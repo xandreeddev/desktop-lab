@@ -1,0 +1,2 @@
+hyprlock hypridle jq grim slurp wl-clipboard playerctl libnotify
+noctalia

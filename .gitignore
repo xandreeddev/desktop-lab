@@ -1,0 +1,13 @@
+.cache/
+.local-vms/
+target/
+__pycache__/
+*.pyc
+reports/local/
+*.qcow2
+*.iso
+*.fd
+*.pem
+id_ed25519*
+known_hosts*
+PROMPT.md

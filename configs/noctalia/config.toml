@@ -1,0 +1,114 @@
+# Lucid-inspired, native Noctalia v5. Schema validation is mandatory on install.
+[shell]
+font_family = "sans-serif"
+corner_radius_scale = 1.2
+telemetry_enabled = false
+polkit_agent = true
+setup_wizard_enabled = false
+
+[theme]
+mode = "dark"
+source = "wallpaper"
+
+[bar]
+order = ["main"]
+
+[bar.main]
+position = "top"
+thickness = 36
+background_opacity = 0.0
+shadow = false
+margin_edge = 14
+margin_ends = 18
+padding = 0
+widget_spacing = 8
+capsule = true
+capsule_fill = "surface_variant"
+capsule_thickness = 1.0
+capsule_radius = 20.0
+start = ["workspaces", "media", "tray"]
+center = ["clock"]
+end = ["notifications", "network", "bluetooth", "volume", "battery", "control-center"]
+
+[dock]
+enabled = true
+position = "bottom"
+icon_size = 42
+main_axis_padding = 16
+cross_axis_padding = 8
+item_spacing = 8
+margin_edge = 18
+radius = 28
+concave_edge_corners = false
+background_opacity = 0.95
+show_running = true
+show_dots = true
+auto_hide = false
+magnification = true
+launcher_position = "start"
+pinned = ["Alacritty", "org.gnome.Nautilus", "chromium", "code"]
+
+[desktop_widgets]
+enabled = true
+schema_version = 2
+widget_order = ["calendar", "weather", "clock", "media"]
+
+[desktop_widgets.widget.calendar]
+type = "calendar"
+output = "Virtual-1"
+cx = 170.0
+cy = 245.0
+box_width = 280.0
+box_height = 280.0
+
+[desktop_widgets.widget.calendar.settings]
+background_radius = 28.0
+background_opacity = 0.95
+
+[desktop_widgets.widget.weather]
+type = "weather"
+output = "Virtual-1"
+cx = 170.0
+cy = 480.0
+box_width = 280.0
+box_height = 130.0
+
+[desktop_widgets.widget.weather.settings]
+background_radius = 28.0
+
+[desktop_widgets.widget.clock]
+type = "clock"
+output = "Virtual-1"
+cx = 1750.0
+cy = 325.0
+box_width = 260.0
+box_height = 250.0
+
+[desktop_widgets.widget.clock.settings]
+format = "{:%H\n%M}"
+background_radius = 28.0
+color = "primary"
+
+[desktop_widgets.widget.media]
+type = "media_player"
+output = "Virtual-1"
+cx = 1750.0
+cy = 675.0
+box_width = 260.0
+box_height = 320.0
+
+[desktop_widgets.widget.media.settings]
+background_radius = 28.0
+
+[[shell.session.actions]]
+action = "lock"
+command = "hyprlock -c ~/.config/desktop-lab/hyprlock.conf"
+
+[[shell.session.actions]]
+action = "logout"
+
+[[shell.session.actions]]
+action = "reboot"
+
+[[shell.session.actions]]
+action = "shutdown"

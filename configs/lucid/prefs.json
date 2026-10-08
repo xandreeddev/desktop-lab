@@ -1,0 +1,17 @@
+{
+  "barStyle": "island",
+  "barTopMargin": 14,
+  "barSideMargin": 18,
+  "barSpacing": 8,
+  "dockStyle": "island",
+  "dockBottomMargin": 18,
+  "dockRadius": 28,
+  "dockShowIndicators": true,
+  "dockAutoHide": false,
+  "clock24h": true,
+  "fontFamily": "Google Sans Flex",
+  "widgetsEnabled": true,
+  "idleEnabled": false,
+  "idleAdopted": true,
+  "idleAutostart": false
+}

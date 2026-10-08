@@ -1,0 +1,33 @@
+{
+  "omarchy": {
+    "repository": "https://github.com/omacom/omarchy",
+    "revision": "b83d3df0840504299d3099ebf391eb8110527edd",
+    "branch": "quattro",
+    "archive_sha256": "97f092fde82569b017d45274c493a0f24b8bb70aa4a837cda77199559ec81246"
+  },
+  "lucid": {
+    "repository": "https://github.com/Sn3akyy1/lucid",
+    "revision": "e662954f73a39275f214923bb4dab6c85b3800ba",
+    "branch": "main",
+    "archive_sha256": "32ab2a3c3bd630fa3c3cbef41f8f8fdc42a2bf3dd01dd8dd3dd60978a191860d",
+    "installer_sha256": "1330af8053ec7df0da3d5f205759ea8c84ddb79cf487e13a4a7eb5d95bb6bd9f"
+  },
+  "noctalia": {
+    "repository": "https://github.com/noctalia-dev/noctalia",
+    "revision": "ecd42238ebdb7ed28cfe44799c93a46d823a7444",
+    "branch": "main",
+    "archive_sha256": "685c22bad09b824e02077fbf7b478d01bc24b40b7982443227d9a21525514a44"
+  },
+  "amane": {
+    "repository": "https://github.com/MystiaFin/amane",
+    "revision": "7cf5fac4a98a13ca7098766b9118806073f57952",
+    "branch": "main",
+    "archive_sha256": "72048811722ba48e3a666f308d666a089cecf2ca1c49faf572ef665b65901f5b"
+  },
+  "suzuha": {
+    "repository": "https://github.com/MystiaFin/suzuha",
+    "revision": "1471f9751ca62392e4babbf8b482c591033b376b",
+    "branch": "main",
+    "archive_sha256": "ba2dac56f6ede910f06771f053d4a6f725b15e88ca8f50ecc777b5602acf1274"
+  }
+}

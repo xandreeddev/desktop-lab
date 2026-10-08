@@ -1,0 +1,2 @@
+hyprlock hypridle jq grim slurp wl-clipboard playerctl libnotify
+quickshell qt6-5compat qt6-declarative qt6-multimedia matugen cliphist python-pillow python-numpy python-fonttools awww cava swappy accountsservice wf-recorder zenity kdeconnect sshfs songrec smartmontools
