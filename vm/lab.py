@@ -147,6 +147,12 @@ def main():
         run('virt-manager', '--connect', URI, '--show-domain-console', name)
     elif args.command == 'shutdown':
         virsh('shutdown', name)
+        deadline = time.monotonic() + 90
+        while time.monotonic() < deadline:
+            if virsh('domstate', name, capture=True).stdout.strip() == 'shut off':
+                return
+            time.sleep(2)
+        raise SystemExit('Shutdown is taking longer than expected; inspect the console.')
 
 
 if __name__ == '__main__':

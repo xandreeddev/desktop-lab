@@ -28,6 +28,7 @@ if profile == 'lucid':
     write(target, (ROOT / 'configs/lucid/set-wallpaper.sh').read_text(), executable=True)
     prefs = HOME_DIR / '.config/quickshell/lucidprefs/prefs.json'
     values = json.loads(prefs.read_text())
+    values.update(json.loads((ROOT / 'configs/lucid/prefs.json').read_text()))
     values['wallpaperFolder'] = str(src / 'wallpapers/matugen')
     write(prefs, json.dumps(values, indent=2) + '\n')
 else:

@@ -13,7 +13,7 @@ awww img "$wallpaper" --transition-type fade --transition-duration 0.4
 mkdir -p "$HOME/.cache/quickshell"
 palette=$(mktemp "$HOME/.cache/quickshell/palette.XXXXXX")
 trap 'rm -f "$palette"' EXIT
-matugen image "$wallpaper" -m "$mode" --prefer colorfulness --dry-run --json hex -q |
+matugen image "$wallpaper" -m "$mode" --prefer saturation --dry-run --json hex -q |
   jq '.colors | with_entries(.value = .value.default.color)' >"$palette"
 jq -e '.primary and .surface' "$palette" >/dev/null
 mv "$palette" "$HOME/.cache/quickshell/matugen.json"

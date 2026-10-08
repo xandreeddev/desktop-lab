@@ -51,7 +51,7 @@ def main():
     if args.sync:
         with tempfile.NamedTemporaryFile(suffix='.tar.gz') as temp:
             with tarfile.open(temp.name, 'w:gz') as tf:
-                for name in ('scripts', 'configs', 'manifests', 'lucent'):
+                for name in ('scripts', 'configs', 'manifests', 'patches', 'lucent'):
                     path = lab.ROOT / name
                     if path.exists():
                         tf.add(path, arcname=name, filter=lambda item: None if '/target/' in item.name or '/__pycache__/' in item.name else item)

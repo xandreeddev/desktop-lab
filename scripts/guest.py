@@ -116,6 +116,8 @@ def install(args):
         run('bash', str(src / 'install.sh'), '--no-hypr', '--no-apps', '--no-look',
             '--no-theming', '--no-wallpapers', '--no-plugins', '--skip-deps',
             *(['--yes'] if args.yes else []))
+        run('patch', '-p1', '-i', str(ROOT / 'patches/lucid-bluetooth-timeout.patch'),
+            cwd=HOME_DIR / '.config/quickshell')
         prefs = HOME_DIR / '.config/quickshell/lucidprefs/prefs.json'
         values = json.loads(prefs.read_text())
         values.update(json.loads((ROOT / 'configs/lucid/prefs.json').read_text()))

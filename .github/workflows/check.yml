@@ -1,0 +1,20 @@
+name: checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  integration-code:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s tests -v
+      - run: shellcheck scripts/*.sh configs/lucid/*.sh
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev pkg-config
+      - run: rustup update stable && rustup component add rustfmt clippy
+      - run: cargo fmt --manifest-path lucent/Cargo.toml --all --check
+      - run: cargo clippy --manifest-path lucent/Cargo.toml --locked --workspace --all-targets -- -D warnings
+      - run: cargo test --manifest-path lucent/Cargo.toml --locked --workspace

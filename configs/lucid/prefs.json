@@ -13,5 +13,7 @@
   "widgetsEnabled": true,
   "idleEnabled": false,
   "idleAdopted": true,
-  "idleAutostart": false
+  "idleAutostart": false,
+  "surfaceTint": 0.8,
+  "surfaceDarkness": 0
 }

@@ -1,0 +1,11 @@
+--- a/Bt.qml
++++ b/Bt.qml
+@@ -218,7 +218,7 @@
+     Process {
+         id: infoProc
+ 
+-        command: ["sh", "-c", "bluetoothctl show 2>/dev/null | sed -n 's/^Controller \\([0-9A-F:]*\\).*/A=\\1/p;s/^\\s*Alias: /B=/p'; rfkill -J 2>/dev/null"]
++        command: ["sh", "-c", "timeout 2s bluetoothctl show 2>/dev/null | sed -n 's/^Controller \\([0-9A-F:]*\\).*/A=\\1/p;s/^\\s*Alias: /B=/p'; rfkill -J 2>/dev/null"]
+ 
+         stdout: StdioCollector {
+             onStreamFinished: {
