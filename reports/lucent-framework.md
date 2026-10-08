@@ -35,7 +35,9 @@ client and reboot/secure-lock checks were also executed separately.
 ## Measured performance
 
 Results are recorded in [the machine-readable performance report](measurements/lucent-framework-performance.json).
-Earlier samples were discarded because the stock screensaver could hide top-layer surfaces. The final measurement holds Omarchy’s supported stay-awake state and checks the visible desktop. The current
+Earlier samples were discarded because the stock screensaver could hide top-layer
+surfaces. The final measurement holds Omarchy’s supported stay-awake state and
+checks the visible desktop. The current
 backend selects Mailbox when supported because the framework already schedules
 frames through compositor callbacks; FIFO remains a fallback.
 
@@ -50,7 +52,8 @@ frames through compositor callbacks; FIFO remains a fallback.
 | Maximum sampled frame interval | 53.86 ms |
 
 The software-Vulkan VM does **not** meet a 60 fps animation target or the initial
-200 MiB RSS aspiration. Changing presentation mode did not produce a meaningful improvement in these VM tests. The interaction curves are implemented and finite; hardware-GPU
+200 MiB RSS aspiration. Changing presentation mode did not produce a meaningful
+improvement in these VM tests. The interaction curves are implemented and finite; hardware-GPU
 smoothness still needs a machine with working GPU-backed Vulkan.
 
 Measurements cover the main Rust process and separately the service cgroup's CPU
