@@ -24,18 +24,20 @@ impl Renderer {
     /// Creates a renderer attached to an existing native Wayland surface.
     ///
     /// # Safety
-    /// Both pointers must identify live libwayland objects. The caller must destroy
-    /// this renderer before either the wl_surface or its display connection.
+    /// The pointer must identify a live wl_surface on the supplied display. The
+    /// caller must destroy this renderer before the wl_surface. The owned display
+    /// handle keeps its connection alive for the GPU instance, including EGL.
     pub unsafe fn new(
-        display: *mut c_void,
+        display: impl HasDisplayHandle + std::fmt::Debug + Send + Sync + 'static,
         surface: *mut c_void,
         font_bytes: Vec<u8>,
     ) -> Result<Self, Error> {
-        let instance = Instance::new(InstanceDescriptor::new_without_display_handle_from_env());
+        let raw_display = display.display_handle()?.as_raw();
+        let instance = Instance::new(InstanceDescriptor::new_with_display_handle_from_env(
+            Box::new(display),
+        ));
         let target = SurfaceTargetUnsafe::RawHandle {
-            raw_display_handle: Some(RawDisplayHandle::Wayland(WaylandDisplayHandle::new(
-                NonNull::new(display).ok_or("null Wayland display")?,
-            ))),
+            raw_display_handle: Some(raw_display),
             raw_window_handle: RawWindowHandle::Wayland(WaylandWindowHandle::new(
                 NonNull::new(surface).ok_or("null Wayland surface")?,
             )),
@@ -56,12 +58,19 @@ impl Renderer {
             .copied()
             .find(|f| matches!(f, TextureFormat::Bgra8Unorm | TextureFormat::Rgba8Unorm))
             .ok_or("no linear surface format")?;
-        if !caps
+        let alpha_mode = if caps
             .alpha_modes
             .contains(&CompositeAlphaMode::PreMultiplied)
         {
-            return Err("compositor cannot present premultiplied transparency".into());
-        }
+            CompositeAlphaMode::PreMultiplied
+        } else if caps.alpha_modes.contains(&CompositeAlphaMode::Opaque) {
+            // wgpu's GLES backend currently exposes only opaque presentation.
+            // Keep the rounded card on a deliberate opaque canvas in that case.
+            CompositeAlphaMode::Opaque
+        } else {
+            return Err("surface has no supported alpha mode".into());
+        };
+        eprintln!("lucent alpha: {alpha_mode:?}");
         let config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
             format,
@@ -69,7 +78,7 @@ impl Renderer {
             height: 1,
             present_mode: PresentMode::Fifo,
             desired_maximum_frame_latency: 2,
-            alpha_mode: CompositeAlphaMode::PreMultiplied,
+            alpha_mode,
             view_formats: vec![],
             color_space: SurfaceColorSpace::Auto,
         };
@@ -175,12 +184,14 @@ impl Renderer {
         }
         let s = scale as f32;
         let radius = 28.0 * s;
+        let opaque = self.config.alpha_mode == CompositeAlphaMode::Opaque;
+        let inset = if opaque { 8.0 * s } else { 0.0 };
         for y in 0..height {
             for x in 0..width {
-                let dx =
-                    (x as f32 + 0.5 - width as f32 / 2.0).abs() - (width as f32 / 2.0 - radius);
-                let dy =
-                    (y as f32 + 0.5 - height as f32 / 2.0).abs() - (height as f32 / 2.0 - radius);
+                let dx = (x as f32 + 0.5 - width as f32 / 2.0).abs()
+                    - (width as f32 / 2.0 - radius - inset);
+                let dy = (y as f32 + 0.5 - height as f32 / 2.0).abs()
+                    - (height as f32 / 2.0 - radius - inset);
                 let distance = dx.max(0.0).hypot(dy.max(0.0)) + dx.max(dy).min(0.0) - radius;
                 let coverage = (0.5 - distance).clamp(0.0, 1.0);
                 let i = ((y * width + x) * 4) as usize;
@@ -190,9 +201,19 @@ impl Renderer {
                     [34.0, 67.0, 72.0]
                 };
                 for (channel, value) in rgb.iter().enumerate() {
-                    self.pixels[i + channel] = (*value * coverage) as u8;
+                    let background = if opaque {
+                        [13.0, 20.0, 30.0][channel]
+                    } else {
+                        0.0
+                    };
+                    self.pixels[i + channel] =
+                        (*value * coverage + background * (1.0 - coverage)) as u8;
                 }
-                self.pixels[i + 3] = (255.0 * coverage) as u8;
+                self.pixels[i + 3] = if opaque {
+                    255
+                } else {
+                    (255.0 * coverage) as u8
+                };
             }
         }
         self.text(title, 30.0 * s, 30.0 * s, 38.0 * s, [151, 222, 242]);

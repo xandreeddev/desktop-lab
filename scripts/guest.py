@@ -88,6 +88,8 @@ def gate(args):
 
 
 def install(args):
+    if args.profile == 'lucent':
+        raise SystemExit('Use lucent/README.md to build and run the development prototype; keep the stock session.')
     gate(args)
     doctor()
     for relative in ('.config/quickshell', '.config/lucid', '.config/noctalia',
@@ -101,6 +103,9 @@ def install(args):
         if args.yes:
             cmd.append('--noconfirm')
         run(*(cmd + packages))
+        if output('systemd-detect-virt') in ('kvm', 'qemu'):
+            run('sudo', 'pacman', '-S', '--needed', *(['--noconfirm'] if args.yes else []), 'qemu-guest-agent')
+            run('sudo', 'systemctl', 'start', 'qemu-guest-agent')
     CONFIG.mkdir(parents=True, exist_ok=True)
     DATA.mkdir(parents=True, exist_ok=True)
     for name in ('hyprlock.conf', 'hypridle.conf'):
@@ -126,14 +131,12 @@ def install(args):
         shutil.copytree(src / 'support/lucid', HOME_DIR / '.config/lucid', dirs_exist_ok=True)
     elif args.profile == 'noctalia':
         version = output('noctalia', '--version')
-        if not any(s.startswith('5.') for s in version.split()):
+        if not any(s.removeprefix('v').startswith('5.') for s in version.split()):
             raise SystemExit(f'Expected Noctalia v5, got {version!r}')
         cfg = HOME_DIR / '.config/noctalia/config.toml'
         write(cfg, (ROOT / 'configs/noctalia/config.toml').read_text())
         run('noctalia', 'config', 'validate')
         write(STATE / 'noctalia-effective.toml', output('noctalia', 'config', 'export', 'full') + '\n')
-    elif args.profile == 'lucent':
-        raise SystemExit('Use lucent/README.md to build and run the development prototype; keep the stock session.')
     write(STATE / 'profile', args.profile + '\n')
     write(STATE / 'packages-after.txt', output('pacman', '-Q') + '\n')
     print('Installed. Verify Hyprlock in the graphical session before activation.')

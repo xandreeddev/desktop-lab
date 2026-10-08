@@ -1,0 +1,5 @@
+{
+  "profile": "noctalia",
+  "service_restart_to_ipc_seconds": 0.731,
+  "scope": "one warm-cache service restart; includes 100 ms polling; not login or first frame latency"
+}

@@ -16,6 +16,8 @@ The implemented separation is `lucent-domain` (pure counter and frame-demand mod
 
 One compositor frame callback gates outstanding work. Input marks a surface dirty. A callback with no new work does not request another callback or render. The GPU surface is dropped before its native wl_surface and display. Failed surface presentation exits with an error; device-loss recovery is future work.
 
+The GPU instance owns a clone of the Wayland backend through its `HasDisplayHandle` implementation. Supplying this display at instance creation is required for EGL presentation. Alpha mode is selected from advertised surface capabilities: premultiplied when available, otherwise an explicit opaque canvas. The virgl guest exercises the latter path; transparent corners on a Vulkan driver are not yet validated.
+
 The prototype rasterizes simple Latin text and rounded cards into a cached CPU image, uploads it only for a dirty frame, and presents it with wgpu. This proves GPU/native-surface integration, not the final rendering architecture. Vello should be evaluated for vector scenes, gradients and clipping after this prototype is tested. Full shaping, a glyph atlas, fractional scaling, multi-output widgets and GPU allocation accounting remain future work. Do not describe the current renderer as a finished UI framework.
 
 Next: introduce a minimal component/view/message API around implemented row, text and button use cases. Then add an event-driven Hyprland workspace adapter and one working top bar before expanding the domain models. Secure locking remains delegated to a proven locker.

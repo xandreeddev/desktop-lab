@@ -1,0 +1,5 @@
+{
+  "profile": "lucid",
+  "service_restart_to_ipc_seconds": 2.992,
+  "scope": "one warm-cache service restart; includes 100 ms polling; not login or first frame latency"
+}

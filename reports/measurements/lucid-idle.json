@@ -1,0 +1,10 @@
+{
+  "duration_seconds": 120.0,
+  "process": "quickshell",
+  "cpu_percent_one_core": 14.833,
+  "rss_mib_mean": 419.01,
+  "rss_mib_max": 435.63,
+  "scope": "main process only; child processes and GPU allocations excluded",
+  "gpu_memory": "not measured",
+  "virtualization": "kvm"
+}

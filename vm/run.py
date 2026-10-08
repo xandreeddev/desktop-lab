@@ -8,8 +8,20 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 
 import lab
+
+
+def source_only(item):
+    parts = Path(item.name).parts
+    if any(part in ('target', '__pycache__') for part in parts):
+        return None
+    if len(parts) > 1 and parts[0] == 'packaging' and (parts[1] in ('pkg', 'src') or '.pkg.tar.' in parts[1]):
+        return None
+    if len(parts) > 1 and parts[:2] == ('reports', 'local'):
+        return None
+    return item
 
 
 def password(args):
@@ -33,10 +45,23 @@ def main():
     args = p.parse_args()
     if args.type_password:
         vm = lab.inventory()['vms'][args.profile]['name']
+        # Avoid typing a secret into a terminal after a failed/slow logout.
+        check = subprocess.run(lab.ssh_args(args.profile) + [
+            'pgrep -x -u "$(id -u)" hyprlock >/dev/null || '
+            '{ ! pgrep -x -u "$(id -u)" Hyprland >/dev/null && pgrep -f "^/usr/bin/sddm-greeter" >/dev/null; }'
+        ], capture_output=True)
+        if check.returncode:
+            stock = subprocess.run(lab.ssh_args(args.profile) + [
+                'python3 ~/desktop-lab/scripts/in-session.py omarchy-shell lock isLocked'
+            ], capture_output=True, text=True)
+            if stock.returncode or stock.stdout.strip() != 'true':
+                raise SystemExit('No secure lock or login screen detected; refusing password keystrokes.')
         normal = '`1234567890-=qwertyuiop[]\\asdfghjkl;\'zxcvbnm,./ '
         shifted = '~!@#$%^&*()_+QWERTYUIOP{}|ASDFGHJKL:"ZXCVBNM<>? '
         codes = [41,2,3,4,5,6,7,8,9,10,11,12,13,16,17,18,19,20,21,22,23,24,25,26,27,43,30,31,32,33,34,35,36,37,38,39,40,44,45,46,47,48,49,50,51,52,53,57]
         secret = password(args)
+        lab.virsh('send-key', vm, '--codeset', 'linux', '--holdtime', '30', '29', '22', capture=True)
+        time.sleep(0.2)
         for char in secret:
             if char in normal:
                 keys = [str(codes[normal.index(char)])]
@@ -51,10 +76,11 @@ def main():
     if args.sync:
         with tempfile.NamedTemporaryFile(suffix='.tar.gz') as temp:
             with tarfile.open(temp.name, 'w:gz') as tf:
-                for name in ('scripts', 'configs', 'manifests', 'patches', 'lucent'):
+                for name in ('scripts', 'configs', 'manifests', 'patches', 'lucent', 'packaging',
+                             'README.md', 'LICENSE', 'docs', 'tests', 'reports'):
                     path = lab.ROOT / name
                     if path.exists():
-                        tf.add(path, arcname=name, filter=lambda item: None if '/target/' in item.name or '/__pycache__/' in item.name else item)
+                        tf.add(path, arcname=name, filter=source_only)
             with open(temp.name, 'rb') as stream:
                 subprocess.run(lab.ssh_args(args.profile) + ['mkdir -p ~/desktop-lab && tar -xz -C ~/desktop-lab'], stdin=stream, check=True)
         print('Synced repository configuration and scripts to ~/desktop-lab.')

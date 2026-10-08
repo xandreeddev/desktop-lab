@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Prepare the 1920x1080 reference layout in a disposable test guest."""
+import argparse
 import json
 from pathlib import Path
 import shutil
@@ -7,7 +8,9 @@ import sys
 
 from guest import HOME_DIR, ROOT, STATE, DATA, backup, output, run, write
 
-profile = sys.argv[1]
+p = argparse.ArgumentParser(description=__doc__)
+p.add_argument('profile', choices=('lucid', 'noctalia'))
+profile = p.parse_args().profile
 if output('systemd-detect-virt') not in ('kvm', 'qemu'):
     raise SystemExit('The reference-resolution preset is only for test VMs.')
 run(sys.executable, str(ROOT / 'scripts/fetch.py'), 'lucid')

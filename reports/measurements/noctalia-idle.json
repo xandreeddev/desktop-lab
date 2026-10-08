@@ -1,0 +1,10 @@
+{
+  "duration_seconds": 120.0,
+  "process": "noctalia",
+  "cpu_percent_one_core": 0.317,
+  "rss_mib_mean": 134.21,
+  "rss_mib_max": 136.89,
+  "scope": "main process only; child processes and GPU allocations excluded",
+  "gpu_memory": "not measured",
+  "virtualization": "kvm"
+}

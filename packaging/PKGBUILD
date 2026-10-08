@@ -1,0 +1,30 @@
+# Build from this repository checkout: cd packaging && makepkg -si
+pkgname=lucent-desktop-prototype
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Experimental native Rust Wayland layer-shell prototype'
+arch=('x86_64')
+url='https://github.com/xandreeddev/desktop-lab'
+license=('MIT')
+options=('!debug' '!strip') # Cargo's release profile already strips the binary.
+depends=('wayland' 'libxkbcommon' 'fontconfig' 'mesa')
+optdepends=('vulkan-driver: Vulkan presentation backend')
+makedepends=('rust' 'pkgconf')
+source=()
+sha256sums=()
+
+build() {
+  cd "$startdir/../lucent"
+  cargo build --release --locked -p lucent-desktop
+}
+
+check() {
+  cd "$startdir/../lucent"
+  cargo test --locked --workspace
+}
+
+package() {
+  install -Dm755 "$startdir/../lucent/target/release/lucent-desktop" "$pkgdir/usr/bin/lucent-desktop"
+  install -Dm644 "$startdir/lucent-desktop.desktop" "$pkgdir/usr/share/applications/lucent-desktop.desktop"
+  install -Dm644 "$startdir/../LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

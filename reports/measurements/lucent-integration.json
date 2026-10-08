@@ -1,0 +1,18 @@
+{
+  "first_frame": true,
+  "left_click": true,
+  "clean_right_click_exit": true,
+  "frames_before_input": 1,
+  "frames_after_input": 2,
+  "extra_frames_during_120_second_idle": 0,
+  "idle": {
+    "duration_seconds": 120.001,
+    "process": "lucent-desktop",
+    "cpu_percent_one_core": 0.0,
+    "rss_mib_mean": 60.71,
+    "rss_mib_max": 60.71,
+    "scope": "main process only; child processes and GPU allocations excluded",
+    "gpu_memory": "not measured",
+    "virtualization": "kvm"
+  }
+}

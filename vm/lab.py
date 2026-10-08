@@ -146,7 +146,7 @@ def main():
     elif args.command == 'console':
         run('virt-manager', '--connect', URI, '--show-domain-console', name)
     elif args.command == 'shutdown':
-        virsh('shutdown', name)
+        virsh('shutdown', name, '--mode', 'agent')
         deadline = time.monotonic() + 90
         while time.monotonic() < deadline:
             if virsh('domstate', name, capture=True).stdout.strip() == 'shut off':

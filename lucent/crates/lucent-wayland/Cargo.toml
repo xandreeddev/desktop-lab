@@ -8,4 +8,4 @@ lucent-domain = { path = "../lucent-domain" }
 lucent-render = { path = "../lucent-render" }
 smithay-client-toolkit = "0.21.1"
 wayland-client = "0.31.15"
-wayland-backend = { version = "0.3.17", features = ["client_system"] }
+wayland-backend = { version = "0.3.17", features = ["client_system", "rwh_06"] }

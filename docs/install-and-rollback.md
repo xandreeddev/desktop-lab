@@ -13,6 +13,8 @@ python3 vm/lab.py shutdown lucid
 
 The console opens Virtual Machine Manager on `qemu:///session`. The guest login is the same as the source VM; consult the local source-VM login note. No password or key is stored in this repository. Use Left Ctrl+Left Alt to release the VM keyboard grab.
 
+`python3 vm/launch.py lucid` combines start and console. Shutdown uses the QEMU guest agent because a desktop can intercept the emulated ACPI power button. The installer prepares the agent inside QEMU/KVM guests. Each prepared overlay has a local qcow2 snapshot named `prepared`; inspect it only while the VM is shut off. Reverting it discards subsequent guest changes and should be a deliberate recovery action.
+
 To reproduce the clones from another installed Omarchy VM:
 
 ```sh

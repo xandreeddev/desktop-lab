@@ -57,7 +57,7 @@ pub fn run(title: &str) -> Result<(), Error> {
     // remains alive until after state and its native surface have been destroyed.
     let renderer = unsafe {
         Renderer::new(
-            conn.backend().display_ptr().cast(),
+            conn.backend(),
             layer.wl_surface().id().as_ptr().cast(),
             font,
         )

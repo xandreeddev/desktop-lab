@@ -1,0 +1,5 @@
+lucent GPU: AdapterInfo { name: "virgl (AMD Radeon Graphics (radeonsi, renoir, ACO, DRM 3.64...)", vendor: 65541, device: 0, device_type: Other, device_pci_bus_id: "", driver: "", driver_info: "4.3 (Core Profile) Mesa 26.2.2-arch1.1", backend: Gl, subgroup_min_size: 4, subgroup_max_size: 128, transient_saves_memory: None, limit_bucket: None }
+lucent alpha: Opaque
+lucent frame 1
+lucent frame 2
+lucent closed cleanly; 2 frame(s), 1 click(s)

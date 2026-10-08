@@ -46,7 +46,7 @@ show_dots = true
 auto_hide = false
 magnification = true
 launcher_position = "start"
-pinned = ["Alacritty", "org.gnome.Nautilus", "chromium", "code"]
+pinned = ["foot", "org.gnome.Nautilus", "chromium"]
 
 [desktop_widgets]
 enabled = true
@@ -64,6 +64,7 @@ box_height = 280.0
 [desktop_widgets.widget.calendar.settings]
 background_radius = 28.0
 background_opacity = 0.95
+show_events = false
 
 [desktop_widgets.widget.weather]
 type = "weather"
@@ -75,6 +76,7 @@ box_height = 130.0
 
 [desktop_widgets.widget.weather.settings]
 background_radius = 28.0
+shadow = false
 
 [desktop_widgets.widget.clock]
 type = "clock"
@@ -88,6 +90,8 @@ box_height = 250.0
 format = "{:%H\n%M}"
 background_radius = 28.0
 color = "primary"
+shadow = false
+center_text = true
 
 [desktop_widgets.widget.media]
 type = "media_player"

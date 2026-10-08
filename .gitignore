@@ -11,3 +11,6 @@ reports/local/
 id_ed25519*
 known_hosts*
 PROMPT.md
+packaging/pkg/
+packaging/src/
+packaging/*.pkg.tar.*
