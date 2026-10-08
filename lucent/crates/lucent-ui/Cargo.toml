@@ -1,8 +1,8 @@
 [package]
-name = "lucent-domain"
+name = "lucent-ui"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-
 [dependencies]
-serde = { version = "1", features = ["derive"] }
+lucent-api = { path = "../lucent-api" }
+fontdue = "0.9"

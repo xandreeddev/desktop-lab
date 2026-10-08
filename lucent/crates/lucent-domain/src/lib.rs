@@ -1,4 +1,6 @@
-//! Pure state and scheduling primitives. No operating-system or rendering dependencies.
+mod desktop;
+pub use desktop::*;
+// Pure state and scheduling primitives. No operating-system or rendering dependencies.
 
 mod widget;
 pub use widget::*;
