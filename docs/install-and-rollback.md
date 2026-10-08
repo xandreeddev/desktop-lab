@@ -44,6 +44,8 @@ Substitute `noctalia` for the second profile. The lock test must succeed before 
 
 Package operations use `pacman -S --needed`, never a database-only `-Sy`. Bring the guest to a consistent supported package set before installing. Exact installed package versions are recorded under `~/.local/state/desktop-lab/`; Arch repository contents themselves are not frozen by this repo.
 
+For reproducible weather personalization, keep a private JSON file containing `name`, `latitude`, `longitude`, and optionally `timezone`. Stop `desktop-lab-shell.service`, run `python3 scripts/set-weather.py PROFILE /path/to/private-location.json`, then start the service again. This disables IP location detection and stores the selected city only in guest state. Subsequent installs reapply that private selection. Do not commit the JSON or screenshots revealing personal location. The prepared weather profiles also have a local `weather-ready` disk snapshot.
+
 Backups live under `~/.local/state/desktop-lab/original`, with a manifest recording both existing files and paths that were absent. Re-running an installer never replaces the first backup. Original package inventories and startup checksums are recorded beside it. Installed applications are retained during rollback; review the before/after package inventories if you want to remove additions.
 
 For normal rollback, run from a terminal or SSH:

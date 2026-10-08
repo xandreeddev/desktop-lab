@@ -31,6 +31,6 @@ Inside the Lucid or Noctalia VM, run `~/desktop-lab/scripts/verify.sh` from a gr
 
 In the Lucent VM, open **Lucent Prototype** from the application launcher, or run `~/.local/bin/lucent-desktop`. Left-click the card to change its color and counter; right-click to close. The stock Omarchy desktop stays available.
 
-Weather needs your city in each shell's Location settings. Noctalia currently shows “No location”; Lucid retains its upstream default coordinates, which must not be read as your local forecast. Media widgets show their idle state until a player publishes MPRIS metadata.
+The prepared guests have a locally selected weather city with IP detection disabled. Personal location data stays outside Git; a fresh install needs your city in Location settings. Media widgets show their idle state until a player publishes MPRIS metadata.
 
 Upstream references: [Omarchy](https://github.com/omacom/omarchy), [Lucid](https://github.com/Sn3akyy1/lucid), [reference screenshot](https://github.com/Sn3akyy1/lucid/blob/main/assets/desktop.webp), [Noctalia v5](https://docs.noctalia.dev/noctalia/), [Amane](https://github.com/MystiaFin/amane), [Suzuha](https://github.com/MystiaFin/suzuha). Exact inspected revisions and archive checksums are recorded in `manifests/upstream-lock.json`. Noctalia's installed package version is recorded separately; its current source tree is a documentation reference.

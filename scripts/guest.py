@@ -138,6 +138,8 @@ def install(args):
         run('noctalia', 'config', 'validate')
         write(STATE / 'noctalia-effective.toml', output('noctalia', 'config', 'export', 'full') + '\n')
     write(STATE / 'profile', args.profile + '\n')
+    if (STATE / 'weather.json').is_file():
+        run(sys.executable, str(ROOT / 'scripts/set-weather.py'), args.profile, str(STATE / 'weather.json'))
     write(STATE / 'packages-after.txt', output('pacman', '-Q') + '\n')
     print('Installed. Verify Hyprlock in the graphical session before activation.')
 

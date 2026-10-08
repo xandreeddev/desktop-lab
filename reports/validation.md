@@ -22,6 +22,7 @@ Three independent VMs were prepared from the existing stopped Omarchy installati
 | Secure lock and password unlock | Hyprlock passed | Hyprlock passed | Stock Omarchy unlock passed |
 | Notification delivery | Verification toast observed | Verification notification delivered | Stock service retained |
 | Clipboard round-trip | Passed | Passed | Stock service retained |
+| Selected-city weather | Forecast cache matches selection, daily forecast populated | Resolved city and live forecast received | Unimplemented |
 | Default audio and network | `wpctl` reports volume; NetworkManager connected | Same | Stock services retained |
 | Native shell runtime | Qt/Quickshell by design | No Qt/GTK libraries in process maps | No Qt/GTK libraries in process maps |
 | Source/config validation | Pinned installer hash, Lua/IPC checks | Installed v5 schema validation and full export | fmt, Clippy, tests, release build |
@@ -37,7 +38,7 @@ Six Python recovery/configuration tests and three Rust domain/scheduling tests p
 
 ## Measurements
 
-Each sample is one real 120-second interval. CPU is a percentage of **one logical CPU**, calculated from process CPU ticks. RSS is sampled once per second. Child processes, compositor cost, GPU allocations and whole-desktop totals are excluded. These are VM observations with different feature sets, not a general toolkit benchmark. The Rust card is far less capable than either complete shell.
+Each sample is one real 120-second interval, captured before personal weather configuration. CPU is a percentage of **one logical CPU**, calculated from process CPU ticks. RSS is sampled once per second. Child processes, compositor cost, GPU allocations and whole-desktop totals are excluded. These are VM observations with different feature sets, not a general toolkit benchmark. The Rust card is far less capable than either complete shell.
 
 | Process | Mean RSS | Maximum RSS | Idle CPU | Service restart → IPC |
 | --- | ---: | ---: | ---: | ---: |
@@ -51,7 +52,7 @@ Raw, sanitized results: [Lucid idle](measurements/lucid-idle.json), [Lucid readi
 
 ## Screenshots
 
-These are real guest captures, not generated mockups. Lucid and Noctalia use Lucid's reference wallpaper. Upstream artwork keeps its original rights; the repository's MIT license covers the lab code, not that artwork.
+These are real guest captures, not generated mockups. They precede personal weather configuration to avoid publishing location data. Lucid and Noctalia use Lucid's reference wallpaper. Upstream artwork keeps its original rights; the repository's MIT license covers the lab code, not that artwork.
 
 - [Stock Omarchy](screenshots/stock-omarchy.png)
 - [Lucid desktop](screenshots/lucid.png) and [launcher](screenshots/lucid-launcher.png)
@@ -62,7 +63,7 @@ These are real guest captures, not generated mockups. Lucid and Noctalia use Luc
 
 Wi-Fi/Bluetooth radios, physical brightness and battery hardware are unavailable in these guests. Their hardware interactions, tray interaction, media controls with a real player, screenshot selection UI, sleep/resume, multi-monitor hotplug, fractional/HiDPI scaling, future Omarchy upgrades, animation frame-time distributions and ten-minute idle were not validated. The verified screenshot capture path is `grim`. The secure lock was manually exercised; sleep-triggered locking remains a separate test.
 
-Weather requires a city choice. Noctalia shows “No location”; Lucid retains upstream default coordinates until configured. Media widgets remain in their idle state without a player. Some Omarchy menu bindings still depend on its stock shell; the common alternative-shell mappings are documented in [shortcuts](../docs/shortcuts.md).
+The prepared guests now use a selected weather city, stored only in guest configuration and ignored host state. IP location detection is disabled. Media widgets remain in their idle state without a player. Some Omarchy menu bindings still depend on its stock shell; the common alternative-shell mappings are documented in [shortcuts](../docs/shortcuts.md).
 
 Lucent has no launcher, dock, OS service layer, complete widget API, settings interface or notification server yet. The next work is a minimal component API around real primitives, then a compositor adapter and functional bar. Its framework/client separation is established at the current prototype scale only.
 
