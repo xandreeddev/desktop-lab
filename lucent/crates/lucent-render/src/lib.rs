@@ -299,12 +299,23 @@ impl Renderer {
         {
             return Err("Vulkan surface requires BGRA8 and premultiplied alpha".into());
         }
+        // The runtime already follows compositor frame callbacks. Mailbox avoids
+        // adding a second FIFO pacing queue while still presenting complete frames.
+        let present_mode = if caps.present_modes.contains(&PresentMode::Mailbox) {
+            PresentMode::Mailbox
+        } else {
+            PresentMode::Fifo
+        };
+        eprintln!(
+            "Vulkan presentation: {present_mode:?}; supported {:?}",
+            caps.present_modes
+        );
         let config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
             format: TextureFormat::Bgra8Unorm,
             width: 0,
             height: 0,
-            present_mode: PresentMode::Fifo,
+            present_mode,
             desired_maximum_frame_latency: 2,
             alpha_mode: CompositeAlphaMode::PreMultiplied,
             view_formats: vec![],
