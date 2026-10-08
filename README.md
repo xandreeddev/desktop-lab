@@ -8,7 +8,7 @@ Three isolated Omarchy experiments for comparing Lucid, native Noctalia v5, and 
 | `desktop-lab-noctalia` | Native C++ comparison | Official Noctalia v5, a Lucid-inspired declarative configuration |
 | `desktop-lab-lucent` | Native Rust development | Working Milestone 1 prototype; stock Omarchy remains active |
 
-The Rust entry is a prototype, **not the full desktop framework/client from the long-term plan**. It presents a real GPU-backed Wayland layer surface, displays text and a rounded card, responds to mouse input and exits cleanly. The next milestones are described in [the architecture decision](docs/adr/0001-native-prototype.md).
+The Rust entry is a prototype, **not the full desktop framework/client from the long-term plan**. It presents a transparent Wayland widget layer through Vulkan, with a draggable card, saved position and finite animations. The prepared VM uses software Vulkan; host GPU acceleration remains unresolved. The next milestones are described in [the architecture decision](docs/adr/0001-native-prototype.md).
 
 On the prepared host, start one VM at a time:
 
@@ -29,7 +29,7 @@ Use the source Omarchy VM's existing guest login. Credentials are kept only in t
 
 Inside the Lucid or Noctalia VM, run `~/desktop-lab/scripts/verify.sh` from a graphical terminal. Run `~/desktop-lab/scripts/rollback.sh` and log out/in to restore the original user configuration. Packages remain installed, with before/after inventories available for review.
 
-In the Lucent VM, open **Lucent Prototype** from the application launcher, or run `~/.local/bin/lucent-desktop`. Left-click the card to change its color and counter; right-click to close. The stock Omarchy desktop stays available.
+In the Lucent VM, open **Lucent Prototype** from the application launcher, or run `~/.local/bin/lucent-desktop`. Drag the card to move it; its position is saved. Click to animate its color; right-click to fade out and close. Clicks outside the card pass through to the desktop. The stock Omarchy desktop stays available.
 
 The prepared guests have a locally selected weather city with IP detection disabled. Personal location data stays outside Git; a fresh install needs your city in Location settings. Media widgets show their idle state until a player publishes MPRIS metadata.
 

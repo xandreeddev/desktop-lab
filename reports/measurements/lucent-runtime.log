@@ -1,5 +1,66 @@
-lucent GPU: AdapterInfo { name: "virgl (AMD Radeon Graphics (radeonsi, renoir, ACO, DRM 3.64...)", vendor: 65541, device: 0, device_type: Other, device_pci_bus_id: "", driver: "", driver_info: "4.3 (Core Profile) Mesa 26.2.2-arch1.1", backend: Gl, subgroup_min_size: 4, subgroup_max_size: 128, transient_saves_memory: None, limit_bucket: None }
-lucent alpha: Opaque
+lucent GPU: AdapterInfo { name: "llvmpipe (LLVM 22.1.8, 256 bits)", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: "", driver: "llvmpipe", driver_info: "Mesa 26.2.2-arch1.1 (LLVM 22.1.8)", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: Some(false), limit_bucket: None }
+lucent alpha: PreMultiplied
+lucent configured 1920 1080 position 690.0 430.0
+lucent text upload
 lucent frame 1
 lucent frame 2
-lucent closed cleanly; 2 frame(s), 1 click(s)
+lucent frame 3
+lucent frame 4
+lucent frame 5
+lucent frame 6
+lucent frame 7
+lucent frame 8
+lucent frame 9
+lucent frame 10
+lucent frame 11
+lucent frame 12
+lucent frame 13
+lucent frame 14
+lucent frame 15
+lucent click 1
+lucent text upload
+lucent frame 16
+lucent frame 17
+lucent frame 18
+lucent frame 19
+lucent frame 20
+lucent frame 21
+lucent frame 22
+lucent frame 23
+lucent frame 24
+lucent frame 25
+lucent frame 26
+lucent frame 27
+lucent frame 28
+lucent frame 29
+lucent frame 30
+lucent frame 31
+lucent frame 32
+lucent frame 33
+lucent frame 34
+lucent frame 35
+lucent frame 36
+lucent position 930.1 309.9
+lucent frame 37
+lucent frame 38
+lucent frame 39
+lucent frame 40
+lucent frame 41
+lucent frame 42
+lucent frame 43
+lucent frame 44
+lucent frame 45
+lucent frame 46
+lucent frame 47
+lucent frame 48
+lucent frame 49
+lucent frame 50
+lucent frame 51
+lucent frame 52
+lucent frame 53
+lucent frame 54
+lucent frame 55
+lucent frame 56
+lucent frame 57
+lucent frame 58
+lucent closed cleanly; 58 frame(s), 1 click(s)

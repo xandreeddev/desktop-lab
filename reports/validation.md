@@ -30,21 +30,21 @@ Three independent VMs were prepared from the existing stopped Omarchy installati
 
 Noctalia rollback was tested after activation: the user startup shadow disappeared, stock `quickshell -n -p /usr/share/omarchy/shell` returned after reboot, and Hyprland reported no configuration errors. Noctalia was then reinstalled and activated again. Lucid uses the same tested recovery implementation, but a separate full Lucid rollback/relogin cycle was not executed.
 
-The Rust integration harness sent actual QEMU pointer events through Hyprland. The first frame displayed the card and text; one left-click changed the counter/color and rendered a second frame. No additional frame was rendered during 120 idle seconds. Right-click closed the process cleanly, reporting two frames and one click. The stock secure lock had to be unlocked during debugging; the harness now checks lock and display state before testing.
+The updated Rust integration harness sent actual QEMU pointer events through Hyprland. Vulkan and premultiplied alpha were confirmed from runtime logs. It observed 7 opening frames, clicked to animate the color, and dragged the card 240 logical pixels right and 120 up without incrementing its click counter. A terminal underneath received a real mouse report from a click outside the rounded card. Text uploaded only twice, for initial content and the changed counter; animation and dragging reused the texture. The saved position survived a full prototype restart. Right-click animated out and exited cleanly.
 
-The Rust GPU instance owns the native display handle required for EGL presentation. The tested virgl backend advertises opaque presentation only, so this prototype draws its rounded card on a dark rectangular canvas. Transparent presentation on Vulkan has not been tested.
+After the scene settled at frame 48, no additional frames appeared during 120 idle seconds. The shader draws rounded geometry, gradients, shadow and animated transforms. The adapter was **lavapipe software Vulkan**, reported as `llvmpipe`, device type `Cpu`, backend `Vulkan`. It is not host GPU acceleration. Venus failed to initialize under QEMU's process-spawning sandbox, and the saved original graphics definition was restored. The host's security settings were not changed; [graphics setup and recovery](../docs/lucent-vulkan.md) records the details.
 
-Six Python recovery/configuration tests and three Rust domain/scheduling tests passed. ShellCheck, `cargo fmt --check`, and `cargo clippy --workspace --all-targets -- -D warnings` passed. An Arch package was built with `makepkg --nodeps` using the isolated toolchain; build and check stages ran. Dependency enforcement and installation via pacman were not tested. The VM uses the local executable/menu installer.
+Six Python recovery/configuration tests and nine Rust interaction/scheduling/state tests passed. ShellCheck, `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and the release build passed. The previous fixed-card revision was also packaged with `makepkg --nodeps`; the updated PKGBUILD's mandatory Vulkan dependency has not been installed through pacman. The VM uses the tested local executable/menu installer.
 
 ## Measurements
 
-Each sample is one real 120-second interval, captured before personal weather configuration. CPU is a percentage of **one logical CPU**, calculated from process CPU ticks. RSS is sampled once per second. Child processes, compositor cost, GPU allocations and whole-desktop totals are excluded. These are VM observations with different feature sets, not a general toolkit benchmark. The Rust card is far less capable than either complete shell.
+Each sample is one real 120-second interval. Lucid and Noctalia were captured before personal weather configuration; Lucent was measured again after the draggable Vulkan update. CPU is a percentage of **one logical CPU**, calculated from process CPU ticks. RSS is sampled once per second. Child processes, compositor cost, GPU allocations and whole-desktop totals are excluded. These are VM observations with different feature sets, not a general toolkit benchmark. The Rust card is far less capable than either complete shell.
 
 | Process | Mean RSS | Maximum RSS | Idle CPU | Service restart → IPC |
 | --- | ---: | ---: | ---: | ---: |
 | Lucid / Quickshell | 419.01 MiB | 435.63 MiB | 14.833% | 2.992 s |
 | Noctalia | 134.21 MiB | 136.89 MiB | 0.317% | 0.731 s |
-| Lucent prototype | 60.71 MiB | 60.71 MiB | 0.000% | Not a shell service |
+| Lucent widget (software Vulkan) | 131.61 MiB | 140.84 MiB | 0.000% | Not a shell service |
 
 The restart measurement is a single warm-cache service restart until shell IPC responds, with 100 ms polling. It is not first-frame or login duration. Zero measured prototype CPU means no measurable tick accumulation during this interval, not a promise of zero resource use in all circumstances.
 
@@ -52,12 +52,12 @@ Raw, sanitized results: [Lucid idle](measurements/lucid-idle.json), [Lucid readi
 
 ## Screenshots
 
-These are real guest captures, not generated mockups. They precede personal weather configuration to avoid publishing location data. Lucid and Noctalia use Lucid's reference wallpaper. Upstream artwork keeps its original rights; the repository's MIT license covers the lab code, not that artwork.
+These are real guest captures, not generated mockups. Lucid and Noctalia precede personal weather configuration to avoid publishing location data. Lucent shows the updated widget after a real drag. Lucid and Noctalia use Lucid's reference wallpaper. Upstream artwork keeps its original rights; the repository's MIT license covers the lab code, not that artwork.
 
 - [Stock Omarchy](screenshots/stock-omarchy.png)
 - [Lucid desktop](screenshots/lucid.png) and [launcher](screenshots/lucid-launcher.png)
 - [Noctalia desktop](screenshots/noctalia.png)
-- [Rust prototype after a click](screenshots/lucent.png)
+- [Rust Vulkan widget after a drag](screenshots/lucent.png)
 
 ## Remaining checks and scope limits
 

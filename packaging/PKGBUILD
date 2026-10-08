@@ -1,14 +1,13 @@
 # Build from this repository checkout: cd packaging && makepkg -si
 pkgname=lucent-desktop-prototype
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc='Experimental native Rust Wayland layer-shell prototype'
 arch=('x86_64')
 url='https://github.com/xandreeddev/desktop-lab'
 license=('MIT')
 options=('!debug' '!strip') # Cargo's release profile already strips the binary.
-depends=('wayland' 'libxkbcommon' 'fontconfig' 'mesa')
-optdepends=('vulkan-driver: Vulkan presentation backend')
+depends=('wayland' 'libxkbcommon' 'fontconfig' 'vulkan-icd-loader' 'vulkan-driver')
 makedepends=('rust' 'pkgconf')
 source=()
 sha256sums=()

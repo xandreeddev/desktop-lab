@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Lucent Prototype
-Comment=Native Wayland and wgpu prototype; right-click to close
+Comment=Draggable Vulkan widget; right-click to close
 Exec=lucent-desktop
 Icon=applications-graphics
 Terminal=false

@@ -522,6 +522,7 @@ name = "lucent-render"
 version = "0.1.0"
 dependencies = [
  "fontdue",
+ "lucent-domain",
  "pollster",
  "wgpu",
 ]

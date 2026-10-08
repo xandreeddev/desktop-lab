@@ -1,5 +1,8 @@
 //! Pure state and scheduling primitives. No operating-system or rendering dependencies.
 
+mod widget;
+pub use widget::*;
+
 /// Tracks demand for frames, coalescing input while a compositor callback is pending.
 #[derive(Debug, Default)]
 pub struct FrameDemand {
@@ -20,17 +23,6 @@ impl FrameDemand {
         self.dirty = false;
         self.pending = true;
         true
-    }
-}
-
-/// Small domain example that makes pointer input observable.
-#[derive(Debug, Default)]
-pub struct Counter {
-    pub clicks: u64,
-}
-impl Counter {
-    pub fn click(&mut self) {
-        self.clicks = self.clicks.saturating_add(1);
     }
 }
 
@@ -58,11 +50,5 @@ mod tests {
         assert!(frames.begin());
         frames.ready();
         assert!(!frames.begin());
-    }
-    #[test]
-    fn counter_saturates() {
-        let mut counter = Counter { clicks: u64::MAX };
-        counter.click();
-        assert_eq!(counter.clicks, u64::MAX);
     }
 }
