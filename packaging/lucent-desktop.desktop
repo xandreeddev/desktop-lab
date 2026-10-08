@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=Lucent Prototype
-Comment=Draggable Vulkan widget; right-click to close
+Name=Lucent Desktop
+Comment=Native Rust launcher, bar and desktop widgets
 Exec=lucent-desktop
-Icon=applications-graphics
+Icon=preferences-desktop
 Terminal=false
-Categories=Utility;
+Categories=System;

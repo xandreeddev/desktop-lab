@@ -1,0 +1,13 @@
+# Build and runtime. Install a Vulkan driver appropriate to the actual device.
+rust
+pkgconf
+wayland
+libxkbcommon
+fontconfig
+vulkan-icd-loader
+# Optional typed desktop adapters; missing service data is shown as unavailable.
+playerctl
+wireplumber
+networkmanager
+curl
+# Current Omarchy integration calls its existing background and lock commands.

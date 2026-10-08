@@ -89,7 +89,7 @@ def gate(args):
 
 def install(args):
     if args.profile == 'lucent':
-        raise SystemExit('Use lucent/README.md to build and run the development prototype; keep the stock session.')
+        raise SystemExit('Use scripts/lucent-setup.py and lucent/README.md for the Rust framework/client integration.')
     gate(args)
     doctor()
     for relative in ('.config/quickshell', '.config/lucid', '.config/noctalia',

@@ -1,26 +1,120 @@
-# Lucent — draggable Vulkan prototype
+# Lucent
 
-A native Rust Wayland widget on a transparent layer surface. Drag the card with the left mouse button; release to save its position. A click changes its color. Right-click fades it out and closes it. Opening, hover, press/release and color changes animate; frames stop when the scene settles. Clicks outside the rounded card pass through to applications underneath.
+A native Rust Wayland shell framework and a Lucid-inspired desktop client. The
+client implements the floating bar, morphing dock/launcher, wallpaper carousel,
+widget selector, dark/light palette and draggable desktop widgets through the
+framework API. Omarchy still provides the compositor, secure lock, notifications,
+background surface and session services.
 
-This is the working prototype from Phase 0/Milestone 1. Omarchy remains active in the Lucent VM. The bar, launcher, dock, settings and lock screen still belong to Omarchy. Those features and the complete reusable widget toolkit remain future work.
-
-Build on Arch with `rust`, `pkgconf`, `wayland`, `libxkbcommon`, `fontconfig`, a font, `vulkan-icd-loader`, and a Vulkan driver:
+## Try the prepared VM
 
 ```sh
-cargo build --locked --release
-cargo run --locked --release -p lucent-desktop
-cargo run --locked --release -p hello-layer
-cargo fmt --all --check
-cargo clippy --locked --workspace --all-targets -- -D warnings
-cargo test --locked --workspace
+python3 vm/launch.py lucent  # from the repository root on the lab host
 ```
 
-Run inside a compositor supporting `zwlr_layer_shell_v1`. The widget host covers one compositor-selected output on the overlay layer, with no reserved space or keyboard grab. Its Wayland input region follows the card, including its rounded corners. Pointer coordinates belong to the stationary host surface, so dragging does not jump as the card moves. A 5-logical-pixel threshold separates drags from clicks. Positions are clamped to output bounds and saved atomically in `$XDG_STATE_HOME/lucent/position` (default `~/.local/state/lucent/position`). Remove that file while the demo is closed to recenter it.
+Inside the guest:
 
-The renderer explicitly selects **Vulkan** and requires premultiplied alpha. It fails with an error if either is unavailable. Logs identify the actual adapter. The prepared guest uses Mesa **lavapipe software Vulkan**, not host GPU acceleration: Venus initialization was blocked by QEMU's process-spawning sandbox, and the VM was restored to its original virgl graphics definition. Its compositor still uses virgl; Lucent uses Vulkan. No host sandbox setting was changed. See [VM graphics setup](../docs/lucent-vulkan.md).
+- **Super+Space:** open/close the application launcher. Type to filter, arrows to
+  select, Enter to launch, Escape or a click outside to close.
+- **Super+Ctrl+Space:** wallpaper carousel. Arrows select, Enter applies; clicking
+  the centered card applies it too.
+- **Widgets** in the launcher header: toggle calendar, clock, weather, media,
+  system monitor, notes and focus timer. Reset positions from the same panel.
+- Drag a widget's background with the left mouse button. Release saves position.
+  Buttons and text fields remain interactive. Widgets live below app windows.
+- Workspace pills switch real Hyprland workspaces. Dock icons launch or focus
+  their application. Omarchy's usual terminal, tiling and lock shortcuts remain.
+- The palette icon offers a shared light/dark theme. Power opens safe commands.
 
-Rounded shapes, gradients, borders, shadows and transforms run in the Vulkan shader. Text is rasterized only when its content or integer scale changes and then cached in a texture. Rendering is restricted to the card/shadow quad on a transparent target. This is a small renderer, not a complete text shaping or vector framework. Fractional scaling, multiple outputs, resizing widgets and GPU device-loss recovery remain future work.
+## Build and install
 
-From the repository root, `scripts/install-prototype.sh` builds and installs the executable and menu entry under `~/.local`. A compatible prebuilt binary can be passed as its sole argument. Open **Lucent Prototype** from the application launcher. The installer never changes shell startup. Close the existing demo before installing a new build. Uninstall by removing `~/.local/bin/lucent-desktop` and `~/.local/share/applications/lucent-desktop.desktop`; remove the position file if desired.
+Arch dependencies: `rust pkgconf wayland libxkbcommon fontconfig vulkan-icd-loader`
+and a Vulkan driver. Desktop adapters use `playerctl`, `wireplumber`,
+`networkmanager` and `curl`; missing services show their unavailable state.
 
-`python3 vm/test-prototype.py` exercises the prepared, unlocked guest using real pointer events. It verifies Vulkan and alpha selection, animated opening/color changes, click-through into a terminal, dragging without an accidental click, cached text uploads, position persistence across restart, a 120-second interval with no extra frames, and animated exit. Reports and screenshots first go into ignored `reports/local/` for review.
+```sh
+cargo build --manifest-path lucent/Cargo.toml --locked --release --workspace
+python3 scripts/lucent-setup.py install
+systemctl --user start lucent.service
+# After checking the running client:
+python3 scripts/lucent-setup.py activate
+```
+
+Installation is per-user. Activation adds marked blocks to Hyprland's user
+`bindings.lua` and `autostart.lua`. The service hides only Omarchy's bar **after
+all three Lucent surfaces have rendered**. Stopping, crashing or rolling back
+restores its previous visibility. Packaged Omarchy configuration is untouched.
+
+```sh
+python3 scripts/lucent-setup.py rollback
+```
+
+Rollback removes the managed blocks, restores stock shortcuts and stops Lucent.
+It retains binaries, widget settings and the last selected wallpaper. To restore
+the prepared VM's original wallpaper as well:
+
+```sh
+omarchy-theme-bg-set "$(cat ~/.config/lucent/original-wallpaper)"
+```
+
+## API and clients
+
+See [the framework guide](../docs/lucent-framework.md) for concepts, boundaries,
+examples and the actual supported API. `examples/hello-layer` is an independent
+counter application using the same layout, input, animation and Vulkan runtime:
+
+```sh
+cargo run --manifest-path lucent/Cargo.toml --locked --release -p hello-layer
+```
+
+The desktop has no raw Wayland objects or GPU commands. Its domain entities and
+use cases have no UI or operating-system dependencies. The renderer shares one
+Vulkan device and a bounded image/text cache across surfaces. Repainting follows
+invalidation and compositor frame callbacks; animations stop at their endpoint.
+
+## State and IPC
+
+`~/.local/state/lucent/desktop.json` stores the versioned layout, visible widget
+IDs, pinned app IDs, notes and palette choice. Saves are atomic. Invalid versions
+are left intact and disable saving until corrected. Notes are currently one line.
+A running timer uses a deadline and catches up after delayed callbacks; it is
+not persisted across a restart.
+
+Place wallpapers in `~/Pictures/Wallpapers` or `~/.config/lucent/wallpapers`.
+Weather is optional: `~/.config/lucent/weather.json` accepts numeric `latitude`
+and `longitude`; conditions come from Open-Meteo every 15 minutes. No IP lookup
+is performed and personal location is excluded from this repository.
+
+```sh
+lucent-cli launcher toggle  # also open / close
+lucent-cli wallpapers open
+lucent-cli widgets open
+lucent-cli inspect
+lucent-cli quit
+```
+
+IPC is a mode-0600 Unix socket in `$XDG_RUNTIME_DIR/lucent.sock`. The command
+allowlist never evaluates shell text. Inspect includes frame counters and hit
+geometry for real-input tests; it also includes the current query and note, so
+review it before sharing. A file lock prevents duplicate clients.
+
+## Validation and limits
+
+```sh
+cargo fmt --manifest-path lucent/Cargo.toml --all --check
+cargo clippy --manifest-path lucent/Cargo.toml --locked --workspace --all-targets -- -D warnings
+cargo test --manifest-path lucent/Cargo.toml --locked --workspace
+python3 vm/test-framework.py  # unlocked, prepared 1920×1080 VM
+```
+
+See [the validation report](../reports/lucent-framework.md) for executed checks
+and measurements. The old card prototype and its tests are historical milestones.
+
+The prepared VM uses **software Vulkan (Mesa lavapipe)**. The host GPU is not
+passed through; the compositor uses virgl. [Graphics details](../docs/lucent-vulkan.md).
+The reference layout and primary launcher/selector transitions are implemented;
+this is not complete Lucid feature or pixel parity. Notification history, tray
+hosting, clipboard/emoji modes, custom control-center dialogs, automatic
+wallpaper palette extraction, widget resizing, fractional scaling, multi-output
+placement and full Unicode shaping remain future work. Stock Omarchy continues
+handling session services. The framework has no Qt/GTK dependency.

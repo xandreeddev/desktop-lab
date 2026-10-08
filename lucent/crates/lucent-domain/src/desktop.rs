@@ -49,7 +49,9 @@ pub enum DomainError {
 }
 impl std::fmt::Display for DomainError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self { Self::Unavailable(s) | Self::Invalid(s) | Self::Failed(s) => f.write_str(s) }
+        match self {
+            Self::Unavailable(s) | Self::Invalid(s) | Self::Failed(s) => f.write_str(s),
+        }
     }
 }
 impl std::error::Error for DomainError {}
@@ -87,9 +89,16 @@ pub struct DesktopSettings {
 }
 impl Default for DesktopSettings {
     fn default() -> Self {
-        Self { version: 1, positions: BTreeMap::new(),
-            visible_widgets: ["calendar", "clock", "weather", "media"].map(str::to_owned).into(),
-            notes: String::new(), pinned: Vec::new(), light: false }
+        Self {
+            version: 1,
+            positions: BTreeMap::new(),
+            visible_widgets: ["calendar", "clock", "weather", "media"]
+                .map(str::to_owned)
+                .into(),
+            notes: String::new(),
+            pinned: Vec::new(),
+            light: false,
+        }
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -102,11 +111,17 @@ pub struct Date {
 }
 impl Date {
     pub fn days_in_month(year: i32, month: u32) -> u32 {
-        match month { 4 | 6 | 9 | 11 => 30,
+        match month {
+            4 | 6 | 9 | 11 => 30,
             2 if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) => 29,
-            2 => 28, 1 | 3 | 5 | 7 | 8 | 10 | 12 => 31, _ => 0 }
+            2 => 28,
+            1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+            _ => 0,
+        }
     }
-    pub fn first_weekday(self) -> u32 { (self.weekday + 7 - (self.day - 1) % 7) % 7 }
+    pub fn first_weekday(self) -> u32 {
+        (self.weekday + 7 - (self.day - 1) % 7) % 7
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClockSnapshot {
@@ -146,7 +161,13 @@ pub struct Wallpaper {
     pub name: String,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum TimerPhase { #[default] Ready, Running, Paused, Finished }
+pub enum TimerPhase {
+    #[default]
+    Ready,
+    Running,
+    Paused,
+    Finished,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FocusTimer {
     pub phase: TimerPhase,
@@ -154,21 +175,35 @@ pub struct FocusTimer {
     deadline: u64,
 }
 impl Default for FocusTimer {
-    fn default() -> Self { Self { phase: TimerPhase::Ready, remaining: 25*60, deadline: 0 } }
+    fn default() -> Self {
+        Self {
+            phase: TimerPhase::Ready,
+            remaining: 25 * 60,
+            deadline: 0,
+        }
+    }
 }
 impl FocusTimer {
     pub fn toggle(&mut self, now: u64) {
         self.tick(now);
         match self.phase {
             TimerPhase::Running => self.phase = TimerPhase::Paused,
-            TimerPhase::Finished => { *self = Self::default(); self.toggle(now); }
-            _ => { self.phase = TimerPhase::Running; self.deadline = now.saturating_add(self.remaining); }
+            TimerPhase::Finished => {
+                *self = Self::default();
+                self.toggle(now);
+            }
+            _ => {
+                self.phase = TimerPhase::Running;
+                self.deadline = now.saturating_add(self.remaining);
+            }
         }
     }
     pub fn tick(&mut self, now: u64) {
         if self.phase == TimerPhase::Running {
             self.remaining = self.deadline.saturating_sub(now);
-            if self.remaining == 0 { self.phase = TimerPhase::Finished; }
+            if self.remaining == 0 {
+                self.phase = TimerPhase::Finished;
+            }
         }
     }
 }

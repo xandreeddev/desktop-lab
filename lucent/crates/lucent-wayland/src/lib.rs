@@ -1,6 +1,9 @@
-//! Event-driven native layer surfaces. Applications do not handle raw Wayland objects.
-use lucent_domain::{FrameDemand, Point, Release, Widget};
-use lucent_render::{Error, Renderer};
+//! Generic event-driven Wayland runtime. Desktop policy lives entirely in clients.
+use calloop::{EventLoop, LoopHandle, channel};
+use calloop_wayland_source::WaylandSource;
+use lucent_api::{self as api, Application, Effects, FrameDemand, ViewContext};
+use lucent_render::{Error, Gpu, Renderer};
+use lucent_ui::{Interaction, Layout, Scene};
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState, FrameCallbackData, Region},
     delegate_registry,
@@ -9,6 +12,7 @@ use smithay_client_toolkit::{
     registry_handlers,
     seat::{
         Capability, SeatHandler, SeatState,
+        keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
         pointer::{PointerEvent, PointerEventKind, PointerHandler},
     },
     shell::{
@@ -19,201 +23,499 @@ use smithay_client_toolkit::{
         },
     },
 };
-use std::{path::PathBuf, time::Instant};
+use std::{
+    collections::BTreeMap,
+    fs::{self, File},
+    io::{BufRead, BufReader, Read, Write},
+    os::unix::{
+        fs::PermissionsExt,
+        net::{UnixListener, UnixStream},
+    },
+    path::PathBuf,
+    rc::Rc,
+    sync::{Arc, mpsc},
+    time::{Duration, Instant},
+};
 use wayland_client::{
     Connection, Proxy, QueueHandle,
     globals::registry_queue_init,
-    protocol::{wl_output, wl_pointer, wl_seat, wl_surface},
+    protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_surface},
 };
+use wgpu_handle::HasDisplayHandle;
+// Use the exact raw-window-handle version used by the renderer.
+use lucent_render::display_handle as wgpu_handle;
 
-/// Open a transparent widget host with a draggable card and Vulkan animations.
-/// The initial milestone deliberately preserves the existing desktop and secure locker.
-pub fn run(title: &str) -> Result<(), Error> {
-    let conn = Connection::connect_to_env()?;
-    let (globals, mut queue) = registry_queue_init(&conn)?;
-    let qh = queue.handle();
-    let compositor = CompositorState::bind(&globals, &qh)?;
-    let layer_shell = LayerShell::bind(&globals, &qh)?;
-    let surface = compositor.create_surface(&qh);
-    let layer = layer_shell.create_layer_surface(
-        &qh,
-        surface,
-        Layer::Overlay,
-        Some("lucent-prototype"),
-        None,
-    );
-    layer.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
-    layer.set_keyboard_interactivity(KeyboardInteractivity::None);
-    layer.set_exclusive_zone(-1);
-    layer.set_size(0, 0);
-    // Do not capture the whole desktop while the first frame is being prepared.
-    let empty = Region::new(&compositor)?;
-    layer.wl_surface().set_input_region(Some(empty.wl_region()));
-    layer.commit();
-    let font_path = std::process::Command::new("fc-match")
-        .args(["-f", "%{file}", "sans-serif"])
-        .output()?;
-    if !font_path.status.success() {
-        return Err("fontconfig could not select a font".into());
-    }
-    let font = std::fs::read(String::from_utf8(font_path.stdout)?.trim())?;
-    // SAFETY: state drops renderer before layer; conn was declared before state and
-    // remains alive until after state and its native surface have been destroyed.
-    let renderer = unsafe {
-        Renderer::new(
-            conn.backend(),
-            layer.wl_surface().id().as_ptr().cast(),
-            font,
-        )
-    }?;
-    let state_file = position_file();
-    let saved = state_file
-        .as_ref()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|s| parse_position(&s));
-    let mut state = State {
-        renderer,
-        layer,
-        compositor,
-        registry: RegistryState::new(&globals),
-        seats: SeatState::new(&globals, &qh),
-        outputs: OutputState::new(&globals, &qh),
-        pointer: None,
-        exit: false,
-        width: 1,
-        height: 1,
-        scale: 1,
-        demand: FrameDemand::default(),
-        widget: Widget::new(saved),
-        epoch: Instant::now(),
-        state_file,
-        input_bounds: None,
-        title: title.into(),
-        configured: false,
-        error: None,
-    };
-    while !state.exit {
-        queue.blocking_dispatch(&mut state)?;
-    }
-    conn.flush()?;
-    if let Some(error) = state.error {
-        return Err(error.into());
-    }
-    eprintln!(
-        "lucent closed cleanly; {} frame(s), {} click(s)",
-        state.renderer.frames, state.widget.clicks
-    );
-    Ok(())
+enum RuntimeEvent<M> {
+    Message(M),
+    Command(String, mpsc::SyncSender<String>),
 }
-
-// Drop order is intentional: GPU before the native Wayland layer surface.
-struct State {
-    renderer: Renderer,
+struct Native<M> {
+    renderer: Renderer, // Drop before layer.
     layer: LayerSurface,
+    spec: api::SurfaceSpec,
+    width: u32,
+    height: u32,
+    scale: u32,
+    configured: bool,
+    demand: FrameDemand,
+    scene: Scene<M>,
+    interaction: Interaction<M>,
+    regions: Vec<(api::Rect, f32)>,
+    frame_times: std::collections::VecDeque<f64>,
+}
+struct State<A: Application> {
+    surfaces: BTreeMap<&'static str, Native<A::Message>>,
+    gpu: Rc<Gpu>,
+    app: A,
+    layout: Layout,
     compositor: CompositorState,
+    layer_shell: LayerShell,
     registry: RegistryState,
     seats: SeatState,
     outputs: OutputState,
     pointer: Option<wl_pointer::WlPointer>,
-    exit: bool,
-    width: u32,
-    height: u32,
-    scale: u32,
-    demand: FrameDemand,
-    widget: Widget,
+    keyboard: Option<wl_keyboard::WlKeyboard>,
+    keyboard_surface: Option<&'static str>,
+    modifiers: Modifiers,
     epoch: Instant,
-    state_file: Option<PathBuf>,
-    input_bounds: Option<[f32; 4]>,
-    title: String,
-    configured: bool,
+    exit: bool,
     error: Option<String>,
+    handle: LoopHandle<'static, Self>,
+    sender: channel::Sender<RuntimeEvent<A::Message>>,
+    tasks: mpsc::Sender<api::Task<A::Message>>,
+    subscriptions: BTreeMap<&'static str, api::Cancellation>,
+    connection: Connection,
 }
-impl State {
-    fn redraw(&mut self, qh: &QueueHandle<Self>) {
-        if !self.configured || !self.demand.begin() {
-            return;
-        }
-        let now = self.epoch.elapsed().as_secs_f64();
-        let card = self.widget.visual(now);
-        let bounds = card.bounds();
-        if self.input_bounds != Some(bounds) {
-            if let Err(error) = self.set_input_region(bounds) {
-                self.error = Some(error.to_string());
-                self.exit = true;
-                return;
-            }
-            self.input_bounds = Some(bounds);
-        }
-        let surface = self.layer.wl_surface();
-        surface.set_buffer_scale(self.scale as i32);
-        surface.frame(qh, FrameCallbackData(surface.clone()));
-        if let Err(error) = self.renderer.render(
-            (self.width * self.scale, self.height * self.scale),
-            self.scale,
-            &self.title,
-            self.widget.clicks,
-            card,
-        ) {
-            self.error = Some(error.to_string());
-            self.exit = true;
-        }
-        // Queue a final settled frame too. Once it arrives no further callbacks
-        // are requested unless a new input/configure event invalidates the scene.
-        if self.widget.animating(now) {
-            self.demand.invalidate();
-        }
-        if self.widget.finished(now) {
-            self.exit = true;
-        }
+/// Run any framework application, with no desktop-specific types in the backend.
+pub fn run<A: Application>(app: A) -> Result<(), Error> {
+    let conn = Connection::connect_to_env()?;
+    let (globals, queue) = registry_queue_init(&conn)?;
+    let qh = queue.handle();
+    let compositor = CompositorState::bind(&globals, &qh)?;
+    let layer_shell = LayerShell::bind(&globals, &qh)?;
+    let mut fonts = Vec::new();
+    for bytes in app.fonts() {
+        fonts.push(
+            fontdue::Font::from_bytes(bytes, fontdue::FontSettings::default())
+                .map_err(std::io::Error::other)?,
+        );
     }
-    fn set_input_region(&self, bounds: [f32; 4]) -> Result<(), Error> {
-        let [x, y, w, h] = bounds;
-        let radius = 26.0 * w / lucent_domain::CARD_WIDTH;
-        let region = Region::new(&self.compositor)?;
-        let top = y.floor() as i32;
-        let bottom = (y + h).ceil() as i32;
-        // Rounded input mask: even the transparent corners pass clicks through.
-        for row in top..bottom {
-            let edge = ((row as f32 + 0.5 - y - h / 2.0).abs() - (h / 2.0 - radius)).max(0.0);
-            let inset = radius - (radius * radius - edge * edge).max(0.0).sqrt();
-            let left = (x + inset).ceil() as i32;
-            let right = (x + w - inset).floor() as i32;
-            if right > left {
-                region.add(left, row, right - left, 1);
+    if fonts.is_empty() {
+        let matched = std::process::Command::new("fc-match")
+            .args(["-f", "%{file}", "sans-serif"])
+            .output()?;
+        if !matched.status.success() {
+            return Err("Fontconfig could not select a font".into());
+        }
+        fonts.push(
+            fontdue::Font::from_bytes(
+                fs::read(String::from_utf8(matched.stdout)?.trim())?,
+                fontdue::FontSettings::default(),
+            )
+            .map_err(std::io::Error::other)?,
+        );
+    }
+    let fonts = Arc::new(fonts);
+    let gpu = Gpu::new(conn.backend(), fonts.clone())?;
+    let mut event_loop: EventLoop<State<A>> = EventLoop::try_new()?;
+    let handle = event_loop.handle();
+    let (sender, events) = channel::channel();
+    let (task_sender, task_receiver) = mpsc::channel::<api::Task<A::Message>>();
+    let completion = sender.clone();
+    // A single ordered effects worker makes configuration writes deterministic.
+    std::thread::spawn(move || {
+        for task in task_receiver {
+            let message = task();
+            if completion.send(RuntimeEvent::Message(message)).is_err() {
+                break;
             }
         }
-        self.layer
-            .wl_surface()
-            .set_input_region(Some(region.wl_region()));
+    });
+    let mut state = State {
+        surfaces: BTreeMap::new(),
+        gpu,
+        app,
+        layout: Layout::new(fonts),
+        compositor,
+        layer_shell,
+        registry: RegistryState::new(&globals),
+        seats: SeatState::new(&globals, &qh),
+        outputs: OutputState::new(&globals, &qh),
+        pointer: None,
+        keyboard: None,
+        keyboard_surface: None,
+        modifiers: Modifiers::default(),
+        epoch: Instant::now(),
+        exit: false,
+        error: None,
+        handle: handle.clone(),
+        sender: sender.clone(),
+        tasks: task_sender,
+        subscriptions: BTreeMap::new(),
+        connection: conn.clone(),
+    };
+    let runtime =
+        PathBuf::from(std::env::var_os("XDG_RUNTIME_DIR").ok_or("XDG_RUNTIME_DIR is required")?);
+    let socket_path = runtime.join(format!("{}.sock", state.app.name()));
+    let lock = File::create(runtime.join(format!("{}.lock", state.app.name())))?;
+    lock.try_lock()
+        .map_err(|_| "This framework client is already running")?;
+    if socket_path.exists() {
+        fs::remove_file(&socket_path)?;
+    }
+    let listener = UnixListener::bind(&socket_path)?;
+    fs::set_permissions(&socket_path, fs::Permissions::from_mode(0o600))?;
+    let ipc_cancel = api::Cancellation::default();
+    let cancel = ipc_cancel.clone();
+    std::thread::spawn(move || {
+        for incoming in listener.incoming() {
+            if cancel.cancelled() {
+                break;
+            }
+            if let Ok(mut stream) = incoming {
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(1)));
+                let _ = stream.set_write_timeout(Some(Duration::from_secs(1)));
+                let mut text = String::new();
+                if BufReader::new(&stream)
+                    .take(4096)
+                    .read_line(&mut text)
+                    .is_err()
+                {
+                    continue;
+                }
+                let (tx, rx) = mpsc::sync_channel(1);
+                if sender
+                    .send(RuntimeEvent::Command(text.trim().into(), tx))
+                    .is_err()
+                {
+                    break;
+                }
+                let result = rx
+                    .recv_timeout(Duration::from_secs(3))
+                    .unwrap_or_else(|_| "error: client not responding".into());
+                let _ = writeln!(stream, "{result}");
+            }
+        }
+    });
+    let event_qh = qh.clone();
+    handle.insert_source(events, move |event, _, state| {
+        if let channel::Event::Msg(event) = event {
+            match event {
+                RuntimeEvent::Message(msg) => state.message(msg, &event_qh),
+                RuntimeEvent::Command(command, reply) => {
+                    let response = if command == "inspect" {
+                        state.inspect()
+                    } else {
+                        match state.app.command(&command) {
+                            Ok(Some(msg)) => {
+                                state.message(msg, &event_qh);
+                                "ok".into()
+                            }
+                            Ok(None) => "ok".into(),
+                            Err(e) => format!("error: {e}"),
+                        }
+                    };
+                    let _ = reply.send(response);
+                }
+            }
+        }
+    })?;
+    WaylandSource::new(conn.clone(), queue).insert(handle)?;
+    let mut effects = Effects::default();
+    state.app.init(&mut effects);
+    state.effects(effects, &qh);
+    state.reconcile(&qh)?;
+    while !state.exit {
+        event_loop.dispatch(None, &mut state)?;
+        state.draw_all(&qh);
+    }
+    for cancel in state.subscriptions.values() {
+        cancel.cancel();
+    }
+    ipc_cancel.cancel();
+    let _ = UnixStream::connect(&socket_path);
+    let _ = fs::remove_file(socket_path);
+    eprintln!("{} stopped cleanly", state.app.name());
+    if let Some(error) = state.error.take() {
+        return Err(error.into());
+    }
+    Ok(())
+}
+impl<A: Application> State<A> {
+    fn inspect(&self) -> String {
+        serde_json::json!({"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id,"width":s.width,"height":s.height,"frames":s.renderer.frames,"frame_times_ms":s.frame_times,"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)}).to_string()
+    }
+    fn message(&mut self, message: A::Message, qh: &QueueHandle<Self>) {
+        let mut effects = Effects {
+            now: self.epoch.elapsed().as_secs_f64(),
+            ..Default::default()
+        };
+        self.app.update(message, &mut effects);
+        self.effects(effects, qh);
+    }
+    fn effects(&mut self, effects: Effects<A::Message>, qh: &QueueHandle<Self>) {
+        self.exit |= effects.exit;
+        for task in effects.tasks {
+            let _ = self.tasks.send(task);
+        }
+        if let Err(e) = self.reconcile(qh) {
+            self.error = Some(e.to_string());
+            self.exit = true;
+        }
+        for id in effects.redraw {
+            if let Some(s) = self.surfaces.get_mut(id) {
+                s.demand.invalidate();
+            }
+        }
+        self.draw_all(qh);
+    }
+    fn reconcile(&mut self, qh: &QueueHandle<Self>) -> Result<(), Error> {
+        let specs = self.app.surfaces();
+        self.surfaces
+            .retain(|id, _| specs.iter().any(|s| s.id == *id && s.visible));
+        for spec in specs.into_iter().filter(|s| s.visible) {
+            if let Some(native) = self.surfaces.get_mut(spec.id) {
+                if native.spec != spec {
+                    configure_layer(&native.layer, &spec);
+                    native.spec = spec;
+                    native.layer.commit();
+                    native.demand.invalidate();
+                }
+                continue;
+            }
+            let surface = self.compositor.create_surface(qh);
+            let layer = self.layer_shell.create_layer_surface(
+                qh,
+                surface,
+                layer_kind(spec.layer),
+                Some(format!("{}-{}", self.app.name(), spec.id)),
+                None,
+            );
+            configure_layer(&layer, &spec);
+            let region = Region::new(&self.compositor)?;
+            layer
+                .wl_surface()
+                .set_input_region(Some(region.wl_region()));
+            layer.commit();
+            // SAFETY: Native drops its renderer before its layer; State keeps the connection alive.
+            let renderer = unsafe {
+                Renderer::new(
+                    self.gpu.clone(),
+                    self.connection.backend().display_handle()?.as_raw(),
+                    layer.wl_surface().id().as_ptr().cast(),
+                )
+            }?;
+            self.surfaces.insert(
+                spec.id,
+                Native {
+                    renderer,
+                    layer,
+                    spec,
+                    width: 1,
+                    height: 1,
+                    scale: 1,
+                    configured: false,
+                    demand: FrameDemand::default(),
+                    scene: Scene::default(),
+                    interaction: Interaction::default(),
+                    regions: vec![],
+                    frame_times: std::collections::VecDeque::new(),
+                },
+            );
+        }
+        let wanted = self.app.subscriptions();
+        self.subscriptions.retain(|id, cancel| {
+            let keep = wanted.iter().any(|s| s.id == *id);
+            if !keep {
+                cancel.cancel();
+            }
+            keep
+        });
+        for subscription in wanted {
+            if self.subscriptions.contains_key(subscription.id) {
+                continue;
+            }
+            let cancel = api::Cancellation::default();
+            self.subscriptions.insert(subscription.id, cancel.clone());
+            let sender = self.sender.clone();
+            std::thread::spawn(move || {
+                (subscription.run)(
+                    api::Emitter::new(move |message| {
+                        let _ = sender.send(RuntimeEvent::Message(message));
+                    }),
+                    cancel,
+                )
+            });
+        }
         Ok(())
     }
-    fn save_position(&self) {
-        let p = self.widget.position;
-        eprintln!("lucent position {:.1} {:.1}", p.x, p.y);
-        if let Some(path) = &self.state_file {
-            let save = || -> std::io::Result<()> {
-                std::fs::create_dir_all(path.parent().unwrap())?;
-                let temporary = path.with_extension("tmp");
-                std::fs::write(&temporary, format!("v1 {} {}\n", p.x, p.y))?;
-                std::fs::rename(temporary, path)
+    fn draw_all(&mut self, qh: &QueueHandle<Self>) {
+        let now = self.epoch.elapsed().as_secs_f64();
+        for (id, s) in &mut self.surfaces {
+            if !s.configured || !s.demand.begin() {
+                continue;
+            }
+            let tree = self.app.view(&ViewContext {
+                surface: id,
+                width: s.width as f32,
+                height: s.height as f32,
+                now,
+            });
+            let scene =
+                self.layout
+                    .build(&tree, s.width as f32, s.height as f32, &s.interaction, now);
+            s.interaction.synchronize(&scene);
+            let regions = if s.spec.capture_all {
+                vec![(api::Rect::new(0., 0., s.width as f32, s.height as f32), 0.)]
+            } else {
+                scene.regions.clone()
             };
-            if let Err(error) = save() {
-                eprintln!("lucent could not save position: {error}");
+            if regions != s.regions {
+                match Region::new(&self.compositor) {
+                    Ok(region) => {
+                        for (rect, radius) in &regions {
+                            add_region(&region, *rect, *radius);
+                        }
+                        s.layer
+                            .wl_surface()
+                            .set_input_region(Some(region.wl_region()));
+                        s.regions = regions;
+                    }
+                    Err(e) => {
+                        self.error = Some(e.to_string());
+                        self.exit = true;
+                    }
+                }
+            }
+            let surface = s.layer.wl_surface();
+            surface.set_buffer_scale(s.scale as i32);
+            surface.frame(qh, FrameCallbackData(surface.clone()));
+            if let Err(e) = s.renderer.render(s.width, s.height, s.scale, &scene.paint) {
+                self.error = Some(e.to_string());
+                self.exit = true;
+            }
+            if self.app.animating(id, now) || s.interaction.animating(now) {
+                s.demand.invalidate();
+            }
+            s.frame_times
+                .push_back(self.epoch.elapsed().as_secs_f64() * 1000.);
+            if s.frame_times.len() > 120 {
+                s.frame_times.pop_front();
+            }
+            s.scene = scene;
+        }
+    }
+    fn id_for(&self, surface: &wl_surface::WlSurface) -> Option<&'static str> {
+        self.surfaces
+            .iter()
+            .find(|(_, s)| s.layer.wl_surface() == surface)
+            .map(|(id, _)| *id)
+    }
+    fn key(&mut self, event: KeyEvent, qh: &QueueHandle<Self>) {
+        let Some(id) = self.keyboard_surface else {
+            return;
+        };
+        let key = match event.keysym {
+            Keysym::Escape => api::Key::Escape,
+            Keysym::Return | Keysym::KP_Enter => api::Key::Enter,
+            Keysym::BackSpace => api::Key::Backspace,
+            Keysym::Up => api::Key::Up,
+            Keysym::Down => api::Key::Down,
+            Keysym::Left => api::Key::Left,
+            Keysym::Right => api::Key::Right,
+            Keysym::Tab => api::Key::Tab,
+            Keysym::Home => api::Key::Home,
+            Keysym::End => api::Key::End,
+            Keysym::a if self.modifiers.ctrl => api::Key::SelectAll,
+            _ => {
+                let Some(text) = event
+                    .utf8
+                    .filter(|s| !s.is_empty() && s.chars().all(|c| !c.is_control()))
+                else {
+                    return;
+                };
+                if self.modifiers.ctrl || self.modifiers.alt {
+                    return;
+                }
+                api::Key::Text(text)
+            }
+        };
+        if let Some(message) = self.app.event(api::Event::Key {
+            surface: id,
+            key: key.clone(),
+        }) {
+            self.message(message, qh);
+            return;
+        }
+        if let Some(s) = self.surfaces.get_mut(id) {
+            let message = s.interaction.key(&s.scene, &key);
+            if let Some(message) = message {
+                self.message(message, qh);
             }
         }
     }
 }
-impl CompositorHandler for State {
+fn layer_kind(layer: api::Layer) -> Layer {
+    match layer {
+        api::Layer::Background => Layer::Background,
+        api::Layer::Bottom => Layer::Bottom,
+        api::Layer::Top => Layer::Top,
+        api::Layer::Overlay => Layer::Overlay,
+    }
+}
+fn configure_layer(layer: &LayerSurface, spec: &api::SurfaceSpec) {
+    layer.set_layer(layer_kind(spec.layer));
+    layer.set_size(spec.width, spec.height);
+    layer.set_exclusive_zone(spec.exclusive_zone);
+    layer.set_anchor(match spec.anchor {
+        api::Anchor::Top => Anchor::TOP | Anchor::LEFT | Anchor::RIGHT,
+        api::Anchor::Bottom => Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
+        api::Anchor::Fill => Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
+        api::Anchor::Center => Anchor::empty(),
+    });
+    layer.set_keyboard_interactivity(match spec.keyboard {
+        api::Keyboard::None => KeyboardInteractivity::None,
+        api::Keyboard::OnDemand => KeyboardInteractivity::OnDemand,
+        api::Keyboard::Exclusive => KeyboardInteractivity::Exclusive,
+    });
+}
+fn add_region(region: &Region, rect: api::Rect, radius: f32) {
+    let radius = radius.min(rect.w / 2.).min(rect.h / 2.);
+    if radius < 1. {
+        region.add(
+            rect.x as i32,
+            rect.y as i32,
+            rect.w.ceil() as i32,
+            rect.h.ceil() as i32,
+        );
+        return;
+    }
+    for row in rect.y.floor() as i32..(rect.y + rect.h).ceil() as i32 {
+        let edge =
+            ((row as f32 + 0.5 - rect.y - rect.h / 2.).abs() - (rect.h / 2. - radius)).max(0.);
+        let inset = radius - (radius * radius - edge * edge).max(0.).sqrt();
+        let left = (rect.x + inset).ceil() as i32;
+        let right = (rect.x + rect.w - inset).floor() as i32;
+        if right > left {
+            region.add(left, row, right - left, 1);
+        }
+    }
+}
+impl<A: Application> CompositorHandler for State<A> {
     fn scale_factor_changed(
         &mut self,
         _: &Connection,
         qh: &QueueHandle<Self>,
-        _: &wl_surface::WlSurface,
+        surface: &wl_surface::WlSurface,
         factor: i32,
     ) {
-        self.scale = factor.max(1) as u32;
-        self.demand.invalidate();
-        self.redraw(qh);
+        if let Some(id) = self.id_for(surface)
+            && let Some(s) = self.surfaces.get_mut(id)
+        {
+            s.scale = factor.max(1) as u32;
+            s.demand.invalidate();
+        }
+        self.draw_all(qh);
     }
     fn transform_changed(
         &mut self,
@@ -223,9 +525,19 @@ impl CompositorHandler for State {
         _: wl_output::Transform,
     ) {
     }
-    fn frame(&mut self, _: &Connection, qh: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: u32) {
-        self.demand.ready();
-        self.redraw(qh);
+    fn frame(
+        &mut self,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+        surface: &wl_surface::WlSurface,
+        _: u32,
+    ) {
+        if let Some(id) = self.id_for(surface)
+            && let Some(s) = self.surfaces.get_mut(id)
+        {
+            s.demand.ready();
+        }
+        self.draw_all(qh);
     }
     fn surface_enter(
         &mut self,
@@ -244,7 +556,7 @@ impl CompositorHandler for State {
     ) {
     }
 }
-impl LayerShellHandler for State {
+impl<A: Application> LayerShellHandler for State<A> {
     fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &LayerSurface) {
         self.exit = true;
     }
@@ -252,31 +564,29 @@ impl LayerShellHandler for State {
         &mut self,
         _: &Connection,
         qh: &QueueHandle<Self>,
-        _: &LayerSurface,
+        layer: &LayerSurface,
         config: LayerSurfaceConfigure,
         _: u32,
     ) {
-        if config.new_size.0 > 0 {
-            self.width = config.new_size.0;
+        if let Some(id) = self.id_for(layer.wl_surface()) {
+            let s = self.surfaces.get_mut(id).unwrap();
+            s.width = config.new_size.0.max(1);
+            s.height = config.new_size.1.max(1);
+            s.configured = true;
+            s.demand.invalidate();
+            let event = api::Event::Resize {
+                surface: id,
+                width: s.width as f32,
+                height: s.height as f32,
+            };
+            if let Some(message) = self.app.event(event) {
+                self.message(message, qh);
+            }
         }
-        if config.new_size.1 > 0 {
-            self.height = config.new_size.1;
-        }
-        self.widget.configure(
-            self.width as f32,
-            self.height as f32,
-            self.epoch.elapsed().as_secs_f64(),
-        );
-        eprintln!(
-            "lucent configured {} {} position {:.1} {:.1}",
-            self.width, self.height, self.widget.position.x, self.widget.position.y
-        );
-        self.configured = true;
-        self.demand.invalidate();
-        self.redraw(qh);
+        self.draw_all(qh);
     }
 }
-impl OutputHandler for State {
+impl<A: Application> OutputHandler for State<A> {
     fn output_state(&mut self) -> &mut OutputState {
         &mut self.outputs
     }
@@ -284,7 +594,7 @@ impl OutputHandler for State {
     fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
     fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
 }
-impl SeatHandler for State {
+impl<A: Application> SeatHandler for State<A> {
     fn seat_state(&mut self) -> &mut SeatState {
         &mut self.seats
     }
@@ -297,34 +607,44 @@ impl SeatHandler for State {
         capability: Capability,
     ) {
         if capability == Capability::Pointer && self.pointer.is_none() {
-            match self.seats.get_pointer(qh, &seat) {
-                Ok(pointer) => self.pointer = Some(pointer),
-                Err(error) => {
-                    self.error = Some(error.to_string());
-                    self.exit = true;
-                }
-            }
+            self.pointer = self.seats.get_pointer(qh, &seat).ok();
+        }
+        if capability == Capability::Keyboard && self.keyboard.is_none() {
+            let key_qh = qh.clone();
+            self.keyboard = self
+                .seats
+                .get_keyboard_with_repeat(
+                    qh,
+                    &seat,
+                    None,
+                    self.handle.clone(),
+                    Box::new(move |state, _, event| state.key(event, &key_qh)),
+                )
+                .ok();
         }
     }
     fn remove_capability(
         &mut self,
         _: &Connection,
-        qh: &QueueHandle<Self>,
+        _: &QueueHandle<Self>,
         _: wl_seat::WlSeat,
         capability: Capability,
     ) {
         if capability == Capability::Pointer
-            && let Some(pointer) = self.pointer.take()
+            && let Some(p) = self.pointer.take()
         {
-            pointer.release();
-            self.widget.cancel_drag(self.epoch.elapsed().as_secs_f64());
-            self.demand.invalidate();
-            self.redraw(qh);
+            p.release();
+        }
+        if capability == Capability::Keyboard
+            && let Some(k) = self.keyboard.take()
+        {
+            k.release();
+            self.keyboard_surface = None;
         }
     }
     fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
 }
-impl PointerHandler for State {
+impl<A: Application> PointerHandler for State<A> {
     fn pointer_frame(
         &mut self,
         _: &Connection,
@@ -333,71 +653,125 @@ impl PointerHandler for State {
         events: &[PointerEvent],
     ) {
         for event in events {
-            if &event.surface != self.layer.wl_surface() {
+            let Some(id) = self.id_for(&event.surface) else {
                 continue;
-            }
+            };
             let now = self.epoch.elapsed().as_secs_f64();
-            let point = Point::new(event.position.0 as f32, event.position.1 as f32);
-            match event.kind {
-                PointerEventKind::Enter { .. } => self.widget.hover(true, now),
-                PointerEventKind::Leave { .. } => self.widget.hover(false, now),
-                PointerEventKind::Motion { .. } => self.widget.motion(point),
-                PointerEventKind::Press { button: 0x110, .. } => self.widget.press(point, now),
-                PointerEventKind::Release { button: 0x110, .. } => {
-                    // Include the release coordinates if motion was coalesced.
-                    self.widget.motion(point);
-                    match self.widget.release(now) {
-                        Release::Dragged => self.save_position(),
-                        Release::Clicked => eprintln!("lucent click {}", self.widget.clicks),
-                        Release::Ignored => {}
+            let (x, y) = (event.position.0 as f32, event.position.1 as f32);
+            let mut messages = vec![];
+            let mut outside = false;
+            let mut scroll = None;
+            if let Some(s) = self.surfaces.get_mut(id) {
+                match event.kind {
+                    PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
+                        messages.extend(s.interaction.motion(&s.scene, x, y, now))
                     }
+                    PointerEventKind::Leave { .. } => s.interaction.leave(now),
+                    PointerEventKind::Press { button: 0x110, .. } => {
+                        outside = !s.scene.hits.iter().any(|h| h.contains(x, y));
+                        s.interaction.press(&s.scene, x, y);
+                    }
+                    PointerEventKind::Release { button: 0x110, .. } => {
+                        if let Some(m) = s.interaction.release(x, y) {
+                            messages.push(m);
+                        }
+                    }
+                    PointerEventKind::Axis { vertical, .. } => {
+                        scroll = Some(if vertical.discrete != 0 {
+                            vertical.discrete as f64
+                        } else {
+                            vertical.absolute / 15.
+                        })
+                    }
+                    _ => continue,
                 }
-                PointerEventKind::Press { button: 0x111, .. } => self.widget.close(now),
-                _ => continue,
+                s.demand.invalidate();
             }
-            self.demand.invalidate();
+            if outside && let Some(m) = self.app.event(api::Event::Outside { surface: id }) {
+                messages.push(m);
+            }
+            if let Some(lines) = scroll
+                && let Some(m) = self.app.event(api::Event::Scroll { surface: id, lines })
+            {
+                messages.push(m);
+            }
+            for m in messages {
+                self.message(m, qh);
+            }
         }
-        self.redraw(qh);
+        self.draw_all(qh);
     }
 }
-delegate_registry!(State);
-impl ProvidesRegistryState for State {
+impl<A: Application> KeyboardHandler for State<A> {
+    fn enter(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_keyboard::WlKeyboard,
+        surface: &wl_surface::WlSurface,
+        _: u32,
+        _: &[u32],
+        _: &[Keysym],
+    ) {
+        self.keyboard_surface = self.id_for(surface);
+    }
+    fn leave(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_keyboard::WlKeyboard,
+        _: &wl_surface::WlSurface,
+        _: u32,
+    ) {
+        self.keyboard_surface = None;
+    }
+    fn press_key(
+        &mut self,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+        _: &wl_keyboard::WlKeyboard,
+        _: u32,
+        event: KeyEvent,
+    ) {
+        self.key(event, qh);
+    }
+    fn repeat_key(
+        &mut self,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+        _: &wl_keyboard::WlKeyboard,
+        _: u32,
+        event: KeyEvent,
+    ) {
+        self.key(event, qh);
+    }
+    fn release_key(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_keyboard::WlKeyboard,
+        _: u32,
+        _: KeyEvent,
+    ) {
+    }
+    fn update_modifiers(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_keyboard::WlKeyboard,
+        _: u32,
+        modifiers: Modifiers,
+        _: RawModifiers,
+        _: u32,
+    ) {
+        self.modifiers = modifiers;
+    }
+}
+delegate_registry!(@<A:Application> State<A>);
+impl<A: Application> ProvidesRegistryState for State<A> {
     fn registry(&mut self) -> &mut RegistryState {
         &mut self.registry
     }
     registry_handlers![OutputState, SeatState];
 }
-smithay_client_toolkit::delegate_dispatch2!(State);
-
-fn position_file() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_STATE_HOME")
-        .map(PathBuf::from)
-        .filter(|p| p.is_absolute())
-        .or_else(|| std::env::var_os("HOME").map(|p| PathBuf::from(p).join(".local/state")))?;
-    Some(base.join("lucent/position"))
-}
-fn parse_position(text: &str) -> Option<Point> {
-    let fields: Vec<_> = text.split_whitespace().collect();
-    if fields.len() != 3 || fields[0] != "v1" {
-        return None;
-    }
-    let p = Point::new(fields[1].parse().ok()?, fields[2].parse().ok()?);
-    (p.x.is_finite() && p.y.is_finite()).then_some(p)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn position_format_rejects_corrupt_or_future_state() {
-        assert_eq!(
-            parse_position("v1 120.5 200\n"),
-            Some(Point::new(120.5, 200.0))
-        );
-        for bad in [
-            "v2 1 2", "v1 NaN 2", "v1 1 inf", "v1 1", "v1 1 2 3", "broken",
-        ] {
-            assert_eq!(parse_position(bad), None);
-        }
-    }
-}
+smithay_client_toolkit::delegate_dispatch2!(@<A:Application> State<A>);

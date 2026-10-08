@@ -83,3 +83,35 @@ class ManifestTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class LucentIntegrationTests(unittest.TestCase):
+    def test_managed_blocks_are_idempotent_and_preserve_later_user_edits(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('lucent_setup', ROOT / 'scripts/lucent-setup.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / 'bindings.lua'
+            config.write_text('-- original\n')
+            module.edit(config, 'o.bind("SUPER + SPACE", "Lucent", "lucent-cli launcher toggle")\n')
+            once = config.read_text()
+            module.edit(config, 'o.bind("SUPER + SPACE", "Lucent", "lucent-cli launcher toggle")\n')
+            self.assertEqual(config.read_text(), once)
+            config.write_text(config.read_text() + '-- later user edit\n')
+            module.edit(config)
+            self.assertIn('-- original', config.read_text())
+            self.assertIn('-- later user edit', config.read_text())
+            self.assertNotIn('lucent-cli', config.read_text())
+
+    def test_malformed_managed_block_is_not_overwritten(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('lucent_setup', ROOT / 'scripts/lucent-setup.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / 'bindings.lua'
+            original = module.BEGIN + '-- unrelated user content\n'
+            config.write_text(original)
+            with self.assertRaises(SystemExit):
+                module.edit(config, 'replacement\n')
+            self.assertEqual(config.read_text(), original)

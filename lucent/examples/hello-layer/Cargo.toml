@@ -5,3 +5,4 @@ edition.workspace = true
 license.workspace = true
 [dependencies]
 lucent-wayland = { path = "../../crates/lucent-wayland" }
+lucent-api = { path = "../../crates/lucent-api" }

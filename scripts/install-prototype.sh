@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build by default, or install an already built, locally supplied prototype binary.
+# Compatibility entry point for the former prototype installer.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ $# -gt 1 ]]; then
@@ -7,13 +7,9 @@ if [[ $# -gt 1 ]]; then
   exit 2
 fi
 if [[ $# -eq 1 ]]; then
-  binary="$1"
+  binary_dir="$(dirname "$1")"
 else
-  cargo build --manifest-path "$root/lucent/Cargo.toml" --locked --release -p lucent-desktop
-  binary="$root/lucent/target/release/lucent-desktop"
+  cargo build --manifest-path "$root/lucent/Cargo.toml" --locked --release -p lucent-desktop -p lucent-cli
+  binary_dir="$root/lucent/target/release"
 fi
-install -Dm755 "$binary" "$HOME/.local/bin/lucent-desktop"
-install -Dm644 "$root/packaging/lucent-desktop.desktop" "$HOME/.local/share/applications/lucent-desktop.desktop"
-# An absolute executable also works in a session without ~/.local/bin on PATH.
-sed -i "s|^Exec=.*|Exec=$HOME/.local/bin/lucent-desktop|" "$HOME/.local/share/applications/lucent-desktop.desktop"
-echo 'Installed Lucent Prototype in the application menu. Right-click its card to exit.'
+exec python3 "$root/scripts/lucent-setup.py" install --binary-dir "$binary_dir"

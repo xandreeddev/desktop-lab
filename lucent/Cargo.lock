@@ -520,6 +520,7 @@ dependencies = [
 name = "hello-layer"
 version = "0.1.0"
 dependencies = [
+ "lucent-api",
  "lucent-wayland",
 ]
 
@@ -729,7 +730,12 @@ version = "0.1.0"
 name = "lucent-desktop"
 version = "0.1.0"
 dependencies = [
+ "lucent-api",
+ "lucent-domain",
+ "lucent-services",
+ "lucent-usecases",
  "lucent-wayland",
+ "serde_json",
 ]
 
 [[package]]
@@ -744,7 +750,8 @@ name = "lucent-render"
 version = "0.1.0"
 dependencies = [
  "fontdue",
- "lucent-domain",
+ "lucent-api",
+ "lucent-ui",
  "pollster",
  "wgpu",
 ]
@@ -780,8 +787,13 @@ dependencies = [
 name = "lucent-wayland"
 version = "0.1.0"
 dependencies = [
- "lucent-domain",
+ "calloop",
+ "calloop-wayland-source",
+ "fontdue",
+ "lucent-api",
  "lucent-render",
+ "lucent-ui",
+ "serde_json",
  "smithay-client-toolkit",
  "wayland-backend",
  "wayland-client",
