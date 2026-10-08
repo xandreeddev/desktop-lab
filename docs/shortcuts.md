@@ -19,16 +19,19 @@ Other Omarchy shell-specific actions are not silently claimed to work. In partic
 
 Lucid uses `qs ipc call -- TARGET METHOD [ARG]`; the `--` is required before method arguments. Noctalia uses `noctalia msg COMMAND [ARG]`. Inspect the installed IPC help when upgrading; do not substitute legacy Noctalia v4 commands.
 
-## Lucent prototype
-
-Use the stock Omarchy keyboard shortcuts. The Rust card has its own pointer controls:
+## Lucent framework client
 
 | Action | Result |
 | --- | --- |
-| Left-button drag anywhere on the card | Move it; release saves its position |
-| Left-click without dragging | Animate between blue and teal |
-| Hover / press / release | Animate highlight and scale |
-| Right-click | Fade out and close the prototype |
-| Click outside its rounded outline | Interact with the application below |
+| Super+Space | Rust launcher toggle |
+| Super+Ctrl+Space | Wallpaper carousel |
+| Type / arrows / Enter / Escape | Search, select, launch/apply, close |
+| Widget background left-drag | Move and persist position |
+| Launcher Widgets tab | Toggle widgets or reset positions |
+| Launcher palette tab | Shared light/dark theme |
+| Dock application icon | Launch or focus a running window |
+| Top-bar workspace pill | Switch workspace |
 
-Launch **Lucent Prototype** again from the menu to restore the saved position. No modifier key is needed to drag it, and it does not enter Hyprland's tiled window layout.
+Omarchy's terminal, tiling and secure-lock shortcuts remain. The Rust widgets are
+Wayland layer surfaces and stay out of the tiled window layout. Close Lucent with
+`lucent-cli quit`; its service restores the stock bar. See [usage](../lucent/README.md).

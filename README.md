@@ -1,14 +1,14 @@
 # Desktop Lab
 
-Three isolated Omarchy experiments for comparing Lucid, native Noctalia v5, and an independent Rust Wayland prototype. The repository owns configuration, pinned upstream sources, auditable installers, backups, VM scripts and test reports. It does not change the host desktop or packaged Omarchy files.
+Three isolated Omarchy experiments for comparing Lucid, native Noctalia v5, and an independent Rust Wayland framework. The repository owns configuration, pinned upstream sources, auditable installers, backups, VM scripts and test reports. It does not change the host desktop or packaged Omarchy files.
 
 | VM | Purpose | Scope |
 | --- | --- | --- |
 | `desktop-lab-lucid` | Closest match to the Lucid reference | Pinned Lucid 1.20, floating capsules/dock, Bookends widgets and matching wallpaper |
 | `desktop-lab-noctalia` | Native C++ comparison | Official Noctalia v5, a Lucid-inspired declarative configuration |
-| `desktop-lab-lucent` | Native Rust development | Working Milestone 1 prototype; stock Omarchy remains active |
+| `desktop-lab-lucent` | Native Rust development | Rust framework/client with bar, dock, launcher, selectors and draggable widgets |
 
-The Rust entry is a prototype, **not the full desktop framework/client from the long-term plan**. It presents a transparent Wayland widget layer through Vulkan, with a draggable card, saved position and finite animations. The prepared VM uses software Vulkan; host GPU acceleration remains unresolved. The next milestones are described in [the architecture decision](docs/adr/0001-native-prototype.md).
+Lucent now has a reusable declarative Rust framework and a desktop client using Vulkan. Its launcher morphs out of the dock, selectors animate, and widget positions persist. Omarchy retains secure locking and session services. The VM uses software Vulkan; see [framework concepts](docs/lucent-framework.md) and [current validation](reports/lucent-framework.md).
 
 On the prepared host, start one VM at a time:
 
@@ -29,7 +29,7 @@ Use the source Omarchy VM's existing guest login. Credentials are kept only in t
 
 Inside the Lucid or Noctalia VM, run `~/desktop-lab/scripts/verify.sh` from a graphical terminal. Run `~/desktop-lab/scripts/rollback.sh` and log out/in to restore the original user configuration. Packages remain installed, with before/after inventories available for review.
 
-In the Lucent VM, open **Lucent Prototype** from the application launcher, or run `~/.local/bin/lucent-desktop`. Drag the card to move it; its position is saved. Click to animate its color; right-click to fade out and close. Clicks outside the card pass through to the desktop. The stock Omarchy desktop stays available.
+In the Lucent VM, **Super+Space** opens the Rust launcher and **Super+Ctrl+Space** opens the wallpaper carousel. The launcher's Widgets tab controls desktop widgets; drag their backgrounds to move them. [Build, usage and rollback](lucent/README.md).
 
 The prepared guests have a locally selected weather city with IP detection disabled. Personal location data stays outside Git; a fresh install needs your city in Location settings. Media widgets show their idle state until a player publishes MPRIS metadata.
 

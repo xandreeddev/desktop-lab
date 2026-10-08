@@ -93,6 +93,17 @@ lucent-cli inspect
 lucent-cli quit
 ```
 
+For a fresh disposable lab guest, the reference assets and private location are
+reproducible with the existing pinned-source tooling:
+
+```sh
+python3 scripts/setup-look.py lucent
+python3 scripts/set-weather.py lucent /path/to/private-location.json
+systemctl --user restart lucent.service
+```
+
+The location file contains `name`, `latitude` and `longitude`; keep it outside Git.
+
 IPC is a mode-0600 Unix socket in `$XDG_RUNTIME_DIR/lucent.sock`. The command
 allowlist never evaluates shell text. Inspect includes frame counters and hit
 geometry for real-input tests; it also includes the current query and note, so

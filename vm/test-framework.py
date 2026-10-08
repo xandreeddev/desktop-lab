@@ -172,7 +172,14 @@ def main():
     # The test mutates widget settings and wallpaper; retain the caller's state.
     settings=remote('bash','-c','cat ~/.local/state/lucent/desktop.json 2>/dev/null || true')
     wallpaper=remote('readlink','/home/omarchy/.local/state/omarchy/current/background').strip()
+    awake=json.loads(session('omarchy-toggle-idle','status'))['enabled']
     try:
+        session('omarchy-toggle-idle','stay-awake')
+        session('omarchy-shell','idle','disable')
+        for window in json.loads(session('hyprctl','-j','clients')):
+            if window['class']=='org.omarchy.screensaver':
+                session('hyprctl','dispatch',f'hl.dsp.window.close({{ window = "address:{window["address"]}" }})')
+        time.sleep(.5)
         suite()
     finally:
         session('systemctl','--user','stop','lucent.service')
@@ -183,6 +190,9 @@ def main():
         if wallpaper:
             session('omarchy-theme-bg-set',wallpaper)
         session('systemctl','--user','start','lucent.service')
+        if not awake:
+            session('omarchy-toggle-idle','allow-idle')
+            session('omarchy-shell','idle','enable')
 
 
 if __name__=='__main__':

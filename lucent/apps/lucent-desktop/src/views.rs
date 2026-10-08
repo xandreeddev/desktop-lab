@@ -126,6 +126,8 @@ impl Desktop {
                 format!("{:02}:{:02}", self.clock.hour, self.clock.minute),
                 13.,
             )
+            .width(Length::Fixed(50.))
+            .align(Align::Center)
             .padding(3.)
             .radius(12.)
             .background(self.accent())
@@ -138,7 +140,9 @@ impl Desktop {
                         weekdays[date.weekday as usize], date.day, date.month
                     ),
                     11.,
-                ),
+                )
+                .width(Length::Fixed(78.))
+                .align(Align::Center),
                 time,
                 self.icon("cloud", 18.),
                 self.label(
@@ -147,11 +151,13 @@ impl Desktop {
                         .map(|w| format!("{:.0}°", w.temperature))
                         .unwrap_or_else(|| "—".into()),
                     11.,
-                ),
+                )
+                .width(Length::Fixed(24.))
+                .align(Align::Center),
             ])
             .on_click(Message::Mode(Mode::Widgets))
             .id("bar-clock")
-            .at((cx.width - 222.) / 2., 12.);
+            .at((cx.width - 198.) / 2., 12.);
         let volume = self
             .system
             .volume

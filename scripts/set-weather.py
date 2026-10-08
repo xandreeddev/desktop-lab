@@ -6,13 +6,13 @@ import math
 from pathlib import Path
 import re
 
-from guest import HOME_DIR, STATE, run, write
+from guest import HOME_DIR, STATE, backup, run, write
 
 p = argparse.ArgumentParser(description=__doc__)
-p.add_argument('profile', choices=('lucid', 'noctalia'))
+p.add_argument('profile', choices=('lucid', 'noctalia', 'lucent'))
 p.add_argument('location_json', type=Path)
 args = p.parse_args()
-if (STATE / 'profile').read_text().strip() != args.profile:
+if args.profile != 'lucent' and (STATE / 'profile').read_text().strip() != args.profile:
     p.error('Install this profile first so its original configuration is backed up.')
 place = json.loads(args.location_json.read_text())
 lat, lon = float(place['latitude']), float(place['longitude'])
@@ -21,7 +21,10 @@ if not (math.isfinite(lat) and math.isfinite(lon) and -90 <= lat <= 90 and -180 
 if not isinstance(place['name'], str) or not place['name'].strip():
     p.error('A city name is required')
 
-if args.profile == 'lucid':
+if args.profile == 'lucent':
+    backup('.config/lucent/weather.json')
+    write(HOME_DIR / '.config/lucent/weather.json', json.dumps(place, indent=2)+'\n')
+elif args.profile == 'lucid':
     relative = '.config/quickshell/lucidprefs/prefs.json'
     path = HOME_DIR / relative
     values = json.loads(path.read_text())

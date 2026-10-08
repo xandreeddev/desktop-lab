@@ -1,5 +1,8 @@
 # VM validation — 2026-10-08
 
+> Historical three-VM/prototype baseline. The newer Rust framework and desktop client are covered by [the current Lucent validation report](lucent-framework.md).
+
+
 Three independent VMs were prepared from the existing stopped Omarchy installation. The original VM disk and host desktop were left untouched. Lucid and Noctalia replace only their own guest shell startup. Lucent is the working first prototype requested for this handoff, launched alongside stock Omarchy.
 
 ## Environment

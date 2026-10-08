@@ -9,7 +9,7 @@ import sys
 from guest import HOME_DIR, ROOT, STATE, DATA, backup, output, run, write
 
 p = argparse.ArgumentParser(description=__doc__)
-p.add_argument('profile', choices=('lucid', 'noctalia'))
+p.add_argument('profile', choices=('lucid', 'noctalia', 'lucent'))
 profile = p.parse_args().profile
 if output('systemd-detect-virt') not in ('kvm', 'qemu'):
     raise SystemExit('The reference-resolution preset is only for test VMs.')
@@ -24,7 +24,20 @@ text = mon.read_text()
 line = 'hl.monitor({ output = "Virtual-1", mode = "1920x1080@60", position = "0x0", scale = 1 })'
 if line not in text:
     write(mon, text + '\n-- Desktop Lab reference screenshot resolution.\n' + line + '\n')
-if profile == 'lucid':
+if profile == 'lucent':
+    backup('.config/lucent/wallpapers')
+    folder = HOME_DIR / '.config/lucent/wallpapers'
+    folder.mkdir(parents=True, exist_ok=True)
+    candidates = sorted(p for p in (src / 'wallpapers').rglob('*') if p.suffix.lower() in ('.png', '.jpg', '.jpeg', '.webp') and p != wall)
+    for image in [wall] + candidates[:7]:
+        shutil.copy2(image, folder / image.name)
+    original = HOME_DIR / '.config/lucent/original-wallpaper'
+    if not original.exists():
+        current = HOME_DIR / '.local/state/omarchy/current/background'
+        if current.exists():
+            write(original, str(current.resolve()) + '\n')
+    run('omarchy-theme-bg-set', str(folder / wall.name))
+elif profile == 'lucid':
     for path in ('.config/hypr/scripts/wallpaper/set-wallpaper.sh', '.cache/current_wallpaper', '.cache/current_mode', '.cache/current_theme'):
         backup(path)
     target = HOME_DIR / '.config/hypr/scripts/wallpaper/set-wallpaper.sh'

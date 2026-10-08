@@ -1,0 +1,53 @@
+{
+  "display": "1920x1080 at 60 Hz, scale 1",
+  "vcpus": 2,
+  "guest_memory_gib": 3,
+  "adapter": "AdapterInfo { name: \"llvmpipe (LLVM 22.1.8, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 26.2.2-arch1.1 (LLVM 22.1.8)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: Some(false), limit_bucket: None }",
+  "animations": [
+    {
+      "action": "open",
+      "frames": 15,
+      "median_frame_interval_ms": 34.36,
+      "max_frame_interval_ms": 52.32,
+      "observed_frame_span_ms": 529.37
+    },
+    {
+      "action": "close",
+      "frames": 15,
+      "median_frame_interval_ms": 33.71,
+      "max_frame_interval_ms": 51.3,
+      "observed_frame_span_ms": 521.03
+    },
+    {
+      "action": "open",
+      "frames": 15,
+      "median_frame_interval_ms": 34.33,
+      "max_frame_interval_ms": 52.74,
+      "observed_frame_span_ms": 513.54
+    },
+    {
+      "action": "close",
+      "frames": 15,
+      "median_frame_interval_ms": 33.2,
+      "max_frame_interval_ms": 53.86,
+      "observed_frame_span_ms": 502.37
+    }
+  ],
+  "idle": {
+    "duration_seconds": 120.0,
+    "process": "lucent-desktop",
+    "cpu_percent_one_core": 0.15,
+    "rss_mib_mean": 255.16,
+    "rss_mib_max": 262.94,
+    "scope": "main process only; child processes and GPU allocations excluded",
+    "gpu_memory": "not measured",
+    "virtualization": "kvm",
+    "service_cpu_percent_one_core": 0.924
+  },
+  "idle_extra_frames": {
+    "bar": 2,
+    "dock": 0,
+    "widgets": 2
+  },
+  "notes": "Software Vulkan. Frame intervals measured between render submissions, not scanout. Main RSS includes mapped driver memory; independent GPU allocation accounting unavailable. Service CPU includes helper processes but excludes retained Omarchy services/compositor."
+}

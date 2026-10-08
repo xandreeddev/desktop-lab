@@ -60,4 +60,15 @@ This restores user configuration, startup modules, masks and unit files. It leav
 
 For emergency manual recovery at a TTY, move `~/.config/default/hypr/autostart.lua` aside, remove the marked desktop-lab `dofile(...)` from `~/.config/hypr/autostart.lua`, restore the original `omarchy-sleep-lock.service` user override from the backup manifest, run `systemctl --user daemon-reload`, and log in again. Prefer `rollback.sh` because it knows whether these files existed originally. The independent VM base also allows discarding and recreating a damaged test overlay after explicitly reviewing its contents.
 
-Lucent's prototype is launched manually from its VM application menu; the stock desktop is retained. Closing the prototype is its normal rollback.
+Lucent has its own reversible integration:
+
+```sh
+python3 scripts/lucent-setup.py install
+systemctl --user start lucent.service
+python3 scripts/lucent-setup.py activate
+# Restore stock bar, shortcuts and login startup:
+python3 scripts/lucent-setup.py rollback
+```
+
+It retains stock Omarchy session services and manages only its own user service,
+bar visibility, two shortcuts and login command. See [Lucent usage](../lucent/README.md).
