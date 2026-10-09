@@ -260,12 +260,12 @@ search, and 12×4 for bar capsules. Command icons and text use `Align::Center`.
 
 `design/app-icons.json` owns 58 original MIT-licensed pictograms and exact desktop
 ID aliases. `scripts/generate-app-icons.py` combines their vector artwork with
-`app_icon.*` geometry/opacity tokens, emitting SVGs and a typed `AppIcon` catalog in
+`app_icon.*` geometry tokens, emitting SVGs and a typed `AppIcon` catalog in
 `lucent-design`. White alpha artwork receives the semantic foreground tint at
-paint time, including its subtle tile, so theme changes require no rasterization.
+paint time on a transparent background, so theme changes require no rasterization.
 Desktop effects rasterize the selected asset once; launcher and dock views
 reference the same cached image by app ID. Unknown IDs use XDG icons,
-then the generic Lucent tile. Display names and arbitrary substring matching do
+then the generic Lucent glyph. Display names and arbitrary substring matching do
 not select icons. Shell controls still use the separately licensed Material set.
 
 Widget drag messages retain continuous coordinates until release. The release

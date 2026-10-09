@@ -446,10 +446,7 @@ pub mod web_space {
 }
 pub mod app_icon {
     pub const CANVAS: f32 = 48.0;
-    pub const TILE_INSET: f32 = 2.0;
-    pub const TILE_RADIUS: f32 = 12.0;
     pub const GLYPH_INSET: f32 = 9.0;
     pub const GLYPH_EXTENT: f32 = 30.0;
     pub const STROKE: f32 = 1.8;
-    pub const TILE_OPACITY: f32 = 0.08;
 }

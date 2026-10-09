@@ -93,7 +93,7 @@ changing that rule. This Hyprland version supports a maximum radius of 20.
 `design/app-icons.json` maps exact desktop IDs to original Lucent pictograms. Edit
 the catalog and run `python3 scripts/generate-app-icons.py` to regenerate SVGs and
 the typed Rust catalog. Both the dock and launcher tint the monochrome artwork
-with the semantic foreground, over a subtle tonal tile. Icons are rasterized at
+with the semantic foreground on a transparent background. Icons are rasterized at
 128 pixels for high-density rendering. Unknown IDs retain their installed XDG
 icon, with a Lucent fallback when it is unavailable. The local design-system page
 includes the complete icon gallery.

@@ -212,3 +212,16 @@ Executed checks on this build:
 Raw captures and VM inspection stay in ignored `reports/local`. The fixed native
 references and the design-system icon gallery are safe to share. This follow-up
 does not add new resource-use or frame-time measurements.
+
+
+### Transparent icon refinement
+
+Removed the low-opacity background tile from all 58 generated app icons. Launcher
+and dock now draw only the monochrome glyph, using the same size and semantic
+foreground as before. The SVG generator no longer emits a background shape, and
+the unused tile tokens were removed. The design-system gallery follows the same
+artwork. The rebuilt desktop is installed in the prepared Lucent VM.
+
+Validated the catalog rasterization test, generated-file checks, all 48 Vulkan
+visual comparisons, Astro check/build and the actual VM launcher capture. The
+58 gallery images also contain no generated background tile.

@@ -358,10 +358,7 @@
   --web-space-section-standard: 100px;
   --web-space-section-large: 116px;
   --app-icon-canvas: 48px;
-  --app-icon-tile-inset: 2px;
-  --app-icon-tile-radius: 12px;
   --app-icon-glyph-inset: 9px;
   --app-icon-glyph-extent: 30px;
   --app-icon-stroke: 1.8px;
-  --app-icon-tile-opacity: var(--opacity-subtle);
 }

@@ -1,5 +1,5 @@
 {
-  "description": "Original monochrome Lucent app pictograms. Glyph coordinates use a 24-unit artwork grid; tile geometry and opacity come from design tokens. The native view tints the white alpha artwork with the semantic foreground. MIT licensed. IDs match desktop entries, never executable commands or localized display names.",
+  "description": "Original monochrome Lucent app pictograms. Glyph coordinates use a 24-unit artwork grid; glyph geometry comes from design tokens; backgrounds are transparent. The native view tints the white alpha artwork with the semantic foreground. MIT licensed. IDs match desktop entries, never executable commands or localized display names.",
   "icons": [
     {
       "id": "application",

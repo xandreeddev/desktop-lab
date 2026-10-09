@@ -23,7 +23,7 @@ def outputs():
             "pub struct AppIcon { pub id: &'static str, pub name: &'static str, pub desktop_ids: &'static [&'static str], pub svg: &'static str }",
             'pub const ALL: &[AppIcon] = &[']
     v=lambda key: values['app_icon.'+key]
-    edge,inset,radius=v('canvas'),v('tile_inset'),v('tile_radius')
+    edge=v('canvas')
     for icon in icons:
         name = icon['id']
         if not re.fullmatch('[a-z][a-z0-9-]*',name) or name in ids: raise ValueError('Duplicate/invalid icon ID: '+name)
@@ -39,7 +39,6 @@ def outputs():
         ink=values['palette.white']
         svg=f'''<!-- Generated Lucent artwork. MIT. Source: design/app-icons.json -->
 <svg xmlns="http://www.w3.org/2000/svg" width="{edge}" height="{edge}" viewBox="0 0 {edge} {edge}">
-<rect x="{inset}" y="{inset}" width="{edge-2*inset}" height="{edge-2*inset}" rx="{radius}" fill="{ink}" fill-opacity="{v('tile_opacity')}"/>
 <g transform="translate({v('glyph_inset')} {v('glyph_inset')}) scale({v('glyph_extent')/24})" fill="none" stroke="{ink}" stroke-width="{v('stroke')}" stroke-linecap="round" stroke-linejoin="round">{glyph}</g></svg>
 '''
         files[base/'assets/apps'/f'{name}.svg']=svg
