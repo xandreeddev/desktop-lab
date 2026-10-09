@@ -480,3 +480,10 @@ pub mod layout {
     pub const SHELL_INSET: f32 = 16.0;
     pub const SECTION_GAP: f32 = 16.0;
 }
+pub mod web_docs {
+    pub const BODY: f32 = 18.0;
+    pub const BODY_MOBILE: f32 = 16.0;
+    pub const SUPPORTING: f32 = 16.0;
+    pub const CODE: f32 = 14.0;
+    pub const LABEL: f32 = 14.0;
+}

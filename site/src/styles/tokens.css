@@ -381,4 +381,9 @@
   --layout-shell-step: var(--space-lg);
   --layout-shell-inset: var(--space-lg);
   --layout-section-gap: var(--space-lg);
+  --web-docs-body: var(--web-type-lead-large);
+  --web-docs-body-mobile: var(--web-type-lead-small);
+  --web-docs-supporting: var(--web-type-lead-small);
+  --web-docs-code: var(--web-type-body);
+  --web-docs-label: var(--web-type-body);
 }
