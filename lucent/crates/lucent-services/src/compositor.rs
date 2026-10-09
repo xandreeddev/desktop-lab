@@ -1,4 +1,3 @@
-use lucent_api::{Cancellation, Emitter};
 use lucent_domain::*;
 use serde_json::Value;
 use std::{
@@ -40,14 +39,11 @@ impl Hyprland {
         serde_json::from_str(&self.request(request)?)
             .map_err(|e| DomainError::Failed(e.to_string()))
     }
-    pub fn watch<M: Send + 'static>(
-        &self,
-        out: Emitter<M>,
-        cancel: Cancellation,
-        map: impl Fn(Result<CompositorSnapshot>) -> M,
-    ) {
+}
+impl CompositorPort for Hyprland {
+    fn watch(&self, emit: &mut dyn FnMut(Result<CompositorSnapshot>), cancel: &dyn StopSignal) {
         while !cancel.cancelled() {
-            out.send(map(self.snapshot()));
+            emit(self.snapshot());
             if let Ok(socket) = UnixStream::connect(self.base.join(".socket2.sock")) {
                 let _ = socket.set_read_timeout(Some(Duration::from_millis(500)));
                 let mut reader = BufReader::new(socket);
@@ -71,7 +67,7 @@ impl Hyprland {
                             .iter()
                             .any(|s| line.starts_with(s))
                             {
-                                out.send(map(self.snapshot()));
+                                emit(self.snapshot());
                             }
                         }
                         Err(e)
@@ -83,11 +79,9 @@ impl Hyprland {
                     }
                 }
             }
-            cancel.sleep(Duration::from_secs(2));
+            cancel.wait(Duration::from_secs(2));
         }
     }
-}
-impl CompositorPort for Hyprland {
     fn snapshot(&self) -> Result<CompositorSnapshot> {
         let active = self.json("j/activeworkspace")?["id"].as_i64().unwrap_or(1) as i32;
         let focused = self.json("j/activewindow")?["address"]

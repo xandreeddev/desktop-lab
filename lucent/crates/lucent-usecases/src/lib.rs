@@ -1,4 +1,5 @@
 //! Desktop application policy, expressed against domain ports.
+pub mod notifications;
 use lucent_domain::*;
 
 /// Stable fuzzy ranking: names outrank descriptions; no filesystem work on a keystroke.

@@ -15,6 +15,10 @@ use smithay_client_toolkit::{
         keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
         pointer::{PointerEvent, PointerEventKind, PointerHandler},
     },
+    session_lock::{
+        SessionLock, SessionLockHandler, SessionLockState, SessionLockSurface,
+        SessionLockSurfaceConfigure,
+    },
     shell::{
         WaylandSurface,
         wlr_layer::{
@@ -51,7 +55,7 @@ enum RuntimeEvent<M> {
 }
 struct Native<M> {
     renderer: Renderer, // Drop before layer.
-    layer: LayerSurface,
+    role: SurfaceRole,
     spec: api::SurfaceSpec,
     width: u32,
     height: u32,
@@ -63,19 +67,34 @@ struct Native<M> {
     regions: Vec<(api::Rect, f32)>,
     frame_times: std::collections::VecDeque<f64>,
 }
+enum SurfaceRole {
+    Layer(LayerSurface),
+    Lock(SessionLockSurface, wl_output::WlOutput),
+}
+impl SurfaceRole {
+    fn wl_surface(&self) -> &wl_surface::WlSurface {
+        match self {
+            Self::Layer(s) => s.wl_surface(),
+            Self::Lock(s, _) => s.wl_surface(),
+        }
+    }
+}
 struct State<A: Application> {
-    surfaces: BTreeMap<&'static str, Native<A::Message>>,
+    surfaces: BTreeMap<String, Native<A::Message>>,
     gpu: Rc<Gpu>,
     app: A,
     layout: Layout,
     compositor: CompositorState,
     layer_shell: LayerShell,
+    session_lock: Option<SessionLock>,
+    authorize_unlock: Option<fn(&A) -> bool>,
+    locked: bool,
     registry: RegistryState,
     seats: SeatState,
     outputs: OutputState,
     pointer: Option<wl_pointer::WlPointer>,
     keyboard: Option<wl_keyboard::WlKeyboard>,
-    keyboard_surface: Option<&'static str>,
+    keyboard_surface: Option<String>,
     modifiers: Modifiers,
     epoch: Instant,
     exit: bool,
@@ -88,6 +107,25 @@ struct State<A: Application> {
 }
 /// Run any framework application, with no desktop-specific types in the backend.
 pub fn run<A: Application>(app: A) -> Result<(), Error> {
+    run_inner(app, None, true)
+}
+/// Authentication must finish before authorizing unlock. Ordinary exit never unlocks.
+pub trait LockApplication: Application {
+    fn authenticated(&self) -> bool;
+}
+/// Uses ext-session-lock for every output and exposes no debug or command socket.
+pub fn run_locked<A: LockApplication>(app: A) -> Result<(), Error> {
+    run_inner(app, Some(A::authenticated), false)
+}
+/// Login greeters also disable the debugging/command socket.
+pub fn run_greeter<A: Application>(app: A) -> Result<(), Error> {
+    run_inner(app, None, false)
+}
+fn run_inner<A: Application>(
+    app: A,
+    authorize_unlock: Option<fn(&A) -> bool>,
+    ipc: bool,
+) -> Result<(), Error> {
     let conn = Connection::connect_to_env()?;
     let (globals, queue) = registry_queue_init(&conn)?;
     let qh = queue.handle();
@@ -138,6 +176,9 @@ pub fn run<A: Application>(app: A) -> Result<(), Error> {
         layout: Layout::new(fonts),
         compositor,
         layer_shell,
+        session_lock: None,
+        authorize_unlock,
+        locked: false,
         registry: RegistryState::new(&globals),
         seats: SeatState::new(&globals, &qh),
         outputs: OutputState::new(&globals, &qh),
@@ -156,47 +197,53 @@ pub fn run<A: Application>(app: A) -> Result<(), Error> {
     };
     let runtime =
         PathBuf::from(std::env::var_os("XDG_RUNTIME_DIR").ok_or("XDG_RUNTIME_DIR is required")?);
+    if authorize_unlock.is_some() {
+        state.session_lock = Some(SessionLockState::new(&globals, &qh).lock(&qh)?);
+        state.create_lock_outputs(&qh)?;
+    }
     let socket_path = runtime.join(format!("{}.sock", state.app.name()));
     let lock = File::create(runtime.join(format!("{}.lock", state.app.name())))?;
     lock.try_lock()
         .map_err(|_| "This framework client is already running")?;
-    if socket_path.exists() {
-        fs::remove_file(&socket_path)?;
-    }
-    let listener = UnixListener::bind(&socket_path)?;
-    fs::set_permissions(&socket_path, fs::Permissions::from_mode(0o600))?;
     let ipc_cancel = api::Cancellation::default();
-    let cancel = ipc_cancel.clone();
-    std::thread::spawn(move || {
-        for incoming in listener.incoming() {
-            if cancel.cancelled() {
-                break;
-            }
-            if let Ok(mut stream) = incoming {
-                let _ = stream.set_read_timeout(Some(Duration::from_secs(1)));
-                let _ = stream.set_write_timeout(Some(Duration::from_secs(1)));
-                let mut text = String::new();
-                if BufReader::new(&stream)
-                    .take(4096)
-                    .read_line(&mut text)
-                    .is_err()
-                {
-                    continue;
-                }
-                let (tx, rx) = mpsc::sync_channel(1);
-                if sender
-                    .send(RuntimeEvent::Command(text.trim().into(), tx))
-                    .is_err()
-                {
+    if ipc {
+        if socket_path.exists() {
+            fs::remove_file(&socket_path)?;
+        }
+        let listener = UnixListener::bind(&socket_path)?;
+        fs::set_permissions(&socket_path, fs::Permissions::from_mode(0o600))?;
+        let cancel = ipc_cancel.clone();
+        std::thread::spawn(move || {
+            for incoming in listener.incoming() {
+                if cancel.cancelled() {
                     break;
                 }
-                let result = rx
-                    .recv_timeout(Duration::from_secs(3))
-                    .unwrap_or_else(|_| "error: client not responding".into());
-                let _ = writeln!(stream, "{result}");
+                if let Ok(mut stream) = incoming {
+                    let _ = stream.set_read_timeout(Some(Duration::from_secs(1)));
+                    let _ = stream.set_write_timeout(Some(Duration::from_secs(1)));
+                    let mut text = String::new();
+                    if BufReader::new(&stream)
+                        .take(4096)
+                        .read_line(&mut text)
+                        .is_err()
+                    {
+                        continue;
+                    }
+                    let (tx, rx) = mpsc::sync_channel(1);
+                    if sender
+                        .send(RuntimeEvent::Command(text.trim().into(), tx))
+                        .is_err()
+                    {
+                        break;
+                    }
+                    let result = rx
+                        .recv_timeout(Duration::from_secs(3))
+                        .unwrap_or_else(|_| "error: client not responding".into());
+                    let _ = writeln!(stream, "{result}");
+                }
             }
-        }
-    });
+        });
+    }
     let event_qh = qh.clone();
     handle.insert_source(events, move |event, _, state| {
         if let channel::Event::Msg(event) = event {
@@ -233,8 +280,10 @@ pub fn run<A: Application>(app: A) -> Result<(), Error> {
         cancel.cancel();
     }
     ipc_cancel.cancel();
-    let _ = UnixStream::connect(&socket_path);
-    let _ = fs::remove_file(socket_path);
+    if ipc {
+        let _ = UnixStream::connect(&socket_path);
+        let _ = fs::remove_file(socket_path);
+    }
     eprintln!("{} stopped cleanly", state.app.name());
     if let Some(error) = state.error.take() {
         return Err(error.into());
@@ -242,6 +291,59 @@ pub fn run<A: Application>(app: A) -> Result<(), Error> {
     Ok(())
 }
 impl<A: Application> State<A> {
+    fn create_lock_outputs(&mut self, qh: &QueueHandle<Self>) -> Result<(), Error> {
+        let Some(lock) = &self.session_lock else {
+            return Ok(());
+        };
+        for output in self.outputs.outputs() {
+            if self
+                .surfaces
+                .values()
+                .any(|s| matches!(&s.role,SurfaceRole::Lock(_,o) if *o==output))
+            {
+                continue;
+            }
+            let surface = self.compositor.create_surface(qh);
+            let lock_surface = lock.create_lock_surface(surface, &output, qh);
+            // SAFETY: renderer drops before its surface; State owns the live connection.
+            let renderer = unsafe {
+                Renderer::new(
+                    self.gpu.clone(),
+                    self.connection.backend().display_handle()?.as_raw(),
+                    lock_surface.wl_surface().id().as_ptr().cast(),
+                )
+            }?;
+            let spec = api::SurfaceSpec {
+                id: "lock",
+                layer: api::Layer::Overlay,
+                anchor: api::Anchor::Fill,
+                width: 0,
+                height: 0,
+                exclusive_zone: -1,
+                keyboard: api::Keyboard::Exclusive,
+                visible: true,
+                capture_all: true,
+            };
+            self.surfaces.insert(
+                format!("lock-{}", output.id().protocol_id()),
+                Native {
+                    renderer,
+                    role: SurfaceRole::Lock(lock_surface, output),
+                    spec,
+                    width: 1,
+                    height: 1,
+                    scale: 1,
+                    configured: false,
+                    demand: FrameDemand::default(),
+                    scene: Scene::default(),
+                    interaction: Interaction::default(),
+                    regions: vec![],
+                    frame_times: Default::default(),
+                },
+            );
+        }
+        Ok(())
+    }
     fn inspect(&self) -> String {
         serde_json::json!({"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id,"width":s.width,"height":s.height,"scale":s.scale,"buffer_width":s.width*s.scale,"buffer_height":s.height*s.scale,"frames":s.renderer.frames,"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.x,"y":h.clip.y,"width":h.clip.w,"height":h.clip.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)}).to_string()
     }
@@ -254,7 +356,20 @@ impl<A: Application> State<A> {
         self.effects(effects, qh);
     }
     fn effects(&mut self, effects: Effects<A::Message>, qh: &QueueHandle<Self>) {
-        self.exit |= effects.exit;
+        if self.authorize_unlock.is_none() {
+            self.exit |= effects.exit;
+        } else if self.locked
+            && self
+                .authorize_unlock
+                .is_some_and(|authorize| authorize(&self.app))
+        {
+            self.session_lock.as_ref().unwrap().unlock();
+            if let Err(error) = self.connection.roundtrip() {
+                self.error = Some(error.to_string());
+            }
+            self.exit = true;
+            return;
+        }
         for task in effects.tasks {
             let _ = self.tasks.send(task);
         }
@@ -263,65 +378,69 @@ impl<A: Application> State<A> {
             self.exit = true;
         }
         for id in effects.redraw {
-            if let Some(s) = self.surfaces.get_mut(id) {
+            for s in self.surfaces.values_mut().filter(|s| s.spec.id == id) {
                 s.demand.invalidate();
             }
         }
         self.draw_all(qh);
     }
     fn reconcile(&mut self, qh: &QueueHandle<Self>) -> Result<(), Error> {
-        let specs = self.app.surfaces();
-        self.surfaces
-            .retain(|id, _| specs.iter().any(|s| s.id == *id && s.visible));
-        for spec in specs.into_iter().filter(|s| s.visible) {
-            if let Some(native) = self.surfaces.get_mut(spec.id) {
-                if native.spec != spec {
-                    configure_layer(&native.layer, &spec);
-                    native.spec = spec;
-                    native.layer.commit();
-                    native.demand.invalidate();
+        if self.session_lock.is_none() {
+            let specs = self.app.surfaces();
+            self.surfaces
+                .retain(|id, _| specs.iter().any(|s| s.id == *id && s.visible));
+            for spec in specs.into_iter().filter(|s| s.visible) {
+                if let Some(native) = self.surfaces.get_mut(spec.id) {
+                    if native.spec != spec {
+                        if let SurfaceRole::Layer(layer) = &native.role {
+                            configure_layer(layer, &spec);
+                            layer.commit();
+                        }
+                        native.spec = spec;
+                        native.demand.invalidate();
+                    }
+                    continue;
                 }
-                continue;
+                let surface = self.compositor.create_surface(qh);
+                let layer = self.layer_shell.create_layer_surface(
+                    qh,
+                    surface,
+                    layer_kind(spec.layer),
+                    Some(format!("{}-{}", self.app.name(), spec.id)),
+                    None,
+                );
+                configure_layer(&layer, &spec);
+                let region = Region::new(&self.compositor)?;
+                layer
+                    .wl_surface()
+                    .set_input_region(Some(region.wl_region()));
+                layer.commit();
+                // SAFETY: Native drops its renderer before its layer; State keeps the connection alive.
+                let renderer = unsafe {
+                    Renderer::new(
+                        self.gpu.clone(),
+                        self.connection.backend().display_handle()?.as_raw(),
+                        layer.wl_surface().id().as_ptr().cast(),
+                    )
+                }?;
+                self.surfaces.insert(
+                    spec.id.into(),
+                    Native {
+                        renderer,
+                        role: SurfaceRole::Layer(layer),
+                        spec,
+                        width: 1,
+                        height: 1,
+                        scale: 1,
+                        configured: false,
+                        demand: FrameDemand::default(),
+                        scene: Scene::default(),
+                        interaction: Interaction::default(),
+                        regions: vec![],
+                        frame_times: std::collections::VecDeque::new(),
+                    },
+                );
             }
-            let surface = self.compositor.create_surface(qh);
-            let layer = self.layer_shell.create_layer_surface(
-                qh,
-                surface,
-                layer_kind(spec.layer),
-                Some(format!("{}-{}", self.app.name(), spec.id)),
-                None,
-            );
-            configure_layer(&layer, &spec);
-            let region = Region::new(&self.compositor)?;
-            layer
-                .wl_surface()
-                .set_input_region(Some(region.wl_region()));
-            layer.commit();
-            // SAFETY: Native drops its renderer before its layer; State keeps the connection alive.
-            let renderer = unsafe {
-                Renderer::new(
-                    self.gpu.clone(),
-                    self.connection.backend().display_handle()?.as_raw(),
-                    layer.wl_surface().id().as_ptr().cast(),
-                )
-            }?;
-            self.surfaces.insert(
-                spec.id,
-                Native {
-                    renderer,
-                    layer,
-                    spec,
-                    width: 1,
-                    height: 1,
-                    scale: 1,
-                    configured: false,
-                    demand: FrameDemand::default(),
-                    scene: Scene::default(),
-                    interaction: Interaction::default(),
-                    regions: vec![],
-                    frame_times: std::collections::VecDeque::new(),
-                },
-            );
         }
         let wanted = self.app.subscriptions();
         self.subscriptions.retain(|id, cancel| {
@@ -354,7 +473,7 @@ impl<A: Application> State<A> {
     /// as well, so an idle bar/dock does not retain a low-density buffer.
     fn refresh_output_scales(&mut self, qh: &QueueHandle<Self>) {
         for surface in self.surfaces.values_mut() {
-            let Some(data) = surface.layer.wl_surface().data::<SurfaceData<()>>() else {
+            let Some(data) = surface.role.wl_surface().data::<SurfaceData<()>>() else {
                 continue;
             };
             let scale = data
@@ -373,12 +492,12 @@ impl<A: Application> State<A> {
     }
     fn draw_all(&mut self, qh: &QueueHandle<Self>) {
         let now = self.epoch.elapsed().as_secs_f64();
-        for (id, s) in &mut self.surfaces {
+        for s in self.surfaces.values_mut() {
             if !s.configured || !s.demand.begin() {
                 continue;
             }
             let tree = self.app.view(&ViewContext {
-                surface: id,
+                surface: s.spec.id,
                 width: s.width as f32,
                 height: s.height as f32,
                 now,
@@ -402,7 +521,7 @@ impl<A: Application> State<A> {
                         for (rect, radius) in &regions {
                             add_region(&region, *rect, *radius);
                         }
-                        s.layer
+                        s.role
                             .wl_surface()
                             .set_input_region(Some(region.wl_region()));
                         s.regions = regions;
@@ -413,14 +532,14 @@ impl<A: Application> State<A> {
                     }
                 }
             }
-            let surface = s.layer.wl_surface();
+            let surface = s.role.wl_surface();
             surface.set_buffer_scale(s.scale as i32);
             surface.frame(qh, FrameCallbackData(surface.clone()));
             if let Err(e) = s.renderer.render(s.width, s.height, s.scale, &scene.paint) {
                 self.error = Some(e.to_string());
                 self.exit = true;
             }
-            if self.app.animating(id, now) || s.interaction.animating(now) {
+            if self.app.animating(s.spec.id, now) || s.interaction.animating(now) {
                 s.demand.invalidate();
             }
             s.frame_times
@@ -431,14 +550,14 @@ impl<A: Application> State<A> {
             s.scene = scene;
         }
     }
-    fn id_for(&self, surface: &wl_surface::WlSurface) -> Option<&'static str> {
+    fn id_for(&self, surface: &wl_surface::WlSurface) -> Option<String> {
         self.surfaces
             .iter()
-            .find(|(_, s)| s.layer.wl_surface() == surface)
-            .map(|(id, _)| *id)
+            .find(|(_, s)| s.role.wl_surface() == surface)
+            .map(|(id, _)| id.clone())
     }
     fn key(&mut self, event: KeyEvent, qh: &QueueHandle<Self>) {
-        let Some(id) = self.keyboard_surface else {
+        let Some(id) = self.keyboard_surface.clone() else {
             return;
         };
         let key = match event.keysym {
@@ -455,6 +574,7 @@ impl<A: Application> State<A> {
             Keysym::Home => api::Key::Home,
             Keysym::End => api::Key::End,
             Keysym::a if self.modifiers.ctrl => api::Key::SelectAll,
+            Keysym::u if self.modifiers.ctrl => api::Key::ClearInput,
             _ => {
                 let Some(text) = event
                     .utf8
@@ -468,20 +588,21 @@ impl<A: Application> State<A> {
                 api::Key::Text(text)
             }
         };
-        if let Some(s) = self.surfaces.get_mut(id) {
+        if let Some(s) = self.surfaces.get_mut(&id) {
             if !s.interaction.focus_visible {
                 s.demand.invalidate();
             }
             s.interaction.focus_visible = true;
         }
+        let logical_id = self.surfaces[&id].spec.id;
         if let Some(message) = self.app.event(api::Event::Key {
-            surface: id,
+            surface: logical_id,
             key: key.clone(),
         }) {
             self.message(message, qh);
             return;
         }
-        if let Some(s) = self.surfaces.get_mut(id) {
+        if let Some(s) = self.surfaces.get_mut(&id) {
             let before = s.interaction.focus.clone();
             let message = s.interaction.key(&s.scene, &key);
             if before != s.interaction.focus {
@@ -550,7 +671,7 @@ impl<A: Application> CompositorHandler for State<A> {
         factor: i32,
     ) {
         if let Some(id) = self.id_for(surface)
-            && let Some(s) = self.surfaces.get_mut(id)
+            && let Some(s) = self.surfaces.get_mut(&id)
         {
             s.scale = factor.max(1) as u32;
             s.demand.invalidate();
@@ -573,7 +694,7 @@ impl<A: Application> CompositorHandler for State<A> {
         _: u32,
     ) {
         if let Some(id) = self.id_for(surface)
-            && let Some(s) = self.surfaces.get_mut(id)
+            && let Some(s) = self.surfaces.get_mut(&id)
         {
             s.demand.ready();
         }
@@ -611,13 +732,13 @@ impl<A: Application> LayerShellHandler for State<A> {
         _: u32,
     ) {
         if let Some(id) = self.id_for(layer.wl_surface()) {
-            let s = self.surfaces.get_mut(id).unwrap();
+            let s = self.surfaces.get_mut(&id).unwrap();
             s.width = config.new_size.0.max(1);
             s.height = config.new_size.1.max(1);
             s.configured = true;
             s.demand.invalidate();
             let event = api::Event::Resize {
-                surface: id,
+                surface: s.spec.id,
                 width: s.width as f32,
                 height: s.height as f32,
             };
@@ -632,11 +753,24 @@ impl<A: Application> OutputHandler for State<A> {
     fn output_state(&mut self) -> &mut OutputState {
         &mut self.outputs
     }
-    fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
+    fn new_output(&mut self, _: &Connection, qh: &QueueHandle<Self>, _: wl_output::WlOutput) {
+        if let Err(e) = self.create_lock_outputs(qh) {
+            self.error = Some(e.to_string());
+            self.exit = true;
+        }
+    }
     fn update_output(&mut self, _: &Connection, qh: &QueueHandle<Self>, _: wl_output::WlOutput) {
         self.refresh_output_scales(qh);
     }
-    fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
+    fn output_destroyed(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        output: wl_output::WlOutput,
+    ) {
+        self.surfaces
+            .retain(|_, s| !matches!(&s.role,SurfaceRole::Lock(_,o) if *o==output));
+    }
 }
 impl<A: Application> SeatHandler for State<A> {
     fn seat_state(&mut self) -> &mut SeatState {
@@ -705,7 +839,7 @@ impl<A: Application> PointerHandler for State<A> {
             let mut messages = vec![];
             let mut outside = false;
             let mut scroll = None;
-            if let Some(s) = self.surfaces.get_mut(id) {
+            if let Some(s) = self.surfaces.get_mut(&id) {
                 match event.kind {
                     PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
                         messages.extend(s.interaction.motion(&s.scene, x, y, now))
@@ -731,11 +865,19 @@ impl<A: Application> PointerHandler for State<A> {
                 }
                 s.demand.invalidate();
             }
-            if outside && let Some(m) = self.app.event(api::Event::Outside { surface: id }) {
+            let logical_id = self.surfaces[&id].spec.id;
+            if outside
+                && let Some(m) = self.app.event(api::Event::Outside {
+                    surface: logical_id,
+                })
+            {
                 messages.push(m);
             }
             if let Some(lines) = scroll
-                && let Some(m) = self.app.event(api::Event::Scroll { surface: id, lines })
+                && let Some(m) = self.app.event(api::Event::Scroll {
+                    surface: logical_id,
+                    lines,
+                })
             {
                 messages.push(m);
             }
@@ -819,3 +961,31 @@ impl<A: Application> ProvidesRegistryState for State<A> {
     registry_handlers![OutputState, SeatState];
 }
 smithay_client_toolkit::delegate_dispatch2!(@<A:Application> State<A>);
+
+impl<A: Application> SessionLockHandler for State<A> {
+    fn locked(&mut self, _: &Connection, qh: &QueueHandle<Self>, _: SessionLock) {
+        self.locked = true;
+        self.effects(Effects::default(), qh);
+    }
+    fn finished(&mut self, _: &Connection, _: &QueueHandle<Self>, _: SessionLock) {
+        self.error = Some("Compositor refused the session lock".into());
+        self.exit = true;
+    }
+    fn configure(
+        &mut self,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+        surface: SessionLockSurface,
+        config: SessionLockSurfaceConfigure,
+        _: u32,
+    ) {
+        if let Some(id) = self.id_for(surface.wl_surface()) {
+            let s = self.surfaces.get_mut(&id).unwrap();
+            s.width = config.new_size.0;
+            s.height = config.new_size.1;
+            s.configured = true;
+            s.demand.invalidate();
+        }
+        self.draw_all(qh);
+    }
+}

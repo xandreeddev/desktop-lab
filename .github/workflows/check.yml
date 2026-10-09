@@ -30,11 +30,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev pkg-config mesa-vulkan-drivers
+      - run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev pkg-config mesa-vulkan-drivers libpam0g-dev libclang-dev dbus
       - run: rustup update stable && rustup component add rustfmt clippy
       - run: cargo fmt --manifest-path lucent/Cargo.toml --all --check
       - run: cargo clippy --manifest-path lucent/Cargo.toml --locked --workspace --all-targets -- -D warnings
       - run: cargo test --manifest-path lucent/Cargo.toml --locked --workspace
+      - run: dbus-run-session -- cargo test --manifest-path lucent/Cargo.toml -p lucent-services notification_protocol -- --ignored
       - name: Native Vulkan visual regressions
         run: |
           export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name '*lvp*' -print -quit)"

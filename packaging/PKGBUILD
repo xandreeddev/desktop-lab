@@ -1,20 +1,21 @@
 # Build from this repository checkout: cd packaging && makepkg -si
 pkgname=lucent-desktop
 pkgver=0.1.0
-pkgrel=3
+pkgrel=4
 pkgdesc='Native Rust Wayland shell framework and desktop client'
 arch=('x86_64')
 url='https://github.com/xandreeddev/desktop-lab'
 license=('MIT')
 options=('!debug' '!strip') # Cargo's release profile already strips the binary.
-depends=('wayland' 'libxkbcommon' 'fontconfig' 'vulkan-icd-loader' 'vulkan-driver' 'playerctl' 'wireplumber' 'networkmanager' 'curl')
-makedepends=('rust' 'pkgconf')
+depends=('wayland' 'libxkbcommon' 'fontconfig' 'vulkan-icd-loader' 'vulkan-driver' 'playerctl' 'wireplumber' 'networkmanager' 'curl' 'pam')
+optdepends=('greetd: native login greeter')
+makedepends=('rust' 'pkgconf' 'clang')
 source=()
 sha256sums=()
 
 build() {
   cd "$startdir/../lucent"
-  cargo build --release --locked -p lucent-desktop -p lucent-cli
+  cargo build --release --locked --workspace
 }
 
 check() {
@@ -27,5 +28,7 @@ package() {
   install -Dm755 "$startdir/../lucent/target/release/lucent-cli" "$pkgdir/usr/bin/lucent-cli"
   install -Dm644 "$startdir/../lucent/apps/lucent-desktop/assets/OFL-GoogleSansFlex.txt" "$pkgdir/usr/share/licenses/$pkgname/OFL-GoogleSansFlex.txt"
   install -Dm644 "$startdir/lucent-desktop.desktop" "$pkgdir/usr/share/applications/lucent-desktop.desktop"
+  install -Dm755 "$startdir/../lucent/target/release/lucent-lock" "$pkgdir/usr/bin/lucent-lock"
+  install -Dm755 "$startdir/../lucent/target/release/lucent-greeter" "$pkgdir/usr/bin/lucent-greeter"
   install -Dm644 "$startdir/../LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

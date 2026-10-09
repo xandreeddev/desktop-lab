@@ -200,7 +200,11 @@ impl Desktop {
             .unwrap_or_else(|| "—".into());
         let right = self
             .pill(vec![
-                self.label("US", font::CAPTION),
+                self.icon("notifications", icon::SMALL)
+                    .on_click(Message::Notifications(
+                        crate::notifications::Message::Toggle,
+                    ))
+                    .id("bar-notifications"),
                 self.icon("network", icon::SMALL),
                 self.icon("volume", icon::SMALL)
                     .on_click(Message::Action(Action::Mute))
@@ -412,17 +416,17 @@ impl Desktop {
                         )
                         .size(width, component::launcher::ROW_HEIGHT)
                         .radius(radius::CARD)
+                        .background(if rank == self.selected {
+                            self.widget_color()
+                        } else {
+                            Color::TRANSPARENT
+                        })
                         .selected(rank == self.selected)
                         .on_hover(Message::Select(rank))
                         .on_click(Message::Launch(app.id.clone(), false))
                         .id(format!("result-{rank}"))
                     })
                     .collect();
-                let selection = Element::empty()
-                    .size(width, component::launcher::SELECTION_HEIGHT)
-                    .at(0., self.selection.value(cx.now))
-                    .radius(radius::CARD)
-                    .background(self.widget_color());
                 let list = if rows.is_empty() {
                     self.label(
                         if self.apps.is_empty() {
@@ -435,9 +439,7 @@ impl Desktop {
                     .size(width, component::launcher::EMPTY_HEIGHT)
                     .align(Align::Center)
                 } else {
-                    Element::stack(vec![selection, Element::column(rows)])
-                        .size(width, body_h)
-                        .clip()
+                    Element::column(rows).size(width, body_h).clip()
                 };
                 elements.push(list.at(0., body_y));
                 let search = Element::row(vec![

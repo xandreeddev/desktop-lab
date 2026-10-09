@@ -108,6 +108,7 @@ pub struct Style {
     pub radius: f32,
     pub font_size: f32,
     pub font_face: usize,
+    pub max_lines: Option<usize>,
     pub align: Align,
     pub opacity: f32,
     pub clip: bool,
@@ -143,6 +144,7 @@ impl Default for Style {
             radius: 0.,
             font_size: 14.,
             font_face: 0,
+            max_lines: None,
             align: Align::Start,
             opacity: 1.,
             clip: false,
@@ -214,6 +216,11 @@ impl<M> Element<M> {
             drag: None,
             autofocus: false,
         }
+    }
+    /// Wrap text at measured glyph advances, limiting overflow with an ellipsis.
+    pub fn wrap(mut self, max_lines: usize) -> Self {
+        self.style.max_lines = Some(max_lines.max(1));
+        self
     }
     pub fn text(text: impl Into<String>) -> Self {
         Self::new(Kind::Text(text.into()))
@@ -431,6 +438,7 @@ pub enum Key {
     Home,
     End,
     SelectAll,
+    ClearInput,
 }
 #[derive(Clone, Debug)]
 pub enum Event {

@@ -51,11 +51,16 @@ def main():
             '{ ! pgrep -x -u "$(id -u)" Hyprland >/dev/null && pgrep -f "^/usr/bin/sddm-greeter" >/dev/null; }'
         ], capture_output=True)
         if check.returncode:
-            stock = subprocess.run(lab.ssh_args(args.profile) + [
-                'python3 ~/desktop-lab/scripts/in-session.py omarchy-shell lock isLocked'
-            ], capture_output=True, text=True)
-            if stock.returncode or stock.stdout.strip() != 'true':
-                raise SystemExit('No secure lock or login screen detected; refusing password keystrokes.')
+            lucent = subprocess.run(lab.ssh_args(args.profile) + [
+                'pgrep -x -u "$(id -u)" lucent-lock >/dev/null && '
+                'python3 ~/desktop-lab/scripts/in-session.py omarchy-hyprland-session-locked'
+            ], capture_output=True)
+            if lucent.returncode:
+                stock = subprocess.run(lab.ssh_args(args.profile) + [
+                    'python3 ~/desktop-lab/scripts/in-session.py omarchy-shell lock isLocked'
+                ], capture_output=True, text=True)
+                if stock.returncode or stock.stdout.strip() != 'true':
+                    raise SystemExit('No secure lock or login screen detected; refusing password keystrokes.')
         normal = '`1234567890-=qwertyuiop[]\\asdfghjkl;\'zxcvbnm,./ '
         shifted = '~!@#$%^&*()_+QWERTYUIOP{}|ASDFGHJKL:"ZXCVBNM<>? '
         codes = [41,2,3,4,5,6,7,8,9,10,11,12,13,16,17,18,19,20,21,22,23,24,25,26,27,43,30,31,32,33,34,35,36,37,38,39,40,44,45,46,47,48,49,50,51,52,53,57]

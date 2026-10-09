@@ -1,12 +1,10 @@
+use crate::ports::{DesktopPorts, WatchStop};
 use lucent_api::{self as api, *};
 use lucent_design::{
     component::{launcher, panel},
     motion,
 };
 use lucent_domain::{self as domain, *};
-use lucent_services::{
-    self as services, JsonSettings, applications::XdgApplications, compositor::Hyprland,
-};
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,6 +59,7 @@ pub const COMMANDS: [(&str, Action, &str); 6] = [
 ];
 #[derive(Clone)]
 pub enum Message {
+    Notifications(crate::notifications::Message),
     Loaded(
         Vec<domain::Application>,
         domain::Result<DesktopSettings>,
@@ -109,6 +108,7 @@ pub const WIDGETS: [(&str, &str, &str); 7] = [
     ("timer", "Focus", "A 25-minute focus timer"),
 ];
 pub struct Desktop {
+    pub notifications: crate::notifications::Center,
     pub registry: WidgetRegistry<Desktop, Message>,
     pub apps: Vec<domain::Application>,
     pub settings: DesktopSettings,
@@ -131,64 +131,26 @@ pub struct Desktop {
     pub reveal: Motion,
     pub panel_width: Motion,
     pub panel_height: Motion,
-    pub selection: Motion,
     pub carousel: Motion,
     pub viewport: (f32, f32),
     pub timer: FocusTimer,
     pub month_offset: i32,
     pub error: String,
     pub drag_origins: BTreeMap<String, Placement>,
-    pub app_port: Arc<XdgApplications>,
-    pub hypr: Option<Arc<Hyprland>>,
-    pub store: Arc<JsonSettings>,
+    pub ports: DesktopPorts,
 }
 impl Desktop {
-    pub fn new() -> Self {
-        let mut images = BTreeMap::new();
-        for name in [
-            "apps",
-            "search",
-            "wallpaper",
-            "widgets",
-            "palette",
-            "power",
-            "close",
-            "left",
-            "right",
-            "music",
-            "play",
-            "pause",
-            "next",
-            "previous",
-            "volume",
-            "network",
-            "sun",
-            "cloud",
-            "lock",
-            "command",
-        ] {
-            images.insert(
-                format!("symbol:{name}"),
-                services::images::symbol(name, "#ffffff"),
-            );
-        }
-        images.insert(
-            "app:fallback".into(),
-            services::images::svg(
-                lucent_design::app_icons::FALLBACK.svg,
-                services::images::ICON_PIXELS,
-                "lucent-app:application".into(),
-            )
-            .expect("bundled fallback icon"),
-        );
+    pub fn new(ports: DesktopPorts) -> Self {
+        let images = ports.assets.initial();
         Self {
+            notifications: crate::notifications::Center::new(ports.notifications.clone()),
             registry: crate::widgets::registry(),
             apps: vec![],
             settings: DesktopSettings::default(),
             settings_writable: false,
             images,
             compositor: CompositorSnapshot::default(),
-            clock: services::clock(),
+            clock: ports.clock.now(),
             system: SystemSnapshot::default(),
             media: MediaSnapshot::default(),
             weather: None,
@@ -204,22 +166,19 @@ impl Desktop {
             reveal: Motion::fixed(0.),
             panel_width: Motion::fixed(panel::INITIAL_WIDTH),
             panel_height: Motion::fixed(panel::DOCK_HEIGHT),
-            selection: Motion::fixed(0.),
             carousel: Motion::fixed(0.),
             viewport: (1920., 1080.),
             timer: FocusTimer::default(),
             month_offset: 0,
             error: String::new(),
             drag_origins: BTreeMap::new(),
-            app_port: Arc::new(XdgApplications),
-            hypr: Hyprland::from_env().ok().map(Arc::new),
-            store: Arc::new(JsonSettings::default()),
+            ports,
         }
     }
     pub fn save(&self, effects: &mut Effects<Message>) {
         if self.settings_writable {
             let settings = self.settings.clone();
-            let store = self.store.clone();
+            let store = self.ports.settings.clone();
             effects.task(move || Message::Completed(store.save(&settings)));
         }
     }
@@ -310,7 +269,7 @@ impl Desktop {
             DECEL,
         );
     }
-    fn choose(&mut self, index: usize, now: f64) {
+    fn choose(&mut self, index: usize, _now: f64) {
         let count = match self.mode {
             Mode::Apps => self.results.len(),
             Mode::Commands => COMMANDS.len(),
@@ -325,19 +284,13 @@ impl Desktop {
         if self.selected >= self.scroll + 7 {
             self.scroll = self.selected - 6;
         }
-        self.selection.target(
-            (self.selected - self.scroll) as f32 * launcher::ROW_HEIGHT,
-            now,
-            motion::SELECTION,
-            SPATIAL,
-        );
     }
     fn launch(&self, id: &AppId, prefer_running: bool, effects: &mut Effects<Message>) {
         let Some(app) = self.apps.iter().find(|a| &a.id == id).cloned() else {
             return;
         };
-        let apps = self.app_port.clone();
-        let hypr = self.hypr.clone();
+        let apps = self.ports.apps.clone();
+        let hypr = self.ports.compositor.clone();
         effects.task(move || {
             Message::Completed(if let Some(hypr) = hypr {
                 lucent_usecases::activate_application(
@@ -362,27 +315,18 @@ impl Desktop {
             }
             return;
         }
+        let ports = self.ports.clone();
         effects.task(move || {
-            Message::Completed(
-                match action {
-                    Action::Lock => services::command("omarchy-system-lock", &[]),
-                    Action::VolumeUp => services::command(
-                        "wpctl",
-                        &["set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+"],
-                    ),
-                    Action::VolumeDown => {
-                        services::command("wpctl", &["set-volume", "@DEFAULT_AUDIO_SINK@", "5%-"])
-                    }
-                    Action::Mute => {
-                        services::command("wpctl", &["set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"])
-                    }
-                    Action::PlayPause => services::command("playerctl", &["play-pause"]),
-                    Action::Next => services::command("playerctl", &["next"]),
-                    Action::Previous => services::command("playerctl", &["previous"]),
-                    _ => Ok(String::new()),
-                }
-                .map(|_| ()),
-            )
+            Message::Completed(match action {
+                Action::Lock => ports.session.lock(),
+                Action::VolumeUp => ports.audio.control(AudioCommand::Raise),
+                Action::VolumeDown => ports.audio.control(AudioCommand::Lower),
+                Action::Mute => ports.audio.control(AudioCommand::ToggleMute),
+                Action::PlayPause => ports.media.control(MediaCommand::PlayPause),
+                Action::Next => ports.media.control(MediaCommand::Next),
+                Action::Previous => ports.media.control(MediaCommand::Previous),
+                _ => Ok(()),
+            })
         });
     }
 }
@@ -393,12 +337,20 @@ impl Component for Desktop {
             "bar" => self.bar(cx),
             "widgets" => self.widgets(cx),
             "dock" => self.dock(cx),
+            "notifications" => self
+                .notifications
+                .view_with_theme(cx, self.theme())
+                .map(Message::Notifications),
             _ => Element::empty(),
         })
     }
     fn update(&mut self, message: Message, effects: &mut Effects<Message>) {
         let now = effects.now;
         match message {
+            Message::Notifications(message) => effects.delegate(
+                |e| self.notifications.update(message, e),
+                Message::Notifications,
+            ),
             Message::Loaded(apps, settings, wallpapers, current_wallpaper) => {
                 self.apps = apps;
                 match settings {
@@ -417,44 +369,12 @@ impl Component for Desktop {
                 self.carousel = Motion::fixed(self.wallpaper_index as f32);
                 self.applied_wallpaper = current_wallpaper;
                 self.results = lucent_usecases::search_applications(&self.apps, "");
-                let icons: Vec<_> = self
-                    .apps
-                    .iter()
-                    .map(|a| (a.id.0.clone(), a.icon.clone()))
-                    .collect();
+                let assets = self.ports.assets.clone();
+                let apps = self.apps.clone();
                 let walls = self.wallpapers.clone();
-                effects.task(move || {
-                    let mut images = vec![];
-                    let mut seen = std::collections::BTreeSet::new();
-                    for (desktop_id, icon) in icons {
-                        if let Some(asset) = lucent_design::app_icons::lookup(&desktop_id)
-                            && let Some(image) = services::images::svg(
-                                asset.svg,
-                                services::images::ICON_PIXELS,
-                                format!("lucent-app:{}", asset.id),
-                            )
-                        {
-                            images.push((format!("app:{desktop_id}"), image));
-                            continue;
-                        }
-                        if seen.insert(icon.clone())
-                            && let Some(image) = services::images::icon(&icon)
-                        {
-                            images.push((icon, image));
-                        }
-                    }
-                    for wall in walls.iter().take(64) {
-                        if let Some(image) = services::images::load(
-                            std::path::Path::new(&wall.path),
-                            services::images::PREVIEW_PIXELS,
-                        ) {
-                            images.push((wall.path.clone(), image));
-                        }
-                    }
-                    Message::Images(images)
-                });
+                effects.task(move || Message::Images(assets.load(&apps, &walls)));
                 self.retarget_panel_transition(now);
-                for id in ["bar", "widgets", "dock"] {
+                for id in ["bar", "widgets", "dock", "notifications"] {
                     effects.redraw(id);
                 }
             }
@@ -595,7 +515,7 @@ impl Component for Desktop {
                 effects.redraw("dock");
             }
             Message::Workspace(id) => {
-                if let Some(hypr) = self.hypr.clone() {
+                if let Some(hypr) = self.ports.compositor.clone() {
                     effects.task(move || Message::Completed(hypr.switch_workspace(id)));
                 }
             }
@@ -607,8 +527,9 @@ impl Component for Desktop {
                         .target(index as f32, now, motion::PANEL, SPATIAL);
                     if apply {
                         let path = self.wallpapers[index].path.clone();
+                        let wallpaper = self.ports.wallpaper.clone();
                         effects.task(move || {
-                            let result = services::apply_wallpaper(&path);
+                            let result = wallpaper.apply(&path);
                             Message::WallpaperApplied(path, result)
                         });
                     }
@@ -686,7 +607,7 @@ impl Component for Desktop {
             Message::Theme(light) => {
                 self.settings.light = light;
                 self.save(effects);
-                for id in ["bar", "widgets", "dock"] {
+                for id in ["bar", "widgets", "dock", "notifications"] {
                     effects.redraw(id);
                 }
             }
@@ -723,6 +644,17 @@ impl api::Application for Desktop {
     }
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         vec![
+            SurfaceSpec {
+                id: "notifications",
+                layer: Layer::Overlay,
+                anchor: Anchor::Fill,
+                width: 0,
+                height: 0,
+                exclusive_zone: -1,
+                keyboard: Keyboard::OnDemand,
+                visible: self.notifications.visible(),
+                capture_all: false,
+            },
             SurfaceSpec {
                 id: "bar",
                 layer: Layer::Top,
@@ -767,39 +699,54 @@ impl api::Application for Desktop {
         ]
     }
     fn init(&mut self, effects: &mut Effects<Message>) {
-        let apps = self.app_port.clone();
-        let store = self.store.clone();
+        let apps = self.ports.apps.clone();
+        let store = self.ports.settings.clone();
+        let wallpaper = self.ports.wallpaper.clone();
         effects.task(move || {
             Message::Loaded(
                 apps.discover().unwrap_or_default(),
                 store.load(),
-                services::wallpapers(),
-                services::current_wallpaper(),
+                wallpaper.list(),
+                wallpaper.current(),
             )
         });
     }
     fn subscriptions(&self) -> Vec<Subscription<Message>> {
+        let clock = self.ports.clock.clone();
+        let system = self.ports.system.clone();
+        let media = self.ports.media.clone();
+        let weather = self.ports.weather.clone();
+        let notifications = self.ports.notifications.clone();
         let mut s = vec![
-            Subscription::every("clock", Duration::from_secs(1), || {
-                Message::Clock(services::clock())
+            Subscription::stream("notifications", move |out, cancel| {
+                notifications.watch(
+                    &mut |value| {
+                        out.send(Message::Notifications(
+                            crate::notifications::Message::Snapshot(value),
+                        ))
+                    },
+                    &WatchStop(cancel),
+                )
             }),
-            Subscription::stream("system", |out, cancel| {
-                let mut probe = services::SystemProbe::default();
-                while !cancel.cancelled() {
-                    out.send(Message::System(probe.sample()));
-                    cancel.sleep(Duration::from_secs(5));
-                }
+            Subscription::every("clock", Duration::from_secs(1), move || {
+                Message::Clock(clock.now())
             }),
-            Subscription::every("media", Duration::from_secs(2), || {
-                Message::Media(services::media())
+            Subscription::every("system", Duration::from_secs(5), move || {
+                Message::System(system.sample())
             }),
-            Subscription::every("weather", Duration::from_secs(15 * 60), || {
-                Message::Weather(services::weather())
+            Subscription::every("media", Duration::from_secs(2), move || {
+                Message::Media(media.snapshot())
+            }),
+            Subscription::every("weather", Duration::from_secs(15 * 60), move || {
+                Message::Weather(weather.snapshot())
             }),
         ];
-        if let Some(hypr) = self.hypr.clone() {
+        if let Some(compositor) = self.ports.compositor.clone() {
             s.push(Subscription::stream("compositor", move |out, cancel| {
-                hypr.watch(out, cancel, Message::Compositor)
+                compositor.watch(
+                    &mut |event| out.send(Message::Compositor(event)),
+                    &WatchStop(cancel),
+                );
             }));
         }
         s
@@ -840,6 +787,7 @@ impl api::Application for Desktop {
     }
     fn command(&self, command: &str) -> std::result::Result<Option<Message>, String> {
         Ok(Some(match command {
+            "notifications toggle" => Message::Notifications(crate::notifications::Message::Toggle),
             "launcher toggle" => Message::ToggleLauncher,
             "launcher close" => Message::CloseLauncher,
             "launcher open" => Message::Mode(Mode::Apps),
@@ -853,7 +801,7 @@ impl api::Application for Desktop {
         }))
     }
     fn inspect(&self) -> String {
-        serde_json::json!({"launcher":self.launcher,"mode":self.mode.name(),"query":self.query,"selected":self.selected,"result_count":self.results.len(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(&a.id.0).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"notes":self.settings.notes,"timer_seconds":self.timer.remaining,"error":self.error}).to_string()
+        serde_json::json!({"notifications_ready":self.notifications.ready,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher,"mode":self.mode.name(),"query":self.query,"selected":self.selected,"result_count":self.results.len(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(&a.id.0).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"notes":self.settings.notes,"timer_seconds":self.timer.remaining,"error":self.error}).to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
         surface == "dock"
@@ -861,7 +809,6 @@ impl api::Application for Desktop {
                 self.reveal,
                 self.panel_width,
                 self.panel_height,
-                self.selection,
                 self.carousel,
             ]
             .iter()

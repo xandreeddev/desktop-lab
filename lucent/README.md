@@ -3,8 +3,10 @@
 A native Rust Wayland shell framework and a Lucid-inspired desktop client. The
 client implements the floating bar, morphing dock/launcher, wallpaper carousel,
 widget selector, dark/light palette and draggable desktop widgets through the
-framework API. Omarchy still provides the compositor, secure lock, notifications,
-background surface and session services.
+framework API, including native notification toasts/history and separate secure
+lock/login clients. Hyprland provides composition and secure locking; PAM and
+greetd provide authentication/session startup. Omarchy services remain available
+for rollback.
 
 ## Try the prepared VM
 
@@ -31,7 +33,7 @@ Inside the guest:
 
 ## Build and install
 
-Arch dependencies: `rust pkgconf wayland libxkbcommon fontconfig vulkan-icd-loader`
+Arch dependencies: `rust clang pam pkgconf wayland libxkbcommon fontconfig vulkan-icd-loader`
 and a Vulkan driver. Desktop adapters use `playerctl`, `wireplumber`,
 `networkmanager` and `curl`; missing services show their unavailable state.
 
@@ -44,9 +46,11 @@ python3 scripts/lucent-setup.py activate
 ```
 
 Installation is per-user. Activation adds marked blocks to Hyprland's user
-`bindings.lua`, `autostart.lua` and `looknfeel.lua`. The latter applies the shared
-panel radius to Foot terminal windows. The service hides only Omarchy's bar **after
-all three Lucent surfaces have rendered**. Stopping, crashing or rolling back
+`bindings.lua`, `autostart.lua` and `looknfeel.lua`, plus a marked PATH block in
+`.bash_profile` for the two lock-command wrappers. The appearance block applies the shared
+panel radius to Foot terminal windows. The service hands off notifications and hides Omarchy's bar **after
+the desktop has rendered and Lucent owns the notification bus**. The handoff uses
+a guarded stock-shell restart; unlock before first activation. Stopping, crashing or rolling back
 restores its previous visibility. Packaged Omarchy configuration is untouched.
 
 ```sh
@@ -157,10 +161,10 @@ and measurements. The old card prototype and its tests are historical milestones
 The prepared VM uses **software Vulkan (Mesa lavapipe)**. The host GPU is not
 passed through; the compositor uses virgl. [Graphics details](../docs/lucent-vulkan.md).
 The reference layout and primary launcher/selector transitions are implemented;
-this is not complete Lucid feature or pixel parity. Notification history, tray
-hosting, clipboard/emoji modes, custom control-center dialogs, automatic
+this is not complete Lucid feature or pixel parity. Tray hosting, clipboard/emoji modes, custom control-center dialogs, automatic
 wallpaper palette extraction, widget resizing, fractional scaling, multi-output
-placement and full Unicode shaping remain future work. Stock Omarchy continues
+placement and full Unicode shaping remain future work. Notification history is
+in memory; images, markup, inline replies and sound are not implemented. Stock Omarchy continues
 handling session services. The framework has no Qt/GTK dependency.
 
 Native visual tests render the real client through Vulkan at 1× and 2×. Run
@@ -170,3 +174,28 @@ with a local Vulkan driver. Review `reports/local/visual-tests/index.html`.
 `python3 vm/test-launcher.py` verifies actual keyboard events in the unlocked VM.
 See [keyboard state and visual tests](../docs/lucent-framework.md#keyboard-state-and-visual-regression-checks)
 for baseline review and CI behavior.
+
+
+## Native lock and login
+
+The bar lock button and **Super+Ctrl+L** request `lucent-lock.service`, which renders
+through the same framework on secure Wayland lock surfaces. The installed Omarchy
+PAM policy verifies the current account; Esc never unlocks. The idle and sleep-lock commands route through narrow user-level wrappers; stock
+locking remains a recovery fallback. Notification history opens from the bar's bell or
+`lucent-cli notifications toggle`.
+
+Login integration is a separate root-level step in the test VM:
+
+```sh
+sudo pacman -S --needed greetd
+sudo python3 scripts/lucent-login.py install
+sudo python3 scripts/lucent-login.py test       # isolated VT9 greeter
+sudo systemctl stop lucent-greeter-test
+sudo python3 scripts/lucent-login.py activate  # selects the next boot's manager
+```
+
+The login installer backs up the existing display-manager selection and greetd
+configuration. It never ends the running desktop. Roll back with
+`sudo python3 scripts/lucent-login.py rollback` before rebooting. Keep a TTY or SSH
+path available while testing login integration. The greeter supports PAM's visible
+and secret prompts; no autologin, credential storage, or improvised authentication.

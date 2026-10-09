@@ -1,0 +1,27 @@
+"""Guard domain/framework boundaries against accidental platform coupling."""
+from pathlib import Path
+import tomllib
+import unittest
+ROOT=Path(__file__).resolve().parents[1]
+
+class Boundaries(unittest.TestCase):
+    def test_domain_does_not_depend_on_platform_or_rendering(self):
+        cargo=tomllib.loads((ROOT/'lucent/crates/lucent-domain/Cargo.toml').read_text())
+        self.assertLessEqual(set(cargo['dependencies']),{'serde','zeroize'})
+        for source in (ROOT/'lucent/crates/lucent-domain/src').glob('*.rs'):
+            self.assertNotIn('std::process',source.read_text())
+            self.assertNotIn('std::fs',source.read_text())
+
+    def test_framework_does_not_depend_on_the_desktop_or_services(self):
+        for crate in ['lucent-api','lucent-ui','lucent-render','lucent-wayland']:
+            cargo=tomllib.loads((ROOT/'lucent/crates'/crate/'Cargo.toml').read_text())
+            self.assertFalse(set(cargo.get('dependencies',{})) & {'lucent-desktop','lucent-services','lucent-design','lucent-auth'})
+
+    def test_component_policy_does_not_choose_production_adapters(self):
+        for name in ['desktop.rs','views.rs','widgets.rs','notifications.rs']:
+            text=(ROOT/'lucent/apps/lucent-desktop/src'/name).read_text()
+            self.assertNotIn('lucent_services',text)
+            self.assertNotIn('std::process',text)
+        session=(ROOT/'lucent/apps/lucent-session/src/lib.rs').read_text()
+        self.assertNotIn('lucent_auth',session)
+        self.assertNotIn('std::process',session)

@@ -1,7 +1,7 @@
 # Framework concepts and client boundaries
 
-The framework is a small, implemented vertical stack. The two clients are
-`lucent-desktop` and the independent `hello-layer` counter. There are no empty
+The framework is a small, implemented vertical stack. Clients include `lucent-desktop`, the shared `SessionScreen` used by
+`lucent-lock` and `lucent-greeter`, and the independent `hello-layer` counter. There are no empty
 crates standing in for future subsystems.
 
 ```mermaid
@@ -11,7 +11,11 @@ flowchart TD
   Desktop --> API[Component, Element, Effects, Subscription, SurfaceSpec, Motion]
   Example[Independent counter client] --> API
   Services[OS adapters] --> Domain
-  Desktop --> Services
+  Root[Executable composition root] --> Services
+  Root --> Desktop
+  Login[Lock and login clients] --> API
+  Login --> Domain
+  Auth[PAM and greetd adapters] --> Domain
   Runtime[Wayland runtime] --> API
   Runtime --> UI[Layout and input]
   UI --> API
@@ -28,6 +32,7 @@ flowchart TD
 | `lucent-ui` | Layout constraints, clipping, hit testing, drag threshold, text input, retained hover/focus state |
 | `lucent-render` | One wgpu Vulkan device, rounded primitives, shadows, cached text/images, clipping and alpha composition |
 | `lucent-wayland` | SCTK layer surfaces, seats/keyboard/pointer, callback scheduling, subscription lifetime, effect worker, bounded local IPC |
+| `lucent-auth` | PAM conversations for the current account; greetd authentication and session startup |
 | `lucent-services` | XDG desktop entries/icons, Hyprland Lua IPC/events, atomic settings, bounded CLI adapters for system/media/weather/wallpaper |
 
 The API and pure domain intentionally do not depend on each other: another shell
@@ -128,13 +133,15 @@ entries, unsupported field codes and unsupported settings versions fail explicit
 exclusive zone, keyboard interactivity, visibility and full-input-capture intent.
 The runtime reconciles these declarations and keeps native handles private.
 
-Lucent uses three native surfaces:
+The desktop uses three persistent native surfaces and an on-demand notification surface:
 
 - A top bar reserving 56 logical pixels.
 - A bottom-layer widget host with input regions matching interactive widgets.
 - A dock host switching from the top layer to an exclusive-keyboard overlay while
   the launcher is open. Clicking outside closes it; otherwise transparent areas
   pass through to applications.
+
+Notification toasts/history use an overlay with bounded cards and action hit regions. The secure locker uses a different Wayland role: one `ext-session-lock` surface per output, including hotplugged displays.
 
 Dragging reports displacement from the original press in the stationary surface's
 coordinates. The use case clamps placement and saves only on release. A five-pixel
@@ -148,7 +155,7 @@ are not implemented. A compositor-closed layer currently ends the client.
 
 `Motion` is an interruptible cubic Bézier timeline. Retargeting starts from the
 current interpolated value. The desktop's spatial curve is `[0.38, 1.21, 0.22, 1]`:
-500 ms for dock/panel geometry and wallpaper selection, 350 ms for app selection.
+500 ms for dock/panel geometry and wallpaper selection. App selection is immediate.
 Content enters over 320 ms and leaves over 190 ms using `[0.05, 0.7, 0.1, 1]`.
 These values were inspected in the pinned Lucid reference.
 
@@ -193,7 +200,9 @@ results and subscription messages; add a port when a use case needs one, rather
 than creating interfaces without an implemented consumer.
 
 The renderer and runtime remain replaceable implementations, not public raw-handle
-APIs. Authentication stays with Omarchy's proven lock implementation. An ordinary
+APIs. The session client renders our lock and login UI through the same framework.
+The secure lock runtime uses `ext-session-lock-v1`; PAM verifies the session
+account, and greetd owns login authentication and session creation. An ordinary
 layer surface is never treated as a secure lock screen.
 
 ## Keyboard state and visual regression checks
@@ -213,16 +222,17 @@ independent from pointer hover. Its app-list height is derived from visible rows
 header, search field and spacing, so seven rows fit after scrolling. Widget
 switches use `Theme::switch_indicator`, drawn from tokens without font glyphs.
 
-Shell icons are pinned Material Symbols Rounded SVGs (Apache-2.0), with sources,
-license and checksums under `lucent-services/assets/material`. The native icon
+Shell icons use pinned Material Symbols Rounded SVGs (Apache-2.0), with sources,
+license and checksums under `lucent-services/assets/material`. The notification
+bell is an original MIT-licensed Lucent drawing in the same directory. The native icon
 box preserves aspect ratio; 256 px sources and mip filtering support 1× and 2×.
 
 `visual_tests.rs` exercises the actual client through the same `Layout`, `Paint`
 and Vulkan `Canvas` used by Wayland presentation. `Gpu::headless` removes the
 compositor requirement, not the renderer. Fixed application data, bundled fonts,
-viewport and animation times make the fixtures repeatable. Forty-eight PNG baselines
+viewport and animation times make the fixtures repeatable. Sixty PNG baselines
 cover dark/light, 1×/2×, all five sections, a narrow launcher, scrolling, empty
-results, long input and an opening frame. Geometry and keyboard tests separately
+results, long input, an opening frame, notifications/history and lock/login UI. Geometry and keyboard tests separately
 assert behavior so accepting an image cannot hide a clipped row.
 
 ```sh
@@ -280,3 +290,66 @@ terminal-class rule in a backed-up, managed block in user `looknfeel.lua`; rollb
 removes only the block. Hyprland owns ordinary terminal corners. Re-run the token
 generator and activation after changing this token. No packaged Omarchy file is
 modified; fullscreen/no-gap compositor policies may still override decorations.
+
+
+## Dependency injection and protocol boundaries
+
+`Desktop::new(DesktopPorts)` receives trait objects for applications, compositor,
+settings, clock, system sampling, audio, media, weather, wallpapers, session locking,
+notifications and presentation assets. `platform.rs` is the composition root that
+chooses concrete adapters. `desktop.rs`, `views.rs`, `widgets.rs` and the notification
+component contain no platform commands or concrete service selection. Test adapters
+can exercise the same component updates without inspecting or modifying the host.
+
+The compositor port's subscription uses a domain callback and `StopSignal`, with no
+framework `Message`, `Emitter` or cancellation type crossing into the adapter.
+Presentation assets are deliberately a client-level port because pixel data is not
+a pure desktop-domain concept. Framework crates do not depend on the domain,
+Lucent's visual theme, service adapters or authentication adapters.
+
+This is a practical ports-and-adapters structure, not a claim of a finished framework.
+The launcher still shares `Desktop` state; audio/media use CLI adapters and polling;
+layout has no general scroll container or complex-script shaping. OS operations
+stay behind ports, while pure search, launch/focus, positioning and notification
+expiry policy live in `lucent-usecases`. Architecture dependency checks enforce
+these boundaries in CI.
+
+## Notifications and secure session UI
+
+`NotificationInbox` owns replacement IDs, timeout policy, bounded active/history
+storage and DND. `FreedesktopNotifications` implements the standard D-Bus methods
+and action/close signals. `Center` is a framework component composed into `Desktop`
+with `Element::map` and `Effects::delegate`; it renders Vulkan cards, history pages,
+DND, dismissal and application actions. History is in memory. Markup, image hints,
+inline replies, sound and Omarchy-specific executable hints are not advertised.
+Applications using standard action signals work without shell evaluation.
+
+Quickshell retains its notification server for the process lifetime. Activation
+records the original plugin state, disables only `omarchy.notifications`, uses
+Omarchy's guarded shell restart while unlocked, and checks Lucent's bus ownership
+before hiding the stock bar. Stop/failure restores the plugin and bar state. The
+stock lock/polkit/idle services stay installed.
+
+`SessionScreen` is a separate framework client with an injected
+`AuthenticationPort`. `PamLocker` authenticates the current UID through the installed
+`omarchy-lock-password` PAM policy and performs account checks. `Greetd` relays the
+full visible/secret/information/error conversation to greetd and asks it to launch
+`start-hyprland` only after success. Authentication and session management are
+provided by PAM/greetd; Lucent supplies the presentation.
+
+`run_locked` uses SCTK's secure session-lock protocol, covers every output and waits
+for the compositor's acknowledgement before any authenticated unlock. An ordinary
+exit or renderer failure never sends unlock. There is no lock/greeter command or
+inspect socket. Owned authentication response buffers are scrubbed; only masked bullets enter the scene
+and texture cache. The renderer remains the shared Lucent/wgpu Vulkan renderer.
+
+Launcher selection is intentionally immediate: one selected row owns both fill
+and outline. Dock/panel geometry retains its timed motion. Selection no longer
+uses a separate 350 ms moving background.
+
+Lock integration adds two commands in `~/.local/lib/lucent/bin`, referenced by
+managed user Hyprland/PATH blocks. They route ordinary idle and pre-sleep requests
+to the native service while Lucent is active, with compositor-lock acknowledgement
+and a bounded deadline. Original `/usr/bin/omarchy-system-*lock` commands remain
+the fallback; no packaged file or PAM policy is changed. Rollback removes the
+managed startup, shortcut and PATH blocks.

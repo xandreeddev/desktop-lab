@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# greetd waits for the entire greeter session before starting the authenticated session.
+/usr/local/bin/lucent-greeter
+status=$?
+hyprctl dispatch 'hl.dsp.exit()' >/dev/null
+exit "$status"

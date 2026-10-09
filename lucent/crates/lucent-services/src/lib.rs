@@ -1,6 +1,7 @@
 //! OS adapters. All blocking operations are called from effects/subscription workers.
 pub mod applications;
 pub mod compositor;
+pub mod desktop_ports;
 pub mod images;
 use chrono::{Datelike, Timelike};
 use lucent_domain::*;
@@ -312,3 +313,5 @@ pub fn current_wallpaper() -> String {
         .map(|p| p.to_string_lossy().into())
         .unwrap_or_default()
 }
+
+pub mod notifications;

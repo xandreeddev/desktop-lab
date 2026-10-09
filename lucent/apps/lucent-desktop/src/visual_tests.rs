@@ -7,8 +7,7 @@ use lucent_ui::{Interaction, Layout, Paint, Scene};
 use std::{path::PathBuf, sync::Arc};
 
 fn fixture(count: usize, light: bool) -> Desktop {
-    let mut app = Desktop::new();
-    app.hypr = None;
+    let mut app = Desktop::new(crate::test_ports::ports());
     app.settings.light = light;
     app.viewport = (640., 580.);
     app.clock = ClockSnapshot {
@@ -506,7 +505,14 @@ fn visual_regressions() {
             ("wallpapers-empty", Mode::Wallpapers, 9, 0, "", 1., 640.),
             ("icon-catalog", Mode::Apps, 9, 0, "", 1., 640.),
             ("bar", Mode::Apps, 9, 0, "", 1., 1280.),
+            ("notification", Mode::Apps, 0, 0, "", 1., 640.),
+            ("notification-history", Mode::Apps, 0, 0, "", 1., 390.),
+            ("lock", Mode::Apps, 0, 0, "", 1., 640.),
+            ("greeter", Mode::Apps, 0, 0, "", 1., 640.),
         ] {
+            if light && matches!(name, "lock" | "greeter") {
+                continue;
+            }
             let mut app = fixture(count, light);
             app.update(
                 Message::Resize("dock", width, 580.),
@@ -515,7 +521,50 @@ fn visual_regressions() {
             app.update(Message::Mode(mode), &mut Effects::default());
             app.update(Message::Select(selected), &mut Effects::default());
             app.query = query.into();
-            let scene = if name == "icon-catalog" {
+            let scene = if matches!(name, "lock" | "greeter") {
+                let mode = if name == "lock" {
+                    lucent_session::Mode::Lock
+                } else {
+                    lucent_session::Mode::Login
+                };
+                let mut session = lucent_session::SessionScreen::new(
+                    mode,
+                    "fixture".into(),
+                    Arc::new(crate::test_ports::Fake::default()),
+                );
+                if name == "lock" {
+                    session.update(
+                        lucent_session::Message::Prompt(lucent_domain::AuthPrompt {
+                            kind: lucent_domain::PromptKind::Secret,
+                            text: "Password:".into(),
+                        }),
+                        &mut Effects::default(),
+                    );
+                    session.update(
+                        lucent_session::Message::Key(Key::Text("fixture".into())),
+                        &mut Effects::default(),
+                    );
+                }
+                let cx = ViewContext {
+                    surface: "lock",
+                    width,
+                    height: 580.,
+                    now,
+                };
+                let tree = session.view(&cx).map(|_| Message::Quit);
+                layout.build(&tree, width, 580., &Interaction::default(), now)
+            } else if name.starts_with("notification") {
+                app.notifications.snapshot=lucent_domain::NotificationSnapshot {active:vec![lucent_domain::Notification {id:1,app:"Lucent fixture".into(),summary:"A notification rendered by our framework".into(),body:"Shared design tokens, measured text wrapping, native actions and keyboard focus.".into(),actions:vec![lucent_domain::NotificationAction {id:"default".into(),label:"Open fixture".into()}],critical:false,resident:false,transient:false,timeout_ms:0}],..Default::default()};
+                app.notifications.ready = true;
+                app.notifications.history_open = name.ends_with("history");
+                let cx = ViewContext {
+                    surface: "notifications",
+                    width,
+                    height: 580.,
+                    now,
+                };
+                layout.build(&app.view(&cx), width, 580., &Interaction::default(), now)
+            } else if name == "icon-catalog" {
                 let icons = lucent_design::app_icons::ALL
                     .iter()
                     .map(|asset| {
@@ -626,4 +675,81 @@ fn visual_regressions() {
         "Visual regressions: {}. See reports/local/visual-tests/index.html",
         failures.join("; ")
     );
+}
+
+#[test]
+fn selection_fill_and_outline_move_together_on_the_first_frame() {
+    let mut app = fixture(9, false);
+    let layout = Layout::new(fonts(&app));
+    for (step, index) in [1, 5, 2, 8, 0].into_iter().enumerate() {
+        let now = 1. + step as f64 * 0.01;
+        app.update(
+            Message::Select(index),
+            &mut Effects {
+                now,
+                ..Default::default()
+            },
+        );
+        let scene = scene(&app, &layout, &mut Interaction::default(), now);
+        let row = scene
+            .hits
+            .iter()
+            .find(|h| h.id == format!("result-{index}"))
+            .unwrap();
+        assert!(scene.paint.iter().any(|p|matches!(p,Paint::Shape {rect,color,..} if *rect==row.rect && *color==app.widget_color())),"selected fill must be immediate");
+        assert!(
+            scene
+                .paint
+                .iter()
+                .any(|p| matches!(p,Paint::Outline {rect,..} if *rect==row.rect)),
+            "fill and outline must share geometry"
+        );
+    }
+}
+#[test]
+fn desktop_actions_use_injected_ports_without_executing_host_commands() {
+    let fake = Arc::new(crate::test_ports::Fake::default());
+    let mut app = Desktop::new(crate::test_ports::with(fake.clone()));
+    for action in [
+        crate::desktop::Action::VolumeUp,
+        crate::desktop::Action::PlayPause,
+        crate::desktop::Action::Lock,
+    ] {
+        let mut effects = Effects::default();
+        app.update(Message::Action(action), &mut effects);
+        for task in effects.tasks {
+            app.update(task(), &mut Effects::default());
+        }
+    }
+    assert_eq!(*fake.calls.lock().unwrap(), ["audio", "media", "lock"]);
+}
+
+#[test]
+fn notification_controls_fit_at_normal_and_narrow_widths() {
+    let mut app = fixture(0, false);
+    app.notifications.update(crate::notifications::Message::Snapshot(Ok(lucent_domain::NotificationSnapshot {active:vec![lucent_domain::Notification {id:1,app:"Fixture".into(),summary:"A long notification title that wraps onto two lines".into(),body:"A body with enough text to exercise wrapping and leave room for actions below the text.".repeat(3),actions:(0..8).map(|n|lucent_domain::NotificationAction {id:n.to_string(),label:format!("Action {n}")}).collect(),critical:false,resident:false,transient:false,timeout_ms:0}],..Default::default()})),&mut Effects::default());
+    let layout = Layout::new(fonts(&app));
+    for width in [390., 1920.] {
+        for history in [false, true] {
+            app.notifications.history_open = history;
+            let cx = ViewContext {
+                surface: "notifications",
+                width,
+                height: 720.,
+                now: 0.,
+            };
+            let tree = app.view(&cx);
+            let scene = layout.build(&tree, width, 720., &Interaction::default(), 0.);
+            for hit in scene.hits {
+                assert!(
+                    fully_visible(hit.rect, hit.clip),
+                    "cropped notification control {}: {:?} in {:?}",
+                    hit.id,
+                    hit.rect,
+                    hit.clip
+                );
+                assert!(hit.rect.y + hit.rect.h <= 720.);
+            }
+        }
+    }
 }

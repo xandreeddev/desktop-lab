@@ -158,7 +158,6 @@ pub mod component {
         pub const HEADER_HEIGHT: f32 = 32.0;
         pub const RESET_HEIGHT: f32 = 36.0;
         pub const RESET_BOTTOM: f32 = 38.0;
-        pub const SELECTION_HEIGHT: f32 = 46.0;
         pub const BODY_TOP: f32 = 44.0;
         pub const ROW_HEIGHT: f32 = 46.0;
         pub const COMMAND_HEIGHT: f32 = 46.0;
@@ -387,6 +386,24 @@ pub mod component {
     }
     pub mod window {
         pub const RADIUS: f32 = 20.0;
+    }
+    pub mod notification {
+        pub const WIDTH: f32 = 400.0;
+        pub const MARGIN: f32 = 16.0;
+        pub const PADDING: f32 = 16.0;
+        pub const GAP: f32 = 8.0;
+        pub const TITLE_LINES: f32 = 2.0;
+        pub const BODY_LINES: f32 = 3.0;
+        pub const TOAST_LIMIT: f32 = 3.0;
+        pub const MAX_CARD_HEIGHT: f32 = 320.0;
+    }
+    pub mod authentication {
+        pub const WIDTH: f32 = 480.0;
+        pub const HEIGHT: f32 = 460.0;
+        pub const PADDING: f32 = 20.0;
+        pub const TITLE_SIZE: f32 = 17.0;
+        pub const INPUT_SIZE: f32 = 23.0;
+        pub const INPUT_HEIGHT: f32 = 56.0;
     }
 }
 pub mod icon {

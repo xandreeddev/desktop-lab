@@ -133,7 +133,6 @@
   --component-launcher-header-height: 32px;
   --component-launcher-reset-height: 36px;
   --component-launcher-reset-bottom: 38px;
-  --component-launcher-selection-height: 46px;
   --component-launcher-body-top: 44px;
   --component-launcher-row-height: 46px;
   --component-launcher-command-height: 46px;
@@ -308,6 +307,20 @@
   --component-switch-thumb: 14px;
   --component-switch-inset: 2px;
   --component-window-radius: var(--radius-panel);
+  --component-notification-width: 400px;
+  --component-notification-margin: var(--space-lg);
+  --component-notification-padding: var(--space-lg);
+  --component-notification-gap: var(--space-sm);
+  --component-notification-title-lines: 2;
+  --component-notification-body-lines: 3;
+  --component-notification-toast-limit: 3;
+  --component-notification-max-card-height: 320px;
+  --component-authentication-width: 480px;
+  --component-authentication-height: 460px;
+  --component-authentication-padding: var(--space-xl);
+  --component-authentication-title-size: var(--font-heading);
+  --component-authentication-input-size: var(--font-title);
+  --component-authentication-input-height: 56px;
   --icon-tiny: 16px;
   --icon-small: 17px;
   --icon-compact: 18px;

@@ -13,6 +13,7 @@ serde_json = "1"
 lucent-design = { path = "../../crates/lucent-design" }
 
 [dev-dependencies]
+lucent-session = { path = "../lucent-session" }
 lucent-ui = { path = "../../crates/lucent-ui" }
 lucent-render = { path = "../../crates/lucent-render" }
 fontdue = "0.9"

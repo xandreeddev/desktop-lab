@@ -1,6 +1,9 @@
 # Lucent framework and desktop validation
 
-Validated on the existing isolated Omarchy 4.0.4 / Hyprland 0.56.2 VM, with
+The sections below record successive builds; their counts and measurements are
+historical. See the final section for the current native notification/session work.
+
+The initial build was validated on the existing isolated Omarchy 4.0.4 / Hyprland 0.56.2 VM, with
 1920×1080 output at scale 1, two virtual CPUs and 3 GiB guest RAM. The compositor
 uses virgl. Lucent uses Mesa llvmpipe/lavapipe through wgpu's Vulkan backend.
 This is software Vulkan, with no host GPU passthrough.
@@ -225,3 +228,80 @@ artwork. The rebuilt desktop is installed in the prepared Lucent VM.
 Validated the catalog rasterization test, generated-file checks, all 48 Vulkan
 visual comparisons, Astro check/build and the actual VM launcher capture. The
 58 gallery images also contain no generated background tile.
+
+## Focus, boundaries and native session UI
+
+This build was validated on the 6-vCPU / 6-GiB Omarchy 4.0.4 guest, with
+Hyprland 0.56.2, Mesa 26.2.2 software Vulkan and a 1920×1080 display.
+Earlier performance figures above have not been remeasured for this build.
+
+Changes:
+
+- Launcher selection now paints its fill and outline from the same row state on
+  the first frame. The independent 350 ms selection motion was removed. Dock,
+  panel and wallpaper geometry still use the framework's timed animation API.
+- `DesktopPorts` injects service interfaces; `platform.rs` selects adapters.
+  The domain has no rendering/Wayland/D-Bus dependency. Framework crates have no
+  dependency on the desktop, visual theme or authentication/service adapters.
+  Components can use fake ports without executing host commands. Pure search,
+  positioning, launch/focus and notification policy remain separate use cases.
+- A native notification component renders toasts, wrapped content, application
+  actions, dismissal, history and DND through the shared Vulkan renderer.
+  The D-Bus adapter implements `org.freedesktop.Notifications`. Activation hands
+  ownership over from the recorded Omarchy plugin state and restores it on stop.
+- Native lock and greetd greeter executables share `SessionScreen`, framework
+  layout, design tokens and rendering. PAM verifies the current session account
+  for locking; greetd owns authentication and session creation for login.
+  The locker uses secure `ext-session-lock-v1` surfaces on every output, exposes
+  no inspection/command socket and never unlocks on an ordinary exit or crash.
+- User-level lock-command wrappers route manual/idle/pre-sleep requests to the
+  native service, reserving time for the retained stock locker if startup fails.
+  No packaged Omarchy file or PAM policy is overwritten. The separate login
+  installer records the previous manager and configuration for rollback.
+
+Executed checks:
+
+- Formatting, warning-free Clippy across all targets, **40 Rust unit tests**,
+  and the notification adapter's additional private-session D-Bus protocol test.
+- **16 Python tests** covering configuration, tokens, rollback, architecture
+  dependencies and the sleep-lock fallback deadline; generated-token/icon checks.
+- **60 reviewed Vulkan visual references** at 1×/2×, with light/dark coverage
+  for desktop components and dark lock/login fixtures. Existing launcher pixels
+  remained unchanged at rest; bar references changed for the notification bell.
+  The comparison run passed. Geometry checks cover immediate focus updates and
+  notification controls at normal and narrow widths.
+- Real keyboard input: focus without hover, unclipped final rows, all five Tab
+  modes, reverse navigation and restored search focus.
+- Real desktop interactions: terminal launch/corner radius, workspace changes,
+  widget drag/snap/persistence, timer, notes, wallpaper application, service
+  restart and stock-bar restoration. Existing user windows were preserved.
+- Standard notification delivery, action-button signal returned to the sending
+  application, dismissal and history rendered by the native component.
+- Native lock rejected a wrong password and accepted the VM account's password.
+  Virtual output creation/removal while locked, killing the locker, compositor
+  failsafe locking and recovery through a new authenticated locker were tested.
+  Both installed manual and sleep-lock command paths securely locked and unlocked.
+  Deliberately making the native service fail before locking confirmed that the
+  stock secure locker takes over inside the pre-sleep budget. The temporary
+  override was removed and the native path was tested again.
+- A greetd greeter on isolated VT9 rejected an incorrect password, accepted a
+  retry and launched an actual Hyprland session for a temporary test account.
+  The test account/session and credential fixture were removed afterward.
+  Greetd is selected for the next boot; the existing desktop was preserved.
+- Astro type and production-build checks; updated architecture, session setup
+  and design-system documentation, including native notification/lock fixtures.
+  Browser checks of the three updated pages at 390 and 1440 CSS pixels found no
+  horizontal overflow.
+
+Remaining limits:
+
+The launcher still shares the desktop state container. Some OS adapters use
+command-line tools and polling. Notification history is bounded and in memory;
+markup, image hints, inline replies, sounds and Omarchy executable-action hints
+are not supported. Desktop multi-output placement and fractional scaling remain
+unfinished; secure lock output coverage is separate and was tested with virtual
+hotplug. Fingerprint authentication, physical display hotplug and suspend/resume
+were not tested. The new greetd selection has not been exercised through a full
+VM reboot; its authentication and session startup were tested on VT9. This is a
+working prototype with recovery paths, not an independently audited locker or a
+claim of full Lucid parity.

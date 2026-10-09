@@ -89,10 +89,61 @@ impl Layout {
         text::width(self.fonts.get(face).unwrap_or(&self.fonts[0]), s, size)
     }
 
+    fn wrapped(&self, text: &str, size: f32, face: usize, width: f32, max_lines: usize) -> String {
+        let mut lines = vec![String::new()];
+        for word in text.split_inclusive([' ', '\n']) {
+            let hard_break = word.ends_with('\n');
+            let word = word.trim_end_matches([' ', '\n']);
+            let current = lines.last().unwrap();
+            let joined = if current.is_empty() {
+                word.to_string()
+            } else {
+                format!("{current} {word}")
+            };
+            if self.text_width(&joined, size, face) <= width {
+                *lines.last_mut().unwrap() = joined;
+            } else {
+                if !current.is_empty() {
+                    lines.push(String::new());
+                }
+                for c in word.chars() {
+                    let line = lines.last_mut().unwrap();
+                    if !line.is_empty()
+                        && self.text_width(&format!("{line}{c}"), size, face) > width
+                    {
+                        lines.push(String::new());
+                    }
+                    lines.last_mut().unwrap().push(c);
+                }
+            }
+            if hard_break {
+                lines.push(String::new());
+            }
+            if lines.len() > max_lines {
+                break;
+            }
+        }
+        if lines.len() > max_lines {
+            lines.truncate(max_lines);
+            let last = lines.last_mut().unwrap();
+            while !last.is_empty() && self.text_width(&format!("{last}…"), size, face) > width {
+                last.pop();
+            }
+            last.push('…');
+        }
+        lines.join("\n")
+    }
     fn measure<M>(&self, e: &Element<M>, available: (f32, f32)) -> (f32, f32) {
         let px = e.style.padding.horizontal * 2.;
         let py = e.style.padding.vertical * 2.;
         let gap = e.style.gap;
+        let available = (
+            match e.style.width {
+                Length::Fixed(w) => w,
+                _ => available.0,
+            },
+            available.1,
+        );
         let children: Vec<_> = e
             .children
             .iter()
@@ -101,15 +152,27 @@ impl Layout {
         let n = children.len();
         let gaps = gap * n.saturating_sub(1) as f32;
         let content = match &e.kind {
-            Kind::Text(t) => (
-                self.text_width(t, e.style.font_size, e.style.font_face),
-                text::line_metrics(
-                    self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
-                    e.style.font_size,
+            Kind::Text(t) => {
+                let wrapped = e.style.max_lines.map(|limit| {
+                    self.wrapped(
+                        t,
+                        e.style.font_size,
+                        e.style.font_face,
+                        (available.0 - px).max(0.),
+                        limit,
+                    )
+                });
+                let t = wrapped.as_deref().unwrap_or(t);
+                (
+                    self.text_width(t, e.style.font_size, e.style.font_face),
+                    text::line_metrics(
+                        self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
+                        e.style.font_size,
+                    )
+                    .height
+                        * t.lines().count().max(1) as f32,
                 )
-                .height
-                    * t.lines().count().max(1) as f32,
-            ),
+            }
             Kind::Input { .. } => (
                 160.,
                 text::line_metrics(
@@ -252,7 +315,13 @@ impl Layout {
             Kind::Text(text) => scene.paint.push(Paint::Text {
                 rect: inner,
                 clip: own_clip.intersect(rect),
-                text: text.clone(),
+                text: e
+                    .style
+                    .max_lines
+                    .map(|limit| {
+                        self.wrapped(text, e.style.font_size, e.style.font_face, inner.w, limit)
+                    })
+                    .unwrap_or_else(|| text.clone()),
                 size: e.style.font_size,
                 face: e.style.font_face,
                 color: fg,

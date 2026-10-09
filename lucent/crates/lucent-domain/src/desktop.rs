@@ -66,6 +66,16 @@ pub trait CompositorPort: Send + Sync {
     fn snapshot(&self) -> Result<CompositorSnapshot>;
     fn switch_workspace(&self, id: i32) -> Result<()>;
     fn focus_window(&self, address: &str) -> Result<()>;
+    fn watch(
+        &self,
+        emit: &mut dyn FnMut(Result<CompositorSnapshot>),
+        stop: &dyn crate::StopSignal,
+    ) {
+        while !stop.cancelled() {
+            emit(self.snapshot());
+            stop.wait(std::time::Duration::from_secs(2));
+        }
+    }
 }
 pub trait SettingsPort: Send + Sync {
     fn load(&self) -> Result<DesktopSettings>;

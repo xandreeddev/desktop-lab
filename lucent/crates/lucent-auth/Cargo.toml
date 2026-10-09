@@ -1,0 +1,12 @@
+[package]
+name = "lucent-auth"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+[dependencies]
+lucent-domain = { path = "../lucent-domain" }
+pam-client = "0.5"
+greetd_ipc = { version = "0.10", features = ["sync-codec"] }
+zeroize = "1"
+libc = "0.2"
+serde_json = "1"
