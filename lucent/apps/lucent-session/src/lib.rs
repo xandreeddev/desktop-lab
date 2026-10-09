@@ -8,6 +8,11 @@ use std::{
     time::Duration,
 };
 use zeroize::Zeroize;
+pub mod platform;
+/// Presentation dependency. The component receives decoded pixels, never paths.
+pub trait SessionAssets: Send + Sync {
+    fn wallpaper(&self) -> Option<Arc<ImageData>>;
+}
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     Lock,
@@ -15,6 +20,7 @@ pub enum Mode {
 }
 #[derive(Clone)]
 pub enum Message {
+    Wallpaper(Option<Arc<ImageData>>),
     Key(Key),
     Submit,
     Prompt(AuthPrompt),
@@ -34,6 +40,8 @@ pub struct SessionScreen {
     attempt: Option<Attempt>,
     verified: bool,
     backend: Arc<dyn AuthenticationPort>,
+    assets: Option<Arc<dyn SessionAssets>>,
+    wallpaper: Option<Arc<ImageData>>,
 }
 impl SessionScreen {
     pub fn new(mode: Mode, identity: String, backend: Arc<dyn AuthenticationPort>) -> Self {
@@ -46,7 +54,13 @@ impl SessionScreen {
             attempt: None,
             verified: false,
             backend,
+            assets: None,
+            wallpaper: None,
         }
+    }
+    pub fn with_assets(mut self, assets: Arc<dyn SessionAssets>) -> Self {
+        self.assets = Some(assets);
+        self
     }
     fn begin(&mut self) {
         self.secret.clear();
@@ -154,26 +168,33 @@ impl Component for SessionScreen {
                 .wrap(3),
         );
         let width = token::WIDTH.min(cx.width - space::XL * 2.);
-        t.apply(
-            Element::stack(vec![
-                Element::column(children)
-                    .gap(space::LG)
-                    .padding(token::PADDING)
-                    .width(Length::Fixed(width))
-                    .at(
-                        (cx.width - width) / 2.,
-                        (cx.height - token::HEIGHT).max(space::XL) / 2.,
-                    )
-                    .radius(radius::PANEL)
-                    .background(t.surface_container)
-                    .shadow(),
-            ])
-            .fill()
-            .background(t.surface),
-        )
+        let mut layers = Vec::new();
+        if let Some(wallpaper) = &self.wallpaper {
+            layers.push(
+                Element::image(wallpaper.clone())
+                    .fill()
+                    .cover()
+                    .id("session-wallpaper"),
+            );
+        }
+        layers.push(
+            Element::column(children)
+                .gap(space::LG)
+                .padding(token::PADDING)
+                .width(Length::Fixed(width))
+                .at(
+                    (cx.width - width) / 2.,
+                    (cx.height - token::HEIGHT).max(space::XL) / 2.,
+                )
+                .radius(radius::PANEL)
+                .background(t.surface_container)
+                .shadow(),
+        );
+        t.apply(Element::stack(layers).fill().background(t.surface))
     }
     fn update(&mut self, message: Message, e: &mut Effects<Message>) {
         match message {
+            Message::Wallpaper(image) => self.wallpaper = image,
             Message::Prompt(prompt) => {
                 self.secret.clear();
                 if matches!(prompt.kind, PromptKind::Information | PromptKind::Error) {
@@ -308,7 +329,11 @@ impl api::Application for SessionScreen {
             capture_all: true,
         }]
     }
-    fn init(&mut self, _: &mut Effects<Message>) {
+    fn init(&mut self, effects: &mut Effects<Message>) {
+        if let Some(assets) = self.assets.clone() {
+            // Secure surfaces and authentication start before image decoding.
+            effects.task(move || Message::Wallpaper(assets.wallpaper()));
+        }
         if self.mode == Mode::Lock {
             self.begin();
         }
@@ -355,6 +380,49 @@ mod tests {
     impl AuthenticationPort for Deny {
         fn authenticate(&self, _: &str, _: &mut dyn AuthConversation) -> domain::Result<()> {
             Err(DomainError::Failed("denied".into()))
+        }
+    }
+    #[test]
+    fn wallpaper_covers_each_output_without_stretching_and_fallback_is_opaque() {
+        use lucent_ui::{Interaction, Layout, Paint};
+        let mut app = SessionScreen::new(Mode::Lock, "fixture".into(), Arc::new(Deny));
+        let fonts = Arc::new(vec![
+            fontdue::Font::from_bytes(api::Application::fonts(&app)[0], Default::default())
+                .unwrap(),
+        ]);
+        let layout = Layout::new(fonts);
+        for (width, height) in [(1920., 1080.), (1080., 1920.)] {
+            let cx = ViewContext {
+                surface: "lock",
+                width,
+                height,
+                now: 0.,
+            };
+            assert_eq!(app.view(&cx).style.background.3, 1.);
+            app.update(
+                Message::Wallpaper(Some(Arc::new(ImageData {
+                    key: "wallpaper-fixture".into(),
+                    width: 4,
+                    height: 2,
+                    rgba: vec![255; 32],
+                }))),
+                &mut Effects::default(),
+            );
+            let scene = layout.build(&app.view(&cx), width, height, &Interaction::default(), 0.);
+            let (rect, clip) = scene
+                .paint
+                .iter()
+                .find_map(|p| match p {
+                    Paint::Image { rect, clip, .. } => Some((rect, clip)),
+                    _ => None,
+                })
+                .expect("wallpaper must be painted");
+            assert!(rect.w >= width && rect.h >= height);
+            assert_eq!(rect.w / rect.h, 2.);
+            assert_eq!(rect.x + rect.w / 2., width / 2.);
+            assert_eq!(rect.y + rect.h / 2., height / 2.);
+            assert_eq!(*clip, Rect::new(0., 0., width, height));
+            app.update(Message::Wallpaper(None), &mut Effects::default());
         }
     }
     #[test]

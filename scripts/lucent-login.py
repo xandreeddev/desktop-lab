@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import pwd
 from pathlib import Path
 import shutil
 import subprocess
@@ -14,7 +15,7 @@ RECORD=BACKUP/'manager.json'
 def run(*cmd):
     return subprocess.run(cmd,check=True,text=True,capture_output=True).stdout.strip()
 
-def install(binary_dir):
+def install(binary_dir, wallpaper_user=None):
     if not shutil.which('greetd'):
         raise SystemExit('Install the official greetd package before this step.')
     binary=binary_dir/'lucent-greeter'
@@ -35,8 +36,24 @@ def install(binary_dir):
     # The greeter user has / as its packaged home; give its compositor a writable private home.
     home=Path('/var/lib/lucent/greeter');home.mkdir(parents=True,exist_ok=True)
     shutil.chown(home,user='greeter',group='greeter');home.chmod(0o700)
-    text=(ROOT/'configs/lucent/greetd/config.toml').read_text().replace('command = "','command = "env HOME=/var/lib/lucent/greeter ',1)
+    user=wallpaper_user or os.environ.get('SUDO_USER')
+    wallpaper_env=''
+    if user and user!='root':
+        account=pwd.getpwnam(user)
+        directory=Path('/var/lib/lucent/wallpapers')/str(account.pw_uid)
+        directory.mkdir(parents=True,exist_ok=True)
+        shutil.chown(directory,user=user,group='greeter');directory.chmod(0o2750)
+        # Run as the desktop account: never read a user-selected file with root privileges.
+        run('runuser','-u',user,'--','/usr/bin/python3',str(ROOT/'scripts/lucent-wallpaper.py'))
+        link=Path('/etc/greetd/lucent-wallpaper')
+        temporary=link.with_suffix('.new');temporary.unlink(missing_ok=True)
+        temporary.symlink_to(directory/'wallpaper');temporary.replace(link)
+        wallpaper_env=f'LUCENT_GREETER_WALLPAPER={directory}/wallpaper '
+    text=(ROOT/'configs/lucent/greetd/config.toml').read_text().replace('command = "','command = "env HOME=/var/lib/lucent/greeter '+wallpaper_env,1)
     Path('/etc/greetd/lucent.toml').write_text(text)
+    # Refresh this installation's active config without changing the selected manager.
+    if config.exists() and '/etc/greetd/lucent.lua' in config.read_text():
+        config.write_text(text)
     print('Installed native greeter. Existing login manager unchanged.')
 
 def test():
@@ -64,7 +81,7 @@ def rollback():
     print('Previous login manager selected for next boot. No active session was stopped.')
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('action',choices=['install','test','activate','rollback']);p.add_argument('--binary-dir',type=Path,default=ROOT/'lucent/target/release');args=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('action',choices=['install','test','activate','rollback']);p.add_argument('--binary-dir',type=Path,default=ROOT/'lucent/target/release');p.add_argument('--wallpaper-user',help='Desktop account whose chosen wallpaper is shown before login (defaults to SUDO_USER)');args=p.parse_args()
     if os.geteuid()!=0: raise SystemExit('This display-manager integration requires root in the test VM.')
-    if args.action=='install':install(args.binary_dir)
+    if args.action=='install':install(args.binary_dir,args.wallpaper_user)
     else:globals()[args.action]()

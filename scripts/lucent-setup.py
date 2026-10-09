@@ -65,6 +65,22 @@ RestartSec=3
     entry.parent.mkdir(parents=True, exist_ok=True)
     entry.write_text('[Desktop Entry]\nType=Application\nName=Lucent Desktop\nComment=Native Rust desktop shell\nExec=systemctl --user start lucent.service\nIcon=preferences-desktop\nCategories=System;\nTerminal=false\n')
     shutil.copy2(ROOT/'scripts/lucent-lock.py', HOME/'.local/lib/lucent/lock.py')
+    shutil.copy2(ROOT/'scripts/lucent-wallpaper.py', HOME/'.local/lib/lucent/wallpaper.py')
+    (unit.parent/'lucent-wallpaper-sync.service').write_text('''[Unit]
+Description=Publish the selected wallpaper for Lucent login
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 %h/.local/lib/lucent/wallpaper.py
+''')
+    (unit.parent/'lucent-wallpaper-sync.path').write_text('''[Unit]
+Description=Follow Omarchy wallpaper and theme changes for Lucent login
+[Path]
+PathChanged=%h/.local/state/omarchy/current
+PathChanged=%h/.local/state/omarchy/current/background
+Unit=lucent-wallpaper-sync.service
+[Install]
+WantedBy=default.target
+''')
     lock_unit=HOME/'.config/systemd/user/lucent-lock.service'
     lock_unit.write_text("""[Unit]
 Description=Lucent secure Wayland locker
@@ -78,12 +94,16 @@ Restart=on-failure
 RestartSec=1
 """)
     run('systemctl', '--user', 'daemon-reload')
+    run('systemctl','--user','enable','--now','lucent-wallpaper-sync.path')
+    run('systemctl','--user','start','lucent-wallpaper-sync.service')
     print('Installed. Test with systemctl --user start lucent.service before activating login startup.')
 
 
 def activate():
     # A running, renderable client is required before changing login integration.
     subprocess.run([str(HOME / '.local/bin/lucent-cli'), 'inspect'], check=True, stdout=subprocess.DEVNULL)
+    run('systemctl','--user','enable','--now','lucent-wallpaper-sync.path')
+    run('systemctl','--user','start','lucent-wallpaper-sync.service')
     BACKUP.mkdir(parents=True, exist_ok=True)
     for name in ('bindings.lua', 'autostart.lua', 'looknfeel.lua'):
         source = HOME / '.config/hypr' / name
@@ -120,6 +140,7 @@ def rollback():
     edit(HOME / '.config/hypr/bindings.lua')
     edit(HOME / '.config/hypr/autostart.lua')
     edit(HOME / '.config/hypr/looknfeel.lua')
+    subprocess.run(['systemctl','--user','disable','--now','lucent-wallpaper-sync.path'],check=False)
     edit(HOME/'.bash_profile',begin='# BEGIN DESKTOP LAB LUCENT\n',end='# END DESKTOP LAB LUCENT\n')
     if (BACKUP/'session-path').exists():
         run('systemctl','--user','set-environment','PATH='+(BACKUP/'session-path').read_text())

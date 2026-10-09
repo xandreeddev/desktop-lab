@@ -199,3 +199,14 @@ configuration. It never ends the running desktop. Roll back with
 `sudo python3 scripts/lucent-login.py rollback` before rebooting. Keep a TTY or SSH
 path available while testing login integration. The greeter supports PAM's visible
 and secret prompts; no autologin, credential storage, or improvised authentication.
+
+
+Lock and login screens use the selected desktop wallpaper with centered cover
+fitting. The locker loads Omarchy's current background asynchronously, so image
+decoding does not delay secure locking. Missing images leave an opaque fallback.
+The login installer publishes one account's wallpaper under
+`/var/lib/lucent/wallpapers/<uid>/wallpaper`. The directory belongs to that account
+and the greeter group (2750); the copied file is 0640. The home remains private.
+`lucent-wallpaper-sync.path` follows changes and copies atomically without sudo.
+Use `--wallpaper-user ACCOUNT` when installing as root without `SUDO_USER`.
+PNG, JPEG and WebP retain source detail up to a 4096-pixel edge.

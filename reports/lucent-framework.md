@@ -305,3 +305,32 @@ were not tested. The new greetd selection has not been exercised through a full
 VM reboot; its authentication and session startup were tested on VT9. This is a
 working prototype with recovery paths, not an independently audited locker or a
 claim of full Lucid parity.
+
+## Session wallpaper follow-up
+
+Lock and login clients now paint the selected wallpaper behind the authentication
+card, using centered cover fitting without distortion. A session asset port loads
+pixels on the effect worker after startup; secure locking does not wait for image
+decoding. The opaque fallback remains if an image is missing or unsupported.
+The greeter reads an atomic copy under `/var/lib/lucent/wallpapers/<uid>`, accessible
+only to its owner and the greeter group. A user path unit follows Omarchy's current
+wallpaper link. Private home-directory permissions are preserved.
+
+Executed on this build:
+
+- Formatting and warning-free Clippy; 41 Rust tests and 17 Python tests.
+- All 60 Vulkan comparisons passed after review of the four intentional lock/login
+  background changes. Other native component references remained unchanged.
+- Landscape/portrait cover geometry, opaque fallback, copy permissions, atomic
+  publication and retention of the last good copy when the source disappears.
+- Real VM path-unit publication after replacing the selected link with the same
+  target; copied bytes matched the source and home permissions remained 0700.
+- Native greeter on the normal login VT displayed the selected wallpaper,
+  authenticated the VM account and launched its desktop. The locker also showed
+  that wallpaper on a compositor-confirmed secure surface.
+- Astro check/build passed. Native captures remain private; published visual
+  references use an original deterministic gradient, not the user's wallpaper.
+
+This supersedes the earlier note about greetd only being exercised on VT9: the VM
+was started from its powered-off state and its selected greetd manager was used.
+Suspend/resume and physical display hotplug remain untested.

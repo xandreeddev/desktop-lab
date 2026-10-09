@@ -9,6 +9,7 @@ lucent-domain = { path = "../../crates/lucent-domain" }
 lucent-design = { path = "../../crates/lucent-design" }
 lucent-wayland = { path = "../../crates/lucent-wayland" }
 lucent-auth = { path = "../../crates/lucent-auth" }
+lucent-services = { path = "../../crates/lucent-services" }
 zeroize = "1"
 [dev-dependencies]
 lucent-ui = { path = "../../crates/lucent-ui" }

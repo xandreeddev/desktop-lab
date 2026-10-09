@@ -372,8 +372,13 @@ impl Layout {
                 }
             }
             Kind::Image(data) => scene.paint.push(Paint::Image {
-                rect: if e.style.image_contain && data.width > 0 && data.height > 0 {
-                    let factor = (inner.w / data.width as f32).min(inner.h / data.height as f32);
+                rect: if e.style.image_fit != ImageFit::Fill && data.width > 0 && data.height > 0 {
+                    let (x, y) = (inner.w / data.width as f32, inner.h / data.height as f32);
+                    let factor = if e.style.image_fit == ImageFit::Cover {
+                        x.max(y)
+                    } else {
+                        x.min(y)
+                    };
                     let (w, h) = (data.width as f32 * factor, data.height as f32 * factor);
                     Rect::new(
                         inner.x + (inner.w - w) / 2.,
@@ -384,7 +389,7 @@ impl Layout {
                 } else {
                     inner
                 },
-                clip: own_clip,
+                clip: own_clip.intersect(inner),
                 data: data.clone(),
                 radius: e.style.radius,
                 opacity: alpha,

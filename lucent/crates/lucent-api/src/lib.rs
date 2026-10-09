@@ -96,6 +96,13 @@ pub struct Padding {
     pub horizontal: f32,
     pub vertical: f32,
 }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ImageFit {
+    #[default]
+    Fill,
+    Contain,
+    Cover,
+}
 #[derive(Clone, Debug)]
 pub struct Style {
     pub width: Length,
@@ -120,8 +127,8 @@ pub struct Style {
     pub hover_transition: Transition,
     /// Multiplicative image tint; white preserves original image colors.
     pub image_tint: Color,
-    /// Preserve image aspect ratio within its layout box.
-    pub image_contain: bool,
+    /// How image pixels fit their layout box; cover crops at the box boundary.
+    pub image_fit: ImageFit,
     pub focus_color: Color,
     pub focus_width: f32,
     pub focus_outline: bool,
@@ -154,7 +161,7 @@ impl Default for Style {
             hover_color: Color::TRANSPARENT,
             hover_transition: Transition::default(),
             image_tint: Color::hex(0xffffff),
-            image_contain: false,
+            image_fit: ImageFit::Fill,
             focus_color: Color::hex(0xffffff),
             focus_width: 1.,
             focus_outline: true,
@@ -308,7 +315,12 @@ impl<M> Element<M> {
         self
     }
     pub fn contain(mut self) -> Self {
-        self.style.image_contain = true;
+        self.style.image_fit = ImageFit::Contain;
+        self
+    }
+    /// Fill the box without stretching, cropping equally from opposite edges.
+    pub fn cover(mut self) -> Self {
+        self.style.image_fit = ImageFit::Cover;
         self
     }
     pub fn selected(mut self, value: bool) -> Self {

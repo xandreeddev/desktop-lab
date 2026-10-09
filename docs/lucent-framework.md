@@ -353,3 +353,12 @@ to the native service while Lucent is active, with compositor-lock acknowledgeme
 and a bounded deadline. Original `/usr/bin/omarchy-system-*lock` commands remain
 the fallback; no packaged file or PAM policy is changed. Rollback removes the
 managed startup, shortcut and PATH blocks.
+
+
+Session wallpaper is a presentation dependency: `SessionAssets` returns decoded
+pixels, and the executable selects the file adapter. `SessionScreen` requests it
+through an effect after startup, then draws an `Element::image(...).cover()` behind
+the authentication card. `ImageFit::{Fill, Contain, Cover}` belongs to the framework;
+cover preserves aspect ratio and clips a centered image to its layout box. An
+opaque base remains even when decoding fails. A user path unit synchronizes the
+login copy, so the greeter never needs access to the desktop account's home.

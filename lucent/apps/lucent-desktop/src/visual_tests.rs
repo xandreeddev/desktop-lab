@@ -532,6 +532,27 @@ fn visual_regressions() {
                     "fixture".into(),
                     Arc::new(crate::test_ports::Fake::default()),
                 );
+                // Original deterministic landscape gradient, never a private VM image.
+                let mut pixels = Vec::new();
+                for y in 0..180u32 {
+                    for x in 0..320u32 {
+                        pixels.extend_from_slice(&[
+                            (25 + x / 5) as u8,
+                            (35 + y / 3) as u8,
+                            (80 + (x + y) / 5) as u8,
+                            255,
+                        ]);
+                    }
+                }
+                session.update(
+                    lucent_session::Message::Wallpaper(Some(Arc::new(ImageData {
+                        key: "session-wallpaper-fixture".into(),
+                        width: 320,
+                        height: 180,
+                        rgba: pixels,
+                    }))),
+                    &mut Effects::default(),
+                );
                 if name == "lock" {
                     session.update(
                         lucent_session::Message::Prompt(lucent_domain::AuthPrompt {
