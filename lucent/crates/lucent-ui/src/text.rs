@@ -30,3 +30,26 @@ pub fn width(font: &fontdue::Font, text: &str, size: f32) -> f32 {
         })
         .fold(0., f32::max)
 }
+
+#[derive(Clone, Copy, Debug)]
+pub struct LineMetrics {
+    pub height: f32,
+    pub baseline: f32,
+    pub ascent: f32,
+    pub descent: f32,
+}
+/// Shared baseline for glyph rasterization, vertically centered fields and carets.
+pub fn line_metrics(font: &fontdue::Font, size: f32) -> LineMetrics {
+    let metrics = font
+        .horizontal_line_metrics(size)
+        .expect("horizontal font metrics");
+    let height = (size * LINE_HEIGHT)
+        .max(metrics.ascent - metrics.descent)
+        .ceil();
+    LineMetrics {
+        height,
+        baseline: (height - metrics.ascent + metrics.descent) / 2. + metrics.ascent,
+        ascent: metrics.ascent,
+        descent: metrics.descent,
+    }
+}

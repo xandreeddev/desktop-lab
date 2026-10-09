@@ -35,7 +35,18 @@ impl Gpu {
     ) -> Result<Rc<Self>, Error> {
         let mut desc = InstanceDescriptor::new_with_display_handle_from_env(Box::new(display));
         desc.backends = Backends::VULKAN;
-        let instance = Instance::new(desc);
+        Self::from_instance(Instance::new(desc), fonts)
+    }
+    /// Use the same Vulkan pipeline without a compositor for deterministic component tests.
+    pub fn headless(fonts: Arc<Vec<fontdue::Font>>) -> Result<Rc<Self>, Error> {
+        let mut desc = InstanceDescriptor::new_without_display_handle();
+        desc.backends = Backends::VULKAN;
+        Self::from_instance(Instance::new(desc), fonts)
+    }
+    fn from_instance(
+        instance: Instance,
+        fonts: Arc<Vec<fontdue::Font>>,
+    ) -> Result<Rc<Self>, Error> {
         let adapter =
             pollster::block_on(instance.request_adapter(&RequestAdapterOptions::default()))
                 .map_err(|e| format!("A Vulkan driver is required: {e}"))?;
@@ -254,15 +265,287 @@ impl Gpu {
         texture
     }
 }
+/// Draws an existing Paint scene into a native buffer or an offscreen test target.
+/// The shaders, rasterization, cache and command encoding are shared by both paths.
+pub struct Canvas {
+    gpu: Rc<Gpu>,
+    viewport: Buffer,
+    frame_group: BindGroup,
+    instances: Buffer,
+    capacity: usize,
+}
+impl Canvas {
+    pub fn new(gpu: Rc<Gpu>) -> Self {
+        let viewport = gpu.device.create_buffer(&BufferDescriptor {
+            label: Some("surface viewport"),
+            size: 16,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let frame_group = gpu.device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &gpu.frame_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: viewport.as_entire_binding(),
+            }],
+        });
+        let instances = gpu.device.create_buffer(&BufferDescriptor {
+            label: None,
+            size: 64,
+            usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        Self {
+            gpu,
+            viewport,
+            frame_group,
+            instances,
+            capacity: 1,
+        }
+    }
+    pub fn paint(
+        &mut self,
+        view: &TextureView,
+        width: u32,
+        height: u32,
+        scale: u32,
+        paint: &[Paint],
+    ) {
+        let mut records = Vec::with_capacity(paint.len());
+        let mut textures = Vec::with_capacity(paint.len());
+        for primitive in paint {
+            let (rect, clip, color, radius, kind, stroke, texture) = match primitive {
+                Paint::Outline {
+                    rect,
+                    clip,
+                    color,
+                    radius,
+                    width,
+                } => (*rect, *clip, *color, *radius, 3., *width, self.gpu.white()),
+                Paint::Shape {
+                    rect,
+                    clip,
+                    color,
+                    radius,
+                    shadow,
+                } => (
+                    *rect,
+                    *clip,
+                    *color,
+                    *radius,
+                    if *shadow { 2. } else { 0. },
+                    0.,
+                    self.gpu.white(),
+                ),
+                Paint::Image {
+                    rect,
+                    clip,
+                    data,
+                    radius,
+                    opacity,
+                    tint,
+                } => (
+                    *rect,
+                    *clip,
+                    tint.alpha(tint.3 * *opacity),
+                    *radius,
+                    1.,
+                    0.,
+                    self.gpu.image(data),
+                ),
+                Paint::Text {
+                    rect,
+                    clip,
+                    text,
+                    size,
+                    face,
+                    color,
+                    align,
+                } => {
+                    if text.is_empty() {
+                        continue;
+                    }
+                    let texture = self.gpu.text(text, *size, scale, *face);
+                    let w = texture.width / scale as f32;
+                    let h = texture.height / scale as f32;
+                    let x = rect.x
+                        + match align {
+                            Align::Start => 0.,
+                            Align::Center => (rect.w - w) / 2.,
+                            Align::End => rect.w - w,
+                        }
+                        .max(0.);
+                    (
+                        Rect::new(
+                            (x * scale as f32).round() / scale as f32,
+                            ((rect.y + (rect.h - h).max(0.) / 2.) * scale as f32).round()
+                                / scale as f32,
+                            w,
+                            h,
+                        ),
+                        *clip,
+                        *color,
+                        0.,
+                        1.,
+                        0.,
+                        texture,
+                    )
+                }
+            };
+            if rect.w <= 0. || rect.h <= 0. || color.3 <= 0. {
+                continue;
+            }
+            records.push([
+                rect.x, rect.y, rect.w, rect.h, color.0, color.1, color.2, color.3, radius, kind,
+                stroke, 0., clip.x, clip.y, clip.w, clip.h,
+            ]);
+            textures.push(texture);
+        }
+        if records.len() > self.capacity {
+            self.capacity = records.len().next_power_of_two();
+            self.instances = self.gpu.device.create_buffer(&BufferDescriptor {
+                label: None,
+                size: (self.capacity * 64) as u64,
+                usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+        }
+        let bytes: Vec<u8> = records
+            .iter()
+            .flatten()
+            .flat_map(|f| f.to_ne_bytes())
+            .collect();
+        if !bytes.is_empty() {
+            self.gpu.queue.write_buffer(&self.instances, 0, &bytes);
+        }
+        let view_bytes: Vec<u8> = [width as f32, height as f32, scale as f32, 0.]
+            .iter()
+            .flat_map(|f| f.to_ne_bytes())
+            .collect();
+        self.gpu.queue.write_buffer(&self.viewport, 0, &view_bytes);
+        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
+        {
+            let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: StoreOp::Store,
+                    },
+                })],
+                ..Default::default()
+            });
+            pass.set_pipeline(&self.gpu.pipeline);
+            pass.set_vertex_buffer(0, self.instances.slice(..));
+            pass.set_bind_group(1, &self.frame_group, &[]);
+            for (i, texture) in textures.iter().enumerate() {
+                pass.set_bind_group(0, &texture.group, &[]);
+                pass.draw(0..6, i as u32..i as u32 + 1);
+            }
+        }
+        self.gpu.queue.submit([encoder.finish()]);
+        // Bound resources from old search strings without invalidating in-flight draws.
+        let cache = self.gpu.cache.borrow();
+        let over_budget =
+            cache.len() > 1024 || cache.values().map(|t| t.bytes).sum::<u64>() > 64 * 1024 * 1024;
+        drop(cache);
+        if over_budget {
+            self.gpu
+                .cache
+                .borrow_mut()
+                .retain(|_, v| Rc::strong_count(v) > 1);
+        }
+    }
+    /// Return premultiplied RGBA pixels at `width*scale` by `height*scale`.
+    pub fn snapshot(
+        &mut self,
+        width: u32,
+        height: u32,
+        scale: u32,
+        paint: &[Paint],
+    ) -> Result<Vec<u8>, Error> {
+        if width == 0 || height == 0 || scale == 0 {
+            return Err("nonzero snapshot dimensions required".into());
+        }
+        let (w, h) = (width * scale, height * scale);
+        let extent = Extent3d {
+            width: w,
+            height: h,
+            depth_or_array_layers: 1,
+        };
+        let texture = self.gpu.device.create_texture(&TextureDescriptor {
+            label: Some("component visual snapshot"),
+            size: extent,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Bgra8Unorm,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        self.paint(
+            &texture.create_view(&Default::default()),
+            width,
+            height,
+            scale,
+            paint,
+        );
+        let stride = (w * 4).div_ceil(COPY_BYTES_PER_ROW_ALIGNMENT) * COPY_BYTES_PER_ROW_ALIGNMENT;
+        let buffer = self.gpu.device.create_buffer(&BufferDescriptor {
+            label: Some("visual snapshot readback"),
+            size: u64::from(stride) * u64::from(h),
+            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
+        encoder.copy_texture_to_buffer(
+            TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
+            },
+            TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(stride),
+                    rows_per_image: Some(h),
+                },
+            },
+            extent,
+        );
+        self.gpu.queue.submit([encoder.finish()]);
+        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        buffer.slice(..).map_async(MapMode::Read, move |result| {
+            let _ = sender.send(result);
+        });
+        self.gpu.device.poll(PollType::Wait {
+            submission_index: None,
+            timeout: Some(std::time::Duration::from_secs(10)),
+        })?;
+        receiver.recv_timeout(std::time::Duration::from_secs(10))??;
+        let mapped = buffer.slice(..).get_mapped_range()?;
+        let mut rgba = Vec::with_capacity((w * h * 4) as usize);
+        for row in mapped.chunks(stride as usize) {
+            for pixel in row[..(w * 4) as usize].as_chunks::<4>().0 {
+                rgba.extend_from_slice(&[pixel[2], pixel[1], pixel[0], pixel[3]]);
+            }
+        }
+        drop(mapped);
+        buffer.unmap();
+        Ok(rgba)
+    }
+}
 /// GPU presentation target. Must be dropped before its native Wayland surface.
 pub struct Renderer {
     surface: Surface<'static>,
     gpu: Rc<Gpu>,
     config: SurfaceConfiguration,
-    viewport: Buffer,
-    frame_group: BindGroup,
-    instances: Buffer,
-    capacity: usize,
+    canvas: Canvas,
     pub frames: u64,
 }
 impl Renderer {
@@ -311,34 +594,12 @@ impl Renderer {
             view_formats: vec![],
             color_space: SurfaceColorSpace::Auto,
         };
-        let viewport = gpu.device.create_buffer(&BufferDescriptor {
-            label: Some("surface viewport"),
-            size: 16,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let frame_group = gpu.device.create_bind_group(&BindGroupDescriptor {
-            label: None,
-            layout: &gpu.frame_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: viewport.as_entire_binding(),
-            }],
-        });
-        let instances = gpu.device.create_buffer(&BufferDescriptor {
-            label: None,
-            size: 64,
-            usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let canvas = Canvas::new(gpu.clone());
         Ok(Self {
             surface,
             gpu,
             config,
-            viewport,
-            frame_group,
-            instances,
-            capacity: 1,
+            canvas,
             frames: 0,
         })
     }
@@ -355,149 +616,21 @@ impl Renderer {
             self.config.height = physical.1;
             self.surface.configure(&self.gpu.device, &self.config);
         }
-        let mut records = Vec::with_capacity(paint.len());
-        let mut textures = Vec::with_capacity(paint.len());
-        for primitive in paint {
-            let (rect, clip, color, radius, kind, texture) = match primitive {
-                Paint::Shape {
-                    rect,
-                    clip,
-                    color,
-                    radius,
-                    shadow,
-                } => (
-                    *rect,
-                    *clip,
-                    *color,
-                    *radius,
-                    if *shadow { 2. } else { 0. },
-                    self.gpu.white(),
-                ),
-                Paint::Image {
-                    rect,
-                    clip,
-                    data,
-                    radius,
-                    opacity,
-                    tint,
-                } => (
-                    *rect,
-                    *clip,
-                    tint.alpha(tint.3 * *opacity),
-                    *radius,
-                    1.,
-                    self.gpu.image(data),
-                ),
-                Paint::Text {
-                    rect,
-                    clip,
-                    text,
-                    size,
-                    face,
-                    color,
-                    align,
-                } => {
-                    if text.is_empty() {
-                        continue;
-                    }
-                    let texture = self.gpu.text(text, *size, scale, *face);
-                    let w = texture.width / scale as f32;
-                    let h = texture.height / scale as f32;
-                    let x = rect.x
-                        + match align {
-                            Align::Start => 0.,
-                            Align::Center => (rect.w - w) / 2.,
-                            Align::End => rect.w - w,
-                        }
-                        .max(0.);
-                    (
-                        Rect::new(
-                            (x * scale as f32).round() / scale as f32,
-                            ((rect.y + (rect.h - h).max(0.) / 2.) * scale as f32).round()
-                                / scale as f32,
-                            w,
-                            h,
-                        ),
-                        *clip,
-                        *color,
-                        0.,
-                        1.,
-                        texture,
-                    )
-                }
-            };
-            if rect.w <= 0. || rect.h <= 0. || color.3 <= 0. {
-                continue;
-            }
-            records.push([
-                rect.x, rect.y, rect.w, rect.h, color.0, color.1, color.2, color.3, radius, kind,
-                0., 0., clip.x, clip.y, clip.w, clip.h,
-            ]);
-            textures.push(texture);
-        }
-        if records.len() > self.capacity {
-            self.capacity = records.len().next_power_of_two();
-            self.instances = self.gpu.device.create_buffer(&BufferDescriptor {
-                label: None,
-                size: (self.capacity * 64) as u64,
-                usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-        }
-        let bytes: Vec<u8> = records
-            .iter()
-            .flatten()
-            .flat_map(|f| f.to_ne_bytes())
-            .collect();
-        if !bytes.is_empty() {
-            self.gpu.queue.write_buffer(&self.instances, 0, &bytes);
-        }
-        let view_bytes: Vec<u8> = [width as f32, height as f32, scale as f32, 0.]
-            .iter()
-            .flat_map(|f| f.to_ne_bytes())
-            .collect();
-        self.gpu.queue.write_buffer(&self.viewport, 0, &view_bytes);
         let frame = match self.surface.get_current_texture() {
-            CurrentSurfaceTexture::Success(f) | CurrentSurfaceTexture::Suboptimal(f) => f,
+            CurrentSurfaceTexture::Success(frame) | CurrentSurfaceTexture::Suboptimal(frame) => {
+                frame
+            }
             other => return Err(format!("Surface presentation: {other:?}").into()),
         };
-        let view = frame.texture.create_view(&Default::default());
-        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
-        {
-            let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: StoreOp::Store,
-                    },
-                })],
-                ..Default::default()
-            });
-            pass.set_pipeline(&self.gpu.pipeline);
-            pass.set_vertex_buffer(0, self.instances.slice(..));
-            pass.set_bind_group(1, &self.frame_group, &[]);
-            for (i, texture) in textures.iter().enumerate() {
-                pass.set_bind_group(0, &texture.group, &[]);
-                pass.draw(0..6, i as u32..i as u32 + 1);
-            }
-        }
-        self.gpu.queue.submit([encoder.finish()]);
+        self.canvas.paint(
+            &frame.texture.create_view(&Default::default()),
+            width,
+            height,
+            scale,
+            paint,
+        );
         self.gpu.queue.present(frame);
         self.frames += 1;
-        // Bound resources from old search strings without invalidating in-flight draws.
-        let cache = self.gpu.cache.borrow();
-        let over_budget =
-            cache.len() > 1024 || cache.values().map(|t| t.bytes).sum::<u64>() > 64 * 1024 * 1024;
-        drop(cache);
-        if over_budget {
-            self.gpu
-                .cache
-                .borrow_mut()
-                .retain(|_, v| Rc::strong_count(v) > 1);
-        }
         Ok(())
     }
 }

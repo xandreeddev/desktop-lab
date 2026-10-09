@@ -125,57 +125,41 @@ pub fn icon(name: &str) -> Option<Arc<ImageData>> {
     }
     None
 }
-/// Small original line icons for framework clients; application logos come from XDG themes.
+/// Official Material Symbols Rounded; pinned SVG sources and Apache-2.0 license
+/// are vendored in assets/material. Monochrome tint is supplied by the UI theme.
 pub fn symbol(name: &str, color: &str) -> Arc<ImageData> {
-    let shape = match name {
-        "apps" => {
-            "<path d='M5 5h2v2H5zm6 0h2v2h-2zm6 0h2v2h-2zM5 11h2v2H5zm6 0h2v2h-2zm6 0h2v2h-2zM5 17h2v2H5zm6 0h2v2h-2zm6 0h2v2h-2z'/>"
-        }
-        "search" => "<circle cx='10.5' cy='10.5' r='6'/><path d='m15 15 5 5'/>",
-        "wallpaper" => {
-            "<rect x='3' y='4' width='18' height='16' rx='3'/><circle cx='8' cy='9' r='1'/><path d='m4 18 5-5 4 4 3-6 5 7'/>"
-        }
-        "widgets" => {
-            "<rect x='3' y='3' width='7' height='7' rx='1'/><rect x='14' y='3' width='7' height='7' rx='1'/><rect x='3' y='14' width='7' height='7' rx='1'/><rect x='14' y='14' width='7' height='7' rx='1'/>"
-        }
-        "palette" => {
-            "<path d='M12 3a9 9 0 1 0 0 18c4 0-2-5 2-5h3c6 0 5-13-5-13z'/><circle cx='7' cy='10' r='1'/><circle cx='11' cy='7' r='1'/><circle cx='16' cy='9' r='1'/>"
-        }
-        "power" => "<path d='M12 2v10M6 5a9 9 0 1 0 12 0'/>",
-        "close" => "<path d='m6 6 12 12M6 18 18 6'/>",
-        "left" => "<path d='m15 5-7 7 7 7'/>",
-        "right" => "<path d='m9 5 7 7-7 7'/>",
-        "music" => {
-            "<path d='M9 17V5l11-2v12M9 7l11-2'/><ellipse cx='6' cy='18' rx='3' ry='2'/><ellipse cx='17' cy='16' rx='3' ry='2'/>"
-        }
-        "play" => "<path d='m8 4 12 8-12 8z'/>",
-        "pause" => "<path d='M8 5v14M16 5v14' stroke-width='4'/>",
-        "next" => "<path d='m5 5 10 7-10 7zM19 5v14'/>",
-        "previous" => "<path d='m19 5-10 7 10 7zM5 5v14'/>",
-        "volume" => "<path d='M3 9h4l5-5v16l-5-5H3zM16 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14'/>",
-        "network" => {
-            "<path d='M3 8a14 14 0 0 1 18 0M6 12a9 9 0 0 1 12 0m-9 4a4 4 0 0 1 6 0'/><circle cx='12' cy='20' r='1'/>"
-        }
-        "sun" => {
-            "<circle cx='12' cy='12' r='4'/><path d='M12 1v3m0 16v3M1 12h3m16 0h3M4 4l2 2m12 12 2 2M4 20l2-2M18 6l2-2'/>"
-        }
-        "cloud" => "<path d='M6 19a5 5 0 1 1 0-10 7 7 0 0 1 13-1 5.5 5.5 0 0 1-1 11z'/>",
-        "lock" => {
-            "<rect x='5' y='10' width='14' height='11' rx='3'/><path d='M8 10V6a4 4 0 0 1 8 0v4M12 14v3'/>"
-        }
-        "command" => {
-            "<path d='M8 8h8v8H8zM8 8H5a3 3 0 1 1 3-3v3m8 0V5a3 3 0 1 1 3 3h-3m0 8h3a3 3 0 1 1-3 3v-3m-8 0v3a3 3 0 1 1-3-3h3'/>"
-        }
-        _ => "<circle cx='12' cy='12' r='8'/><path d='M12 7v10M7 12h10'/>",
+    let source = match name {
+        "apps" => include_str!("../assets/material/apps.svg"),
+        "search" => include_str!("../assets/material/search.svg"),
+        "wallpaper" => include_str!("../assets/material/wallpaper.svg"),
+        "widgets" => include_str!("../assets/material/widgets.svg"),
+        "palette" => include_str!("../assets/material/palette.svg"),
+        "power" => include_str!("../assets/material/power.svg"),
+        "close" => include_str!("../assets/material/close.svg"),
+        "left" => include_str!("../assets/material/left.svg"),
+        "right" => include_str!("../assets/material/right.svg"),
+        "music" => include_str!("../assets/material/music.svg"),
+        "play" => include_str!("../assets/material/play.svg"),
+        "pause" => include_str!("../assets/material/pause.svg"),
+        "next" => include_str!("../assets/material/next.svg"),
+        "previous" => include_str!("../assets/material/previous.svg"),
+        "volume" => include_str!("../assets/material/volume.svg"),
+        "network" => include_str!("../assets/material/network.svg"),
+        "sun" => include_str!("../assets/material/sun.svg"),
+        "cloud" => include_str!("../assets/material/cloud.svg"),
+        "lock" => include_str!("../assets/material/lock.svg"),
+        "command" => include_str!("../assets/material/command.svg"),
+        _ => include_str!("../assets/material/apps.svg"),
     };
-    let svg = format!(
-        "<svg xmlns='http://www.w3.org/2000/svg' width='{SYMBOL_PIXELS}' height='{SYMBOL_PIXELS}' viewBox='0 0 24 24'><g fill='none' stroke='{color}' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'>{shape}</g></svg>"
-    );
+    let svg = source.replace("<path ", &format!("<path fill='{color}' "));
     let tree = resvg::usvg::Tree::from_str(&svg, &Default::default()).unwrap();
     let mut pixmap = resvg::tiny_skia::Pixmap::new(SYMBOL_PIXELS, SYMBOL_PIXELS).unwrap();
     resvg::render(
         &tree,
-        resvg::tiny_skia::Transform::identity(),
+        resvg::tiny_skia::Transform::from_scale(
+            SYMBOL_PIXELS as f32 / tree.size().width(),
+            SYMBOL_PIXELS as f32 / tree.size().height(),
+        ),
         &mut pixmap.as_mut(),
     );
     let mut rgba = pixmap.take();
@@ -187,7 +171,7 @@ pub fn symbol(name: &str, color: &str) -> Arc<ImageData> {
         }
     }
     Arc::new(ImageData {
-        key: format!("symbol:{name}:{color}"),
+        key: format!("material-rounded:{name}:{color}"),
         width: SYMBOL_PIXELS,
         height: SYMBOL_PIXELS,
         rgba,

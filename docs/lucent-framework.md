@@ -54,8 +54,8 @@ including optical dimensions such as `component::launcher::ROW_HEIGHT`.
 `Theme::new(light)` provides `primary`, `on_primary`, `surface`,
 `surface_container`, `on_surface`, `error`, `success`, `warning`, `info` and `focus`.
 `Theme::button` composes a basic recipe, and `Theme::apply` supplies shared hover
-color/timing and shadow recipes throughout a tree. Monochrome images use
-`Element::tint`; application logos retain their original colors. Contrast tests
+color/timing, focus outlines and shadow recipes throughout a tree. Monochrome images use
+`Element::tint` and `Element::contain`; application logos retain their original colors and aspect ratio. Contrast tests
 cover the normal text, primary-action and error pairs in both themes.
 
 The generic framework supplies neutral style defaults and unstyled buttons.
@@ -194,3 +194,56 @@ than creating interfaces without an implemented consumer.
 The renderer and runtime remain replaceable implementations, not public raw-handle
 APIs. Authentication stays with Omarchy's proven lock implementation. An ordinary
 layer surface is never treated as a secure lock screen.
+
+## Keyboard state and visual regression checks
+
+Framework interaction distinguishes pointer hover, keyboard focus and controlled
+selection. Buttons support Tab / Shift+Tab traversal and Enter / Space activation.
+`Element::selected(bool)` renders a persistent selected outline; `focus_within()`
+lets a composite input field draw the focus outline around all its contents.
+`tab_stop(false)` lets composite clients own keyboard navigation. `Theme::apply`
+provides semantic focus color, outline width and caret width. Text, placeholder
+and caret share the renderer's line metrics. A long input scrolls to keep its
+end caret visible. General caret movement and IME are still future work.
+
+The launcher owns Tab / Shift+Tab to cycle Apps → Commands → Wallpapers → Themes
+→ Widgets. Arrows change selection, Enter activates it, Escape closes. This is
+independent from pointer hover. Its app-list height is derived from visible rows,
+header, search field and spacing, so seven rows fit after scrolling. Widget
+switches use `Theme::switch_indicator`, drawn from tokens without font glyphs.
+
+Shell icons are pinned Material Symbols Rounded SVGs (Apache-2.0), with sources,
+license and checksums under `lucent-services/assets/material`. The native icon
+box preserves aspect ratio; 256 px sources and mip filtering support 1× and 2×.
+
+`visual_tests.rs` exercises the actual client through the same `Layout`, `Paint`
+and Vulkan `Canvas` used by Wayland presentation. `Gpu::headless` removes the
+compositor requirement, not the renderer. Fixed application data, bundled fonts,
+viewport and animation times make the fixtures repeatable. Forty PNG baselines
+cover dark/light, 1×/2×, all five sections, a narrow launcher, scrolling, empty
+results, long input and an opening frame. Geometry and keyboard tests separately
+assert behavior so accepting an image cannot hide a clipped row.
+
+```sh
+# Host with a Vulkan driver (Mesa lavapipe recommended)
+cargo test --manifest-path lucent/Cargo.toml -p lucent-desktop visual_regressions -- --ignored
+# Or use the prepared VM's software Vulkan driver; no desktop changes
+python3 vm/test-visual.py
+# Real keyboard events in the unlocked VM
+python3 vm/test-launcher.py
+```
+
+CI installs Mesa Vulkan, selects lavapipe and runs the snapshots explicitly.
+Normal workspace tests skip that one GPU test. Differences above 8/255 in any
+channel count as changed; more than 0.1% changed pixels overall or 1% in any
+64×64 tile fails the case, so a missing small icon cannot hide in the background. Missing
+images or dimensions also fail. Actual and difference images plus an HTML report
+are written to `reports/local/visual-tests/` and uploaded as a CI artifact.
+The threshold allows small driver rasterization differences; it is not a claim
+that all renderers are pixel-identical.
+
+For intentional design changes, run `python3 vm/test-visual.py --update` (or set
+`LUCENT_UPDATE_GOLDENS=1` for the native cargo command), inspect every changed
+baseline and the geometry tests, then commit the PNGs. Never update baselines just
+to silence a failure. The design-system website shows representative native
+captures, while its interactive browser examples remain illustrations.

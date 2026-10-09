@@ -738,10 +738,14 @@ dependencies = [
 name = "lucent-desktop"
 version = "0.1.0"
 dependencies = [
+ "fontdue",
+ "image",
  "lucent-api",
  "lucent-design",
  "lucent-domain",
+ "lucent-render",
  "lucent-services",
+ "lucent-ui",
  "lucent-usecases",
  "lucent-wayland",
  "serde_json",

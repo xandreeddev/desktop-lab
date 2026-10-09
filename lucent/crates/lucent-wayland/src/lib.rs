@@ -243,7 +243,7 @@ pub fn run<A: Application>(app: A) -> Result<(), Error> {
 }
 impl<A: Application> State<A> {
     fn inspect(&self) -> String {
-        serde_json::json!({"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id,"width":s.width,"height":s.height,"scale":s.scale,"buffer_width":s.width*s.scale,"buffer_height":s.height*s.scale,"frames":s.renderer.frames,"frame_times_ms":s.frame_times,"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)}).to_string()
+        serde_json::json!({"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id,"width":s.width,"height":s.height,"scale":s.scale,"buffer_width":s.width*s.scale,"buffer_height":s.height*s.scale,"frames":s.renderer.frames,"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.x,"y":h.clip.y,"width":h.clip.w,"height":h.clip.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)}).to_string()
     }
     fn message(&mut self, message: A::Message, qh: &QueueHandle<Self>) {
         let mut effects = Effects {
@@ -386,7 +386,11 @@ impl<A: Application> State<A> {
             let scene =
                 self.layout
                     .build(&tree, s.width as f32, s.height as f32, &s.interaction, now);
+            let focus = s.interaction.focus.clone();
             s.interaction.synchronize(&scene);
+            if focus != s.interaction.focus {
+                s.demand.invalidate();
+            }
             let regions = if s.spec.capture_all {
                 vec![(api::Rect::new(0., 0., s.width as f32, s.height as f32), 0.)]
             } else {
@@ -445,6 +449,8 @@ impl<A: Application> State<A> {
             Keysym::Down => api::Key::Down,
             Keysym::Left => api::Key::Left,
             Keysym::Right => api::Key::Right,
+            Keysym::ISO_Left_Tab => api::Key::BackTab,
+            Keysym::Tab if self.modifiers.shift => api::Key::BackTab,
             Keysym::Tab => api::Key::Tab,
             Keysym::Home => api::Key::Home,
             Keysym::End => api::Key::End,
@@ -462,6 +468,12 @@ impl<A: Application> State<A> {
                 api::Key::Text(text)
             }
         };
+        if let Some(s) = self.surfaces.get_mut(id) {
+            if !s.interaction.focus_visible {
+                s.demand.invalidate();
+            }
+            s.interaction.focus_visible = true;
+        }
         if let Some(message) = self.app.event(api::Event::Key {
             surface: id,
             key: key.clone(),
@@ -470,9 +482,15 @@ impl<A: Application> State<A> {
             return;
         }
         if let Some(s) = self.surfaces.get_mut(id) {
+            let before = s.interaction.focus.clone();
             let message = s.interaction.key(&s.scene, &key);
+            if before != s.interaction.focus {
+                s.demand.invalidate();
+            }
             if let Some(message) = message {
                 self.message(message, qh);
+            } else {
+                self.draw_all(qh);
             }
         }
     }

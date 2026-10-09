@@ -29,8 +29,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev pkg-config
+      - run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev pkg-config mesa-vulkan-drivers
       - run: rustup update stable && rustup component add rustfmt clippy
       - run: cargo fmt --manifest-path lucent/Cargo.toml --all --check
       - run: cargo clippy --manifest-path lucent/Cargo.toml --locked --workspace --all-targets -- -D warnings
       - run: cargo test --manifest-path lucent/Cargo.toml --locked --workspace
+      - name: Native Vulkan visual regressions
+        run: |
+          export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name '*lvp*' -print -quit)"
+          test -n "$VK_DRIVER_FILES"
+          cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-desktop visual_regressions -- --ignored --nocapture
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-visual-report
+          path: reports/local/visual-tests
+          if-no-files-found: ignore

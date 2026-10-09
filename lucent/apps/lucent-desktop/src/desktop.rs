@@ -18,6 +18,17 @@ pub enum Mode {
     Widgets,
 }
 impl Mode {
+    pub const ALL: [Self; 5] = [
+        Self::Apps,
+        Self::Commands,
+        Self::Wallpapers,
+        Self::Themes,
+        Self::Widgets,
+    ];
+    pub fn cycle(self, delta: i32) -> Self {
+        let index = Self::ALL.iter().position(|mode| *mode == self).unwrap() as i32;
+        Self::ALL[(index + delta).rem_euclid(Self::ALL.len() as i32) as usize]
+    }
     pub fn name(self) -> &'static str {
         match self {
             Self::Apps => "Apps",
@@ -28,7 +39,7 @@ impl Mode {
         }
     }
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Action {
     Lock,
     VolumeUp,
@@ -40,6 +51,14 @@ pub enum Action {
     Terminal,
     Quit,
 }
+pub const COMMANDS: [(&str, Action, &str); 6] = [
+    ("New terminal", Action::Terminal, "command"),
+    ("Lock screen", Action::Lock, "lock"),
+    ("Volume up", Action::VolumeUp, "volume"),
+    ("Volume down", Action::VolumeDown, "volume"),
+    ("Mute / unmute", Action::Mute, "volume"),
+    ("Close Lucent", Action::Quit, "power"),
+];
 #[derive(Clone)]
 pub enum Message {
     Loaded(
@@ -253,7 +272,10 @@ impl Desktop {
             match self.mode {
                 Mode::Wallpapers => panel::WALLPAPER_HEIGHT,
                 Mode::Apps => (self.results.len().min(7) as f32 * launcher::ROW_HEIGHT
-                    + panel::LAUNCHER_CHROME)
+                    + launcher::BODY_TOP
+                    + lucent_design::space::MD
+                    + lucent_design::component::input::HEIGHT
+                    + lucent_design::component::dock::CONTENT_INSETS)
                     .clamp(panel::LAUNCHER_MIN_HEIGHT, panel::LAUNCHER_MAX_HEIGHT),
                 Mode::Widgets => panel::WIDGETS_HEIGHT,
                 Mode::Commands => panel::COMMANDS_HEIGHT,
@@ -277,7 +299,14 @@ impl Desktop {
         );
     }
     fn choose(&mut self, index: usize, now: f64) {
-        self.selected = index.min(self.results.len().saturating_sub(1));
+        let count = match self.mode {
+            Mode::Apps => self.results.len(),
+            Mode::Commands => COMMANDS.len(),
+            Mode::Widgets => WIDGETS.len() + 1,
+            Mode::Themes => 2,
+            Mode::Wallpapers => self.wallpapers.len(),
+        };
+        self.selected = index.min(count.saturating_sub(1));
         if self.selected < self.scroll {
             self.scroll = self.selected;
         }
@@ -511,6 +540,18 @@ impl Component for Desktop {
             Message::Activate => {
                 if self.mode == Mode::Wallpapers {
                     self.update(Message::Wallpaper(self.wallpaper_index, true), effects);
+                } else if self.mode == Mode::Themes {
+                    self.update(Message::Theme(self.selected == 1), effects);
+                } else if self.mode == Mode::Widgets {
+                    let message = WIDGETS
+                        .get(self.selected)
+                        .map(|(id, _, _)| Message::ToggleWidget((*id).into()))
+                        .unwrap_or(Message::ResetLayout);
+                    self.update(message, effects);
+                } else if self.mode == Mode::Commands {
+                    if let Some((_, action, _)) = COMMANDS.get(self.selected) {
+                        self.perform(*action, effects);
+                    }
                 } else if self.mode == Mode::Apps
                     && let Some(index) = self.results.get(self.selected)
                 {
@@ -619,8 +660,9 @@ impl Component for Desktop {
                 effects.redraw("widgets");
             }
             Message::Resize(id, w, h) => {
-                if id == "widgets" {
+                if matches!(id, "widgets" | "dock") {
                     self.viewport = (w, h);
+                    effects.redraw("dock");
                 }
                 self.retarget_panel_transition(now);
                 effects.redraw(id);
@@ -738,10 +780,18 @@ impl api::Application for Desktop {
                 surface: "dock",
                 key,
             } if self.launcher => match key {
+                Key::Tab => Some(Message::Mode(self.mode.cycle(1))),
+                Key::BackTab => Some(Message::Mode(self.mode.cycle(-1))),
                 Key::Escape => Some(Message::CloseLauncher),
                 Key::Enter => Some(Message::Activate),
-                Key::Up | Key::Left => Some(Message::Navigate(-1)),
-                Key::Down | Key::Right => Some(Message::Navigate(1)),
+                Key::Up => Some(Message::Navigate(-1)),
+                Key::Left if matches!(self.mode, Mode::Wallpapers | Mode::Themes) => {
+                    Some(Message::Navigate(-1))
+                }
+                Key::Down => Some(Message::Navigate(1)),
+                Key::Right if matches!(self.mode, Mode::Wallpapers | Mode::Themes) => {
+                    Some(Message::Navigate(1))
+                }
                 Key::Home if self.mode == Mode::Wallpapers => Some(Message::Wallpaper(0, false)),
                 _ => None,
             },

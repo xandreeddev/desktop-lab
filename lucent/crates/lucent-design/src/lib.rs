@@ -43,6 +43,9 @@ impl Theme {
     /// Explicit component foregrounds and image colors are preserved.
     pub fn apply<M>(self, mut element: Element<M>) -> Element<M> {
         fn visit<M>(theme: Theme, e: &mut Element<M>) {
+            e.style.focus_color = theme.focus;
+            e.style.focus_width = component::focus::WIDTH;
+            e.style.caret_width = component::input::CARET_WIDTH;
             e.style.hover_color = theme.primary.alpha(opacity::HOVER);
             e.style.hover_transition = Transition {
                 duration: motion::HOVER,
@@ -56,6 +59,35 @@ impl Theme {
         }
         visit(self, &mut element);
         element
+    }
+    /// Visual state for a toggle row; attach the action to its enclosing control.
+    pub fn switch_indicator<M>(self, checked: bool) -> Element<M> {
+        use component::switch as s;
+        Element::stack(vec![
+            Element::empty()
+                .size(s::THUMB, s::THUMB)
+                .at(
+                    if checked {
+                        s::WIDTH - s::INSET - s::THUMB
+                    } else {
+                        s::INSET
+                    },
+                    s::INSET,
+                )
+                .radius(s::THUMB / 2.)
+                .background(if checked {
+                    self.on_primary
+                } else {
+                    self.on_surface
+                }),
+        ])
+        .size(s::WIDTH, s::HEIGHT)
+        .radius(s::HEIGHT / 2.)
+        .background(if checked {
+            self.primary
+        } else {
+            self.surface_container
+        })
     }
     pub fn button<M>(self, label: impl Into<String>, message: M) -> Element<M> {
         Element::button(label, message)

@@ -153,20 +153,19 @@ pub mod component {
         pub const THEME_HALF_GAP: f32 = 5.0;
         pub const ERROR_HEIGHT: f32 = 24.0;
         pub const ICON_WIDTH: f32 = 28.0;
-        pub const TAB_HEIGHT: f32 = 30.0;
-        pub const HEADER_HEIGHT: f32 = 31.0;
+        pub const TAB_HEIGHT: f32 = 32.0;
+        pub const HEADER_HEIGHT: f32 = 32.0;
         pub const RESET_HEIGHT: f32 = 36.0;
         pub const RESET_BOTTOM: f32 = 38.0;
-        pub const SELECTION_HEIGHT: f32 = 42.0;
-        pub const BODY_TOP: f32 = 43.0;
-        pub const ROW_HEIGHT: f32 = 45.0;
+        pub const SELECTION_HEIGHT: f32 = 46.0;
+        pub const BODY_TOP: f32 = 44.0;
+        pub const ROW_HEIGHT: f32 = 46.0;
         pub const COMMAND_HEIGHT: f32 = 46.0;
         pub const WIDGET_ROW_HEIGHT: f32 = 49.0;
         pub const BODY_MIN_HEIGHT: f32 = 50.0;
         pub const EMPTY_HEIGHT: f32 = 70.0;
         pub const ERROR_BOTTOM: f32 = 71.0;
         pub const THEME_HEIGHT: f32 = 84.0;
-        pub const BODY_CHROME: f32 = 99.0;
         pub const THEME_CAPTION_TOP: f32 = 100.0;
     }
     pub mod dock_row {
@@ -207,6 +206,7 @@ pub mod component {
     }
     pub mod icon_button {
         pub const EXTENT: f32 = 33.0;
+        pub const PADDING: f32 = 7.0;
     }
     pub mod timer {
         pub const HEADING_TOP: f32 = 13.0;
@@ -362,13 +362,26 @@ pub mod component {
         pub const LAUNCHER_WIDTH: f32 = 448.0;
         pub const VIEWPORT_INSETS: f32 = 40.0;
         pub const WALLPAPER_HEIGHT: f32 = 380.0;
-        pub const LAUNCHER_CHROME: f32 = 126.0;
         pub const LAUNCHER_MIN_HEIGHT: f32 = 218.0;
         pub const LAUNCHER_MAX_HEIGHT: f32 = 500.0;
         pub const WIDGETS_HEIGHT: f32 = 506.0;
         pub const COMMANDS_HEIGHT: f32 = 440.0;
         pub const THEMES_HEIGHT: f32 = 272.0;
         pub const BAR_HEIGHT: f32 = 56.0;
+    }
+    pub mod focus {
+        pub const WIDTH: f32 = 2.0;
+    }
+    pub mod input {
+        pub const HEIGHT: f32 = 44.0;
+        pub const INSET: f32 = 8.0;
+        pub const CARET_WIDTH: f32 = 1.5;
+    }
+    pub mod switch {
+        pub const WIDTH: f32 = 32.0;
+        pub const HEIGHT: f32 = 18.0;
+        pub const THUMB: f32 = 14.0;
+        pub const INSET: f32 = 2.0;
     }
 }
 pub mod icon {

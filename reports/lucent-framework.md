@@ -128,3 +128,42 @@ Executed checks:
 Fractional scaling, complex-script shaping and hardware Vulkan remain unverified
 or unimplemented as described above. Larger cached assets may increase resource
 use; these changes are rendering-quality work, not a measured performance win.
+
+## Launcher quality follow-up
+
+The later launcher check used the resized guest: 6 vCPUs, 6 GiB RAM, Mesa 26.2.2
+software Vulkan. The earlier performance table above remains a historical sample.
+
+Executed on the updated build:
+
+- 28 Rust unit tests; formatting and warning-free Clippy across all targets.
+- 11 Python configuration/token/rollback tests; generated-token and ShellCheck checks.
+- 40 native Vulkan snapshots, with fixed data and time, across dark/light and
+  1×/2×: first/last results, empty state, long input, narrow width, opening frame,
+  commands, themes, widgets and the empty wallpaper selector.
+- Independent geometry tests require all seven visible app rows to fit their
+  clips after scrolling, and search icons/caret to share a centered line box.
+- Real VM keyboard input: selection without hovering, all five Tab modes,
+  Shift+Tab reverse navigation, widget selection and restored search focus.
+- Existing VM interaction suite: real terminal launch, workspaces, widget drag
+  and saved position, notes, timer, wallpaper, restart and stock-bar restoration.
+- Real output changes between 1920×1080 at 1× and 3840×2160 at 2×, in both themes;
+  all three native surfaces followed the scale and the original output was restored.
+- Astro type/build checks; documentation and design-system pages at 320, 390,
+  768 and 1440 CSS pixels without horizontal overflow or browser errors.
+
+The image comparator rejected an intentional application-icon change against
+the previous references. Its difference image isolated that icon. The new icon
+was reviewed before updating the references. A unit check also verifies that a
+small missing icon fails the per-tile threshold even if its whole-image change
+would be below the global threshold.
+
+The launcher now derives list space from row/header/input tokens, has independent
+keyboard selection and composite search focus, and uses drawn widget switches.
+Shell symbols use pinned Material Symbols Rounded SVGs; image containment avoids
+stretching, and missing application icons use the same symbol family. The actual
+Vulkan captures appear in the local design-system page. Source reference PNGs are
+under `lucent/tests/visual/baselines`; private VM captures stay in `reports/local`.
+
+Commands and baseline-review policy are documented in
+[the framework guide](../docs/lucent-framework.md#keyboard-state-and-visual-regression-checks).

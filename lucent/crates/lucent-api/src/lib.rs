@@ -113,6 +113,16 @@ pub struct Style {
     pub hover_transition: Transition,
     /// Multiplicative image tint; white preserves original image colors.
     pub image_tint: Color,
+    /// Preserve image aspect ratio within its layout box.
+    pub image_contain: bool,
+    pub focus_color: Color,
+    pub focus_width: f32,
+    pub focus_outline: bool,
+    pub focus_within: bool,
+    /// Controlled selection, independent of pointer hover and text-input focus.
+    pub selected: bool,
+    pub tab_stop: bool,
+    pub caret_width: f32,
 }
 impl Default for Style {
     fn default() -> Self {
@@ -136,6 +146,14 @@ impl Default for Style {
             hover_color: Color::TRANSPARENT,
             hover_transition: Transition::default(),
             image_tint: Color::hex(0xffffff),
+            image_contain: false,
+            focus_color: Color::hex(0xffffff),
+            focus_width: 1.,
+            focus_outline: true,
+            focus_within: false,
+            selected: false,
+            tab_stop: true,
+            caret_width: 1.,
         }
     }
 }
@@ -269,6 +287,27 @@ impl<M> Element<M> {
         self.style.background = v;
         self
     }
+    pub fn contain(mut self) -> Self {
+        self.style.image_contain = true;
+        self
+    }
+    pub fn selected(mut self, value: bool) -> Self {
+        self.style.selected = value;
+        self
+    }
+    /// Decorate a composite field when one of its descendants has keyboard focus.
+    pub fn focus_within(mut self) -> Self {
+        self.style.focus_within = true;
+        self
+    }
+    pub fn focus_outline(mut self, enabled: bool) -> Self {
+        self.style.focus_outline = enabled;
+        self
+    }
+    pub fn tab_stop(mut self, enabled: bool) -> Self {
+        self.style.tab_stop = enabled;
+        self
+    }
     pub fn tint(mut self, v: Color) -> Self {
         self.style.image_tint = v;
         self
@@ -375,6 +414,7 @@ pub enum Key {
     Left,
     Right,
     Tab,
+    BackTab,
     Home,
     End,
     SelectAll,

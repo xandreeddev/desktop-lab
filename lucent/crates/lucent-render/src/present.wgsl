@@ -11,7 +11,7 @@ struct Vertex {
 };
 @vertex fn vs(@builtin(vertex_index) index:u32,@location(0) rect:vec4<f32>,@location(1) color:vec4<f32>,@location(2) params:vec4<f32>,@location(3) clip:vec4<f32>)->Vertex {
     let corners=array<vec2<f32>,6>(vec2(0.0,0.0),vec2(1.0,0.0),vec2(0.0,1.0),vec2(0.0,1.0),vec2(1.0,0.0),vec2(1.0,1.0));
-    let pad=select(0.0,18.0,params.y>1.5);
+    let pad=select(0.0,18.0,params.y>1.5&&params.y<2.5);
     let local=corners[index]*(rect.zw+vec2(pad*2.0))-vec2(pad);
     let point=rect.xy+local;
     var out:Vertex;
@@ -26,7 +26,8 @@ struct Vertex {
     let d=length(max(q,vec2(0.0)))+min(max(q.x,q.y),0.0)-radius;
     let aa=max(fwidth(d),0.3);
     var coverage=1.0-smoothstep(-aa,aa,d);
-    if v.params.y>1.5 {coverage=exp(-max(d,0.0)*max(d,0.0)/65.0);}
+    if v.params.y>1.5&&v.params.y<2.5 {coverage=exp(-max(d,0.0)*max(d,0.0)/65.0);}
+    if v.params.y>2.5 {coverage*=smoothstep(-aa,aa,d+v.params.z);}
     var pixel=vec4(1.0);
     if v.params.y>0.5&&v.params.y<1.5 {pixel=textureSample(image,filtering,v.local/v.rect.zw);}
     return vec4(pixel.rgb*v.color.rgb*v.color.a,pixel.a*v.color.a)*coverage;

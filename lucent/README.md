@@ -15,7 +15,8 @@ python3 vm/launch.py lucent  # from the repository root on the lab host
 Inside the guest:
 
 - **Super+Space:** open/close the application launcher. Type to filter, arrows to
-  select, Enter to launch, Escape or a click outside to close.
+  select, Enter to launch, Escape or a click outside to close. Tab / Shift+Tab
+  cycle launcher sections; arrows and Enter work in Commands, Themes and Widgets too.
 - **Super+Ctrl+Space:** wallpaper carousel. Arrows select, Enter applies; clicking
   the centered card applies it too.
 - **Widgets** in the launcher header: toggle calendar, clock, weather, media,
@@ -143,3 +144,11 @@ hosting, clipboard/emoji modes, custom control-center dialogs, automatic
 wallpaper palette extraction, widget resizing, fractional scaling, multi-output
 placement and full Unicode shaping remain future work. Stock Omarchy continues
 handling session services. The framework has no Qt/GTK dependency.
+
+Native visual tests render the real client through Vulkan at 1× and 2×. Run
+`python3 vm/test-visual.py` from the repository root to use the prepared VM, or
+`cargo test --manifest-path lucent/Cargo.toml -p lucent-desktop visual_regressions -- --ignored`
+with a local Vulkan driver. Review `reports/local/visual-tests/index.html`.
+`python3 vm/test-launcher.py` verifies actual keyboard events in the unlocked VM.
+See [keyboard state and visual tests](../docs/lucent-framework.md#keyboard-state-and-visual-regression-checks)
+for baseline review and CI behavior.

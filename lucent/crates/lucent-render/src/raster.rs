@@ -1,5 +1,5 @@
 //! Cached CPU raster work. The presentation framebuffer stays at output density.
-use lucent_ui::text::{LINE_HEIGHT, glyph_positions, width};
+use lucent_ui::text::{glyph_positions, line_metrics, width};
 
 /// Area reduction on premultiplied RGBA, including odd-sized edge texels.
 /// Used for texture mip levels and 2× text coverage supersampling.
@@ -35,7 +35,8 @@ pub fn text(font: &fontdue::Font, text: &str, size: f32, scale: u32) -> (Vec<u8>
     let scale = scale.max(1);
     let density = scale as f32 * 2.;
     let logical_w = (width(font, text, size).ceil() + 2.).clamp(1., 4096.);
-    let logical_h = (size * LINE_HEIGHT * text.lines().count().max(1) as f32)
+    let metrics = line_metrics(font, size);
+    let logical_h = (metrics.height * text.lines().count().max(1) as f32)
         .ceil()
         .clamp(1., 1024.);
     // Bound allocation for pathological strings/scale; normal UI text is well below this.
@@ -47,18 +48,19 @@ pub fn text(font: &fontdue::Font, text: &str, size: f32, scale: u32) -> (Vec<u8>
             if x * density >= w as f32 {
                 break;
             }
-            let (metrics, bitmap) = font.rasterize(c, size * density);
-            let left = (x * density).round() as i32 + metrics.xmin;
-            let top = ((line_index as f32 * size * LINE_HEIGHT + size) * density).round() as i32
-                - metrics.height as i32
-                - metrics.ymin;
-            for row in 0..metrics.height {
-                for col in 0..metrics.width {
+            let (glyph, bitmap) = font.rasterize(c, size * density);
+            let left = (x * density).round() as i32 + glyph.xmin;
+            let top = ((line_index as f32 * metrics.height + metrics.baseline) * density).round()
+                as i32
+                - glyph.height as i32
+                - glyph.ymin;
+            for row in 0..glyph.height {
+                for col in 0..glyph.width {
                     let (px, py) = (left + col as i32, top + row as i32);
                     if px < 0 || py < 0 || px >= w as i32 || py >= h as i32 {
                         continue;
                     }
-                    let a = bitmap[row * metrics.width + col];
+                    let a = bitmap[row * glyph.width + col];
                     let at = ((py as u32 * w + px as u32) * 4) as usize;
                     for channel in &mut pixels[at..at + 4] {
                         *channel = a.saturating_add(

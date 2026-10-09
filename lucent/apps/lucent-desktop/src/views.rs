@@ -29,14 +29,14 @@ impl Desktop {
         self.images
             .get(&format!("symbol:{name}"))
             .cloned()
-            .map(Element::image)
+            .map(|data| Element::image(data).contain())
             .unwrap_or_else(Element::empty)
             .size(size, size)
             .tint(self.ink())
     }
     pub fn icon_button(&self, id: &str, name: &str, message: Message) -> Element<Message> {
         self.icon(name, icon::CONTROL)
-            .padding(space::SM)
+            .padding(component::icon_button::PADDING)
             .size(
                 component::icon_button::EXTENT,
                 component::icon_button::EXTENT,
@@ -50,15 +50,12 @@ impl Desktop {
         self.images
             .get(&app.icon)
             .cloned()
-            .map(Element::image)
+            .map(|data| Element::image(data).contain())
             .unwrap_or_else(|| {
-                self.label(
-                    app.name.chars().next().unwrap_or('A').to_string(),
-                    size * 0.5,
-                )
-                .align(Align::Center)
-                .background(self.widget_color())
-                .radius(size / 2.)
+                self.icon("apps", size)
+                    .padding(space::XS)
+                    .background(self.widget_color())
+                    .radius(radius::CARD)
             })
             .size(size, size)
     }
@@ -253,6 +250,7 @@ impl Desktop {
             .background(self.surface_color())
             .shadow()
             .clip()
+            .tab_stop(false)
             .on_click(Message::Select(self.selected))
             .id("dock-panel");
         Element::stack(vec![panel]).fill()
@@ -314,6 +312,7 @@ impl Desktop {
     fn launcher_face(&self, cx: &ViewContext, width: f32, height: f32) -> Element<Message> {
         let mut modes = vec![
             self.icon("apps", icon::MEDIUM)
+                .padding(space::XS)
                 .size(
                     component::launcher::ICON_WIDTH,
                     component::launcher::TAB_HEIGHT,
@@ -357,6 +356,7 @@ impl Desktop {
         }
         modes.push(
             self.icon("power", icon::SMALL)
+                .padding(space::XS)
                 .size(
                     component::launcher::ICON_WIDTH,
                     component::launcher::TAB_HEIGHT,
@@ -369,8 +369,8 @@ impl Desktop {
             .height(Length::Fixed(component::launcher::HEADER_HEIGHT));
         let mut elements = vec![header];
         let body_y = component::launcher::BODY_TOP;
-        let body_h =
-            (height - component::launcher::BODY_CHROME).max(component::launcher::BODY_MIN_HEIGHT);
+        let body_h = (height - body_y - component::input::HEIGHT - space::MD)
+            .max(component::launcher::BODY_MIN_HEIGHT);
         match self.mode {
             Mode::Apps => {
                 let rows: Vec<_> = self
@@ -394,6 +394,8 @@ impl Desktop {
                         .gap(space::MD)
                         .padding(space::SM)
                         .size(width, component::launcher::ROW_HEIGHT)
+                        .radius(radius::CARD)
+                        .selected(rank == self.selected)
                         .on_hover(Message::Select(rank))
                         .on_click(Message::Launch(app.id.clone(), false))
                         .id(format!("result-{rank}"))
@@ -426,20 +428,24 @@ impl Desktop {
                     Element::input(&self.query, "Search apps and settings", Message::Query)
                         .id("launcher-search")
                         .autofocus()
+                        .focus_outline(false)
                         .font(font::BODY)
                         .color(self.ink())
                         .width(Length::Fill)
-                        .height(Length::Fixed(component::launcher::ICON_WIDTH)),
+                        .height(Length::Fill),
                     self.icon("close", icon::SMALL)
                         .on_click(Message::Query(String::new()))
                         .id("clear-search"),
                 ])
-                .gap(space::MD)
-                .padding(space::MD)
-                .size(width, component::launcher::ROW_HEIGHT)
+                .align(Align::Center)
+                .gap(space::SM)
+                .padding(component::input::INSET)
+                .size(width, component::input::HEIGHT)
+                .id("launcher-search-field")
+                .focus_within()
                 .radius(radius::SEARCH)
                 .background(self.widget_color());
-                elements.push(search.at(0., height - component::launcher::ROW_HEIGHT));
+                elements.push(search.at(0., height - component::input::HEIGHT));
             }
             Mode::Wallpapers => elements.push(
                 self.wallpaper_strip(cx, width, body_h + component::launcher::ROW_HEIGHT)
@@ -448,7 +454,8 @@ impl Desktop {
             Mode::Widgets => {
                 let rows = WIDGETS
                     .iter()
-                    .map(|(id, title, description)| {
+                    .enumerate()
+                    .map(|(index, (id, title, description))| {
                         let on = self.settings.visible_widgets.iter().any(|w| w == id);
                         Element::row(vec![
                             self.icon(
@@ -461,8 +468,7 @@ impl Desktop {
                                     .opacity(opacity::MUTED),
                             ])
                             .width(Length::Fill),
-                            self.label(if on { "●" } else { "○" }, font::TITLE)
-                                .color(self.accent()),
+                            self.theme().switch_indicator(on),
                         ])
                         .align(Align::Center)
                         .gap(space::MD)
@@ -470,6 +476,8 @@ impl Desktop {
                         .size(width, component::launcher::WIDGET_ROW_HEIGHT)
                         .radius(radius::CONTROL)
                         .background(self.surface_color())
+                        .selected(index == self.selected)
+                        .on_hover(Message::Select(index))
                         .on_click(Message::ToggleWidget((*id).into()))
                         .id(format!("toggle-{id}"))
                     })
@@ -477,6 +485,8 @@ impl Desktop {
                 elements.push(Element::column(rows).gap(space::XXS).at(0., body_y));
                 elements.push(
                     self.button("Reset widget positions", Message::ResetLayout)
+                        .selected(self.selected == WIDGETS.len())
+                        .on_hover(Message::Select(WIDGETS.len()))
                         .id("reset-layout")
                         .size(width, component::launcher::RESET_HEIGHT)
                         .font(font::CONTROL)
@@ -494,6 +504,8 @@ impl Desktop {
                             )
                             .background(theme::dark::SURFACE)
                             .color(theme::dark::ON_SURFACE)
+                            .selected(self.selected == 0)
+                            .on_hover(Message::Select(0))
                             .id("theme-dark"),
                         self.button("Light", Message::Theme(true))
                             .size(
@@ -502,6 +514,8 @@ impl Desktop {
                             )
                             .background(theme::light::SURFACE)
                             .color(theme::light::ON_SURFACE)
+                            .selected(self.selected == 1)
+                            .on_hover(Message::Select(1))
                             .id("theme-light"),
                     ])
                     .gap(space::MD)
@@ -515,19 +529,12 @@ impl Desktop {
                 );
             }
             Mode::Commands => {
-                let actions = [
-                    ("New terminal", Action::Terminal, "command"),
-                    ("Lock screen", Action::Lock, "lock"),
-                    ("Volume up", Action::VolumeUp, "volume"),
-                    ("Volume down", Action::VolumeDown, "volume"),
-                    ("Mute / unmute", Action::Mute, "volume"),
-                    ("Close Lucent", Action::Quit, "power"),
-                ];
                 elements.push(
                     Element::column(
-                        actions
+                        COMMANDS
                             .into_iter()
-                            .map(|(label, action, icon)| {
+                            .enumerate()
+                            .map(|(index, (label, action, icon))| {
                                 Element::row(vec![
                                     self.icon(icon, icon::ACTION),
                                     self.label(label, font::BODY),
@@ -537,6 +544,8 @@ impl Desktop {
                                 .size(width, component::launcher::COMMAND_HEIGHT)
                                 .radius(radius::CARD)
                                 .background(self.surface_color())
+                                .selected(self.selected == index)
+                                .on_hover(Message::Select(index))
                                 .on_click(Message::Action(action))
                                 .id(format!("command-{icon}-{label}"))
                             })
@@ -555,7 +564,19 @@ impl Desktop {
                     .color(self.theme().error),
             );
         }
-        Element::stack(elements).size(width, height)
+        // This launcher owns Tab to cycle modes. Keep typing focused in its
+        // search input while pointer clicks select/activate other controls.
+        fn retain_search_focus(e: &mut Element<Message>) {
+            if e.input.is_none() {
+                e.style.tab_stop = false;
+            }
+            for child in &mut e.children {
+                retain_search_focus(child);
+            }
+        }
+        let mut face = Element::stack(elements).size(width, height);
+        retain_search_focus(&mut face);
+        face
     }
     fn wallpaper_strip(&self, cx: &ViewContext, width: f32, height: f32) -> Element<Message> {
         if self.wallpapers.is_empty() {
@@ -589,7 +610,7 @@ impl Desktop {
                 .images
                 .get(&wall.path)
                 .cloned()
-                .map(Element::image)
+                .map(|data| Element::image(data).contain())
                 .unwrap_or_else(|| Element::empty().background(self.widget_color()));
             let active = i == self.wallpaper_index;
             cards.push(

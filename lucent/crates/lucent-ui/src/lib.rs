@@ -5,6 +5,13 @@ use std::{collections::BTreeMap, sync::Arc};
 
 #[derive(Clone, Debug)]
 pub enum Paint {
+    Outline {
+        rect: Rect,
+        clip: Rect,
+        color: Color,
+        radius: f32,
+        width: f32,
+    },
     Shape {
         rect: Rect,
         clip: Rect,
@@ -43,6 +50,7 @@ pub struct Hit<M> {
     pub drag: Option<DragCallback<M>>,
     pub autofocus: bool,
     pub hover_transition: Transition,
+    pub tab_stop: bool,
 }
 impl<M> Hit<M> {
     pub fn contains(&self, x: f32, y: f32) -> bool {
@@ -94,9 +102,21 @@ impl Layout {
         let content = match &e.kind {
             Kind::Text(t) => (
                 self.text_width(t, e.style.font_size, e.style.font_face),
-                e.style.font_size * text::LINE_HEIGHT * t.lines().count().max(1) as f32,
+                text::line_metrics(
+                    self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
+                    e.style.font_size,
+                )
+                .height
+                    * t.lines().count().max(1) as f32,
             ),
-            Kind::Input { .. } => (160., e.style.font_size * text::LINE_HEIGHT),
+            Kind::Input { .. } => (
+                160.,
+                text::line_metrics(
+                    self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
+                    e.style.font_size,
+                )
+                .height,
+            ),
             Kind::Image(_) => (32., 32.),
             Kind::Row => (
                 children.iter().map(|c| c.0).sum::<f32>() + gaps,
@@ -161,6 +181,9 @@ impl Layout {
             e.id.clone()
         };
         let alpha = opacity * e.style.opacity;
+        if alpha <= 0.001 {
+            return;
+        }
         let own_clip = if e.style.clip {
             clip.intersect(rect)
         } else {
@@ -212,6 +235,7 @@ impl Layout {
                 drag: e.drag.clone(),
                 autofocus: e.autofocus,
                 hover_transition: e.style.hover_transition,
+                tab_stop: e.style.tab_stop && (e.click.is_some() || e.input.is_some()),
             });
         }
         let p = e.style.padding;
@@ -247,21 +271,44 @@ impl Layout {
                     align: Align::Start,
                 });
                 if interaction.focus.as_deref() == Some(&id) {
-                    let x = (inner.x
-                        + self.text_width(value, e.style.font_size, e.style.font_face)
-                        + 2.)
-                        .min(inner.x + inner.w - 1.);
+                    let font = self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]);
+                    let line = text::line_metrics(font, e.style.font_size);
+                    let top = inner.y + (inner.h - line.height).max(0.) / 2.;
+                    let advance = self.text_width(value, e.style.font_size, e.style.font_face);
+                    let scroll = (advance + e.style.caret_width - inner.w).max(0.);
+                    // Keep the end-caret visible when a single-line value exceeds the field.
+                    if let Some(Paint::Text { rect, .. }) = scene.paint.last_mut() {
+                        rect.x -= scroll;
+                    }
+                    let x =
+                        (inner.x + advance - scroll).min(inner.x + inner.w - e.style.caret_width);
                     scene.paint.push(Paint::Shape {
-                        rect: Rect::new(x, inner.y + 3., 1.5, e.style.font_size + 2.),
-                        clip: inner,
-                        color: e.style.foreground,
+                        rect: Rect::new(
+                            x,
+                            top + line.baseline - line.ascent,
+                            e.style.caret_width,
+                            line.ascent - line.descent,
+                        ),
+                        clip: own_clip.intersect(inner),
+                        color: e.style.foreground.alpha(e.style.foreground.3 * alpha),
                         radius: 0.,
                         shadow: false,
                     });
                 }
             }
             Kind::Image(data) => scene.paint.push(Paint::Image {
-                rect: inner,
+                rect: if e.style.image_contain && data.width > 0 && data.height > 0 {
+                    let factor = (inner.w / data.width as f32).min(inner.h / data.height as f32);
+                    let (w, h) = (data.width as f32 * factor, data.height as f32 * factor);
+                    Rect::new(
+                        inner.x + (inner.w - w) / 2.,
+                        inner.y + (inner.h - h) / 2.,
+                        w,
+                        h,
+                    )
+                } else {
+                    inner
+                },
                 clip: own_clip,
                 data: data.clone(),
                 radius: e.style.radius,
@@ -364,6 +411,27 @@ impl Layout {
                 &format!("{path}/{i}"),
             );
         }
+        fn contains_focus<M>(e: &Element<M>, focus: &str, path: &str) -> bool {
+            let id = if e.id.is_empty() { path } else { &e.id };
+            id == focus
+                || e.children
+                    .iter()
+                    .enumerate()
+                    .any(|(i, child)| contains_focus(child, focus, &format!("{path}/{i}")))
+        }
+        let focused = interaction.focus_visible
+            && interaction.focus.as_deref().is_some_and(|focus| {
+                focus == id || (e.style.focus_within && contains_focus(e, focus, path))
+            });
+        if (e.style.selected || (e.style.focus_outline && focused)) && e.style.focus_width > 0. {
+            scene.paint.push(Paint::Outline {
+                rect,
+                clip: own_clip,
+                radius: e.style.radius,
+                color: e.style.focus_color.alpha(e.style.focus_color.3 * alpha),
+                width: e.style.focus_width,
+            });
+        }
     }
 }
 fn align_offset(align: Align, remaining: f32) -> f32 {
@@ -384,6 +452,7 @@ struct Press<M> {
 pub struct Interaction<M> {
     pub focus: Option<String>,
     pub hovered: Option<String>,
+    pub focus_visible: bool,
     press: Option<Press<M>>,
     hover_transition: Transition,
     motions: BTreeMap<String, Motion>,
@@ -395,6 +464,7 @@ impl<M> Default for Interaction<M> {
         Self {
             focus: None,
             hovered: None,
+            focus_visible: false,
             hover_transition: Transition::default(),
             press: None,
             motions: BTreeMap::new(),
@@ -418,6 +488,9 @@ impl<M: Clone> Interaction<M> {
                 .iter()
                 .find(|h| h.autofocus)
                 .map(|h| h.id.clone());
+            if self.focus.is_some() {
+                self.focus_visible = true;
+            }
         }
         self.input_buffer = self.focus.as_ref().and_then(|id| {
             scene
@@ -495,6 +568,7 @@ impl<M: Clone> Interaction<M> {
         out
     }
     pub fn press(&mut self, scene: &Scene<M>, x: f32, y: f32) {
+        self.focus_visible = false;
         self.press = scene
             .hits
             .iter()
@@ -502,10 +576,13 @@ impl<M: Clone> Interaction<M> {
             .find(|h| h.contains(x, y))
             .cloned()
             .map(|hit| {
-                if hit.input.is_some() {
+                if hit.tab_stop {
                     self.focus = Some(hit.id.clone());
                     self.select_all = false;
-                    self.input_buffer = Some((hit.id.clone(), hit.value.clone()));
+                    self.input_buffer = hit
+                        .input
+                        .as_ref()
+                        .map(|_| (hit.id.clone(), hit.value.clone()));
                 }
                 Press {
                     hit,
@@ -533,6 +610,43 @@ impl<M: Clone> Interaction<M> {
         }
     }
     pub fn key(&mut self, scene: &Scene<M>, key: &Key) -> Option<M> {
+        self.focus_visible = true;
+        if matches!(key, Key::Tab | Key::BackTab) {
+            let stops: Vec<_> = scene
+                .hits
+                .iter()
+                .filter(|h| {
+                    h.tab_stop && h.rect.intersect(h.clip).w > 0. && h.rect.intersect(h.clip).h > 0.
+                })
+                .collect();
+            if !stops.is_empty() {
+                let current = stops
+                    .iter()
+                    .position(|h| Some(&h.id) == self.focus.as_ref());
+                let next = match (current, key) {
+                    (Some(i), Key::BackTab) => (i + stops.len() - 1) % stops.len(),
+                    (Some(i), _) => (i + 1) % stops.len(),
+                    (None, Key::BackTab) => stops.len() - 1,
+                    (None, _) => 0,
+                };
+                let hit = stops[next];
+                self.focus = Some(hit.id.clone());
+                self.select_all = false;
+                self.input_buffer = hit
+                    .input
+                    .as_ref()
+                    .map(|_| (hit.id.clone(), hit.value.clone()));
+            }
+            return None;
+        }
+        if (matches!(key, Key::Enter) || matches!(key, Key::Text(s) if s == " "))
+            && let Some(hit) = scene
+                .hits
+                .iter()
+                .find(|h| Some(&h.id) == self.focus.as_ref() && h.input.is_none())
+        {
+            return hit.click.clone();
+        }
         let hit = scene
             .hits
             .iter()
@@ -590,6 +704,7 @@ mod tests {
             drag: None,
             autofocus: false,
             hover_transition: Transition::default(),
+            tab_stop: true,
         };
         assert!(!h.contains(1., 1.));
         assert!(h.contains(50., 50.));
@@ -608,6 +723,7 @@ mod tests {
             drag: None,
             autofocus: true,
             hover_transition: Transition::default(),
+            tab_stop: true,
         };
         let scene = Scene {
             hits: vec![hit],
@@ -642,6 +758,7 @@ mod tests {
             drag: Some(Arc::new(|d: DragEvent| if d.finished { 3 } else { 2 })),
             autofocus: false,
             hover_transition: Transition::default(),
+            tab_stop: true,
         };
         let scene = Scene {
             hits: vec![h],
