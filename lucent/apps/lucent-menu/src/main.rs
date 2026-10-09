@@ -8,15 +8,16 @@ fn main() {
         return;
     }
     match run() {
-        Ok(Some(value)) => println!("{value}"),
-        Ok(None) => std::process::exit(1),
+        Ok(MenuOutcome::Accepted(value)) => println!("{value}"),
+        Ok(MenuOutcome::Cancelled) => std::process::exit(1),
+        Ok(MenuOutcome::Parent) => std::process::exit(3),
         Err(error) => {
             eprintln!("lucent-menu: {error}");
             std::process::exit(2);
         }
     }
 }
-fn run() -> Result<Option<String>, Box<dyn std::error::Error>> {
+fn run() -> Result<MenuOutcome, Box<dyn std::error::Error>> {
     let mut bytes = Vec::new();
     std::io::stdin()
         .take(2 * 1024 * 1024 + 1)
@@ -30,8 +31,5 @@ fn run() -> Result<Option<String>, Box<dyn std::error::Error>> {
     }
     let (menu, result) = lucent_menu::Menu::new(request);
     lucent_wayland::run(menu)?;
-    Ok(match result.outcome() {
-        Some(MenuOutcome::Accepted(value)) => Some(value.clone()),
-        _ => None,
-    })
+    Ok(result.outcome().cloned().unwrap_or(MenuOutcome::Cancelled))
 }

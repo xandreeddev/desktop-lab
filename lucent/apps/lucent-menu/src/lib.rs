@@ -29,6 +29,8 @@ pub struct Request {
     pub max_height: Option<f32>,
     #[serde(default)]
     pub light: bool,
+    #[serde(default)]
+    pub back: bool,
 }
 #[derive(Clone)]
 pub enum Message {
@@ -39,6 +41,7 @@ pub enum Message {
     Choose(usize),
     Accept,
     Cancel,
+    Back,
     Resize(f32, f32),
 }
 /// Read the result after the runtime exits and destroys its keyboard surface.
@@ -107,20 +110,30 @@ impl Component for Menu {
             .min((cx.width - space::XXL * 2.).max(0.));
         let height = self.height(cx.height);
         let start = self.selection.start(self.start, self.rows(cx.height));
-        let mut children = vec![
-            Element::row(vec![
-                Element::text(&self.request.prompt)
-                    .font(font::TITLE)
-                    .color(t.on_surface)
-                    .width(Length::Fill)
-                    .wrap(1),
-                t.button("Close", Message::Cancel)
-                    .id("menu-close")
+        let mut header = vec![
+            Element::text(&self.request.prompt)
+                .font(font::TITLE)
+                .color(t.on_surface)
+                .width(Length::Fill)
+                .wrap(1),
+            t.button("Close", Message::Cancel)
+                .id("menu-close")
+                .tab_stop(false),
+        ];
+        if self.request.back {
+            header.insert(
+                0,
+                t.button("Back", Message::Back)
+                    .id("menu-back")
                     .tab_stop(false),
-            ])
-            .width(Length::Fill)
-            .height(Length::Fixed(token::HEADER_HEIGHT))
-            .align(Align::Center),
+            );
+        }
+        let mut children = vec![
+            Element::row(header)
+                .gap(if self.request.back { space::SM } else { 0. })
+                .width(Length::Fill)
+                .height(Length::Fixed(token::HEADER_HEIGHT))
+                .align(Align::Center),
             Element::input(
                 &self.query,
                 if self.request.mode == Mode::Input {
@@ -150,7 +163,7 @@ impl Component for Menu {
                 .take(self.rows(cx.height))
                 .map(|(index, source)| {
                     let entry = &self.selection.entries[*source];
-                    let selected = index == self.selection.selected;
+                    let selected = index == self.selection.selected && !entry.disabled;
                     let mut labels = vec![
                         Element::text(&entry.label)
                             .font(font::BODY)
@@ -173,6 +186,11 @@ impl Component for Menu {
                         .height(Length::Fixed(token::ROW_HEIGHT))
                         .padding_xy(token::ROW_PADDING, space::SM)
                         .radius(radius::CONTROL)
+                        .opacity(if entry.disabled {
+                            opacity::DISABLED
+                        } else {
+                            1.
+                        })
                         .selected(selected)
                         .background(if selected {
                             t.primary.alpha(opacity::HOVER)
@@ -208,8 +226,9 @@ impl Component for Menu {
                     "Enter confirm · Esc cancel".into()
                 } else {
                     format!(
-                        "{} results · Arrows select · Enter run · Esc close",
-                        self.selection.matches.len()
+                        "{} results · Arrows select · Enter run · Esc {}",
+                        self.selection.matches.len(),
+                        if self.request.back { "back" } else { "close" }
                     )
                 })
                 .font(font::CAPTION)
@@ -249,11 +268,10 @@ impl Component for Menu {
             }
             Message::Navigate(delta) => self.selection.navigate(delta),
             Message::Select(index) => {
-                self.selection.selected = index.min(self.selection.matches.len().saturating_sub(1))
+                self.selection.select(index);
             }
             Message::Choose(index) => {
-                if index < self.selection.matches.len() {
-                    self.selection.selected = index;
+                if self.selection.select(index) {
                     self.update(Message::Accept, effects);
                 }
             }
@@ -268,6 +286,7 @@ impl Component for Menu {
                 }
             }
             Message::Cancel => self.finish(MenuOutcome::Cancelled, effects),
+            Message::Back => self.finish(MenuOutcome::Parent, effects),
             Message::Resize(w, h) => self.viewport = (w, h),
         }
         self.start = self.selection.start(self.start, self.rows(self.viewport.1));
@@ -306,7 +325,11 @@ impl Application for Menu {
             Event::Resize { width, height, .. } => Some(Message::Resize(width, height)),
             Event::Scroll { lines, .. } => Some(Message::Navigate(if lines > 0. { 1 } else { -1 })),
             Event::Key { key, .. } => match key {
-                Key::Escape => Some(Message::Cancel),
+                Key::Escape => Some(if self.request.back {
+                    Message::Back
+                } else {
+                    Message::Cancel
+                }),
                 Key::Enter => Some(Message::Accept),
                 Key::Down | Key::Tab => Some(Message::Navigate(1)),
                 Key::Up | Key::BackTab => Some(Message::Navigate(-1)),
@@ -344,11 +367,13 @@ mod tests {
                     label: format!("Action {i}"),
                     detail: format!("Super + {i}"),
                     value: format!("original-{i}"),
+                    disabled: false,
                 })
                 .collect(),
             width: Some(800.),
             max_height: Some(500.),
             light: false,
+            back: false,
         }
     }
     #[test]
@@ -436,5 +461,37 @@ mod tests {
         assert!(!menu.inspect().contains(value));
         menu.update(Message::Accept, &mut Effects::default());
         assert_eq!(result.outcome(), Some(&MenuOutcome::Accepted(value.into())));
+    }
+    #[test]
+    fn disabled_rows_cannot_activate_and_keyboard_skips_them() {
+        let mut r = request();
+        r.entries[0].disabled = true;
+        r.entries[0].label = "Unavailable fixture".into();
+        r.entries[2].disabled = true;
+        let (mut menu, result) = Menu::new(r);
+        let mut effects = Effects::default();
+        assert_eq!(menu.selection.selected, 1);
+        menu.update(Message::Choose(0), &mut effects);
+        assert!(!effects.exit);
+        assert!(result.outcome().is_none());
+        menu.update(Message::Navigate(1), &mut effects);
+        assert_eq!(menu.selection.selected, 3);
+        menu.update(Message::Query("Unavailable fixture".into()), &mut effects);
+        menu.update(Message::Accept, &mut effects);
+        assert!(!effects.exit);
+    }
+    #[test]
+    fn escape_in_a_submenu_returns_to_parent_without_executing_a_value() {
+        let mut r = request();
+        r.back = true;
+        let (mut menu, result) = Menu::new(r);
+        let message = menu
+            .event(Event::Key {
+                surface: "menu",
+                key: Key::Escape,
+            })
+            .unwrap();
+        menu.update(message, &mut Effects::default());
+        assert_eq!(result.outcome(), Some(&MenuOutcome::Parent));
     }
 }

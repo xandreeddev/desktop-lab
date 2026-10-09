@@ -388,6 +388,90 @@ fn widget_drag_is_continuous_until_release_then_snaps_and_clamps() {
     assert!(lucent_usecases::snap_placement(Placement { x: 0., y: 0. }, 0.).is_err());
 }
 #[test]
+fn drag_grid_matches_snap_spacing_and_never_captures_input() {
+    let mut app = fixture(0, false);
+    let layout = Layout::new(fonts(&app));
+    let cx = ViewContext {
+        surface: "widgets",
+        width: 640.,
+        height: 580.,
+        now: 1.,
+    };
+    let idle = layout.build(
+        &app.view(&cx),
+        cx.width,
+        cx.height,
+        &Interaction::default(),
+        cx.now,
+    );
+    app.update(
+        Message::MoveWidget(
+            "calendar".into(),
+            DragEvent {
+                dx: 25.,
+                dy: 35.,
+                finished: false,
+            },
+        ),
+        &mut Effects::default(),
+    );
+    let dragging = layout.build(
+        &app.view(&cx),
+        cx.width,
+        cx.height,
+        &Interaction::default(),
+        cx.now,
+    );
+    let step = lucent_design::component::widget_layout::GRID_STEP;
+    let width = lucent_design::component::widget_grid::LINE_WIDTH;
+    let lines: Vec<_> = dragging
+        .paint
+        .iter()
+        .filter_map(|p| match p {
+            Paint::Shape {
+                rect,
+                shadow: false,
+                ..
+            } if rect.w == width && rect.h == cx.height
+                || rect.h == width && rect.w == cx.width =>
+            {
+                Some(*rect)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        lines.len(),
+        (cx.width / step).ceil() as usize + (cx.height / step).ceil() as usize
+    );
+    for line in &lines {
+        assert_eq!(line.x % step, 0.);
+        assert_eq!(line.y % step, 0.);
+    }
+    assert_eq!(dragging.hits.len(), idle.hits.len());
+    assert_eq!(dragging.regions.len(), idle.regions.len());
+    app.update(
+        Message::MoveWidget(
+            "calendar".into(),
+            DragEvent {
+                dx: 25.,
+                dy: 35.,
+                finished: true,
+            },
+        ),
+        &mut Effects::default(),
+    );
+    let released = layout.build(
+        &app.view(&cx),
+        cx.width,
+        cx.height,
+        &Interaction::default(),
+        cx.now,
+    );
+    assert_eq!(released.paint.len(), idle.paint.len());
+    assert_eq!(dragging.paint.len(), released.paint.len() + lines.len());
+}
+#[test]
 fn catalog_uses_desktop_identity_and_every_icon_rasterizes() {
     use lucent_design::app_icons::{ALL, lookup};
     assert_eq!(lookup("foot.desktop").unwrap().id, "terminal");
@@ -513,6 +597,8 @@ fn visual_regressions() {
             ("menu-last-narrow", Mode::Apps, 0, 22, "", 1., 390.),
             ("menu-empty", Mode::Apps, 0, 0, "no such action", 1., 640.),
             ("menu-input", Mode::Apps, 0, 0, "A reminder", 1., 640.),
+            ("widget-drag-grid", Mode::Apps, 0, 0, "", 1., 960.),
+            ("menu-submenu", Mode::Apps, 0, 0, "", 1., 640.),
         ] {
             if light && matches!(name, "lock" | "greeter") {
                 continue;
@@ -525,19 +611,59 @@ fn visual_regressions() {
             app.update(Message::Mode(mode), &mut Effects::default());
             app.update(Message::Select(selected), &mut Effects::default());
             app.query = query.into();
-            let scene = if name.starts_with("menu") {
-                let names = [
-                    "Keybindings",
-                    "Terminal",
-                    "Browser",
-                    "File manager",
-                    "System menu",
-                    "Theme menu",
-                    "Full screen",
-                    "Toggle window floating/tiling",
-                ];
+            let scene = if name == "widget-drag-grid" {
+                app.settings.visible_widgets = vec!["calendar".into(), "weather".into()];
+                app.update(
+                    Message::MoveWidget(
+                        "calendar".into(),
+                        DragEvent {
+                            dx: 151.,
+                            dy: 73.,
+                            finished: false,
+                        },
+                    ),
+                    &mut Effects::default(),
+                );
+                layout.build(
+                    &app.view(&ViewContext {
+                        surface: "widgets",
+                        width,
+                        height: 580.,
+                        now,
+                    }),
+                    width,
+                    580.,
+                    &Interaction::default(),
+                    now,
+                )
+            } else if name.starts_with("menu") {
+                let names = if name == "menu-submenu" {
+                    [
+                        "Lock",
+                        "Suspend",
+                        "Hibernate",
+                        "Logout",
+                        "Reboot",
+                        "Shutdown",
+                        "Unavailable action",
+                        "Another action",
+                    ]
+                } else {
+                    [
+                        "Keybindings",
+                        "Terminal",
+                        "Browser",
+                        "File manager",
+                        "System menu",
+                        "Theme menu",
+                        "Full screen",
+                        "Toggle window floating/tiling",
+                    ]
+                };
                 let (mut menu, _) = lucent_menu::Menu::new(lucent_menu::Request {
-                    prompt: if name == "menu-input" {
+                    prompt: if name == "menu-submenu" {
+                        "System"
+                    } else if name == "menu-input" {
                         "Reminder"
                     } else {
                         "Keybindings"
@@ -548,16 +674,27 @@ fn visual_regressions() {
                     } else {
                         lucent_menu::Mode::Select
                     },
-                    entries: (0..23)
+                    entries: (0..if name == "menu-submenu" { 6 } else { 23 })
                         .map(|i| lucent_domain::MenuEntry {
                             label: names[i % names.len()].into(),
-                            detail: format!("SUPER CTRL + {}", i + 1),
+                            detail: if name == "menu-submenu" {
+                                if i == 2 {
+                                    "Unavailable on this system"
+                                } else {
+                                    ""
+                                }
+                                .into()
+                            } else {
+                                format!("SUPER CTRL + {}", i + 1)
+                            },
                             value: i.to_string(),
+                            disabled: name == "menu-submenu" && i == 2,
                         })
                         .collect(),
                     width: Some(800.),
                     max_height: Some(500.),
                     light,
+                    back: name == "menu-submenu",
                 });
                 menu.init(&mut Effects::default());
                 for msg in [

@@ -28,3 +28,14 @@ class Boundaries(unittest.TestCase):
         menu=(ROOT/'lucent/apps/lucent-menu/src/lib.rs').read_text()
         self.assertNotIn('std::process',menu)
         self.assertNotIn('std::fs',menu)
+
+    def test_menu_definition_model_has_no_platform_dependencies(self):
+        import ast
+        tree = ast.parse((ROOT/'scripts/menu_model.py').read_text())
+        modules = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                modules.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                modules.add(node.module)
+        self.assertLessEqual(modules, {'json', 're'})

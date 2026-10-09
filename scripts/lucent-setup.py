@@ -67,6 +67,8 @@ RestartSec=3
     shutil.copy2(ROOT/'scripts/lucent-lock.py', HOME/'.local/lib/lucent/lock.py')
     shutil.copy2(ROOT/'scripts/lucent-wallpaper.py', HOME/'.local/lib/lucent/wallpaper.py')
     shutil.copy2(ROOT/'scripts/lucent-menu.py', HOME/'.local/lib/lucent/menu.py')
+    shutil.copy2(ROOT/'scripts/lucent-menu-routes.py', HOME/'.local/lib/lucent/menu_routes.py')
+    shutil.copy2(ROOT/'scripts/menu_model.py', HOME/'.local/lib/lucent/menu_model.py')
     (unit.parent/'lucent-wallpaper-sync.service').write_text('''[Unit]
 Description=Publish the selected wallpaper for Lucent login
 [Service]
@@ -120,8 +122,8 @@ o.bind("SUPER + CTRL + L", "Lucent secure lock", "python3 " .. os.getenv("HOME")
 ''')
     edit(HOME / '.config/hypr/looknfeel.lua', (ROOT / 'configs/lucent/window-rules.lua').read_text())
     wrappers=HOME/'.local/lib/lucent/bin';wrappers.mkdir(parents=True,exist_ok=True)
-    for mode in ('select', 'input'):
-        script = wrappers / ('omarchy-menu-' + mode)
+    for mode in ('select', 'input', 'routes'):
+        script = wrappers / ('omarchy-menu' if mode == 'routes' else 'omarchy-menu-' + mode)
         script.write_text('#!/usr/bin/env bash\nexec python3 "$HOME/.local/lib/lucent/menu.py" ' + mode + ' "$@"\n')
         script.chmod(0o755)
     (BACKUP/'menu-enabled').touch()

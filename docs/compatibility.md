@@ -14,7 +14,7 @@ A packaged startup change invalidates the saved checksum. Re-run doctor, review 
 | Polkit dialogs | Lucid | Noctalia native agent | Stock Omarchy |
 | Wallpaper | awww + shell-only Matugen palette | Native Noctalia wallpaper/palette | Stock Omarchy |
 | Terminal/app theming | Existing Omarchy theme | Existing Omarchy theme | Stock Omarchy |
-| Omarchy menus and shell-specific IPC | Partly replaced; see shortcuts | Partly replaced; see shortcuts | Native keybinding/select/input menus; other shell IPC remains stock |
+| Omarchy menus and shell-specific IPC | Partly replaced; see shortcuts | Partly replaced; see shortcuts | Native keybinding, root/submenus, select/input; specialized shell IPC remains stock |
 
 Lucid's own Idle page is deliberately disabled: changing it would write and restart another Hypridle configuration. Lock shortcuts use Hyprlock. Lucid still exposes its upstream session/lock UI; it is not represented as a separately audited authentication implementation. Noctalia's session lock action is routed to Hyprlock. The stock Omarchy sleep-lock monitor is masked only in the two replacement guests because it otherwise calls a shell that is no longer running. Hypridle handles logind sleep/lock events instead.
 
@@ -41,7 +41,8 @@ guarded handoff. Background, idle, polkit and several shell IPC services remain
 stock. Lucent owns the visible bar, dock, launcher, wallpaper/widget selectors,
 seven widgets, notifications, secure lock and login UI. The native keybinding
 picker retains Omarchy's installed discovery/dispatch logic through select/input
-wrappers; packaged bindings stay unchanged. Wallpaper application calls
+wrappers; a separate adapter projects installed root/submenu definitions into
+the same native picker. Packaged bindings stay unchanged. Wallpaper application calls
 `omarchy-theme-bg-set`; lock wrappers prefer the native secure locker and retain
 a stock fallback. Its Hyprland adapter uses the tested Lua
 `hl.dsp.focus` dispatch API. Full parity gaps and measurements are documented in

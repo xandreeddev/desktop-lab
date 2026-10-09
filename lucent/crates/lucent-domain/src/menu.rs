@@ -7,10 +7,13 @@ pub struct MenuEntry {
     #[serde(default)]
     pub detail: String,
     pub value: String,
+    #[serde(default)]
+    pub disabled: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MenuOutcome {
     Accepted(String),
     Cancelled,
+    Parent,
 }

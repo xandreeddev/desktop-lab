@@ -13,14 +13,15 @@ impl Selection {
             .iter()
             .map(|e| format!("{} {}", e.label, e.detail).to_lowercase())
             .collect();
+        let selected = entries.iter().position(|e| !e.disabled).unwrap_or(0);
         Self {
             matches: (0..entries.len()).collect(),
             entries,
-            selected: 0,
+            selected,
             searchable,
         }
     }
-    /// All query words must match; retain Omarchy's order and original values.
+    /// All query words must match; retain the supplied order and original values.
     pub fn search(&mut self, query: &str) {
         let query = query.to_lowercase();
         let words: Vec<_> = query.split_whitespace().collect();
@@ -31,15 +32,46 @@ impl Selection {
             .filter(|(_, text)| words.iter().all(|word| text.contains(word)))
             .map(|(i, _)| i)
             .collect();
-        self.selected = 0;
+        self.selected = self
+            .matches
+            .iter()
+            .position(|i| !self.entries[*i].disabled)
+            .unwrap_or(0);
     }
     pub fn navigate(&mut self, delta: i32) {
-        self.selected = (self.selected as i64 + i64::from(delta))
-            .clamp(0, self.matches.len().saturating_sub(1) as i64) as usize;
+        let enabled: Vec<_> = self
+            .matches
+            .iter()
+            .enumerate()
+            .filter(|(_, i)| !self.entries[**i].disabled)
+            .map(|(i, _)| i)
+            .collect();
+        let current = enabled
+            .iter()
+            .position(|i| *i == self.selected)
+            .unwrap_or(0);
+        let index = (current as i64 + i64::from(delta))
+            .clamp(0, enabled.len().saturating_sub(1) as i64) as usize;
+        if let Some(selected) = enabled.get(index) {
+            self.selected = *selected;
+        }
+    }
+    pub fn select(&mut self, index: usize) -> bool {
+        if self
+            .matches
+            .get(index)
+            .is_some_and(|i| !self.entries[*i].disabled)
+        {
+            self.selected = index;
+            true
+        } else {
+            false
+        }
     }
     pub fn choose(&self) -> Option<String> {
         self.matches
             .get(self.selected)
+            .filter(|i| !self.entries[**i].disabled)
             .map(|i| self.entries[*i].value.clone())
     }
     /// Keep the selected row visible without moving earlier rows unnecessarily.
@@ -61,11 +93,13 @@ mod tests {
                 label: "Terminal".into(),
                 detail: "Super Return".into(),
                 value: "first".into(),
+                disabled: false,
             },
             MenuEntry {
                 label: "Terminal".into(),
                 detail: "Super Alt Return".into(),
                 value: "second".into(),
+                disabled: false,
             },
         ]);
         s.search("TERMINAL alt");

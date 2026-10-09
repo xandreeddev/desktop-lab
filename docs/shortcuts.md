@@ -27,7 +27,7 @@ Lucid uses `qs ipc call -- TARGET METHOD [ARG]`; the `--` is required before met
 | Super+K | Native searchable Omarchy keybinding menu |
 | Super+Ctrl+Space | Wallpaper carousel |
 | Type / arrows / Enter / Escape | Search, select, launch/apply, close |
-| Widget background left-drag | Move and persist position |
+| Widget background left-drag | Show spacing grid; snap and persist on release |
 | Launcher Widgets tab | Toggle widgets or reset positions |
 | Launcher palette tab | Shared light/dark theme |
 | Dock application icon | Launch or focus a running window |
@@ -46,6 +46,7 @@ surface before returning the exact original value to Omarchy's dispatcher.
 Custom bindings remain discoverable; there is no second hardcoded shortcut list.
 
 Other Omarchy callers of `omarchy-menu-select` and `omarchy-menu-input` use the
-same native picker. Root shell menus that call `omarchy-shell` directly still use
-the stock shell. Rollback disables the wrappers even for existing processes
+same native picker. `omarchy-menu` routes, including nested System, Style and
+Setup menus, use native selection with Back/Escape navigation. Actions that call
+`omarchy-shell` directly can still open a specialized stock panel. Rollback disables the wrappers even for existing processes
 that retain their old PATH.

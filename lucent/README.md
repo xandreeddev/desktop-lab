@@ -26,7 +26,8 @@ Inside the guest:
   the centered card applies it too.
 - **Widgets** in the launcher header: toggle calendar, clock, weather, media,
   system monitor, notes and focus timer. Reset positions from the same panel.
-- Drag a widget's background with the left mouse button. Release snaps its top-left
+- Drag a widget's background with the left mouse button. A token-based spacing
+  grid appears while dragging and disappears on release. Release snaps its top-left
   corner to the 16-logical-pixel spacing grid and saves the position. Screen edges
   take precedence so the whole widget stays visible.
   Buttons and text fields remain interactive. Widgets live below app windows.
@@ -51,7 +52,9 @@ python3 scripts/lucent-setup.py activate
 Installation is per-user. Activation adds marked blocks to Hyprland's user
 `bindings.lua`, `autostart.lua` and `looknfeel.lua`, plus a marked PATH block in
 `.bash_profile` for lock and native menu-command wrappers. The appearance block applies the shared
-panel radius to Foot terminal windows. The service hands off notifications and hides Omarchy's bar **after
+panel radius as the compositor default for ordinary app windows, including
+Chromium and Foot. Explicit window rules and Omarchy gapless/fullscreen policies
+retain precedence. The service hands off notifications and hides Omarchy's bar **after
 the desktop has rendered and Lucent owns the notification bus**. The handoff uses
 a guarded stock-shell restart; unlock before first activation. Stopping, crashing or rolling back
 restores its previous visibility. Packaged Omarchy configuration is untouched.
@@ -63,6 +66,8 @@ never executes actions. The installed Omarchy keybinding script still discovers
 and dispatches bindings, including user overrides. Native select/input wrappers
 also preserve icon-prefixed options and their subtext return values. Palette,
 spacing, rounded corners and opening motion use the shared design tokens.
+Root and nested `omarchy-menu` routes use this picker too; Back/Escape returns to
+the parent and Close cancels. See [menu ownership](../docs/native-menu.md).
 
 ```sh
 python3 scripts/lucent-setup.py rollback
@@ -101,7 +106,9 @@ geometry and motion. The reusable engine remains independent of the theme.
 Rounded controls use separate horizontal and vertical padding through
 `Element::padding_xy`; their hit target retains the full outer bounds. The widget
 grid uses `component.widget_layout.grid_step`, which references `space.lg` (16).
-Terminal corners use `component.window.radius`, an alias of `radius.panel` (20).
+Its decorative lines use `component.widget_grid` tokens, sit behind widgets,
+and never enter the input region.
+Ordinary application corners use `component.window.radius`, an alias of `radius.panel` (20).
 The generator also emits `configs/lucent/window-rules.lua`; rerun activation after
 changing that rule. This Hyprland version supports a maximum radius of 20.
 

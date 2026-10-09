@@ -282,12 +282,18 @@ Widget drag messages retain continuous coordinates until release. The release
 use case snaps to `component.widget_layout.grid_step`, an alias of `space.lg`
 (16 logical pixels), then clamps to the usable output. Saved and default anchors
 use the grid; existing saved placements are retained until moved. Widgets keep
-their own dimensions and do not avoid overlaps automatically.
+their own dimensions and do not avoid overlaps automatically. While a drag is
+active, the desktop composes decorative grid lines behind the widgets using the
+existing Element API. The spacing and line appearance use shared tokens. Lines
+have no input handlers, so they never capture pointer events; there is no grid
+special case in the renderer, layout engine or Wayland runtime.
 
 `component.window.radius` references `radius.panel` (20 logical pixels). The token
 generator also writes `configs/lucent/window-rules.lua`. Activation places that
-terminal-class rule in a backed-up, managed block in user `looknfeel.lua`; rollback
-removes only the block. Hyprland owns ordinary terminal corners. Re-run the token
+compositor decoration default in a backed-up, managed block in user
+`looknfeel.lua`; rollback removes only the block. Hyprland owns ordinary
+application corners, including Chrome and terminals; no per-app class list is
+needed. Re-run the token
 generator and activation after changing this token. No packaged Omarchy file is
 modified; fullscreen/no-gap compositor policies may still override decorations.
 

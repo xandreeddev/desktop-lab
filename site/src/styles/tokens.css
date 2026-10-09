@@ -331,6 +331,10 @@
   --component-menu-row-height: 52px;
   --component-menu-padding: var(--space-xxl);
   --component-menu-row-padding: var(--space-lg);
+  --component-widget-grid-line-width: var(--space-hairline);
+  --component-widget-grid-major-every: 4;
+  --component-widget-grid-minor-opacity: 0.18;
+  --component-widget-grid-major-opacity: 0.38;
   --icon-tiny: 16px;
   --icon-small: 17px;
   --icon-compact: 18px;

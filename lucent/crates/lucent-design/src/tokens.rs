@@ -417,6 +417,12 @@ pub mod component {
         pub const PADDING: f32 = 24.0;
         pub const ROW_PADDING: f32 = 16.0;
     }
+    pub mod widget_grid {
+        pub const LINE_WIDTH: f32 = 1.0;
+        pub const MAJOR_EVERY: f32 = 4.0;
+        pub const MINOR_OPACITY: f32 = 0.18;
+        pub const MAJOR_OPACITY: f32 = 0.38;
+    }
 }
 pub mod icon {
     pub const TINY: f32 = 16.0;

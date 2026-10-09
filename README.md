@@ -33,7 +33,7 @@ Use the source Omarchy VM's existing guest login. Credentials are kept only in t
 
 Inside the Lucid or Noctalia VM, run `~/desktop-lab/scripts/verify.sh` from a graphical terminal. Run `~/desktop-lab/scripts/rollback.sh` and log out/in to restore the original user configuration. Packages remain installed, with before/after inventories available for review.
 
-In the Lucent VM, **Super+Space** opens the Rust launcher and **Super+Ctrl+Space** opens the wallpaper carousel. The launcher's Widgets tab controls desktop widgets; drag their backgrounds to move them. [Build, usage and rollback](lucent/README.md).
+In the Lucent VM, **Super+Space** opens the Rust launcher and **Super+Ctrl+Space** opens the wallpaper carousel. The launcher's Widgets tab controls desktop widgets; drag their backgrounds to reveal the spacing grid and snap on release. **Super+K** searches Omarchy bindings; its menu routes use native rounded submenus. Ordinary app windows share the design-system corner radius. [Build, usage and rollback](lucent/README.md).
 
 The prepared guests have a locally selected weather city with IP detection disabled. Personal location data stays outside Git; a fresh install needs your city in Location settings. Media widgets show their idle state until a player publishes MPRIS metadata.
 

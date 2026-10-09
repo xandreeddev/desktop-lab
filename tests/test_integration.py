@@ -117,7 +117,7 @@ class LucentIntegrationTests(unittest.TestCase):
             self.assertEqual(config.read_text(), original)
 
 
-    def test_terminal_rule_activation_and_rollback_preserve_user_appearance(self):
+    def test_window_defaults_activation_and_rollback_preserve_user_appearance(self):
         spec = importlib.util.spec_from_file_location('lucent_setup_corners', ROOT / 'scripts/lucent-setup.py')
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -142,4 +142,4 @@ class LucentIntegrationTests(unittest.TestCase):
                 self.assertFalse((module.BACKUP/'menu-enabled').exists())
             self.assertIn(original.strip(), path.read_text())
             self.assertIn('-- Later user setting', path.read_text())
-            self.assertNotIn('hl.window_rule', path.read_text())
+            self.assertNotIn('rounding = 20', path.read_text())

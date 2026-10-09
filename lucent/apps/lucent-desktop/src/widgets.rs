@@ -109,41 +109,70 @@ pub fn default_position(id: &str, viewport: (f32, f32)) -> Placement {
     }
 }
 impl Desktop {
-    pub fn widgets(&self, cx: &ViewContext) -> Element<Message> {
-        let children = self
-            .settings
-            .visible_widgets
-            .iter()
-            .filter_map(|id| {
-                let content = self.registry.view(id, self, cx)?;
-                let pos = self
-                    .settings
-                    .positions
-                    .get(id)
-                    .copied()
-                    .unwrap_or_else(|| default_position(id, (cx.width, cx.height)));
-                let size = widget_size(id);
-                let drag_id = id.clone();
-                Some(
-                    Element::stack(vec![content])
-                        .size(size.0, size.1)
-                        .at(
-                            pos.x.clamp(0., (cx.width - size.0).max(0.)),
-                            pos.y.clamp(0., (cx.height - size.1).max(0.)),
+    /// Decorative geometry only: grid lines never enter the pointer input region.
+    fn drag_grid(&self, cx: &ViewContext) -> Vec<Element<Message>> {
+        if self.drag_origins.is_empty() {
+            return vec![];
+        }
+        let step = component::widget_layout::GRID_STEP;
+        let thickness = component::widget_grid::LINE_WIDTH;
+        let mut lines = Vec::new();
+        for (extent, vertical) in [(cx.width, true), (cx.height, false)] {
+            for index in 0..(extent / step).ceil() as usize {
+                let position = index as f32 * step;
+                let major = index.is_multiple_of(component::widget_grid::MAJOR_EVERY as usize);
+                let color = self.theme().on_surface.alpha(if major {
+                    component::widget_grid::MAJOR_OPACITY
+                } else {
+                    component::widget_grid::MINOR_OPACITY
+                });
+                lines.push(
+                    Element::empty()
+                        .size(
+                            if vertical { thickness } else { cx.width },
+                            if vertical { cx.height } else { thickness },
                         )
-                        .background(if id == "calendar" || id == "media" {
-                            self.surface_color()
-                        } else {
-                            self.widget_color()
-                        })
-                        .radius(radius::WIDGET)
-                        .clip()
-                        .shadow()
-                        .on_drag(move |drag| Message::MoveWidget(drag_id.clone(), drag))
-                        .id(format!("widget-{id}")),
-                )
-            })
-            .collect();
+                        .at(
+                            if vertical { position } else { 0. },
+                            if vertical { 0. } else { position },
+                        )
+                        .background(color),
+                );
+            }
+        }
+        lines
+    }
+    pub fn widgets(&self, cx: &ViewContext) -> Element<Message> {
+        let mut children = self.drag_grid(cx);
+        children.extend(self.settings.visible_widgets.iter().filter_map(|id| {
+            let content = self.registry.view(id, self, cx)?;
+            let pos = self
+                .settings
+                .positions
+                .get(id)
+                .copied()
+                .unwrap_or_else(|| default_position(id, (cx.width, cx.height)));
+            let size = widget_size(id);
+            let drag_id = id.clone();
+            Some(
+                Element::stack(vec![content])
+                    .size(size.0, size.1)
+                    .at(
+                        pos.x.clamp(0., (cx.width - size.0).max(0.)),
+                        pos.y.clamp(0., (cx.height - size.1).max(0.)),
+                    )
+                    .background(if id == "calendar" || id == "media" {
+                        self.surface_color()
+                    } else {
+                        self.widget_color()
+                    })
+                    .radius(radius::WIDGET)
+                    .clip()
+                    .shadow()
+                    .on_drag(move |drag| Message::MoveWidget(drag_id.clone(), drag))
+                    .id(format!("widget-{id}")),
+            )
+        }));
         Element::stack(children).fill()
     }
 }

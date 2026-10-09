@@ -59,14 +59,8 @@ def request(mode, args, stdin):
     return result
 
 
-def main():
-    mode, *args = sys.argv[1:]
-    # Wrappers remain on PATH in some long-lived applications after rollback.
-    # Route those callers to stock too; never leave a half-active integration.
-    enabled = Path.home() / '.local/state/lucent/integration-backup/menu-enabled'
-    if not enabled.exists():
-        os.execv('/usr/bin/omarchy-menu-' + mode, ['omarchy-menu-' + mode, *args])
-    payload = request(mode, args, sys.stdin)
+def pick(payload, capture=False):
+    """One typed request and response; the renderer never executes its values."""
     state = Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state')))
     if not state.is_absolute():
         state = Path.home() / '.local/state'
@@ -76,8 +70,26 @@ def main():
     except (OSError, ValueError):
         pass
     binary = Path.home() / '.local/bin/lucent-menu'
+    return subprocess.run([str(binary)], input=json.dumps(payload), text=True,
+                          stdout=subprocess.PIPE if capture else None, check=False)
+
+
+def main():
+    mode, *args = sys.argv[1:]
+    if mode not in ('routes', 'select', 'input'):
+        raise ValueError('Expected routes, select, or input')
+    # Wrappers remain on PATH in some long-lived applications after rollback.
+    # Route those callers to stock too; never leave a half-active integration.
+    enabled = Path.home() / '.local/state/lucent/integration-backup/menu-enabled'
+    if not enabled.exists():
+        name = 'omarchy-menu' if mode == 'routes' else 'omarchy-menu-' + mode
+        os.execv('/usr/bin/' + name, [name, *args])
+    if mode == 'routes':
+        import menu_routes
+        return menu_routes.run(args, pick)
+    payload = request(mode, args, sys.stdin)
     # The child writes only a selected value to stdout, after releasing focus.
-    result = subprocess.run([str(binary)], input=json.dumps(payload), text=True, check=False)
+    result = pick(payload)
     return result.returncode
 
 
