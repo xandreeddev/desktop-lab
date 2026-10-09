@@ -1,4 +1,5 @@
 ---
+import { withBase } from '../../data/urls';
 import DocGuide from '../../layouts/DocGuide.astro';
 import CodeBlock from '../../components/CodeBlock.astro';
 import { excerpt, sourceUrl } from '../../data/source';
@@ -56,7 +57,7 @@ const surfaces = [
     <p><strong>Notifications:</strong> the parent maps the child’s elements with <code>Element::map(Message::Notifications)</code> and routes updates through <code>Effects::delegate</code>. The child owns toast/history presentation, paging, DND and actions. The D-Bus adapter and pure inbox policy remain outside it. History is currently in memory.</p>
     <p><strong>Keybindings and menus:</strong> <code>lucent-menu</code> is an independent client with pure selection policy. It returns the original selected value after destroying its keyboard surface. Omarchy’s per-user adapter supplies installed binding/menu data and dispatches actions. Back/Escape and nested menus use the native picker; trusted user actions retain precedence. See <a href={sourceUrl('docs/native-menu.md')}>the menu integration contract</a>.</p>
     <p><strong>Lock and login:</strong> both use a shared <code>SessionScreen</code>, injected authentication and native rendering. Lock uses the secure session-lock runtime; login uses greetd. A decorative layer-shell window cannot replace that protocol. Secrets stay outside scene and texture data.</p>
-    <p><strong>Still supplied by the system:</strong> Hyprland handles windows, tiling, keybindings and decorations. Omarchy still supplies background, idle, polkit and remaining shell integrations. The native clients do not yet replace every stock shell feature; see the <a href="/guide/#ownership">ownership guide</a>.</p>
+    <p><strong>Still supplied by the system:</strong> Hyprland handles windows, tiling, keybindings and decorations. Omarchy still supplies background, idle, polkit and remaining shell integrations. The native clients do not yet replace every stock shell feature; see the <a href={withBase('/guide/#ownership')}>ownership guide</a>.</p>
   </section>
   <section id="extend"><span class="eyebrow">07 / A PRACTICAL SOURCE MAP</span><h2>Change the owning layer.</h2>
     <ul class="resource-list">
@@ -64,8 +65,8 @@ const surfaces = [
       <li><a href={sourceUrl('lucent/apps/lucent-desktop/src/views.rs')}>views.rs + shell_layout.rs ↗</a><span>Launcher/bar/dock presentation and shared pure geometry. Add a geometry assertion when changing capacity or bounds.</span></li>
       <li><a href={sourceUrl('lucent/apps/lucent-desktop/src/widgets.rs')}>widgets.rs ↗</a><span>Register a stable widget ID and view, then wire any new behavior through a message.</span></li>
       <li><a href={sourceUrl('design/tokens.json')}>design/tokens.json ↗</a><span>Primary scales, semantic roles and component recipes. Regenerate the Rust and website consumers.</span></li>
-      <li><a href="/docs/domain/#ports">Domain ports and adapters →</a><span>Add or replace an external capability here, then select it in platform.rs.</span></li>
-      <li><a href="/docs/#quality">Validation workflow →</a><span>Pure decisions, scene geometry, reviewed Vulkan baselines and real input checks cover different failure modes.</span></li>
+      <li><a href={withBase('/docs/domain/#ports')}>Domain ports and adapters →</a><span>Add or replace an external capability here, then select it in platform.rs.</span></li>
+      <li><a href={withBase('/docs/#quality')}>Validation workflow →</a><span>Pure decisions, scene geometry, reviewed Vulkan baselines and real input checks cover different failure modes.</span></li>
     </ul>
     <p>Existing examples and clients demonstrate framework reuse. Remaining architectural work includes extracting the launcher state machine, replacing selected polling adapters and making loading/error presentation consistent. Those changes can preserve the port contracts and rendering engine.</p>
   </section>

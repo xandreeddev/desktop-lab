@@ -1,0 +1,202 @@
+---
+import DocGuide from '../../layouts/DocGuide.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import { sourceUrl, excerpt } from '../../data/source';
+import { withBase } from '../../data/urls';
+import mainSource from '../../../../lucent/apps/lucent-desktop/src/main.rs?raw';
+import widgetSource from '../../../../lucent/apps/lucent-desktop/src/widgets.rs?raw';
+const sections: [string, string][] = [
+  ['map', '01 · The big picture'], ['files', '02 · Code vs programs'],
+  ['boot', '03 · Boot to desktop'], ['main', '04 · Inside startup'],
+  ['crates', '05 · The crate map'], ['registration', '06 · What “register” means'],
+  ['loading', '07 · Where data comes from'], ['frame', '08 · State to pixels'],
+  ['action', '09 · One complete interaction'], ['changes', '10 · Changing the system'],
+  ['inspect', '11 · See it for yourself'], ['rust', '12 · Reading the Rust'],
+];
+const boot = [
+  { id:'machine', title:'Start Linux', owner:'VM firmware → Linux kernel → systemd', detail:'The virtual machine presents a virtual CPU, memory, disk and display. Its firmware starts the boot loader, which loads the Linux kernel. The kernel manages hardware access, memory and running programs. It starts the system service manager, systemd.', result:'Running now: the operating system and its background services. Lucent has not started.', file:'docs/install-and-rollback.md' },
+  { id:'login', title:'Show login', owner:'greetd + a small greeter session', detail:'With our optional login integration enabled, greetd starts a dedicated Hyprland session containing lucent-greeter. That separate program renders the login form and talks to greetd for authentication. This is the login account’s temporary session, not your desktop session.', result:'A successful login lets greetd start your configured user session. The temporary greeter compositor exits.', file:'configs/lucent/greetd/config.toml' },
+  { id:'compositor', title:'Start Hyprland', owner:'Your user session', detail:'Hyprland becomes the Wayland server for your desktop. It handles monitors, application windows, tiling, focus and global shortcuts. It reads Omarchy’s configuration plus your user configuration. Other programs will connect to it to display their surfaces.', result:'Hyprland is running and your graphical session has connection information in its environment.', file:'scripts/lucent-setup.py' },
+  { id:'service', title:'Start the service', owner:'Hyprland autostart → your systemd manager', detail:'Our user autostart block runs systemctl --user start lucent.service. The installed unit tells systemd to run the Python session wrapper. systemd tracks that wrapper’s process and restarts the service after a failure according to the unit settings.', result:'The wrapper starts the installed lucent-desktop executable as your normal user.', file:'scripts/lucent-setup.py' },
+  { id:'client', title:'Initialize Lucent', owner:'lucent-desktop → our Wayland runtime', detail:'The executable constructs its service adapters and Desktop state, connects to Hyprland, initializes rendering and starts its event loop. It requests native surfaces, loads settings and applications, and begins listening for service updates.', result:'The compositor configures the requested surfaces; Lucent can render the first bar, dock and widget frames.', file:'lucent/apps/lucent-desktop/src/main.rs' },
+  { id:'handoff', title:'Hand over UI', owner:'The session wrapper', detail:'The wrapper checks that Lucent’s bar, dock and widgets have produced frames. It records the previous stock state, disables the stock notification plugin and waits for Lucent’s notification service to become ready. It restarts the stock shell if needed to release that D-Bus name, then hides the stock bar.', result:'Lucent owns those visible features. On stop or startup failure the wrapper restores the recorded stock state. Other Omarchy services remain active.', file:'scripts/lucent-session.py' },
+];
+const crates = [
+  ['lucent-api', 'The shared vocabulary', 'Defines Element, Component, Message-related contracts, Effects, surfaces, motion and the widget registry. Like the public interfaces and data types of a UI library.'],
+  ['lucent-domain', 'Desktop facts and capabilities', 'Defines Application records, workspaces, settings, notifications and service traits. No drawing or OS calls.'],
+  ['lucent-usecases', 'Desktop decisions', 'Search ranking, launch-versus-focus, snapping, menu navigation and notification timeout rules. Calls domain ports when a decision needs an external action.'],
+  ['lucent-services', 'Actual OS integrations', 'Implements the domain ports using files, Hyprland sockets, commands, HTTP and D-Bus. Turns external data into domain values.'],
+  ['lucent-design', 'The visual language', 'Tokens, palettes, control recipes and app icon artwork. Turns shared visual choices into reusable elements.'],
+  ['lucent-ui', 'Layout and input behavior', 'Turns an Element tree into positioned rectangles, drawing instructions and clickable regions. Tracks focus, hovering, editing and dragging.'],
+  ['lucent-render', 'Drawing those instructions', 'Owns GPU resources, text/image textures, shaders and wgpu render passes. It does not launch apps or decide which widget is visible.'],
+  ['lucent-wayland', 'The running application engine', 'Connects to the compositor and owns surfaces, input delivery, worker messages, frame pacing and the event loop. It calls the UI and renderer crates.'],
+  ['lucent-auth', 'Authentication adapters', 'Talks to PAM or greetd for the lock/login clients. The desktop shell does not authenticate a password itself.'],
+];
+const registration = [
+  ['A systemd unit', 'Installer writes lucent.service; daemon-reload makes the user manager reread units.', 'A configuration file tells the manager which process to start. Hyprland autostart explicitly starts it. Writing a unit is not the same as starting it.'],
+  ['A Wayland interface', 'Hyprland advertises protocol objects; our runtime binds the interfaces it needs.', 'A local connection to the compositor. SCTK handles protocol plumbing. This does not register a Lucent widget with Linux.'],
+  ['A Lucent widget', 'Desktop::new calls widgets::registry; register stores a descriptor and view function.', 'An in-memory list inside lucent-desktop. A stable string such as clock identifies the widget in saved settings.'],
+  ['An installed application', 'A package or installer writes a .desktop entry; XdgApplications discovers it.', 'A small metadata file describing name, icon and launch command. The launcher searches those records, not every executable on the disk.'],
+  ['The notification service', 'The adapter requests org.freedesktop.Notifications on the session D-Bus.', 'A well-known local service name. Other applications send notifications to its current owner, so two competing notification servers cannot both own it.'],
+  ['A subscription', 'The client returns a stream recipe with an ID; the runtime starts a worker for it.', 'A producer of typed messages inside the same application. The runtime retains or cancels it by ID.'],
+];
+---
+<DocGuide chapter="start-here" title="From boot to pixels — a beginner’s architecture guide" heading="From turning it on" accent="to drawing a pixel." description="Start here if Linux, Rust and graphics APIs are new to you. Follow one real Lucent installation from files on disk to a running, interactive desktop." sections={sections}>
+  <section id="map"><span class="eyebrow">01 / ORIENTATION</span><h2>There are a few different<br />systems in the picture.</h2>
+    <p><strong>Linux</strong> is the kernel: the central program that manages processes, memory and access to devices. <strong>Arch Linux</strong> supplies that kernel plus installed software and a package manager. <strong>Omarchy</strong> builds a configured desktop environment on Arch, including Hyprland, shortcuts, applications and management tools.</p>
+    <p><strong>Hyprland</strong> is the compositor. It combines the images produced by applications, decides where their windows appear and routes keyboard/mouse input. <strong>Wayland</strong> is the protocol those applications use to communicate with a compositor. In this setup, Hyprland is the Wayland server.</p>
+    <p><strong>Lucent</strong> is one of those applications. It draws the bar, dock, launcher, widgets and notifications using special desktop surfaces. It also asks system services to do things such as changing volume or starting another application. Hyprland still tiles that new application’s window.</p>
+    <CodeBlock code={`Inside the virtual machine
+
+Linux + system services
+  └─ your graphical session
+       ├─ Hyprland                    places and combines surfaces
+       ├─ stock Omarchy services      remaining system integrations
+       ├─ lucent-desktop              bar / dock / launcher / widgets
+       └─ normal applications        terminal / browser / editor
+
+On the host: QEMU displays the VM; Astro serves this website.`} label="Running programs · simplified process/ownership map" />
+    <p>A <strong>process</strong> is a running instance of a program. A <strong>service</strong> is a program managed in the background. A <strong>session</strong> is the set of activity associated with a logged-in user. The host is your actual machine; the guest is the virtual machine. A command in the host terminal does not automatically run in the guest.</p>
+    <div class="callout"><strong>Two meanings of “shell”</strong><p>A terminal shell, such as Bash, reads commands. A desktop shell, such as Lucent, provides the visible desktop controls. Opening a terminal starts an application containing a command shell; it does not create another Lucent desktop.</p></div>
+  </section>
+  <section id="files"><span class="eyebrow">02 / BEFORE ANYTHING RUNS</span><h2>The repo contains code.<br />Linux runs executables.</h2>
+    <p>The repository is a collection of source files. Rust source ends in <code>.rs</code>. <strong>Cargo</strong> is Rust’s build and dependency tool; <strong>rustc</strong> is the compiler that turns Rust into machine code. A <strong>crate</strong> is a unit of Rust code compiled as a library or program. A Cargo package can expose a library and multiple executable targets; a <strong>workspace</strong> groups related packages.</p>
+    <p>Our workspace is described by <code>lucent/Cargo.toml</code>. Each member has its own <code>Cargo.toml</code>, listing dependencies. <code>Cargo.lock</code> records the resolved dependency versions. A Rust <code>use</code> statement makes a name convenient to reference; it does not start a service or dynamically load an application.</p>
+    <CodeBlock code={`Source files + Cargo manifests + dependency sources
+                         ↓ cargo build
+                  compiler + linker
+                         ↓
+             lucent/target/release/lucent-desktop
+                         ↓ installer copies it
+                   ~/.local/bin/lucent-desktop
+                         ↓ operating system starts it
+                 a running desktop process`} label="Build time → installation time → runtime" />
+    <p>The library crates are compiled and linked into the executable as needed. They do not become nine separate background programs, and Linux does not scan the <code>crates/</code> directory at login. Native system libraries and graphics drivers are still runtime dependencies. You do not need Cargo running while you use the desktop.</p>
+    <p><code>~</code> means the current user’s home directory. <code>~/.local/bin</code> holds user-installed executables; <code>~/.config</code> holds user configuration; <code>~/.local/state</code> holds persistent application state. These are different from the repository checkout. Editing source changes the checkout; it does not replace the already-installed binary.</p>
+  </section>
+  <section id="boot"><span class="eyebrow">03 / THE STARTUP CHAIN</span><h2>Who starts whom?</h2>
+    <p>Choose a stage to follow the chain. The login stage below assumes Lucent’s optional greetd integration is activated. An installation keeping Omarchy’s original login mechanism joins the same chain at the user’s Hyprland session.</p>
+    <div class="frame-walkthrough" data-tabs><div class="frame-tabs" role="tablist" aria-label="Boot sequence">{boot.map((stage,i) => <button role="tab" type="button" id={`boot-tab-${stage.id}`} aria-controls={`boot-panel-${stage.id}`} aria-selected={i===0?'true':'false'} tabindex={i===0?0:-1}><span>0{i+1}</span>{stage.title}</button>)}</div>{boot.map((stage,i) => <div class="frame-detail" role="tabpanel" id={`boot-panel-${stage.id}`} aria-labelledby={`boot-tab-${stage.id}`} hidden={i!==0} tabindex="0"><span class="eyebrow">{stage.owner}</span><h3>{stage.title}</h3><p>{stage.detail}</p><div class="frame-state">{stage.result}</div><a class="text-link" href={sourceUrl(stage.file)}>Read this part of the implementation ↗</a></div>)}</div>
+    <p>The installer writes <code>~/.config/systemd/user/lucent.service</code>. A <strong>unit</strong> is systemd’s configuration for a managed resource. In this unit, <code>ExecStart</code> points to <code>~/.local/lib/lucent/session.py</code>, and <code>ExecStopPost</code> runs its restoration path. <code>systemctl --user</code> talks to your user’s manager; a system-wide service such as greetd is managed separately.</p>
+    <p>The activation script adds a managed block to <code>~/.config/hypr/autostart.lua</code>. Hyprland runs that block at session startup. Existing Omarchy configuration remains relevant: it starts the compositor environment and the services Lucent still relies on. The wrapper’s readiness checks prevent a failed new shell from simply hiding the fallback UI.</p>
+    <p>Source: <a href={sourceUrl('scripts/lucent-setup.py')}>installation and activation</a>, <a href={sourceUrl('scripts/lucent-session.py')}>session handoff and restoration</a>, <a href={sourceUrl('scripts/lucent-login.py')}>optional login integration</a>.</p>
+  </section>
+  <section id="main"><span class="eyebrow">04 / INSIDE THE EXECUTABLE</span><h2>The entry point<br />is intentionally small.</h2>
+    <CodeBlock code={excerpt(mainSource, 'fn main()', '#[cfg(test)]')} lang="rust" label="Live source · the desktop entry point" />
+    <p>Read the nested call from the inside out:</p>
+    <ol class="guide-steps"><li><code>platform::desktop_ports()</code> constructs the concrete service adapters: settings storage, applications, compositor, audio and the rest. It returns a bundle of capabilities.</li><li><code>Desktop::new(…)</code> takes that bundle and creates initial state. It registers built-in widget views, loads the small bundled symbol set and sets defaults. The installed app list and most external snapshots have not arrived yet.</li><li><code>lucent_wayland::run(…)</code> takes ownership of the desktop and runs it. This call stays active until the application exits or a fatal error occurs.</li></ol>
+    <p>The runtime connects using session environment variables. <code>WAYLAND_DISPLAY</code> identifies the compositor connection; <code>XDG_RUNTIME_DIR</code> identifies your user’s temporary runtime directory. A <strong>socket</strong> is a local communication endpoint—programs send messages through it. Starting the binary from an unrelated SSH environment may fail because it lacks the graphical session’s connection information.</p>
+    <p>Next the runtime binds advertised Wayland interfaces, loads the client’s embedded fonts, creates a shared graphics device and builds an event loop. An <strong>event loop</strong> waits for input, worker results and compositor messages, handles them, and waits again. An <strong>effect worker</strong> runs queued external operations; subscription workers produce ongoing updates.</p>
+    <p>The runtime calls <code>init</code> to schedule startup loading. It reads <code>surfaces()</code> and creates native Wayland layer surfaces for the bar, dock and widgets. A <strong>surface</strong> is a place an application can submit pixels and receive input. Hyprland replies with a configuration, including dimensions; the runtime then has enough information to render it.</p>
+    <p>Startup overlaps: workers can still be loading app metadata while an initial frame displays default state. “Constructed the Desktop struct” and “all services are ready” are different milestones. The session wrapper waits for observable rendered frames and notification readiness.</p>
+  </section>
+  <section id="crates"><span class="eyebrow">05 / READ THIS AS A MAP, NOT A CHECKLIST</span><h2>Where each crate fits.</h2>
+    <CodeBlock code={`lucent-desktop: state, views, widgets, composition
+  ├─ desktop behavior: domain ← usecases / services
+  ├─ visual choices:   design → api
+  └─ execution:        wayland runtime
+                          ├─ ui: Element → Scene
+                          └─ render: Paint → wgpu → Vulkan
+
+lucent-menu: independent picker client, same framework
+lucent-session: shared lock/login UI + separate binaries
+  └─ auth: PAM / greetd conversations
+lucent-cli: short-lived command sender to the running desktop`} label="Conceptual ownership map · not every Cargo dependency is shown" />
+    <div class="table-scroll"><table><thead><tr><th>Library crate</th><th>Plain meaning</th><th>What lives there</th></tr></thead><tbody>{crates.map(([name, meaning, detail]) => <tr><td><a href={sourceUrl(`lucent/crates/${name}/src/lib.rs`)}>{name}</a></td><td>{meaning}</td><td>{detail}</td></tr>)}</tbody></table></div>
+    <p><strong>Client</strong> here means an application using our framework. It does not mean a website or a network client. <code>lucent-desktop</code> is the main client. The <code>lucent-session</code> package supplies the shared session UI and the <code>lucent-lock</code>/<code>lucent-greeter</code> executables. <code>hello-layer</code> is a small example client. The website is a separate Astro project.</p>
+    <p>A <strong>port</strong> is a Rust trait describing a capability, such as “launch this application.” An <strong>adapter</strong> is code implementing it using the real OS. A <strong>use case</strong> makes the decision, such as “focus an existing window if this was a dock click.” Passing adapters into the client at startup is called <strong>dependency injection</strong>. Tests can supply fake adapters without changing view code.</p>
+    <p>Start reading in <code>main.rs</code>, then <code>platform.rs</code>, then <code>desktop.rs</code>. Follow one message into <code>views.rs</code> or a port. You can understand a launcher interaction before reading a Vulkan shader.</p>
+  </section>
+  <section id="registration"><span class="eyebrow">06 / SEVERAL DIFFERENT REGISTRIES</span><h2>What gets “registered”?</h2>
+    <div class="table-scroll"><table><thead><tr><th>Thing</th><th>Who registers or discovers it?</th><th>What that actually means</th></tr></thead><tbody>{registration.map(([thing, who, meaning]) => <tr><td>{thing}</td><td>{who}</td><td>{meaning}</td></tr>)}</tbody></table></div>
+    <h3>A widget registration, in actual code.</h3>
+    <CodeBlock code={excerpt(widgetSource, 'pub fn registry()', 'pub fn widget_size')} lang="rust" label="Live source · the seven built-in widgets" />
+    <p>The tuple holds a stable ID, a title and a function. Rust functions can be stored as values and called later. <code>register</code> appends the descriptor/function pair and rejects duplicate IDs. When drawing a visible widget, the client looks up its ID and calls that stored function with current state and view context.</p>
+    <p>Registering a widget makes it available; saved visibility determines whether it is shown. Current widgets are compiled into the executable. Dropping a Rust file in a folder does not install a widget. The selector’s <code>WIDGETS</code> list and the view registry are currently maintained separately, so adding one requires updating both.</p>
+  </section>
+  <section id="loading"><span class="eyebrow">07 / THE INPUTS TO YOUR DESKTOP</span><h2>What gets loaded,<br />from where, and when?</h2>
+    <div class="table-scroll"><table><thead><tr><th>Input</th><th>Location / provider</th><th>When it becomes available</th></tr></thead><tbody>
+      <tr><td>Fonts, shader source, symbols</td><td>Assets embedded by the Rust build</td><td>Startup initializes font/graphics resources. Textures are created or cached when needed. Editing these sources requires rebuilding.</td></tr>
+      <tr><td>Widget positions, pins, notes, theme mode</td><td>Lucent’s XDG state directory, normally ~/.local/state/lucent/desktop.json</td><td>The init effect loads JSON; Message::Loaded installs the result. Serde converts JSON fields into Rust values.</td></tr>
+      <tr><td>Applications</td><td>XDG application directories, normally ~/.local/share/applications and /usr/share/applications</td><td>The application adapter reads .desktop files at startup. Search later uses the cached records. Live rescanning is not implemented.</td></tr>
+      <tr><td>Icons and wallpaper previews</td><td>Bundled app catalog, installed icon sources and wallpaper files</td><td>After metadata arrives, a separate effect loads assets and sends Message::Images. The renderer uploads/caches textures as they are used.</td></tr>
+      <tr><td>Clock, system, media, weather</td><td>Injected adapters reading the OS or configured weather endpoint</td><td>Subscription workers sample at their configured intervals and send snapshots. An unconfigured weather service remains unavailable.</td></tr>
+      <tr><td>Windows and workspaces</td><td>Hyprland’s IPC sockets</td><td>The adapter requests snapshots and watches compositor events. This is separate from the Wayland connection used for our own surfaces.</td></tr>
+      <tr><td>Notifications</td><td>Other applications via the session D-Bus</td><td>The notification server receives requests, updates its inbox and publishes snapshots to the client.</td></tr>
+    </tbody></table></div>
+    <p><strong>IPC</strong> means inter-process communication: programs exchanging messages. <strong>D-Bus</strong> is one IPC system used by Linux desktop services. Hyprland sockets, the Wayland connection and Lucent’s own command socket are other channels with different message formats. “Uses IPC” does not mean they all talk through one global bus.</p>
+    <p>Data flows back to the UI as a <code>Message</code>, an enum identifying what happened. Only the UI event-loop thread updates desktop state. A <strong>thread</strong> is a path of execution within a process; workers let the desktop continue handling input while an external operation runs.</p>
+  </section>
+  <section id="frame"><span class="eyebrow">08 / THE GRAPHICS STACK</span><h2>From a Rust value<br />to a visible rounded box.</h2>
+    <p><strong>Rendering</strong> means computing an image. A <strong>GPU</strong> is a processor designed for graphics and other parallel work. <strong>Vulkan</strong> is a low-level API for talking to a graphics driver. Our Rust code uses <strong>wgpu</strong>, a graphics library, with its Vulkan backend enabled.</p>
+    <p><strong>WGSL</strong> is the language of our shader program. A <strong>shader</strong> describes calculations used to draw shapes or sample textures. wgpu prepares that shader for the selected backend. WGL is a different name you may encounter: it is a Windows/OpenGL interface and is not used here.</p>
+    <CodeBlock code={`1. State:       launcher is open; width target is 448
+2. Motion:      current time → current animated width
+3. View:        Element tree describes controls and styles
+4. Layout:      logical rectangles + paint list + hit targets
+5. Renderer:    textures + primitive data + GPU commands
+6. wgpu/Vulkan: execute drawing and present a surface buffer
+7. Hyprland:    combine that buffer with other surfaces
+8. Display:     show the composed image`} label="One frame · each stage has a different owner" />
+    <p><strong>Paint</strong> is our list of drawing instructions, such as “draw this rounded rectangle” or “place this image here.” It is data, not a callback from Vulkan. Our renderer translates it into buffers and draw calls. A <strong>buffer</strong> stores data; a <strong>texture</strong> is image data arranged for graphics sampling. The <strong>driver</strong> executes the graphics API on the available hardware or software implementation.</p>
+    <p>Our VM currently uses Mesa software Vulkan. The same Vulkan API is being executed on CPU resources there; using Vulkan does not itself prove that the host GPU is rendering Lucent. Hyprland’s rendering and Lucent’s rendering are also separate clients of graphics machinery.</p>
+    <h3>Who moves the box between frames?</h3><p>Our CPU-side <code>Motion</code> stores a start value, target, start time, duration and easing curve. Each frame samples it with the current time. A 500 ms transition means it reaches the target after half a second, regardless of how many intermediate frames were possible. The GPU draws the sampled shape; it does not own that timeline.</p>
+    <p>The runtime marks a surface <strong>dirty</strong> when its picture needs updating. It requests a one-shot Wayland frame callback to pace further drawing. When that callback arrives, it draws again if motion or another event still requires it. Once settled, it stops repainting until something changes. Service sampling can still happen while no frame is drawn.</p>
+    <p>If you know HTML: <code>view</code> produces a tree, layout resolves boxes, paint creates drawing instructions and the graphics layer produces pixels. Our framework rebuilds a dirty surface’s tree and scene; it has no browser DOM, CSS engine or automatic DOM diff.</p>
+  </section>
+  <section id="action"><span class="eyebrow">09 / PUT THE PIECES TOGETHER</span><h2>Press Super+Space,<br />search, then launch.</h2>
+    <ol class="guide-steps"><li><strong>Hyprland catches the shortcut.</strong> Its user binding starts the small program <code>lucent-cli launcher toggle</code>.</li><li><strong>The CLI sends a local command.</strong> It connects to <code>$XDG_RUNTIME_DIR/lucent.sock</code>, writes the command and waits for a reply. It does not create another desktop process.</li><li><strong>The running desktop receives a message.</strong> Its command handler converts the text to <code>Message::ToggleLauncher</code>. The event loop calls <code>update</code>.</li><li><strong>State changes.</strong> The client opens Apps, clears the search and retargets its panel motion. Its surface declaration requests overlay placement and keyboard focus for the open launcher.</li><li><strong>A frame is requested.</strong> View, layout and rendering draw the growing panel. Keyboard input becomes query/navigation messages, and pure search ranks the already-loaded app list.</li><li><strong>You press Enter.</strong> The selected app ID resolves to its domain record. An effect calls the application port; the adapter starts its parsed executable and argument list.</li><li><strong>The new application talks to the compositor.</strong> A native Wayland app creates its own window; an X11 app can be mediated by XWayland. Hyprland places the window and manages focus/tiling. Lucent’s compositor adapter then observes the updated window state.</li></ol>
+    <p>The launcher does not render the terminal’s text or the browser’s webpage. Those applications produce their own images. Lucent only presents desktop controls around them. The same separation lets Lucent crash or restart without intentionally closing your normal applications.</p>
+  </section>
+  <section id="changes"><span class="eyebrow">10 / WHAT A CHANGE ACTUALLY REQUIRES</span><h2>Which file should I edit?</h2>
+    <div class="table-scroll"><table><thead><tr><th>Desired change</th><th>Owning layer</th><th>How it reaches the running system</th></tr></thead><tbody>
+      <tr><td>Change row padding or a semantic color</td><td>design/tokens.json → generated Rust/CSS consumers</td><td>Run the generator, rebuild the Rust client, install it and restart the service. Astro uses the website consumer separately.</td></tr>
+      <tr><td>Add a widget</td><td>Client widget view/registry, size/default position and selector entry</td><td>Compile the function into the client, install/restart, then enable its stable ID through visibility settings.</td></tr>
+      <tr><td>Change launch-versus-focus behavior</td><td>lucent-usecases and its tests</td><td>Rebuild the client depending on that crate. No Wayland protocol or shader change is needed.</td></tr>
+      <tr><td>Add a system capability</td><td>Domain port → adapter → composition root → client messages/views</td><td>Implement the external work, choose its startup/subscription policy, build and install the client.</td></tr>
+      <tr><td>Change a saved widget position</td><td>Client state and settings adapter</td><td>Drag/release updates it live and saves it. No compilation is needed.</td></tr>
+      <tr><td>Change a global shortcut or window radius</td><td>User Hyprland integration</td><td>Update the supported configuration and reload Hyprland. The compositor owns these rules.</td></tr>
+    </tbody></table></div>
+    <p>A <strong>restart</strong> starts a fresh process, which reads startup configuration again. A <strong>reload</strong> asks an existing program to reread something it supports reloading. Lucent has specific live interactions; it does not have a universal mechanism that reloads every source or settings file after arbitrary edits.</p>
+    <p>The installation guide provides the full build/install/activation sequence. “cargo build succeeded” establishes that code compiled; the VM still needs the resulting binaries installed. Likewise, rebuilding this Astro website changes documentation, not the desktop executable.</p>
+  </section>
+  <section id="inspect"><span class="eyebrow">11 / OBSERVE THE REAL SYSTEM</span><h2>Try these in the VM.</h2>
+    <p>Run these read-only commands in a terminal <strong>inside the prepared Lucent guest</strong>. They reveal the same chain explained above.</p>
+    <CodeBlock code={`# Is the managed desktop service running?
+systemctl --user status lucent.service
+
+# What command starts it?
+systemctl --user cat lucent.service
+
+# What happened during this boot?
+journalctl --user -u lucent.service -b --no-pager -n 60
+
+# Which user programs are running?
+pgrep -a -u "$(id -u)" 'Hyprland|lucent|quickshell'
+
+# Which connection information did this terminal inherit?
+printf 'Wayland: %s\\nRuntime directory: %s\\n' "$WAYLAND_DISPLAY" "$XDG_RUNTIME_DIR"
+
+# Ask the running Lucent client for its current state and surfaces
+lucent-cli inspect`} label="Guest terminal · inspect startup, logs and state" />
+    <p><code>status</code> shows whether systemd considers the service active. The main PID can belong to the Python wrapper; the Rust executable is its child. <code>journalctl</code> reads recorded service output. <code>inspect</code> asks the live desktop rather than reading a saved JSON file. Lock/login clients deliberately do not expose this debug socket.</p>
+    <div class="callout"><strong>Follow the first broken connection</strong><p>If the executable is missing, check installation. If the service fails, read its journal. If Wayland cannot connect, check the session environment. If the shell draws but an app is missing, check its .desktop metadata. If a weather widget is empty, check that adapter’s configuration. These failures belong to different layers.</p></div>
+    <p>Read <a href={withBase('/guide/#build')}>the build and installation guide</a> before changing integration. The rollback script removes its managed startup/binding blocks and stops Lucent, while preserving user settings and installed binaries.</p>
+  </section>
+  <section id="rust"><span class="eyebrow">12 / JUST ENOUGH RUST TO READ ALONG</span><h2>A small translation table.</h2>
+    <div class="table-scroll"><table><thead><tr><th>Rust notation</th><th>Read it as</th><th>Lucent example</th></tr></thead><tbody>
+      <tr><td>struct</td><td>A named record of fields.</td><td>Desktop owns current UI state; Placement contains x/y.</td></tr>
+      <tr><td>enum</td><td>One of a defined set of variants, sometimes carrying data.</td><td>Message::Query(String) means the search text changed.</td></tr>
+      <tr><td>trait / impl</td><td>A behavior contract / an implementation of it.</td><td>ApplicationPort / XdgApplications.</td></tr>
+      <tr><td>&amp;T / &amp;mut T</td><td>Borrow a value to read it / borrow it exclusively to change it.</td><td>view reads state; update can mutate it.</td></tr>
+      <tr><td>Option&lt;T&gt;</td><td>A value is present or absent: Some or None.</td><td>A compositor adapter may be unavailable.</td></tr>
+      <tr><td>Result&lt;T, E&gt; / ?</td><td>Success or error / return early if this operation failed.</td><td>Wayland connection or a settings read can fail.</td></tr>
+      <tr><td>Arc&lt;dyn Port&gt;</td><td>Shared ownership of an object implementing that trait.</td><td>The client and workers share a service adapter; Arc itself does not make arbitrary mutation safe.</td></tr>
+      <tr><td>Element&lt;Message&gt;</td><td>An element parameterized by the messages its interactions produce.</td><td>A button click produces a typed desktop message.</td></tr>
+      <tr><td>mod / use / ::</td><td>Declare a module / bring a name into scope / navigate a Rust path.</td><td>platform::desktop_ports calls a function in that module.</td></tr>
+      <tr><td>#[derive(Serialize, Deserialize)]</td><td>Generate Serde conversion implementations.</td><td>Convert settings between Rust values and JSON; the adapter still does the file I/O.</td></tr>
+    </tbody></table></div>
+    <p>You now have the startup and ownership map. The detailed guides below follow the same boundaries, with exact contracts and implementation limits.</p>
+    <ul class="resource-list"><li><a href={withBase('/docs/domain/')}>Domain, ports and adapters →</a><span>What each capability means and how the current OS adapter implements it.</span></li><li><a href={withBase('/docs/framework/')}>Inside the framework →</a><span>Actual traits, worker lifecycle, layout, frame scheduling and rendering.</span></li><li><a href={withBase('/docs/client/')}>The desktop client →</a><span>State ownership, launcher flow, geometry and widget behavior.</span></li></ul>
+  </section>
+</DocGuide>

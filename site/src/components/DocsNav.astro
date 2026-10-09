@@ -1,7 +1,9 @@
 ---
+import { withBase } from '../data/urls';
 interface Props { current?: string; }
 const { current = 'overview' } = Astro.props;
 const chapters = [
+  ['start-here', '/docs/start-here/', 'Start here: boot to pixels'],
   ['overview', '/docs/', 'Overview & frame walkthrough'],
   ['domain', '/docs/domain/', 'Domain, ports & adapters'],
   ['framework', '/docs/framework/', 'Inside the framework'],
@@ -9,6 +11,6 @@ const chapters = [
 ];
 ---
 <nav aria-label="Documentation chapters">
-  {chapters.map(([id, href, title]) => <a href={href} aria-current={current === id ? 'page' : undefined}>{title}</a>)}
-  <a href="/design-system/">Design system & tokens</a>
+  {chapters.map(([id, href, title]) => <a href={withBase(href)} aria-current={current === id ? 'page' : undefined}>{title}</a>)}
+  <a href={withBase('/design-system/')}>Design system & tokens</a>
 </nav>

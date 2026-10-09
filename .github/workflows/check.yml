@@ -18,6 +18,13 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run build
+      - run: python3 scripts/check-build.py
+      - name: Check project Pages URLs
+        env:
+          SITE_BASE_PATH: /desktop-lab
+        run: |
+          npm run build
+          python3 scripts/check-build.py
   integration-code:
     runs-on: ubuntu-latest
     steps:

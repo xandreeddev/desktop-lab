@@ -37,12 +37,45 @@ npm run stop
 npm run preview
 ```
 
-The static output is in `dist/`. There is no deployment configuration. CI runs
-type checking and a production build.
+The static output is in `dist/`. CI checks both root hosting and the project
+Pages prefix, including links, image sources and fragment targets in the built HTML.
+
+## GitHub Pages
+
+The source repository is <https://github.com/xandreeddev/desktop-lab>.
+`.github/workflows/pages.yml` publishes the site on relevant pushes to `main`
+and supports manual runs. It checks the Astro source, builds the static site,
+validates its links/assets, uploads only `site/dist` and deploys that artifact.
+It does not publish VM images or change repository visibility.
+
+One-time repository setup: in **Settings → Pages → Build and deployment**,
+choose **GitHub Actions** as the source. This requires an authenticated account
+with permission to manage Pages. Private repositories also need a GitHub plan
+that supports Pages. After enabling it, run **Publish site to GitHub Pages** from
+the Actions tab if the initial push happened before Pages was enabled.
+
+The workflow reads the actual origin and base path from GitHub Pages metadata.
+Project hosting normally uses `/desktop-lab/`; an account-level custom domain
+can change the origin. The successful deployment's URL is authoritative.
+Do not add a custom domain to this repository unless intentionally changing it.
+
+To reproduce project hosting locally:
+
+```sh
+SITE_BASE_PATH=/desktop-lab npm run build
+SITE_BASE_PATH=/desktop-lab python3 scripts/check-build.py
+SITE_BASE_PATH=/desktop-lab npm run preview -- --port 4322
+# Open the printed preview URL plus /desktop-lab/ (normally port 4322).
+```
+
+`npm run dev` continues to serve at `/`. Internal links and public assets use
+the shared `withBase` helper; imported assets are prefixed by Astro. The workflow
+sets `SITE_URL` and `SITE_BASE_PATH`; no deployment secrets are embedded in output.
 
 ## Content and assets
 
 - `/`: desktop tour, three experiments, architecture/API, motion, surfaces and measurements.
+- `/docs/start-here/`: beginner walkthrough from Linux boot to registration, loading and rendering.
 - `/docs/`: programming model, interactive frame lifecycle, API, domain and rendering.
 - `/docs/domain/`: actual domain models, all service ports, adapters, use cases and failures.
 - `/docs/framework/`: component contract, workers, layout, input, motion and Vulkan internals.

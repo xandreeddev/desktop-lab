@@ -1,4 +1,5 @@
 ---
+import { withBase } from '../../data/urls';
 import DocGuide from '../../layouts/DocGuide.astro';
 import CodeBlock from '../../components/CodeBlock.astro';
 import { excerpt, sourceUrl } from '../../data/source';
@@ -69,6 +70,6 @@ Domain    → values / contracts / policy inputs`} label="Dependency direction �
   <section id="testing"><span class="eyebrow">06 / EXTENDING THE BOUNDARY</span><h2>Add behavior with evidence.</h2>
     <ol class="guide-steps"><li>Define the smallest domain value and port needed by the interaction. Keep transport and rendering types out.</li><li>Write the decision as a use case when it is independent of UI state. Test it with a fake that records calls.</li><li>Implement an adapter with explicit unavailable/error behavior. Wire it in the composition root.</li><li>Map worker results to a client message, update state and invalidate the affected surfaces.</li><li>Exercise the real integration separately. A fake-adapter test does not prove that D-Bus, a compositor socket or an installed command works.</li></ol>
     <p>Existing tests cover search ranking, dock focus versus launcher launch, timer catch-up, calendar arithmetic, widget bounds, notification replacement/expiry and menu navigation. See <a href={sourceUrl('lucent/crates/lucent-usecases/src/lib.rs')}>use-case tests</a> and <a href={sourceUrl('lucent/apps/lucent-desktop/src/visual_tests.rs')}>client tests with injected adapters</a>.</p>
-    <ul class="resource-list"><li><a href="/docs/framework/">Next: inside the framework →</a><span>Messages, workers, layout, animation and GPU submission.</span></li><li><a href="/docs/client/">Trace the desktop client →</a><span>Where ports are injected and what happens when a user acts.</span></li></ul>
+    <ul class="resource-list"><li><a href={withBase('/docs/framework/')}>Next: inside the framework →</a><span>Messages, workers, layout, animation and GPU submission.</span></li><li><a href={withBase('/docs/client/')}>Trace the desktop client →</a><span>Where ports are injected and what happens when a user acts.</span></li></ul>
   </section>
 </DocGuide>

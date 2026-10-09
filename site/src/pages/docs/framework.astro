@@ -1,4 +1,5 @@
 ---
+import { withBase } from '../../data/urls';
 import DocGuide from '../../layouts/DocGuide.astro';
 import CodeBlock from '../../components/CodeBlock.astro';
 import { excerpt, sourceUrl } from '../../data/source';
@@ -47,7 +48,7 @@ subscription → Message ─────┘     │
   <section id="motion"><span class="eyebrow">05 / TIME BELONGS TO THE CPU</span><h2>Motion is sampled.<br />Frames are requested.</h2>
     <CodeBlock code={excerpt(apiSource, 'pub struct Motion {', '#[cfg(test)]')} lang="rust" label="Live source · interruptible scalar motion" />
     <p><code>target</code> starts from the value at the current time, so reversing an in-flight transition stays continuous. <code>value</code> normalizes elapsed time, solves the cubic Bézier’s time coordinate and evaluates its output. The output curve may overshoot. It returns the exact target once the duration ends.</p>
-    <p>The desktop supplies duration and easing tokens: panel geometry currently uses 500 ms, with separate 320 ms entry and 190 ms exit reveals. The framework does not decide how long a launcher should take. <a href="/design-system/#motion">Explore the motion tokens and curves</a>.</p>
+    <p>The desktop supplies duration and easing tokens: panel geometry currently uses 500 ms, with separate 320 ms entry and 190 ms exit reveals. The framework does not decide how long a launcher should take. <a href={withBase('/design-system/#motion')}>Explore the motion tokens and curves</a>.</p>
     <div class="table-scroll"><table><thead><tr><th>Event</th><th>Frame demand</th><th>Consequence</th></tr></thead><tbody><tr><td>Message changes visible state</td><td>dirty = true</td><td>Draw if configured and no callback is pending.</td></tr><tr><td>A frame begins</td><td>dirty = false; pending = true</td><td>Request one compositor frame callback and submit the buffer.</td></tr><tr><td>Animation remains active</td><td>dirty = true</td><td>Keep work pending until the callback opens the gate.</td></tr><tr><td>Compositor callback arrives</td><td>pending = false</td><td>Draw only if dirty; otherwise wait.</td></tr></tbody></table></div>
     <p><code>FrameDemand</code> preserves invalidations received while a frame is pending. The compositor does not call us forever at the monitor refresh rate: a frame callback is a one-shot pacing request. It is also not a presentation timestamp. Vulkan receives already-sampled coordinates and colors; it does not interpolate the 500 ms timeline.</p>
     <p>Idle means no unnecessary repaint loop. Subscriptions may still wake for clock or service updates; the client decides whether their data actually requires a redraw.</p>
@@ -62,6 +63,6 @@ subscription → Message ─────┘     │
   <section id="limits"><span class="eyebrow">07 / WHAT THE ENGINE DOES TODAY</span><h2>Useful boundaries.<br />Visible limitations.</h2>
     <p>The engine implements native layer-shell clients and a secure session-lock path. It does not provide the full general-purpose toolkit from the original proposal: fractional scaling, complex-script text shaping, IME, general scrolling, dynamic plugins and a general xdg-window API remain work. The prepared VM renders through software Vulkan; frame-pacing architecture alone cannot remove that CPU cost.</p>
     <p>Framework tests cover interrupted motion, frame-demand gating, child message/effect mapping and registry IDs. CPU geometry tests inspect the same scenes that the renderer consumes. Vulkan image comparisons cover component states, palettes and densities. Live VM checks separately exercise keyboard input and actual service integration.</p>
-    <ul class="resource-list"><li><a href="/docs/client/">Next: the desktop client →</a><span>Composition, launcher behavior, surfaces, widgets and the grid.</span></li><li><a href={sourceUrl('lucent/examples/hello-layer/src/main.rs')}>Read hello-layer ↗</a><span>A small independent client using the same public contract.</span></li></ul>
+    <ul class="resource-list"><li><a href={withBase('/docs/client/')}>Next: the desktop client →</a><span>Composition, launcher behavior, surfaces, widgets and the grid.</span></li><li><a href={sourceUrl('lucent/examples/hello-layer/src/main.rs')}>Read hello-layer ↗</a><span>A small independent client using the same public contract.</span></li></ul>
   </section>
 </DocGuide>
