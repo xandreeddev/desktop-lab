@@ -43,10 +43,17 @@ Pages prefix, including links, image sources and fragment targets in the built H
 ## GitHub Pages
 
 The source repository is <https://github.com/xandreeddev/desktop-lab>.
-`.github/workflows/pages.yml` publishes the site on relevant pushes to `main`
-and supports manual runs. It checks the Astro source, builds the static site,
+`.github/workflows/pages.yml` publishes the site whenever a PR merges into
+protected `main`. Every update to `main` triggers it, without path filters.
+Manual recovery runs are also restricted to `main`. It checks the Astro source, builds the static site,
 validates its links/assets, uploads only `site/dist` and deploys that artifact.
 It does not publish VM images or change repository visibility.
+
+Before merging, `main` requires the `site`, `integration-code` and `rust` checks
+from GitHub Actions and an up-to-date PR branch. The Pages environment accepts
+deployments only from the `main` branch. Pull requests run validation without
+publishing a preview or receiving Pages write permissions. Repository access and
+protection maintenance are documented in [Contributing](../CONTRIBUTING.md).
 
 One-time repository setup: in **Settings → Pages → Build and deployment**,
 choose **GitHub Actions** as the source. This requires an authenticated account
