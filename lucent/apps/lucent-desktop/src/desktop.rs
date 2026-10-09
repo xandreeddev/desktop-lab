@@ -172,6 +172,15 @@ impl Desktop {
                 services::images::symbol(name, "#ffffff"),
             );
         }
+        images.insert(
+            "app:fallback".into(),
+            services::images::svg(
+                lucent_design::app_icons::FALLBACK.svg,
+                services::images::ICON_PIXELS,
+                "lucent-app:application".into(),
+            )
+            .expect("bundled fallback icon"),
+        );
         Self {
             registry: crate::widgets::registry(),
             apps: vec![],
@@ -256,7 +265,10 @@ impl Desktop {
         apps
     }
     pub fn dock_width(&self) -> f32 {
-        (self.dock_apps().len() as f32 + 1.) * panel::DOCK_STRIDE + panel::DOCK_INSETS
+        let count = self.dock_apps().len() as f32 + 1.;
+        count * lucent_design::component::dock_row::ITEM_SIZE
+            + (count - 1.) * lucent_design::space::SM
+            + 2. * lucent_design::component::dock::ROW_LEFT
     }
     fn retarget_panel_transition(&mut self, now: f64) {
         let width = if self.launcher {
@@ -275,7 +287,7 @@ impl Desktop {
                     + launcher::BODY_TOP
                     + lucent_design::space::MD
                     + lucent_design::component::input::HEIGHT
-                    + lucent_design::component::dock::CONTENT_INSETS)
+                    + (2. * lucent_design::component::dock::CONTENT_INSET))
                     .clamp(panel::LAUNCHER_MIN_HEIGHT, panel::LAUNCHER_MAX_HEIGHT),
                 Mode::Widgets => panel::WIDGETS_HEIGHT,
                 Mode::Commands => panel::COMMANDS_HEIGHT,
@@ -405,12 +417,26 @@ impl Component for Desktop {
                 self.carousel = Motion::fixed(self.wallpaper_index as f32);
                 self.applied_wallpaper = current_wallpaper;
                 self.results = lucent_usecases::search_applications(&self.apps, "");
-                let icons: Vec<_> = self.apps.iter().map(|a| a.icon.clone()).collect();
+                let icons: Vec<_> = self
+                    .apps
+                    .iter()
+                    .map(|a| (a.id.0.clone(), a.icon.clone()))
+                    .collect();
                 let walls = self.wallpapers.clone();
                 effects.task(move || {
                     let mut images = vec![];
                     let mut seen = std::collections::BTreeSet::new();
-                    for icon in icons {
+                    for (desktop_id, icon) in icons {
+                        if let Some(asset) = lucent_design::app_icons::lookup(&desktop_id)
+                            && let Some(image) = services::images::svg(
+                                asset.svg,
+                                services::images::ICON_PIXELS,
+                                format!("lucent-app:{}", asset.id),
+                            )
+                        {
+                            images.push((format!("app:{desktop_id}"), image));
+                            continue;
+                        }
                         if seen.insert(icon.clone())
                             && let Some(image) = services::images::icon(&icon)
                         {
@@ -614,13 +640,23 @@ impl Component for Desktop {
                         .unwrap_or_else(|| crate::widgets::default_position(&id, self.viewport))
                 });
                 let size = crate::widgets::widget_size(&id);
+                let mut placement = Placement {
+                    x: origin.x + drag.dx,
+                    y: origin.y + drag.dy,
+                };
+                if drag.finished {
+                    let Ok(snapped) = lucent_usecases::snap_placement(
+                        placement,
+                        lucent_design::component::widget_layout::GRID_STEP,
+                    ) else {
+                        return;
+                    };
+                    placement = snapped;
+                }
                 let _ = lucent_usecases::move_widget(
                     &mut self.settings,
                     &id,
-                    Placement {
-                        x: origin.x + drag.dx,
-                        y: origin.y + drag.dy,
-                    },
+                    placement,
                     size,
                     self.viewport,
                 );
@@ -817,7 +853,7 @@ impl api::Application for Desktop {
         }))
     }
     fn inspect(&self) -> String {
-        serde_json::json!({"launcher":self.launcher,"mode":self.mode.name(),"query":self.query,"selected":self.selected,"result_count":self.results.len(),"applications":self.apps.len(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"notes":self.settings.notes,"timer_seconds":self.timer.remaining,"error":self.error}).to_string()
+        serde_json::json!({"launcher":self.launcher,"mode":self.mode.name(),"query":self.query,"selected":self.selected,"result_count":self.results.len(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(&a.id.0).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"notes":self.settings.notes,"timer_seconds":self.timer.remaining,"error":self.error}).to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
         surface == "dock"

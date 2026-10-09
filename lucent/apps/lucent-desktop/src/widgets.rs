@@ -100,6 +100,9 @@ pub fn default_position(id: &str, viewport: (f32, f32)) -> Placement {
         ),
     };
     let size = widget_size(id);
+    let Placement { x, y } =
+        lucent_usecases::snap_placement(Placement { x, y }, component::widget_layout::GRID_STEP)
+            .expect("valid grid token and default placement");
     Placement {
         x: x.clamp(0., (viewport.0 - size.0).max(0.)),
         y: y.clamp(0., (viewport.1 - size.1).max(0.)),
@@ -556,7 +559,7 @@ fn notes(d: &Desktop, _: &ViewContext) -> Element<Message> {
             component::notes::INPUT_HEIGHT,
         )
         .at(component::notes::INSET, component::notes::INPUT_TOP)
-        .padding(space::MD)
+        .padding_xy(component::input::PADDING_INLINE, space::MD)
         .font(font::BODY)
         .color(d.ink())
         .background(d.surface_color())

@@ -21,7 +21,9 @@ Inside the guest:
   the centered card applies it too.
 - **Widgets** in the launcher header: toggle calendar, clock, weather, media,
   system monitor, notes and focus timer. Reset positions from the same panel.
-- Drag a widget's background with the left mouse button. Release saves position.
+- Drag a widget's background with the left mouse button. Release snaps its top-left
+  corner to the 16-logical-pixel spacing grid and saves the position. Screen edges
+  take precedence so the whole widget stays visible.
   Buttons and text fields remain interactive. Widgets live below app windows.
 - Workspace pills switch real Hyprland workspaces. Dock icons launch or focus
   their application. Omarchy's usual terminal, tiling and lock shortcuts remain.
@@ -42,7 +44,8 @@ python3 scripts/lucent-setup.py activate
 ```
 
 Installation is per-user. Activation adds marked blocks to Hyprland's user
-`bindings.lua` and `autostart.lua`. The service hides only Omarchy's bar **after
+`bindings.lua`, `autostart.lua` and `looknfeel.lua`. The latter applies the shared
+panel radius to Foot terminal windows. The service hides only Omarchy's bar **after
 all three Lucent surfaces have rendered**. Stopping, crashing or rolling back
 restores its previous visibility. Packaged Omarchy configuration is untouched.
 
@@ -79,6 +82,21 @@ Edit `design/tokens.json`, then run `python3 scripts/generate-design-tokens.py`.
 `lucent-design` exposes typed primitive, semantic and component tokens plus
 `Theme` recipes. Views use these tokens for colors, type, spacing, corners,
 geometry and motion. The reusable engine remains independent of the theme.
+
+Rounded controls use separate horizontal and vertical padding through
+`Element::padding_xy`; their hit target retains the full outer bounds. The widget
+grid uses `component.widget_layout.grid_step`, which references `space.lg` (16).
+Terminal corners use `component.window.radius`, an alias of `radius.panel` (20).
+The generator also emits `configs/lucent/window-rules.lua`; rerun activation after
+changing that rule. This Hyprland version supports a maximum radius of 20.
+
+`design/app-icons.json` maps exact desktop IDs to original Lucent pictograms. Edit
+the catalog and run `python3 scripts/generate-app-icons.py` to regenerate SVGs and
+the typed Rust catalog. Both the dock and launcher tint the monochrome artwork
+with the semantic foreground, over a subtle tonal tile. Icons are rasterized at
+128 pixels for high-density rendering. Unknown IDs retain their installed XDG
+icon, with a Lucent fallback when it is unavailable. The local design-system page
+includes the complete icon gallery.
 
 Text uses supersampled coverage, kerning-aware measurement and physical-pixel
 alignment. Images prefer larger/vector originals, with filtered mip levels for

@@ -15,7 +15,7 @@ import lab
 
 def source_only(item):
     parts = Path(item.name).parts
-    if any(part in ('target', '__pycache__') for part in parts):
+    if any(part in ('target', '__pycache__', 'node_modules', 'dist', '.astro') for part in parts):
         return None
     if len(parts) > 1 and parts[0] == 'packaging' and (parts[1] in ('pkg', 'src') or '.pkg.tar.' in parts[1]):
         return None
@@ -76,7 +76,7 @@ def main():
     if args.sync:
         with tempfile.NamedTemporaryFile(suffix='.tar.gz') as temp:
             with tarfile.open(temp.name, 'w:gz') as tf:
-                for name in ('scripts', 'configs', 'manifests', 'patches', 'lucent', 'packaging',
+                for name in ('scripts', 'configs', 'manifests', 'patches', 'lucent', 'packaging', 'design', 'site',
                              'README.md', 'LICENSE', 'docs', 'tests', 'reports'):
                     path = lab.ROOT / name
                     if path.exists():

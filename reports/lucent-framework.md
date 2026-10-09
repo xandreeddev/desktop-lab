@@ -167,3 +167,48 @@ under `lucent/tests/visual/baselines`; private VM captures stay in `reports/loca
 
 Commands and baseline-review policy are documented in
 [the framework guide](../docs/lucent-framework.md#keyboard-state-and-visual-regression-checks).
+
+
+## Spacing, monochrome icons and grid follow-up
+
+The follow-up used the same 6-vCPU / 6-GiB software-Vulkan guest. It introduces
+independent horizontal/vertical framework padding, centered command rows, equal
+dock end insets and rounded-control spacing recipes. The app catalog has 58
+original monochrome pictograms, including the generic fallback; exact desktop-ID
+aliases cover all 57 installed applications. Launcher and dock tint the same
+128-pixel artwork with the current semantic foreground and a subtle tonal tile.
+
+Widget movement remains continuous during a drag. Release rounds its top-left
+anchor to `component.widget_layout.grid_step → space.lg` (16 logical pixels),
+then clamps to the screen and saves. Existing saved positions are retained until
+moved. Widgets do not resize or prevent overlap automatically.
+
+Terminal corners use the generated Hyprland rule and
+`component.window.radius → radius.panel` (20 logical pixels). The prepared
+Hyprland rejects window-rule radii above 20, so Lucent panels share that supported
+value. The actual Foot window reported `rounding = 20`, its corners were captured
+and reviewed, and Hyprland reported no configuration errors. Activation backs up
+and adds a managed block to user `looknfeel.lua`; rollback preserves other edits.
+
+Executed checks on this build:
+
+- 32 Rust unit tests, formatting and warning-free Clippy across all targets.
+- 12 Python tests, token/icon generated-file checks, and ShellCheck. The added
+  rollback check covers repeated activation and subsequent user appearance edits.
+- Geometry checks cover per-axis padding, centered command content, equal dock
+  insets, continuous-to-snapped dragging and screen-edge clamping. Every icon
+  rasterizes, remains monochrome and has distinct pixel artwork.
+- 48 reviewed native Vulkan visual references at 1×/2× and dark/light, now also
+  including the bar and complete icon catalog; the comparison run passed.
+- Real VM input: terminal launch and its effective corner radius, workspaces,
+  widget drag/snap/save/restart, timer, notes, wallpaper application, stock-bar
+  restoration and service restart. The harness waits for stable rendered hit
+  geometry rather than assuming the software renderer finishes a morph on time.
+- Real keyboard-only launcher selection, all five Tab modes, reverse navigation,
+  search-focus restoration and seven unclipped visible rows.
+- Astro check/build and the icon gallery at 320, 390, 768 and 1440 CSS pixels;
+  every icon loaded and no horizontal page overflow occurred.
+
+Raw captures and VM inspection stay in ignored `reports/local`. The fixed native
+references and the design-system icon gallery are safe to share. This follow-up
+does not add new resource-use or frame-time measurements.

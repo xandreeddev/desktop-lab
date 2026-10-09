@@ -5,6 +5,7 @@ Run with an unlocked guest and lucent.service running. Uses QMP pointer/keyboard
 input, the public inspection IPC, and the compositor's actual window state.
 """
 import json
+import math
 from pathlib import Path
 import shlex
 import subprocess
@@ -31,6 +32,13 @@ def cli(*args):
 
 def inspect():
     return json.loads(cli('inspect'))
+
+
+def token_value(name):
+    value=json.loads((lab.ROOT/'design/tokens.json').read_text())
+    for part in name.split('.'): value=value[part]
+    value=value['$value']
+    return token_value(value[1:-1]) if isinstance(value,str) and value.startswith('{') else value
 
 
 def send(events):
@@ -64,7 +72,19 @@ def hit(identifier):
 
 
 def click(identifier):
-    h=hit(identifier)
+    # A software-rendered morph can outlast the nominal animation duration.
+    # Use the rendered geometry, once stable, instead of clicking an old frame.
+    deadline=time.monotonic()+10
+    previous=None
+    while time.monotonic()<deadline:
+        try: h=hit(identifier)
+        except StopIteration:
+            time.sleep(0.15)
+            continue
+        if h==previous: break
+        previous=h
+        time.sleep(0.2)
+    else: raise AssertionError('No stable hit target: '+identifier)
     move(h['x']+h['width']/2, h['y']+h['height']/2)
     time.sleep(0.15)
     button(True)
@@ -102,6 +122,8 @@ def suite():
     state=inspect()
     assert state['client']['launcher']
     assert next(s for s in state['surfaces'] if s['id']=='dock')['frames']>frames['dock']+2
+    click('launcher-search')
+    key(29,30)
     text('foot')
     eventually(lambda:inspect()['client']['query']=='foot','Keyboard search did not reach framework input')
     assert inspect()['client']['result_count']>0
@@ -111,8 +133,14 @@ def suite():
     eventually(lambda:any(c['address'] not in before and c['class'].startswith('foot') for c in json.loads(session('hyprctl','-j','clients'))),'Launcher failed to start an actual terminal')
     terminal=next(c for c in json.loads(session('hyprctl','-j','clients')) if c['address'] not in before and c['class'].startswith('foot'))
     assert not inspect()['client']['launcher']
-    # Close only the terminal created by this test.
-    session('hyprctl','dispatch',f'hl.dsp.window.close({{ window = "address:{terminal["address"]}" }})')
+    try:
+        rounding=float(session('hyprctl','getprop','address:'+terminal['address'],'rounding').strip())
+        assert rounding==token_value('component.window.radius'), rounding
+        assert not session('hyprctl','configerrors').strip(), 'Hyprland rejected configuration'
+        screenshot('lucent-terminal-rounded.png')
+    finally:
+        # Close only the terminal created by this test, including on assertion failure.
+        session('hyprctl','dispatch',f'hl.dsp.window.close({{ window = "address:{terminal["address"]}" }})')
     click('workspace-2')
     eventually(lambda:json.loads(session('hyprctl','-j','activeworkspace'))['id']==2,'Workspace button failed')
     click('workspace-1')
@@ -125,7 +153,10 @@ def suite():
         time.sleep(0.025)
     button(False);time.sleep(0.7)
     position=inspect()['client']['positions']['calendar']
-    assert abs(position['x']-h['x']-180)<3 and abs(position['y']-h['y']-72)<3,position
+    step=token_value('component.widget_layout.grid_step')
+    expected_x=math.floor((h['x']+180)/step+0.5)*step
+    expected_y=math.floor((h['y']+72)/step+0.5)*step
+    assert abs(position['x']-expected_x)<0.01 and abs(position['y']-expected_y)<0.01,position
     session('systemctl','--user','restart','lucent.service')
     eventually(lambda:inspect()['client']['positions'].get('calendar')==position,'Widget position was not restored')
     
@@ -161,7 +192,7 @@ def suite():
     eventually(lambda:remote('bash','-c','test -e ~/.local/state/omarchy/toggles/bar-off && echo hidden || true').strip()=='hidden','Stock bar was not hidden after readiness')
     screenshot('lucent-framework-desktop.png')
     report={'vulkan':True,'native_surfaces':3,'animated_dock_launcher':True,'keyboard_search':True,
-            'real_application_launch':True,'workspace_switch':True,'widget_drag':True,'position_restored':True,
+            'real_application_launch':True,'terminal_rounding':rounding,'workspace_switch':True,'widget_drag':True,'position_restored':True,'token_grid_snap':True,
             'timer_start_pause_reset':True,'notes_input':True,'wallpaper_selector_and_apply':True,
             'stock_bar_restored_on_stop':True,'restart':True,'application_count':inspect()['client']['applications']}
     (REPORT/'lucent-framework-integration.json').write_text(json.dumps(report,indent=2)+'\n')

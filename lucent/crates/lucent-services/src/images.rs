@@ -125,6 +125,32 @@ pub fn icon(name: &str) -> Option<Arc<ImageData>> {
     }
     None
 }
+/// Rasterize bundled vector artwork on the effect worker. The view only references pixels.
+pub fn svg(source: &str, size: u32, key: String) -> Option<Arc<ImageData>> {
+    let tree = resvg::usvg::Tree::from_str(source, &Default::default()).ok()?;
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(size, size)?;
+    let factor = size as f32 / tree.size().width().max(tree.size().height());
+    resvg::render(
+        &tree,
+        resvg::tiny_skia::Transform::from_scale(factor, factor),
+        &mut pixmap.as_mut(),
+    );
+    let mut rgba = pixmap.take();
+    for p in rgba.as_chunks_mut::<4>().0.iter_mut() {
+        if p[3] > 0 {
+            for c in 0..3 {
+                p[c] = (u32::from(p[c]) * 255 / u32::from(p[3])).min(255) as u8;
+            }
+        }
+    }
+    Some(Arc::new(ImageData {
+        key,
+        width: size,
+        height: size,
+        rgba,
+    }))
+}
+
 /// Official Material Symbols Rounded; pinned SVG sources and Apache-2.0 license
 /// are vendored in assets/material. Monochrome tint is supplied by the UI theme.
 pub fn symbol(name: &str, color: &str) -> Arc<ImageData> {

@@ -4,6 +4,8 @@ use lucent_api::{Color, Element, Transition};
 #[rustfmt::skip]
 mod tokens;
 pub use tokens::*;
+#[rustfmt::skip]
+pub mod app_icons;
 
 /// Semantic roles: clients describe intent without selecting palette swatches.
 #[derive(Clone, Copy, Debug)]
@@ -91,7 +93,10 @@ impl Theme {
     }
     pub fn button<M>(self, label: impl Into<String>, message: M) -> Element<M> {
         Element::button(label, message)
-            .padding(component::button::PADDING)
+            .padding_xy(
+                component::button::PADDING_INLINE,
+                component::button::PADDING_BLOCK,
+            )
             .radius(component::button::RADIUS)
             .font(font::CONTROL)
             .color(self.on_surface)

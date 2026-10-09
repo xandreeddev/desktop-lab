@@ -90,11 +90,17 @@ impl Default for Transition {
         }
     }
 }
+/// Symmetric content insets in logical pixels, independent on each axis.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Padding {
+    pub horizontal: f32,
+    pub vertical: f32,
+}
 #[derive(Clone, Debug)]
 pub struct Style {
     pub width: Length,
     pub height: Length,
-    pub padding: f32,
+    pub padding: Padding,
     pub gap: f32,
     pub position: Option<(f32, f32)>,
     pub background: Color,
@@ -129,7 +135,7 @@ impl Default for Style {
         Self {
             width: Length::Shrink,
             height: Length::Shrink,
-            padding: 0.,
+            padding: Padding::default(),
             gap: 0.,
             position: None,
             background: Color::TRANSPARENT,
@@ -275,8 +281,15 @@ impl<M> Element<M> {
         self.style.position = Some((x, y));
         self
     }
-    pub fn padding(mut self, v: f32) -> Self {
-        self.style.padding = v;
+    pub fn padding(self, v: f32) -> Self {
+        self.padding_xy(v, v)
+    }
+    /// Inset content horizontally and vertically without shrinking the hit target.
+    pub fn padding_xy(mut self, horizontal: f32, vertical: f32) -> Self {
+        self.style.padding = Padding {
+            horizontal: horizontal.max(0.),
+            vertical: vertical.max(0.),
+        };
         self
     }
     pub fn gap(mut self, v: f32) -> Self {

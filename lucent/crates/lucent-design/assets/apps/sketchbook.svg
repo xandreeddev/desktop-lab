@@ -1,0 +1,4 @@
+<!-- Generated Lucent artwork. MIT. Source: design/app-icons.json -->
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+<rect x="2" y="2" width="44" height="44" rx="12" fill="#ffffff" fill-opacity="0.08"/>
+<g transform="translate(9 9) scale(1.25)" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M2 6h4M2 11h4M2 16h4m5-1 7-7m-7 7 1-4 3 3-4 1Z"/></g></svg>

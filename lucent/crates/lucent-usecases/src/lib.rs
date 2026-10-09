@@ -59,6 +59,20 @@ pub fn activate_application(
     apps.launch(app)
 }
 
+/// Align a released widget to a client-supplied logical spacing grid.
+/// Screen-edge clamping remains the responsibility of `move_widget`.
+pub fn snap_placement(placement: Placement, step: f32) -> Result<Placement> {
+    if !step.is_finite() || step <= 0. || !placement.x.is_finite() || !placement.y.is_finite() {
+        return Err(DomainError::Invalid(
+            "Finite coordinates and a positive grid step are required".into(),
+        ));
+    }
+    Ok(Placement {
+        x: (placement.x / step).round() * step,
+        y: (placement.y / step).round() * step,
+    })
+}
+
 /// Reject invalid coordinates, clamp to the usable output, and retain stable widget IDs.
 pub fn move_widget(
     settings: &mut DesktopSettings,

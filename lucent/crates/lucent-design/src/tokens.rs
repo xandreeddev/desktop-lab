@@ -47,7 +47,7 @@ pub mod radius {
     pub const BUTTON: f32 = 20.0;
     pub const CARD: f32 = 22.0;
     pub const SEARCH: f32 = 25.0;
-    pub const PANEL: f32 = 28.0;
+    pub const PANEL: f32 = 20.0;
     pub const WIDGET: f32 = 30.0;
 }
 pub mod font {
@@ -127,8 +127,9 @@ pub mod web {
 }
 pub mod component {
     pub mod button {
-        pub const PADDING: f32 = 8.0;
         pub const RADIUS: f32 = 20.0;
+        pub const PADDING_INLINE: f32 = 20.0;
+        pub const PADDING_BLOCK: f32 = 8.0;
     }
     pub mod wallpaper {
         pub const ASPECT_RATIO: f32 = 0.62;
@@ -167,11 +168,11 @@ pub mod component {
         pub const ERROR_BOTTOM: f32 = 71.0;
         pub const THEME_HEIGHT: f32 = 84.0;
         pub const THEME_CAPTION_TOP: f32 = 100.0;
+        pub const ROW_PADDING_INLINE: f32 = 16.0;
+        pub const ROW_PADDING_BLOCK: f32 = 8.0;
     }
     pub mod dock_row {
         pub const INDICATOR_HEIGHT: f32 = 2.0;
-        pub const ICON_TOP: f32 = 3.0;
-        pub const ICON_LEFT: f32 = 6.5;
         pub const INDICATOR_WIDTH: f32 = 11.0;
         pub const INDICATOR_LEFT: f32 = 15.0;
         pub const INDICATOR_TOP: f32 = 36.0;
@@ -179,11 +180,10 @@ pub mod component {
         pub const HEIGHT: f32 = 42.0;
     }
     pub mod dock {
-        pub const ROW_TOP: f32 = 6.0;
-        pub const ROW_LEFT: f32 = 10.0;
+        pub const ROW_TOP: f32 = 8.0;
+        pub const ROW_LEFT: f32 = 16.0;
         pub const BOTTOM: f32 = 12.0;
-        pub const CONTENT_INSET: f32 = 18.0;
-        pub const CONTENT_INSETS: f32 = 36.0;
+        pub const CONTENT_INSET: f32 = 20.0;
         pub const MINIMUM_HEIGHT: f32 = 40.0;
         pub const MINIMUM_WIDTH: f32 = 60.0;
     }
@@ -197,12 +197,14 @@ pub mod component {
         pub const WORKSPACE_SIZE: f32 = 24.0;
         pub const TIME_WIDTH: f32 = 50.0;
         pub const DATE_WIDTH: f32 = 78.0;
-        pub const SYSTEM_WIDTH: f32 = 132.0;
+        pub const SYSTEM_WIDTH: f32 = 148.0;
         pub const MEDIA_TEXT_WIDTH: f32 = 135.0;
-        pub const CLOCK_WIDTH: f32 = 198.0;
+        pub const CLOCK_WIDTH: f32 = 218.0;
     }
     pub mod pill {
         pub const HEIGHT: f32 = 32.0;
+        pub const PADDING_INLINE: f32 = 12.0;
+        pub const PADDING_BLOCK: f32 = 4.0;
     }
     pub mod icon_button {
         pub const EXTENT: f32 = 33.0;
@@ -318,6 +320,7 @@ pub mod component {
         pub const WEATHER_TOP: f32 = 400.0;
         pub const MEDIA_TOP: f32 = 495.0;
         pub const SYSTEM_TOP: f32 = 560.0;
+        pub const GRID_STEP: f32 = 16.0;
     }
     pub mod widget_size {
         pub mod calendar {
@@ -355,9 +358,7 @@ pub mod component {
     }
     pub mod panel {
         pub const INITIAL_WIDTH: f32 = 350.0;
-        pub const DOCK_HEIGHT: f32 = 54.0;
-        pub const DOCK_STRIDE: f32 = 49.0;
-        pub const DOCK_INSETS: f32 = 28.0;
+        pub const DOCK_HEIGHT: f32 = 57.0;
         pub const WALLPAPER_WIDTH: f32 = 1248.0;
         pub const LAUNCHER_WIDTH: f32 = 448.0;
         pub const VIEWPORT_INSETS: f32 = 40.0;
@@ -374,14 +375,18 @@ pub mod component {
     }
     pub mod input {
         pub const HEIGHT: f32 = 44.0;
-        pub const INSET: f32 = 8.0;
         pub const CARET_WIDTH: f32 = 1.5;
+        pub const PADDING_INLINE: f32 = 16.0;
+        pub const PADDING_BLOCK: f32 = 8.0;
     }
     pub mod switch {
         pub const WIDTH: f32 = 32.0;
         pub const HEIGHT: f32 = 18.0;
         pub const THUMB: f32 = 14.0;
         pub const INSET: f32 = 2.0;
+    }
+    pub mod window {
+        pub const RADIUS: f32 = 20.0;
     }
 }
 pub mod icon {
@@ -438,4 +443,13 @@ pub mod web_space {
     pub const SECTION_COMPACT: f32 = 80.0;
     pub const SECTION_STANDARD: f32 = 100.0;
     pub const SECTION_LARGE: f32 = 116.0;
+}
+pub mod app_icon {
+    pub const CANVAS: f32 = 48.0;
+    pub const TILE_INSET: f32 = 2.0;
+    pub const TILE_RADIUS: f32 = 12.0;
+    pub const GLYPH_INSET: f32 = 9.0;
+    pub const GLYPH_EXTENT: f32 = 30.0;
+    pub const STROKE: f32 = 1.8;
+    pub const TILE_OPACITY: f32 = 0.08;
 }

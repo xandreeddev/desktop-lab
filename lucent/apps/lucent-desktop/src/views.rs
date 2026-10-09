@@ -48,9 +48,19 @@ impl Desktop {
     }
     pub fn app_icon(&self, app: &App, size: f32) -> Element<Message> {
         self.images
-            .get(&app.icon)
+            .get(&format!("app:{}", app.id.0))
+            .or_else(|| self.images.get(&app.icon))
+            .or_else(|| self.images.get("app:fallback"))
             .cloned()
-            .map(|data| Element::image(data).contain())
+            .map(|data| {
+                let monochrome = data.key.starts_with("lucent-app:");
+                let image = Element::image(data).contain();
+                if monochrome {
+                    image.tint(self.ink())
+                } else {
+                    image
+                }
+            })
             .unwrap_or_else(|| {
                 self.icon("apps", size)
                     .padding(space::XS)
@@ -62,7 +72,10 @@ impl Desktop {
     fn pill(&self, children: Vec<Element<Message>>) -> Element<Message> {
         Element::row(children)
             .gap(space::SM)
-            .padding(space::XS)
+            .padding_xy(
+                component::pill::PADDING_INLINE,
+                component::pill::PADDING_BLOCK,
+            )
             .height(Length::Fixed(component::pill::HEIGHT))
             .align(Align::Center)
             .radius(radius::CONTROL)
@@ -117,7 +130,7 @@ impl Desktop {
         let workspace_count = self.compositor.workspaces.len().min(8) as f32;
         let workspace_width = workspace_count * component::bar::WORKSPACE_SIZE
             + (workspace_count - 1.).max(0.) * space::XXS
-            + space::XS * 2.;
+            + component::pill::PADDING_INLINE * 2.;
         let media_left = component::bar::LEFT + workspace_width + space::MD;
         let title = if self.media.title.is_empty() {
             "Nothing playing".into()
@@ -145,8 +158,9 @@ impl Desktop {
                 font::CONTROL,
             )
             .width(Length::Fixed(component::bar::TIME_WIDTH))
+            .height(Length::Fill)
             .align(Align::Center)
-            .padding(space::XS)
+            .padding_xy(space::SM, space::XXS)
             .radius(radius::CONTROL)
             .background(self.accent())
             .color(self.theme().on_primary);
@@ -232,8 +246,8 @@ impl Desktop {
             children.push(
                 self.launcher_face(
                     cx,
-                    target_width - component::dock::CONTENT_INSETS,
-                    target_height - component::dock::CONTENT_INSETS,
+                    target_width - (2. * component::dock::CONTENT_INSET),
+                    target_height - (2. * component::dock::CONTENT_INSET),
                 )
                 .at(
                     component::dock::CONTENT_INSET,
@@ -275,8 +289,8 @@ impl Desktop {
                         .eq_ignore_ascii_case(app.id.0.trim_end_matches(".desktop"))
             });
             let mut content = vec![self.app_icon(app, icon::APP).at(
-                component::dock_row::ICON_LEFT,
-                component::dock_row::ICON_TOP,
+                (component::dock_row::ITEM_SIZE - icon::APP) / 2.,
+                (component::dock_row::ITEM_SIZE - icon::APP) / 2.,
             )];
             if running {
                 content.push(
@@ -392,7 +406,10 @@ impl Desktop {
                         ])
                         .align(Align::Center)
                         .gap(space::MD)
-                        .padding(space::SM)
+                        .padding_xy(
+                            component::launcher::ROW_PADDING_INLINE,
+                            component::launcher::ROW_PADDING_BLOCK,
+                        )
                         .size(width, component::launcher::ROW_HEIGHT)
                         .radius(radius::CARD)
                         .selected(rank == self.selected)
@@ -439,7 +456,10 @@ impl Desktop {
                 ])
                 .align(Align::Center)
                 .gap(space::SM)
-                .padding(component::input::INSET)
+                .padding_xy(
+                    component::input::PADDING_INLINE,
+                    component::input::PADDING_BLOCK,
+                )
                 .size(width, component::input::HEIGHT)
                 .id("launcher-search-field")
                 .focus_within()
@@ -472,7 +492,10 @@ impl Desktop {
                         ])
                         .align(Align::Center)
                         .gap(space::MD)
-                        .padding(space::SM)
+                        .padding_xy(
+                            component::launcher::ROW_PADDING_INLINE,
+                            component::launcher::ROW_PADDING_BLOCK,
+                        )
                         .size(width, component::launcher::WIDGET_ROW_HEIGHT)
                         .radius(radius::CONTROL)
                         .background(self.surface_color())
@@ -539,8 +562,12 @@ impl Desktop {
                                     self.icon(icon, icon::ACTION),
                                     self.label(label, font::BODY),
                                 ])
+                                .align(Align::Center)
                                 .gap(space::MD)
-                                .padding(space::SM)
+                                .padding_xy(
+                                    component::launcher::ROW_PADDING_INLINE,
+                                    component::launcher::ROW_PADDING_BLOCK,
+                                )
                                 .size(width, component::launcher::COMMAND_HEIGHT)
                                 .radius(radius::CARD)
                                 .background(self.surface_color())

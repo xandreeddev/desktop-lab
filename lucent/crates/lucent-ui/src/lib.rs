@@ -90,12 +90,13 @@ impl Layout {
     }
 
     fn measure<M>(&self, e: &Element<M>, available: (f32, f32)) -> (f32, f32) {
-        let p = e.style.padding * 2.;
+        let px = e.style.padding.horizontal * 2.;
+        let py = e.style.padding.vertical * 2.;
         let gap = e.style.gap;
         let children: Vec<_> = e
             .children
             .iter()
-            .map(|c| self.measure(c, (available.0 - p, available.1 - p)))
+            .map(|c| self.measure(c, ((available.0 - px).max(0.), (available.1 - py).max(0.))))
             .collect();
         let n = children.len();
         let gaps = gap * n.saturating_sub(1) as f32;
@@ -129,7 +130,7 @@ impl Layout {
             Kind::Grid(cols) => {
                 let rows = n.div_ceil(*cols);
                 (
-                    available.0 - p,
+                    available.0 - px,
                     rows as f32 * children.iter().map(|c| c.1).fold(0., f32::max)
                         + gap * rows.saturating_sub(1) as f32,
                 )
@@ -140,14 +141,14 @@ impl Layout {
             ),
             Kind::Empty => (0., 0.),
         };
-        let resolve = |length: Length, intrinsic: f32, max: f32| match length {
+        let resolve = |length: Length, intrinsic: f32, max: f32, padding: f32| match length {
             Length::Fixed(v) => v,
             Length::Fill => max,
-            Length::Shrink => intrinsic + p,
+            Length::Shrink => intrinsic + padding,
         };
         (
-            resolve(e.style.width, content.0, available.0).max(0.),
-            resolve(e.style.height, content.1, available.1).max(0.),
+            resolve(e.style.width, content.0, available.0, px).max(0.),
+            resolve(e.style.height, content.1, available.1, py).max(0.),
         )
     }
     pub fn build<M: Clone>(
@@ -239,7 +240,12 @@ impl Layout {
             });
         }
         let p = e.style.padding;
-        let inner = Rect::new(rect.x + p, rect.y + p, rect.w - 2. * p, rect.h - 2. * p);
+        let inner = Rect::new(
+            rect.x + p.horizontal,
+            rect.y + p.vertical,
+            (rect.w - 2. * p.horizontal).max(0.),
+            (rect.h - 2. * p.vertical).max(0.),
+        );
         let mut fg = e.style.foreground;
         fg.3 *= alpha;
         match &e.kind {

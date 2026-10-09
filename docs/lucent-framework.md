@@ -55,8 +55,9 @@ including optical dimensions such as `component::launcher::ROW_HEIGHT`.
 `surface_container`, `on_surface`, `error`, `success`, `warning`, `info` and `focus`.
 `Theme::button` composes a basic recipe, and `Theme::apply` supplies shared hover
 color/timing, focus outlines and shadow recipes throughout a tree. Monochrome images use
-`Element::tint` and `Element::contain`; application logos retain their original colors and aspect ratio. Contrast tests
-cover the normal text, primary-action and error pairs in both themes.
+`Element::tint` and `Element::contain`. Lucent's app artwork follows the same
+semantic foreground; externally supplied XDG icons retain their original colors.
+Contrast tests cover normal text, primary-action and error pairs in both themes.
 
 The generic framework supplies neutral style defaults and unstyled buttons.
 Clients may use a different design system without importing `lucent-design`.
@@ -219,7 +220,7 @@ box preserves aspect ratio; 256 px sources and mip filtering support 1× and 2×
 `visual_tests.rs` exercises the actual client through the same `Layout`, `Paint`
 and Vulkan `Canvas` used by Wayland presentation. `Gpu::headless` removes the
 compositor requirement, not the renderer. Fixed application data, bundled fonts,
-viewport and animation times make the fixtures repeatable. Forty PNG baselines
+viewport and animation times make the fixtures repeatable. Forty-eight PNG baselines
 cover dark/light, 1×/2×, all five sections, a narrow launcher, scrolling, empty
 results, long input and an opening frame. Geometry and keyboard tests separately
 assert behavior so accepting an image cannot hide a clipped row.
@@ -247,3 +248,35 @@ For intentional design changes, run `python3 vm/test-visual.py --update` (or set
 baseline and the geometry tests, then commit the PNGs. Never update baselines just
 to silence a failure. The design-system website shows representative native
 captures, while its interactive browser examples remain illustrations.
+
+## Rounded spacing, app icons and spatial alignment
+
+`Padding { horizontal, vertical }` keeps content insets independent per axis.
+`padding(v)` remains shorthand for equal insets; `padding_xy(x, y)` supports
+capsules with generous ends and compact height. Measurement, placement and fill
+constraints share those insets. The outer background and hit rectangle do not
+shrink. The Lucent recipes use 20×8 for text buttons, 16×8 for launcher rows and
+search, and 12×4 for bar capsules. Command icons and text use `Align::Center`.
+
+`design/app-icons.json` owns 58 original MIT-licensed pictograms and exact desktop
+ID aliases. `scripts/generate-app-icons.py` combines their vector artwork with
+`app_icon.*` geometry/opacity tokens, emitting SVGs and a typed `AppIcon` catalog in
+`lucent-design`. White alpha artwork receives the semantic foreground tint at
+paint time, including its subtle tile, so theme changes require no rasterization.
+Desktop effects rasterize the selected asset once; launcher and dock views
+reference the same cached image by app ID. Unknown IDs use XDG icons,
+then the generic Lucent tile. Display names and arbitrary substring matching do
+not select icons. Shell controls still use the separately licensed Material set.
+
+Widget drag messages retain continuous coordinates until release. The release
+use case snaps to `component.widget_layout.grid_step`, an alias of `space.lg`
+(16 logical pixels), then clamps to the usable output. Saved and default anchors
+use the grid; existing saved placements are retained until moved. Widgets keep
+their own dimensions and do not avoid overlaps automatically.
+
+`component.window.radius` references `radius.panel` (20 logical pixels). The token
+generator also writes `configs/lucent/window-rules.lua`. Activation places that
+terminal-class rule in a backed-up, managed block in user `looknfeel.lua`; rollback
+removes only the block. Hyprland owns ordinary terminal corners. Re-run the token
+generator and activation after changing this token. No packaged Omarchy file is
+modified; fullscreen/no-gap compositor policies may still override decorations.

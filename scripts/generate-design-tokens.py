@@ -91,6 +91,13 @@ def outputs(tree):
     return {
         ROOT / 'lucent/crates/lucent-design/src/tokens.rs': rust_text,
         ROOT / 'site/src/styles/tokens.css': '\n'.join(css) + '\n',
+        ROOT / 'configs/lucent/window-rules.lua': (
+            '-- Generated from component.window.radius in design/tokens.json.\n'
+            'hl.window_rule({\n'
+            '  match = { class = "^(foot|footclient|org[.]codeberg[.]dnkl[.]foot|org[.]omarchy[.](terminal|bash))$" },\n'
+            f'  rounding = {values["component.window.radius"]:g},\n'
+            '})\n'
+        ),
     }
 
 

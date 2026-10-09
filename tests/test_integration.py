@@ -115,3 +115,28 @@ class LucentIntegrationTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 module.edit(config, 'replacement\n')
             self.assertEqual(config.read_text(), original)
+
+
+    def test_terminal_rule_activation_and_rollback_preserve_user_appearance(self):
+        spec = importlib.util.spec_from_file_location('lucent_setup_corners', ROOT / 'scripts/lucent-setup.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as directory:
+            module.HOME = Path(directory)
+            module.BACKUP = module.HOME / 'backup'
+            path = module.HOME / '.config/hypr/looknfeel.lua'
+            path.parent.mkdir(parents=True)
+            original = '-- User appearance\nhl.config({general={gaps_in=6}})\n'
+            path.write_text(original)
+            with patch.object(module, 'run'), patch.object(module.subprocess, 'run'):
+                module.activate()
+                once = path.read_text()
+                module.activate()
+                self.assertEqual(path.read_text(), once)
+                self.assertIn('rounding = 20', once)
+                self.assertEqual((module.BACKUP/'looknfeel.lua').read_text(), original)
+                path.write_text(once+'-- Later user setting\n')
+                module.rollback()
+            self.assertIn(original.strip(), path.read_text())
+            self.assertIn('-- Later user setting', path.read_text())
+            self.assertNotIn('hl.window_rule', path.read_text())

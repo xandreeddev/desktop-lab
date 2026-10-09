@@ -71,7 +71,7 @@ def activate():
     # A running, renderable client is required before changing login integration.
     run(str(HOME / '.local/bin/lucent-cli'), 'inspect')
     BACKUP.mkdir(parents=True, exist_ok=True)
-    for name in ('bindings.lua', 'autostart.lua'):
+    for name in ('bindings.lua', 'autostart.lua', 'looknfeel.lua'):
         source = HOME / '.config/hypr' / name
         target = BACKUP / name
         if not target.exists() and source.exists():
@@ -81,6 +81,7 @@ o.bind("SUPER + SPACE", "Lucent launcher", os.getenv("HOME") .. "/.local/bin/luc
 hl.unbind("SUPER + CTRL + SPACE")
 o.bind("SUPER + CTRL + SPACE", "Lucent wallpapers", os.getenv("HOME") .. "/.local/bin/lucent-cli wallpapers open")
 ''')
+    edit(HOME / '.config/hypr/looknfeel.lua', (ROOT / 'configs/lucent/window-rules.lua').read_text())
     edit(HOME / '.config/hypr/autostart.lua', 'o.launch_on_start("systemctl --user start lucent.service")\n')
     run('hyprctl', 'reload')
     print('Lucent login integration active. Super+Space opens apps; Super+Ctrl+Space opens wallpapers.')
@@ -90,6 +91,7 @@ def rollback():
     # Remove only our blocks, preserving subsequent user edits.
     edit(HOME / '.config/hypr/bindings.lua')
     edit(HOME / '.config/hypr/autostart.lua')
+    edit(HOME / '.config/hypr/looknfeel.lua')
     subprocess.run(['systemctl', '--user', 'stop', 'lucent.service'], check=False)
     run('hyprctl', 'reload')
     print('Restored stock bar and startup. Lucent settings and binaries retained.')

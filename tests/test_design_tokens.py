@@ -29,7 +29,7 @@ class DesignTokens(unittest.TestCase):
         for name in ['views.rs', 'widgets.rs']:
             source = (ROOT / 'lucent/apps/lucent-desktop/src' / name).read_text()
             self.assertNotRegex(source, r'Color::hex|#[0-9a-fA-F]{6}\b')
-            self.assertNotRegex(source, r'\.(?:font|padding|gap|radius)\(\d')
+            self.assertNotRegex(source, r'\.(?:font|padding(?:_xy)?|gap|radius)\(\d')
             self.assertNotRegex(source, r'\.size\(\d+[.]')
 
 

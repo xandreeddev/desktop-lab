@@ -46,7 +46,20 @@ fn fixture(count: usize, light: bool) -> Desktop {
     ];
     app.apps = (0..count)
         .map(|n| App {
-            id: AppId(format!("fixture-{n}.desktop")),
+            id: AppId(
+                [
+                    "foot.desktop",
+                    "org.gnome.Nautilus.desktop",
+                    "cliamp.desktop",
+                    "fcitx5-configtool.desktop",
+                    "Google Contacts.desktop",
+                    "chromium.desktop",
+                    "libreoffice-writer.desktop",
+                    "omacalc.desktop",
+                    "unmapped-fixture.desktop",
+                ][n % 9]
+                    .into(),
+            ),
             name: names[n % names.len()].into(),
             description: String::new(),
             keywords: vec![],
@@ -64,6 +77,15 @@ fn fixture(count: usize, light: bool) -> Desktop {
             },
         })
         .collect();
+    for a in &app.apps {
+        if let Some(asset) = lucent_design::app_icons::lookup(&a.id.0) {
+            app.images.insert(
+                format!("app:{}", a.id.0),
+                lucent_services::images::svg(asset.svg, 128, format!("lucent-app:{}", asset.id))
+                    .unwrap(),
+            );
+        }
+    }
     app.results = (0..count).collect();
     app.update(Message::Mode(Mode::Apps), &mut Effects::default());
     app
@@ -240,6 +262,159 @@ fn framework_buttons_support_keyboard_focus_and_activation_without_hover() {
             .any(|p| matches!(p, Paint::Outline{rect, ..} if rect.x == 0.))
     );
 }
+#[test]
+fn command_rows_center_icons_and_labels_inside_rounded_endcaps() {
+    let mut app = fixture(9, false);
+    app.update(Message::Mode(Mode::Commands), &mut Effects::default());
+    let layout = Layout::new(fonts(&app));
+    let command_scene = scene(&app, &layout, &mut Interaction::default(), 1.);
+    let rows: Vec<_> = command_scene
+        .hits
+        .iter()
+        .filter(|h| h.id.starts_with("command-"))
+        .collect();
+    assert_eq!(rows.len(), 6);
+    for row in rows {
+        let center = row.rect.y + row.rect.h / 2.;
+        let paints: Vec<_> = command_scene
+            .paint
+            .iter()
+            .filter_map(|p| match p {
+                Paint::Image { rect, .. } | Paint::Text { rect, .. }
+                    if rect.y >= row.rect.y && rect.y + rect.h <= row.rect.y + row.rect.h =>
+                {
+                    Some(rect)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(paints.len(), 2);
+        for rect in paints {
+            assert!(
+                (rect.y + rect.h / 2. - center).abs() < 0.01,
+                "command contents share a vertical center"
+            );
+            assert!(rect.x - row.rect.x >= 16., "content clears curved endcap");
+            assert!(fully_visible(*rect, row.clip));
+        }
+    }
+    app.update(Message::CloseLauncher, &mut Effects::default());
+    let dock = scene(&app, &layout, &mut Interaction::default(), 1.);
+    let panel = dock.hits.iter().find(|h| h.id == "dock-panel").unwrap();
+    let slots: Vec<_> = dock
+        .hits
+        .iter()
+        .filter(|h| h.id.starts_with("dock-") && h.id != "dock-panel")
+        .collect();
+    let first = slots.first().unwrap();
+    let last = slots.last().unwrap();
+    assert_eq!(first.rect.x - panel.rect.x, 16.);
+    assert_eq!(panel.rect.x + panel.rect.w - last.rect.x - last.rect.w, 16.);
+    assert_eq!(first.rect.y - panel.rect.y, 8.);
+    assert_eq!(
+        panel.rect.y + panel.rect.h - first.rect.y - first.rect.h,
+        8.
+    );
+}
+
+#[test]
+fn axis_padding_preserves_intrinsic_size_fill_and_hit_bounds() {
+    let app = fixture(0, false);
+    let layout = Layout::new(fonts(&app));
+    let child = Element::empty().size(20., 10.).on_click(1).id("child");
+    let box_ = Element::row(vec![child])
+        .padding_xy(18., 6.)
+        .on_click(2)
+        .id("box");
+    let root = Element::stack(vec![box_]).fill();
+    let scene = layout.build(&root, 200., 100., &Interaction::default(), 0.);
+    let outer = scene.hits.iter().find(|h| h.id == "box").unwrap();
+    let inner = scene.hits.iter().find(|h| h.id == "child").unwrap();
+    assert_eq!((outer.rect.w, outer.rect.h), (56., 22.));
+    assert_eq!((inner.rect.x, inner.rect.y), (18., 6.));
+    assert!(outer.contains(1., 1.));
+    let root = Element::row(vec![Element::empty().fill().on_click(1)])
+        .padding_xy(18., 6.)
+        .fill();
+    let scene = layout.build(&root, 200., 100., &Interaction::default(), 0.);
+    assert_eq!((scene.hits[0].rect.w, scene.hits[0].rect.h), (164., 88.));
+}
+#[test]
+fn widget_drag_is_continuous_until_release_then_snaps_and_clamps() {
+    use lucent_domain::Placement;
+    let mut app = fixture(0, false);
+    app.viewport = (640., 580.);
+    app.settings
+        .positions
+        .insert("calendar".into(), Placement { x: 20., y: 110. });
+    let send = |app: &mut Desktop, finished| {
+        app.update(
+            Message::MoveWidget(
+                "calendar".into(),
+                DragEvent {
+                    dx: 181.,
+                    dy: 73.,
+                    finished,
+                },
+            ),
+            &mut Effects::default(),
+        )
+    };
+    send(&mut app, false);
+    assert_eq!(
+        app.settings.positions["calendar"],
+        Placement { x: 201., y: 183. }
+    );
+    send(&mut app, true);
+    assert_eq!(
+        app.settings.positions["calendar"],
+        Placement { x: 208., y: 176. }
+    );
+    assert!(app.drag_origins.is_empty());
+    app.update(
+        Message::MoveWidget(
+            "calendar".into(),
+            DragEvent {
+                dx: 9999.,
+                dy: 9999.,
+                finished: true,
+            },
+        ),
+        &mut Effects::default(),
+    );
+    assert_eq!(
+        app.settings.positions["calendar"],
+        Placement { x: 370., y: 304. }
+    );
+    assert!(lucent_usecases::snap_placement(Placement { x: 0., y: 0. }, 0.).is_err());
+}
+#[test]
+fn catalog_uses_desktop_identity_and_every_icon_rasterizes() {
+    use lucent_design::app_icons::{ALL, lookup};
+    assert_eq!(lookup("foot.desktop").unwrap().id, "terminal");
+    assert_eq!(lookup("foot-server.desktop").unwrap().id, "terminal-server");
+    assert!(lookup("my-foot-wrapper.desktop").is_none());
+    assert!(lookup("Foot").is_none());
+    let mut pixels = std::collections::BTreeSet::new();
+    for asset in ALL {
+        let image = lucent_services::images::svg(asset.svg, 64, asset.id.into()).unwrap();
+        assert!(image.rgba.as_chunks::<4>().0.iter().any(|p| p[3] > 0));
+        assert!(
+            image
+                .rgba
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|p| p[0] == p[1] && p[1] == p[2]),
+            "artwork remains monochrome before theme tinting"
+        );
+        assert!(
+            pixels.insert(image.rgba.clone()),
+            "each app pictogram is distinct"
+        );
+    }
+}
+
 fn changed_pixels(expected: &[u8], actual: &[u8]) -> usize {
     expected
         .as_chunks::<4>()
@@ -329,6 +504,8 @@ fn visual_regressions() {
             ("themes", Mode::Themes, 9, 1, "", 1., 640.),
             ("widgets", Mode::Widgets, 9, 6, "", 1., 640.),
             ("wallpapers-empty", Mode::Wallpapers, 9, 0, "", 1., 640.),
+            ("icon-catalog", Mode::Apps, 9, 0, "", 1., 640.),
+            ("bar", Mode::Apps, 9, 0, "", 1., 1280.),
         ] {
             let mut app = fixture(count, light);
             app.update(
@@ -338,7 +515,45 @@ fn visual_regressions() {
             app.update(Message::Mode(mode), &mut Effects::default());
             app.update(Message::Select(selected), &mut Effects::default());
             app.query = query.into();
-            let scene = scene(&app, &layout, &mut Interaction::default(), now);
+            let scene = if name == "icon-catalog" {
+                let icons = lucent_design::app_icons::ALL
+                    .iter()
+                    .map(|asset| {
+                        let image = lucent_services::images::svg(
+                            asset.svg,
+                            128,
+                            format!("catalog:{}", asset.id),
+                        )
+                        .unwrap();
+                        Element::<Message>::column(vec![
+                            Element::image(image).tint(app.ink()).size(40., 40.),
+                            app.label(asset.id, 9.).size(76., 16.).align(Align::Center),
+                        ])
+                        .gap(4.)
+                        .align(Align::Center)
+                    })
+                    .collect();
+                let root = Element::grid(8, icons).gap(8.).padding(12.).fill();
+                layout.build(&root, width, 580., &Interaction::default(), now)
+            } else if name == "bar" {
+                app.compositor.workspaces = (1..=6)
+                    .map(|id| lucent_domain::Workspace {
+                        id,
+                        name: id.to_string(),
+                        windows: 0,
+                        active: id == 1,
+                    })
+                    .collect();
+                let cx = ViewContext {
+                    surface: "bar",
+                    width,
+                    height: 580.,
+                    now,
+                };
+                layout.build(&app.view(&cx), width, 580., &Interaction::default(), now)
+            } else {
+                scene(&app, &layout, &mut Interaction::default(), now)
+            };
             let mut paint = vec![Paint::Shape {
                 rect: Rect::new(0., 0., width, 580.),
                 clip: Rect::new(0., 0., width, 580.),
