@@ -1,0 +1,23 @@
+---
+import { Image } from 'astro:assets';
+import desktop from '../../../reports/screenshots/lucent-framework-desktop.png';
+import launcher from '../../../reports/screenshots/lucent-framework-launcher.png';
+import wallpapers from '../../../reports/screenshots/lucent-framework-wallpapers.png';
+const shots = [
+  { id: 'desktop', title: 'The desktop', key: '01', image: desktop, alt: 'Lucent desktop with floating top-bar capsules, calendar, weather, clock, media widget and centered dock.', caption: 'A floating bar, seven available widgets, and a dock. All built with the same Rust framework.', action: 'Drag a widget background to move it. Release to save.' },
+  { id: 'launcher', title: 'The launcher', key: '02', image: launcher, alt: 'Lucent’s application launcher expanded above the dock, showing installed applications and a search field.', caption: 'The dock opens into a keyboard-first launcher. Real app discovery, fuzzy search, and launch-or-focus behavior.', action: 'Super + Space → type → Enter. Escape closes.' },
+  { id: 'wallpapers', title: 'The selector', key: '03', image: wallpapers, alt: 'Lucent’s wallpaper carousel with five image previews and an Apply wallpaper button.', caption: 'A five-card carousel keeps the selected wallpaper front and center. Applying it updates the actual Omarchy background.', action: 'Super + Ctrl + Space → arrows → Enter.' },
+];
+---
+<div class="gallery" data-tabs>
+  <div class="gallery-toolbar">
+    <div class="tab-list" role="tablist" aria-label="Explore Lucent">
+      {shots.map((shot, i) => <button type="button" id={`tab-${shot.id}`} role="tab" aria-selected={i === 0} aria-controls={`panel-${shot.id}`} tabindex={i === 0 ? 0 : -1}><span>{shot.key}</span>{shot.title}</button>)}
+    </div>
+    <span class="capture-label"><span class="status-dot"></span>REAL VM CAPTURES</span>
+  </div>
+  {shots.map((shot, i) => <div class="gallery-panel" id={`panel-${shot.id}`} role="tabpanel" aria-labelledby={`tab-${shot.id}`} tabindex="0" hidden={i !== 0}>
+    <div class="screen-frame"><Image src={shot.image} alt={shot.alt} widths={[640, 960, 1440, 1920]} sizes="(max-width: 760px) 94vw, 90vw" format="webp" quality={85} loading={i === 0 ? 'eager' : 'lazy'} fetchpriority={i === 0 ? 'high' : 'auto'} /></div>
+    <div class="gallery-caption"><p>{shot.caption}</p><span>{shot.action}</span></div>
+  </div>)}
+</div>

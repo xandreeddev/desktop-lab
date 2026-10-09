@@ -42,7 +42,7 @@ impl Rect {
 pub struct Color(pub f32, pub f32, pub f32, pub f32);
 impl Color {
     pub const TRANSPARENT: Self = Self(0., 0., 0., 0.);
-    pub fn hex(rgb: u32) -> Self {
+    pub const fn hex(rgb: u32) -> Self {
         Self(
             ((rgb >> 16) & 255) as f32 / 255.,
             ((rgb >> 8) & 255) as f32 / 255.,
@@ -76,6 +76,20 @@ pub enum Align {
     Center,
     End,
 }
+/// Client-defined timing for an interaction transition.
+#[derive(Clone, Copy, Debug)]
+pub struct Transition {
+    pub duration: f64,
+    pub curve: [f32; 4],
+}
+impl Default for Transition {
+    fn default() -> Self {
+        Self {
+            duration: 0.15,
+            curve: [0.2, 0., 0., 1.],
+        }
+    }
+}
 #[derive(Clone, Debug)]
 pub struct Style {
     pub width: Length,
@@ -92,6 +106,13 @@ pub struct Style {
     pub opacity: f32,
     pub clip: bool,
     pub shadow: bool,
+    pub shadow_color: Color,
+    pub shadow_offset: f32,
+    /// Tint and strength of the hover state layer; transparent disables it.
+    pub hover_color: Color,
+    pub hover_transition: Transition,
+    /// Multiplicative image tint; white preserves original image colors.
+    pub image_tint: Color,
 }
 impl Default for Style {
     fn default() -> Self {
@@ -102,7 +123,7 @@ impl Default for Style {
             gap: 0.,
             position: None,
             background: Color::TRANSPARENT,
-            foreground: Color::hex(0xc2e8f5),
+            foreground: Color::hex(0xffffff),
             radius: 0.,
             font_size: 14.,
             font_face: 0,
@@ -110,6 +131,11 @@ impl Default for Style {
             opacity: 1.,
             clip: false,
             shadow: false,
+            shadow_color: Color(0., 0., 0., 0.2),
+            shadow_offset: 4.,
+            hover_color: Color::TRANSPARENT,
+            hover_transition: Transition::default(),
+            image_tint: Color::hex(0xffffff),
         }
     }
 }
@@ -195,7 +221,7 @@ impl<M> Element<M> {
         Self::new(Kind::Empty)
     }
     pub fn button(label: impl Into<String>, message: M) -> Self {
-        Self::text(label).on_click(message).padding(10.).radius(20.)
+        Self::text(label).on_click(message)
     }
     pub fn input(
         value: impl Into<String>,
@@ -241,6 +267,10 @@ impl<M> Element<M> {
     }
     pub fn background(mut self, v: Color) -> Self {
         self.style.background = v;
+        self
+    }
+    pub fn tint(mut self, v: Color) -> Self {
+        self.style.image_tint = v;
         self
     }
     pub fn color(mut self, v: Color) -> Self {

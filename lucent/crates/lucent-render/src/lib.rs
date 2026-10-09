@@ -1,15 +1,17 @@
 //! Shared Vulkan device and cached text/image resources for arbitrary framework scenes.
-use lucent_api::{Align, Color, Rect};
+use lucent_api::{Align, Rect};
 use lucent_ui::Paint;
 use std::{cell::RefCell, collections::HashMap, ffi::c_void, ptr::NonNull, rc::Rc, sync::Arc};
 pub use wgpu::rwh as display_handle;
 use wgpu::{rwh::*, *};
+mod raster;
 pub type Error = Box<dyn std::error::Error>;
 struct TextureResource {
     group: BindGroup,
     width: f32,
     height: f32,
     _texture: Texture,
+    bytes: u64,
 }
 /// One GPU device is shared by all native surfaces in an application.
 pub struct Gpu {
@@ -78,6 +80,7 @@ impl Gpu {
         let sampler = device.create_sampler(&SamplerDescriptor {
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
+            mipmap_filter: MipmapFilterMode::Linear,
             ..Default::default()
         });
         let module = device.create_shader_module(include_wgsl!("present.wgsl"));
@@ -131,7 +134,7 @@ impl Gpu {
             adapter_description,
         }))
     }
-    fn texture(&self, bytes: &[u8], width: u32, height: u32) -> Rc<TextureResource> {
+    fn texture(&self, bytes: &[u8], width: u32, height: u32, mipmaps: bool) -> Rc<TextureResource> {
         let size = Extent3d {
             width: width.max(1),
             height: height.max(1),
@@ -140,7 +143,11 @@ impl Gpu {
         let texture = self.device.create_texture(&TextureDescriptor {
             label: Some("cached framework texture"),
             size,
-            mip_level_count: 1,
+            mip_level_count: if mipmaps {
+                width.max(height).ilog2() + 1
+            } else {
+                1
+            },
             sample_count: 1,
             dimension: TextureDimension::D2,
             format: TextureFormat::Rgba8Unorm,
@@ -162,6 +169,33 @@ impl Gpu {
             },
             size,
         );
+        if mipmaps {
+            let (mut pixels, mut w, mut h) = (bytes.to_vec(), width, height);
+            let mut level = 1;
+            while w > 1 || h > 1 {
+                (pixels, w, h) = raster::reduce(&pixels, w, h);
+                self.queue.write_texture(
+                    TexelCopyTextureInfo {
+                        texture: &texture,
+                        mip_level: level,
+                        origin: Origin3d::ZERO,
+                        aspect: TextureAspect::All,
+                    },
+                    &pixels,
+                    TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(w * 4),
+                        rows_per_image: Some(h),
+                    },
+                    Extent3d {
+                        width: w,
+                        height: h,
+                        depth_or_array_layers: 1,
+                    },
+                );
+                level += 1;
+            }
+        }
         let view = texture.create_view(&Default::default());
         let group = self.device.create_bind_group(&BindGroupDescriptor {
             label: None,
@@ -182,13 +216,14 @@ impl Gpu {
             width: width as f32,
             height: height as f32,
             _texture: texture,
+            bytes: u64::from(width) * u64::from(height) * 4 * if mipmaps { 4 } else { 3 } / 3,
         })
     }
     fn white(&self) -> Rc<TextureResource> {
         if let Some(v) = self.white.borrow().as_ref() {
             return v.clone();
         }
-        let v = self.texture(&[255, 255, 255, 255], 1, 1);
+        let v = self.texture(&[255, 255, 255, 255], 1, 1, false);
         *self.white.borrow_mut() = Some(v.clone());
         v
     }
@@ -203,63 +238,18 @@ impl Gpu {
                 p[c] = (u16::from(p[c]) * u16::from(p[3]) / 255) as u8;
             }
         }
-        let texture = self.texture(&bytes, data.width, data.height);
+        let texture = self.texture(&bytes, data.width, data.height, true);
         self.cache.borrow_mut().insert(key, texture.clone());
         texture
     }
     fn text(&self, text: &str, size: f32, scale: u32, face: usize) -> Rc<TextureResource> {
-        let pixel_size = (size * scale as f32).max(1.);
-        let key = format!("text:{face}:{pixel_size:.2}:{text}");
+        let key = format!("text:{face}:{size:.3}:{scale}:{text}");
         let font = self.fonts.get(face).unwrap_or(&self.fonts[0]);
         if let Some(v) = self.cache.borrow().get(&key) {
             return v.clone();
         }
-        let line_height = (pixel_size * 1.3).ceil();
-        let lines: Vec<_> = text.lines().collect();
-        let width = lines
-            .iter()
-            .map(|line| {
-                line.chars()
-                    .map(|c| font.metrics(c, pixel_size).advance_width)
-                    .sum::<f32>()
-            })
-            .fold(0., f32::max)
-            .ceil()
-            .clamp(1., 8192.) as u32
-            + 2;
-        let height = (line_height * lines.len().max(1) as f32)
-            .ceil()
-            .clamp(1., 2048.) as u32;
-        let mut pixels = vec![0u8; (width * height * 4) as usize];
-        for (line_index, line) in lines.iter().enumerate() {
-            let mut x = 0.;
-            for c in line.chars() {
-                let (m, bitmap) = font.rasterize(c, pixel_size);
-                let top =
-                    line_index as f32 * line_height + pixel_size - m.height as f32 - m.ymin as f32;
-                for row in 0..m.height {
-                    for col in 0..m.width {
-                        let px = x as i32 + m.xmin + col as i32;
-                        let py = top as i32 + row as i32;
-                        if px >= 0 && py >= 0 && px < width as i32 && py < height as i32 {
-                            let a = bitmap[row * m.width + col];
-                            let i = ((py as u32 * width + px as u32) * 4) as usize;
-                            for channel in 0..4 {
-                                pixels[i + channel] = a.saturating_add(
-                                    (u16::from(pixels[i + channel]) * (255 - u16::from(a)) / 255)
-                                        as u8,
-                                );
-                            }
-                        }
-                    }
-                }
-                x += m.advance_width;
-                if x > width as f32 {
-                    break;
-                }
-            }
-        }
-        let texture = self.texture(&pixels, width, height);
+        let (pixels, width, height) = raster::text(font, text, size, scale);
+        let texture = self.texture(&pixels, width, height, false);
         self.cache.borrow_mut().insert(key, texture.clone());
         texture
     }
@@ -389,10 +379,11 @@ impl Renderer {
                     data,
                     radius,
                     opacity,
+                    tint,
                 } => (
                     *rect,
                     *clip,
-                    Color(1., 1., 1., *opacity),
+                    tint.alpha(tint.3 * *opacity),
                     *radius,
                     1.,
                     self.gpu.image(data),
@@ -420,7 +411,13 @@ impl Renderer {
                         }
                         .max(0.);
                     (
-                        Rect::new(x, rect.y + (rect.h - h).max(0.) / 2., w, h),
+                        Rect::new(
+                            (x * scale as f32).round() / scale as f32,
+                            ((rect.y + (rect.h - h).max(0.) / 2.) * scale as f32).round()
+                                / scale as f32,
+                            w,
+                            h,
+                        ),
                         *clip,
                         *color,
                         0.,
@@ -491,7 +488,11 @@ impl Renderer {
         self.gpu.queue.present(frame);
         self.frames += 1;
         // Bound resources from old search strings without invalidating in-flight draws.
-        if self.gpu.cache.borrow().len() > 1024 {
+        let cache = self.gpu.cache.borrow();
+        let over_budget =
+            cache.len() > 1024 || cache.values().map(|t| t.bytes).sum::<u64>() > 64 * 1024 * 1024;
+        drop(cache);
+        if over_budget {
             self.gpu
                 .cache
                 .borrow_mut()

@@ -10,3 +10,4 @@ lucent-domain = { path = "../../crates/lucent-domain" }
 lucent-usecases = { path = "../../crates/lucent-usecases" }
 lucent-services = { path = "../../crates/lucent-services" }
 serde_json = "1"
+lucent-design = { path = "../../crates/lucent-design" }

@@ -1,4 +1,8 @@
 use lucent_api::{self as api, *};
+use lucent_design::{
+    component::{launcher, panel},
+    motion,
+};
 use lucent_domain::{self as domain, *};
 use lucent_services::{
     self as services, JsonSettings, applications::XdgApplications, compositor::Hyprland,
@@ -74,8 +78,8 @@ pub enum Message {
     Completed(domain::Result<()>),
     Quit,
 }
-pub const SPATIAL: [f32; 4] = [0.38, 1.21, 0.22, 1.];
-pub const DECEL: [f32; 4] = [0.05, 0.7, 0.1, 1.];
+pub const SPATIAL: [f32; 4] = motion::SPATIAL;
+pub const DECEL: [f32; 4] = motion::DECELERATE;
 pub const WIDGETS: [(&str, &str, &str); 7] = [
     ("calendar", "Calendar", "Your month at a glance"),
     ("clock", "Clock", "Large, stacked time"),
@@ -146,7 +150,7 @@ impl Desktop {
         ] {
             images.insert(
                 format!("symbol:{name}"),
-                services::images::symbol(name, "#a8ecf6"),
+                services::images::symbol(name, "#ffffff"),
             );
         }
         Self {
@@ -170,8 +174,8 @@ impl Desktop {
             selected: 0,
             scroll: 0,
             reveal: Motion::fixed(0.),
-            panel_width: Motion::fixed(350.),
-            panel_height: Motion::fixed(54.),
+            panel_width: Motion::fixed(panel::INITIAL_WIDTH),
+            panel_height: Motion::fixed(panel::DOCK_HEIGHT),
             selection: Motion::fixed(0.),
             carousel: Motion::fixed(0.),
             viewport: (1920., 1080.),
@@ -233,35 +237,42 @@ impl Desktop {
         apps
     }
     pub fn dock_width(&self) -> f32 {
-        (self.dock_apps().len() as f32 + 1.) * 49. + 28.
+        (self.dock_apps().len() as f32 + 1.) * panel::DOCK_STRIDE + panel::DOCK_INSETS
     }
-    fn update_geometry(&mut self, now: f64) {
+    fn retarget_panel_transition(&mut self, now: f64) {
         let width = if self.launcher {
             if self.mode == Mode::Wallpapers {
-                1248_f32.min(self.viewport.0 - 40.)
+                panel::WALLPAPER_WIDTH.min(self.viewport.0 - panel::VIEWPORT_INSETS)
             } else {
-                448_f32.min(self.viewport.0 - 40.)
+                panel::LAUNCHER_WIDTH.min(self.viewport.0 - panel::VIEWPORT_INSETS)
             }
         } else {
             self.dock_width()
         };
         let height = if self.launcher {
             match self.mode {
-                Mode::Wallpapers => 380.,
-                Mode::Apps => (self.results.len().min(7) as f32 * 45. + 126.).clamp(218., 500.),
-                Mode::Widgets => 506.,
-                Mode::Commands => 440.,
-                Mode::Themes => 272.,
+                Mode::Wallpapers => panel::WALLPAPER_HEIGHT,
+                Mode::Apps => (self.results.len().min(7) as f32 * launcher::ROW_HEIGHT
+                    + panel::LAUNCHER_CHROME)
+                    .clamp(panel::LAUNCHER_MIN_HEIGHT, panel::LAUNCHER_MAX_HEIGHT),
+                Mode::Widgets => panel::WIDGETS_HEIGHT,
+                Mode::Commands => panel::COMMANDS_HEIGHT,
+                Mode::Themes => panel::THEMES_HEIGHT,
             }
         } else {
-            54.
+            panel::DOCK_HEIGHT
         };
-        self.panel_width.target(width, now, 0.5, SPATIAL);
-        self.panel_height.target(height, now, 0.5, SPATIAL);
+        self.panel_width.target(width, now, motion::PANEL, SPATIAL);
+        self.panel_height
+            .target(height, now, motion::PANEL, SPATIAL);
         self.reveal.target(
             if self.launcher { 1. } else { 0. },
             now,
-            if self.launcher { 0.32 } else { 0.19 },
+            if self.launcher {
+                motion::ENTER
+            } else {
+                motion::EXIT
+            },
             DECEL,
         );
     }
@@ -274,9 +285,9 @@ impl Desktop {
             self.scroll = self.selected - 6;
         }
         self.selection.target(
-            (self.selected - self.scroll) as f32 * 45.,
+            (self.selected - self.scroll) as f32 * launcher::ROW_HEIGHT,
             now,
-            0.35,
+            motion::SELECTION,
             SPATIAL,
         );
     }
@@ -337,12 +348,12 @@ impl Desktop {
 impl Component for Desktop {
     type Message = Message;
     fn view(&self, cx: &ViewContext) -> Element<Message> {
-        match cx.surface {
+        self.theme().apply(match cx.surface {
             "bar" => self.bar(cx),
             "widgets" => self.widgets(cx),
             "dock" => self.dock(cx),
             _ => Element::empty(),
-        }
+        })
     }
     fn update(&mut self, message: Message, effects: &mut Effects<Message>) {
         let now = effects.now;
@@ -378,15 +389,16 @@ impl Component for Desktop {
                         }
                     }
                     for wall in walls.iter().take(64) {
-                        if let Some(image) =
-                            services::images::load(std::path::Path::new(&wall.path), 512)
-                        {
+                        if let Some(image) = services::images::load(
+                            std::path::Path::new(&wall.path),
+                            services::images::PREVIEW_PIXELS,
+                        ) {
                             images.push((wall.path.clone(), image));
                         }
                     }
                     Message::Images(images)
                 });
-                self.update_geometry(now);
+                self.retarget_panel_transition(now);
                 for id in ["bar", "widgets", "dock"] {
                     effects.redraw(id);
                 }
@@ -400,7 +412,7 @@ impl Component for Desktop {
                 Ok(value) => {
                     if self.compositor != value {
                         self.compositor = value;
-                        self.update_geometry(now);
+                        self.retarget_panel_transition(now);
                         effects.redraw("bar");
                         effects.redraw("dock");
                     }
@@ -455,12 +467,12 @@ impl Component for Desktop {
                     self.results = lucent_usecases::search_applications(&self.apps, "");
                     self.choose(0, now);
                 }
-                self.update_geometry(now);
+                self.retarget_panel_transition(now);
                 effects.redraw("dock");
             }
             Message::CloseLauncher => {
                 self.launcher = false;
-                self.update_geometry(now);
+                self.retarget_panel_transition(now);
                 effects.redraw("dock");
             }
             Message::Mode(mode) => {
@@ -470,7 +482,7 @@ impl Component for Desktop {
                 self.results = lucent_usecases::search_applications(&self.apps, "");
                 self.scroll = 0;
                 self.choose(0, now);
-                self.update_geometry(now);
+                self.retarget_panel_transition(now);
                 effects.redraw("dock");
             }
             Message::Query(query) => {
@@ -478,7 +490,7 @@ impl Component for Desktop {
                 self.results = lucent_usecases::search_applications(&self.apps, &self.query);
                 self.scroll = 0;
                 self.choose(0, now);
-                self.update_geometry(now);
+                self.retarget_panel_transition(now);
                 effects.redraw("dock");
             }
             Message::Select(index) => {
@@ -505,14 +517,14 @@ impl Component for Desktop {
                     let id = self.apps[*index].id.clone();
                     self.launch(&id, false, effects);
                     self.launcher = false;
-                    self.update_geometry(now);
+                    self.retarget_panel_transition(now);
                     effects.redraw("dock");
                 }
             }
             Message::Launch(id, prefer) => {
                 self.launch(&id, prefer, effects);
                 self.launcher = false;
-                self.update_geometry(now);
+                self.retarget_panel_transition(now);
                 effects.redraw("dock");
             }
             Message::Workspace(id) => {
@@ -524,7 +536,8 @@ impl Component for Desktop {
             Message::Wallpaper(index, apply) => {
                 if index < self.wallpapers.len() {
                     self.wallpaper_index = index;
-                    self.carousel.target(index as f32, now, 0.5, SPATIAL);
+                    self.carousel
+                        .target(index as f32, now, motion::PANEL, SPATIAL);
                     if apply {
                         let path = self.wallpapers[index].path.clone();
                         effects.task(move || {
@@ -609,7 +622,7 @@ impl Component for Desktop {
                 if id == "widgets" {
                     self.viewport = (w, h);
                 }
-                self.update_geometry(now);
+                self.retarget_panel_transition(now);
                 effects.redraw(id);
             }
             Message::Completed(result) => {
@@ -637,8 +650,8 @@ impl api::Application for Desktop {
                 layer: Layer::Top,
                 anchor: Anchor::Top,
                 width: 0,
-                height: 56,
-                exclusive_zone: 56,
+                height: panel::BAR_HEIGHT as u32,
+                exclusive_zone: panel::BAR_HEIGHT as i32,
                 keyboard: Keyboard::None,
                 visible: true,
                 capture_all: false,

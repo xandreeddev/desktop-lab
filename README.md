@@ -10,6 +10,10 @@ Three isolated Omarchy experiments for comparing Lucid, native Noctalia v5, and 
 
 Lucent now has a reusable declarative Rust framework and a desktop client using Vulkan. Its launcher morphs out of the dock, selectors animate, and widget positions persist. Omarchy retains secure locking and session services. The VM uses software Vulkan; see [framework concepts](docs/lucent-framework.md) and [current validation](reports/lucent-framework.md).
 
+The [local Astro site](site/README.md) provides a visual desktop tour, interactive
+framework walkthrough, measured results and a hands-on VM guide. Start it with
+`cd site && npm ci && npm run dev`, then open <http://127.0.0.1:4321>.
+
 On the prepared host, start one VM at a time:
 
 ```sh
@@ -34,3 +38,7 @@ In the Lucent VM, **Super+Space** opens the Rust launcher and **Super+Ctrl+Space
 The prepared guests have a locally selected weather city with IP detection disabled. Personal location data stays outside Git; a fresh install needs your city in Location settings. Media widgets show their idle state until a player publishes MPRIS metadata.
 
 Upstream references: [Omarchy](https://github.com/omacom/omarchy), [Lucid](https://github.com/Sn3akyy1/lucid), [reference screenshot](https://github.com/Sn3akyy1/lucid/blob/main/assets/desktop.webp), [Noctalia v5](https://docs.noctalia.dev/noctalia/), [Amane](https://github.com/MystiaFin/amane), [Suzuha](https://github.com/MystiaFin/suzuha). Exact inspected revisions and archive checksums are recorded in `manifests/upstream-lock.json`. Noctalia's installed package version is recorded separately; its current source tree is a documentation reference.
+
+Lucent’s shared visual tokens live in `design/tokens.json`. The local site adds
+`/design-system/` for the live token catalog and `/docs/` for the state-to-pixels
+walkthrough. See [the framework guide](docs/lucent-framework.md) for the native API.

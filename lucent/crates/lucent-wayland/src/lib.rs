@@ -5,7 +5,7 @@ use lucent_api::{self as api, Application, Effects, FrameDemand, ViewContext};
 use lucent_render::{Error, Gpu, Renderer};
 use lucent_ui::{Interaction, Layout, Scene};
 use smithay_client_toolkit::{
-    compositor::{CompositorHandler, CompositorState, FrameCallbackData, Region},
+    compositor::{CompositorHandler, CompositorState, FrameCallbackData, Region, SurfaceData},
     delegate_registry,
     output::{OutputHandler, OutputState},
     registry::{ProvidesRegistryState, RegistryState},
@@ -243,7 +243,7 @@ pub fn run<A: Application>(app: A) -> Result<(), Error> {
 }
 impl<A: Application> State<A> {
     fn inspect(&self) -> String {
-        serde_json::json!({"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id,"width":s.width,"height":s.height,"frames":s.renderer.frames,"frame_times_ms":s.frame_times,"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)}).to_string()
+        serde_json::json!({"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id,"width":s.width,"height":s.height,"scale":s.scale,"buffer_width":s.width*s.scale,"buffer_height":s.height*s.scale,"frames":s.renderer.frames,"frame_times_ms":s.frame_times,"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)}).to_string()
     }
     fn message(&mut self, message: A::Message, qh: &QueueHandle<Self>) {
         let mut effects = Effects {
@@ -348,6 +348,28 @@ impl<A: Application> State<A> {
             });
         }
         Ok(())
+    }
+    /// Some compositors update wl_output scale without repeating the preferred
+    /// buffer-scale event on every existing layer surface. Track entered outputs
+    /// as well, so an idle bar/dock does not retain a low-density buffer.
+    fn refresh_output_scales(&mut self, qh: &QueueHandle<Self>) {
+        for surface in self.surfaces.values_mut() {
+            let Some(data) = surface.layer.wl_surface().data::<SurfaceData<()>>() else {
+                continue;
+            };
+            let scale = data
+                .outputs()
+                .filter_map(|output| self.outputs.info(&output))
+                .map(|info| info.scale_factor.max(1) as u32)
+                .max();
+            if let Some(scale) = scale
+                && surface.scale != scale
+            {
+                surface.scale = scale;
+                surface.demand.invalidate();
+            }
+        }
+        self.draw_all(qh);
     }
     fn draw_all(&mut self, qh: &QueueHandle<Self>) {
         let now = self.epoch.elapsed().as_secs_f64();
@@ -542,18 +564,20 @@ impl<A: Application> CompositorHandler for State<A> {
     fn surface_enter(
         &mut self,
         _: &Connection,
-        _: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         _: &wl_surface::WlSurface,
         _: &wl_output::WlOutput,
     ) {
+        self.refresh_output_scales(qh);
     }
     fn surface_leave(
         &mut self,
         _: &Connection,
-        _: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         _: &wl_surface::WlSurface,
         _: &wl_output::WlOutput,
     ) {
+        self.refresh_output_scales(qh);
     }
 }
 impl<A: Application> LayerShellHandler for State<A> {
@@ -591,7 +615,9 @@ impl<A: Application> OutputHandler for State<A> {
         &mut self.outputs
     }
     fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
-    fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
+    fn update_output(&mut self, _: &Connection, qh: &QueueHandle<Self>, _: wl_output::WlOutput) {
+        self.refresh_output_scales(qh);
+    }
     fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
 }
 impl<A: Application> SeatHandler for State<A> {

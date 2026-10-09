@@ -1,5 +1,6 @@
 //! An independent client composing a child component and lifting its typed effects.
 use lucent_api::*;
+use lucent_design::{Theme, font, motion, radius, space};
 #[derive(Clone)]
 enum CounterMessage {
     Increment,
@@ -17,21 +18,22 @@ impl Component for Counter {
             Element::text(format!("{} clicks · Vulkan · frame callbacks", self.count)),
             Element::empty()
                 .size(width, 6.)
-                .background(Color::hex(0x73dcee))
-                .radius(3.),
-            Element::button("Count", CounterMessage::Increment)
+                .background(Theme::new(false).primary)
+                .radius(radius::INDICATOR),
+            Theme::new(false)
+                .button("Count", CounterMessage::Increment)
                 .id("count")
-                .background(Color::hex(0x1b6a7d)),
+                .background(Theme::new(false).surface_container),
         ])
-        .gap(16.)
+        .gap(space::LG)
     }
     fn update(&mut self, _: CounterMessage, effects: &mut Effects<CounterMessage>) {
         self.count += 1;
         self.motion.get_or_insert(Motion::fixed(60.)).target(
             60. + (self.count % 5) as f32 * 50.,
             effects.now,
-            0.35,
-            [0.38, 1.21, 0.22, 1.],
+            motion::SELECTION,
+            motion::SPATIAL,
         );
         effects.redraw("example");
     }
@@ -49,17 +51,18 @@ impl Component for Example {
     type Message = Message;
     fn view(&self, cx: &ViewContext) -> Element<Message> {
         Element::column(vec![
-            Element::text("Hello, native Wayland").font(23.),
+            Element::text("Hello, native Wayland").font(font::TITLE),
             self.counter.view(cx).map(Message::Counter),
-            Element::button("Close", Message::Quit)
+            Theme::new(false)
+                .button("Close", Message::Quit)
                 .id("close")
-                .background(Color::hex(0x1b6a7d)),
+                .background(Theme::new(false).surface_container),
         ])
-        .padding(24.)
-        .gap(12.)
+        .padding(space::XXL)
+        .gap(space::MD)
         .size(420., 270.)
-        .background(Color::hex(0x2c5184))
-        .radius(28.)
+        .background(Theme::new(false).surface)
+        .radius(radius::PANEL)
     }
     fn update(&mut self, message: Message, effects: &mut Effects<Message>) {
         match message {

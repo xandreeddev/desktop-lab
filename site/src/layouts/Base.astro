@@ -1,0 +1,41 @@
+---
+import '../styles/tokens.css';
+import { tokens } from '../data/tokens';
+import '../styles/global.css';
+import '../styles/design-system.css';
+import sans from '../../../lucent/apps/lucent-desktop/assets/LucentSans.ttf?url';
+import display from '../../../lucent/apps/lucent-desktop/assets/LucentDisplay.ttf?url';
+interface Props { title?: string; description?: string; }
+const { title = 'Desktop Lab — Lucent, from the inside out', description = 'Three Omarchy desktops. One independent Rust framework. Explore Lucent’s native Wayland surfaces, Vulkan renderer, components, motion and real VM results.' } = Astro.props;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content={String(tokens.find(t => t.name === "web.background")?.value)} />
+    <title>{title}</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" href={sans} as="font" type="font/ttf" crossorigin />
+    <style is:inline set:html={`@font-face { font-family: 'Lucent Sans'; src: url('${sans}') format('truetype'); font-weight: 400 500; font-display: swap; } @font-face { font-family: 'Lucent Display'; src: url('${display}') format('truetype'); font-weight: 600 800; font-display: swap; }`} />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Desktop Lab home"><img src="/favicon.svg" width="34" height="34" alt="" />desktop<span>lab</span><span class="brand-slash">/</span><span class="brand-author">Xand Reed</span></a>
+      <nav aria-label="Main navigation">
+        <a href="/#desktops">Desktops</a>
+        <a href="/design-system/">Design system</a>
+        <a href="/docs/">Docs</a>
+        <a class="nav-cta" href="/guide/">Try it locally <span aria-hidden="true">↗</span></a>
+      </nav>
+    </header>
+    <main id="main"><slot /></main>
+    <footer class="site-footer wrap">
+      <div><a class="brand" href="/">desktop<span>lab</span><span class="brand-slash">/</span><span class="brand-author">Xand Reed</span></a><p>An experiment in how a desktop is built.</p></div>
+      <div class="footer-links"><a href="/design-system/">Design system</a><a href="/docs/">Documentation</a><a href="/guide/#credits">Sources & credits</a><a href="https://github.com/xandreeddev/desktop-lab">Repository ↗</a><span>Source links require repository access.</span></div>
+    </footer>
+    <script src="../scripts/site.ts"></script>
+  </body>
+</html>

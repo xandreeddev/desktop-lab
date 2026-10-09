@@ -1,5 +1,6 @@
 use crate::desktop::{Action, Desktop, Message};
 use lucent_api::*;
+use lucent_design::*;
 use lucent_domain::{Date, Placement, TimerPhase};
 
 pub fn registry() -> WidgetRegistry<Desktop, Message> {
@@ -29,26 +30,74 @@ pub fn registry() -> WidgetRegistry<Desktop, Message> {
 }
 pub fn widget_size(id: &str) -> (f32, f32) {
     match id {
-        "calendar" => (270., 276.),
-        "clock" => (248., 264.),
-        "weather" => (270., 130.),
-        "media" => (260., 392.),
-        "system" => (270., 180.),
-        "notes" => (270., 160.),
-        "timer" => (270., 190.),
-        _ => (200., 150.),
+        "calendar" => (
+            component::widget_size::calendar::WIDTH,
+            component::widget_size::calendar::HEIGHT,
+        ),
+        "clock" => (
+            component::widget_size::clock::WIDTH,
+            component::widget_size::clock::HEIGHT,
+        ),
+        "weather" => (
+            component::widget_size::weather::WIDTH,
+            component::widget_size::weather::HEIGHT,
+        ),
+        "media" => (
+            component::widget_size::media::WIDTH,
+            component::widget_size::media::HEIGHT,
+        ),
+        "system" => (
+            component::widget_size::system::WIDTH,
+            component::widget_size::system::HEIGHT,
+        ),
+        "notes" => (
+            component::widget_size::notes::WIDTH,
+            component::widget_size::notes::HEIGHT,
+        ),
+        "timer" => (
+            component::widget_size::timer::WIDTH,
+            component::widget_size::timer::HEIGHT,
+        ),
+        _ => (
+            component::widget_size::fallback::WIDTH,
+            component::widget_size::fallback::HEIGHT,
+        ),
     }
 }
 pub fn default_position(id: &str, viewport: (f32, f32)) -> Placement {
     let (x, y): (f32, f32) = match id {
-        "calendar" => (20., 110.),
-        "weather" => (25., 400.),
-        "clock" => (viewport.0 - 280., 215.),
-        "media" => (viewport.0 - 280., 495.),
-        "system" => (20., 560.),
-        "notes" => (320., 110.),
-        "timer" => (320., 310.),
-        _ => (20., 110.),
+        "calendar" => (
+            component::widget_layout::LEFT,
+            component::widget_layout::TOP,
+        ),
+        "weather" => (
+            component::widget_layout::WEATHER_LEFT,
+            component::widget_layout::WEATHER_TOP,
+        ),
+        "clock" => (
+            viewport.0 - component::widget_layout::RIGHT_INSET,
+            component::widget_layout::CLOCK_TOP,
+        ),
+        "media" => (
+            viewport.0 - component::widget_layout::RIGHT_INSET,
+            component::widget_layout::MEDIA_TOP,
+        ),
+        "system" => (
+            component::widget_layout::LEFT,
+            component::widget_layout::SYSTEM_TOP,
+        ),
+        "notes" => (
+            component::widget_layout::SECOND_COLUMN,
+            component::widget_layout::TOP,
+        ),
+        "timer" => (
+            component::widget_layout::SECOND_COLUMN,
+            component::widget_layout::TIMER_TOP,
+        ),
+        _ => (
+            component::widget_layout::LEFT,
+            component::widget_layout::TOP,
+        ),
     };
     let size = widget_size(id);
     Placement {
@@ -84,7 +133,7 @@ impl Desktop {
                         } else {
                             self.widget_color()
                         })
-                        .radius(30.)
+                        .radius(radius::WIDGET)
                         .clip()
                         .shadow()
                         .on_drag(move |drag| Message::MoveWidget(drag_id.clone(), drag))
@@ -97,16 +146,16 @@ impl Desktop {
 }
 fn clock(d: &Desktop, _: &ViewContext) -> Element<Message> {
     Element::stack(vec![
-        d.label(format!("{:02}", d.clock.hour), 110.)
+        d.label(format!("{:02}", d.clock.hour), font::CLOCK)
             .font_face(1)
-            .size(248., 119.)
+            .size(component::clock::WIDTH, component::clock::DIGIT_HEIGHT)
             .align(Align::Center)
-            .at(0., 5.),
-        d.label(format!("{:02}", d.clock.minute), 110.)
+            .at(0., component::clock::HOUR_TOP),
+        d.label(format!("{:02}", d.clock.minute), font::CLOCK)
             .font_face(1)
-            .size(248., 119.)
+            .size(component::clock::WIDTH, component::clock::DIGIT_HEIGHT)
             .align(Align::Center)
-            .at(0., 104.),
+            .at(0., component::clock::MINUTE_TOP),
         d.label(
             format!(
                 "{}  ·  {} {}",
@@ -122,11 +171,11 @@ fn clock(d: &Desktop, _: &ViewContext) -> Element<Message> {
                 d.clock.date.day,
                 months()[d.clock.date.month as usize - 1]
             ),
-            12.,
+            font::SMALL,
         )
-        .size(248., 24.)
+        .size(component::clock::WIDTH, component::clock::DATE_HEIGHT)
         .align(Align::Center)
-        .at(0., 221.),
+        .at(0., component::clock::DATE_TOP),
     ])
     .fill()
 }
@@ -174,21 +223,40 @@ fn calendar(d: &Desktop, _: &ViewContext) -> Element<Message> {
     let date = d.clock.date;
     let (year, month, first) = calendar_month(date, d.month_offset);
     let mut children = vec![
-        d.label(format!("{} {}", months()[month as usize - 1], year), 15.)
-            .at(19., 16.)
-            .size(172., 30.),
+        d.label(
+            format!("{} {}", months()[month as usize - 1], year),
+            font::LABEL,
+        )
+        .at(component::calendar::LEFT, component::calendar::HEADING_TOP)
+        .size(
+            component::calendar::HEADING_WIDTH,
+            component::calendar::ROW_HEIGHT,
+        ),
         d.icon_button("calendar-previous", "left", Message::Month(-1))
-            .at(189., 15.),
+            .at(
+                component::calendar::PREVIOUS_LEFT,
+                component::calendar::NAVIGATION_TOP,
+            ),
         d.icon_button("calendar-next", "right", Message::Month(1))
-            .at(224., 15.),
+            .at(
+                component::calendar::NEXT_LEFT,
+                component::calendar::NAVIGATION_TOP,
+            ),
     ];
     for (i, day) in ["M", "T", "W", "T", "F", "S", "S"].iter().enumerate() {
         children.push(
-            d.label(*day, 11.)
-                .size(33., 25.)
+            d.label(*day, font::CAPTION)
+                .size(
+                    component::calendar::COLUMN_WIDTH,
+                    component::calendar::WEEKDAY_HEIGHT,
+                )
                 .align(Align::Center)
-                .at(18. + i as f32 * 33., 51.)
-                .opacity(0.65),
+                .at(
+                    component::calendar::WEEKDAY_LEFT
+                        + i as f32 * component::calendar::COLUMN_WIDTH,
+                    component::calendar::WEEKDAY_TOP,
+                )
+                .opacity(opacity::SECONDARY),
         );
     }
     let days = Date::days_in_month(year, month);
@@ -205,29 +273,41 @@ fn calendar(d: &Desktop, _: &ViewContext) -> Element<Message> {
             day
         };
         let today = current && d.month_offset == 0 && day == date.day as i32;
-        let x = 19. + (index % 7) as f32 * 33.;
-        let y = 79. + (index / 7) as f32 * 30.;
+        let x = component::calendar::LEFT + (index % 7) as f32 * component::calendar::COLUMN_WIDTH;
+        let y =
+            component::calendar::DAYS_TOP + (index / 7) as f32 * component::calendar::ROW_HEIGHT;
         if today {
             let petals = (0..6)
                 .map(|i| {
                     let a = i as f32 * std::f32::consts::TAU / 6.;
                     Element::empty()
-                        .size(22., 22.)
-                        .at(x + 4.5 + a.cos() * 5., y + 3.5 + a.sin() * 5.)
-                        .radius(8.)
+                        .size(
+                            component::calendar::PETAL_SIZE,
+                            component::calendar::PETAL_SIZE,
+                        )
+                        .at(
+                            x + component::calendar::PETAL_LEFT
+                                + a.cos() * component::calendar::PETAL_ORBIT,
+                            y + component::calendar::PETAL_TOP
+                                + a.sin() * component::calendar::PETAL_ORBIT,
+                        )
+                        .radius(radius::SMALL)
                         .background(d.accent())
                 })
                 .collect();
             children.push(Element::stack(petals).fill());
         }
         children.push(
-            d.label(displayed.to_string(), 12.)
-                .size(31., 29.)
+            d.label(displayed.to_string(), font::SMALL)
+                .size(
+                    component::calendar::DAY_WIDTH,
+                    component::calendar::DAY_HEIGHT,
+                )
                 .align(Align::Center)
                 .color(if today {
-                    Color::hex(0x174657)
+                    d.theme().on_primary
                 } else {
-                    d.ink().alpha(if current { 1. } else { 0.3 })
+                    d.ink().alpha(if current { 1. } else { opacity::DISABLED })
                 })
                 .at(x, y),
         );
@@ -248,16 +328,37 @@ fn weather(d: &Desktop, _: &ViewContext) -> Element<Message> {
         .unwrap_or_else(|| ("—".into(), "Weather unavailable", "cloud"));
     Element::stack(vec![
         Element::empty()
-            .size(82., 82.)
-            .at(18., 24.)
-            .radius(30.)
-            .background(d.ink().alpha(0.08)),
-        d.icon(symbol, 61.).at(28., 33.),
-        d.label(temperature, 32.)
+            .size(
+                component::weather::ICON_BACKGROUND_SIZE,
+                component::weather::ICON_BACKGROUND_SIZE,
+            )
+            .at(
+                component::weather::ICON_BACKGROUND_LEFT,
+                component::weather::ICON_BACKGROUND_TOP,
+            )
+            .radius(radius::WIDGET)
+            .background(d.ink().alpha(opacity::SUBTLE)),
+        d.icon(symbol, icon::WEATHER)
+            .at(component::weather::ICON_LEFT, component::weather::ICON_TOP),
+        d.label(temperature, font::TEMPERATURE)
             .font_face(1)
-            .at(116., 29.)
-            .size(134., 46.),
-        d.label(description, 14.).at(116., 72.).size(145., 30.),
+            .at(
+                component::weather::TEXT_LEFT,
+                component::weather::TEMPERATURE_TOP,
+            )
+            .size(
+                component::weather::TEMPERATURE_WIDTH,
+                component::weather::TEMPERATURE_HEIGHT,
+            ),
+        d.label(description, font::BODY)
+            .at(
+                component::weather::TEXT_LEFT,
+                component::weather::DESCRIPTION_TOP,
+            )
+            .size(
+                component::weather::DESCRIPTION_WIDTH,
+                component::weather::DESCRIPTION_HEIGHT,
+            ),
     ])
     .fill()
 }
@@ -269,7 +370,11 @@ fn media(d: &Desktop, _: &ViewContext) -> Element<Message> {
         .cloned()
         .map(Element::image)
         .unwrap_or_else(|| {
-            Element::stack(vec![d.icon("music", 70.).at(77., 67.)]).background(d.surface_color())
+            Element::stack(vec![d.icon("music", icon::ARTWORK).at(
+                component::media::FALLBACK_LEFT,
+                component::media::FALLBACK_TOP,
+            )])
+            .background(d.surface_color())
         });
     let title = if d.media.title.is_empty() {
         "Nothing playing"
@@ -282,40 +387,67 @@ fn media(d: &Desktop, _: &ViewContext) -> Element<Message> {
         (d.media.position as f32 / d.media.length as f32).clamp(0., 1.)
     };
     Element::stack(vec![
-        artwork.size(224., 213.).at(18., 18.).radius(22.),
-        d.label(title, 17.).size(224., 28.).at(18., 241.),
-        d.label(&d.media.artist, 12.)
-            .size(224., 24.)
-            .at(18., 271.)
-            .opacity(0.8),
+        artwork
+            .size(
+                component::media::CONTENT_WIDTH,
+                component::media::ARTWORK_HEIGHT,
+            )
+            .at(component::media::INSET, component::media::INSET)
+            .radius(radius::CARD),
+        d.label(title, font::HEADING)
+            .size(
+                component::media::CONTENT_WIDTH,
+                component::media::TITLE_HEIGHT,
+            )
+            .at(component::media::INSET, component::media::TITLE_TOP),
+        d.label(&d.media.artist, font::SMALL)
+            .size(
+                component::media::CONTENT_WIDTH,
+                component::media::ARTIST_HEIGHT,
+            )
+            .at(component::media::INSET, component::media::ARTIST_TOP)
+            .opacity(opacity::SUPPORTING),
         Element::empty()
-            .size(224., 3.)
-            .at(18., 310.)
-            .radius(2.)
+            .size(
+                component::media::CONTENT_WIDTH,
+                component::media::PROGRESS_HEIGHT,
+            )
+            .at(component::media::INSET, component::media::PROGRESS_TOP)
+            .radius(radius::INDICATOR)
             .background(d.surface_color()),
         Element::empty()
-            .size(224. * progress, 3.)
-            .at(18., 310.)
-            .radius(2.)
+            .size(
+                component::media::CONTENT_WIDTH * progress,
+                component::media::PROGRESS_HEIGHT,
+            )
+            .at(component::media::INSET, component::media::PROGRESS_TOP)
+            .radius(radius::INDICATOR)
             .background(d.accent()),
         d.icon_button(
             "media-previous",
             "previous",
             Message::Action(Action::Previous),
         )
-        .at(58., 337.),
+        .at(
+            component::media::PREVIOUS_LEFT,
+            component::media::NAVIGATION_TOP,
+        ),
         d.icon_button(
             "media-play",
             if d.media.playing { "pause" } else { "play" },
             Message::Action(Action::PlayPause),
         )
-        .size(60., 44.)
-        .padding(12.)
-        .radius(24.)
+        .size(component::media::PLAY_WIDTH, component::media::PLAY_HEIGHT)
+        .padding(space::MD)
+        .radius(radius::SEARCH)
         .background(d.accent())
-        .at(100., 330.),
+        .tint(d.theme().on_primary)
+        .at(component::media::PLAY_LEFT, component::media::PLAY_TOP),
         d.icon_button("media-next", "next", Message::Action(Action::Next))
-            .at(168., 337.),
+            .at(
+                component::media::NEXT_LEFT,
+                component::media::NAVIGATION_TOP,
+            ),
     ])
     .fill()
 }
@@ -327,66 +459,115 @@ fn system(d: &Desktop, _: &ViewContext) -> Element<Message> {
         mem.memory_used_mib as f32 / mem.memory_total_mib as f32
     };
     Element::stack(vec![
-        d.label("System", 17.).at(18., 14.).size(234., 28.),
-        d.label(format!("CPU   {:.0}%", mem.cpu_percent), 14.)
-            .at(18., 53.)
-            .size(234., 24.),
+        d.label("System", font::HEADING)
+            .at(component::system::INSET, component::system::HEADING_TOP)
+            .size(
+                component::system::CONTENT_WIDTH,
+                component::system::HEADING_HEIGHT,
+            ),
+        d.label(format!("CPU   {:.0}%", mem.cpu_percent), font::BODY)
+            .at(component::system::INSET, component::system::CPU_TOP)
+            .size(
+                component::system::CONTENT_WIDTH,
+                component::system::LABEL_HEIGHT,
+            ),
         Element::empty()
-            .size(234., 4.)
-            .at(18., 84.)
-            .radius(2.)
+            .size(
+                component::system::CONTENT_WIDTH,
+                component::system::PROGRESS_HEIGHT,
+            )
+            .at(
+                component::system::INSET,
+                component::system::CPU_PROGRESS_TOP,
+            )
+            .radius(radius::INDICATOR)
             .background(d.surface_color()),
         Element::empty()
-            .size(234. * (mem.cpu_percent / 100.).clamp(0., 1.), 4.)
-            .at(18., 84.)
-            .radius(2.)
+            .size(
+                component::system::CONTENT_WIDTH * (mem.cpu_percent / 100.).clamp(0., 1.),
+                component::system::PROGRESS_HEIGHT,
+            )
+            .at(
+                component::system::INSET,
+                component::system::CPU_PROGRESS_TOP,
+            )
+            .radius(radius::INDICATOR)
             .background(d.accent()),
         d.label(
             format!(
                 "Memory   {} / {} MiB",
                 mem.memory_used_mib, mem.memory_total_mib
             ),
-            12.,
+            font::SMALL,
         )
-        .at(18., 98.)
-        .size(234., 24.),
+        .at(component::system::INSET, component::system::MEMORY_TOP)
+        .size(
+            component::system::CONTENT_WIDTH,
+            component::system::LABEL_HEIGHT,
+        ),
         Element::empty()
-            .size(234., 4.)
-            .at(18., 129.)
-            .radius(2.)
+            .size(
+                component::system::CONTENT_WIDTH,
+                component::system::PROGRESS_HEIGHT,
+            )
+            .at(
+                component::system::INSET,
+                component::system::MEMORY_PROGRESS_TOP,
+            )
+            .radius(radius::INDICATOR)
             .background(d.surface_color()),
         Element::empty()
-            .size(234. * fraction, 4.)
-            .at(18., 129.)
-            .radius(2.)
+            .size(
+                component::system::CONTENT_WIDTH * fraction,
+                component::system::PROGRESS_HEIGHT,
+            )
+            .at(
+                component::system::INSET,
+                component::system::MEMORY_PROGRESS_TOP,
+            )
+            .radius(radius::INDICATOR)
             .background(d.accent()),
-        d.label(&mem.network, 11.)
-            .at(18., 144.)
-            .size(234., 23.)
-            .opacity(0.75),
+        d.label(&mem.network, font::CAPTION)
+            .at(component::system::INSET, component::system::NETWORK_TOP)
+            .size(
+                component::system::CONTENT_WIDTH,
+                component::system::NETWORK_HEIGHT,
+            )
+            .opacity(opacity::MUTED),
     ])
     .fill()
 }
 fn notes(d: &Desktop, _: &ViewContext) -> Element<Message> {
     Element::stack(vec![
-        d.label("Notes", 17.).size(230., 30.).at(20., 15.),
+        d.label("Notes", font::HEADING)
+            .size(
+                component::notes::CONTENT_WIDTH,
+                component::notes::HEADING_HEIGHT,
+            )
+            .at(component::notes::INSET, component::notes::HEADING_TOP),
         Element::input(
             &d.settings.notes,
             "A thought to keep nearby…",
             Message::Notes,
         )
         .id("notes-input")
-        .size(230., 60.)
-        .at(20., 55.)
-        .padding(10.)
-        .font(14.)
+        .size(
+            component::notes::CONTENT_WIDTH,
+            component::notes::INPUT_HEIGHT,
+        )
+        .at(component::notes::INSET, component::notes::INPUT_TOP)
+        .padding(space::MD)
+        .font(font::BODY)
         .color(d.ink())
         .background(d.surface_color())
-        .radius(18.),
-        d.label("Saved automatically", 10.)
-            .at(20., 128.)
-            .size(230., 18.)
-            .opacity(0.65),
+        .radius(radius::CONTROL),
+        d.label("Saved automatically", font::MICRO)
+            .at(component::notes::INSET, component::notes::CAPTION_TOP)
+            .size(
+                component::notes::CONTENT_WIDTH,
+                component::notes::CAPTION_HEIGHT,
+            )
+            .opacity(opacity::SECONDARY),
     ])
     .fill()
 }
@@ -400,29 +581,44 @@ fn timer(d: &Desktop, _: &ViewContext) -> Element<Message> {
             } else {
                 "Focus"
             },
-            15.,
+            font::LABEL,
         )
-        .size(230., 28.)
-        .at(20., 13.),
-        d.label(format!("{:02}:{:02}", seconds / 60, seconds % 60), 51.)
-            .size(230., 70.)
-            .at(20., 47.)
-            .align(Align::Center),
-        Element::button(
+        .size(
+            component::timer::CONTENT_WIDTH,
+            component::timer::HEADING_HEIGHT,
+        )
+        .at(component::timer::INSET, component::timer::HEADING_TOP),
+        d.label(
+            format!("{:02}:{:02}", seconds / 60, seconds % 60),
+            font::TIMER,
+        )
+        .size(
+            component::timer::CONTENT_WIDTH,
+            component::timer::TIME_HEIGHT,
+        )
+        .at(component::timer::INSET, component::timer::TIME_TOP)
+        .align(Align::Center),
+        d.button(
             if running { "Pause" } else { "Start" },
             Message::TimerToggle,
         )
         .id("timer-toggle")
-        .size(142., 37.)
-        .at(20., 135.)
-        .font(13.)
+        .size(
+            component::timer::TOGGLE_WIDTH,
+            component::timer::BUTTON_HEIGHT,
+        )
+        .at(component::timer::INSET, component::timer::BUTTONS_TOP)
+        .font(font::CONTROL)
         .background(d.accent())
-        .color(Color::hex(0x174657)),
-        Element::button("Reset", Message::TimerReset)
+        .color(d.theme().on_primary),
+        d.button("Reset", Message::TimerReset)
             .id("timer-reset")
-            .size(78., 37.)
-            .at(172., 135.)
-            .font(13.)
+            .size(
+                component::timer::RESET_WIDTH,
+                component::timer::BUTTON_HEIGHT,
+            )
+            .at(component::timer::RESET_LEFT, component::timer::BUTTONS_TOP)
+            .font(font::CONTROL)
             .background(d.surface_color()),
     ])
     .fill()

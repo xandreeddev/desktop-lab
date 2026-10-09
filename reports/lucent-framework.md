@@ -81,3 +81,50 @@ background and session services. Media buttons are connected through playerctl,
 but playback against a real media player was not exercised in this run. Wi-Fi,
 Bluetooth, physical brightness, battery, monitor hotplug and suspend/resume were
 not validated by this VM test.
+
+## Design-system and density follow-up
+
+The follow-up ran on the same software-Vulkan guest after its allocation increased
+to **6 vCPUs and 6 GiB RAM**. The performance measurements above remain the original
+2-vCPU/3-GiB baseline; this follow-up does not claim new CPU, memory or frame-time
+results.
+
+Implemented:
+
+- One reference-based token source in `design/tokens.json`, compiled to Rust and
+  CSS: primitive colors, semantic dark/light roles, typography, spacing, corners,
+  opacity, motion and named component geometry. The optional `lucent-design`
+  crate owns the theme and recipes; framework styles remain independent of it.
+- Token-based native bar, dock, launcher, carousel and widgets. Monochrome icons
+  follow semantic foreground/action roles in both themes. Workspace/media pills
+  calculate their separation from the workspace group width.
+- Shared kerning metrics, 2× coverage supersampling, physical-pixel text alignment,
+  larger/vector source assets and premultiplied mip filtering. The full framebuffer
+  is not supersampled. Texture cache eviction also considers byte usage.
+- Output-scale propagation through entered-output events as well as preferred
+  buffer-scale events. This fixes an observed case where widgets adopted 2× but
+  an existing bar and dock kept their 1× buffers.
+- The local Astro landing page, dedicated `/docs/` engine walkthrough and
+  `/design-system/` live theme/token reference. No hosted website deployment.
+
+Executed checks:
+
+- Formatting and warning-free Clippy across all targets; **23 Rust tests**.
+- **11 Python tests**, including reference/type/cycle validation, generated-token
+  drift, native visual-style guards and the existing integration/rollback tests.
+- Real VM input checks: launcher search and actual application launch, workspace
+  switch, widget drag/save/restart, timer, notes, wallpaper selection/application,
+  service restart and stock-bar restoration.
+- Dark and light themes at **1920×1080/1×** and **3840×2160/2×**. All three native
+  surfaces reported matching buffer density while retaining the same logical
+  width. Original output and settings restored afterward. Run
+  `python3 vm/test-design-system.py` to reproduce; captures stay in `reports/local`.
+  [Machine-readable result](measurements/lucent-design-integration.json).
+- Astro check/build; browser checks at 320, 390, 768 and 1440 px across all four
+  pages; theme previews, token filtering/empty state, Rust/CSS clipboard values,
+  keyboard-operated frame tabs, motion/reduced motion and internal links.
+  No horizontal page overflow, broken internal links or browser page errors.
+
+Fractional scaling, complex-script shaping and hardware Vulkan remain unverified
+or unimplemented as described above. Larger cached assets may increase resource
+use; these changes are rendering-quality work, not a measured performance win.

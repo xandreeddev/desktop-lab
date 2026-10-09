@@ -521,6 +521,7 @@ name = "hello-layer"
 version = "0.1.0"
 dependencies = [
  "lucent-api",
+ "lucent-design",
  "lucent-wayland",
 ]
 
@@ -727,10 +728,18 @@ name = "lucent-cli"
 version = "0.1.0"
 
 [[package]]
+name = "lucent-design"
+version = "0.1.0"
+dependencies = [
+ "lucent-api",
+]
+
+[[package]]
 name = "lucent-desktop"
 version = "0.1.0"
 dependencies = [
  "lucent-api",
+ "lucent-design",
  "lucent-domain",
  "lucent-services",
  "lucent-usecases",

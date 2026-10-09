@@ -1,5 +1,6 @@
 //! Layout, hit testing and retained interaction state for declarative components.
 use lucent_api::*;
+pub mod text;
 use std::{collections::BTreeMap, sync::Arc};
 
 #[derive(Clone, Debug)]
@@ -26,6 +27,7 @@ pub enum Paint {
         data: Arc<ImageData>,
         radius: f32,
         opacity: f32,
+        tint: Color,
     },
 }
 #[derive(Clone)]
@@ -40,6 +42,7 @@ pub struct Hit<M> {
     pub value: String,
     pub drag: Option<DragCallback<M>>,
     pub autofocus: bool,
+    pub hover_transition: Transition,
 }
 impl<M> Hit<M> {
     pub fn contains(&self, x: f32, y: f32) -> bool {
@@ -75,20 +78,9 @@ impl Layout {
         Self { fonts }
     }
     fn text_width(&self, s: &str, size: f32, face: usize) -> f32 {
-        s.lines()
-            .map(|l| {
-                l.chars()
-                    .map(|c| {
-                        self.fonts
-                            .get(face)
-                            .unwrap_or(&self.fonts[0])
-                            .metrics(c, size)
-                            .advance_width
-                    })
-                    .sum::<f32>()
-            })
-            .fold(0., f32::max)
+        text::width(self.fonts.get(face).unwrap_or(&self.fonts[0]), s, size)
     }
+
     fn measure<M>(&self, e: &Element<M>, available: (f32, f32)) -> (f32, f32) {
         let p = e.style.padding * 2.;
         let gap = e.style.gap;
@@ -102,9 +94,9 @@ impl Layout {
         let content = match &e.kind {
             Kind::Text(t) => (
                 self.text_width(t, e.style.font_size, e.style.font_face),
-                e.style.font_size * 1.3 * t.lines().count().max(1) as f32,
+                e.style.font_size * text::LINE_HEIGHT * t.lines().count().max(1) as f32,
             ),
-            Kind::Input { .. } => (160., e.style.font_size * 1.3),
+            Kind::Input { .. } => (160., e.style.font_size * text::LINE_HEIGHT),
             Kind::Image(_) => (32., 32.),
             Kind::Row => (
                 children.iter().map(|c| c.0).sum::<f32>() + gaps,
@@ -180,16 +172,16 @@ impl Layout {
             let mut color = e.style.background;
             if e.click.is_some() || e.input.is_some() {
                 color = color.mix(
-                    Color::hex(0x91e5f5).alpha(color.3),
-                    interaction.hover_amount(&id, now) * 0.16,
+                    e.style.hover_color.alpha(color.3),
+                    interaction.hover_amount(&id, now) * e.style.hover_color.3,
                 );
             }
             color.3 *= alpha;
             if e.style.shadow {
                 scene.paint.push(Paint::Shape {
-                    rect: Rect::new(rect.x, rect.y + 5., rect.w, rect.h),
+                    rect: Rect::new(rect.x, rect.y + e.style.shadow_offset, rect.w, rect.h),
                     clip,
-                    color: Color(0., 0., 0., 0.22 * alpha),
+                    color: e.style.shadow_color.alpha(e.style.shadow_color.3 * alpha),
                     radius: e.style.radius,
                     shadow: true,
                 });
@@ -219,6 +211,7 @@ impl Layout {
                 },
                 drag: e.drag.clone(),
                 autofocus: e.autofocus,
+                hover_transition: e.style.hover_transition,
             });
         }
         let p = e.style.padding;
@@ -273,6 +266,7 @@ impl Layout {
                 data: data.clone(),
                 radius: e.style.radius,
                 opacity: alpha,
+                tint: e.style.image_tint,
             }),
             _ => {}
         }
@@ -391,6 +385,7 @@ pub struct Interaction<M> {
     pub focus: Option<String>,
     pub hovered: Option<String>,
     press: Option<Press<M>>,
+    hover_transition: Transition,
     motions: BTreeMap<String, Motion>,
     select_all: bool,
     input_buffer: Option<(String, String)>,
@@ -400,6 +395,7 @@ impl<M> Default for Interaction<M> {
         Self {
             focus: None,
             hovered: None,
+            hover_transition: Transition::default(),
             press: None,
             motions: BTreeMap::new(),
             select_all: false,
@@ -443,8 +439,8 @@ impl<M: Clone> Interaction<M> {
             self.motions.entry(old).or_insert(Motion::fixed(1.)).target(
                 0.,
                 now,
-                0.15,
-                [0.2, 0., 0., 1.],
+                self.hover_transition.duration,
+                self.hover_transition.curve,
             );
         }
     }
@@ -457,13 +453,24 @@ impl<M: Clone> Interaction<M> {
                 self.motions
                     .entry(old.clone())
                     .or_insert(Motion::fixed(1.))
-                    .target(0., now, 0.15, [0.2, 0., 0., 1.]);
+                    .target(
+                        0.,
+                        now,
+                        self.hover_transition.duration,
+                        self.hover_transition.curve,
+                    );
             }
             if let Some(new) = &id {
+                self.hover_transition = hit.unwrap().hover_transition;
                 self.motions
                     .entry(new.clone())
                     .or_insert(Motion::fixed(0.))
-                    .target(1., now, 0.15, [0.2, 0., 0., 1.]);
+                    .target(
+                        1.,
+                        now,
+                        self.hover_transition.duration,
+                        self.hover_transition.curve,
+                    );
             }
             self.hovered = id;
             if let Some(msg) = hit.and_then(|h| h.hover.clone()) {
@@ -582,6 +589,7 @@ mod tests {
             value: String::new(),
             drag: None,
             autofocus: false,
+            hover_transition: Transition::default(),
         };
         assert!(!h.contains(1., 1.));
         assert!(h.contains(50., 50.));
@@ -599,6 +607,7 @@ mod tests {
             value: String::new(),
             drag: None,
             autofocus: true,
+            hover_transition: Transition::default(),
         };
         let scene = Scene {
             hits: vec![hit],
@@ -632,6 +641,7 @@ mod tests {
             value: String::new(),
             drag: Some(Arc::new(|d: DragEvent| if d.finished { 3 } else { 2 })),
             autofocus: false,
+            hover_transition: Transition::default(),
         };
         let scene = Scene {
             hits: vec![h],

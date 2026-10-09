@@ -1,0 +1,51 @@
+{
+  "renderer": "Vulkan",
+  "checks": [
+    {
+      "theme": "dark",
+      "scale": 1,
+      "capture_pixels": [
+        1920,
+        1080
+      ],
+      "logical_width": 1920,
+      "surfaces": 3
+    },
+    {
+      "theme": "light",
+      "scale": 1,
+      "capture_pixels": [
+        1920,
+        1080
+      ],
+      "logical_width": 1920,
+      "surfaces": 3
+    },
+    {
+      "theme": "dark",
+      "scale": 2,
+      "capture_pixels": [
+        3840,
+        2160
+      ],
+      "logical_width": 1920,
+      "surfaces": 3
+    },
+    {
+      "theme": "light",
+      "scale": 2,
+      "capture_pixels": [
+        3840,
+        2160
+      ],
+      "logical_width": 1920,
+      "surfaces": 3
+    }
+  ],
+  "original_output_restored": true,
+  "vm": {
+    "vcpus": 6,
+    "memory_gib": 6,
+    "driver": "Mesa software Vulkan"
+  }
+}

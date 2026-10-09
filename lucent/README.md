@@ -72,6 +72,19 @@ use cases have no UI or operating-system dependencies. The renderer shares one
 Vulkan device and a bounded image/text cache across surfaces. Repainting follows
 invalidation and compositor frame callbacks; animations stop at their endpoint.
 
+## Design system and high-density rendering
+
+Edit `design/tokens.json`, then run `python3 scripts/generate-design-tokens.py`.
+`lucent-design` exposes typed primitive, semantic and component tokens plus
+`Theme` recipes. Views use these tokens for colors, type, spacing, corners,
+geometry and motion. The reusable engine remains independent of the theme.
+
+Text uses supersampled coverage, kerning-aware measurement and physical-pixel
+alignment. Images prefer larger/vector originals, with filtered mip levels for
+animated reductions. The output buffer still follows the compositor's integer
+scale; fractional scaling is not implemented. The current asset budgets target
+up to 2× density. See the local site's `/design-system/` and `/docs/` pages.
+
 ## State and IPC
 
 `~/.local/state/lucent/desktop.json` stores the versioned layout, visible widget
@@ -116,6 +129,7 @@ cargo fmt --manifest-path lucent/Cargo.toml --all --check
 cargo clippy --manifest-path lucent/Cargo.toml --locked --workspace --all-targets -- -D warnings
 cargo test --manifest-path lucent/Cargo.toml --locked --workspace
 python3 vm/test-framework.py  # unlocked, prepared 1920×1080 VM
+python3 vm/test-design-system.py  # themes + temporary 4K/2×, restores the output
 ```
 
 See [the validation report](../reports/lucent-framework.md) for executed checks

@@ -5,6 +5,11 @@ use std::{
     sync::Arc,
 };
 
+/// Source texture budgets for the desktop's current components at up to 2× output scale.
+pub const ICON_PIXELS: u32 = 128;
+pub const SYMBOL_PIXELS: u32 = 256;
+pub const PREVIEW_PIXELS: u32 = 1024;
+
 pub fn load(path: &Path, size: u32) -> Option<Arc<ImageData>> {
     let bytes = fs::read(path).ok()?;
     if bytes.len() > 32 * 1024 * 1024 {
@@ -43,7 +48,32 @@ pub fn load(path: &Path, size: u32) -> Option<Arc<ImageData>> {
         limits.max_image_height = Some(16384);
         limits.max_alloc = Some(128 * 1024 * 1024);
         reader.limits(limits);
-        let image = reader.decode().ok()?.thumbnail(size, size).to_rgba8();
+        let decoded = reader.decode().ok()?;
+        // Do not invent detail by enlarging small raster originals. Filter premultiplied
+        // pixels so transparent borders cannot introduce dark/colored fringes.
+        let image = if decoded.width() > size || decoded.height() > size {
+            let mut rgba = decoded.to_rgba8();
+            for p in rgba.pixels_mut() {
+                for c in 0..3 {
+                    p[c] = (u16::from(p[c]) * u16::from(p[3]) / 255) as u8;
+                }
+            }
+            let mut resized = image::DynamicImage::ImageRgba8(rgba)
+                .resize(size, size, image::imageops::FilterType::Lanczos3)
+                .to_rgba8();
+            for p in resized.pixels_mut() {
+                for c in 0..3 {
+                    p[c] = if p[3] == 0 {
+                        0
+                    } else {
+                        (u32::from(p[c]) * 255 / u32::from(p[3])).min(255) as u8
+                    };
+                }
+            }
+            resized
+        } else {
+            decoded.to_rgba8()
+        };
         (image.width(), image.height(), image.into_raw())
     };
     Some(Arc::new(ImageData {
@@ -55,7 +85,7 @@ pub fn load(path: &Path, size: u32) -> Option<Arc<ImageData>> {
 }
 pub fn icon(name: &str) -> Option<Arc<ImageData>> {
     if Path::new(name).is_absolute() {
-        return load(Path::new(name), 64);
+        return load(Path::new(name), ICON_PIXELS);
     }
     let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
     let roots = [
@@ -65,7 +95,9 @@ pub fn icon(name: &str) -> Option<Arc<ImageData>> {
     ];
     for root in roots {
         for theme in ["Papirus-Dark", "Papirus", "Adwaita", "hicolor"] {
-            for size in ["64x64", "48x48", "scalable", "32x32", "symbolic"] {
+            for size in [
+                "scalable", "256x256", "128x128", "96x96", "64x64", "48x48", "32x32", "symbolic",
+            ] {
                 for category in ["apps", "mimetypes", "places", "status"] {
                     for ext in ["png", "svg"] {
                         let path = root
@@ -74,7 +106,7 @@ pub fn icon(name: &str) -> Option<Arc<ImageData>> {
                             .join(category)
                             .join(format!("{name}.{ext}"));
                         if path.is_file()
-                            && let Some(image) = load(&path, 64)
+                            && let Some(image) = load(&path, ICON_PIXELS)
                         {
                             return Some(image);
                         }
@@ -86,7 +118,7 @@ pub fn icon(name: &str) -> Option<Arc<ImageData>> {
     for ext in ["png", "svg"] {
         if let Some(image) = load(
             &PathBuf::from("/usr/share/pixmaps").join(format!("{name}.{ext}")),
-            64,
+            ICON_PIXELS,
         ) {
             return Some(image);
         }
@@ -137,10 +169,10 @@ pub fn symbol(name: &str, color: &str) -> Arc<ImageData> {
         _ => "<circle cx='12' cy='12' r='8'/><path d='M12 7v10M7 12h10'/>",
     };
     let svg = format!(
-        "<svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 24 24'><g fill='none' stroke='{color}' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'>{shape}</g></svg>"
+        "<svg xmlns='http://www.w3.org/2000/svg' width='{SYMBOL_PIXELS}' height='{SYMBOL_PIXELS}' viewBox='0 0 24 24'><g fill='none' stroke='{color}' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'>{shape}</g></svg>"
     );
     let tree = resvg::usvg::Tree::from_str(&svg, &Default::default()).unwrap();
-    let mut pixmap = resvg::tiny_skia::Pixmap::new(128, 128).unwrap();
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(SYMBOL_PIXELS, SYMBOL_PIXELS).unwrap();
     resvg::render(
         &tree,
         resvg::tiny_skia::Transform::identity(),
@@ -156,8 +188,8 @@ pub fn symbol(name: &str, color: &str) -> Arc<ImageData> {
     }
     Arc::new(ImageData {
         key: format!("symbol:{name}:{color}"),
-        width: 128,
-        height: 128,
+        width: SYMBOL_PIXELS,
+        height: SYMBOL_PIXELS,
         rgba,
     })
 }

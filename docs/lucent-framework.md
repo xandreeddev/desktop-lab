@@ -24,6 +24,7 @@ flowchart TD
 | `lucent-domain` | Application IDs/commands, windows/workspaces, desktop settings, clock/date, media/system/weather snapshots, timer state; application/compositor/settings ports |
 | `lucent-usecases` | Ranked app search, launch-versus-focus policy, validated widget movement, visibility, settings validation |
 | `lucent-api` | Declarative elements, typed component messages, async effects, subscriptions, surface intent, animations, widget registration |
+| `lucent-design` | Optional Lucent visual language: generated primitive/semantic/component tokens, light/dark theme and recipes |
 | `lucent-ui` | Layout constraints, clipping, hit testing, drag threshold, text input, retained hover/focus state |
 | `lucent-render` | One wgpu Vulkan device, rounded primitives, shadows, cached text/images, clipping and alpha composition |
 | `lucent-wayland` | SCTK layer surfaces, seats/keyboard/pointer, callback scheduling, subscription lifetime, effect worker, bounded local IPC |
@@ -32,8 +33,35 @@ flowchart TD
 The API and pure domain intentionally do not depend on each other: another shell
 can use the UI framework with different domain concepts. Framework code does not
 know about Lucid's colors, panels, calendar or launcher. All those decisions live
-in the desktop application. OS commands run on worker threads, never inside a
+in the desktop application and its optional `lucent-design` dependency. OS commands run on worker threads, never inside a
 component's `view` or the Vulkan draw loop.
+
+## Programming model and design system
+
+Rust structs own state; traits define contracts; functions compose views and use
+cases. There is no class inheritance. `view(&self, cx)` reads state and describes
+an element tree; `update(&mut self, message, effects)` changes state. OS work stays
+behind effects and service ports. This is a declarative view with explicit mutable
+state, rather than a purely functional application.
+
+`design/tokens.json` is the shared source for primitive palette/spacing/type,
+semantic light/dark roles, component geometry and motion. Run
+`python3 scripts/generate-design-tokens.py` after editing it. Generated Rust
+constants live in `lucent-design`; CSS variables feed the Astro site. CI checks
+references, types, cycles and generated drift. Native views use token references,
+including optical dimensions such as `component::launcher::ROW_HEIGHT`.
+
+`Theme::new(light)` provides `primary`, `on_primary`, `surface`,
+`surface_container`, `on_surface`, `error`, `success`, `warning`, `info` and `focus`.
+`Theme::button` composes a basic recipe, and `Theme::apply` supplies shared hover
+color/timing and shadow recipes throughout a tree. Monochrome images use
+`Element::tint`; application logos retain their original colors. Contrast tests
+cover the normal text, primary-action and error pairs in both themes.
+
+The generic framework supplies neutral style defaults and unstyled buttons.
+Clients may use a different design system without importing `lucent-design`.
+The local site keeps its landing page at `/`, with `/docs/` for the engine model
+and `/design-system/` for live specimens and the searchable source token catalog.
 
 ## Components and message composition
 
@@ -129,7 +157,23 @@ then renders only when needed. Hover animations use the same scheduler. No
 permanent animation timer repaints the screen. Multiple surfaces share one Vulkan
 device, pipeline and bounded resource cache. Text is rasterized when content,
 font face, size or scale changes, then positioned with GPU geometry during motion.
-This uses cached glyph rasterization, not a full complex-script shaping engine.
+Shared kerning-aware logical advances keep layout, caret placement and text
+rasterization consistent. Glyph coverage is sampled at twice the physical output
+density and area-resolved once, then cached at output resolution. Text origins
+snap to physical pixels; shapes continue moving at subpixel coordinates. The full
+framebuffer is not supersampled. Complex-script shaping and IME remain open.
+
+Source icons prefer SVG or high-resolution theme assets (128 px app icons,
+256 px line symbols). Wallpaper previews use up to 1024 px per edge and Lanczos
+resampling of premultiplied pixels; small originals are not enlarged. GPU image
+textures include mip levels with trilinear sampling. Transparent edges stay
+premultiplied throughout filtering and blending. These are quality/resource
+budgets, separate from logical design dimensions. Source assets are prepared for
+the current components at up to 2× density, not arbitrary unlimited zoom.
+
+The cache evicts unused resources above 1024 entries or approximately 64 MiB of
+texture payload. In-flight resources remain alive, and decoded source images,
+framebuffers and driver allocations are separate from this cache budget.
 
 ## Widget registration
 
