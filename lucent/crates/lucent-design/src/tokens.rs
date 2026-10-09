@@ -405,6 +405,18 @@ pub mod component {
         pub const INPUT_SIZE: f32 = 23.0;
         pub const INPUT_HEIGHT: f32 = 56.0;
     }
+    pub mod menu {
+        pub const WIDTH: f32 = 800.0;
+        pub const MIN_WIDTH: f32 = 320.0;
+        pub const HEIGHT: f32 = 560.0;
+        pub const INPUT_HEIGHT: f32 = 224.0;
+        pub const CHROME_HEIGHT: f32 = 184.0;
+        pub const HEADER_HEIGHT: f32 = 36.0;
+        pub const FOOTER_HEIGHT: f32 = 20.0;
+        pub const ROW_HEIGHT: f32 = 52.0;
+        pub const PADDING: f32 = 24.0;
+        pub const ROW_PADDING: f32 = 16.0;
+    }
 }
 pub mod icon {
     pub const TINY: f32 = 16.0;

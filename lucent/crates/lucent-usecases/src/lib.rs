@@ -1,4 +1,5 @@
 //! Desktop application policy, expressed against domain ports.
+pub mod menu;
 pub mod notifications;
 use lucent_domain::*;
 

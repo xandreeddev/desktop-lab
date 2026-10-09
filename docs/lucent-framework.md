@@ -1,7 +1,7 @@
 # Framework concepts and client boundaries
 
 The framework is a small, implemented vertical stack. Clients include `lucent-desktop`, the shared `SessionScreen` used by
-`lucent-lock` and `lucent-greeter`, and the independent `hello-layer` counter. There are no empty
+`lucent-lock` and `lucent-greeter`, the native `lucent-menu` picker, and the independent `hello-layer` counter. There are no empty
 crates standing in for future subsystems.
 
 ```mermaid

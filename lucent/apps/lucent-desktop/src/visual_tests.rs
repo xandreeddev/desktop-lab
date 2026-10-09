@@ -509,6 +509,10 @@ fn visual_regressions() {
             ("notification-history", Mode::Apps, 0, 0, "", 1., 390.),
             ("lock", Mode::Apps, 0, 0, "", 1., 640.),
             ("greeter", Mode::Apps, 0, 0, "", 1., 640.),
+            ("menu", Mode::Apps, 0, 0, "", 1., 960.),
+            ("menu-last-narrow", Mode::Apps, 0, 22, "", 1., 390.),
+            ("menu-empty", Mode::Apps, 0, 0, "no such action", 1., 640.),
+            ("menu-input", Mode::Apps, 0, 0, "A reminder", 1., 640.),
         ] {
             if light && matches!(name, "lock" | "greeter") {
                 continue;
@@ -521,7 +525,60 @@ fn visual_regressions() {
             app.update(Message::Mode(mode), &mut Effects::default());
             app.update(Message::Select(selected), &mut Effects::default());
             app.query = query.into();
-            let scene = if matches!(name, "lock" | "greeter") {
+            let scene = if name.starts_with("menu") {
+                let names = [
+                    "Keybindings",
+                    "Terminal",
+                    "Browser",
+                    "File manager",
+                    "System menu",
+                    "Theme menu",
+                    "Full screen",
+                    "Toggle window floating/tiling",
+                ];
+                let (mut menu, _) = lucent_menu::Menu::new(lucent_menu::Request {
+                    prompt: if name == "menu-input" {
+                        "Reminder"
+                    } else {
+                        "Keybindings"
+                    }
+                    .into(),
+                    mode: if name == "menu-input" {
+                        lucent_menu::Mode::Input
+                    } else {
+                        lucent_menu::Mode::Select
+                    },
+                    entries: (0..23)
+                        .map(|i| lucent_domain::MenuEntry {
+                            label: names[i % names.len()].into(),
+                            detail: format!("SUPER CTRL + {}", i + 1),
+                            value: i.to_string(),
+                        })
+                        .collect(),
+                    width: Some(800.),
+                    max_height: Some(500.),
+                    light,
+                });
+                menu.init(&mut Effects::default());
+                for msg in [
+                    lucent_menu::Message::Resize(width, 580.),
+                    lucent_menu::Message::Query(query.into()),
+                    lucent_menu::Message::Select(selected),
+                ] {
+                    menu.update(msg, &mut Effects::default());
+                }
+                let tree = menu
+                    .view(&ViewContext {
+                        surface: "menu",
+                        width,
+                        height: 580.,
+                        now,
+                    })
+                    .map(|_| Message::Quit);
+                let mut input = Interaction::default();
+                input.synchronize(&layout.build(&tree, width, 580., &input, now));
+                layout.build(&tree, width, 580., &input, now)
+            } else if matches!(name, "lock" | "greeter") {
                 let mode = if name == "lock" {
                     lucent_session::Mode::Lock
                 } else {

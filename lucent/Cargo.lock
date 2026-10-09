@@ -1097,6 +1097,7 @@ dependencies = [
  "lucent-api",
  "lucent-design",
  "lucent-domain",
+ "lucent-menu",
  "lucent-render",
  "lucent-services",
  "lucent-session",
@@ -1112,6 +1113,21 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "zeroize",
+]
+
+[[package]]
+name = "lucent-menu"
+version = "0.1.0"
+dependencies = [
+ "fontdue",
+ "lucent-api",
+ "lucent-design",
+ "lucent-domain",
+ "lucent-ui",
+ "lucent-usecases",
+ "lucent-wayland",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

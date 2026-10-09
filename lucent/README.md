@@ -16,6 +16,9 @@ python3 vm/launch.py lucent  # from the repository root on the lab host
 
 Inside the guest:
 
+- **Super+K:** searchable Omarchy keybindings, rendered by the native `lucent-menu`
+  framework client. Search actions or key combinations; arrows / Tab select,
+  Enter runs the action, and Escape or an outside click cancels.
 - **Super+Space:** open/close the application launcher. Type to filter, arrows to
   select, Enter to launch, Escape or a click outside to close. Tab / Shift+Tab
   cycle launcher sections; arrows and Enter work in Commands, Themes and Widgets too.
@@ -47,11 +50,19 @@ python3 scripts/lucent-setup.py activate
 
 Installation is per-user. Activation adds marked blocks to Hyprland's user
 `bindings.lua`, `autostart.lua` and `looknfeel.lua`, plus a marked PATH block in
-`.bash_profile` for the two lock-command wrappers. The appearance block applies the shared
+`.bash_profile` for lock and native menu-command wrappers. The appearance block applies the shared
 panel radius to Foot terminal windows. The service hands off notifications and hides Omarchy's bar **after
 the desktop has rendered and Lucent owns the notification bus**. The handoff uses
 a guarded stock-shell restart; unlock before first activation. Stopping, crashing or rolling back
 restores its previous visibility. Packaged Omarchy configuration is untouched.
+
+`lucent-menu` is a separate, short-lived framework client with an exclusive
+Wayland keyboard surface. `MenuEntry` holds display text and the original return
+value; the pure `Selection` use case handles search and navigation. The component
+never executes actions. The installed Omarchy keybinding script still discovers
+and dispatches bindings, including user overrides. Native select/input wrappers
+also preserve icon-prefixed options and their subtext return values. Palette,
+spacing, rounded corners and opening motion use the shared design tokens.
 
 ```sh
 python3 scripts/lucent-setup.py rollback

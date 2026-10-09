@@ -9,12 +9,12 @@ A packaged startup change invalidates the saved checksum. Re-run doctor, review 
 | Responsibility | Lucid VM | Noctalia VM | Lucent VM |
 | --- | --- | --- | --- |
 | Compositor, windows, input, monitors | Omarchy Hyprland | Omarchy Hyprland | Stock Omarchy Hyprland |
-| Panels, dock, launcher, notifications | Lucid | Noctalia v5 | Lucent bar/dock/launcher; stock notifications |
-| Idle and sleep lock | Dedicated Hypridle + Hyprlock | Dedicated Hypridle + Hyprlock | Stock Omarchy |
+| Panels, dock, launcher, notifications | Lucid | Noctalia v5 | Native Lucent |
+| Idle and sleep lock | Dedicated Hypridle + Hyprlock | Dedicated Hypridle + Hyprlock | Stock idle; native Lucent lock with stock fallback |
 | Polkit dialogs | Lucid | Noctalia native agent | Stock Omarchy |
 | Wallpaper | awww + shell-only Matugen palette | Native Noctalia wallpaper/palette | Stock Omarchy |
 | Terminal/app theming | Existing Omarchy theme | Existing Omarchy theme | Stock Omarchy |
-| Omarchy menus and shell-specific IPC | Partly replaced; see shortcuts | Partly replaced; see shortcuts | Stock functionality |
+| Omarchy menus and shell-specific IPC | Partly replaced; see shortcuts | Partly replaced; see shortcuts | Native keybinding/select/input menus; other shell IPC remains stock |
 
 Lucid's own Idle page is deliberately disabled: changing it would write and restart another Hypridle configuration. Lock shortcuts use Hyprlock. Lucid still exposes its upstream session/lock UI; it is not represented as a separately audited authentication implementation. Noctalia's session lock action is routed to Hyprlock. The stock Omarchy sleep-lock monitor is masked only in the two replacement guests because it otherwise calls a shell that is no longer running. Hypridle handles logind sleep/lock events instead.
 
@@ -36,9 +36,13 @@ Wireless radios, physical brightness, battery hardware, physical multi-monitor h
 Lucent uses a separate service and marked blocks in user `bindings.lua` and
 `autostart.lua`. It does not shadow packaged startup. It hides Omarchy's bar using
 its supported `bar-off` state flag after the new surfaces render, and restores
-that flag on stop/crash. Stock lock, notifications, background and polkit remain.
-The Rust client owns the visible bar, dock, launcher, wallpaper/widget selectors
-and seven desktop widgets. Wallpaper application calls `omarchy-theme-bg-set`;
-locking calls `omarchy-system-lock`. Its Hyprland adapter uses the tested Lua
+that flag on stop/crash. Native notifications own the notification bus after a
+guarded handoff. Background, idle, polkit and several shell IPC services remain
+stock. Lucent owns the visible bar, dock, launcher, wallpaper/widget selectors,
+seven widgets, notifications, secure lock and login UI. The native keybinding
+picker retains Omarchy's installed discovery/dispatch logic through select/input
+wrappers; packaged bindings stay unchanged. Wallpaper application calls
+`omarchy-theme-bg-set`; lock wrappers prefer the native secure locker and retain
+a stock fallback. Its Hyprland adapter uses the tested Lua
 `hl.dsp.focus` dispatch API. Full parity gaps and measurements are documented in
 [the Lucent README](../lucent/README.md) and [report](../reports/lucent-framework.md).

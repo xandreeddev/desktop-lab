@@ -24,6 +24,7 @@ Lucid uses `qs ipc call -- TARGET METHOD [ARG]`; the `--` is required before met
 | Action | Result |
 | --- | --- |
 | Super+Space | Rust launcher toggle |
+| Super+K | Native searchable Omarchy keybinding menu |
 | Super+Ctrl+Space | Wallpaper carousel |
 | Type / arrows / Enter / Escape | Search, select, launch/apply, close |
 | Widget background left-drag | Move and persist position |
@@ -35,3 +36,16 @@ Lucid uses `qs ipc call -- TARGET METHOD [ARG]`; the `--` is required before met
 Omarchy's terminal, tiling and secure-lock shortcuts remain. The Rust widgets are
 Wayland layer surfaces and stay out of the tiled window layout. Close Lucent with
 `lucent-cli quit`; its service restores the stock bar. See [usage](../lucent/README.md).
+
+The keybinding menu uses Omarchy's installed `omarchy-menu-keybindings` unchanged.
+It discovers active Hyprland bindings and resolves Lua actions; Lucent's native
+picker replaces `omarchy-menu-select` through a per-user PATH wrapper. Type an
+action or shortcut, use arrows or Tab / Shift+Tab to select, and Enter to execute.
+Escape, Close, or an outside click cancels. The picker releases its keyboard
+surface before returning the exact original value to Omarchy's dispatcher.
+Custom bindings remain discoverable; there is no second hardcoded shortcut list.
+
+Other Omarchy callers of `omarchy-menu-select` and `omarchy-menu-input` use the
+same native picker. Root shell menus that call `omarchy-shell` directly still use
+the stock shell. Rollback disables the wrappers even for existing processes
+that retain their old PATH.

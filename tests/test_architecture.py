@@ -25,3 +25,6 @@ class Boundaries(unittest.TestCase):
         session=(ROOT/'lucent/apps/lucent-session/src/lib.rs').read_text()
         self.assertNotIn('lucent_auth',session)
         self.assertNotIn('std::process',session)
+        menu=(ROOT/'lucent/apps/lucent-menu/src/lib.rs').read_text()
+        self.assertNotIn('std::process',menu)
+        self.assertNotIn('std::fs',menu)

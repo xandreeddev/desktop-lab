@@ -9,3 +9,5 @@ mod notifications;
 pub use notifications::*;
 mod authentication;
 pub use authentication::*;
+mod menu;
+pub use menu::*;

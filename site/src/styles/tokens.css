@@ -321,6 +321,16 @@
   --component-authentication-title-size: var(--font-heading);
   --component-authentication-input-size: var(--font-title);
   --component-authentication-input-height: 56px;
+  --component-menu-width: 800px;
+  --component-menu-min-width: 320px;
+  --component-menu-height: 560px;
+  --component-menu-input-height: 224px;
+  --component-menu-chrome-height: 184px;
+  --component-menu-header-height: 36px;
+  --component-menu-footer-height: 20px;
+  --component-menu-row-height: 52px;
+  --component-menu-padding: var(--space-xxl);
+  --component-menu-row-padding: var(--space-lg);
   --icon-tiny: 16px;
   --icon-small: 17px;
   --icon-compact: 18px;

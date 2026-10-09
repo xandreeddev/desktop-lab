@@ -1,7 +1,7 @@
 # Build from this repository checkout: cd packaging && makepkg -si
 pkgname=lucent-desktop
 pkgver=0.1.0
-pkgrel=4
+pkgrel=5
 pkgdesc='Native Rust Wayland shell framework and desktop client'
 arch=('x86_64')
 url='https://github.com/xandreeddev/desktop-lab'
@@ -26,6 +26,7 @@ check() {
 package() {
   install -Dm755 "$startdir/../lucent/target/release/lucent-desktop" "$pkgdir/usr/bin/lucent-desktop"
   install -Dm755 "$startdir/../lucent/target/release/lucent-cli" "$pkgdir/usr/bin/lucent-cli"
+  install -Dm755 "$startdir/../lucent/target/release/lucent-menu" "$pkgdir/usr/bin/lucent-menu"
   install -Dm644 "$startdir/../lucent/apps/lucent-desktop/assets/OFL-GoogleSansFlex.txt" "$pkgdir/usr/share/licenses/$pkgname/OFL-GoogleSansFlex.txt"
   install -Dm644 "$startdir/lucent-desktop.desktop" "$pkgdir/usr/share/applications/lucent-desktop.desktop"
   install -Dm755 "$startdir/../lucent/target/release/lucent-lock" "$pkgdir/usr/bin/lucent-lock"

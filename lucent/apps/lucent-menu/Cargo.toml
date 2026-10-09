@@ -1,21 +1,18 @@
 [package]
-name = "lucent-desktop"
+name = "lucent-menu"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+
 [dependencies]
-lucent-wayland = { path = "../../crates/lucent-wayland" }
 lucent-api = { path = "../../crates/lucent-api" }
 lucent-domain = { path = "../../crates/lucent-domain" }
 lucent-usecases = { path = "../../crates/lucent-usecases" }
-lucent-services = { path = "../../crates/lucent-services" }
-serde_json = "1"
 lucent-design = { path = "../../crates/lucent-design" }
+lucent-wayland = { path = "../../crates/lucent-wayland" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [dev-dependencies]
-lucent-menu = { path = "../lucent-menu" }
-lucent-session = { path = "../lucent-session" }
 lucent-ui = { path = "../../crates/lucent-ui" }
-lucent-render = { path = "../../crates/lucent-render" }
 fontdue = "0.9"
-image = { version = "0.25", default-features = false, features = ["png"] }

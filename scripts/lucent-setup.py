@@ -32,11 +32,11 @@ def edit(path, block=None, begin=BEGIN, end=END):
 
 
 def install(binary_dir):
-    for name in ('lucent-desktop', 'lucent-cli', 'lucent-lock', 'lucent-greeter'):
+    for name in ('lucent-desktop', 'lucent-cli', 'lucent-lock', 'lucent-greeter', 'lucent-menu'):
         source = binary_dir / name
         if not source.is_file():
             raise SystemExit(f'Build {source} first')
-    for name in ('lucent-desktop', 'lucent-cli', 'lucent-lock', 'lucent-greeter'):
+    for name in ('lucent-desktop', 'lucent-cli', 'lucent-lock', 'lucent-greeter', 'lucent-menu'):
         target = HOME / '.local/bin' / name
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = target.with_suffix('.new')
@@ -66,6 +66,7 @@ RestartSec=3
     entry.write_text('[Desktop Entry]\nType=Application\nName=Lucent Desktop\nComment=Native Rust desktop shell\nExec=systemctl --user start lucent.service\nIcon=preferences-desktop\nCategories=System;\nTerminal=false\n')
     shutil.copy2(ROOT/'scripts/lucent-lock.py', HOME/'.local/lib/lucent/lock.py')
     shutil.copy2(ROOT/'scripts/lucent-wallpaper.py', HOME/'.local/lib/lucent/wallpaper.py')
+    shutil.copy2(ROOT/'scripts/lucent-menu.py', HOME/'.local/lib/lucent/menu.py')
     (unit.parent/'lucent-wallpaper-sync.service').write_text('''[Unit]
 Description=Publish the selected wallpaper for Lucent login
 [Service]
@@ -119,6 +120,11 @@ o.bind("SUPER + CTRL + L", "Lucent secure lock", "python3 " .. os.getenv("HOME")
 ''')
     edit(HOME / '.config/hypr/looknfeel.lua', (ROOT / 'configs/lucent/window-rules.lua').read_text())
     wrappers=HOME/'.local/lib/lucent/bin';wrappers.mkdir(parents=True,exist_ok=True)
+    for mode in ('select', 'input'):
+        script = wrappers / ('omarchy-menu-' + mode)
+        script.write_text('#!/usr/bin/env bash\nexec python3 "$HOME/.local/lib/lucent/menu.py" ' + mode + ' "$@"\n')
+        script.chmod(0o755)
+    (BACKUP/'menu-enabled').touch()
     for name,mode in [('omarchy-system-lock',''),('omarchy-system-sleep-lock',' sleep')]:
         script=wrappers/name
         script.write_text('#!/usr/bin/env bash\nexec python3 "$HOME/.local/lib/lucent/lock.py"'+mode+' "$@"\n')
@@ -137,6 +143,7 @@ o.bind("SUPER + CTRL + L", "Lucent secure lock", "python3 " .. os.getenv("HOME")
 
 def rollback():
     # Remove only our blocks, preserving subsequent user edits.
+    (BACKUP/'menu-enabled').unlink(missing_ok=True)
     edit(HOME / '.config/hypr/bindings.lua')
     edit(HOME / '.config/hypr/autostart.lua')
     edit(HOME / '.config/hypr/looknfeel.lua')
