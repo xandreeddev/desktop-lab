@@ -3,12 +3,7 @@ name: Publish site to GitHub Pages
 on:
   push:
     branches: [main]
-    paths:
-      - 'site/**'
-      - 'design/**'
-      - 'lucent/**'
-      - 'reports/**'
-      - '.github/workflows/pages.yml'
+  # A merge into protected main triggers publication, including docs-only PRs.
   workflow_dispatch:
 
 permissions:
@@ -20,6 +15,8 @@ concurrency:
 
 jobs:
   build:
+    # Manual recovery runs must also use main.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
