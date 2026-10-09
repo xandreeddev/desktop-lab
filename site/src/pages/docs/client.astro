@@ -1,0 +1,72 @@
+---
+import DocGuide from '../../layouts/DocGuide.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import { excerpt, sourceUrl } from '../../data/source';
+import platformSource from '../../../../lucent/apps/lucent-desktop/src/platform.rs?raw';
+import desktopSource from '../../../../lucent/apps/lucent-desktop/src/desktop.rs?raw';
+const sections: [string, string][] = [['composition', '01 · Composition root'], ['state', '02 · State & startup'], ['launcher', '03 · Launcher flow'], ['surfaces', '04 · Bar, dock & geometry'], ['widgets', '05 · Widget drag flow'], ['clients', '06 · Other native clients'], ['extend', '07 · Where to make changes']];
+const state = [
+  ['Durable preferences', 'DesktopSettings', 'Widget positions/visibility, pins, notes and palette mode. Loaded from the settings port; saved through ordered effects.'],
+  ['Observed external state', 'apps, compositor, clock, system, media, weather, wallpapers', 'Snapshots and discovered data. Changed by worker results, not by view functions. Absence and failures follow each service’s current policy.'],
+  ['Interaction state', 'launcher, mode, query, results, selected, scroll, drag_origins', 'The user’s current activity. Kept in memory and reset or updated by typed messages.'],
+  ['Presentation state', 'panel motions, carousel, images, viewport', 'Time-dependent scalar transitions, decoded assets and current logical surface size. These are not domain entities.'],
+  ['Composed child state', 'notifications::Center', 'Owns notification presentation and messages; the parent lifts its view and effects into the desktop application.'],
+];
+const surfaces = [
+  ['bar', 'Top', 'No keyboard capture', 'A 64-pixel surface and exclusive zone keep tiled windows below it. Only controls receive pointer input.'],
+  ['widgets', 'Bottom', 'On demand', 'A full-output layer below normal windows. Widget hit regions allow clicks through the empty desktop.'],
+  ['dock · closed', 'Top', 'None', 'The native surface fills the output, but its painted dock and input regions occupy the bottom portion.'],
+  ['dock · open', 'Overlay', 'Exclusive', 'The same client surface hosts the launcher/pickers and captures outside clicks for dismissal.'],
+  ['notifications', 'Overlay', 'On demand', 'Visible when the child has toast/history content; input remains limited to interactive regions.'],
+];
+---
+<DocGuide chapter="client" title="Building the desktop client" heading="One framework." accent="A concrete desktop." description="Trace the production client from injected ports to launcher actions, bar layout, draggable widgets and independent native menus." sections={sections}>
+  <section id="composition"><span class="eyebrow">01 / THE EXECUTABLE CHOOSES</span><h2>Adapters enter through<br />the composition root.</h2>
+    <p><code>Desktop::new(DesktopPorts)</code> receives shared trait objects. The only desktop module that selects production service implementations is <code>platform.rs</code>. Tests can construct the same desktop with fake ports, deterministic snapshots and synthetic assets.</p>
+    <CodeBlock code={excerpt(platformSource, 'pub fn desktop_ports()', 'pub struct NativeAssets;')} lang="rust" label="Live source · production dependency injection" />
+    <p>The compositor is optional: without a valid connection, launching apps still works, but workspace/focus behavior is unavailable. <code>AssetPort</code> stays at the presentation boundary because it returns image data. Domain services return domain values.</p>
+    <p>The client uses functional view builders around a state-owning struct. The launcher is currently part of <code>Desktop</code>, not an independent component. Notifications demonstrate the separate-child-component path; framework support for composition does not mean every client feature has already been extracted.</p>
+  </section>
+  <section id="state"><span class="eyebrow">02 / STATE HAS DIFFERENT LIFETIMES</span><h2>What changes,<br />and where it lives.</h2>
+    <div class="table-scroll"><table><thead><tr><th>Lifetime</th><th>State</th><th>Owner / behavior</th></tr></thead><tbody>{state.map(([kind, fields, detail]) => <tr><td>{kind}</td><td><code>{fields}</code></td><td>{detail}</td></tr>)}</tbody></table></div>
+    <p>At startup, <code>init</code> queues discovery of applications, settings and wallpapers. <code>Message::Loaded</code> installs that data, ranks the initial app list, schedules asset loading and invalidates the surfaces. A failed settings load leaves saving disabled to protect the original file. Application-discovery failure currently produces an empty list rather than a dedicated error screen.</p>
+    <p>Subscriptions provide compositor and notification streams, clock samples every second, system samples every five seconds, media every two seconds and weather every fifteen minutes. These are independent worker streams. Updates compare relevant fields before repainting: a clock tick redraws the minute clock only when its displayed minute/date changes; a visible running timer can update each second.</p>
+    <p>The view reads snapshots; it does not fetch them. The renderer consumes the resulting scene; it does not know whether a value came from Hyprland, a fake adapter or a saved setting.</p>
+  </section>
+  <section id="launcher"><span class="eyebrow">03 / KEYSTROKE TO APPLICATION</span><h2>Follow one launcher action.</h2>
+    <ol class="guide-steps"><li>Super+Space reaches the configured launcher command. The desktop toggles its launcher state, selects Apps, clears the query and retargets panel motion.</li><li>The input handler emits <code>Message::Query</code>. The client searches the cached app list, resets selection/scroll and recomputes the target panel size.</li><li>Arrows update controlled selection; the visible row window follows it. Tab and Shift+Tab cycle Apps, Commands, Wallpapers, Themes and Widgets.</li><li>Enter resolves the selected result to a stable <code>AppId</code> and calls the launch helper with <code>prefer_running = false</code>. A dock click uses <code>true</code>.</li><li>The helper clones the needed app and ports into an effect. The use case chooses focus or launch; the adapter performs the OS operation.</li><li><code>Message::Completed</code> returns success/failure to the UI thread. The launcher closes through its existing transition; an action failure updates the error field.</li></ol>
+    <CodeBlock code={excerpt(desktopSource, '    fn launch(&self,', '    fn perform(')} lang="rust" label="Live source · client effect around the launch use case" />
+    <p>The fill and outline of a selected row come from the same controlled state on the same frame. There is no delayed selection-background animation. Panel width/height and wallpaper-carousel motion have separate timelines; changing a row does not need to animate the entire panel.</p>
+    <p>App icons use exact desktop-ID mappings to Lucent’s monochrome SVG catalog, with XDG icons and a bundled symbol as fallbacks. Their loading belongs to the asset adapter; row rendering receives a cached image. Search, app launching and icon resolution remain separate responsibilities.</p>
+  </section>
+  <section id="surfaces"><span class="eyebrow">04 / NATIVE SURFACES, CLIENT GEOMETRY</span><h2>The bar and launcher<br />share a layout contract.</h2>
+    <div class="table-scroll"><table><thead><tr><th>Surface</th><th>Wayland layer</th><th>Keyboard</th><th>Purpose</th></tr></thead><tbody>{surfaces.map(([name, layer, keyboard, detail]) => <tr><td>{name}</td><td>{layer}</td><td>{keyboard}</td><td>{detail}</td></tr>)}</tbody></table></div>
+    <p>A native surface’s size is not necessarily the painted panel’s size. The dock uses a full-output transparent surface so its panel can move and grow. Its rounded panel, children and input regions are ordinary elements inside that surface. Hyprland manages the surface’s layer and focus; the client manages its internal layout.</p>
+    <p><a href={sourceUrl('lucent/apps/lucent-desktop/src/shell_layout.rs')}>shell_layout.rs</a> contains pure desktop geometry shared by animation targets and views. Settled outer panels use the 16-pixel shell grid; control placement follows an 8-pixel rhythm with a 4-pixel inset subdivision. Launcher/input rows are 48 pixels. Height is derived from actual header, body, gaps and padding instead of copied totals for each mode.</p>
+    <p>Whole rows determine launcher capacity. The last selected result remains reachable, reset stays in a reserved footer and theme cards use equal widths with their actual token gap. Dock slots are centered with equal side insets. Available space is rounded down before placement; leftover display pixels can make a grid-aligned center slightly different from the mathematical center.</p>
+    <p><code>BarLayout</code> derives capsule widths from control slots and gaps. Optional media and clock capsules appear only when their calculated bounds fit between the other groups. A compact workspace strip retains the active workspace. Text is constrained inside its slot; a long track name cannot push another capsule off screen.</p>
+    <p>These are client layout decisions. The framework supplies rows, constraints and clipping; the renderer supplies rounded shapes. Neither needs a special case for Lucent’s launcher or bar. During morphs, dimensions remain continuous between settled grid targets.</p>
+  </section>
+  <section id="widgets"><span class="eyebrow">05 / POINTER TO PERSISTED POSITION</span><h2>Dragging is an interaction.<br />Snapping is a use case.</h2>
+    <ol class="guide-steps"><li>The framework recognizes a drag and emits deltas relative to its start.</li><li><code>Message::MoveWidget</code> records the widget’s initial placement once in <code>drag_origins</code>. Each movement adds the current delta to that origin.</li><li><code>move_widget</code> clamps the proposed placement inside the viewport. The client updates state and invalidates the widgets surface.</li><li>While an origin is active, the view adds decorative grid elements using the same spacing token as snapping. They have no input handlers.</li><li>On release, <code>snap_placement</code> rounds the final position, then bounds clamping runs. The origin is removed, hiding the grid, and one save effect persists the result.</li></ol>
+    <p>Dragging remains smooth between grid points; snapping happens on release. The grid is generated in the client’s widget view, so the renderer receives the same generic elements as any other decoration.</p>
+    <p><a href={sourceUrl('lucent/apps/lucent-desktop/src/widgets.rs')}>The widget registry</a> currently contains calendar, clock, weather, media, system, notes and focus timer views. Each registration supplies a stable ID, title, token-derived size and view function. This is compile-time composition, not a dynamic plugin ABI. Registry functions read the desktop context; OS operations return through messages and ports.</p>
+  </section>
+  <section id="clients"><span class="eyebrow">06 / REUSE BEYOND THE DESKTOP</span><h2>Other clients use<br />the same engine.</h2>
+    <p><strong>Notifications:</strong> the parent maps the child’s elements with <code>Element::map(Message::Notifications)</code> and routes updates through <code>Effects::delegate</code>. The child owns toast/history presentation, paging, DND and actions. The D-Bus adapter and pure inbox policy remain outside it. History is currently in memory.</p>
+    <p><strong>Keybindings and menus:</strong> <code>lucent-menu</code> is an independent client with pure selection policy. It returns the original selected value after destroying its keyboard surface. Omarchy’s per-user adapter supplies installed binding/menu data and dispatches actions. Back/Escape and nested menus use the native picker; trusted user actions retain precedence. See <a href={sourceUrl('docs/native-menu.md')}>the menu integration contract</a>.</p>
+    <p><strong>Lock and login:</strong> both use a shared <code>SessionScreen</code>, injected authentication and native rendering. Lock uses the secure session-lock runtime; login uses greetd. A decorative layer-shell window cannot replace that protocol. Secrets stay outside scene and texture data.</p>
+    <p><strong>Still supplied by the system:</strong> Hyprland handles windows, tiling, keybindings and decorations. Omarchy still supplies background, idle, polkit and remaining shell integrations. The native clients do not yet replace every stock shell feature; see the <a href="/guide/#ownership">ownership guide</a>.</p>
+  </section>
+  <section id="extend"><span class="eyebrow">07 / A PRACTICAL SOURCE MAP</span><h2>Change the owning layer.</h2>
+    <ul class="resource-list">
+      <li><a href={sourceUrl('lucent/apps/lucent-desktop/src/desktop.rs')}>desktop.rs ↗</a><span>Typed messages, state transitions, effects, subscriptions and surface declarations.</span></li>
+      <li><a href={sourceUrl('lucent/apps/lucent-desktop/src/views.rs')}>views.rs + shell_layout.rs ↗</a><span>Launcher/bar/dock presentation and shared pure geometry. Add a geometry assertion when changing capacity or bounds.</span></li>
+      <li><a href={sourceUrl('lucent/apps/lucent-desktop/src/widgets.rs')}>widgets.rs ↗</a><span>Register a stable widget ID and view, then wire any new behavior through a message.</span></li>
+      <li><a href={sourceUrl('design/tokens.json')}>design/tokens.json ↗</a><span>Primary scales, semantic roles and component recipes. Regenerate the Rust and website consumers.</span></li>
+      <li><a href="/docs/domain/#ports">Domain ports and adapters →</a><span>Add or replace an external capability here, then select it in platform.rs.</span></li>
+      <li><a href="/docs/#quality">Validation workflow →</a><span>Pure decisions, scene geometry, reviewed Vulkan baselines and real input checks cover different failure modes.</span></li>
+    </ul>
+    <p>Existing examples and clients demonstrate framework reuse. Remaining architectural work includes extracting the launcher state machine, replacing selected polling adapters and making loading/error presentation consistent. Those changes can preserve the port contracts and rendering engine.</p>
+  </section>
+</DocGuide>

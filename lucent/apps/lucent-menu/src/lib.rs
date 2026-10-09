@@ -85,11 +85,23 @@ impl Menu {
             self.request.max_height.unwrap_or(token::HEIGHT)
         };
         preferred
-            .max(token::INPUT_HEIGHT)
+            .max(if self.request.mode == Mode::Input {
+                token::INPUT_HEIGHT
+            } else {
+                self.chrome_height() + token::ROW_HEIGHT
+            })
             .min((viewport - space::XXL * 2.).max(0.))
     }
+    fn chrome_height(&self) -> f32 {
+        token::HEADER_HEIGHT
+            + input::HEIGHT
+            + token::FOOTER_HEIGHT
+            + token::PADDING * 2.
+            + space::MD * 3.
+    }
     fn rows(&self, viewport: f32) -> usize {
-        ((self.height(viewport) - token::CHROME_HEIGHT) / (token::ROW_HEIGHT + space::XS))
+        ((self.height(viewport) - self.chrome_height() + space::XS)
+            / (token::ROW_HEIGHT + space::XS))
             .floor()
             .max(1.) as usize
     }
@@ -378,7 +390,7 @@ mod tests {
     }
     #[test]
     fn last_row_is_visible_and_selection_keeps_input_focus() {
-        for (width, height) in [(1920., 1080.), (390., 580.), (640., 360.)] {
+        for (width, height) in [(1920., 1080.), (390., 580.), (640., 360.), (640., 288.)] {
             let (mut menu, _) = Menu::new(request());
             let fonts = menu
                 .fonts()

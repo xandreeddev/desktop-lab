@@ -1,9 +1,6 @@
 use crate::ports::{DesktopPorts, WatchStop};
 use lucent_api::{self as api, *};
-use lucent_design::{
-    component::{launcher, panel},
-    motion,
-};
+use lucent_design::{component::panel, motion};
 use lucent_domain::{self as domain, *};
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
@@ -220,40 +217,17 @@ impl Desktop {
                 apps.push(app);
             }
         }
-        apps.truncate(8);
+        apps.truncate(8.min(crate::shell_layout::dock_capacity(self.viewport.0).saturating_sub(1)));
         apps
     }
     pub fn dock_width(&self) -> f32 {
-        let count = self.dock_apps().len() as f32 + 1.;
-        count * lucent_design::component::dock_row::ITEM_SIZE
-            + (count - 1.) * lucent_design::space::SM
-            + 2. * lucent_design::component::dock::ROW_LEFT
+        crate::shell_layout::dock_width(self.dock_apps().len() + 1)
     }
     fn retarget_panel_transition(&mut self, now: f64) {
-        let width = if self.launcher {
-            if self.mode == Mode::Wallpapers {
-                panel::WALLPAPER_WIDTH.min(self.viewport.0 - panel::VIEWPORT_INSETS)
-            } else {
-                panel::LAUNCHER_WIDTH.min(self.viewport.0 - panel::VIEWPORT_INSETS)
-            }
+        let (width, height) = if self.launcher {
+            crate::shell_layout::launcher_size(self.mode, self.results.len(), self.viewport)
         } else {
-            self.dock_width()
-        };
-        let height = if self.launcher {
-            match self.mode {
-                Mode::Wallpapers => panel::WALLPAPER_HEIGHT,
-                Mode::Apps => (self.results.len().min(7) as f32 * launcher::ROW_HEIGHT
-                    + launcher::BODY_TOP
-                    + lucent_design::space::MD
-                    + lucent_design::component::input::HEIGHT
-                    + (2. * lucent_design::component::dock::CONTENT_INSET))
-                    .clamp(panel::LAUNCHER_MIN_HEIGHT, panel::LAUNCHER_MAX_HEIGHT),
-                Mode::Widgets => panel::WIDGETS_HEIGHT,
-                Mode::Commands => panel::COMMANDS_HEIGHT,
-                Mode::Themes => panel::THEMES_HEIGHT,
-            }
-        } else {
-            panel::DOCK_HEIGHT
+            (self.dock_width(), panel::DOCK_HEIGHT)
         };
         self.panel_width.target(width, now, motion::PANEL, SPATIAL);
         self.panel_height
@@ -278,12 +252,18 @@ impl Desktop {
             Mode::Wallpapers => self.wallpapers.len(),
         };
         self.selected = index.min(count.saturating_sub(1));
-        if self.selected < self.scroll {
-            self.scroll = self.selected;
-        }
-        if self.selected >= self.scroll + 7 {
-            self.scroll = self.selected - 6;
-        }
+        let rows = crate::shell_layout::visible_rows(self.mode, self.results.len(), self.viewport);
+        let row_count = if self.mode == Mode::Widgets {
+            WIDGETS.len()
+        } else {
+            count
+        };
+        let selected = self.selected.min(row_count.saturating_sub(1));
+        self.scroll = self
+            .scroll
+            .min(selected)
+            .max((selected + 1).saturating_sub(rows))
+            .min(row_count.saturating_sub(rows));
     }
     fn launch(&self, id: &AppId, prefer_running: bool, effects: &mut Effects<Message>) {
         let Some(app) = self.apps.iter().find(|a| &a.id == id).cloned() else {
@@ -623,6 +603,7 @@ impl Component for Desktop {
                     effects.redraw("dock");
                 }
                 self.retarget_panel_transition(now);
+                self.choose(self.selected, now);
                 effects.redraw(id);
             }
             Message::Completed(result) => {

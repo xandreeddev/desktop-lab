@@ -307,8 +307,14 @@ fn command_rows_center_icons_and_labels_inside_rounded_endcaps() {
         .collect();
     let first = slots.first().unwrap();
     let last = slots.last().unwrap();
-    assert_eq!(first.rect.x - panel.rect.x, 16.);
-    assert_eq!(panel.rect.x + panel.rect.w - last.rect.x - last.rect.w, 16.);
+    let left = first.rect.x - panel.rect.x;
+    let right = panel.rect.x + panel.rect.w - last.rect.x - last.rect.w;
+    assert_eq!(
+        left, right,
+        "dock padding must stay symmetric after grid sizing"
+    );
+    assert!(left >= lucent_design::component::dock::CONTENT_INSET);
+    assert_eq!(left % lucent_design::layout::UNIT, 0.);
     assert_eq!(first.rect.y - panel.rect.y, 8.);
     assert_eq!(
         panel.rect.y + panel.rect.h - first.rect.y - first.rect.h,
@@ -587,8 +593,12 @@ fn visual_regressions() {
             ("themes", Mode::Themes, 9, 1, "", 1., 640.),
             ("widgets", Mode::Widgets, 9, 6, "", 1., 640.),
             ("wallpapers-empty", Mode::Wallpapers, 9, 0, "", 1., 640.),
+            ("wallpapers", Mode::Wallpapers, 9, 0, "", 1., 1280.),
             ("icon-catalog", Mode::Apps, 9, 0, "", 1., 640.),
             ("bar", Mode::Apps, 9, 0, "", 1., 1280.),
+            ("bar-dense", Mode::Apps, 9, 0, "", 1., 1920.),
+            ("bar-narrow", Mode::Apps, 9, 0, "", 1., 390.),
+            ("dock", Mode::Apps, 9, 0, "", 1., 640.),
             ("notification", Mode::Apps, 0, 0, "", 1., 640.),
             ("notification-history", Mode::Apps, 0, 0, "", 1., 390.),
             ("lock", Mode::Apps, 0, 0, "", 1., 640.),
@@ -611,6 +621,9 @@ fn visual_regressions() {
             app.update(Message::Mode(mode), &mut Effects::default());
             app.update(Message::Select(selected), &mut Effects::default());
             app.query = query.into();
+            if name == "wallpapers" {
+                app.wallpapers = wallpaper_fixtures();
+            }
             let scene = if name == "widget-drag-grid" {
                 app.settings.visible_widgets = vec!["calendar".into(), "weather".into()];
                 app.update(
@@ -799,13 +812,15 @@ fn visual_regressions() {
                     .collect();
                 let root = Element::grid(8, icons).gap(8.).padding(12.).fill();
                 layout.build(&root, width, 580., &Interaction::default(), now)
-            } else if name == "bar" {
-                app.compositor.workspaces = (1..=6)
+            } else if name.starts_with("bar") {
+                app.media.title = "A long media title that must stay inside its own capsule".into();
+                app.system.volume = Some(100);
+                app.compositor.workspaces = (1..=8)
                     .map(|id| lucent_domain::Workspace {
                         id,
                         name: id.to_string(),
                         windows: 0,
-                        active: id == 1,
+                        active: id == 8,
                     })
                     .collect();
                 let cx = ViewContext {
@@ -816,6 +831,9 @@ fn visual_regressions() {
                 };
                 layout.build(&app.view(&cx), width, 580., &Interaction::default(), now)
             } else {
+                if name == "dock" {
+                    app.update(Message::CloseLauncher, &mut Effects::default());
+                }
                 scene(&app, &layout, &mut Interaction::default(), now)
             };
             let mut paint = vec![Paint::Shape {
@@ -967,4 +985,237 @@ fn notification_controls_fit_at_normal_and_narrow_widths() {
             }
         }
     }
+}
+
+#[test]
+fn settled_shell_geometry_obeys_grid_and_contains_its_controls() {
+    use lucent_design::{component, layout as grid, space};
+    let mut app = fixture(20, false);
+    app.wallpapers = wallpaper_fixtures();
+    let layout = Layout::new(fonts(&app));
+    let aligned = |value: f32, step: f32| {
+        assert!(
+            (value / step - (value / step).round()).abs() < 0.001,
+            "{value} is off the {step}px grid"
+        );
+    };
+    for (width, height) in [
+        (320., 360.),
+        (390., 580.),
+        (640., 580.),
+        (1366., 768.),
+        (1920., 1080.),
+    ] {
+        app.update(
+            Message::Resize("dock", width, height),
+            &mut Effects::default(),
+        );
+        for mode in Mode::ALL {
+            app.update(Message::Mode(mode), &mut Effects::default());
+            app.update(Message::Select(19), &mut Effects::default());
+            let rendered = scene(&app, &layout, &mut Interaction::default(), 1.);
+            let panel = rendered
+                .hits
+                .iter()
+                .find(|h| h.id == "dock-panel")
+                .unwrap()
+                .rect;
+            for value in [panel.x, panel.y, panel.w, panel.h] {
+                aligned(value, grid::SHELL_STEP);
+            }
+            assert!(panel.x >= grid::SHELL_INSET && panel.x + panel.w <= width - grid::SHELL_INSET);
+            assert!(panel.y >= component::panel::BAR_HEIGHT + grid::SECTION_GAP);
+            assert!(panel.y + panel.h <= height - grid::SHELL_INSET);
+            for hit in &rendered.hits {
+                if hit.id.starts_with("mode-") {
+                    assert!(
+                        fully_visible(hit.rect, panel),
+                        "{} outside {mode:?} header at {width}",
+                        hit.id
+                    );
+                    for value in [hit.rect.x, hit.rect.y, hit.rect.w, hit.rect.h] {
+                        aligned(value, grid::CONTROL_STEP);
+                    }
+                }
+                if hit.id.starts_with("result-")
+                    || hit.id.starts_with("command-")
+                    || hit.id.starts_with("toggle-")
+                    || hit.id == "reset-layout"
+                    || hit.id == "apply-wallpaper"
+                    || hit.id == "wallpaper-previous"
+                    || hit.id == "wallpaper-next"
+                {
+                    assert!(
+                        fully_visible(hit.rect, hit.clip),
+                        "clipped {} in {mode:?} at {width}x{height}",
+                        hit.id
+                    );
+                    for value in [hit.rect.x, hit.rect.y, hit.rect.w, hit.rect.h] {
+                        aligned(value, grid::SHELL_STEP);
+                    }
+                }
+            }
+            if mode == Mode::Apps {
+                let input = rendered
+                    .hits
+                    .iter()
+                    .find(|h| h.id == "launcher-search")
+                    .unwrap()
+                    .rect;
+                let field = rendered
+                    .paint
+                    .iter()
+                    .find_map(|p| match p {
+                        Paint::Shape {
+                            rect,
+                            color,
+                            shadow: false,
+                            ..
+                        } if *color == app.widget_color()
+                            && rect.h == component::input::HEIGHT
+                            && fully_visible(input, *rect) =>
+                        {
+                            Some(*rect)
+                        }
+                        _ => None,
+                    })
+                    .expect("painted search field");
+                for value in [field.x, field.y, field.w, field.h] {
+                    aligned(value, grid::SHELL_STEP);
+                }
+                assert_eq!(field.x - panel.x, component::dock::CONTENT_INSET);
+                assert_eq!(
+                    panel.y + panel.h - field.y - field.h,
+                    component::dock::CONTENT_INSET
+                );
+                assert!(
+                    rendered.hits.iter().any(|h| h.id == "result-19"),
+                    "last result must remain reachable at {height}px tall"
+                );
+            }
+            if mode == Mode::Widgets {
+                assert!(rendered.hits.iter().any(|h| h.id == "toggle-timer"));
+                assert!(rendered.hits.iter().any(|h| h.id == "reset-layout"));
+            }
+            if mode == Mode::Wallpapers {
+                let controls: Vec<_> = ["wallpaper-previous", "apply-wallpaper", "wallpaper-next"]
+                    .into_iter()
+                    .map(|id| rendered.hits.iter().find(|h| h.id == id).unwrap().rect)
+                    .collect();
+                for pair in controls.windows(2) {
+                    assert!(pair[1].x - pair[0].x - pair[0].w >= grid::SECTION_GAP);
+                }
+            }
+            if mode == Mode::Themes {
+                let a = rendered
+                    .hits
+                    .iter()
+                    .find(|h| h.id == "theme-dark")
+                    .unwrap()
+                    .rect;
+                let b = rendered
+                    .hits
+                    .iter()
+                    .find(|h| h.id == "theme-light")
+                    .unwrap()
+                    .rect;
+                assert_eq!(a.w, b.w);
+                assert_eq!(b.x - a.x - a.w, grid::SECTION_GAP);
+                assert_eq!(a.x - panel.x, panel.x + panel.w - b.x - b.w);
+            }
+        }
+        app.update(Message::CloseLauncher, &mut Effects::default());
+        let rendered = scene(&app, &layout, &mut Interaction::default(), 1.);
+        let panel = rendered
+            .hits
+            .iter()
+            .find(|h| h.id == "dock-panel")
+            .unwrap()
+            .rect;
+        for value in [panel.x, panel.y, panel.w, panel.h] {
+            aligned(value, grid::SHELL_STEP);
+        }
+        assert!(panel.x >= grid::SHELL_INSET && panel.x + panel.w <= width - grid::SHELL_INSET);
+        let slots: Vec<_> = rendered
+            .hits
+            .iter()
+            .filter(|h| h.id.starts_with("dock-") && h.id != "dock-panel")
+            .collect();
+        for pair in slots.windows(2) {
+            assert_eq!(pair[1].rect.x - pair[0].rect.x - pair[0].rect.w, space::SM);
+        }
+    }
+}
+
+#[test]
+fn bar_capsules_share_grid_do_not_overlap_and_keep_active_workspace_visible() {
+    use lucent_design::{component, layout as grid};
+    let mut app = fixture(0, false);
+    let layout = Layout::new(fonts(&app));
+    for width in [320., 390., 640., 1024., 1280., 1366., 1920.] {
+        for count in 1..=8 {
+            app.compositor.workspaces = (1..=count)
+                .map(|id| lucent_domain::Workspace {
+                    id,
+                    name: id.to_string(),
+                    windows: 0,
+                    active: id == count,
+                })
+                .collect();
+            let geometry = crate::shell_layout::BarLayout::new(width, count as usize);
+            let mut groups = vec![geometry.workspaces, geometry.system];
+            groups.extend(geometry.media);
+            groups.extend(geometry.clock);
+            let cx = ViewContext {
+                surface: "bar",
+                width,
+                height: component::panel::BAR_HEIGHT,
+                now: 1.,
+            };
+            let rendered = layout.build(
+                &app.view(&cx),
+                width,
+                cx.height,
+                &Interaction::default(),
+                1.,
+            );
+            for rect in &groups {
+                for value in [rect.x, rect.y, rect.w, rect.h] {
+                    assert_eq!(value % grid::SHELL_STEP, 0.);
+                }
+                assert!(
+                    rect.x >= grid::SHELL_INSET && rect.x + rect.w <= width - grid::SHELL_INSET
+                );
+                assert!(rendered.paint.iter().any(|p| matches!(p, Paint::Shape { rect: painted, color, .. } if painted == rect && *color == app.surface_color())), "view drifted from calculated capsule {rect:?}");
+            }
+            groups.sort_by(|a, b| a.x.total_cmp(&b.x));
+            for pair in groups.windows(2) {
+                assert!(pair[1].x - pair[0].x - pair[0].w >= grid::SECTION_GAP);
+            }
+            assert!(
+                rendered
+                    .hits
+                    .iter()
+                    .any(|h| h.id == format!("workspace-{count}")),
+                "active workspace disappeared at {width}"
+            );
+            for hit in &rendered.hits {
+                assert!(
+                    groups.iter().any(|g| fully_visible(hit.rect, *g)),
+                    "bar control {} escaped its capsule",
+                    hit.id
+                );
+            }
+        }
+    }
+}
+
+fn wallpaper_fixtures() -> Vec<lucent_domain::Wallpaper> {
+    ["Dawn", "Day", "Dusk"]
+        .into_iter()
+        .map(|name| lucent_domain::Wallpaper {
+            path: format!("fixture:{name}"),
+            name: name.into(),
+        })
+        .collect()
 }

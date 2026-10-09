@@ -2,6 +2,7 @@ mod desktop;
 mod notifications;
 mod platform;
 mod ports;
+mod shell_layout;
 mod views;
 mod widgets;
 use desktop::Desktop;

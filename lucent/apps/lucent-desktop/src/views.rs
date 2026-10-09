@@ -1,4 +1,4 @@
-use crate::desktop::*;
+use crate::{desktop::*, shell_layout};
 use lucent_api::*;
 use lucent_design::{self as design, *};
 use lucent_domain::Application as App;
@@ -82,17 +82,39 @@ impl Desktop {
             .background(self.surface_color())
     }
     pub fn bar(&self, cx: &ViewContext) -> Element<Message> {
+        let geometry = shell_layout::BarLayout::new(cx.width, self.compositor.workspaces.len());
+        let active = self
+            .compositor
+            .workspaces
+            .iter()
+            .position(|w| w.active)
+            .unwrap_or(0);
+        let start = (active + 1).saturating_sub(geometry.workspace_count).min(
+            self.compositor
+                .workspaces
+                .len()
+                .saturating_sub(geometry.workspace_count),
+        );
+        let bar_icon = |name: &str| {
+            self.icon(name, icon::TINY)
+                .size(component::bar::CONTROL_SIZE, component::bar::CONTROL_SIZE)
+                .padding(space::XS)
+        };
         let workspaces = self
             .compositor
             .workspaces
             .iter()
-            .take(8)
+            .skip(start)
+            .take(geometry.workspace_count)
             .map(|w| {
                 let ring = if w.active {
                     Element::stack(vec![
                         Element::empty()
                             .size(component::bar::RING_SIZE, component::bar::RING_SIZE)
-                            .at(component::bar::RING_INSET, component::bar::RING_INSET)
+                            .at(
+                                (component::bar::WORKSPACE_SIZE - component::bar::RING_SIZE) / 2.,
+                                (component::bar::WORKSPACE_SIZE - component::bar::RING_SIZE) / 2.,
+                            )
                             .radius(radius::SMALL)
                             .background(self.surface_color()),
                     ])
@@ -106,7 +128,10 @@ impl Desktop {
                     Element::stack(vec![
                         Element::empty()
                             .size(component::bar::DOT_SIZE, component::bar::DOT_SIZE)
-                            .at(component::bar::DOT_INSET, component::bar::DOT_INSET)
+                            .at(
+                                (component::bar::WORKSPACE_SIZE - component::bar::DOT_SIZE) / 2.,
+                                (component::bar::WORKSPACE_SIZE - component::bar::DOT_SIZE) / 2.,
+                            )
                             .radius(radius::INDICATOR)
                             .background(self.ink().alpha(if w.windows > 0 {
                                 opacity::STRONG
@@ -125,31 +150,23 @@ impl Desktop {
             .collect();
         let spaces = self
             .pill(workspaces)
-            .gap(space::XXS)
-            .at(component::bar::LEFT, component::bar::TOP);
-        let workspace_count = self.compositor.workspaces.len().min(8) as f32;
-        let workspace_width = workspace_count * component::bar::WORKSPACE_SIZE
-            + (workspace_count - 1.).max(0.) * space::XXS
-            + component::pill::PADDING_INLINE * 2.;
-        let media_left = component::bar::LEFT + workspace_width + space::MD;
+            .gap(space::SM)
+            .size(geometry.workspaces.w, geometry.workspaces.h)
+            .at(geometry.workspaces.x, geometry.workspaces.y);
         let title = if self.media.title.is_empty() {
             "Nothing playing".into()
         } else {
             format!("{} · {}", self.media.artist, self.media.title)
         };
-        let media = self
-            .pill(vec![
-                self.icon("music", icon::CONTROL),
-                self.label(title, font::SMALL)
-                    .width(Length::Fixed(component::bar::MEDIA_TEXT_WIDTH)),
-                self.icon(
-                    if self.media.playing { "pause" } else { "play" },
-                    icon::CONTROL,
-                )
+        let media = self.pill(vec![
+            bar_icon("music"),
+            self.label(title, font::SMALL)
+                .width(Length::Fixed(component::bar::MEDIA_TEXT_WIDTH))
+                .clip(),
+            bar_icon(if self.media.playing { "pause" } else { "play" })
                 .on_click(Message::Action(Action::PlayPause))
                 .id("bar-play"),
-            ])
-            .at(media_left, component::bar::TOP);
+        ]);
         let weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
         let date = &self.clock.date;
         let time = self
@@ -176,7 +193,7 @@ impl Desktop {
                 .width(Length::Fixed(component::bar::DATE_WIDTH))
                 .align(Align::Center),
                 time,
-                self.icon("cloud", icon::COMPACT),
+                bar_icon("cloud"),
                 self.label(
                     self.weather
                         .as_ref()
@@ -184,15 +201,11 @@ impl Desktop {
                         .unwrap_or_else(|| "—".into()),
                     font::CAPTION,
                 )
-                .width(Length::Fixed(component::bar::WORKSPACE_SIZE))
+                .width(Length::Fixed(component::bar::CONTROL_SIZE))
                 .align(Align::Center),
             ])
             .on_click(Message::Mode(Mode::Widgets))
-            .id("bar-clock")
-            .at(
-                (cx.width - component::bar::CLOCK_WIDTH) / 2.,
-                component::bar::TOP,
-            );
+            .id("bar-clock");
         let volume = self
             .system
             .volume
@@ -200,13 +213,13 @@ impl Desktop {
             .unwrap_or_else(|| "—".into());
         let right = self
             .pill(vec![
-                self.icon("notifications", icon::SMALL)
+                bar_icon("notifications")
                     .on_click(Message::Notifications(
                         crate::notifications::Message::Toggle,
                     ))
                     .id("bar-notifications"),
-                self.icon("network", icon::SMALL),
-                self.icon("volume", icon::SMALL)
+                bar_icon("network"),
+                bar_icon("volume")
                     .on_click(Message::Action(Action::Mute))
                     .id("bar-mute"),
                 self.label(
@@ -216,13 +229,26 @@ impl Desktop {
                         volume
                     },
                     font::CAPTION,
-                ),
-                self.icon("lock", icon::SMALL)
+                )
+                .width(Length::Fixed(component::bar::CONTROL_SIZE))
+                .align(Align::Center),
+                bar_icon("lock")
                     .on_click(Message::Action(Action::Lock))
                     .id("bar-lock"),
             ])
-            .at(cx.width - component::bar::SYSTEM_WIDTH, component::bar::TOP);
-        Element::stack(vec![spaces, media, center, right]).fill()
+            .size(geometry.system.w, geometry.system.h)
+            .at(geometry.system.x, geometry.system.y);
+        let mut groups = vec![right];
+        if geometry.workspace_count > 0 {
+            groups.push(spaces);
+        }
+        if let Some(rect) = geometry.media {
+            groups.push(media.size(rect.w, rect.h).at(rect.x, rect.y));
+        }
+        if let Some(rect) = geometry.clock {
+            groups.push(center.size(rect.w, rect.h).at(rect.x, rect.y));
+        }
+        Element::stack(groups).fill()
     }
     pub fn dock(&self, cx: &ViewContext) -> Element<Message> {
         let width = self
@@ -234,15 +260,14 @@ impl Desktop {
             .value(cx.now)
             .max(component::dock::MINIMUM_HEIGHT);
         let reveal = self.reveal.value(cx.now).clamp(0., 1.);
-        let x = (cx.width - width) / 2.;
-        let y = cx.height - height - component::dock::BOTTOM;
+        let (x, y) = shell_layout::panel_origin((cx.width, cx.height), (width, height));
         let mut children = vec![];
         if reveal < 0.999 {
-            children.push(
-                self.dock_row()
-                    .opacity((1. - reveal * 2.).max(0.))
-                    .at(component::dock::ROW_LEFT, component::dock::ROW_TOP),
-            );
+            children.push(self.dock_row().opacity((1. - reveal * 2.).max(0.)).at(
+                (self.dock_width() - shell_layout::dock_content_width(self.dock_apps().len() + 1))
+                    / 2.,
+                (component::panel::DOCK_HEIGHT - component::dock_row::HEIGHT) / 2.,
+            ));
         }
         if reveal > 0.001 {
             let target_width = self.panel_width.target_value();
@@ -328,15 +353,7 @@ impl Desktop {
             .height(Length::Fixed(component::dock_row::HEIGHT))
     }
     fn launcher_face(&self, cx: &ViewContext, width: f32, height: f32) -> Element<Message> {
-        let mut modes = vec![
-            self.icon("apps", icon::MEDIUM)
-                .padding(space::XS)
-                .size(
-                    component::launcher::ICON_WIDTH,
-                    component::launcher::TAB_HEIGHT,
-                )
-                .on_click(Message::Mode(Mode::Apps)),
-        ];
+        let mut modes = Vec::new();
         for (mode, icon) in [
             (Mode::Apps, "apps"),
             (Mode::Commands, "command"),
@@ -350,7 +367,7 @@ impl Desktop {
             } else {
                 self.ink()
             })];
-            if active {
+            if active && width >= component::launcher::TAB_LABEL_MIN_WIDTH {
                 contents.push(
                     self.label(mode.name(), font::CAPTION)
                         .color(self.theme().on_primary),
@@ -359,9 +376,16 @@ impl Desktop {
             modes.push(
                 Element::row(contents)
                     .align(Align::Center)
-                    .gap(space::XS)
+                    .gap(space::SM)
                     .padding(space::SM)
-                    .height(Length::Fixed(component::launcher::TAB_HEIGHT))
+                    .size(
+                        if active && width >= component::launcher::TAB_LABEL_MIN_WIDTH {
+                            component::launcher::ACTIVE_TAB_WIDTH
+                        } else {
+                            component::launcher::TAB_WIDTH
+                        },
+                        component::launcher::TAB_HEIGHT,
+                    )
                     .radius(radius::CONTROL)
                     .background(if active {
                         self.accent()
@@ -372,6 +396,7 @@ impl Desktop {
                     .id(format!("mode-{}", mode.name().to_lowercase())),
             );
         }
+        modes.push(Element::empty().width(Length::Fill));
         modes.push(
             self.icon("power", icon::SMALL)
                 .padding(space::XS)
@@ -383,12 +408,12 @@ impl Desktop {
                 .id("mode-power"),
         );
         let header = Element::row(modes)
-            .gap(space::XS)
-            .height(Length::Fixed(component::launcher::HEADER_HEIGHT));
+            .gap(space::SM)
+            .size(width, component::launcher::HEADER_HEIGHT);
         let mut elements = vec![header];
-        let body_y = component::launcher::BODY_TOP;
-        let body_h = (height - body_y - component::input::HEIGHT - space::MD)
-            .max(component::launcher::BODY_MIN_HEIGHT);
+        let body_y = shell_layout::body_top();
+        let body_h = shell_layout::body_height(self.mode, height);
+        let visible_rows = (body_h / component::launcher::ROW_HEIGHT).floor().max(1.) as usize;
         match self.mode {
             Mode::Apps => {
                 let rows: Vec<_> = self
@@ -396,11 +421,11 @@ impl Desktop {
                     .iter()
                     .enumerate()
                     .skip(self.scroll)
-                    .take(7)
+                    .take(visible_rows)
                     .map(|(rank, index)| {
                         let app = &self.apps[*index];
                         Element::row(vec![
-                            self.app_icon(app, icon::APP),
+                            self.app_icon(app, component::launcher::ICON_WIDTH),
                             self.label(&app.name, font::BODY).width(Length::Fill),
                             self.label(
                                 if rank == self.selected { "Open" } else { "" },
@@ -409,7 +434,7 @@ impl Desktop {
                             .width(Length::Fixed(component::launcher::TAB_HEIGHT)),
                         ])
                         .align(Align::Center)
-                        .gap(space::MD)
+                        .gap(space::LG)
                         .padding_xy(
                             component::launcher::ROW_PADDING_INLINE,
                             component::launcher::ROW_PADDING_BLOCK,
@@ -469,14 +494,15 @@ impl Desktop {
                 .background(self.widget_color());
                 elements.push(search.at(0., height - component::input::HEIGHT));
             }
-            Mode::Wallpapers => elements.push(
-                self.wallpaper_strip(cx, width, body_h + component::launcher::ROW_HEIGHT)
-                    .at(0., body_y),
-            ),
+            Mode::Wallpapers => {
+                elements.push(self.wallpaper_strip(cx, width, body_h).at(0., body_y))
+            }
             Mode::Widgets => {
                 let rows = WIDGETS
                     .iter()
                     .enumerate()
+                    .skip(self.scroll)
+                    .take(visible_rows)
                     .map(|(index, (id, title, description))| {
                         let on = self.settings.visible_widgets.iter().any(|w| w == id);
                         Element::row(vec![
@@ -493,12 +519,12 @@ impl Desktop {
                             self.theme().switch_indicator(on),
                         ])
                         .align(Align::Center)
-                        .gap(space::MD)
+                        .gap(space::LG)
                         .padding_xy(
                             component::launcher::ROW_PADDING_INLINE,
                             component::launcher::ROW_PADDING_BLOCK,
                         )
-                        .size(width, component::launcher::WIDGET_ROW_HEIGHT)
+                        .size(width, component::launcher::ROW_HEIGHT)
                         .radius(radius::CONTROL)
                         .background(self.surface_color())
                         .selected(index == self.selected)
@@ -507,7 +533,12 @@ impl Desktop {
                         .id(format!("toggle-{id}"))
                     })
                     .collect();
-                elements.push(Element::column(rows).gap(space::XXS).at(0., body_y));
+                elements.push(
+                    Element::column(rows)
+                        .size(width, body_h)
+                        .clip()
+                        .at(0., body_y),
+                );
                 elements.push(
                     self.button("Reset widget positions", Message::ResetLayout)
                         .selected(self.selected == WIDGETS.len())
@@ -516,7 +547,7 @@ impl Desktop {
                         .size(width, component::launcher::RESET_HEIGHT)
                         .font(font::CONTROL)
                         .background(self.widget_color())
-                        .at(0., height - component::launcher::RESET_BOTTOM),
+                        .at(0., height - component::launcher::RESET_HEIGHT),
                 );
             }
             Mode::Themes => {
@@ -524,7 +555,7 @@ impl Desktop {
                     Element::row(vec![
                         self.button("Dark", Message::Theme(false))
                             .size(
-                                width / 2. - component::launcher::THEME_HALF_GAP,
+                                (width - layout::SECTION_GAP) / 2.,
                                 component::launcher::THEME_HEIGHT,
                             )
                             .background(theme::dark::SURFACE)
@@ -534,7 +565,7 @@ impl Desktop {
                             .id("theme-dark"),
                         self.button("Light", Message::Theme(true))
                             .size(
-                                width / 2. - component::launcher::THEME_HALF_GAP,
+                                (width - layout::SECTION_GAP) / 2.,
                                 component::launcher::THEME_HEIGHT,
                             )
                             .background(theme::light::SURFACE)
@@ -543,14 +574,17 @@ impl Desktop {
                             .on_hover(Message::Select(1))
                             .id("theme-light"),
                     ])
-                    .gap(space::MD)
+                    .gap(space::LG)
                     .at(0., body_y),
                 );
                 elements.push(
                     self.label("Colors shared across every component", font::SMALL)
-                        .size(width, component::launcher::TAB_HEIGHT)
+                        .size(width, component::launcher::THEME_CAPTION_HEIGHT)
                         .align(Align::Center)
-                        .at(0., body_y + component::launcher::THEME_CAPTION_TOP),
+                        .at(
+                            0.,
+                            body_y + component::launcher::THEME_HEIGHT + layout::SECTION_GAP,
+                        ),
                 );
             }
             Mode::Commands => {
@@ -559,18 +593,20 @@ impl Desktop {
                         COMMANDS
                             .into_iter()
                             .enumerate()
+                            .skip(self.scroll)
+                            .take(visible_rows)
                             .map(|(index, (label, action, icon))| {
                                 Element::row(vec![
                                     self.icon(icon, icon::ACTION),
                                     self.label(label, font::BODY),
                                 ])
                                 .align(Align::Center)
-                                .gap(space::MD)
+                                .gap(space::LG)
                                 .padding_xy(
                                     component::launcher::ROW_PADDING_INLINE,
                                     component::launcher::ROW_PADDING_BLOCK,
                                 )
-                                .size(width, component::launcher::COMMAND_HEIGHT)
+                                .size(width, component::launcher::ROW_HEIGHT)
                                 .radius(radius::CARD)
                                 .background(self.surface_color())
                                 .selected(self.selected == index)
@@ -580,7 +616,8 @@ impl Desktop {
                             })
                             .collect(),
                     )
-                    .gap(space::XXS)
+                    .size(width, body_h)
+                    .clip()
                     .at(0., body_y),
                 );
             }
@@ -667,10 +704,15 @@ impl Desktop {
         }
         cards.push(
             self.icon_button("wallpaper-previous", "left", Message::Navigate(-1))
-                .at(
-                    component::wallpaper::PREVIOUS_LEFT,
-                    height - component::wallpaper::FOOTER_HEIGHT,
-                ),
+                .size(
+                    component::wallpaper::CONTROL_SIZE,
+                    component::wallpaper::CONTROL_SIZE,
+                )
+                .padding(space::MD)
+                .at(0., height - component::wallpaper::FOOTER_HEIGHT),
+        );
+        let apply_width = component::wallpaper::BUTTON_WIDTH.min(
+            (width - component::wallpaper::CONTROL_SIZE * 2. - layout::SECTION_GAP * 2.).max(0.),
         );
         cards.push(
             self.button(
@@ -681,22 +723,24 @@ impl Desktop {
                 },
                 Message::Wallpaper(self.wallpaper_index, true),
             )
-            .size(
-                component::wallpaper::BUTTON_WIDTH,
-                component::wallpaper::BUTTON_HEIGHT,
-            )
+            .size(apply_width, component::wallpaper::BUTTON_HEIGHT)
             .background(self.accent())
             .color(self.theme().on_primary)
             .id("apply-wallpaper")
             .at(
-                (width - component::wallpaper::BUTTON_WIDTH) / 2.,
+                (width - apply_width) / 2.,
                 height - component::wallpaper::FOOTER_HEIGHT,
             ),
         );
         cards.push(
             self.icon_button("wallpaper-next", "right", Message::Navigate(1))
+                .size(
+                    component::wallpaper::CONTROL_SIZE,
+                    component::wallpaper::CONTROL_SIZE,
+                )
+                .padding(space::MD)
                 .at(
-                    width - component::wallpaper::NEXT_INSET,
+                    width - component::wallpaper::CONTROL_SIZE,
                     height - component::wallpaper::FOOTER_HEIGHT,
                 ),
         );

@@ -54,7 +54,40 @@ semantic light/dark roles, component geometry and motion. Run
 `python3 scripts/generate-design-tokens.py` after editing it. Generated Rust
 constants live in `lucent-design`; CSS variables feed the Astro site. CI checks
 references, types, cycles and generated drift. Native views use token references,
-including optical dimensions such as `component::launcher::ROW_HEIGHT`.
+including structural dimensions such as `component::launcher::ROW_HEIGHT`.
+
+
+The launcher, dock and bar share a spacing contract:
+
+| Token | Logical pixels | Purpose |
+| --- | --- | --- |
+| `layout.unit` | 4 | Compact insets and structural token validation |
+| `layout.control_step` | 8 | Tab slots and control spacing |
+| `layout.shell_step` | 16 | Settled shell bounds, launcher rows, panel insets and widget anchors |
+| `layout.section_gap` | 16 | Header/body/footer separation and minimum bar-group gaps |
+
+`apps/lucent-desktop/src/shell_layout.rs` owns pure client geometry. Views and
+animation targets use the same calculations. Launcher rows and input are 48
+pixels high; header slots have fixed widths, and the theme cards derive their
+equal widths from the actual gap. Panel height follows content, rather than an
+independent handwritten total. Small viewports show fewer complete rows and
+keep the selected row reachable. Dock slots have equal outer padding.
+
+Settled panels use widths in pairs of shell cells and share a fixed grid-aligned
+center. Their bottom edge uses the last grid line before the screen inset. At
+resolutions that are not multiples of 16, the leftover pixels stay outside the
+shell. Glyph metrics, aspect-fitted artwork, strokes and animation samples retain
+their own precision; the renderer never rounds animated geometry to the grid.
+
+Bar capsule widths derive from fixed control slots and gaps. They share the same
+top and height. Optional media and clock capsules are omitted when they cannot
+fit without overlap. At narrow widths, the workspace strip retains the active
+workspace and shows as many neighbors as fit. Omarchy's workspace bindings remain
+available for the rest.
+
+Tests check actual painted capsules and search-field bounds, row containment,
+equal gutters, grid alignment, selected-row visibility, and non-overlapping bar
+and wallpaper controls. Merely using a named token is not sufficient.
 
 `Theme::new(light)` provides `primary`, `on_primary`, `surface`,
 `surface_container`, `on_surface`, `error`, `success`, `warning`, `info` and `focus`.

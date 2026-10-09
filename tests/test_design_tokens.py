@@ -32,6 +32,19 @@ class DesignTokens(unittest.TestCase):
             self.assertNotRegex(source, r'\.(?:font|padding(?:_xy)?|gap|radius)\(\d')
             self.assertNotRegex(source, r'\.size\(\d+[.]')
 
+    def test_shell_geometry_tokens_follow_the_spacing_scale(self):
+        flat = tokens.flatten(json.loads(tokens.SOURCE.read_text()))
+        values = tokens.resolve(flat)
+        structural = ('component.launcher.', 'component.dock.', 'component.bar.',
+                      'component.pill.', 'component.panel.')
+        for name, value in values.items():
+            if name.startswith(structural) and flat[name]['$type'] == 'dimension':
+                self.assertEqual(value % values['layout.unit'], 0, name)
+        for name in ('component.launcher.row_height', 'component.input.height',
+                     'component.launcher.reset_height', 'component.panel.dock_height',
+                     'component.panel.bar_height'):
+            self.assertEqual(values[name] % values['layout.shell_step'], 0, name)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,0 +1,67 @@
+---
+import DocGuide from '../../layouts/DocGuide.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import { excerpt, sourceUrl } from '../../data/source';
+import apiSource from '../../../../lucent/crates/lucent-api/src/lib.rs?raw';
+const sections: [string, string][] = [['crates', '01 · Crates & ownership'], ['api', '02 · Component contract'], ['runtime', '03 · Messages & workers'], ['layout', '04 · Layout & interaction'], ['motion', '05 · Time & frame pacing'], ['renderer', '06 · Paint to Vulkan'], ['limits', '07 · Current limits']];
+const crates = [
+  ['lucent-api', 'Public values and traits', 'Element, Component, Application, Effects, Subscription, SurfaceSpec, Motion and WidgetRegistry. No native protocol or GPU handles are exposed.', 'lucent/crates/lucent-api/src/lib.rs'],
+  ['lucent-ui', 'CPU layout and interaction', 'Measures and places elements, builds paint/hit/region lists, manages focus, text input and drag recognition. Knows no application service ports.', 'lucent/crates/lucent-ui/src/lib.rs'],
+  ['lucent-wayland', 'Application runtime', 'Owns the event loop, native surfaces, output scale, input, effect delivery, subscription lifecycle and frame demand. SCTK supplies Wayland building blocks.', 'lucent/crates/lucent-wayland/src/lib.rs'],
+  ['lucent-render', 'GPU resources and rendering', 'Owns the wgpu Vulkan device, Canvas, textures, primitive buffers, WGSL pipelines and presentation. Consumes Paint, never desktop use cases.', 'lucent/crates/lucent-render/src/lib.rs'],
+  ['lucent-design', 'Optional visual language', 'Generated tokens, semantic palettes, component recipes and app symbols. The reusable engine does not require Lucent’s desktop theme.', 'lucent/crates/lucent-design/src/lib.rs'],
+];
+---
+<DocGuide chapter="framework" title="Inside the framework" heading="State becomes geometry." accent="Geometry becomes pixels." description="Follow the concrete Rust contracts, thread boundaries, layout engine and Vulkan renderer that make the client run." sections={sections}>
+  <section id="crates"><span class="eyebrow">01 / WHO OWNS WHAT</span><h2>Five implementation boundaries.</h2>
+    <div class="table-scroll"><table><thead><tr><th>Crate</th><th>Owns</th><th>Implementation</th></tr></thead><tbody>{crates.map(([name, owns, detail, path]) => <tr><td><a href={sourceUrl(path)}>{name} ↗</a></td><td>{owns}</td><td>{detail}</td></tr>)}</tbody></table></div>
+    <p>These are the current crates, rather than the larger crate list in the original proposal. Runtime orchestration lives in <code>lucent-wayland</code>; there is no separate generic runtime crate today. Domain models, use cases and OS adapters sit alongside this engine and are selected by clients.</p>
+  </section>
+  <section id="api"><span class="eyebrow">02 / THE PUBLIC CONTRACT</span><h2>Structs own state.<br />Traits expose behavior.</h2>
+    <CodeBlock code={excerpt(apiSource, 'pub trait Component:', 'pub type Task<M>')} lang="rust" label="Live source · Component and Application" />
+    <p><code>Component::view</code> borrows state immutably and describes a tree. <code>update</code> receives a typed message, mutates state and describes effects. Child components have their own message types. <code>Element::map</code> lifts child interaction messages into the parent type; <code>Effects::delegate</code> does the same for child tasks while preserving time, redraw requests and exit requests.</p>
+    <p><code>Application</code> extends that contract with fonts, surface declarations, startup work, subscriptions, raw events and optional command/inspection hooks. Subscriptions belong to the application contract today. There is no separate signal graph or automatic field-level reactivity.</p>
+    <p><code>SurfaceSpec</code> declares layer, anchors, dimensions, reserved space, visibility, keyboard mode and whether to capture the full input surface. <code>ViewContext</code> supplies the surface ID, logical size and monotonic time. Components never manipulate a raw Wayland surface.</p>
+  </section>
+  <section id="runtime"><span class="eyebrow">03 / STATE CHANGES ON ONE THREAD</span><h2>The runtime delivers.<br />The client decides.</h2>
+    <CodeBlock code={`Wayland input ───────────────┐
+effect worker → Message ─────┼→ UI event loop
+subscription → Message ─────┘     │
+                                  update(state, message, effects)
+                                  │
+                                  reconcile surfaces / subscriptions
+                                  invalidate requested surfaces
+                                  draw when a surface is ready`} label="Runtime event flow · schematic" />
+    <p>The Wayland event-loop thread owns the application state. Worker threads send messages through a calloop channel, which wakes the event loop. They do not mutate the component. The runtime supplies <code>Effects::now</code> from a monotonic epoch before invoking <code>update</code>.</p>
+    <p><code>Effects::task</code> accepts a <code>FnOnce() -&gt; Message</code>. One ordered worker runs these tasks; completion returns through the event channel. This keeps successive settings saves ordered. It also means a slow task delays later effects. The API is not a concurrent async executor, and queued effects have no general cancellation handle.</p>
+    <p><code>Subscription::stream</code> runs a long-lived producer with an emitter and cancellation token. The runtime keeps one worker per active subscription ID, retains it while that ID remains present, and cancels it when removed. Reusing an ID does not restart the producer with new captured values. <code>Subscription::every</code> emits once immediately, then waits between samples; intervals are not real-time deadlines.</p>
+    <p>Cooperative cancellation must be checked by adapters. It cannot interrupt arbitrary blocking code. Bounded process calls and reconnect loops belong in adapters; frame handling stays on the UI thread.</p>
+  </section>
+  <section id="layout"><span class="eyebrow">04 / FROM TREE TO SCENE</span><h2>One layout drives paint<br />and hit testing.</h2>
+    <p><code>Element&lt;Message&gt;</code> describes rows, columns, stacks, grids, text, images and inputs. Builders add fixed/fill/shrink dimensions, padding, gaps, alignment, clipping, colors, radii and handlers. Design-system recipes assemble those primitives into controls; the layout engine knows nothing about launcher rows or calendar widgets.</p>
+    <ol class="guide-steps"><li>The client samples current motion values and returns the affected surface’s element tree.</li><li><code>Layout</code> measures content, resolves constraints and places logical rectangles.</li><li>The same traversal produces <code>Scene</code>: a paint list, hit targets and input regions.</li><li><code>Interaction</code> reconciles stable element IDs with focus and pointer state. A changed focus can invalidate another frame.</li><li>The runtime updates Wayland input regions and sends the scene’s paint list to the renderer.</li></ol>
+    <p>The scene is rebuilt for a dirty surface. This is not a DOM diff, retained layout cache or CSS cascade. Stable element IDs retain interaction identity across rebuilt trees. Hover, keyboard focus and controlled selection are distinct states; a selected row’s fill and outline use the same geometry.</p>
+    <p>Dragging uses a movement threshold and pointer grab. The framework reports <code>DragEvent</code> deltas and completion; the client decides what moves, whether to snap and when to save. Rounded hit bounds and clipping prevent invisible corners from behaving as rectangular buttons. Decorative grid lines do not acquire input handlers.</p>
+    <p>Text input maintains caret and selection behavior in the interaction layer. Launcher paging and section switching remain client policy. There is no general scroll-container or IME implementation yet.</p>
+  </section>
+  <section id="motion"><span class="eyebrow">05 / TIME BELONGS TO THE CPU</span><h2>Motion is sampled.<br />Frames are requested.</h2>
+    <CodeBlock code={excerpt(apiSource, 'pub struct Motion {', '#[cfg(test)]')} lang="rust" label="Live source · interruptible scalar motion" />
+    <p><code>target</code> starts from the value at the current time, so reversing an in-flight transition stays continuous. <code>value</code> normalizes elapsed time, solves the cubic Bézier’s time coordinate and evaluates its output. The output curve may overshoot. It returns the exact target once the duration ends.</p>
+    <p>The desktop supplies duration and easing tokens: panel geometry currently uses 500 ms, with separate 320 ms entry and 190 ms exit reveals. The framework does not decide how long a launcher should take. <a href="/design-system/#motion">Explore the motion tokens and curves</a>.</p>
+    <div class="table-scroll"><table><thead><tr><th>Event</th><th>Frame demand</th><th>Consequence</th></tr></thead><tbody><tr><td>Message changes visible state</td><td>dirty = true</td><td>Draw if configured and no callback is pending.</td></tr><tr><td>A frame begins</td><td>dirty = false; pending = true</td><td>Request one compositor frame callback and submit the buffer.</td></tr><tr><td>Animation remains active</td><td>dirty = true</td><td>Keep work pending until the callback opens the gate.</td></tr><tr><td>Compositor callback arrives</td><td>pending = false</td><td>Draw only if dirty; otherwise wait.</td></tr></tbody></table></div>
+    <p><code>FrameDemand</code> preserves invalidations received while a frame is pending. The compositor does not call us forever at the monitor refresh rate: a frame callback is a one-shot pacing request. It is also not a presentation timestamp. Vulkan receives already-sampled coordinates and colors; it does not interpolate the 500 ms timeline.</p>
+    <p>Idle means no unnecessary repaint loop. Subscriptions may still wake for clock or service updates; the client decides whether their data actually requires a redraw.</p>
+  </section>
+  <section id="renderer"><span class="eyebrow">06 / THE PAINT IMPLEMENTATION</span><h2>Paint is a display list.</h2>
+    <p><code>Paint</code> records shapes, outlines, text and images. <code>lucent-render</code> turns those records into primitive instances, cached textures and viewport data. <code>queue.write_buffer</code> uploads data, render passes record draw calls, and <code>queue.submit</code> plus presentation hands the finished buffer to the compositor.</p>
+    <p>Our WGSL shaders implement rounded shapes, edge coverage, clipping and texture composition. wgpu manages Vulkan access and resource validation. Hyprland then composes this buffer with other surfaces and application windows. Window tiling and ordinary app corner decoration remain compositor responsibilities.</p>
+    <p>A shared GPU device serves the application’s surface renderers. Font/image caches avoid rebuilding textures on each animated frame. Layout uses logical pixels; buffers use the output’s integer scale. Text coverage is rasterized with fontdue at twice physical density and area-resolved; shared kerning-aware metrics align layout with rendered glyphs. Images use filtered previews and premultiplied mip levels for smooth reductions.</p>
+    <p>Text placement can align to physical pixels while animated rectangles retain subpixel coordinates. Snapping every animation sample to the design grid would cause visible stepping. The design grid constrains settled client geometry, not the GPU coordinate system.</p>
+    <p>Read <a href={sourceUrl('lucent/crates/lucent-render/src/lib.rs')}>Canvas and resource management</a>, <a href={sourceUrl('lucent/crates/lucent-render/src/raster.rs')}>texture rasterization</a> and <a href={sourceUrl('lucent/crates/lucent-render/src/present.wgsl')}>the presentation shader</a>.</p>
+  </section>
+  <section id="limits"><span class="eyebrow">07 / WHAT THE ENGINE DOES TODAY</span><h2>Useful boundaries.<br />Visible limitations.</h2>
+    <p>The engine implements native layer-shell clients and a secure session-lock path. It does not provide the full general-purpose toolkit from the original proposal: fractional scaling, complex-script text shaping, IME, general scrolling, dynamic plugins and a general xdg-window API remain work. The prepared VM renders through software Vulkan; frame-pacing architecture alone cannot remove that CPU cost.</p>
+    <p>Framework tests cover interrupted motion, frame-demand gating, child message/effect mapping and registry IDs. CPU geometry tests inspect the same scenes that the renderer consumes. Vulkan image comparisons cover component states, palettes and densities. Live VM checks separately exercise keyboard input and actual service integration.</p>
+    <ul class="resource-list"><li><a href="/docs/client/">Next: the desktop client →</a><span>Composition, launcher behavior, surfaces, widgets and the grid.</span></li><li><a href={sourceUrl('lucent/examples/hello-layer/src/main.rs')}>Read hello-layer ↗</a><span>A small independent client using the same public contract.</span></li></ul>
+  </section>
+</DocGuide>

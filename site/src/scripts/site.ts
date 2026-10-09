@@ -69,7 +69,7 @@ if ('IntersectionObserver' in window) {
   const observer = new IntersectionObserver((entries) => {
     for (const entry of entries) {
       if (!entry.isIntersecting) continue;
-      document.querySelectorAll<HTMLAnchorElement>('.guide-nav a').forEach((link) => {
+      document.querySelectorAll<HTMLAnchorElement>('.guide-nav a[href^="#"]').forEach((link) => {
         if (link.hash === `#${entry.target.id}`) link.setAttribute('aria-current', 'location');
         else link.removeAttribute('aria-current');
       });

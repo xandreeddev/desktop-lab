@@ -44,6 +44,9 @@ type checking and a production build.
 
 - `/`: desktop tour, three experiments, architecture/API, motion, surfaces and measurements.
 - `/docs/`: programming model, interactive frame lifecycle, API, domain and rendering.
+- `/docs/domain/`: actual domain models, all service ports, adapters, use cases and failures.
+- `/docs/framework/`: component contract, workers, layout, input, motion and Vulkan internals.
+- `/docs/client/`: dependency injection, state lifetimes, launcher/bar/widget flows and native clients.
 - `/design-system/`: themes, typography, spacing, motion and a searchable token catalog.
 - `/guide/`: VM startup, interactions, ownership, build, state, rollback and validation.
 - `/reports/performance.json`: the actual repository measurement data.
@@ -56,6 +59,11 @@ are served locally. There are no external font, analytics or CDN requests.
 Visual tokens come from `design/tokens.json`. Regenerate Rust/CSS with
 `python3 scripts/generate-design-tokens.py`; CI rejects stale generated files.
 The token catalog reads the same JSON directly.
+
+Implementation guides import selected Rust sources with `?raw` at build time.
+`src/data/source.ts` extracts snippets using explicit markers and rejects missing
+markers during the build. Keep prose, adapter tables and source links aligned
+with implementation changes; snippets alone cannot verify narrative claims.
 
 The technical source of truth is `docs/lucent-framework.md`,
 `reports/lucent-framework.md`, `lucent/README.md` and the measurement JSON under

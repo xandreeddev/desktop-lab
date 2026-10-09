@@ -134,71 +134,65 @@ pub mod component {
     pub mod wallpaper {
         pub const ASPECT_RATIO: f32 = 0.62;
         pub const VISIBLE_DISTANCE: f32 = 3.2;
-        pub const PREVIOUS_LEFT: f32 = 5.0;
         pub const CAPTION_GAP: f32 = 6.0;
         pub const CAPTION_INSET: f32 = 10.0;
         pub const CAPTION_INSETS: f32 = 20.0;
         pub const CAPTION_HEIGHT: f32 = 30.0;
-        pub const BUTTON_HEIGHT: f32 = 36.0;
-        pub const NEXT_INSET: f32 = 38.0;
-        pub const FOOTER_HEIGHT: f32 = 40.0;
+        pub const BUTTON_HEIGHT: f32 = 48.0;
+        pub const FOOTER_HEIGHT: f32 = 48.0;
         pub const FAR_SHRINK: f32 = 88.0;
         pub const NEAR_SHRINK: f32 = 102.0;
-        pub const BUTTON_WIDTH: f32 = 180.0;
+        pub const BUTTON_WIDTH: f32 = 192.0;
         pub const FAR_STEP: f32 = 205.0;
-        pub const STAGE_HEIGHT: f32 = 230.0;
+        pub const STAGE_HEIGHT: f32 = 240.0;
         pub const NEAR_STEP: f32 = 300.0;
         pub const HERO_WIDTH: f32 = 340.0;
+        pub const CONTROL_SIZE: f32 = 48.0;
     }
     pub mod launcher {
-        pub const THEME_HALF_GAP: f32 = 5.0;
-        pub const ERROR_HEIGHT: f32 = 24.0;
-        pub const ICON_WIDTH: f32 = 28.0;
+        pub const ERROR_HEIGHT: f32 = 32.0;
+        pub const ICON_WIDTH: f32 = 32.0;
         pub const TAB_HEIGHT: f32 = 32.0;
         pub const HEADER_HEIGHT: f32 = 32.0;
-        pub const RESET_HEIGHT: f32 = 36.0;
-        pub const RESET_BOTTOM: f32 = 38.0;
-        pub const BODY_TOP: f32 = 44.0;
-        pub const ROW_HEIGHT: f32 = 46.0;
-        pub const COMMAND_HEIGHT: f32 = 46.0;
-        pub const WIDGET_ROW_HEIGHT: f32 = 49.0;
-        pub const BODY_MIN_HEIGHT: f32 = 50.0;
-        pub const EMPTY_HEIGHT: f32 = 70.0;
-        pub const ERROR_BOTTOM: f32 = 71.0;
-        pub const THEME_HEIGHT: f32 = 84.0;
-        pub const THEME_CAPTION_TOP: f32 = 100.0;
+        pub const RESET_HEIGHT: f32 = 48.0;
+        pub const ROW_HEIGHT: f32 = 48.0;
+        pub const BODY_MIN_HEIGHT: f32 = 48.0;
+        pub const EMPTY_HEIGHT: f32 = 48.0;
+        pub const ERROR_BOTTOM: f32 = 64.0;
+        pub const THEME_HEIGHT: f32 = 96.0;
         pub const ROW_PADDING_INLINE: f32 = 16.0;
         pub const ROW_PADDING_BLOCK: f32 = 8.0;
+        pub const TAB_WIDTH: f32 = 32.0;
+        pub const ACTIVE_TAB_WIDTH: f32 = 96.0;
+        pub const TAB_LABEL_MIN_WIDTH: f32 = 320.0;
+        pub const THEME_CAPTION_HEIGHT: f32 = 32.0;
+        pub const VISIBLE_ROWS: f32 = 7.0;
     }
     pub mod dock_row {
         pub const INDICATOR_HEIGHT: f32 = 2.0;
-        pub const INDICATOR_WIDTH: f32 = 11.0;
-        pub const INDICATOR_LEFT: f32 = 15.0;
-        pub const INDICATOR_TOP: f32 = 36.0;
-        pub const ITEM_SIZE: f32 = 41.0;
-        pub const HEIGHT: f32 = 42.0;
+        pub const INDICATOR_WIDTH: f32 = 16.0;
+        pub const INDICATOR_LEFT: f32 = 16.0;
+        pub const INDICATOR_TOP: f32 = 40.0;
+        pub const ITEM_SIZE: f32 = 48.0;
+        pub const HEIGHT: f32 = 48.0;
     }
     pub mod dock {
-        pub const ROW_TOP: f32 = 8.0;
-        pub const ROW_LEFT: f32 = 16.0;
-        pub const BOTTOM: f32 = 12.0;
-        pub const CONTENT_INSET: f32 = 20.0;
+        pub const BOTTOM: f32 = 16.0;
+        pub const CONTENT_INSET: f32 = 16.0;
         pub const MINIMUM_HEIGHT: f32 = 40.0;
         pub const MINIMUM_WIDTH: f32 = 60.0;
     }
     pub mod bar {
-        pub const RING_INSET: f32 = 3.5;
-        pub const DOT_SIZE: f32 = 5.0;
-        pub const DOT_INSET: f32 = 9.5;
-        pub const TOP: f32 = 12.0;
+        pub const DOT_SIZE: f32 = 4.0;
+        pub const TOP: f32 = 16.0;
         pub const LEFT: f32 = 16.0;
-        pub const RING_SIZE: f32 = 17.0;
+        pub const RING_SIZE: f32 = 16.0;
         pub const WORKSPACE_SIZE: f32 = 24.0;
-        pub const TIME_WIDTH: f32 = 50.0;
-        pub const DATE_WIDTH: f32 = 78.0;
-        pub const SYSTEM_WIDTH: f32 = 148.0;
-        pub const MEDIA_TEXT_WIDTH: f32 = 135.0;
-        pub const CLOCK_WIDTH: f32 = 218.0;
+        pub const TIME_WIDTH: f32 = 64.0;
+        pub const DATE_WIDTH: f32 = 80.0;
+        pub const MEDIA_TEXT_WIDTH: f32 = 136.0;
+        pub const CONTROL_SIZE: f32 = 24.0;
+        pub const MAX_WORKSPACES: f32 = 8.0;
     }
     pub mod pill {
         pub const HEIGHT: f32 = 32.0;
@@ -356,24 +350,19 @@ pub mod component {
         }
     }
     pub mod panel {
-        pub const INITIAL_WIDTH: f32 = 350.0;
-        pub const DOCK_HEIGHT: f32 = 57.0;
+        pub const INITIAL_WIDTH: f32 = 352.0;
+        pub const DOCK_HEIGHT: f32 = 64.0;
         pub const WALLPAPER_WIDTH: f32 = 1248.0;
         pub const LAUNCHER_WIDTH: f32 = 448.0;
-        pub const VIEWPORT_INSETS: f32 = 40.0;
-        pub const WALLPAPER_HEIGHT: f32 = 380.0;
-        pub const LAUNCHER_MIN_HEIGHT: f32 = 218.0;
-        pub const LAUNCHER_MAX_HEIGHT: f32 = 500.0;
-        pub const WIDGETS_HEIGHT: f32 = 506.0;
-        pub const COMMANDS_HEIGHT: f32 = 440.0;
-        pub const THEMES_HEIGHT: f32 = 272.0;
-        pub const BAR_HEIGHT: f32 = 56.0;
+        pub const LAUNCHER_MIN_HEIGHT: f32 = 224.0;
+        pub const BAR_HEIGHT: f32 = 64.0;
+        pub const WALLPAPER_BODY_HEIGHT: f32 = 304.0;
     }
     pub mod focus {
         pub const WIDTH: f32 = 2.0;
     }
     pub mod input {
-        pub const HEIGHT: f32 = 44.0;
+        pub const HEIGHT: f32 = 48.0;
         pub const CARET_WIDTH: f32 = 1.5;
         pub const PADDING_INLINE: f32 = 16.0;
         pub const PADDING_BLOCK: f32 = 8.0;
@@ -410,7 +399,6 @@ pub mod component {
         pub const MIN_WIDTH: f32 = 320.0;
         pub const HEIGHT: f32 = 560.0;
         pub const INPUT_HEIGHT: f32 = 224.0;
-        pub const CHROME_HEIGHT: f32 = 184.0;
         pub const HEADER_HEIGHT: f32 = 36.0;
         pub const FOOTER_HEIGHT: f32 = 20.0;
         pub const ROW_HEIGHT: f32 = 52.0;
@@ -484,4 +472,11 @@ pub mod app_icon {
     pub const GLYPH_INSET: f32 = 9.0;
     pub const GLYPH_EXTENT: f32 = 30.0;
     pub const STROKE: f32 = 1.8;
+}
+pub mod layout {
+    pub const UNIT: f32 = 4.0;
+    pub const CONTROL_STEP: f32 = 8.0;
+    pub const SHELL_STEP: f32 = 16.0;
+    pub const SHELL_INSET: f32 = 16.0;
+    pub const SECTION_GAP: f32 = 16.0;
 }

@@ -105,7 +105,11 @@ geometry and motion. The reusable engine remains independent of the theme.
 
 Rounded controls use separate horizontal and vertical padding through
 `Element::padding_xy`; their hit target retains the full outer bounds. The widget
-grid uses `component.widget_layout.grid_step`, which references `space.lg` (16).
+grid uses `component.widget_layout.grid_step`, which shares `layout.shell_step`
+(16) with settled launcher, dock and bar bounds. Controls use an 8-pixel rhythm
+and compact insets use 4 pixels. Launcher rows and search fields are 48 pixels;
+their panel height derives from the content. Glyph metrics and animation remain
+continuous. [Layout contract](../docs/lucent-framework.md#programming-model-and-design-system).
 Its decorative lines use `component.widget_grid` tokens, sit behind widgets,
 and never enter the input region.
 Ordinary application corners use `component.window.radius`, an alias of `radius.panel` (20).

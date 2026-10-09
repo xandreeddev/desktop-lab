@@ -1,0 +1,14 @@
+---
+interface Props { current?: string; }
+const { current = 'overview' } = Astro.props;
+const chapters = [
+  ['overview', '/docs/', 'Overview & frame walkthrough'],
+  ['domain', '/docs/domain/', 'Domain, ports & adapters'],
+  ['framework', '/docs/framework/', 'Inside the framework'],
+  ['client', '/docs/client/', 'Building the desktop client'],
+];
+---
+<nav aria-label="Documentation chapters">
+  {chapters.map(([id, href, title]) => <a href={href} aria-current={current === id ? 'page' : undefined}>{title}</a>)}
+  <a href="/design-system/">Design system & tokens</a>
+</nav>

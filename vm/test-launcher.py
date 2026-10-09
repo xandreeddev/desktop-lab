@@ -11,7 +11,7 @@ spec.loader.exec_module(vm)
 
 
 def main():
-    assert vm.session('omarchy-shell', 'lock', 'isLocked').strip() == 'false', 'Unlock the VM first'
+    assert vm.session('sh', '-c', 'omarchy-hyprland-session-locked && echo locked || echo unlocked').strip() == 'unlocked', 'Unlock the VM first'
     awake = json.loads(vm.session('omarchy-toggle-idle', 'status'))['enabled']
     checks = []
     try:
@@ -27,6 +27,19 @@ def main():
         dock = next(s for s in state['surfaces'] if s['id'] == 'dock')
         assert dock['focus'] == 'launcher-search' and dock['focus_visible']
         rows = [h for h in dock['hits'] if h['id'].startswith('result-')]
+        panel = next(h for h in dock['hits'] if h['id'] == 'dock-panel')
+        grid = vm.token_value('layout.shell_step')
+        for h in [panel, *rows]:
+            assert all(abs(h[k] / grid - round(h[k] / grid)) < .001 for k in ('x', 'y', 'width', 'height')), h['id']
+        inset = vm.token_value('component.dock.content_inset')
+        assert all(r['x']-panel['x'] == inset and panel['x']+panel['width']-r['x']-r['width'] == inset for r in rows)
+        pitch = vm.token_value('component.launcher.row_height')
+        assert all(b['y']-a['y'] == pitch for a,b in zip(rows,rows[1:]))
+        search = next(h for h in dock['hits'] if h['id'] == 'launcher-search')
+        assert (search['y'] - vm.token_value('component.input.padding_block')) % grid == 0
+        clock = next(h for s in state['surfaces'] if s['id']=='bar' for h in s['hits'] if h['id']=='bar-clock')
+        assert all(clock[k] % grid == 0 for k in ('x','y','width','height'))
+        checks += ['panel_and_rows_on_shell_grid', 'equal_launcher_insets', 'uniform_row_pitch', 'input_on_shell_grid', 'top_bar_clock_on_shell_grid']
         assert len(rows) == 7
         assert any(h['id'] == 'result-8' for h in rows)
         for row in rows:

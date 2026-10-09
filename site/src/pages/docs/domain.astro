@@ -1,0 +1,74 @@
+---
+import DocGuide from '../../layouts/DocGuide.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import { excerpt, sourceUrl } from '../../data/source';
+import domainSource from '../../../../lucent/crates/lucent-domain/src/desktop.rs?raw';
+import usecaseSource from '../../../../lucent/crates/lucent-usecases/src/lib.rs?raw';
+const models = [
+  ['Application identity', 'AppId, Application, LaunchCommand', 'AppId holds the XDG desktop-entry ID. Application carries searchable metadata and a parsed command: program, argument vector, optional working directory and terminal requirement. Icons are names here, not textures.'],
+  ['Compositor state', 'Window, Workspace, CompositorSnapshot', 'Windows, workspace membership, focus, workspace counts and the active workspace. Window addresses remain opaque strings; the adapter interprets them.'],
+  ['Persistent preferences', 'DesktopSettings, Placement', 'Versioned widget positions and visibility, pinned app IDs, notes and light/dark choice. Positions are logical coordinates. Query, selection and animation progress are not saved.'],
+  ['Observed services', 'ClockSnapshot, SystemSnapshot, MediaSnapshot, WeatherSnapshot', 'Values the client displays without knowing their transport. System state includes CPU, memory, optional volume and a network status string. Weather describes current conditions, not a forecast.'],
+  ['Calendar & focus', 'Date, FocusTimer, TimerPhase', 'Monday is weekday zero. The timer has Ready, Running, Paused and Finished states. Remaining time comes from a deadline, so delayed callbacks do not slow it down.'],
+  ['Notifications', 'Notification, NotificationAction, NotificationSnapshot, CloseReason', 'Content, action IDs, urgency/residency flags, timeout and active/history collections. An action is a protocol identifier, not an executable command.'],
+  ['Menus & sessions', 'MenuEntry, MenuOutcome, Secret, AuthPrompt', 'Menus preserve the original result, including disabled and parent/cancel behavior. Authentication is a conversation. Secret zeroizes its owned string and cannot be cloned or debug-printed.'],
+  ['Wallpaper', 'Wallpaper', 'A path and display name. Decoded pixels and preview textures belong to the presentation asset boundary.'],
+];
+const ports = [
+  ['ApplicationPort', 'discover, launch', 'XdgApplications', 'Reads .desktop entries with XDG precedence and visibility rules. Parses Exec field codes; launches program/argv directly. Discovery happens at startup; launch is an effect.', 'applications.rs'],
+  ['CompositorPort', 'snapshot, watch, switch_workspace, focus_window', 'Hyprland', 'Reads JSON snapshots and subscribes to the event socket, reconnecting after failure. The trait default polls every two seconds; production overrides watch with events.', 'compositor.rs'],
+  ['SettingsPort', 'load, save', 'JsonSettings', 'Reads desktop.json under the Lucent XDG state directory. Missing files use defaults; unsupported versions return an error. Saves write a temporary sibling and rename it. The effect worker serializes client saves.', 'lib.rs'],
+  ['ClockPort', 'now', 'LocalClock', 'Converts local civil time to ClockSnapshot. The desktop samples every second, but the minute clock does not repaint for every tick.', 'desktop_ports.rs'],
+  ['SystemPort', 'sample', 'LinuxSystem', 'Uses /proc/stat deltas and /proc/meminfo, plus wpctl volume and nmcli status. A mutex protects the previous CPU sample. The desktop samples every five seconds.', 'desktop_ports.rs'],
+  ['AudioPort', 'control', 'WirePlumber', 'Maps Raise, Lower and ToggleMute to wpctl on the default sink. This is a command adapter, not device discovery or audio routing.', 'desktop_ports.rs'],
+  ['MediaPort', 'snapshot, control', 'Playerctl', 'Uses playerctl for MPRIS metadata and playback commands. The desktop samples every two seconds; position and length are converted to seconds.', 'desktop_ports.rs'],
+  ['WeatherPort', 'snapshot', 'OpenMeteo', 'Reads configured coordinates and requests current conditions with a bounded curl call. The client polls every fifteen minutes. Missing configuration is Unavailable; this port does not detect location.', 'desktop_ports.rs'],
+  ['WallpaperPort', 'list, current, apply', 'OmarchyWallpaper', 'Lists wallpaper directories, reads the active background and validates an absolute file before calling omarchy-theme-bg-set. Omarchy owns background presentation and persistence.', 'desktop_ports.rs'],
+  ['SessionPort', 'lock', 'OmarchySession', 'Invokes the installed lock wrapper, which prefers the native secure locker and retains a fallback. This initiates locking; it does not check credentials.', 'desktop_ports.rs'],
+  ['NotificationPort', 'watch, dismiss, invoke, set_do_not_disturb, clear_history', 'FreedesktopNotifications', 'Owns the freedesktop D-Bus notification service, feeds the pure inbox policy, publishes snapshots and emits action/close signals. Updates are event-driven, with expiry scheduling.', 'notifications.rs'],
+];
+const sections: [string, string][] = [['boundaries', '01 · Dependency boundaries'], ['models', '02 · Domain vocabulary'], ['ports', '03 · Every service port'], ['usecases', '04 · Policy and use cases'], ['errors', '05 · Failure & persistence'], ['testing', '06 · Tests & extension']];
+---
+<DocGuide chapter="domain" title="Domain, ports & adapters" heading="Meaning first." accent="Mechanics at the edge." description="The actual domain vocabulary, service contracts and production adapters behind Lucent, including their behavior and current limits." sections={sections}>
+  <section id="boundaries"><span class="eyebrow">01 / DEPENDENCIES</span><h2>A port is a capability<br />the application asks for.</h2>
+    <p><code>lucent-domain</code> defines desktop data and outbound traits. <code>lucent-usecases</code> expresses decisions against those traits. <code>lucent-services</code> and <code>lucent-auth</code> implement external operations. The desktop executable chooses adapters in its composition root and supplies them to the client.</p>
+    <CodeBlock code={`Client → use case → domain port ← production adapter
+                       ↑                  ↓
+                    test fake       OS / filesystem / IPC
+
+Framework → Element / Layout / Paint / surface lifecycle
+Domain    → values / contracts / policy inputs`} label="Dependency direction · arrows mean depends on" />
+    <p>The domain has no Wayland, D-Bus or GPU types and performs no OS operations. Its models use serde where persistence is needed, and authentication uses zeroizing storage. The framework does not depend on the desktop domain. Another shell can reuse the component and rendering crates with its own models and ports.</p>
+    <p>The domain’s Application is an installed-app record; the framework’s Application trait is the lifecycle contract for a UI executable. They are different types with different responsibilities.</p>
+    <p>A port describes an operation, not its scheduling. Most methods are synchronous and may block. The client calls external work from effects or subscription workers; results return as typed messages. <code>Send + Sync</code> permits shared adapters—it does not make a method asynchronous.</p>
+  </section>
+  <section id="models"><span class="eyebrow">02 / DATA WITH MEANING</span><h2>The domain vocabulary.</h2>
+    <div class="table-scroll"><table><thead><tr><th>Concern</th><th>Types</th><th>Meaning</th></tr></thead><tbody>{models.map(([concern, types, meaning]) => <tr><td>{concern}</td><td><code>{types}</code></td><td>{meaning}</td></tr>)}</tbody></table></div>
+    <p>These are the models implemented today. The original proposal also included typed network connections, Bluetooth devices, battery services and calendar events. Those are not implemented domain contracts yet. The current network field is a status string; the calendar is date arithmetic and presentation.</p>
+    <p>Read <a href={sourceUrl('lucent/crates/lucent-domain/src/desktop.rs')}>desktop.rs</a>, <a href={sourceUrl('lucent/crates/lucent-domain/src/notifications.rs')}>notifications.rs</a>, <a href={sourceUrl('lucent/crates/lucent-domain/src/menu.rs')}>menu.rs</a> and <a href={sourceUrl('lucent/crates/lucent-domain/src/authentication.rs')}>authentication.rs</a>.</p>
+  </section>
+  <section id="ports"><span class="eyebrow">03 / CONTRACT → ADAPTER → SYSTEM</span><h2>What each port does.</h2>
+    <CodeBlock code={excerpt(domainSource, 'pub trait ApplicationPort', '#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]')} lang="rust" label="Live source · application, compositor and settings ports" />
+    <div class="table-scroll"><table><thead><tr><th>Port / operations</th><th>Production adapter</th><th>Implementation & client usage</th></tr></thead><tbody>{ports.map(([port, methods, adapter, detail, path]) => <tr><td><strong>{port}</strong><br /><code>{methods}</code></td><td><a href={sourceUrl(`lucent/crates/lucent-services/src/${path}`)}>{adapter} ↗</a></td><td>{detail}</td></tr>)}</tbody></table></div>
+    <h3>Authentication has a separate contract.</h3><p><code>AuthenticationPort::authenticate(identity, conversation)</code> belongs to lock/login. <a href={sourceUrl('lucent/crates/lucent-auth/src/lib.rs')}>PamLocker and Greetd</a> translate backend prompts into <code>AuthConversation</code>. Success includes account checks and, for login, acceptance of the session-start request. The framework's secure session-lock protocol controls which surfaces protect the session; authentication alone does not make a surface secure.</p>
+    <h3>Two boundaries deliberately stay small.</h3><p><code>StopSignal</code> exposes cancellation and interruptible waiting to long-lived domain adapters. The client's <code>WatchStop</code> adapts framework cancellation to it. Domain code never receives the framework's message emitter.</p>
+    <p><code>AssetPort</code> is a <em>client</em> port because it returns <code>Arc&lt;ImageData&gt;</code>. Its <code>NativeAssets</code> adapter loads bundled monochrome symbols, resolves fallback XDG icons and decodes wallpaper previews. Putting rendering types into <code>Wallpaper</code> or <code>Application</code> would cross the domain boundary. See <a href={sourceUrl('lucent/apps/lucent-desktop/src/ports.rs')}>the injected client bundle</a>.</p>
+  </section>
+  <section id="usecases"><span class="eyebrow">04 / DECISIONS YOU CAN TEST</span><h2>Policy has no pixels.</h2>
+    <p><code>search_applications</code> ranks an in-memory list: exact name, prefix, substring, keyword/description and finally a name subsequence. It returns indices, preserving application identity. It performs no filesystem reads on a keystroke.</p>
+    <p><code>activate_application</code> gives dock and launcher different behavior. A dock activation prefers an existing matching window. A launcher activation starts an application. If the compositor snapshot is unavailable, it can still launch; a failure to focus a matched window is returned to the client.</p>
+    <CodeBlock code={excerpt(usecaseSource, 'pub fn activate_application(', '/// Align a released widget')} lang="rust" label="Live source · launch-or-focus policy" />
+    <p><code>snap_placement</code> validates finite coordinates and a positive grid step, then rounds to the nearest grid point. <code>move_widget</code> clamps the whole widget inside the viewport and updates its stable ID's placement. The client supplies the spacing token and widget size. Screen-edge clamping can take precedence over exact grid alignment.</p>
+    <p><a href={sourceUrl('lucent/crates/lucent-usecases/src/menu.rs')}>Selection</a> owns menu filtering and navigation, skips disabled entries and preserves the original result value. <a href={sourceUrl('lucent/crates/lucent-usecases/src/notifications.rs')}>NotificationInbox</a> owns replacement IDs, bounded active/history collections, timeout decisions and DND. Its clock input comes from the adapter, so tests can advance time without sleeping.</p>
+  </section>
+  <section id="errors"><span class="eyebrow">05 / WHAT HAPPENS WHEN IT FAILS</span><h2>Errors cross the same boundary.</h2>
+    <p><code>DomainError</code> distinguishes <code>Unavailable</code>, <code>Invalid</code> and <code>Failed</code>, each with context. Adapters translate external failures; the client decides how to present them. This is not yet a universal loading/error state machine: media failures become an empty snapshot, weather becomes absent, system sampling errors retain prior state, and action failures populate the desktop's error field.</p>
+    <p>Settings are schema version 1. Loading an unsupported or malformed file disables client saves, preserving the original. Missing files use defaults. The separate validate_settings use case checks schema and finite coordinates, but the current save path does not invoke it; widget movement validates coordinates at its own boundary. Temporary-file rename prevents readers from seeing partially written JSON; it is not a migration system or a promise of power-loss durability.</p>
+    <p>The shared command adapter supplies argument arrays, bounds execution to five seconds and caps captured stdout at 8 MiB. Some features remain CLI-backed and polled. Omarchy menu actions are a separate integration: its Python adapter preserves trusted installed/user action semantics, including shell commands, after the native picker returns a value.</p>
+  </section>
+  <section id="testing"><span class="eyebrow">06 / EXTENDING THE BOUNDARY</span><h2>Add behavior with evidence.</h2>
+    <ol class="guide-steps"><li>Define the smallest domain value and port needed by the interaction. Keep transport and rendering types out.</li><li>Write the decision as a use case when it is independent of UI state. Test it with a fake that records calls.</li><li>Implement an adapter with explicit unavailable/error behavior. Wire it in the composition root.</li><li>Map worker results to a client message, update state and invalidate the affected surfaces.</li><li>Exercise the real integration separately. A fake-adapter test does not prove that D-Bus, a compositor socket or an installed command works.</li></ol>
+    <p>Existing tests cover search ranking, dock focus versus launcher launch, timer catch-up, calendar arithmetic, widget bounds, notification replacement/expiry and menu navigation. See <a href={sourceUrl('lucent/crates/lucent-usecases/src/lib.rs')}>use-case tests</a> and <a href={sourceUrl('lucent/apps/lucent-desktop/src/visual_tests.rs')}>client tests with injected adapters</a>.</p>
+    <ul class="resource-list"><li><a href="/docs/framework/">Next: inside the framework →</a><span>Messages, workers, layout, animation and GPU submission.</span></li><li><a href="/docs/client/">Trace the desktop client →</a><span>Where ports are injected and what happens when a user acts.</span></li></ul>
+  </section>
+</DocGuide>
