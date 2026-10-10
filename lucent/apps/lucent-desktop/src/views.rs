@@ -551,23 +551,24 @@ impl Desktop {
                 );
             }
             Mode::Themes => {
+                // Keep theme and size controls visible when a short screen or a
+                // user preference reduces the panel's available content height.
+                let theme_height = (body_h
+                    - component::launcher::THEME_CAPTION_HEIGHT
+                    - component::launcher::SIZE_BUTTON_HEIGHT
+                    - layout::SECTION_GAP * 2.)
+                    .clamp(0., component::launcher::THEME_HEIGHT);
                 elements.push(
                     Element::row(vec![
                         self.button("Dark", Message::Theme(false))
-                            .size(
-                                (width - layout::SECTION_GAP) / 2.,
-                                component::launcher::THEME_HEIGHT,
-                            )
+                            .size((width - layout::SECTION_GAP) / 2., theme_height)
                             .background(theme::dark::SURFACE)
                             .color(theme::dark::ON_SURFACE)
                             .selected(self.selected == 0)
                             .on_hover(Message::Select(0))
                             .id("theme-dark"),
                         self.button("Light", Message::Theme(true))
-                            .size(
-                                (width - layout::SECTION_GAP) / 2.,
-                                component::launcher::THEME_HEIGHT,
-                            )
+                            .size((width - layout::SECTION_GAP) / 2., theme_height)
                             .background(theme::light::SURFACE)
                             .color(theme::light::ON_SURFACE)
                             .selected(self.selected == 1)
@@ -578,13 +579,43 @@ impl Desktop {
                     .at(0., body_y),
                 );
                 elements.push(
-                    self.label("Colors shared across every component", font::SMALL)
+                    self.label("Launcher size", font::SMALL)
                         .size(width, component::launcher::THEME_CAPTION_HEIGHT)
                         .align(Align::Center)
-                        .at(
-                            0.,
-                            body_y + component::launcher::THEME_HEIGHT + layout::SECTION_GAP,
-                        ),
+                        .at(0., body_y + theme_height + layout::SECTION_GAP),
+                );
+                let button_width = shell_layout::floor(
+                    (width - space::SM * 2.) / shell_layout::LAUNCHER_PRESETS.len() as f32,
+                    layout::CONTROL_STEP,
+                );
+                elements.push(
+                    Element::row(
+                        shell_layout::LAUNCHER_PRESETS
+                            .iter()
+                            .enumerate()
+                            .map(|(index, (label, size))| {
+                                self.button(*label, Message::LauncherSize(*size))
+                                    .size(button_width, component::launcher::SIZE_BUTTON_HEIGHT)
+                                    .padding_xy(space::SM, space::XS)
+                                    .font(font::CAPTION)
+                                    .background(if self.settings.launcher == *size {
+                                        self.accent()
+                                    } else {
+                                        self.widget_color()
+                                    })
+                                    .color(if self.settings.launcher == *size {
+                                        self.theme().on_primary
+                                    } else {
+                                        self.ink()
+                                    })
+                                    .selected(self.selected == index + 2)
+                                    .on_hover(Message::Select(index + 2))
+                                    .id(format!("launcher-size-{}", label.to_lowercase()))
+                            })
+                            .collect(),
+                    )
+                    .gap(space::SM)
+                    .at(0., height - component::launcher::SIZE_BUTTON_HEIGHT),
                 );
             }
             Mode::Commands => {

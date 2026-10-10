@@ -115,6 +115,11 @@ pub fn validate_settings(settings: &DesktopSettings) -> Result<()> {
     {
         return Err(DomainError::Invalid("Non-finite widget position".into()));
     }
+    if settings.launcher.width == Some(0) || settings.launcher.max_height == Some(0) {
+        return Err(DomainError::Invalid(
+            "Launcher dimensions must be positive".into(),
+        ));
+    }
     Ok(())
 }
 
@@ -164,6 +169,11 @@ mod tests {
         }
     }
     impl CompositorPort for Fake {
+        fn watch(&self, emit: &mut dyn FnMut(Result<CompositorSnapshot>), stop: &dyn StopSignal) {
+            if !stop.cancelled() {
+                emit(self.snapshot());
+            }
+        }
         fn snapshot(&self) -> Result<CompositorSnapshot> {
             Ok(CompositorSnapshot {
                 workspaces: vec![],

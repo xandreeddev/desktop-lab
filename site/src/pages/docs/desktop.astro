@@ -1,0 +1,49 @@
+---
+import DocGuide from '../../layouts/DocGuide.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import { withBase } from '../../data/urls';
+import { sourceUrl } from '../../data/source';
+const sections: [string, string][] = [['launcher','01 · Launcher size'],['controls','02 · Keyboard and windows'],['appearance','03 · Appearance and widgets'],['files','04 · Saved preferences'],['services','05 · System services'],['recovery','06 · Restart and rollback']];
+const settingsExample = JSON.stringify({launcher:{width:800,max_height:720}}, null, 2);
+---
+<DocGuide chapter="desktop" title="Use and configure Lucent" heading="Your desktop." accent="Your preferences." description="Change launcher size, appearance, widgets and shortcuts. Understand which settings belong to Lucent and which belong to Omarchy or Hyprland." sections={sections} audience="Desktop user guide">
+  <section id="launcher"><span class="eyebrow">01 / MAKE ROOM</span><h2>A larger launcher.<br />A size you can change.</h2>
+    <p>Open the launcher with <strong>Super+Space</strong>, choose the palette icon (<strong>Themes</strong>), then pick <strong>Small</strong>, <strong>Default</strong> or <strong>Large</strong> under Launcher size. Arrow keys select both theme cards and size presets; Enter applies the selected control. Tab cycles launcher sections.</p>
+    <div class="table-scroll"><table><thead><tr><th>Preset</th><th>Preferred width</th><th>Maximum height</th></tr></thead><tbody><tr><td>Small</td><td>448 logical pixels</td><td>480 logical pixels</td></tr><tr><td>Default</td><td>640 logical pixels</td><td>640 logical pixels</td></tr><tr><td>Large</td><td>800 logical pixels</td><td>800 logical pixels</td></tr></tbody></table></div>
+    <p>The default fits up to ten app rows on a sufficiently tall display. The panel still shrinks when there are fewer results, and each section keeps its own content height. Size changes animate. The default wallpaper carousel has its own wider layout; an explicit width preference also constrains that carousel.</p>
+    <p>For an exact preference, open a terminal inside the desktop session:</p>
+    <CodeBlock code="lucent-cli launcher size 800 720\nlucent-cli launcher open\n\n# Open the preset controls directly\nlucent-cli themes open\n\n# Restore design defaults without changing your other preferences\nlucent-cli launcher size reset" label="Preferred width and maximum height, in logical pixels" />
+    <p>Changes apply live and save in the background. Width rounds down to a 32-pixel step; maximum height rounds down to a 16-pixel step. Both are constrained by the usable screen. The command accepts widths of at least 320 and heights of at least 224. Logical pixels keep the layout consistent at 1× and 2× output scale; these controls do not enlarge font or icon sizes.</p>
+    <p>For example, a preference of 777 × 699 becomes at most 768 × 688 before screen constraints. Searching for one application may produce a shorter panel. A smaller display limits the visible rows, while arrows and scrolling keep the selected result reachable.</p>
+  </section>
+  <section id="controls"><span class="eyebrow">02 / YOUR EXISTING SHORTCUTS</span><h2>Keep Omarchy's window workflow.</h2>
+    <p><strong>Super+K</strong> opens the native keybinding menu. It reads the installed Omarchy bindings, including user overrides, so it is the place to check terminal, splitting, tiling, monitor and workspace shortcuts on your current system. Search a shortcut or action, then press Enter to run it.</p>
+    <p>Lucent's launcher uses typing to filter, arrows to select, Enter to launch, Escape or an outside click to close, and Tab / Shift+Tab to change sections. Dock clicks focus a matching running application or launch it. Top-bar workspace buttons ask Hyprland to change workspace.</p>
+    <p>Window tiling and focus rules belong to Hyprland. Edit your user configuration under <code>~/.config/hypr/</code>, preserving the marked Lucent integration blocks. The generated appearance block gives normal windows the shared corner radius. Fullscreen, gapless layouts and explicit application rules can override it.</p>
+    <p>For root and nested Omarchy menus, Lucent renders the picker while Omarchy's definitions supply the actions. Some specialized actions still open stock shell panels. See the <a href={withBase('/docs/system/')}>complete ownership map</a>.</p>
+  </section>
+  <section id="appearance"><span class="eyebrow">03 / COLORS, WALLPAPERS AND WIDGETS</span><h2>Separate shell preferences<br />from system themes.</h2>
+    <p><strong>Themes → Dark / Light</strong> changes Lucent's semantic palette. It does not automatically regenerate the terminal, browser or GTK theme. Omarchy's Style → Theme menu still selects an Omarchy theme through its own tools.</p>
+    <p><strong>Super+Ctrl+Space</strong> opens the wallpaper carousel. Put images in <code>~/Pictures/Wallpapers</code> or <code>~/.config/lucent/wallpapers</code>, then restart Lucent to discover new files. Theme backgrounds are also discovered. Select a picture and choose Apply; the adapter calls Omarchy's wallpaper tool. Desktop, lock and login clients use the configured wallpaper integration, with a synchronized readable copy for login.</p>
+    <p>The <strong>Widgets</strong> section toggles calendar, clock, weather, media, system monitor, notes and focus timer. Drag a widget background to move it. A spacing grid appears during the drag; releasing snaps to the grid and saves. Buttons and inputs inside widgets remain interactive. Reset positions clears saved placements without changing visibility or notes.</p>
+    <p>Weather is optional. Configure latitude and longitude in <code>~/.config/lucent/weather.json</code>; keep personal coordinates out of Git. The adapter fetches Open-Meteo data when the weather subscription runs. This desktop does not automatically infer your location. Missing hardware or unavailable providers cannot be fixed by a visual setting.</p>
+  </section>
+  <section id="files"><span class="eyebrow">04 / WHAT GETS SAVED</span><h2>One desktop preference file.</h2>
+    <p>Lucent stores preferences at <code>$XDG_STATE_HOME/lucent/desktop.json</code>, falling back to <code>~/.local/state/lucent/desktop.json</code>. It contains version 1 settings: widget positions and visibility, notes, pinned application IDs, light mode and launcher dimensions. Old files without launcher preferences receive the new defaults.</p>
+    <CodeBlock code={settingsExample} lang="json" label="Launcher fields only — merge into existing settings, not a replacement file" />
+    <p>Use the live controls or CLI for launcher changes. If editing the file by hand, stop <code>lucent.service</code> first, preserve unrelated keys, then start it again. The desktop reads settings at startup; it does not watch this file for edits. Missing values or <code>null</code> restore design defaults. Invalid settings are reported and are not overwritten by automatic saves.</p>
+    <p>Appearance constants belong to the design system, not this preference file. Changing fonts, semantic colors or component recipes in source requires rebuilding. See <a href={withBase('/design-system/')}>the design system</a> if you are developing a theme.</p>
+  </section>
+  <section id="services"><span class="eyebrow">05 / WHAT RUNS BEHIND THE DESKTOP</span><h2>Lucent draws.<br />System services do the work.</h2>
+    <p>Audio uses WirePlumber through <code>wpctl</code>. Media uses <code>playerctl</code>. Network status comes from NetworkManager through <code>nmcli</code>. Notifications are rendered by Lucent and received through the standard desktop D-Bus interface. Notification history is currently held in memory.</p>
+    <p>Wi-Fi configuration, Bluetooth pairing, power profiles, brightness, clipboard, screenshot tools, polkit prompts and some stock panels remain dependent on Omarchy or installed system tools. There is no complete native Lucent control center or tray yet. The <a href={withBase('/docs/system/')}>ownership map</a> lists each responsibility and its implementation.</p>
+    <p>Lock shortcuts use the installed native lock wrapper, which requests a secure session lock and authenticates through PAM. It retains a stock fallback if the native path fails. Login is a separate greetd-backed client; restarting the desktop service does not replace the login manager.</p>
+  </section>
+  <section id="recovery"><span class="eyebrow">06 / CHECK AND RECOVER</span><h2>Inspect the running session.</h2>
+    <CodeBlock code="systemctl --user status lucent.service\nlucent-cli inspect\njournalctl --user -u lucent.service -n 60\nsystemctl --user restart lucent.service" label="Run inside the graphical guest session" />
+    <p><code>inspect</code> reports saved size preferences, target panel size, surfaces, frame counts and errors. Its command response acknowledges receipt; a background save can still fail and report an error afterwards. A shell restart retains saved preferences.</p>
+    <p>Stopping the service restores Omarchy's previous bar and notification state. To remove the managed desktop startup, appearance and shortcut blocks, run the repository rollback command. It preserves binaries and preferences:</p>
+    <CodeBlock code="python3 scripts/lucent-setup.py rollback" label="From the repository inside the VM" />
+    <p>Login-manager rollback is separate: use <code>scripts/lucent-login.py</code> and its documented rollback action only when that integration was installed. Read <a href={sourceUrl('docs/install-and-rollback.md')}>installation and rollback</a> before changing session setup. Development and VM testing instructions are in the <a href={sourceUrl('.agents/skills/lucent-desktop/SKILL.md')}>lucent-desktop repository skill</a>.</p>
+  </section>
+</DocGuide>

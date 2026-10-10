@@ -1,0 +1,55 @@
+---
+import DocGuide from '../../layouts/DocGuide.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import { withBase } from '../../data/urls';
+import { excerpt, sourceUrl } from '../../data/source';
+import api from '../../../../lucent/crates/lucent-api/src/lib.rs?raw';
+import example from '../../../../lucent/examples/hello-layer/src/main.rs?raw';
+const sections: [string, string][] = [['scope','01 · Library boundary'],['contract','02 · Public API'],['compose','03 · Compose a client'],['execute','04 · Runtime implementation'],['extend','05 · Extend and test']];
+---
+<DocGuide chapter="library" title="Framework library guide" heading="Build your own client." accent="Keep the engine reusable." description="The library API, component composition and rendering lifecycle, independent of Lucent desktop preferences or Omarchy installation." sections={sections} audience="Library documentation">
+  <section id="scope"><span class="eyebrow">01 / START AT THE BOUNDARY</span><h2>Four engine crates.<br />One optional design system.</h2>
+    <p>The reusable framework consists of <code>lucent-api</code>, <code>lucent-ui</code>, <code>lucent-render</code> and <code>lucent-wayland</code>. Clients choose their own application state, components and service adapters. <code>lucent-design</code> is an optional set of tokens and recipes. None of the engine crates depends on the desktop client, its domain services or Omarchy.</p>
+    <p>If you want to change launcher size, wallpaper, keybindings or startup, use <a href={withBase('/docs/desktop/')}>the desktop configuration guide</a>. If you want to implement a new client, start here and run the small example:</p>
+    <CodeBlock code="cargo run --manifest-path lucent/Cargo.toml --locked -p hello-layer" label="Inside a Wayland session with layer-shell and Vulkan" />
+    <p>This is an in-workspace library. The repository does not promise a stable published crates.io API. The example is a real independent client, not an Omarchy service.</p>
+  </section>
+  <section id="contract"><span class="eyebrow">02 / WHAT YOU IMPLEMENT</span><h2>State, messages and a view.</h2>
+    <CodeBlock code={excerpt(api, 'pub trait Component:', 'pub type Task<M>')} lang="rust" label="Actual Component and Application contracts" />
+    <p>A Rust struct holds state. A message enum names possible changes. <code>view(&amp;self)</code> constructs an <code>Element</code> tree; <code>update(&amp;mut self)</code> changes state and records effects. An application also declares native surfaces, startup work and subscriptions. These are ordinary Rust method calls, not automatically discovered classes or registered DOM nodes.</p>
+    <div class="table-scroll"><table><thead><tr><th>API value</th><th>Responsibility</th></tr></thead><tbody>
+      <tr><td>Element&lt;Message&gt;</td><td>Rows, columns, stacks, grids, text, images, inputs, styles and interaction messages.</td></tr>
+      <tr><td>ViewContext</td><td>Current surface ID, logical width/height and monotonic time.</td></tr>
+      <tr><td>SurfaceSpec</td><td>Layer, anchor, size, reserved space, keyboard mode, visibility and input capture.</td></tr>
+      <tr><td>Effects</td><td>Redraw requests, queued background tasks and exit requests. A redraw records intent; it does not submit GPU work.</td></tr>
+      <tr><td>Subscription</td><td>A stream or interval producer, keyed by an application-chosen ID, with cooperative cancellation.</td></tr>
+      <tr><td>Motion</td><td>CPU interpolation between values at a supplied time. Duration and easing are selected by the client.</td></tr>
+    </tbody></table></div>
+  </section>
+  <section id="compose"><span class="eyebrow">03 / A COMPLETE SMALL CLIENT</span><h2>Compose views.<br />Delegate messages explicitly.</h2>
+    <CodeBlock code={excerpt(example, 'impl Component for Example', 'fn main()')} lang="rust" label="Live hello-layer parent component and surface declaration" />
+    <p><code>Element::map</code> wraps a child's messages in the parent's message type. <code>Effects::delegate</code> invokes the child's update and merges its effects, wrapping background results too. The runtime calls the application's update; it does not automatically locate and call an update method on every node.</p>
+    <p>Use stable element IDs where focus, hover or input state must survive rebuilding a view. Each visible native surface gets its own view. Child coordinates are resolved relative to their parent's content box. A surface anchor is a compositor request; a row's padding is a layout instruction inside that surface.</p>
+  </section>
+  <section id="execute"><span class="eyebrow">04 / WHEN THINGS HAPPEN</span><h2>One event loop owns state.</h2>
+    <CodeBlock code={`run(application)
+  connect to Wayland; create shared GPU and layout resources
+  register event sources with calloop
+  call init; reconcile surfaces and subscriptions
+  wait for events
+
+message → update → effects → invalidate surface
+configured + dirty + no pending frame
+  → view → layout → paint and hit regions
+  → wgpu/Vulkan commands → present buffer
+Wayland frame callback → allow the next dirty frame`} label="Simplified implementation; not copyable Rust" />
+    <p>Pointer and keyboard events arrive through Wayland. An optional local command socket translates external strings into application messages. Effects run on one ordered worker; subscriptions have their own workers. All return messages to the event loop, which owns the application state.</p>
+    <p>The renderer owns shaders, primitive buffers, image/text caches and GPU submission. Hyprland combines our buffers with other windows. The compositor does not receive the Element tree. Frame callbacks pace further work; an idle surface does not redraw continuously.</p>
+    <p>Read <a href={withBase('/docs/framework/')}>the detailed library implementation</a> for layout, clipping, input, textures and scheduling. <a href={withBase('/docs/execution/')}>Follow the wiring</a> traces this same engine through the actual desktop client.</p>
+  </section>
+  <section id="extend"><span class="eyebrow">05 / CHANGE THE RIGHT LAYER</span><h2>Keep product policy in clients.</h2>
+    <p>Launcher sizing, widget snapping and Omarchy integration belong to the desktop. Generic layout constraints belong to <code>lucent-ui</code>; new surface protocol support belongs to <code>lucent-wayland</code>; texture sampling belongs to <code>lucent-render</code>. A service contract is a port. Its implementation is an adapter. Presentation data such as decoded image pixels belongs outside the pure desktop domain.</p>
+    <CodeBlock code="cargo fmt --manifest-path lucent/Cargo.toml --all --check\ncargo clippy --manifest-path lucent/Cargo.toml --locked --workspace --all-targets -- -D warnings\ncargo test --manifest-path lucent/Cargo.toml --locked --workspace\npython3 -m unittest discover -s tests -v" label="Boundary and behavior checks" />
+    <p>Use <a href={sourceUrl('.agents/skills/lucent-framework/SKILL.md')}>the repository's lucent-framework skill</a> for library or architecture work. Current limits include a single ordered effects worker, unbounded message queues, integer output scaling, basic text editing and unfinished accessibility integration. The <a href={withBase('/docs/review/')}>architecture review</a> separates checked boundaries from remaining design work.</p>
+  </section>
+</DocGuide>

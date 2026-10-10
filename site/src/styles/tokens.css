@@ -141,7 +141,13 @@
   --component-launcher-active-tab-width: 96px;
   --component-launcher-tab-label-min-width: 320px;
   --component-launcher-theme-caption-height: 32px;
-  --component-launcher-visible-rows: 7;
+  --component-launcher-min-width: 320px;
+  --component-launcher-max-height: 640px;
+  --component-launcher-small-width: 448px;
+  --component-launcher-small-max-height: 480px;
+  --component-launcher-large-width: 800px;
+  --component-launcher-large-max-height: 800px;
+  --component-launcher-size-button-height: 32px;
   --component-dock-row-indicator-height: 2px;
   --component-dock-row-indicator-width: 16px;
   --component-dock-row-indicator-left: 16px;
@@ -282,7 +288,7 @@
   --component-panel-initial-width: 352px;
   --component-panel-dock-height: 64px;
   --component-panel-wallpaper-width: 1248px;
-  --component-panel-launcher-width: 448px;
+  --component-panel-launcher-width: 640px;
   --component-panel-launcher-min-height: 224px;
   --component-panel-bar-height: 64px;
   --component-panel-wallpaper-body-height: 304px;

@@ -88,6 +88,7 @@ pub enum Message {
     TimerReset,
     Month(i32),
     Theme(bool),
+    LauncherSize(LauncherSize),
     ResetLayout,
     Resize(&'static str, f32, f32),
     Completed(domain::Result<()>),
@@ -225,7 +226,12 @@ impl Desktop {
     }
     fn retarget_panel_transition(&mut self, now: f64) {
         let (width, height) = if self.launcher {
-            crate::shell_layout::launcher_size(self.mode, self.results.len(), self.viewport)
+            crate::shell_layout::launcher_size(
+                self.mode,
+                self.results.len(),
+                self.viewport,
+                self.settings.launcher,
+            )
         } else {
             (self.dock_width(), panel::DOCK_HEIGHT)
         };
@@ -248,11 +254,16 @@ impl Desktop {
             Mode::Apps => self.results.len(),
             Mode::Commands => COMMANDS.len(),
             Mode::Widgets => WIDGETS.len() + 1,
-            Mode::Themes => 2,
+            Mode::Themes => 2 + crate::shell_layout::LAUNCHER_PRESETS.len(),
             Mode::Wallpapers => self.wallpapers.len(),
         };
         self.selected = index.min(count.saturating_sub(1));
-        let rows = crate::shell_layout::visible_rows(self.mode, self.results.len(), self.viewport);
+        let rows = crate::shell_layout::visible_rows(
+            self.mode,
+            self.results.len(),
+            self.viewport,
+            self.settings.launcher,
+        );
         let row_count = if self.mode == Mode::Widgets {
             WIDGETS.len()
         } else {
@@ -467,7 +478,13 @@ impl Component for Desktop {
                 if self.mode == Mode::Wallpapers {
                     self.update(Message::Wallpaper(self.wallpaper_index, true), effects);
                 } else if self.mode == Mode::Themes {
-                    self.update(Message::Theme(self.selected == 1), effects);
+                    if self.selected < 2 {
+                        self.update(Message::Theme(self.selected == 1), effects);
+                    } else if let Some((_, size)) =
+                        crate::shell_layout::LAUNCHER_PRESETS.get(self.selected - 2)
+                    {
+                        self.update(Message::LauncherSize(*size), effects);
+                    }
                 } else if self.mode == Mode::Widgets {
                     let message = WIDGETS
                         .get(self.selected)
@@ -590,6 +607,13 @@ impl Component for Desktop {
                 for id in ["bar", "widgets", "dock", "notifications"] {
                     effects.redraw(id);
                 }
+            }
+            Message::LauncherSize(size) => {
+                self.settings.launcher = size;
+                self.retarget_panel_transition(now);
+                self.choose(self.selected, now);
+                self.save(effects);
+                effects.redraw("dock");
             }
             Message::ResetLayout => {
                 self.drag_origins.clear();
@@ -768,6 +792,36 @@ impl api::Application for Desktop {
         }
     }
     fn command(&self, command: &str) -> std::result::Result<Option<Message>, String> {
+        let words: Vec<_> = command.split_whitespace().collect();
+        if let ["launcher", "size", args @ ..] = words.as_slice() {
+            use lucent_design::component::launcher;
+            let usage = format!(
+                "Use launcher size WIDTH MAX_HEIGHT (logical pixels, minimum {} × {}) or launcher size reset",
+                launcher::MIN_WIDTH,
+                panel::LAUNCHER_MIN_HEIGHT
+            );
+            let size = match args {
+                ["reset"] => LauncherSize::default(),
+                [width, height] => {
+                    let width: u32 = width.parse().map_err(|_| usage.clone())?;
+                    let height: u32 = height.parse().map_err(|_| usage.clone())?;
+                    if width < launcher::MIN_WIDTH as u32
+                        || height < panel::LAUNCHER_MIN_HEIGHT as u32
+                    {
+                        return Err(usage);
+                    }
+                    LauncherSize {
+                        width: Some(width),
+                        max_height: Some(height),
+                    }
+                }
+                _ => return Err(usage),
+            };
+            if !self.settings_writable {
+                return Err("Settings are not ready for saving; wait for loading or fix the settings error first".into());
+            }
+            return Ok(Some(Message::LauncherSize(size)));
+        }
         Ok(Some(match command {
             "notifications toggle" => Message::Notifications(crate::notifications::Message::Toggle),
             "launcher toggle" => Message::ToggleLauncher,
@@ -775,15 +829,16 @@ impl api::Application for Desktop {
             "launcher open" => Message::Mode(Mode::Apps),
             "wallpapers open" => Message::Mode(Mode::Wallpapers),
             "widgets open" => Message::Mode(Mode::Widgets),
+            "themes open" => Message::Mode(Mode::Themes),
             "quit" => Message::Quit,
             _ => return Err(
-                "Use launcher toggle|open|close, wallpapers open, widgets open, inspect, or quit"
+                "Use launcher toggle|open|close|size, wallpapers open, widgets open, themes open, inspect, or quit"
                     .into(),
             ),
         }))
     }
     fn inspect(&self) -> String {
-        serde_json::json!({"notifications_ready":self.notifications.ready,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher,"mode":self.mode.name(),"query":self.query,"selected":self.selected,"result_count":self.results.len(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(&a.id.0).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":!self.drag_origins.is_empty(),"notes":self.settings.notes,"timer_seconds":self.timer.remaining,"error":self.error}).to_string()
+        serde_json::json!({"notifications_ready":self.notifications.ready,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher,"launcher_size":self.settings.launcher,"launcher_panel_size":[self.panel_width.target_value(),self.panel_height.target_value()],"mode":self.mode.name(),"query":self.query,"selected":self.selected,"result_count":self.results.len(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(&a.id.0).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":!self.drag_origins.is_empty(),"notes":self.settings.notes,"timer_seconds":self.timer.remaining,"error":self.error}).to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
         surface == "dock"

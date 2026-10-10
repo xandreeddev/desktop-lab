@@ -166,7 +166,13 @@ pub mod component {
         pub const ACTIVE_TAB_WIDTH: f32 = 96.0;
         pub const TAB_LABEL_MIN_WIDTH: f32 = 320.0;
         pub const THEME_CAPTION_HEIGHT: f32 = 32.0;
-        pub const VISIBLE_ROWS: f32 = 7.0;
+        pub const MIN_WIDTH: f32 = 320.0;
+        pub const MAX_HEIGHT: f32 = 640.0;
+        pub const SMALL_WIDTH: f32 = 448.0;
+        pub const SMALL_MAX_HEIGHT: f32 = 480.0;
+        pub const LARGE_WIDTH: f32 = 800.0;
+        pub const LARGE_MAX_HEIGHT: f32 = 800.0;
+        pub const SIZE_BUTTON_HEIGHT: f32 = 32.0;
     }
     pub mod dock_row {
         pub const INDICATOR_HEIGHT: f32 = 2.0;
@@ -353,7 +359,7 @@ pub mod component {
         pub const INITIAL_WIDTH: f32 = 352.0;
         pub const DOCK_HEIGHT: f32 = 64.0;
         pub const WALLPAPER_WIDTH: f32 = 1248.0;
-        pub const LAUNCHER_WIDTH: f32 = 448.0;
+        pub const LAUNCHER_WIDTH: f32 = 640.0;
         pub const LAUNCHER_MIN_HEIGHT: f32 = 224.0;
         pub const BAR_HEIGHT: f32 = 64.0;
         pub const WALLPAPER_BODY_HEIGHT: f32 = 304.0;

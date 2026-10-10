@@ -33,7 +33,17 @@ Inside the guest:
   Buttons and text fields remain interactive. Widgets live below app windows.
 - Workspace pills switch real Hyprland workspaces. Dock icons launch or focus
   their application. Omarchy's usual terminal, tiling and lock shortcuts remain.
-- The palette icon offers a shared light/dark theme. Power opens safe commands.
+- The palette icon offers a shared light/dark theme and Small / Default / Large
+  launcher size presets. The default is 640 logical pixels wide and up to 640 tall.
+  Use `lucent-cli launcher size 800 720` for a preferred width and maximum height,
+  or `lucent-cli launcher size reset` to restore defaults. Sizes save across restarts,
+  follow the spacing grid and fit the current screen. Fonts and icons retain their size.
+  Power opens safe commands.
+
+See the separate [desktop configuration guide](https://xandreeddev.github.io/desktop-lab/docs/desktop/)
+and [framework library guide](https://xandreeddev.github.io/desktop-lab/docs/library/).
+The [system ownership map](https://xandreeddev.github.io/desktop-lab/docs/system/)
+identifies every current integration category and remaining stock-shell dependency.
 
 ## Build and install
 

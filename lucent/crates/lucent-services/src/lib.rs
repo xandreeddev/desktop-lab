@@ -48,11 +48,7 @@ impl SettingsPort for JsonSettings {
             Ok(bytes) => {
                 let value: DesktopSettings = serde_json::from_slice(&bytes)
                     .map_err(|e| DomainError::Invalid(format!("Settings: {e}")))?;
-                if value.version != 1 {
-                    return Err(DomainError::Invalid(
-                        "Unsupported settings version; original file retained".into(),
-                    ));
-                }
+                lucent_usecases::validate_settings(&value)?;
                 Ok(value)
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(DesktopSettings::default()),
@@ -60,6 +56,7 @@ impl SettingsPort for JsonSettings {
         }
     }
     fn save(&self, settings: &DesktopSettings) -> Result<()> {
+        lucent_usecases::validate_settings(settings)?;
         let save = || -> std::io::Result<()> {
             fs::create_dir_all(self.path.parent().unwrap())?;
             let temporary = self.path.with_extension("tmp");
@@ -67,6 +64,39 @@ impl SettingsPort for JsonSettings {
             fs::rename(temporary, &self.path)
         };
         save().map_err(|e| DomainError::Failed(format!("Could not save desktop settings: {e}")))
+    }
+}
+
+#[cfg(test)]
+mod settings_tests {
+    use super::*;
+
+    #[test]
+    fn settings_adapter_validates_before_replacing_existing_preferences() {
+        let directory =
+            std::env::temp_dir().join(format!("lucent-settings-{}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let store = JsonSettings {
+            path: directory.join("desktop.json"),
+        };
+        fs::write(&store.path, br#"{"version":1,"notes":"retained"}"#).unwrap();
+        let mut settings = store.load().unwrap();
+        assert_eq!(settings.launcher, LauncherSize::default());
+        settings.launcher = LauncherSize {
+            width: Some(800),
+            max_height: Some(720),
+        };
+        store.save(&settings).unwrap();
+        assert_eq!(store.load().unwrap(), settings);
+        let saved = fs::read(&store.path).unwrap();
+        settings.launcher.width = Some(0);
+        assert!(store.save(&settings).is_err());
+        assert_eq!(fs::read(&store.path).unwrap(), saved);
+        fs::write(&store.path, br#"{"version":1,"launcher":{"max_height":0}}"#).unwrap();
+        assert!(store.load().is_err());
+        fs::write(&store.path, br#"{"version":2}"#).unwrap();
+        assert!(store.load().is_err());
+        fs::remove_dir_all(directory).unwrap();
     }
 }
 /// Bounded command adapter. stdout is drained concurrently; timeouts kill and reap the child.

@@ -42,3 +42,14 @@ Upstream references: [Omarchy](https://github.com/omacom/omarchy), [Lucid](https
 Lucent’s shared visual tokens live in `design/tokens.json`. The local site adds
 `/design-system/` for the live token catalog and `/docs/` for the state-to-pixels
 walkthrough. See [the framework guide](docs/lucent-framework.md) for the native API.
+
+## Configure or extend Lucent
+
+Use the [desktop guide](https://xandreeddev.github.io/desktop-lab/docs/desktop/) for
+launcher size and saved preferences, the [ownership map](https://xandreeddev.github.io/desktop-lab/docs/system/)
+for remaining Omarchy integration, and the [library guide](https://xandreeddev.github.io/desktop-lab/docs/library/)
+for framework APIs. The [architecture review](https://xandreeddev.github.io/desktop-lab/docs/review/)
+records checked boundaries and remaining work.
+
+Repository skills: [lucent-framework](.agents/skills/lucent-framework/SKILL.md) and
+[lucent-desktop](.agents/skills/lucent-desktop/SKILL.md).

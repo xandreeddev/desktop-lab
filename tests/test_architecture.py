@@ -17,6 +17,22 @@ class Boundaries(unittest.TestCase):
             cargo=tomllib.loads((ROOT/'lucent/crates'/crate/'Cargo.toml').read_text())
             self.assertFalse(set(cargo.get('dependencies',{})) & {'lucent-desktop','lucent-services','lucent-design','lucent-auth'})
 
+    def test_local_dependency_graph_has_no_indirect_boundary_leaks(self):
+        manifests = list((ROOT/'lucent').glob('crates/*/Cargo.toml')) + list((ROOT/'lucent').glob('apps/*/Cargo.toml'))
+        crates = {data['package']['name']: data for path in manifests
+                  for data in [tomllib.loads(path.read_text())]}
+        graph = {name: set(data.get('dependencies', {})) & crates.keys() for name, data in crates.items()}
+        def reachable(name, seen=None):
+            seen = set() if seen is None else seen
+            for dependency in graph[name] - seen:
+                seen.add(dependency)
+                reachable(dependency, seen)
+            return seen
+        self.assertEqual(reachable('lucent-usecases'), {'lucent-domain'})
+        framework = {'lucent-api', 'lucent-ui', 'lucent-wayland', 'lucent-render'}
+        for name in framework:
+            self.assertLessEqual(reachable(name), framework, name)
+
     def test_component_policy_does_not_choose_production_adapters(self):
         for name in ['desktop.rs','views.rs','widgets.rs','notifications.rs']:
             text=(ROOT/'lucent/apps/lucent-desktop/src'/name).read_text()
