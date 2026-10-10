@@ -1,5 +1,5 @@
 //! In-memory adapters: component tests do not inspect the host or execute commands.
-use crate::ports::*;
+use crate::adapters::DesktopAdapters;
 use lucent_domain::*;
 use std::sync::{Arc, Mutex};
 #[derive(Default)]
@@ -82,11 +82,11 @@ impl SessionPort for Fake {
         Ok(())
     }
 }
-pub fn ports() -> DesktopPorts {
+pub fn adapters() -> DesktopAdapters {
     with(Arc::new(Fake::default()))
 }
-pub fn with(fake: Arc<Fake>) -> DesktopPorts {
-    DesktopPorts {
+pub fn with(fake: Arc<Fake>) -> DesktopAdapters {
+    DesktopAdapters {
         apps: fake.clone(),
         compositor: None,
         settings: fake.clone(),

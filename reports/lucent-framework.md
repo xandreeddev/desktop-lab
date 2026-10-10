@@ -240,10 +240,10 @@ Changes:
 - Launcher selection now paints its fill and outline from the same row state on
   the first frame. The independent 350 ms selection motion was removed. Dock,
   panel and wallpaper geometry still use the framework's timed animation API.
-- `DesktopPorts` injects service interfaces; `platform.rs` selects adapters.
+- `DesktopAdapters` injects service implementations through domain ports; `platform.rs` selects adapters.
   The domain has no rendering/Wayland/D-Bus dependency. Framework crates have no
   dependency on the desktop, visual theme or authentication/service adapters.
-  Components can use fake ports without executing host commands. Pure search,
+  Components can use fake adapters without executing host commands. Pure search,
   positioning, launch/focus and notification policy remain separate use cases.
 - A native notification component renders toasts, wrapped content, application
   actions, dismissal, history and DND through the shared Vulkan renderer.

@@ -1,7 +1,7 @@
 # Framework concepts and client boundaries
 
 For a guided source-level reading, see [Follow the wiring: main to a frame](https://xandreeddev.github.io/desktop-lab/docs/execution/).
-It separates construction, declarations and execution, follows `desktop_ports()`
+It separates construction, declarations and execution, follows `desktop_adapters()`
 through the first frame and a launcher action, and records the current architecture's strengths and limits.
 
 The framework is a small, implemented vertical stack. Clients include `lucent-desktop`, the shared `SessionScreen` used by
@@ -337,7 +337,13 @@ modified; fullscreen/no-gap compositor policies may still override decorations.
 
 ## Dependency injection and protocol boundaries
 
-`Desktop::new(DesktopPorts)` receives trait objects for applications, compositor,
+Names distinguish contracts from implementations: domain service contracts use the `Port` suffix,
+while supplied implementations are adapters. `desktop_adapters()` constructs
+`DesktopAdapters`, stored as `Desktop::adapters`. Each field is typed by its
+port contract. Client `ports.rs` retains only the presentation asset contract;
+`adapters.rs` contains injected bindings and the cancellation adapter.
+
+`Desktop::new(DesktopAdapters)` receives trait objects for applications, compositor,
 settings, clock, system sampling, audio, media, weather, wallpapers, session locking,
 notifications and presentation assets. `platform.rs` is the composition root that
 chooses concrete adapters. `desktop.rs`, `views.rs`, `widgets.rs` and the notification
