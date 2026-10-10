@@ -1,4 +1,4 @@
-use crate::ports::{DesktopPorts, WatchStop};
+use crate::adapters::{DesktopAdapters, WatchStop};
 use lucent_api::{self as api, *};
 use lucent_design::{component::panel, motion};
 use lucent_domain::{self as domain, *};
@@ -134,20 +134,20 @@ pub struct Desktop {
     pub month_offset: i32,
     pub error: String,
     pub drag_origins: BTreeMap<String, Placement>,
-    pub ports: DesktopPorts,
+    pub adapters: DesktopAdapters,
 }
 impl Desktop {
-    pub fn new(ports: DesktopPorts) -> Self {
-        let images = ports.assets.initial();
+    pub fn new(adapters: DesktopAdapters) -> Self {
+        let images = adapters.assets.initial();
         Self {
-            notifications: crate::notifications::Center::new(ports.notifications.clone()),
+            notifications: crate::notifications::Center::new(adapters.notifications.clone()),
             registry: crate::widgets::registry(),
             apps: vec![],
             settings: DesktopSettings::default(),
             settings_writable: false,
             images,
             compositor: CompositorSnapshot::default(),
-            clock: ports.clock.now(),
+            clock: adapters.clock.now(),
             system: SystemSnapshot::default(),
             media: MediaSnapshot::default(),
             weather: None,
@@ -169,13 +169,13 @@ impl Desktop {
             month_offset: 0,
             error: String::new(),
             drag_origins: BTreeMap::new(),
-            ports,
+            adapters,
         }
     }
     pub fn save(&self, effects: &mut Effects<Message>) {
         if self.settings_writable {
             let settings = self.settings.clone();
-            let store = self.ports.settings.clone();
+            let store = self.adapters.settings.clone();
             effects.task(move || Message::Completed(store.save(&settings)));
         }
     }
@@ -269,8 +269,8 @@ impl Desktop {
         let Some(app) = self.apps.iter().find(|a| &a.id == id).cloned() else {
             return;
         };
-        let apps = self.ports.apps.clone();
-        let hypr = self.ports.compositor.clone();
+        let apps = self.adapters.apps.clone();
+        let hypr = self.adapters.compositor.clone();
         effects.task(move || {
             Message::Completed(if let Some(hypr) = hypr {
                 lucent_usecases::activate_application(
@@ -295,16 +295,16 @@ impl Desktop {
             }
             return;
         }
-        let ports = self.ports.clone();
+        let adapters = self.adapters.clone();
         effects.task(move || {
             Message::Completed(match action {
-                Action::Lock => ports.session.lock(),
-                Action::VolumeUp => ports.audio.control(AudioCommand::Raise),
-                Action::VolumeDown => ports.audio.control(AudioCommand::Lower),
-                Action::Mute => ports.audio.control(AudioCommand::ToggleMute),
-                Action::PlayPause => ports.media.control(MediaCommand::PlayPause),
-                Action::Next => ports.media.control(MediaCommand::Next),
-                Action::Previous => ports.media.control(MediaCommand::Previous),
+                Action::Lock => adapters.session.lock(),
+                Action::VolumeUp => adapters.audio.control(AudioCommand::Raise),
+                Action::VolumeDown => adapters.audio.control(AudioCommand::Lower),
+                Action::Mute => adapters.audio.control(AudioCommand::ToggleMute),
+                Action::PlayPause => adapters.media.control(MediaCommand::PlayPause),
+                Action::Next => adapters.media.control(MediaCommand::Next),
+                Action::Previous => adapters.media.control(MediaCommand::Previous),
                 _ => Ok(()),
             })
         });
@@ -349,7 +349,7 @@ impl Component for Desktop {
                 self.carousel = Motion::fixed(self.wallpaper_index as f32);
                 self.applied_wallpaper = current_wallpaper;
                 self.results = lucent_usecases::search_applications(&self.apps, "");
-                let assets = self.ports.assets.clone();
+                let assets = self.adapters.assets.clone();
                 let apps = self.apps.clone();
                 let walls = self.wallpapers.clone();
                 effects.task(move || Message::Images(assets.load(&apps, &walls)));
@@ -495,7 +495,7 @@ impl Component for Desktop {
                 effects.redraw("dock");
             }
             Message::Workspace(id) => {
-                if let Some(hypr) = self.ports.compositor.clone() {
+                if let Some(hypr) = self.adapters.compositor.clone() {
                     effects.task(move || Message::Completed(hypr.switch_workspace(id)));
                 }
             }
@@ -507,7 +507,7 @@ impl Component for Desktop {
                         .target(index as f32, now, motion::PANEL, SPATIAL);
                     if apply {
                         let path = self.wallpapers[index].path.clone();
-                        let wallpaper = self.ports.wallpaper.clone();
+                        let wallpaper = self.adapters.wallpaper.clone();
                         effects.task(move || {
                             let result = wallpaper.apply(&path);
                             Message::WallpaperApplied(path, result)
@@ -681,9 +681,9 @@ impl api::Application for Desktop {
         ]
     }
     fn init(&mut self, effects: &mut Effects<Message>) {
-        let apps = self.ports.apps.clone();
-        let store = self.ports.settings.clone();
-        let wallpaper = self.ports.wallpaper.clone();
+        let apps = self.adapters.apps.clone();
+        let store = self.adapters.settings.clone();
+        let wallpaper = self.adapters.wallpaper.clone();
         effects.task(move || {
             Message::Loaded(
                 apps.discover().unwrap_or_default(),
@@ -694,11 +694,11 @@ impl api::Application for Desktop {
         });
     }
     fn subscriptions(&self) -> Vec<Subscription<Message>> {
-        let clock = self.ports.clock.clone();
-        let system = self.ports.system.clone();
-        let media = self.ports.media.clone();
-        let weather = self.ports.weather.clone();
-        let notifications = self.ports.notifications.clone();
+        let clock = self.adapters.clock.clone();
+        let system = self.adapters.system.clone();
+        let media = self.adapters.media.clone();
+        let weather = self.adapters.weather.clone();
+        let notifications = self.adapters.notifications.clone();
         let mut s = vec![
             Subscription::stream("notifications", move |out, cancel| {
                 notifications.watch(
@@ -723,7 +723,7 @@ impl api::Application for Desktop {
                 Message::Weather(weather.snapshot())
             }),
         ];
-        if let Some(compositor) = self.ports.compositor.clone() {
+        if let Some(compositor) = self.adapters.compositor.clone() {
             s.push(Subscription::stream("compositor", move |out, cancel| {
                 compositor.watch(
                     &mut |event| out.send(Message::Compositor(event)),

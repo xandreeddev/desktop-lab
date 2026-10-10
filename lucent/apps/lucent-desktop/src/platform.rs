@@ -1,15 +1,15 @@
 //! Composition root: the only desktop module that chooses production adapters.
-use crate::ports::*;
+use crate::{adapters::DesktopAdapters, ports::*};
 use lucent_domain::*;
 use lucent_services::{
-    JsonSettings, applications::XdgApplications, compositor::Hyprland, desktop_ports::*, images,
+    JsonSettings, applications::XdgApplications, compositor::Hyprland, desktop_adapters::*, images,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
-pub fn desktop_ports() -> DesktopPorts {
-    DesktopPorts {
+pub fn desktop_adapters() -> DesktopAdapters {
+    DesktopAdapters {
         apps: Arc::new(XdgApplications),
         compositor: Hyprland::from_env()
             .ok()

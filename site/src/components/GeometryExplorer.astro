@@ -1,0 +1,82 @@
+---
+import { tokens } from '../data/tokens';
+import { panelGeometry } from '../data/execution';
+const dimension = (name: string) => {
+  const value = tokens.find(token => token.name === name)?.value;
+  if (typeof value !== 'number') throw new Error(`Missing geometry token: ${name}`);
+  return value;
+};
+const config = {
+  step: dimension('layout.shell_step'), inset: dimension('layout.shell_inset'),
+  dockW: dimension('component.panel.initial_width'), dockH: dimension('component.panel.dock_height'),
+  launcherW: dimension('component.panel.launcher_width'), launcherH: dimension('component.panel.launcher_min_height'),
+  radius: dimension('radius.panel'),
+};
+const initial = panelGeometry(1920, 1080, config.dockW, config.dockH, config.step, config.inset);
+---
+<div class="geometry-explorer" data-geometry data-config={JSON.stringify(config)}>
+  <div class="geometry-controls">
+    <label>Surface size<select data-viewport><option value="1920,1080">1920 × 1080</option><option value="1366,768">1366 × 768</option><option value="2560,1440">2560 × 1440</option></select></label>
+    <label>Panel example<select data-panel><option value="dock">Initial dock size</option><option value="launcher">Minimum launcher size</option></select></label>
+    <label>Buffer scale<select data-scale><option value="1">1×</option><option value="2">2×</option></select></label>
+  </div>
+  <figure>
+    <svg viewBox="0 0 1920 1080" role="img" aria-label={`Full surface with panel at ${initial.x}, ${initial.y}`} data-canvas>
+      <line data-center x1={initial.center} x2={initial.center} y1="0" y2="1080" />
+      <line data-bottom x1="0" x2="1920" y1={initial.bottom} y2={initial.bottom} />
+      <rect data-rect x={initial.x} y={initial.y} width={config.dockW} height={config.dockH} rx={config.radius} />
+    </svg>
+    <figcaption>The outline is the full surface. The filled rectangle is the visible panel. Dashed guides show its grid-aligned center and bottom.</figcaption>
+  </figure>
+  <dl class="geometry-values" aria-live="polite" aria-atomic="true">
+    <div><dt>Client position</dt><dd data-position>({initial.x}, {initial.y})</dd></div>
+    <div><dt>Logical panel size</dt><dd data-size>{config.dockW} × {config.dockH}</dd></div>
+    <div><dt>Surface buffer</dt><dd data-buffer>1920 × 1080 pixels</dd></div>
+  </dl>
+  <p data-equation>Center = {initial.center}; bottom = {initial.bottom}. x = {initial.center} − {config.dockW / 2} = {initial.x}; y = {initial.bottom} − {config.dockH} = {initial.y}.</p>
+  <p class="geometry-note">Browser illustration of the Rust positioning calculation. Values come from the design tokens. Actual dock width follows its apps; launcher height follows its contents. This diagram executes JavaScript and SVG.</p>
+</div>
+<script>
+  import { panelGeometry } from '../data/execution';
+  document.querySelectorAll<HTMLElement>('[data-geometry]').forEach(root => {
+    const config = JSON.parse(root.dataset.config!);
+    const viewport = root.querySelector<HTMLSelectElement>('[data-viewport]')!;
+    const panel = root.querySelector<HTMLSelectElement>('[data-panel]')!;
+    const scale = root.querySelector<HTMLSelectElement>('[data-scale]')!;
+    const set = (selector: string, attributes: Record<string, number | string>) => {
+      const element = root.querySelector(selector)!;
+      Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, String(value)));
+    };
+    const text = (selector: string, value: string) => { root.querySelector(selector)!.textContent = value; };
+    const update = () => {
+      const [w, h] = viewport.value.split(',').map(Number);
+      const launcher = panel.value === 'launcher';
+      const pw = launcher ? config.launcherW : config.dockW;
+      const ph = launcher ? config.launcherH : config.dockH;
+      const { center, bottom, x, y } = panelGeometry(w, h, pw, ph, config.step, config.inset);
+      set('[data-canvas]', { viewBox: `0 0 ${w} ${h}`, 'aria-label': `Full ${w} by ${h} surface with ${pw} by ${ph} panel at ${x}, ${y}` });
+      set('[data-center]', { x1: center, x2: center, y2: h });
+      set('[data-bottom]', { x2: w, y1: bottom, y2: bottom });
+      set('[data-rect]', { x, y, width: pw, height: ph });
+      text('[data-position]', `(${x}, ${y})`);
+      text('[data-size]', `${pw} × ${ph}`);
+      text('[data-buffer]', `${w * Number(scale.value)} × ${h * Number(scale.value)} pixels`);
+      text('[data-equation]', `Center = ${center}; bottom = ${bottom}. x = ${center} − ${pw / 2} = ${x}; y = ${bottom} − ${ph} = ${y}.`);
+    };
+    root.addEventListener('change', update);
+  });
+</script>
+<style>
+  .geometry-explorer { margin-block: var(--space-section); padding: var(--space-xxl); border: var(--space-hairline) solid var(--line); border-radius: var(--radius-control); background: var(--panel); }
+  .geometry-controls { display: flex; flex-wrap: wrap; gap: var(--space-lg); }
+  label { display: grid; flex: 1 1 auto; gap: var(--space-sm); font-size: var(--web-docs-label); color: var(--muted); }
+  select { min-width: 0; width: 100%; padding: var(--space-md); border: var(--space-hairline) solid var(--line); border-radius: var(--radius-small); background: var(--bg); color: var(--text); font: inherit; }
+  figure { margin: var(--space-xxl) 0; }
+  svg { display: block; width: 100%; border: var(--space-hairline) solid var(--mint); border-radius: var(--radius-small); background: var(--bg); }
+  line { stroke: var(--muted); stroke-width: var(--space-hairline); stroke-dasharray: var(--space-xs); vector-effect: non-scaling-stroke; }
+  rect { fill: var(--mint); }
+  figcaption, .geometry-note { font-size: var(--web-docs-label); color: var(--muted); margin-top: var(--space-md); }
+  .geometry-values { display: flex; flex-wrap: wrap; gap: var(--space-xxl); }
+  .geometry-values dt { color: var(--muted); font-size: var(--web-docs-label); }
+  .geometry-values dd { color: var(--mint); font-variant-numeric: tabular-nums; }
+</style>

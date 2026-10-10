@@ -23,8 +23,8 @@ const surfaces = [
 ---
 <DocGuide chapter="client" title="Building the desktop client" heading="One framework." accent="A concrete desktop." description="Trace the production client from injected ports to launcher actions, bar layout, draggable widgets and independent native menus." sections={sections}>
   <section id="composition"><span class="eyebrow">01 / THE EXECUTABLE CHOOSES</span><h2>Adapters enter through<br />the composition root.</h2>
-    <p><code>Desktop::new(DesktopPorts)</code> receives shared trait objects. The only desktop module that selects production service implementations is <code>platform.rs</code>. Tests can construct the same desktop with fake ports, deterministic snapshots and synthetic assets.</p>
-    <CodeBlock code={excerpt(platformSource, 'pub fn desktop_ports()', 'pub struct NativeAssets;')} lang="rust" label="Live source · production dependency injection" />
+    <p><code>Desktop::new(DesktopAdapters)</code> receives shared trait objects. The only desktop module that selects production service implementations is <code>platform.rs</code>. Tests can construct the same desktop with fake adapters, deterministic snapshots and bundled assets.</p>
+    <CodeBlock code={excerpt(platformSource, 'pub fn desktop_adapters()', 'pub struct NativeAssets;')} lang="rust" label="Live source · production dependency injection" />
     <p>The compositor is optional: without a valid connection, launching apps still works, but workspace/focus behavior is unavailable. <code>AssetPort</code> stays at the presentation boundary because it returns image data. Domain services return domain values.</p>
     <p>The client uses functional view builders around a state-owning struct. The launcher is currently part of <code>Desktop</code>, not an independent component. Notifications demonstrate the separate-child-component path; framework support for composition does not mean every client feature has already been extracted.</p>
   </section>

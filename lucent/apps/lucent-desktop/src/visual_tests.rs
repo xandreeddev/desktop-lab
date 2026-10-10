@@ -7,7 +7,7 @@ use lucent_ui::{Interaction, Layout, Paint, Scene};
 use std::{path::PathBuf, sync::Arc};
 
 fn fixture(count: usize, light: bool) -> Desktop {
-    let mut app = Desktop::new(crate::test_ports::ports());
+    let mut app = Desktop::new(crate::test_adapters::adapters());
     app.settings.light = light;
     app.viewport = (640., 580.);
     app.clock = ClockSnapshot {
@@ -737,7 +737,7 @@ fn visual_regressions() {
                 let mut session = lucent_session::SessionScreen::new(
                     mode,
                     "fixture".into(),
-                    Arc::new(crate::test_ports::Fake::default()),
+                    Arc::new(crate::test_adapters::Fake::default()),
                 );
                 // Original deterministic landscape gradient, never a private VM image.
                 let mut pixels = Vec::new();
@@ -940,9 +940,9 @@ fn selection_fill_and_outline_move_together_on_the_first_frame() {
     }
 }
 #[test]
-fn desktop_actions_use_injected_ports_without_executing_host_commands() {
-    let fake = Arc::new(crate::test_ports::Fake::default());
-    let mut app = Desktop::new(crate::test_ports::with(fake.clone()));
+fn desktop_actions_use_injected_adapters_without_executing_host_commands() {
+    let fake = Arc::new(crate::test_adapters::Fake::default());
+    let mut app = Desktop::new(crate::test_adapters::with(fake.clone()));
     for action in [
         crate::desktop::Action::VolumeUp,
         crate::desktop::Action::PlayPause,

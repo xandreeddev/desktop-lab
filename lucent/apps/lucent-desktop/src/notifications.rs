@@ -22,10 +22,10 @@ pub struct Center {
     page: usize,
     action_pages: std::collections::BTreeMap<u32, usize>,
     error: bool,
-    port: Arc<dyn NotificationPort>,
+    adapter: Arc<dyn NotificationPort>,
 }
 impl Center {
-    pub fn new(port: Arc<dyn NotificationPort>) -> Self {
+    pub fn new(adapter: Arc<dyn NotificationPort>) -> Self {
         Self {
             snapshot: NotificationSnapshot::default(),
             ready: false,
@@ -33,7 +33,7 @@ impl Center {
             page: 0,
             action_pages: Default::default(),
             error: false,
-            port,
+            adapter,
         }
     }
     pub fn visible(&self) -> bool {
@@ -204,7 +204,7 @@ impl Component for Center {
         self.view_with_theme(cx, Theme::new(false))
     }
     fn update(&mut self, message: Message, e: &mut Effects<Message>) {
-        let port = self.port.clone();
+        let adapter = self.adapter.clone();
         match message {
             Message::Snapshot(Ok(value)) => {
                 self.action_pages
@@ -228,13 +228,15 @@ impl Component for Center {
                 let index = self.action_pages.entry(id).or_default();
                 *index = (*index as i32 + delta).max(0) as usize;
             }
-            Message::Dismiss(id) => e.task(move || Message::Done(port.dismiss(id))),
-            Message::Invoke(id, action) => e.task(move || Message::Done(port.invoke(id, &action))),
+            Message::Dismiss(id) => e.task(move || Message::Done(adapter.dismiss(id))),
+            Message::Invoke(id, action) => {
+                e.task(move || Message::Done(adapter.invoke(id, &action)))
+            }
             Message::Dnd => {
                 let enabled = !self.snapshot.do_not_disturb;
-                e.task(move || Message::Done(port.set_do_not_disturb(enabled)));
+                e.task(move || Message::Done(adapter.set_do_not_disturb(enabled)));
             }
-            Message::Clear => e.task(move || Message::Done(port.clear_history())),
+            Message::Clear => e.task(move || Message::Done(adapter.clear_history())),
             Message::Done(result) => self.error = result.is_err(),
         }
         e.redraw("notifications");

@@ -1,0 +1,249 @@
+---
+import DocGuide from '../../layouts/DocGuide.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import GeometryExplorer from '../../components/GeometryExplorer.astro';
+import { execution } from '../../data/execution';
+import { excerpt, sourceUrl } from '../../data/source';
+import { withBase } from '../../data/urls';
+import mainSource from '../../../../lucent/apps/lucent-desktop/src/main.rs?raw';
+import platformSource from '../../../../lucent/apps/lucent-desktop/src/platform.rs?raw';
+import adaptersSource from '../../../../lucent/apps/lucent-desktop/src/adapters.rs?raw';
+import desktopSource from '../../../../lucent/apps/lucent-desktop/src/desktop.rs?raw';
+import runtimeSource from '../../../../lucent/crates/lucent-wayland/src/lib.rs?raw';
+import apiSource from '../../../../lucent/crates/lucent-api/src/lib.rs?raw';
+import audioSource from '../../../../lucent/crates/lucent-services/src/desktop_adapters.rs?raw';
+import domainPorts from '../../../../lucent/crates/lucent-domain/src/ports.rs?raw';
+import geometrySource from '../../../../lucent/apps/lucent-desktop/src/shell_layout.rs?raw';
+import usecaseSource from '../../../../lucent/crates/lucent-usecases/src/lib.rs?raw';
+const sections: [string, string][] = [
+  ['path', '01 · The complete path'], ['wiring', '02 · What wiring means'],
+  ['contracts', '03 · Who calls the declarations?'], ['startup', '04 · The first frame'],
+  ['geometry', '05 · Where things go'], ['interaction', '06 · One launcher interaction'],
+  ['workers', '07 · Threads, effects & state'], ['assessment', '08 · Is the structure good?'],
+  ['reading', '09 · Read and change the code'],
+];
+const lifecycle = [
+  ['Desktop::new', 'main, once', 'Constructs state; prepares bundled assets, reads the clock and registers widget functions.'],
+  ['init(effects)', 'Runtime, once during startup', 'Records tasks to load apps, settings and wallpaper metadata.'],
+  ['surfaces()', 'Runtime during reconciliation', 'Describes the native surfaces that should currently exist and their placement/focus policy.'],
+  ['subscriptions()', 'Runtime during reconciliation', 'Describes ongoing producers. The runtime starts missing IDs and cancels removed IDs.'],
+  ['update(message, effects)', 'Runtime when a typed message arrives', 'Changes state and records redraw requests or worker tasks. The client also delegates some messages internally.'],
+  ['view(context)', 'Runtime for each configured surface that is dirty and ready', 'Reads state and time, returns an Element tree describing that surface.'],
+  ['animating(surface, now)', 'Runtime after rendering', 'Says whether another frame is needed to continue client motion.'],
+];
+const assessment = [
+  ['Keep: explicit construction', 'platform.rs chooses production adapters; Desktop receives the bundle. test_adapters.rs supplies fake OS capabilities to the same client.', 'A replacement implementation has a clear insertion point. The cost is visible, repetitive field wiring.'],
+  ['Keep: independent engine', 'The API, layout, renderer and Wayland runtime have no launcher or Omarchy service policy. hello-layer is a separate working client.', 'The framework boundary is implemented and exercised beyond the desktop client.'],
+  ['Keep: one state owner', 'Worker results become typed messages. The main event loop owns Desktop and processes its updates.', 'Views can read a coherent snapshot while workers perform external operations.'],
+  ['Keep: shared geometry', 'shell_layout feeds view placement and animation targets. Scene contains paint and hit geometry from the same layout traversal.', 'The picture and interactive targets have a common source, with geometry and visual regression coverage.'],
+  ['Improve: client composition', 'Desktop still owns launcher, dock, bar, most widget state and a broad DesktopAdapters bundle. Notifications are already a separate child component.', 'Extract a launcher component when changing its behavior, following the existing message/effect mapping pattern. Give children only the capabilities they need.'],
+  ['Improve: task scheduling', 'One ordered effect worker handles saves, loading and actions; channels are unbounded. Subscription workers are separate.', 'Slow work can delay later actions and queues can grow. Keep settings writes ordered while adding bounded scheduling for independent work.'],
+  ['Improve: failure visibility', 'App discovery uses unwrap_or_default; weather errors become None; compositor construction uses .ok().', 'Unavailable and failed services can look like empty data. Preserve typed loading/ready/error states and show actionable failures.'],
+  ['Improve: output ownership', 'Desktop has one shared viewport. Regular surfaces use string IDs and request compositor-selected output placement.', 'A per-output desktop model and explicit output IDs are still needed for robust independent monitor layouts.'],
+  ['Improve: registry consistency', 'Widget view registration, selector entries and size/default-position matches are maintained in several places.', 'Derive the selector and metadata from one client registry to prevent drift. This belongs in the client, not a global plugin system.'],
+];
+---
+<DocGuide chapter="execution" title="Follow the wiring — construction, declarations and execution" heading="Follow the wiring." accent="From main to a frame." description="A source-backed walkthrough of who creates each object, who calls each function, where coordinates come from and how an interaction reaches the operating system." sections={sections}>
+  <section id="path">
+    <span class="eyebrow">01 / READ THE PATH BEFORE THE CRATES</span>
+    <h2>Three kinds of work.<br />One running application.</h2>
+    <p><strong>The structure has a sound foundation for this desktop, with important unfinished parts.</strong> The useful boundaries are the client, the reusable UI engine and the OS adapters. The number of crates alone says little about quality. This guide follows actual calls and data across those boundaries, then assesses their current limits.</p>
+    <p>First separate <strong>construction</strong> (create state and choose dependencies), <strong>declarations</strong> (describe the UI, surfaces and event streams), and <strong>execution</strong> (the framework performs work and calls the client back). Construction happens at startup. Declarations are read repeatedly as the application runs.</p>
+    <CodeBlock code={`CONSTRUCTION — the executable connects the parts
+main → desktop_adapters() → Desktop::new(adapters) → run(desktop)
+
+DECLARATIONS — the client describes what should exist
+surfaces()        → native surface requirements
+subscriptions()   → ongoing message producers
+view(state, time) → element tree for one surface
+
+EXECUTION — the framework interprets those descriptions
+configure / input / worker result
+    → message → update → state + requested effects
+                           │
+    ┌──────────────────────┴───────────────────────┐
+    ↓                                              ↓
+dirty surface                                queued task
+    ↓                                              ↓
+view → layout → paint → render             use case / port
+    ↓                                              ↓
+wgpu / Vulkan → Hyprland                   concrete adapter
+                                                   ↓
+                                      result → another message`} label="The complete path · arrows mean runtime calls or data delivery" />
+    <p>Select a stage to see its owner, input and output. The first seven stages follow startup to pixels. The last stage is the update loop used throughout the session. Startup data loading can overlap surface setup; the diagram describes dependencies rather than a fixed timing schedule.</p>
+    <div class="frame-walkthrough" data-tabs>
+      <div class="frame-tabs" role="tablist" aria-label="Execution path">
+        {execution.map((stage, i) => <button role="tab" type="button" id={`execution-tab-${stage.id}`} aria-controls={`execution-panel-${stage.id}`} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1}><span>0{i + 1}</span>{stage.title}</button>)}
+      </div>
+      {execution.map((stage, i) => <div class="frame-detail" role="tabpanel" id={`execution-panel-${stage.id}`} aria-labelledby={`execution-tab-${stage.id}`} hidden={i !== 0} tabindex="0">
+        <span class="eyebrow">{stage.owner}</span><h3>{stage.title}</h3>
+        <p><strong>Input:</strong> {stage.input}</p><p>{stage.action}</p>
+        <div class="frame-state"><strong>Output:</strong> {stage.output}<br /><strong>Next:</strong> {stage.next}</div>
+        <a class="text-link" href={`#${stage.section}`}>Follow this stage in detail ↓</a>
+      </div>)}
+    </div>
+    <p>If you know HTML: the <code>Element</code> tree plays the role of a view description, <code>Layout</code> resolves boxes, and <code>Paint</code> is a display list. Here we wrote those stages ourselves. The client supplies the desktop-specific content; the engine interprets it.</p>
+  </section>
+
+  <section id="wiring">
+    <span class="eyebrow">02 / ORDINARY OBJECT CONSTRUCTION</span>
+    <h2>What does<br /><code>desktop_adapters()</code> do?</h2>
+    <CodeBlock code={excerpt(mainSource, 'fn main()', '#[cfg(test)]')} lang="rust" label="Live source · main.rs" />
+    <p>Read the inner call first. Expanded into named steps, the same expression is:</p>
+    <CodeBlock code={`let adapters = platform::desktop_adapters();
+let desktop = Desktop::new(adapters);
+lucent_wayland::run(desktop)`} lang="rust" label="Equivalent spelling · names added to expose the handoffs" />
+    <p><code>desktop_adapters()</code> is a factory function in the executable. Its job is to choose implementations and put them into a record. This location is called the <strong>composition root</strong>: the place where the final application is assembled.</p>
+    <CodeBlock code={excerpt(platformSource, 'pub fn desktop_adapters()', 'pub struct NativeAssets;')} lang="rust" label="Live source · production adapter choices" />
+    <p>Consider <code>audio: Arc::new(WirePlumber)</code>. <code>audio</code> is the field name. <code>WirePlumber</code> is our concrete adapter. <code>Arc::new</code> gives it shared ownership so the client and a worker can hold handles to the same adapter. The object is stored through the <code>AudioPort</code> contract.</p>
+    <CodeBlock code={excerpt(adaptersSource, '#[derive(Clone)]', '/// Adapts the framework')} lang="rust" label="Live source · injected adapters held through their port contracts" />
+    <p><strong>Naming rule:</strong> a <code>Port</code> is a contract. An <strong>adapter</strong> is an implementation supplied for that contract. Domain traits keep names such as <code>AudioPort</code> and <code>SettingsPort</code>; the provided implementations are grouped in <code>DesktopAdapters</code>, created by <code>desktop_adapters()</code> and stored as <code>self.adapters</code>. The bundle’s fields still use port types so each implementation remains replaceable.</p>
+    <div class="table-scroll"><table><thead><tr><th>Expression</th><th>Read it as</th><th>What actually happens</th></tr></thead><tbody>
+      <tr><td>Arc&lt;dyn AudioPort&gt;</td><td>A shared handle to something implementing the audio contract.</td><td>The concrete adapter stays behind the trait. dyn allows dispatch to that implementation at runtime.</td></tr>
+      <tr><td>self.adapters.audio.clone()</td><td>Give another owner a handle to the same object.</td><td>Increment a reference count. This does not duplicate the service or start a thread.</td></tr>
+      <tr><td>adapters.audio.control(command)</td><td>Call the selected implementation.</td><td>An ordinary synchronous Rust method call. External I/O happens inside that implementation.</td></tr>
+      <tr><td>effects.task(move || …)</td><td>Record work and move the captured handles/data into it.</td><td>The runtime later sends the closure to its effect worker. This is where the thread handoff happens.</td></tr>
+    </tbody></table></div>
+    <h3>A port and its adapter, side by side in the call chain.</h3>
+    <CodeBlock code={excerpt(domainPorts, 'pub trait AudioPort', '#[derive(Clone, Copy, Debug, PartialEq, Eq)]\npub enum MediaCommand')} lang="rust" label="Live source · domain contract" />
+    <CodeBlock code={excerpt(audioSource, 'pub struct WirePlumber;', 'pub struct Playerctl;')} lang="rust" label="Live source · adapter implements the contract using wpctl" />
+    <p>The trait defines a capability. The adapter implements it by invoking <code>wpctl</code> with an argument list. The composition root chooses that adapter. A view can describe a “Volume up” button without knowing which executable implements audio control.</p>
+    <p>Constructing <code>WirePlumber</code> does not start the system’s WirePlumber daemon. Similarly, <code>Hyprland::from_env()</code> reads and validates connection information; the runtime separately establishes the Wayland connection used for drawing. A Rust module import resolves code names at build time. It does not discover services, scan for adapters or register them with Linux.</p>
+    <p><code>Desktop::new</code> stores the bundle in <code>self.adapters</code>. <code>run</code> then takes ownership of the Desktop inside the runtime’s state. These values generally live until that runtime exits. Tests construct the same client with <a href={sourceUrl('lucent/apps/lucent-desktop/src/test_adapters.rs')}>in-memory adapters</a>, which record calls instead of launching apps or changing audio. The test asset adapter still prepares bundled artwork.</p>
+    <div class="callout"><strong>Why this wiring exists</strong><p>Choosing adapters once makes production dependencies visible and replaceable. A new audio backend needs an implementation and a different assignment here; it does not require changing the launcher view or the Vulkan renderer.</p></div>
+  </section>
+
+  <section id="contracts">
+    <span class="eyebrow">03 / DECLARATIVE DOES NOT MEAN AUTOMATIC</span>
+    <h2>The client describes.<br />The framework calls and interprets.</h2>
+    <CodeBlock code={excerpt(apiSource, 'pub trait Component:', '/// An application supplies')} lang="rust" label="Live source · the component contract" />
+    <p><code>view(&amp;self, …)</code> reads state and returns elements. <code>update(&amp;mut self, …)</code> can change state. <code>type Message</code> tells the framework which enum this particular client uses. The runtime is generic over an application implementing these traits, so it can run both the desktop and the small counter example.</p>
+    <p><strong>Implementing a trait tells the compiler which methods fulfill a contract.</strong> The actual runtime calls those methods. No file scanner or reflection system searches for a function named <code>view</code>.</p>
+    <div class="table-scroll"><table><thead><tr><th>Client method</th><th>Caller / timing</th><th>Responsibility</th></tr></thead><tbody>{lifecycle.map(([method, caller, role]) => <tr><td><code>{method}</code></td><td>{caller}</td><td>{role}</td></tr>)}</tbody></table></div>
+    <CodeBlock code={excerpt(desktopSource, '    fn view(&self, cx:', '    fn update(&mut self, message:')} lang="rust" label="Live source · one client chooses the view for each surface" />
+    <p>A view expression such as <code>Element::row(children).gap(space::SM)</code> creates a Rust value describing a row. Its builder methods fill fields such as children and spacing. <code>.on_click(Message::ToggleLauncher)</code> stores the message to produce later; it does not toggle anything while building the view.</p>
+    <p><code>surfaces()</code> and <code>subscriptions()</code> are declarative too. The runtime compares their requested IDs with the objects it already owns. This is <strong>reconciliation</strong>: create what is missing, update changed surface properties, and remove or cancel what is no longer requested. An unchanged subscription ID keeps its existing worker and captured values.</p>
+    <p>Widget registration is a smaller, separate mechanism: <code>widgets::registry()</code> builds an in-memory table of ID, descriptor and view function. The widgets view looks up visible IDs and calls those functions. Registration makes a widget available; settings decide whether it appears. See the <a href={withBase('/docs/start-here/#registration')}>different meanings of registration</a>.</p>
+    <p>The declarative tree does not include the entire application lifecycle. State updates, adapter implementations and scheduling contain ordinary imperative Rust code. Keeping OS operations out of views is an architectural rule of this implementation; <code>&amp;self</code> alone does not prove that a function has no side effects.</p>
+  </section>
+
+  <section id="startup">
+    <span class="eyebrow">04 / HOW THE FIRST DRAW BECOMES POSSIBLE</span>
+    <h2>The first frame starts<br />with state and a configured surface.</h2>
+    <p>After constructing Desktop, the runtime connects to Wayland, prepares fonts and graphics resources, creates an event loop and starts an ordered effect worker. It then calls the client’s startup method:</p>
+    <CodeBlock code={excerpt(desktopSource, '    fn init(&mut self, effects:', '    fn subscriptions(&self)')} lang="rust" label="Live source · init schedules loading; the closure runs on a worker" />
+    <p>The <code>task</code> call puts a closure into an effects list. Later the worker calls <code>apps.discover()</code>, <code>store.load()</code> and the wallpaper methods, in that order. It sends the resulting <code>Message::Loaded</code> back to the event loop. The update handler installs the data into Desktop and requests redraws. Loading images is a subsequent task.</p>
+    <ol class="guide-steps">
+      <li><strong>Read the declarations.</strong> Reconciliation asks Desktop for its visible surfaces. Initially that includes the bar, widgets and dock.</li>
+      <li><strong>Create native surfaces.</strong> The runtime creates Wayland surfaces, assigns their layer-shell roles, sets size/anchors/focus policy, and makes the initial commit. Each surface starts as unconfigured.</li>
+      <li><strong>Receive configure.</strong> Hyprland supplies a surface’s dimensions. Our handler stores them, sets <code>configured = true</code>, marks it dirty and sends the client a resize event.</li>
+      <li><strong>Pass the frame gate.</strong> <code>draw_all</code> only proceeds when the surface is configured, needs a redraw and has no outstanding frame callback.</li>
+      <li><strong>Build and render.</strong> The framework asks for the view with those dimensions and current time, lays it out, requests the next frame callback, and renders/presents the buffer.</li>
+    </ol>
+    <CodeBlock code={excerpt(runtimeSource, '    fn draw_all(', '            let focus = s.interaction.focus.clone();')} lang="rust" label="Live source · the exact gate and call from runtime into client view and layout" />
+    <p>The local variable <code>tree</code> contains the description. <code>scene</code> contains resolved geometry. <code>self.app</code> is the Desktop value originally passed into <code>run</code>. This is the concrete connection between the declarative API and the implementation that consumes it.</p>
+    <div class="callout"><strong>First frame and fully loaded desktop are different moments</strong><p>Workers and compositor events arrive independently. Defaults may appear before saved settings or app metadata arrives. A later Message::Loaded updates state and redraws it. Each surface also gets configured independently; there is no single atomic first frame covering the entire desktop.</p></div>
+    <p>The first draw is triggered by configuration and dirty state. Later frame callbacks only reopen the scheduling gate. The <a href={withBase('/docs/framework/#motion')}>frame-demand state machine</a> explains why the desktop stops repainting when it has no visible changes.</p>
+  </section>
+
+  <section id="geometry">
+    <span class="eyebrow">05 / TWO COORDINATE SYSTEMS</span>
+    <h2>Who decides<br />where a component appears?</h2>
+    <p><strong>Hyprland places native surfaces; the client and layout engine place elements inside each surface.</strong> The bar requests a strip at the top. The dock uses a transparent full-output surface and draws the rounded panel near its bottom. Desktop widgets share another full-output surface below normal windows.</p>
+    <p>The client chooses policy: centered dock, right-side clock, saved widget positions and spacing tokens. The framework computes the rectangles implied by that policy. Each surface has its own logical origin at the top-left; child offsets are relative to their parent’s content area.</p>
+    <CodeBlock code={excerpt(geometrySource, 'pub fn bottom(', 'pub fn dock_capacity(')} lang="rust" label="Live source · client policy for the dock / launcher origin" />
+    <p><code>floor(value, step)</code> rounds down to a grid line. The panel uses a grid-aligned center and bottom edge, then subtracts half its current width and its full height. Sampling a larger width therefore expands around that center. A larger height grows upward from the same bottom edge.</p>
+    <GeometryExplorer />
+    <p>Try the 1366-pixel surface to see the deliberate grid offset. Then change the buffer scale: the logical placement stays the same, while the number of physical pixels used to render the surface changes. This matches the current integer-scale rendering model.</p>
+    <h3>The framework resolves the children.</h3>
+    <CodeBlock code={`Example logical coordinates:
+  panel origin                         (100, 200)
+  + parent padding                     ( 16,  16)
+  + child offset inside content        (  8,   0)
+  = child origin in the surface        (124, 216)
+
+A row advances a cursor by child width + gap.
+A column advances it by child height + gap.
+A stack applies each child’s explicit offset.
+Text measurement contributes its intrinsic size.`} label="Illustrative numbers · parent-to-child layout" />
+    <p><code>Layout::build</code> starts with the full surface rectangle and recursively places children. It emits <code>Paint::Shape</code>, <code>Paint::Text</code>, image/outline instructions, hit targets and input regions. A hit target connects a region of the picture to an element’s handler. Transparent parts outside the active input regions let pointer input pass through to other surfaces.</p>
+    <p>Our renderer then turns Paint into cached textures and primitive data. It uploads buffers, records GPU draw commands and submits them through wgpu’s Vulkan backend. Presentation hands a buffer to Hyprland. Hyprland knows how that whole surface is placed; it does not receive Lucent’s element tree or a separate native window for every widget.</p>
+    <p>Source: <a href={sourceUrl('lucent/apps/lucent-desktop/src/views.rs')}>dock view</a>, <a href={sourceUrl('lucent/crates/lucent-ui/src/lib.rs')}>measure/place and Scene</a>, <a href={sourceUrl('lucent/crates/lucent-render/src/lib.rs')}>Canvas::paint and Renderer::render</a>. For the underlying client-buffer/compositor split, see <a href="https://wayland.freedesktop.org/docs/book/Architecture.html#wayland-rendering">Wayland’s rendering architecture</a>.</p>
+  </section>
+
+  <section id="interaction">
+    <span class="eyebrow">06 / FOLLOW THE LAUNCHER ALL THE WAY THROUGH</span>
+    <h2>Open it. Type. Press Enter.</h2>
+    <p>There are two paths through this interaction: changing the picture and doing an external action. Most launcher activity uses the first path and reads already-loaded application records.</p>
+    <ol class="guide-steps">
+      <li><strong>Open:</strong> Hyprland’s shortcut runs <code>lucent-cli launcher toggle</code>. The CLI writes to the running desktop’s local command socket. The desktop maps it to <code>Message::ToggleLauncher</code>.</li>
+      <li><strong>Update state:</strong> the handler changes <code>launcher</code>, selects Apps, clears the query, ranks the cached apps and retargets width/height/reveal motion.</li>
+      <li><strong>Update surface policy:</strong> reconciliation reads <code>surfaces()</code> again. The open launcher asks for the overlay layer, exclusive keyboard interaction and full input capture.</li>
+      <li><strong>Draw:</strong> the dock is dirty. At the next allowed draw, <code>view</code> samples the motion’s current values, describes the panel and results, and hands the tree to layout.</li>
+      <li><strong>Type:</strong> Wayland delivers keyboard input. The input element’s handler produces <code>Message::Query</code>. Updating it reruns pure search, resets selection/scroll, retargets the panel and redraws.</li>
+      <li><strong>Activate:</strong> Enter becomes <code>Message::Activate</code>. The selected index resolves to an application ID; the client queues launch work and closes the launcher.</li>
+      <li><strong>Execute:</strong> the worker invokes the activation use case or application port. The concrete adapter starts the executable with parsed arguments. Completion returns as another message.</li>
+      <li><strong>Observe:</strong> the launched app creates its own window. Hyprland places it. The compositor adapter later sends updated window/workspace data, which can change Lucent’s bar or dock.</li>
+    </ol>
+    <CodeBlock code={excerpt(desktopSource, '            Message::ToggleLauncher =>', '            Message::CloseLauncher =>')} lang="rust" label="Live source · opening is a state change plus a redraw request" />
+    <p>A redraw request adds a surface ID to a set. It does not call Vulkan on this line. The runtime processes it after <code>update</code> returns. The next view reads the changed state.</p>
+    <CodeBlock code={excerpt(desktopSource, '    fn launch(&self,', '    fn perform(')} lang="rust" label="Live source · move an application snapshot and adapter handles into a task" />
+    <p>The app record is cloned into this task so it can outlive the current update call. The adapter handles are shared. <code>apps.as_ref()</code> lends the underlying object through its port to the use case. The trait method eventually dispatches to the implementation selected in <code>desktop_adapters()</code>.</p>
+    <CodeBlock code={excerpt(usecaseSource, 'pub fn activate_application(', '/// Align a released widget')} lang="rust" label="Live source · the use case decides between focus and launch" />
+    <p>A dock click passes <code>prefer_running = true</code>, allowing the use case to focus an existing matching window. Launcher activation passes false and starts a new instance. This decision belongs to desktop behavior; layout and rendering remain the same either way.</p>
+    <p>Animation is also explicit. A state update sets targets and duration; <code>Motion::value(now)</code> calculates the current width/height on the CPU each frame. The client reports active motion so the runtime keeps requesting frames. Vulkan draws the current geometry. The target dimensions use the design grid, while intermediate animation samples retain fractional precision.</p>
+  </section>
+
+  <section id="workers">
+    <span class="eyebrow">07 / WHERE THE WORK ACTUALLY RUNS</span>
+    <h2>The adapter does not<br />choose its calling thread.</h2>
+    <p>Calling a port is synchronous unless its implementation explicitly does otherwise. The <strong>runtime</strong> creates the workers. This is why passing an adapter into Desktop and scheduling an effect are separate pieces of wiring.</p>
+    <CodeBlock code={excerpt(runtimeSource, '    // A single ordered effects worker', '    let mut state = State {')} lang="rust" label="Live source · the worker executes tasks and returns messages" />
+    <div class="table-scroll"><table><thead><tr><th>Execution context</th><th>Owns / performs</th><th>How data returns</th></tr></thead><tbody>
+      <tr><td>Main event-loop thread</td><td>Desktop, native surface state, input, update, view, layout and rendering submission.</td><td>It is the receiver and state owner.</td></tr>
+      <tr><td>One effect worker</td><td>Queued tasks such as startup discovery, image loading, settings saves and actions, in order.</td><td>Each task returns one typed Message through the event channel.</td></tr>
+      <tr><td>Subscription workers</td><td>Ongoing snapshots or event streams, one worker per active subscription ID.</td><td>Each producer can emit many Messages over its lifetime.</td></tr>
+      <tr><td>Driver / graphics execution</td><td>Drawing commands submitted by the renderer; the VM may execute Vulkan in software.</td><td>Presentation and compositor frame pacing are separate from app-data messages.</td></tr>
+    </tbody></table></div>
+    <p><code>Effects::task</code> stores a boxed closure; the channel transports it to the worker. <code>move</code> transfers its captured values into that closure. The worker calls it and sends the result back. The event loop then calls <code>update</code> with that result. Workers do not borrow a mutable Desktop.</p>
+    <p>A <code>Subscription::every</code> emits immediately, waits for its interval and repeats until cancelled. A stream subscription can instead listen for external events. In the current client, clock/system/media/weather sampling and compositor/notification streams use these different policies. Re-reading a subscription declaration with the same ID keeps the original producer; changing captured configuration needs an explicit restart policy.</p>
+    <p><strong>Persistent state</strong> is saved through the settings port. <strong>Observed state</strong> consists of external snapshots. <strong>Interaction state</strong> includes query, selection and dragging. <strong>Presentation state</strong> includes motion and images. They currently share Desktop ownership, but have different lifetimes and update sources.</p>
+    <p>Rust borrowing and typed messages help enforce ownership. They do not automatically provide timeouts, cancellation, backpressure or good error UX. Those remain responsibilities of the adapters, runtime and client respectively.</p>
+  </section>
+
+  <section id="assessment">
+    <span class="eyebrow">08 / AN ASSESSMENT OF THE IMPLEMENTATION</span>
+    <h2>Useful separation.<br />Concrete work still ahead.</h2>
+    <p>The architecture has working ports/adapters and a reusable rendering path. Its current maturity is an evolving desktop framework with tested vertical slices. It still needs work before it is a complete general-purpose desktop toolkit. These observations come from the source linked throughout this guide; the proposed improvements below remain future work.</p>
+    <div class="table-scroll"><table><thead><tr><th>Boundary</th><th>Current evidence</th><th>Assessment / next step</th></tr></thead><tbody>{assessment.map(([boundary, evidence, next]) => <tr><td>{boundary}</td><td>{evidence}</td><td>{next}</td></tr>)}</tbody></table></div>
+    <p>The command-backed adapters and remaining Omarchy helpers are real dependencies. Replacing one with direct D-Bus integration belongs behind its port. Domain models also currently derive Serde serialization, which couples their persisted shape to a library/schema choice even though they contain no OS operations. The UI engine has further limits around fractional scaling, complex text shaping, IME, general scrolling and accessibility integration.</p>
+    <p>The most useful next refactor would be a focused launcher component with its own state/messages, followed by clearer service status and bounded worker scheduling. More empty crates would add navigation work without improving these boundaries. Current <code>Element::map</code> and <code>Effects::delegate</code> already support composing child messages and effects; the notifications client and counter example demonstrate that path.</p>
+  </section>
+
+  <section id="reading">
+    <span class="eyebrow">09 / A PRACTICAL READING ORDER</span>
+    <h2>Read one call chain.<br />Then change one behavior.</h2>
+    <ol class="guide-steps">
+      <li><a href={sourceUrl('lucent/apps/lucent-desktop/src/main.rs')}>main.rs</a> — find the three construction calls.</li>
+      <li><a href={sourceUrl('lucent/apps/lucent-desktop/src/platform.rs')}>platform.rs</a> and <a href={sourceUrl('lucent/apps/lucent-desktop/src/adapters.rs')}>adapters.rs</a> — pair one concrete adapter with a field typed by its domain port. The client’s <a href={sourceUrl('lucent/apps/lucent-desktop/src/ports.rs')}>ports.rs</a> holds the presentation-only AssetPort contract, keeping image data outside the domain.</li>
+      <li><a href={sourceUrl('lucent/apps/lucent-desktop/src/desktop.rs')}>desktop.rs</a> — follow new, init, ToggleLauncher, launch and the view dispatcher.</li>
+      <li><a href={sourceUrl('lucent/apps/lucent-desktop/src/views.rs')}>views.rs</a> and <a href={sourceUrl('lucent/apps/lucent-desktop/src/shell_layout.rs')}>shell_layout.rs</a> — find how state becomes elements and panel coordinates.</li>
+      <li><a href={sourceUrl('lucent/crates/lucent-wayland/src/lib.rs')}>runtime</a> — read message, effects, reconcile and draw_all in that order. These are the callers of the client methods.</li>
+      <li><a href={sourceUrl('lucent/crates/lucent-ui/src/lib.rs')}>layout</a> and <a href={sourceUrl('lucent/crates/lucent-render/src/lib.rs')}>renderer</a> — follow Element into Scene, then Paint into drawing commands.</li>
+    </ol>
+    <div class="table-scroll"><table><thead><tr><th>If you want to change…</th><th>Start here</th><th>Trace to verify</th></tr></thead><tbody>
+      <tr><td>Which audio implementation is used</td><td>AudioPort implementation + platform::desktop_adapters</td><td>Button message → effect → new adapter → completion.</td></tr>
+      <tr><td>What happens when an app is activated</td><td>activate_application in lucent-usecases</td><td>Launcher/dock passes the right preference; fake adapters record the expected call.</td></tr>
+      <tr><td>Where a panel appears</td><td>shell_layout and its design tokens</td><td>View uses that geometry; Scene bounds and input regions agree.</td></tr>
+      <tr><td>How long opening takes</td><td>Motion tokens + retarget_panel_transition</td><td>Targets change in update; view samples time; animating keeps frames requested.</td></tr>
+      <tr><td>How a primitive is drawn</td><td>lucent-render and its shader</td><td>Paint contains the intended primitive; snapshots match at multiple densities.</td></tr>
+    </tbody></table></div>
+    <p>To check your understanding, follow <code>Action::VolumeUp</code> from a view to <code>perform</code>, then through the effect worker to <code>AudioPort::control</code> and <code>wpctl</code>. Then follow <code>Message::Query</code>: it changes cached search results and the picture without calling an OS adapter. These two traces cover the main forms of client behavior.</p>
+    <ul class="resource-list">
+      <li><a href={withBase('/docs/start-here/')}>Need the operating-system startup chain? →</a><span>Linux, systemd, the session wrapper, installed binaries and registration.</span></li>
+      <li><a href={withBase('/docs/domain/')}>Look up every implemented port →</a><span>Contracts, concrete adapters, use cases and failure policies.</span></li>
+      <li><a href={withBase('/docs/framework/')}>Read the lower-level engine details →</a><span>Layout, input, frame gating, motion, textures and Vulkan submission.</span></li>
+      <li><a href={sourceUrl('lucent/examples/hello-layer/src/main.rs')}>Read the smaller counter client ↗</a><span>The same framework contracts with a much smaller state and message set.</span></li>
+    </ul>
+  </section>
+</DocGuide>
