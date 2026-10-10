@@ -33,7 +33,7 @@ Inside the guest:
   Buttons and text fields remain interactive. Widgets live below app windows.
 - Workspace pills switch real Hyprland workspaces. Dock icons launch or focus
   their application. Omarchy's usual terminal, tiling and lock shortcuts remain.
-- The palette icon offers a shared light/dark theme and Small / Default / Large
+- The palette icon offers named color sets and saved wallpaper palettes and Small / Default / Large
   launcher size presets. The default is 640 logical pixels wide and up to 640 tall.
   Use `lucent-cli launcher size 800 720` for a preferred width and maximum height,
   or `lucent-cli launcher size reset` to restore defaults. Sizes save across restarts,
@@ -162,7 +162,10 @@ is performed and personal location is excluded from this repository.
 lucent-cli launcher toggle  # also open / close
 lucent-cli wallpapers open
 lucent-cli widgets open
-lucent-cli theme light  # or dark; exports application colors too
+lucent-cli palette ocean  # exports the full semantic palette to apps
+lucent-cli palette wallpaper  # derive a palette from the current wallpaper
+lucent-cli wallpapers search wallhaven mountains
+lucent-cli wallpapers search alpha-coders landscape
 lucent-cli inspect
 lucent-cli quit
 ```
@@ -249,3 +252,11 @@ and the greeter group (2750); the copied file is 0640. The home remains private.
 `lucent-wallpaper-sync.path` follows changes and copies atomically without sudo.
 Use `--wallpaper-user ACCOUNT` when installing as root without `SUDO_USER`.
 PNG, JPEG and WebP retain source detail up to a 4096-pixel edge.
+
+
+The native wallpaper browser searches Wallhaven and Alpha Coders, caches previews,
+and downloads original images only on explicit apply. Choose Wallpaper only or
+Wallpaper + colors. Alpha Coders uses public HTML metadata because its former API
+endpoint is unavailable; provider errors remain visible without changing the
+active desktop. Downloads and source metadata stay in `~/Pictures/Wallpapers/Lucent`.
+No provider images or private desktop captures are published as visual fixtures.

@@ -26,6 +26,21 @@ pub mod palette {
     pub const MINT_100: lucent_api::Color = lucent_api::Color::hex(0xd4f3cf);
     pub const BLACK: lucent_api::Color = lucent_api::Color::hex(0x000000);
     pub const WHITE: lucent_api::Color = lucent_api::Color::hex(0xffffff);
+    pub const OCEAN: lucent_api::Color = lucent_api::Color::hex(0x83c7eb);
+    pub const FOREST: lucent_api::Color = lucent_api::Color::hex(0x9ed8ae);
+    pub const EMBER: lucent_api::Color = lucent_api::Color::hex(0xf6b18e);
+    pub const OCEAN_SURFACE: lucent_api::Color = lucent_api::Color::hex(0x15232d);
+    pub const OCEAN_SURFACE_CONTAINER: lucent_api::Color = lucent_api::Color::hex(0x243845);
+    pub const OCEAN_ON_SURFACE: lucent_api::Color = lucent_api::Color::hex(0xe5f2fb);
+    pub const OCEAN_ON_PRIMARY: lucent_api::Color = lucent_api::Color::hex(0x12252f);
+    pub const FOREST_SURFACE: lucent_api::Color = lucent_api::Color::hex(0x18261f);
+    pub const FOREST_SURFACE_CONTAINER: lucent_api::Color = lucent_api::Color::hex(0x293b30);
+    pub const FOREST_ON_SURFACE: lucent_api::Color = lucent_api::Color::hex(0xe4f2e8);
+    pub const FOREST_ON_PRIMARY: lucent_api::Color = lucent_api::Color::hex(0x142a1c);
+    pub const EMBER_SURFACE: lucent_api::Color = lucent_api::Color::hex(0x2b201c);
+    pub const EMBER_SURFACE_CONTAINER: lucent_api::Color = lucent_api::Color::hex(0x423027);
+    pub const EMBER_ON_SURFACE: lucent_api::Color = lucent_api::Color::hex(0xfbece5);
+    pub const EMBER_ON_PRIMARY: lucent_api::Color = lucent_api::Color::hex(0x312016);
 }
 pub mod space {
     pub const HAIRLINE: f32 = 1.0;
@@ -107,6 +122,42 @@ pub mod theme {
         pub const WARNING: lucent_api::Color = lucent_api::Color::hex(0x754e08);
         pub const INFO: lucent_api::Color = lucent_api::Color::hex(0x176075);
         pub const FOCUS: lucent_api::Color = lucent_api::Color::hex(0x176075);
+    }
+    pub mod ocean {
+        pub const SURFACE: lucent_api::Color = lucent_api::Color::hex(0x15232d);
+        pub const SURFACE_CONTAINER: lucent_api::Color = lucent_api::Color::hex(0x243845);
+        pub const ON_SURFACE: lucent_api::Color = lucent_api::Color::hex(0xe5f2fb);
+        pub const PRIMARY: lucent_api::Color = lucent_api::Color::hex(0x83c7eb);
+        pub const ON_PRIMARY: lucent_api::Color = lucent_api::Color::hex(0x12252f);
+        pub const ERROR: lucent_api::Color = lucent_api::Color::hex(0xffcfbc);
+        pub const SUCCESS: lucent_api::Color = lucent_api::Color::hex(0xa7ead3);
+        pub const WARNING: lucent_api::Color = lucent_api::Color::hex(0xf4d48f);
+        pub const INFO: lucent_api::Color = lucent_api::Color::hex(0xbce8f4);
+        pub const FOCUS: lucent_api::Color = lucent_api::Color::hex(0x83c7eb);
+    }
+    pub mod forest {
+        pub const SURFACE: lucent_api::Color = lucent_api::Color::hex(0x18261f);
+        pub const SURFACE_CONTAINER: lucent_api::Color = lucent_api::Color::hex(0x293b30);
+        pub const ON_SURFACE: lucent_api::Color = lucent_api::Color::hex(0xe4f2e8);
+        pub const PRIMARY: lucent_api::Color = lucent_api::Color::hex(0x9ed8ae);
+        pub const ON_PRIMARY: lucent_api::Color = lucent_api::Color::hex(0x142a1c);
+        pub const ERROR: lucent_api::Color = lucent_api::Color::hex(0xffcfbc);
+        pub const SUCCESS: lucent_api::Color = lucent_api::Color::hex(0xa7ead3);
+        pub const WARNING: lucent_api::Color = lucent_api::Color::hex(0xf4d48f);
+        pub const INFO: lucent_api::Color = lucent_api::Color::hex(0xbce8f4);
+        pub const FOCUS: lucent_api::Color = lucent_api::Color::hex(0x9ed8ae);
+    }
+    pub mod ember {
+        pub const SURFACE: lucent_api::Color = lucent_api::Color::hex(0x2b201c);
+        pub const SURFACE_CONTAINER: lucent_api::Color = lucent_api::Color::hex(0x423027);
+        pub const ON_SURFACE: lucent_api::Color = lucent_api::Color::hex(0xfbece5);
+        pub const PRIMARY: lucent_api::Color = lucent_api::Color::hex(0xf6b18e);
+        pub const ON_PRIMARY: lucent_api::Color = lucent_api::Color::hex(0x312016);
+        pub const ERROR: lucent_api::Color = lucent_api::Color::hex(0xffcfbc);
+        pub const SUCCESS: lucent_api::Color = lucent_api::Color::hex(0xa7ead3);
+        pub const WARNING: lucent_api::Color = lucent_api::Color::hex(0xf4d48f);
+        pub const INFO: lucent_api::Color = lucent_api::Color::hex(0xbce8f4);
+        pub const FOCUS: lucent_api::Color = lucent_api::Color::hex(0xf6b18e);
     }
 }
 pub mod web {
@@ -425,6 +476,15 @@ pub mod component {
         pub const MARGIN: f32 = 20.0;
         pub const TRACK: f32 = 4.0;
     }
+    pub mod wallpaper_browser {
+        pub const SOURCE_HEIGHT: f32 = 40.0;
+        pub const SEARCH_HEIGHT: f32 = 48.0;
+        pub const CARD_MIN_WIDTH: f32 = 176.0;
+        pub const CARD_HEIGHT: f32 = 160.0;
+        pub const FOOTER_HEIGHT: f32 = 40.0;
+        pub const SWATCH: f32 = 24.0;
+        pub const PALETTE_ROW: f32 = 56.0;
+    }
 }
 pub mod icon {
     pub const TINY: f32 = 16.0;
@@ -500,4 +560,11 @@ pub mod web_docs {
     pub const SUPPORTING: f32 = 16.0;
     pub const CODE: f32 = 14.0;
     pub const LABEL: f32 = 14.0;
+}
+pub mod palette_recipe {
+    pub const SURFACE_SEED: f32 = 0.12;
+    pub const CONTAINER_SEED: f32 = 0.2;
+    pub const FOREGROUND_WHITE: f32 = 0.9;
+    pub const ACCENT_WHITE: f32 = 0.35;
+    pub const CONTRAST_STEP: f32 = 0.05;
 }

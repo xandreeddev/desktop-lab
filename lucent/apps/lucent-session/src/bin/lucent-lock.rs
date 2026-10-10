@@ -8,6 +8,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             user,
             std::sync::Arc::new(lucent_auth::PamLocker),
         )
+        .with_palette(
+            lucent_services::JsonSettings::default()
+                .load()
+                .ok()
+                .and_then(|s| s.palette),
+        )
         .with_theme(
             lucent_services::JsonSettings::default()
                 .load()

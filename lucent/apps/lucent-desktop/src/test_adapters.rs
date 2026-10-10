@@ -40,8 +40,11 @@ impl ClockPort for Fake {
     }
 }
 impl ThemePort for Fake {
-    fn apply(&self, mode: ThemeMode) -> Result<()> {
-        self.calls.lock().unwrap().push(mode.name());
+    fn apply(&self, palette: &ThemePalette) -> Result<()> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(ThemeMode::from_light(palette.light()).name());
         Ok(())
     }
 }
@@ -94,6 +97,8 @@ pub fn adapters() -> DesktopAdapters {
 pub fn with(fake: Arc<Fake>) -> DesktopAdapters {
     DesktopAdapters {
         theme: fake.clone(),
+        palette_generation: fake.clone(),
+        catalog: fake.clone(),
         apps: fake.clone(),
         compositor: None,
         settings: fake.clone(),
@@ -132,5 +137,26 @@ impl NotificationPort for Fake {
 impl AuthenticationPort for Fake {
     fn authenticate(&self, _: &str, _: &mut dyn AuthConversation) -> Result<()> {
         Err(DomainError::Failed("fixture only".into()))
+    }
+}
+
+impl PaletteGenerationPort for Fake {
+    fn seed(&self, _: &str) -> Result<Rgb> {
+        Ok(Rgb::new(80, 120, 180))
+    }
+}
+impl WallpaperCatalogPort for Fake {
+    fn search(&self, _: WallpaperProvider, _: &str, _: u32) -> Result<WallpaperPage> {
+        Ok(WallpaperPage {
+            items: vec![],
+            page: 1,
+            has_more: false,
+        })
+    }
+    fn preview(&self, _: &RemoteWallpaper) -> Result<String> {
+        Err(DomainError::Unavailable("offline fixture".into()))
+    }
+    fn download(&self, _: &RemoteWallpaper) -> Result<Wallpaper> {
+        Err(DomainError::Unavailable("offline fixture".into()))
     }
 }

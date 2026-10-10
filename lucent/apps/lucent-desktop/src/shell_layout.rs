@@ -110,12 +110,16 @@ pub fn launcher_size(
                 + launcher::RESET_HEIGHT
         }
         Mode::Themes => {
-            launcher::THEME_HEIGHT
+            lucent_design::component::wallpaper_browser::PALETTE_ROW * 6.
                 + layout::SECTION_GAP * 2.
                 + launcher::THEME_CAPTION_HEIGHT
                 + launcher::SIZE_BUTTON_HEIGHT
         }
-        Mode::Wallpapers => panel::WALLPAPER_BODY_HEIGHT,
+        Mode::Wallpapers => {
+            panel::WALLPAPER_BODY_HEIGHT
+                + lucent_design::component::wallpaper_browser::SOURCE_HEIGHT
+                + layout::SECTION_GAP
+        }
     };
     let height = ceil(
         (body_top() + body + dock::CONTENT_INSET * 2.).max(panel::LAUNCHER_MIN_HEIGHT),
@@ -128,6 +132,17 @@ pub fn launcher_size(
     let available = (bottom(viewport.1) - panel::BAR_HEIGHT - layout::SECTION_GAP).min(max_height);
     (width, height.min(floor(available, layout::SHELL_STEP)))
 }
+
+pub fn palette_rows(content_height: f32) -> usize {
+    ((body_height(Mode::Themes, content_height)
+        - launcher::THEME_CAPTION_HEIGHT
+        - launcher::SIZE_BUTTON_HEIGHT
+        - layout::SECTION_GAP * 2.)
+        / lucent_design::component::wallpaper_browser::PALETTE_ROW)
+        .floor()
+        .max(1.) as usize
+}
+
 pub fn visible_rows(
     mode: Mode,
     results: usize,

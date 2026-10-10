@@ -101,6 +101,9 @@ def outputs(tree):
             '})\n'
         ),
     }
+    names = {'dark': 'Moonstone', 'light': 'Pearl', 'ocean': 'Ocean', 'forest': 'Forest', 'ember': 'Ember'}
+    palettes = [{'id': mode, 'name': name, 'colors': {key: values[f'theme.{mode}.{key}'] for key in tree['theme'][mode]}} for mode, name in names.items()]
+    generated[ROOT/'configs/lucent/palettes.json'] = json.dumps(palettes, indent=2) + '\n'
     for mode in ('dark', 'light'):
         role = lambda name: values[f'theme.{mode}.{name}']
         colors = {

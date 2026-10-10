@@ -66,7 +66,9 @@ def pick(payload, capture=False):
         state = Path.home() / '.local/state'
     settings = state / 'lucent/desktop.json'
     try:
-        payload['light'] = bool(json.loads(settings.read_text()).get('light', False))
+        value=json.loads(settings.read_text())
+        payload['light'] = bool(value.get('light', False))
+        payload['palette'] = value.get('palette')
     except (OSError, ValueError):
         pass
     binary = Path.home() / '.local/bin/lucent-menu'

@@ -5,7 +5,7 @@ use lucent_domain::Application as App;
 
 impl Desktop {
     pub fn theme(&self) -> design::Theme {
-        design::Theme::new(self.settings.light)
+        design::Theme::from_palette(&design::selected_palette(&self.settings))
     }
     pub fn surface_color(&self) -> Color {
         self.theme().surface
@@ -495,7 +495,22 @@ impl Desktop {
                 elements.push(search.at(0., height - component::input::HEIGHT));
             }
             Mode::Wallpapers => {
-                elements.push(self.wallpaper_strip(cx, width, body_h).at(0., body_y))
+                let source_height = component::wallpaper_browser::SOURCE_HEIGHT;
+                elements.push(
+                    self.browser
+                        .sources(width, self.theme())
+                        .map(Message::Browser)
+                        .at(0., body_y),
+                );
+                let remaining = body_h - source_height - layout::SECTION_GAP;
+                let browser = if self.browser.source.is_some() {
+                    self.browser
+                        .view(width, remaining, self.theme())
+                        .map(Message::Browser)
+                } else {
+                    self.wallpaper_strip(cx, width, remaining)
+                };
+                elements.push(browser.at(0., body_y + source_height + layout::SECTION_GAP));
             }
             Mode::Widgets => {
                 let rows = WIDGETS
@@ -551,38 +566,94 @@ impl Desktop {
                 );
             }
             Mode::Themes => {
-                // Keep theme and size controls visible when a short screen or a
-                // user preference reduces the panel's available content height.
-                let theme_height = (body_h
+                let choices = self.palette_choices();
+                let rows = shell_layout::palette_rows(height);
+                let list_height = (body_h
                     - component::launcher::THEME_CAPTION_HEIGHT
                     - component::launcher::SIZE_BUTTON_HEIGHT
                     - layout::SECTION_GAP * 2.)
-                    .clamp(0., component::launcher::THEME_HEIGHT);
+                    .max(0.);
+                let row_height = component::wallpaper_browser::PALETTE_ROW.min(list_height);
+                let entries = choices
+                    .iter()
+                    .enumerate()
+                    .map(|(index, palette)| {
+                        let preview = design::Theme::from_palette(palette);
+                        let swatches = Element::row(
+                            [
+                                preview.primary,
+                                preview.surface_container,
+                                preview.on_surface,
+                                preview.error,
+                            ]
+                            .into_iter()
+                            .map(|color| {
+                                Element::empty()
+                                    .size(
+                                        component::wallpaper_browser::SWATCH,
+                                        component::wallpaper_browser::SWATCH,
+                                    )
+                                    .radius(radius::INDICATOR)
+                                    .background(color)
+                            })
+                            .collect(),
+                        )
+                        .gap(space::XS);
+                        Element::row(vec![
+                            self.label(
+                                if self.settings.palette.as_ref().map_or_else(
+                                    || lucent_design::selected_palette(&self.settings).id,
+                                    |p| p.id.clone(),
+                                ) == palette.id
+                                {
+                                    format!("{} · Applied", palette.name)
+                                } else {
+                                    palette.name.clone()
+                                },
+                                font::BODY,
+                            )
+                            .color(preview.on_surface)
+                            .width(Length::Fill),
+                            swatches,
+                        ])
+                        .gap(space::SM)
+                        .align(Align::Center)
+                        .padding_xy(space::LG, space::SM)
+                        .size(width, row_height)
+                        .radius(radius::CONTROL)
+                        .background(preview.surface)
+                        .selected(self.selected == index)
+                        .on_hover(Message::Select(index))
+                        .on_click(Message::Palette(palette.clone()))
+                        .id(format!("theme-{}", palette.id))
+                    })
+                    .chain(std::iter::once(
+                        self.button("Use current wallpaper colors", Message::ExtractPalette)
+                            .size(width, row_height)
+                            .selected(self.selected == choices.len())
+                            .on_hover(Message::Select(choices.len()))
+                            .id("palette-from-wallpaper"),
+                    ))
+                    .skip(self.scroll)
+                    .take(rows)
+                    .collect();
                 elements.push(
-                    Element::row(vec![
-                        self.button("Dark", Message::Theme(false))
-                            .size((width - layout::SECTION_GAP) / 2., theme_height)
-                            .background(theme::dark::SURFACE)
-                            .color(theme::dark::ON_SURFACE)
-                            .selected(self.selected == 0)
-                            .on_hover(Message::Select(0))
-                            .id("theme-dark"),
-                        self.button("Light", Message::Theme(true))
-                            .size((width - layout::SECTION_GAP) / 2., theme_height)
-                            .background(theme::light::SURFACE)
-                            .color(theme::light::ON_SURFACE)
-                            .selected(self.selected == 1)
-                            .on_hover(Message::Select(1))
-                            .id("theme-light"),
-                    ])
-                    .gap(space::LG)
-                    .at(0., body_y),
+                    Element::column(entries)
+                        .size(width, list_height)
+                        .clip()
+                        .at(0., body_y),
                 );
                 elements.push(
                     self.label("Launcher size", font::SMALL)
                         .size(width, component::launcher::THEME_CAPTION_HEIGHT)
                         .align(Align::Center)
-                        .at(0., body_y + theme_height + layout::SECTION_GAP),
+                        .at(
+                            0.,
+                            height
+                                - component::launcher::SIZE_BUTTON_HEIGHT
+                                - layout::SECTION_GAP
+                                - component::launcher::THEME_CAPTION_HEIGHT,
+                        ),
                 );
                 let button_width = shell_layout::floor(
                     (width - space::SM * 2.) / shell_layout::LAUNCHER_PRESETS.len() as f32,
@@ -608,8 +679,8 @@ impl Desktop {
                                     } else {
                                         self.ink()
                                     })
-                                    .selected(self.selected == index + 2)
-                                    .on_hover(Message::Select(index + 2))
+                                    .selected(self.selected == index + choices.len() + 1)
+                                    .on_hover(Message::Select(index + choices.len() + 1))
                                     .id(format!("launcher-size-{}", label.to_lowercase()))
                             })
                             .collect(),

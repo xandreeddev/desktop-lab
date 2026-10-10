@@ -111,3 +111,15 @@ class Clipboard(unittest.TestCase):
             store.capture('text',b'x'*(store.BYTES+1))
             self.assertEqual(len(store.read()),2)
             store.clear();self.assertEqual(store.read(),[])
+
+class PaletteExports(unittest.TestCase):
+    def test_full_palette_roles_reach_each_export_without_mode_substitution(self):
+        theme=load('custom_palette_export','lucent-theme.py')
+        palettes=json.loads((ROOT/'configs/lucent/palettes.json').read_text())
+        for palette in palettes:
+            mode,toml,css,lock=theme.exports(palette)
+            self.assertIn('accent = "'+palette['colors']['primary']+'"',toml)
+            self.assertIn('@define-color window_bg_color '+palette['colors']['surface']+';',css)
+            self.assertIn('outer_color = rgb('+palette['colors']['primary'][1:]+')',lock)
+        palette=json.loads(json.dumps(palettes[0]));palette['colors']['on_surface']=palette['colors']['surface']
+        with self.assertRaises(ValueError):theme.exports(palette)

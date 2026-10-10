@@ -6,6 +6,7 @@ mod platform;
 mod ports;
 mod shell_layout;
 mod views;
+mod wallpaper_browser;
 mod widgets;
 use desktop::Desktop;
 fn main() -> Result<(), Box<dyn std::error::Error>> {

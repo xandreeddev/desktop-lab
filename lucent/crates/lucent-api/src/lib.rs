@@ -591,16 +591,17 @@ impl<M> Emitter<M> {
     }
 }
 pub struct Subscription<M> {
-    pub id: &'static str,
+    /// Stable identity of the captured inputs; change it to replace a stream.
+    pub id: String,
     pub run: Box<dyn FnOnce(Emitter<M>, Cancellation) + Send>,
 }
 impl<M: Send + 'static> Subscription<M> {
     pub fn stream(
-        id: &'static str,
+        id: impl Into<String>,
         run: impl FnOnce(Emitter<M>, Cancellation) + Send + 'static,
     ) -> Self {
         Self {
-            id,
+            id: id.into(),
             run: Box::new(run),
         }
     }

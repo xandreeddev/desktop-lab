@@ -321,6 +321,7 @@ pub fn wallpapers() -> Vec<Wallpaper> {
     let mut files = vec![];
     for dir in [
         home.join("Pictures/Wallpapers"),
+        home.join("Pictures/Wallpapers/Lucent"),
         home.join(".config/lucent/wallpapers"),
         home.join(".config/omarchy/current/theme/backgrounds"),
     ] {
@@ -379,3 +380,5 @@ pub fn current_wallpaper() -> String {
 }
 
 pub mod notifications;
+
+pub mod wallpaper_catalog;

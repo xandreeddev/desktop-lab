@@ -89,6 +89,12 @@ pub enum Message {
     TimerReset,
     Month(i32),
     Theme(bool),
+    Palette(ThemePalette),
+    ExtractPalette,
+    ExtractedPalette(domain::Result<Rgb>),
+    Browser(crate::wallpaper_browser::Message),
+    BrowserSearch(WallpaperProvider, String),
+    DownloadedApplied(Wallpaper, Option<Rgb>, domain::Result<()>),
     ThemeApplied(domain::Result<()>),
     Osd(crate::osd::Feedback),
     OsdTick,
@@ -129,6 +135,7 @@ pub struct Desktop {
     pub system: SystemSnapshot,
     pub media: MediaSnapshot,
     pub weather: Option<WeatherSnapshot>,
+    pub browser: crate::wallpaper_browser::Browser,
     pub wallpapers: Vec<Wallpaper>,
     pub wallpaper_index: usize,
     pub applied_wallpaper: String,
@@ -168,6 +175,7 @@ impl Desktop {
             system: SystemSnapshot::default(),
             media: MediaSnapshot::default(),
             weather: None,
+            browser: Default::default(),
             wallpapers: vec![],
             wallpaper_index: 0,
             applied_wallpaper: String::new(),
@@ -188,6 +196,20 @@ impl Desktop {
             drag_origins: BTreeMap::new(),
             adapters,
         }
+    }
+    pub fn palette_choices(&self) -> Vec<ThemePalette> {
+        let mut choices = lucent_design::palettes().to_vec();
+        for palette in self
+            .settings
+            .saved_palettes
+            .iter()
+            .chain(self.settings.palette.iter())
+        {
+            if !choices.iter().any(|p| p.id == palette.id) {
+                choices.push(palette.clone());
+            }
+        }
+        choices
     }
     pub fn save(&self, effects: &mut Effects<Message>) {
         if self.settings_writable {
@@ -270,17 +292,32 @@ impl Desktop {
             Mode::Apps => self.results.len(),
             Mode::Commands => COMMANDS.len(),
             Mode::Widgets => WIDGETS.len() + 1,
-            Mode::Themes => 2 + crate::shell_layout::LAUNCHER_PRESETS.len(),
+            Mode::Themes => {
+                self.palette_choices().len() + 1 + crate::shell_layout::LAUNCHER_PRESETS.len()
+            }
             Mode::Wallpapers => self.wallpapers.len(),
         };
         self.selected = index.min(count.saturating_sub(1));
-        let rows = crate::shell_layout::visible_rows(
+        let mut rows = crate::shell_layout::visible_rows(
             self.mode,
             self.results.len(),
             self.viewport,
             self.settings.launcher,
         );
-        let row_count = if self.mode == Mode::Widgets {
+        if self.mode == Mode::Themes {
+            let (_, height) = crate::shell_layout::launcher_size(
+                self.mode,
+                0,
+                self.viewport,
+                self.settings.launcher,
+            );
+            rows = crate::shell_layout::palette_rows(
+                height - lucent_design::component::dock::CONTENT_INSET * 2.,
+            );
+        }
+        let row_count = if self.mode == Mode::Themes {
+            self.palette_choices().len() + 1
+        } else if self.mode == Mode::Widgets {
             WIDGETS.len()
         } else {
             count
@@ -390,8 +427,8 @@ impl Component for Desktop {
                 let walls = self.wallpapers.clone();
                 effects.task(move || Message::Images(assets.load(&apps, &walls)));
                 let theme = self.adapters.theme.clone();
-                let mode = ThemeMode::from_light(self.settings.light);
-                effects.task(move || Message::ThemeApplied(theme.apply(mode)));
+                let palette = lucent_design::selected_palette(&self.settings);
+                effects.task(move || Message::ThemeApplied(theme.apply(&palette)));
                 self.retarget_panel_transition(now);
                 for id in [
                     "bar",
@@ -503,7 +540,11 @@ impl Component for Desktop {
                 effects.redraw("dock");
             }
             Message::Navigate(delta) => {
-                if self.mode == Mode::Wallpapers {
+                if self.mode == Mode::Wallpapers && self.browser.source.is_some() {
+                    self.browser
+                        .update(crate::wallpaper_browser::Message::Navigate(delta));
+                    effects.redraw("dock");
+                } else if self.mode == Mode::Wallpapers {
                     let index = (self.wallpaper_index as i32 + delta)
                         .clamp(0, self.wallpapers.len().saturating_sub(1) as i32)
                         as usize;
@@ -514,13 +555,29 @@ impl Component for Desktop {
                 }
             }
             Message::Activate => {
-                if self.mode == Mode::Wallpapers {
+                if self.mode == Mode::Wallpapers && self.browser.source.is_some() {
+                    use crate::wallpaper_browser::Message as Browse;
+                    self.update(
+                        Message::Browser(
+                            if self.browser.items.is_empty()
+                                || self.browser.query != self.browser.submitted
+                            {
+                                Browse::Search(1)
+                            } else {
+                                Browse::Download(true)
+                            },
+                        ),
+                        effects,
+                    );
+                } else if self.mode == Mode::Wallpapers {
                     self.update(Message::Wallpaper(self.wallpaper_index, true), effects);
                 } else if self.mode == Mode::Themes {
-                    if self.selected < 2 {
-                        self.update(Message::Theme(self.selected == 1), effects);
-                    } else if let Some((_, size)) =
-                        crate::shell_layout::LAUNCHER_PRESETS.get(self.selected - 2)
+                    if let Some(palette) = self.palette_choices().get(self.selected) {
+                        self.update(Message::Palette(palette.clone()), effects);
+                    } else if self.selected == self.palette_choices().len() {
+                        self.update(Message::ExtractPalette, effects);
+                    } else if let Some((_, size)) = crate::shell_layout::LAUNCHER_PRESETS
+                        .get(self.selected - self.palette_choices().len() - 1)
                     {
                         self.update(Message::LauncherSize(*size), effects);
                     }
@@ -678,12 +735,33 @@ impl Component for Desktop {
                     Message::WallpaperApplied(path, result)
                 });
             }
-            Message::Theme(light) => {
-                self.settings.light = light;
+            Message::Theme(light) => self.update(
+                Message::Palette(lucent_design::palettes()[usize::from(light)].clone()),
+                effects,
+            ),
+            Message::Palette(palette) => {
+                if let Err(error) = palette.validate() {
+                    self.theme_error = error.to_string();
+                    effects.redraw("dock");
+                    return;
+                }
+                if palette.id.starts_with("wallpaper-")
+                    && !self
+                        .settings
+                        .saved_palettes
+                        .iter()
+                        .any(|p| p.id == palette.id)
+                {
+                    if self.settings.saved_palettes.len() == 24 {
+                        self.settings.saved_palettes.remove(0);
+                    }
+                    self.settings.saved_palettes.push(palette.clone());
+                }
+                self.settings.light = palette.light();
+                self.settings.palette = Some(palette.clone());
                 self.save(effects);
                 let theme = self.adapters.theme.clone();
-                effects
-                    .task(move || Message::ThemeApplied(theme.apply(ThemeMode::from_light(light))));
+                effects.task(move || Message::ThemeApplied(theme.apply(&palette)));
                 for id in [
                     "bar",
                     "widgets",
@@ -693,6 +771,81 @@ impl Component for Desktop {
                     "osd",
                 ] {
                     effects.redraw(id);
+                }
+            }
+            Message::ExtractPalette => {
+                let path = self.applied_wallpaper.clone();
+                let adapter = self.adapters.palette_generation.clone();
+                effects.task(move || Message::ExtractedPalette(adapter.seed(&path)));
+            }
+            Message::ExtractedPalette(result) => match result {
+                Ok(seed) => self.update(
+                    Message::Palette(lucent_design::wallpaper_palette(seed)),
+                    effects,
+                ),
+                Err(error) => {
+                    self.theme_error = error.to_string();
+                    effects.redraw("dock");
+                }
+            },
+            Message::BrowserSearch(provider, query) => {
+                use crate::wallpaper_browser::Message as Browse;
+                self.update(Message::Mode(Mode::Wallpapers), effects);
+                for message in [
+                    Browse::Source(Some(provider)),
+                    Browse::Query(query),
+                    Browse::Search(1),
+                ] {
+                    self.update(Message::Browser(message), effects);
+                }
+            }
+            Message::Browser(message) => {
+                use crate::wallpaper_browser::Message as Browse;
+                if let Browse::Ready(id, Ok((wallpaper, seed))) = &message
+                    && *id == self.browser.generation
+                {
+                    let adapter = self.adapters.wallpaper.clone();
+                    let wall = wallpaper.clone();
+                    let seed = *seed;
+                    effects.task(move || {
+                        let result = adapter.apply(&wall.path);
+                        Message::DownloadedApplied(wall, seed, result)
+                    });
+                }
+                self.browser.update(message);
+                effects.redraw("dock");
+            }
+            Message::DownloadedApplied(wallpaper, seed, result) => {
+                let applied = result.is_ok();
+                self.update(
+                    Message::WallpaperApplied(wallpaper.path.clone(), result),
+                    effects,
+                );
+                if applied {
+                    if !self
+                        .wallpapers
+                        .iter()
+                        .any(|wall| wall.path == wallpaper.path)
+                    {
+                        self.wallpapers.push(wallpaper.clone());
+                    }
+                    self.wallpaper_index = self
+                        .wallpapers
+                        .iter()
+                        .position(|wall| wall.path == wallpaper.path)
+                        .unwrap_or(0);
+                    self.carousel = Motion::fixed(self.wallpaper_index as f32);
+                    let assets = self.adapters.assets.clone();
+                    effects.task(move || Message::Images(assets.load(&[], &[wallpaper])));
+                    if let Some(seed) = seed {
+                        self.update(
+                            Message::Palette(lucent_design::wallpaper_palette(seed)),
+                            effects,
+                        );
+                    }
+                    self.browser.status = "Applied".into();
+                } else {
+                    self.browser.status = self.error.clone();
                 }
             }
             Message::LauncherSize(size) => {
@@ -856,6 +1009,14 @@ impl api::Application for Desktop {
                 Message::Weather(weather.snapshot())
             }),
         ];
+        for subscription in self.browser.subscriptions(&self.adapters) {
+            s.push(Subscription::stream(subscription.id, move |out, cancel| {
+                (subscription.run)(
+                    Emitter::new(move |message| out.send(Message::Browser(message))),
+                    cancel,
+                )
+            }));
+        }
         if self.osd.feedback.is_some() {
             s.push(Subscription::every(
                 "osd-expiry",
@@ -890,11 +1051,17 @@ impl api::Application for Desktop {
                 Key::Escape => Some(Message::CloseLauncher),
                 Key::Enter => Some(Message::Activate),
                 Key::Up => Some(Message::Navigate(-1)),
-                Key::Left if matches!(self.mode, Mode::Wallpapers | Mode::Themes) => {
+                Key::Left
+                    if self.mode == Mode::Themes
+                        || (self.mode == Mode::Wallpapers && self.browser.source.is_none()) =>
+                {
                     Some(Message::Navigate(-1))
                 }
                 Key::Down => Some(Message::Navigate(1)),
-                Key::Right if matches!(self.mode, Mode::Wallpapers | Mode::Themes) => {
+                Key::Right
+                    if self.mode == Mode::Themes
+                        || (self.mode == Mode::Wallpapers && self.browser.source.is_none()) =>
+                {
                     Some(Message::Navigate(1))
                 }
                 Key::Home if self.mode == Mode::Wallpapers => Some(Message::Wallpaper(0, false)),
@@ -937,6 +1104,29 @@ impl api::Application for Desktop {
         }
         if matches!(command, "theme dark" | "theme light") && !self.settings_writable {
             return Err("Wait for saved settings to load before changing the theme".into());
+        }
+        if let Some(id) = command.strip_prefix("palette ") {
+            if !self.settings_writable {
+                return Err("Wait for saved settings to load".into());
+            }
+            if id == "wallpaper" {
+                return Ok(Some(Message::ExtractPalette));
+            }
+            return self
+                .palette_choices()
+                .into_iter()
+                .find(|p| p.id == id)
+                .map(|p| Some(Message::Palette(p)))
+                .ok_or_else(|| "Unknown palette".into());
+        }
+        if let Some(payload) = command.strip_prefix("wallpapers search ") {
+            let (provider, query) = payload.split_once(' ').unwrap_or((payload, ""));
+            let provider = match provider {
+                "wallhaven" => WallpaperProvider::Wallhaven,
+                "alpha-coders" => WallpaperProvider::AlphaCoders,
+                _ => return Err("Unknown provider".into()),
+            };
+            return Ok(Some(Message::BrowserSearch(provider, query.to_string())));
         }
         let words: Vec<_> = command.split_whitespace().collect();
         if let ["launcher", "size", args @ ..] = words.as_slice() {
@@ -994,7 +1184,7 @@ impl api::Application for Desktop {
         }))
     }
     fn inspect(&self) -> String {
-        serde_json::json!({"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.background.is_some(), "notifications_ready":self.notifications.ready,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher,"launcher_size":self.settings.launcher,"launcher_panel_size":[self.panel_width.target_value(),self.panel_height.target_value()],"mode":self.mode.name(),"query":self.query,"selected":self.selected,"result_count":self.results.len(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(&a.id.0).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":!self.drag_origins.is_empty(),"notes":self.settings.notes,"timer_seconds":self.timer.remaining,"error":self.error}).to_string()
+        serde_json::json!({"palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.background.is_some(), "notifications_ready":self.notifications.ready,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher,"launcher_size":self.settings.launcher,"launcher_panel_size":[self.panel_width.target_value(),self.panel_height.target_value()],"mode":self.mode.name(),"query":self.query,"selected":self.selected,"result_count":self.results.len(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(&a.id.0).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":!self.drag_origins.is_empty(),"notes":self.settings.notes,"timer_seconds":self.timer.remaining,"error":self.error}).to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
         (surface == "osd" && self.osd.animating(now))

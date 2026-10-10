@@ -30,6 +30,8 @@ pub struct Request {
     #[serde(default)]
     pub light: bool,
     #[serde(default)]
+    pub palette: Option<lucent_domain::ThemePalette>,
+    #[serde(default)]
     pub back: bool,
 }
 #[derive(Clone)]
@@ -113,7 +115,13 @@ impl Menu {
 impl Component for Menu {
     type Message = Message;
     fn view(&self, cx: &ViewContext) -> Element<Message> {
-        let t = Theme::new(self.request.light);
+        let t = self
+            .request
+            .palette
+            .as_ref()
+            .filter(|p| p.validate().is_ok())
+            .map(Theme::from_palette)
+            .unwrap_or_else(|| Theme::new(self.request.light));
         let width = self
             .request
             .width
@@ -385,6 +393,7 @@ mod tests {
             width: Some(800.),
             max_height: Some(500.),
             light: false,
+            palette: None,
             back: false,
         }
     }

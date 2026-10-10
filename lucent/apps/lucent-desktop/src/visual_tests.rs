@@ -231,20 +231,26 @@ fn launcher_size_preserves_selection_and_limits_at_every_preset() {
                 );
             }
             app.update(Message::Mode(Mode::Themes), &mut Effects::default());
-            let rendered = scene(&app, &layout, &mut Interaction::default(), 1.);
-            for id in [
-                "theme-dark",
-                "theme-light",
-                "launcher-size-small",
-                "launcher-size-default",
-                "launcher-size-large",
-            ] {
-                let hit = rendered.hits.iter().find(|h| h.id == id).unwrap();
-                assert!(
-                    fully_visible(hit.rect, hit.clip),
-                    "cropped {id} for {size:?} at {viewport:?}"
-                );
-                assert!(hit.rect.h >= 32.);
+            for index in 0..app.palette_choices().len() {
+                app.update(Message::Select(index), &mut Effects::default());
+                let rendered = scene(&app, &layout, &mut Interaction::default(), 1.);
+                for id in [
+                    format!("theme-{}", app.palette_choices()[index].id),
+                    "launcher-size-small".into(),
+                    "launcher-size-default".into(),
+                    "launcher-size-large".into(),
+                ] {
+                    let hit = rendered
+                        .hits
+                        .iter()
+                        .find(|h| h.id == id)
+                        .expect("selected palette and size controls remain reachable");
+                    assert!(
+                        fully_visible(hit.rect, hit.clip),
+                        "cropped {id} for {size:?} at {viewport:?}"
+                    );
+                    assert!(hit.rect.h >= 32.);
+                }
             }
         }
     }
@@ -320,7 +326,7 @@ fn launcher_size_commands_keyboard_presets_and_settings_roundtrip() {
     assert!(legacy.light);
     assert_eq!(legacy.notes, "keep my notes");
     app.update(Message::Mode(Mode::Themes), &mut Effects::default());
-    for _ in 0..4 {
+    for _ in 0..(app.palette_choices().len() + 3) {
         key(&mut app, Key::Down);
     }
     key(&mut app, Key::Enter);
@@ -770,6 +776,26 @@ fn visual_regressions() {
             ("widgets", Mode::Widgets, 9, 6, "", 1., 640.),
             ("wallpapers-empty", Mode::Wallpapers, 9, 0, "", 1., 640.),
             ("wallpapers", Mode::Wallpapers, 9, 0, "", 1., 1280.),
+            ("wallpapers-online", Mode::Wallpapers, 9, 0, "", 1., 960.),
+            (
+                "wallpapers-online-narrow",
+                Mode::Wallpapers,
+                9,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            (
+                "wallpapers-online-error",
+                Mode::Wallpapers,
+                9,
+                0,
+                "",
+                1.,
+                640.,
+            ),
+            ("palette-ocean", Mode::Themes, 9, 2, "", 1., 640.),
             ("icon-catalog", Mode::Apps, 9, 0, "", 1., 640.),
             ("bar", Mode::Apps, 9, 0, "", 1., 1280.),
             ("bar-dense", Mode::Apps, 9, 0, "", 1., 1920.),
@@ -815,6 +841,16 @@ fn visual_regressions() {
             app.query = query.into();
             if name == "wallpapers" {
                 app.wallpapers = wallpaper_fixtures();
+            }
+            if name.starts_with("wallpapers-online") {
+                online_fixture(&mut app);
+                if name.ends_with("error") {
+                    app.browser.items.clear();
+                    app.browser.status = "Provider unavailable. Try again later.".into();
+                }
+            }
+            if name == "palette-ocean" {
+                app.settings.palette = Some(lucent_design::palettes()[2].clone());
             }
             let scene = if name == "widget-drag-grid" {
                 app.settings.visible_widgets = vec!["calendar".into(), "weather".into()];
@@ -866,6 +902,7 @@ fn visual_regressions() {
                     ]
                 };
                 let (mut menu, _) = lucent_menu::Menu::new(lucent_menu::Request {
+                    palette: None,
                     prompt: if name == "menu-submenu" {
                         "System"
                     } else if name == "menu-input" {
@@ -1329,21 +1366,17 @@ fn settled_shell_geometry_obeys_grid_and_contains_its_controls() {
                 }
             }
             if mode == Mode::Themes {
-                let a = rendered
+                for hit in rendered
                     .hits
                     .iter()
-                    .find(|h| h.id == "theme-dark")
-                    .unwrap()
-                    .rect;
-                let b = rendered
-                    .hits
-                    .iter()
-                    .find(|h| h.id == "theme-light")
-                    .unwrap()
-                    .rect;
-                assert_eq!(a.w, b.w);
-                assert_eq!(b.x - a.x - a.w, grid::SECTION_GAP);
-                assert_eq!(a.x - panel.x, panel.x + panel.w - b.x - b.w);
+                    .filter(|h| h.id.starts_with("theme-") || h.id == "palette-from-wallpaper")
+                {
+                    assert!(fully_visible(hit.rect, hit.clip));
+                    assert_eq!(
+                        hit.rect.x - panel.x,
+                        panel.x + panel.w - hit.rect.x - hit.rect.w
+                    );
+                }
             }
         }
         app.update(Message::CloseLauncher, &mut Effects::default());
@@ -1507,4 +1540,110 @@ fn feedback_stops_scheduling_after_expiry_and_has_no_keyboard_grab() {
     );
     assert!(app.osd.feedback.is_none());
     assert!(!app.animating("osd", 3.));
+}
+
+fn online_fixture(app: &mut Desktop) {
+    use lucent_domain::{RemoteWallpaper, WallpaperProvider};
+    app.browser.source = Some(WallpaperProvider::Wallhaven);
+    app.browser.query = "landscape".into();
+    app.browser.page = 1;
+    app.browser.has_more = true;
+    app.browser.status = "6 results · page 1".into();
+    app.browser.items = (0..6)
+        .map(|i| RemoteWallpaper {
+            provider: WallpaperProvider::Wallhaven,
+            id: format!("wall0{i}"),
+            title: format!("Synthetic landscape {i}"),
+            page_url: String::new(),
+            thumbnail_url: String::new(),
+            image_url: String::new(),
+            resolution: "1920×1080".into(),
+        })
+        .collect();
+    for (i, item) in app.browser.items.iter().enumerate() {
+        let mut rgba = Vec::new();
+        for y in 0..96 {
+            for x in 0..160 {
+                rgba.extend_from_slice(&[
+                    (x + i * 19) as u8,
+                    (y * 2 + i * 11) as u8,
+                    (80 + i * 23) as u8,
+                    255,
+                ]);
+            }
+        }
+        app.browser.previews.insert(
+            item.id.clone(),
+            Arc::new(ImageData {
+                key: format!("synthetic-landscape-{i}"),
+                width: 160,
+                height: 96,
+                rgba,
+            }),
+        );
+    }
+}
+#[test]
+fn online_browser_controls_and_selected_result_fit_at_small_and_large_sizes() {
+    let mut app = fixture(0, false);
+    let layout = Layout::new(fonts(&app));
+    for (width, height) in [(960., 768.), (390., 580.), (320., 360.)] {
+        app.update(
+            Message::Resize("dock", width, height),
+            &mut Effects::default(),
+        );
+        app.update(Message::Mode(Mode::Wallpapers), &mut Effects::default());
+        online_fixture(&mut app);
+        app.browser.selected = 5;
+        let rendered = scene(&app, &layout, &mut Interaction::default(), 1.);
+        for id in [
+            "source-local",
+            "source-wallhaven",
+            "source-alpha-coders",
+            "wallpaper-search",
+            "wallpaper-search-submit",
+            "download-theme",
+            "download-wallpaper",
+            "catalog-previous",
+            "catalog-next",
+        ] {
+            let hit = rendered.hits.iter().find(|h| h.id == id).unwrap();
+            assert!(
+                fully_visible(hit.rect, hit.clip),
+                "{id} clipped at {width}×{height}: {:?} {:?}",
+                hit.rect,
+                hit.clip
+            );
+        }
+        if height > 360. {
+            let selected = rendered
+                .hits
+                .iter()
+                .find(|h| h.id == "online-wallpaper-5")
+                .expect("last result reachable");
+            assert!(fully_visible(selected.rect, selected.clip));
+        }
+    }
+}
+#[test]
+fn palette_library_and_failed_download_preserve_user_intent() {
+    let mut app = fixture(0, false);
+    app.settings_writable = true;
+    let mut effects = Effects::default();
+    let palette = lucent_design::wallpaper_palette(lucent_domain::Rgb::new(33, 66, 150));
+    app.update(Message::Palette(palette.clone()), &mut effects);
+    app.update(Message::Theme(true), &mut effects);
+    assert!(app.palette_choices().iter().any(|p| p == &palette));
+    app.applied_wallpaper = "existing".into();
+    app.update(
+        Message::Browser(crate::wallpaper_browser::Message::Ready(
+            0,
+            Err(lucent_domain::DomainError::Unavailable(
+                "network unavailable".into(),
+            )),
+        )),
+        &mut effects,
+    );
+    assert_eq!(app.applied_wallpaper, "existing");
+    assert_eq!(app.settings.palette.as_ref().unwrap().name, "Pearl");
 }

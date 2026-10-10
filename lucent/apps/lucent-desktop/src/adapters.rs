@@ -11,6 +11,8 @@ pub struct DesktopAdapters {
     pub compositor: Option<Arc<dyn CompositorPort>>,
     pub settings: Arc<dyn SettingsPort>,
     pub theme: Arc<dyn ThemePort>,
+    pub palette_generation: Arc<dyn PaletteGenerationPort>,
+    pub catalog: Arc<dyn WallpaperCatalogPort>,
     pub clock: Arc<dyn ClockPort>,
     pub system: Arc<dyn SystemPort>,
     pub audio: Arc<dyn AudioPort>,

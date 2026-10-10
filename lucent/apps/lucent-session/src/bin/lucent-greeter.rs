@@ -6,6 +6,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             String::new(),
             std::sync::Arc::new(backend),
         )
+        .with_palette(
+            std::fs::read("/etc/greetd/lucent-palette.json")
+                .ok()
+                .and_then(|data| serde_json::from_slice(&data).ok()),
+        )
         .with_theme(
             std::fs::read_to_string("/etc/greetd/lucent-theme-mode")
                 .is_ok_and(|mode| mode.trim() == "light"),

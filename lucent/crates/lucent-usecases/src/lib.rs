@@ -105,6 +105,18 @@ pub fn toggle_widget(settings: &mut DesktopSettings, id: &str) {
     }
 }
 pub fn validate_settings(settings: &DesktopSettings) -> Result<()> {
+    if let Some(palette) = &settings.palette {
+        palette.validate()?;
+    }
+    if settings.saved_palettes.len() > 24 {
+        return Err(DomainError::Invalid(
+            "At most 24 saved wallpaper palettes".into(),
+        ));
+    }
+    for palette in &settings.saved_palettes {
+        palette.validate()?;
+    }
+
     if settings.version != 1 {
         return Err(DomainError::Invalid("Unsupported settings version".into()));
     }

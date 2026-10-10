@@ -13,3 +13,6 @@ mod menu;
 pub use menu::*;
 mod appearance;
 pub use appearance::*;
+
+mod wallpaper_catalog;
+pub use wallpaper_catalog::*;
