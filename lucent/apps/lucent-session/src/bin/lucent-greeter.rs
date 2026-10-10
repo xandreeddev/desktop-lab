@@ -6,6 +6,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             String::new(),
             std::sync::Arc::new(backend),
         )
+        .with_theme(
+            std::fs::read_to_string("/etc/greetd/lucent-theme-mode")
+                .is_ok_and(|mode| mode.trim() == "light"),
+        )
         .with_assets(std::sync::Arc::new(
             lucent_session::platform::WallpaperFile::greeter(),
         )),

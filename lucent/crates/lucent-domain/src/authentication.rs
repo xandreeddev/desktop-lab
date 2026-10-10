@@ -49,6 +49,10 @@ pub trait AuthConversation {
     fn prompt(&mut self, prompt: AuthPrompt) -> Result<Secret>;
 }
 pub trait AuthenticationPort: Send + Sync {
+    /// An external authority may withdraw a permission request while input is pending.
+    fn cancelled(&self) -> bool {
+        false
+    }
     /// Returns success only after authentication and account checks (and, for a
     /// login adapter, acceptance of the session-start request).
     fn authenticate(&self, identity: &str, conversation: &mut dyn AuthConversation) -> Result<()>;

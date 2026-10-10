@@ -653,9 +653,14 @@ impl Desktop {
                 );
             }
         }
-        if !self.error.is_empty() {
+        let error = if self.mode == Mode::Themes && !self.theme_error.is_empty() {
+            &self.theme_error
+        } else {
+            &self.error
+        };
+        if !error.is_empty() {
             elements.push(
-                self.label(&self.error, font::CAPTION)
+                self.label(error, font::CAPTION)
                     .size(width, component::launcher::ERROR_HEIGHT)
                     .at(0., height - component::launcher::ERROR_BOTTOM)
                     .color(self.theme().error),

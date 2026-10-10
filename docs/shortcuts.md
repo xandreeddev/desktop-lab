@@ -35,7 +35,7 @@ Lucid uses `qs ipc call -- TARGET METHOD [ARG]`; the `--` is required before met
 
 Omarchy's terminal, tiling and secure-lock shortcuts remain. The Rust widgets are
 Wayland layer surfaces and stay out of the tiled window layout. Close Lucent with
-`lucent-cli quit`; its service restores the stock bar. See [usage](../lucent/README.md).
+`lucent-cli quit`; use explicit integration rollback to restore stock UI. See [usage](../lucent/README.md).
 
 The keybinding menu uses Omarchy's installed `omarchy-menu-keybindings` unchanged.
 It discovers active Hyprland bindings and resolves Lua actions; Lucent's native

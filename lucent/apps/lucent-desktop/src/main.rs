@@ -1,6 +1,7 @@
 mod adapters;
 mod desktop;
 mod notifications;
+mod osd;
 mod platform;
 mod ports;
 mod shell_layout;

@@ -1,5 +1,6 @@
 //! Composition root: the only desktop module that chooses production adapters.
 use crate::{adapters::DesktopAdapters, ports::*};
+use lucent_api::ImageData;
 use lucent_domain::*;
 use lucent_services::{
     JsonSettings, applications::XdgApplications, compositor::Hyprland, desktop_adapters::*, images,
@@ -15,13 +16,14 @@ pub fn desktop_adapters() -> DesktopAdapters {
             .ok()
             .map(|h| Arc::new(h) as Arc<dyn CompositorPort>),
         settings: Arc::new(JsonSettings::default()),
+        theme: Arc::new(LucentTheme),
         clock: Arc::new(LocalClock),
         system: Arc::new(LinuxSystem::default()),
         audio: Arc::new(WirePlumber),
         media: Arc::new(Playerctl),
         weather: Arc::new(OpenMeteo),
-        wallpaper: Arc::new(OmarchyWallpaper),
-        session: Arc::new(OmarchySession),
+        wallpaper: Arc::new(LucentWallpaper),
+        session: Arc::new(LucentSession),
         assets: Arc::new(NativeAssets),
         notifications: Arc::new(
             lucent_services::notifications::FreedesktopNotifications::default(),
@@ -30,6 +32,9 @@ pub fn desktop_adapters() -> DesktopAdapters {
 }
 pub struct NativeAssets;
 impl AssetPort for NativeAssets {
+    fn background(&self, path: &str) -> Option<Arc<ImageData>> {
+        images::load(std::path::Path::new(path), 4096)
+    }
     fn initial(&self) -> BTreeMap<String, Arc<lucent_api::ImageData>> {
         let mut result = BTreeMap::new();
         for name in [

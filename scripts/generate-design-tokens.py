@@ -88,7 +88,7 @@ def outputs(tree):
         value = f'var(--{raw[1:-1].replace(".", "-").replace("_", "-")})' if isinstance(raw, str) and raw.startswith('{') else css_value(token['$type'], values[name])
         css.append(f'  --{name.replace(".", "-").replace("_", "-").replace("_", "-")}: {value};')
     css.append('}')
-    return {
+    generated = {
         ROOT / 'lucent/crates/lucent-design/src/tokens.rs': rust_text,
         ROOT / 'site/src/styles/tokens.css': '\n'.join(css) + '\n',
         ROOT / 'configs/lucent/window-rules.lua': (
@@ -101,6 +101,50 @@ def outputs(tree):
             '})\n'
         ),
     }
+    for mode in ('dark', 'light'):
+        role = lambda name: values[f'theme.{mode}.{name}']
+        colors = {
+            'mode': mode, 'accent': role('primary'), 'selection': role('surface_container'),
+            'muted': role('surface_container'), 'background': role('surface'),
+            'dark_background': role('surface_container'), 'darker_background': role('surface_container'),
+            'lighter_background': role('surface_container'), 'foreground': role('on_surface'),
+            'dark_foreground': role('on_surface'), 'light_foreground': role('on_surface'),
+            'bright_foreground': role('on_surface'), 'red': role('error'),
+            'yellow': role('warning'), 'orange': role('warning'), 'green': role('success'),
+            'cyan': role('primary'), 'blue': role('info'), 'magenta': role('primary'),
+            'brown': role('warning'),
+        }
+        for name in ('red', 'yellow', 'green', 'cyan', 'blue', 'magenta'):
+            colors['bright_' + name] = colors[name]
+        base = ROOT / 'configs/lucent/themes' / mode
+        generated[base/'colors.toml'] = '# Generated from Lucent semantic tokens.\n' + ''.join(
+            f'{name} = "{value}"\n' for name, value in colors.items())
+        gtk = {'window_bg_color':'surface', 'window_fg_color':'on_surface',
+               'view_bg_color':'surface_container', 'view_fg_color':'on_surface',
+               'headerbar_bg_color':'surface', 'headerbar_fg_color':'on_surface',
+               'card_bg_color':'surface_container', 'card_fg_color':'on_surface',
+               'accent_bg_color':'primary', 'accent_fg_color':'on_primary', 'accent_color':'primary',
+               'error_color':'error', 'warning_color':'warning', 'success_color':'success',
+               'theme_bg_color':'surface', 'theme_fg_color':'on_surface',
+               'theme_base_color':'surface_container', 'theme_text_color':'on_surface',
+               'theme_selected_bg_color':'primary', 'theme_selected_fg_color':'on_primary'}
+        generated[base/'gtk.css'] = '/* Generated from Lucent semantic tokens. */\n' + ''.join(
+            f'@define-color {name} {role(value)};\n' for name,value in gtk.items())
+        generated[base/'hyprlock.conf'] = (
+            '# Emergency secure locker; generated from Lucent tokens.\n'
+            'general {\n  ignore_empty_input = true\n}\n'
+            'background {\n  monitor =\n  path = ~/.local/state/lucent/wallpaper\n'
+            f'  color = rgb({role("surface")[1:]})\n  blur_passes = 0\n}}\n'
+            'input-field {\n  monitor =\n'
+            f'  size = {values["component.menu.min_width"]:g}, {values["component.input.height"]:g}\n'
+            f'  rounding = {values["radius.control"]:g}\n'
+            f'  inner_color = rgb({role("surface")[1:]})\n'
+            f'  outer_color = rgb({role("primary")[1:]})\n'
+            f'  font_color = rgb({role("on_surface")[1:]})\n'
+            f'  fail_color = rgb({role("error")[1:]})\n'
+            '  placeholder_text = Password\n  halign = center\n  valign = center\n}\n'
+        )
+    return generated
 
 
 def main():

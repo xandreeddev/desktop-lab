@@ -64,6 +64,7 @@ pub enum Message {
         String,
     ),
     Images(Vec<(String, Arc<ImageData>)>),
+    Background(Option<Arc<ImageData>>),
     Compositor(domain::Result<CompositorSnapshot>),
     Clock(ClockSnapshot),
     System(domain::Result<SystemSnapshot>),
@@ -88,6 +89,13 @@ pub enum Message {
     TimerReset,
     Month(i32),
     Theme(bool),
+    ThemeApplied(domain::Result<()>),
+    Osd(crate::osd::Feedback),
+    OsdTick,
+    OsdClose,
+    Bar(bool),
+    WidgetShow(String),
+    SetWallpaper(String),
     LauncherSize(LauncherSize),
     ResetLayout,
     Resize(&'static str, f32, f32),
@@ -107,11 +115,15 @@ pub const WIDGETS: [(&str, &str, &str); 7] = [
 ];
 pub struct Desktop {
     pub notifications: crate::notifications::Center,
+    pub osd: crate::osd::Osd,
+    pub bar_visible: bool,
+    pub theme_error: String,
     pub registry: WidgetRegistry<Desktop, Message>,
     pub apps: Vec<domain::Application>,
     pub settings: DesktopSettings,
     pub settings_writable: bool,
     pub images: BTreeMap<String, Arc<ImageData>>,
+    pub background: Option<Arc<ImageData>>,
     pub compositor: CompositorSnapshot,
     pub clock: ClockSnapshot,
     pub system: SystemSnapshot,
@@ -141,12 +153,16 @@ impl Desktop {
     pub fn new(adapters: DesktopAdapters) -> Self {
         let images = adapters.assets.initial();
         Self {
+            osd: Default::default(),
+            bar_visible: true,
+            theme_error: String::new(),
             notifications: crate::notifications::Center::new(adapters.notifications.clone()),
             registry: crate::widgets::registry(),
             apps: vec![],
             settings: DesktopSettings::default(),
             settings_writable: false,
             images,
+            background: None,
             compositor: CompositorSnapshot::default(),
             clock: adapters.clock.now(),
             system: SystemSnapshot::default(),
@@ -325,6 +341,12 @@ impl Component for Desktop {
     type Message = Message;
     fn view(&self, cx: &ViewContext) -> Element<Message> {
         self.theme().apply(match cx.surface {
+            "osd" => self.osd.view(cx, self.theme()),
+            "background" => self
+                .background
+                .as_ref()
+                .map(|image| Element::image(image.clone()).cover().fill())
+                .unwrap_or_else(|| Element::empty().fill().background(self.surface_color())),
             "bar" => self.bar(cx),
             "widgets" => self.widgets(cx),
             "dock" => self.dock(cx),
@@ -359,13 +381,26 @@ impl Component for Desktop {
                     .unwrap_or(0);
                 self.carousel = Motion::fixed(self.wallpaper_index as f32);
                 self.applied_wallpaper = current_wallpaper;
+                let assets = self.adapters.assets.clone();
+                let path = self.applied_wallpaper.clone();
+                effects.task(move || Message::Background(assets.background(&path)));
                 self.results = lucent_usecases::search_applications(&self.apps, "");
                 let assets = self.adapters.assets.clone();
                 let apps = self.apps.clone();
                 let walls = self.wallpapers.clone();
                 effects.task(move || Message::Images(assets.load(&apps, &walls)));
+                let theme = self.adapters.theme.clone();
+                let mode = ThemeMode::from_light(self.settings.light);
+                effects.task(move || Message::ThemeApplied(theme.apply(mode)));
                 self.retarget_panel_transition(now);
-                for id in ["bar", "widgets", "dock", "notifications"] {
+                for id in [
+                    "bar",
+                    "widgets",
+                    "dock",
+                    "notifications",
+                    "background",
+                    "osd",
+                ] {
                     effects.redraw(id);
                 }
             }
@@ -373,6 +408,10 @@ impl Component for Desktop {
                 self.images.extend(images);
                 effects.redraw("dock");
                 effects.redraw("widgets");
+            }
+            Message::Background(image) => {
+                self.background = image;
+                effects.redraw("background");
             }
             Message::Compositor(result) => match result {
                 Ok(value) => {
@@ -538,6 +577,9 @@ impl Component for Desktop {
                     Ok(()) => {
                         self.applied_wallpaper = path;
                         self.error.clear();
+                        let assets = self.adapters.assets.clone();
+                        let path = self.applied_wallpaper.clone();
+                        effects.task(move || Message::Background(assets.background(&path)));
                     }
                     Err(e) => self.error = e.to_string(),
                 }
@@ -601,10 +643,55 @@ impl Component for Desktop {
                 self.month_offset = (self.month_offset + delta).clamp(-120, 120);
                 effects.redraw("widgets");
             }
+            Message::ThemeApplied(result) => {
+                self.theme_error = result
+                    .err()
+                    .map(|error| error.to_string())
+                    .unwrap_or_default();
+                effects.redraw("dock");
+            }
+            Message::Osd(value) => {
+                self.osd.show(value, now);
+                effects.redraw("osd");
+            }
+            Message::OsdTick => {
+                self.osd.tick(now);
+                effects.redraw("osd");
+            }
+            Message::OsdClose => {
+                self.osd.feedback = None;
+                effects.redraw("osd");
+            }
+            Message::Bar(visible) => {
+                self.bar_visible = visible;
+                effects.redraw("bar");
+            }
+            Message::WidgetShow(id) => {
+                if !self.settings.visible_widgets.contains(&id) {
+                    self.update(Message::ToggleWidget(id), effects);
+                }
+            }
+            Message::SetWallpaper(path) => {
+                let wallpaper = self.adapters.wallpaper.clone();
+                effects.task(move || {
+                    let result = wallpaper.apply(&path);
+                    Message::WallpaperApplied(path, result)
+                });
+            }
             Message::Theme(light) => {
                 self.settings.light = light;
                 self.save(effects);
-                for id in ["bar", "widgets", "dock", "notifications"] {
+                let theme = self.adapters.theme.clone();
+                effects
+                    .task(move || Message::ThemeApplied(theme.apply(ThemeMode::from_light(light))));
+                for id in [
+                    "bar",
+                    "widgets",
+                    "dock",
+                    "notifications",
+                    "background",
+                    "osd",
+                ] {
                     effects.redraw(id);
                 }
             }
@@ -651,6 +738,28 @@ impl api::Application for Desktop {
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         vec![
             SurfaceSpec {
+                id: "osd",
+                layer: Layer::Overlay,
+                anchor: Anchor::Fill,
+                width: 0,
+                height: 0,
+                exclusive_zone: -1,
+                keyboard: Keyboard::None,
+                visible: self.osd.feedback.is_some(),
+                capture_all: false,
+            },
+            SurfaceSpec {
+                id: "background",
+                layer: Layer::Background,
+                anchor: Anchor::Fill,
+                width: 0,
+                height: 0,
+                exclusive_zone: -1,
+                keyboard: Keyboard::None,
+                visible: true,
+                capture_all: false,
+            },
+            SurfaceSpec {
                 id: "notifications",
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
@@ -669,7 +778,7 @@ impl api::Application for Desktop {
                 height: panel::BAR_HEIGHT as u32,
                 exclusive_zone: panel::BAR_HEIGHT as i32,
                 keyboard: Keyboard::None,
-                visible: true,
+                visible: self.bar_visible,
                 capture_all: false,
             },
             SurfaceSpec {
@@ -747,6 +856,13 @@ impl api::Application for Desktop {
                 Message::Weather(weather.snapshot())
             }),
         ];
+        if self.osd.feedback.is_some() {
+            s.push(Subscription::every(
+                "osd-expiry",
+                Duration::from_millis(100),
+                || Message::OsdTick,
+            ));
+        }
         if let Some(compositor) = self.adapters.compositor.clone() {
             s.push(Subscription::stream("compositor", move |out, cancel| {
                 compositor.watch(
@@ -792,6 +908,36 @@ impl api::Application for Desktop {
         }
     }
     fn command(&self, command: &str) -> std::result::Result<Option<Message>, String> {
+        if let Some(payload) = command.strip_prefix("osd show ") {
+            return serde_json::from_str(payload)
+                .map(|value| Some(Message::Osd(value)))
+                .map_err(|_| "Invalid feedback payload".into());
+        }
+        if let Some(path) = command.strip_prefix("wallpaper set ") {
+            return Ok(Some(Message::SetWallpaper(path.to_string())));
+        }
+        if let Some(id) = command.strip_prefix("notifications dismiss ") {
+            return id
+                .parse()
+                .map(|id| {
+                    Some(Message::Notifications(
+                        crate::notifications::Message::Dismiss(id),
+                    ))
+                })
+                .map_err(|_| "Invalid notification ID".into());
+        }
+        if let Some(id) = command
+            .strip_prefix("widget ")
+            .and_then(|s| s.strip_suffix(" show"))
+        {
+            if !WIDGETS.iter().any(|widget| widget.0 == id) {
+                return Err("Unknown widget".into());
+            }
+            return Ok(Some(Message::WidgetShow(id.into())));
+        }
+        if matches!(command, "theme dark" | "theme light") && !self.settings_writable {
+            return Err("Wait for saved settings to load before changing the theme".into());
+        }
         let words: Vec<_> = command.split_whitespace().collect();
         if let ["launcher", "size", args @ ..] = words.as_slice() {
             use lucent_design::component::launcher;
@@ -823,6 +969,16 @@ impl api::Application for Desktop {
             return Ok(Some(Message::LauncherSize(size)));
         }
         Ok(Some(match command {
+            "bar show" => Message::Bar(true),
+            "bar hide" => Message::Bar(false),
+            "osd close" => Message::OsdClose,
+            "notifications dismiss-last" => Message::Notifications(crate::notifications::Message::DismissLast),
+            "notifications dismiss-all" => Message::Notifications(crate::notifications::Message::DismissAll),
+            "notifications invoke-last" => Message::Notifications(crate::notifications::Message::InvokeLast),
+            "notifications show" => Message::Notifications(crate::notifications::Message::Show),
+            "notifications dnd" => Message::Notifications(crate::notifications::Message::Dnd),
+            "theme light" => Message::Theme(true),
+            "theme dark" => Message::Theme(false),
             "notifications toggle" => Message::Notifications(crate::notifications::Message::Toggle),
             "launcher toggle" => Message::ToggleLauncher,
             "launcher close" => Message::CloseLauncher,
@@ -838,17 +994,18 @@ impl api::Application for Desktop {
         }))
     }
     fn inspect(&self) -> String {
-        serde_json::json!({"notifications_ready":self.notifications.ready,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher,"launcher_size":self.settings.launcher,"launcher_panel_size":[self.panel_width.target_value(),self.panel_height.target_value()],"mode":self.mode.name(),"query":self.query,"selected":self.selected,"result_count":self.results.len(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(&a.id.0).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":!self.drag_origins.is_empty(),"notes":self.settings.notes,"timer_seconds":self.timer.remaining,"error":self.error}).to_string()
+        serde_json::json!({"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.background.is_some(), "notifications_ready":self.notifications.ready,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher,"launcher_size":self.settings.launcher,"launcher_panel_size":[self.panel_width.target_value(),self.panel_height.target_value()],"mode":self.mode.name(),"query":self.query,"selected":self.selected,"result_count":self.results.len(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(&a.id.0).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":!self.drag_origins.is_empty(),"notes":self.settings.notes,"timer_seconds":self.timer.remaining,"error":self.error}).to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
-        surface == "dock"
-            && [
-                self.reveal,
-                self.panel_width,
-                self.panel_height,
-                self.carousel,
-            ]
-            .iter()
-            .any(|m| m.active(now))
+        (surface == "osd" && self.osd.animating(now))
+            || surface == "dock"
+                && [
+                    self.reveal,
+                    self.panel_width,
+                    self.panel_height,
+                    self.carousel,
+                ]
+                .iter()
+                .any(|m| m.active(now))
     }
 }

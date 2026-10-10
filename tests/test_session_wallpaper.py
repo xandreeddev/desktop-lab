@@ -31,3 +31,16 @@ class SessionWallpaper(unittest.TestCase):
             second.unlink()
             with self.assertRaises(FileNotFoundError):module.publish(selected,destination)
             self.assertEqual(result.read_bytes(),b'next image')
+
+    def test_mode_publish_is_independent_and_does_not_rewrite_identical_content(self):
+        spec=importlib.util.spec_from_file_location('wallpaper_mode',ROOT/'scripts/lucent-wallpaper.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);destination=root/'published';destination.mkdir()
+            source=root/'mode';source.write_text('light\n')
+            module.publish(source,destination,'theme-mode')
+            target=destination/'theme-mode';first=target.stat().st_mtime_ns
+            module.publish(source,destination,'theme-mode')
+            self.assertEqual(target.stat().st_mtime_ns,first)
+            source.write_text('dark\n');module.publish(source,destination,'theme-mode')
+            self.assertEqual(target.read_text(),'dark\n')

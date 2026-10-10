@@ -17,6 +17,7 @@ pub trait SessionAssets: Send + Sync {
 pub enum Mode {
     Lock,
     Login,
+    Authorization,
 }
 #[derive(Clone)]
 pub enum Message {
@@ -26,6 +27,7 @@ pub enum Message {
     Prompt(AuthPrompt),
     Finished(domain::Result<()>),
     Retry,
+    Cancel,
 }
 struct Attempt {
     send: mpsc::SyncSender<Secret>,
@@ -42,6 +44,8 @@ pub struct SessionScreen {
     backend: Arc<dyn AuthenticationPort>,
     assets: Option<Arc<dyn SessionAssets>>,
     wallpaper: Option<Arc<ImageData>>,
+    light: bool,
+    authorization: String,
 }
 impl SessionScreen {
     pub fn new(mode: Mode, identity: String, backend: Arc<dyn AuthenticationPort>) -> Self {
@@ -56,11 +60,28 @@ impl SessionScreen {
             backend,
             assets: None,
             wallpaper: None,
+            light: false,
+            authorization: String::new(),
         }
     }
     pub fn with_assets(mut self, assets: Arc<dyn SessionAssets>) -> Self {
         self.assets = Some(assets);
         self
+    }
+    pub fn with_theme(mut self, light: bool) -> Self {
+        self.light = light;
+        self
+    }
+    pub fn with_authorization(mut self, message: String) -> Self {
+        self.authorization = message;
+        self
+    }
+    fn surface_id(&self) -> &'static str {
+        match self.mode {
+            Mode::Lock => "lock",
+            Mode::Login => "greeter",
+            Mode::Authorization => "authorization",
+        }
     }
     fn begin(&mut self) {
         self.secret.clear();
@@ -82,9 +103,11 @@ impl SessionScreen {
 impl Component for SessionScreen {
     type Message = Message;
     fn view(&self, cx: &ViewContext) -> Element<Message> {
-        let t = Theme::new(false);
+        let t = Theme::new(self.light);
         let title = if self.mode == Mode::Lock {
             "Welcome back"
+        } else if self.mode == Mode::Authorization {
+            "Permission required"
         } else {
             "Welcome to Lucent"
         };
@@ -114,7 +137,7 @@ impl Component for SessionScreen {
                 .font(token::TITLE_SIZE)
                 .color(t.on_surface)
                 .wrap(2),
-            Element::text(if self.mode == Mode::Lock {
+            Element::text(if self.mode != Mode::Login {
                 &self.identity
             } else {
                 "Your desktop, ready when you are"
@@ -136,6 +159,19 @@ impl Component for SessionScreen {
                 .selected(self.input_enabled())
                 .id("authentication-input"),
         ];
+        if self.mode == Mode::Authorization {
+            children.insert(
+                2,
+                Element::text(&self.authorization)
+                    .font(font::BODY)
+                    .color(t.on_surface)
+                    .wrap(4),
+            );
+            children.push(
+                t.button("Cancel", Message::Cancel)
+                    .id("authorization-cancel"),
+            );
+        }
         if self.input_enabled() {
             children.push(
                 t.button(
@@ -143,6 +179,8 @@ impl Component for SessionScreen {
                         "Continue"
                     } else if self.mode == Mode::Lock {
                         "Unlock"
+                    } else if self.mode == Mode::Authorization {
+                        "Authorize"
                     } else {
                         "Sign in"
                     },
@@ -190,7 +228,15 @@ impl Component for SessionScreen {
                 .background(t.surface_container)
                 .shadow(),
         );
-        t.apply(Element::stack(layers).fill().background(t.surface))
+        t.apply(
+            Element::stack(layers)
+                .fill()
+                .background(if self.mode == Mode::Authorization {
+                    Color::TRANSPARENT
+                } else {
+                    t.surface
+                }),
+        )
     }
     fn update(&mut self, message: Message, e: &mut Effects<Message>) {
         match message {
@@ -208,6 +254,10 @@ impl Component for SessionScreen {
                 self.attempt = None;
                 self.secret.clear();
                 self.prompt = None;
+                if self.mode == Mode::Authorization {
+                    e.quit();
+                    return;
+                }
                 match result {
                     Ok(()) => {
                         self.verified = true;
@@ -237,6 +287,11 @@ impl Component for SessionScreen {
                 }
             }
             Message::Key(key) => {
+                if self.mode == Mode::Authorization && key == Key::Escape {
+                    self.secret.clear();
+                    e.quit();
+                    return;
+                }
                 if matches!(key, Key::Enter) {
                     if self.mode == Mode::Lock && self.attempt.is_none() {
                         self.begin();
@@ -267,13 +322,13 @@ impl Component for SessionScreen {
                     }
                 }
             }
+            Message::Cancel if self.mode == Mode::Authorization => {
+                self.secret.clear();
+                e.quit();
+            }
             _ => {}
         }
-        e.redraw(if self.mode == Mode::Lock {
-            "lock"
-        } else {
-            "greeter"
-        });
+        e.redraw(self.surface_id());
     }
 }
 struct Conversation {
@@ -309,6 +364,8 @@ impl api::Application for SessionScreen {
     fn name(&self) -> &'static str {
         if self.mode == Mode::Lock {
             "lucent-lock"
+        } else if self.mode == Mode::Authorization {
+            "lucent-authorization"
         } else {
             "lucent-greeter"
         }
@@ -318,7 +375,7 @@ impl api::Application for SessionScreen {
     }
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         vec![SurfaceSpec {
-            id: "greeter",
+            id: self.surface_id(),
             layer: Layer::Overlay,
             anchor: Anchor::Fill,
             width: 0,
@@ -334,7 +391,7 @@ impl api::Application for SessionScreen {
             // Secure surfaces and authentication start before image decoding.
             effects.task(move || Message::Wallpaper(assets.wallpaper()));
         }
-        if self.mode == Mode::Lock {
+        if self.mode != Mode::Login {
             self.begin();
         }
     }
@@ -345,7 +402,7 @@ impl api::Application for SessionScreen {
         let receive = attempt.receive.clone();
         let identity = self.identity.clone();
         let backend = self.backend.clone();
-        vec![Subscription::stream(
+        let mut subscriptions = vec![Subscription::stream(
             "authentication",
             move |out, cancel| {
                 let result = backend.authenticate(
@@ -358,7 +415,23 @@ impl api::Application for SessionScreen {
                 );
                 out.send(Message::Finished(result));
             },
-        )]
+        )];
+        if self.mode == Mode::Authorization {
+            let backend = self.backend.clone();
+            subscriptions.push(Subscription::stream(
+                "authorization-cancellation",
+                move |out, stop| {
+                    while !stop.cancelled() {
+                        if backend.cancelled() {
+                            out.send(Message::Cancel);
+                            break;
+                        }
+                        stop.sleep(Duration::from_millis(100));
+                    }
+                },
+            ));
+        }
+        subscriptions
     }
     fn event(&self, event: Event) -> Option<Message> {
         match event {
@@ -469,5 +542,29 @@ mod tests {
         assert!(!app.authenticated());
         app.update(Message::Finished(Ok(())), &mut Effects::default());
         assert!(app.authenticated());
+    }
+    #[test]
+    fn authorization_cancel_closes_without_unlocking_any_session() {
+        use lucent_wayland::LockApplication;
+        let mut app = SessionScreen::new(Mode::Authorization, "fixture".into(), Arc::new(Deny));
+        app.begin();
+        app.update(
+            Message::Prompt(AuthPrompt {
+                kind: PromptKind::Secret,
+                text: "Password".into(),
+            }),
+            &mut Effects::default(),
+        );
+        app.update(
+            Message::Key(Key::Text("fixture-secret".into())),
+            &mut Effects::default(),
+        );
+        let mut effects = Effects::default();
+        app.update(Message::Cancel, &mut effects);
+        assert!(effects.exit);
+        assert!(app.secret.is_empty());
+        assert!(!app.authenticated());
+        app.update(Message::Finished(Ok(())), &mut effects);
+        assert!(!app.authenticated());
     }
 }

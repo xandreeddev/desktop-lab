@@ -58,9 +58,12 @@ def native_defaults(defaults):
     extension's action still takes precedence. Other stock actions are retained.
     """
     overrides = {
-        'root': {'label': 'Omarchy', 'parent': '', 'aliases': ['go', 'menu']},
+        'root': {'label': 'Lucent', 'parent': '', 'aliases': ['go', 'menu']},
         'style.background': {'action': ['lucent-cli', 'wallpapers', 'open']},
-        'style.theme': {'action': None, 'provider': 'themes'},
+        'style.theme': {'action': ['lucent-cli', 'themes', 'open'], 'provider': None},
+        'style.screensaver': {'label': 'Lock appearance', 'action': ['lucent-cli', 'themes', 'open']},
+        'install.style.theme': {'when': 'false'},
+        'setup.plugin': {'when': 'false'},
     }
     result = {key: dict(value) for key, value in defaults.items()}
     for key, fields in overrides.items():
@@ -83,8 +86,6 @@ def provider_rows(provider):
         values, current, command = output('omarchy-font-list'), output('omarchy-font-current'), ['omarchy-font-set']
     elif provider == 'power-profiles':
         values, current, command = output('omarchy-powerprofiles-list'), output('powerprofilesctl', 'get'), ['omarchy-powerprofiles-set', 'autodetect']
-    elif provider == 'themes':
-        values, current, command = output('omarchy-theme-list'), output('omarchy-theme-current'), ['omarchy-theme-set']
     else:
         raise ValueError('Unsupported Omarchy menu provider: ' + provider)
     rows, actions = [], {}

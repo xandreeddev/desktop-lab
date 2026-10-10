@@ -10,6 +10,7 @@ pub struct DesktopAdapters {
     pub apps: Arc<dyn ApplicationPort>,
     pub compositor: Option<Arc<dyn CompositorPort>>,
     pub settings: Arc<dyn SettingsPort>,
+    pub theme: Arc<dyn ThemePort>,
     pub clock: Arc<dyn ClockPort>,
     pub system: Arc<dyn SystemPort>,
     pub audio: Arc<dyn AudioPort>,

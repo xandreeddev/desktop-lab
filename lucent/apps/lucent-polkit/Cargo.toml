@@ -1,0 +1,14 @@
+[package]
+name = "lucent-polkit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+[dependencies]
+lucent-api = { path = "../../crates/lucent-api" }
+lucent-domain = { path = "../../crates/lucent-domain" }
+lucent-session = { path = "../lucent-session" }
+lucent-services = { path = "../../crates/lucent-services" }
+lucent-wayland = { path = "../../crates/lucent-wayland" }
+polkit-agent-rs = "0.3.0"
+glib = "0.20"
+async-channel = "2"

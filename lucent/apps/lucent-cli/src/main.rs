@@ -15,7 +15,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = env::args().skip(1).collect();
     if args.is_empty() || args[0] == "--help" {
         println!(
-            "lucent-cli launcher toggle|open|close\nlucent-cli launcher size WIDTH MAX_HEIGHT | reset\n  Dimensions use logical pixels; height is a content limit.\nlucent-cli themes open\nlucent-cli wallpapers open\nlucent-cli widgets open\nlucent-cli inspect\nlucent-cli quit"
+            "lucent-cli launcher toggle|open|close\nlucent-cli launcher size WIDTH MAX_HEIGHT | reset\n  Dimensions use logical pixels; height is a content limit.\nlucent-cli themes open\nlucent-cli theme dark|light\nlucent-cli notifications show|toggle|dismiss-last|dismiss-all|invoke-last|dnd\nlucent-cli bar show|hide\nlucent-cli widget NAME show\nlucent-cli wallpapers open\nlucent-cli widgets open\nlucent-cli inspect\nlucent-cli quit"
         );
         return Ok(());
     }

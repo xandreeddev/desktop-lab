@@ -47,10 +47,10 @@ not maintain a duplicate shortcut list.
 | Framework crates | Generic layout, input, animation, Wayland and Vulkan; no Omarchy route knowledge |
 
 Native replacements use explicit route IDs: `style.background` opens Lucent's
-wallpaper selector, `style.theme` lists themes in the native picker, and the apps
+wallpaper selector, `style.theme` opens Lucent's token-based theme selector, and the apps
 provider opens Lucent's launcher. User extensions are merged **after** these
-defaults, so custom actions retain precedence. Fonts and themes use installed
-Omarchy list/current/set commands. The adapter also supports the power-profile
+defaults, so custom actions retain precedence. Application font settings use installed
+Omarchy list/current/set commands; shell typography stays in Lucent tokens. The adapter also supports the power-profile
 provider used by newer definitions; that provider is not present in the tested
 4.0.4 menu source.
 
@@ -73,9 +73,11 @@ and the Super+K binding are unchanged. The existing PATH integration selects
 the wrappers. `rollback` disables them before removing the PATH block, so even
 long-running applications with the old PATH return to stock selection UI.
 
-The stock shell still supplies background, idle, polkit and specialized panels.
-An action that calls `omarchy-shell` directly may still open a stock panel; this
-is not a claim that all stock shell services have been replaced.
+The stock shell is stopped. Known `omarchy-shell` calls pass through the explicit
+`lucent-compat.py` adapter to native menus, widgets, notifications and OSD.
+Unsupported plugin operations return errors; they never start a second shell.
+Network setup and Bluetooth pairing may open independent terminal tools.
+See the [current ownership map](https://xandreeddev.github.io/desktop-lab/docs/system/).
 
 ## Verification
 

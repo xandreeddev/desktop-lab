@@ -7,6 +7,10 @@ use std::sync::Arc;
 pub enum Message {
     Snapshot(lucent_domain::Result<NotificationSnapshot>),
     Toggle,
+    Show,
+    DismissLast,
+    DismissAll,
+    InvokeLast,
     Dismiss(u32),
     Invoke(u32, String),
     Dnd,
@@ -213,6 +217,27 @@ impl Component for Center {
                 self.ready = true;
             }
             Message::Snapshot(Err(_)) => self.ready = false,
+            Message::Show => {
+                self.history_open = true;
+                self.page = 0;
+            }
+            Message::DismissLast => {
+                if let Some(note) = self.snapshot.active.last() {
+                    self.update(Message::Dismiss(note.id), e);
+                }
+            }
+            Message::DismissAll => {
+                for note in self.snapshot.active.clone() {
+                    self.update(Message::Dismiss(note.id), e);
+                }
+            }
+            Message::InvokeLast => {
+                if let Some(note) = self.snapshot.active.last()
+                    && let Some(action) = note.actions.first()
+                {
+                    self.update(Message::Invoke(note.id, action.id.clone()), e);
+                }
+            }
             Message::Toggle => {
                 self.history_open = !self.history_open;
                 self.page = 0;

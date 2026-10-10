@@ -331,6 +331,10 @@
   --component-widget-grid-major-every: 4;
   --component-widget-grid-minor-opacity: 0.18;
   --component-widget-grid-major-opacity: 0.38;
+  --component-osd-width: var(--component-notification-width);
+  --component-osd-padding: var(--space-lg);
+  --component-osd-margin: var(--space-xl);
+  --component-osd-track: var(--space-xs);
   --icon-tiny: 16px;
   --icon-small: 17px;
   --icon-compact: 18px;
