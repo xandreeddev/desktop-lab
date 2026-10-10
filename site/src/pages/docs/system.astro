@@ -1,0 +1,72 @@
+---
+import DocGuide from '../../layouts/DocGuide.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import { withBase } from '../../data/urls';
+import { sourceUrl } from '../../data/source';
+const sections: [string, string][] = [['startup','01 · Startup and handoff'],['ownership','02 · Responsibility map'],['rendering','03 · Rendering boundaries'],['menus','04 · Menu and binding routes'],['verify','05 · Inspect your installation']];
+const ownership = [
+  ['Bar, dock and launcher', 'Lucent', 'Desktop component → framework layout → Vulkan surface buffers.', 'desktop.rs / views.rs'],
+  ['Application discovery and launch', 'Lucent policy + system apps', 'XDG desktop entries; argument-array launch. Dock prefers focusing a known window.', 'ApplicationPort → XdgApplications'],
+  ['Windows, splits, tiling and focus', 'Hyprland', 'Lucent requests workspace changes/focus through Hyprland IPC. It does not tile or render application contents.', 'CompositorPort → Hyprland'],
+  ['Window spacing and rounded corners', 'Hyprland + shared tokens', 'Generated gaps and decoration defaults in user looknfeel.lua. The bar reserves its visible height; Hyprland supplies the gap below it. Per-window rules and fullscreen behavior retain precedence.', 'window-rules.lua / lucent-setup.py'],
+  ['Monitors, input, keymaps and scaling', 'Hyprland / system configuration', 'Lucent receives output and seat events; integer surface scale is supported. Per-output desktop state is unfinished.', '~/.config/hypr/'],
+  ['Desktop widgets and drag grid', 'Lucent', 'Layer surfaces below normal windows. Client geometry, token grid, persisted positions and visibility.', 'widgets.rs / shell_layout.rs'],
+  ['Light and dark shell palette', 'Lucent', 'Semantic design tokens. This switch changes Lucent components, not installed application themes.', 'DesktopSettings.light / lucent-design'],
+  ['Terminal, browser and GTK themes', 'Omarchy / each application', 'Omarchy theme commands and application configuration remain authoritative.', 'Omarchy Style → Theme'],
+  ['Wallpaper selector', 'Lucent', 'Native animated carousel selects a path and calls the wallpaper port.', 'WallpaperPort → OmarchyWallpaper'],
+  ['Desktop wallpaper display', 'Stock Omarchy shell', 'Omarchy applies/displays the selected background. Lucent does not replace this background service.', 'omarchy-theme-bg-set'],
+  ['Lock and login wallpaper', 'Lucent clients + sync adapter', 'Native clients render a wallpaper image; helper synchronizes a readable copy for the login user.', 'lucent-wallpaper.py / lucent-session'],
+  ['Notifications and history', 'Lucent', 'Owns org.freedesktop.Notifications after handoff; native toasts/history, actions, expiry and DND. History is in memory.', 'NotificationPort → FreedesktopNotifications'],
+  ['Keybinding picker', 'Lucent UI + Omarchy behavior', 'Omarchy discovers bindings; a native picker selects the original value; Omarchy dispatches it.', 'omarchy-menu-keybindings / lucent-menu.py'],
+  ['Root and nested menus', 'Lucent UI + Omarchy definitions', 'JSONC model and extensions feed the native picker. Adapter evaluates availability and dispatches trusted actions.', 'menu_model.py / lucent-menu-routes.py'],
+  ['Specialized stock panels', 'Stock Omarchy shell', 'Unmapped actions that directly call omarchy-shell can still open stock UI. They are not native Lucent components.', 'Installed Omarchy menu actions'],
+  ['Audio volume / mute', 'Lucent controls + WirePlumber', 'Adapter calls wpctl; audio routing and device services remain system-owned.', 'AudioPort → WirePlumber'],
+  ['Media playback', 'Lucent controls + playerctl', 'Player metadata/control through playerctl; periodic snapshots.', 'MediaPort → Playerctl'],
+  ['Network status and Wi-Fi setup', 'Lucent status + system/Omarchy setup', 'Status sampled through nmcli. No native Lucent Wi-Fi configuration port/control center yet.', 'SystemPort → LinuxSystem'],
+  ['Bluetooth, brightness and power profiles', 'System / Omarchy tools', 'Actions use existing providers. No complete native Lucent adapters and controls for these capabilities.', 'Installed commands and menus'],
+  ['Battery and system tray', 'Remaining integration work', 'No implemented UPower battery port or StatusNotifier watcher in this desktop. Stock services are retained; native tray parity is not claimed.', 'Future desktop service adapters'],
+  ['Clipboard, emoji and screenshots', 'Installed tools / stock routes', 'Existing bindings and specialized shell/tool interfaces remain. No native Lucent clipboard history or screenshot UI.', 'Installed Hyprland bindings'],
+  ['Weather', 'Lucent widget + Open-Meteo', 'Optional configured coordinates; curl-based adapter. Missing/error state is not a hardware or location detector.', 'WeatherPort → OpenMeteo'],
+  ['Clock, calendar, notes and timer', 'Lucent', 'Clock adapter supplies time; client/use cases handle calendar, notes and focus timer state.', 'ClockPort / Date / FocusTimer'],
+  ['CPU, memory and status samples', 'Lucent widget + Linux adapter', 'System counters and bounded command calls. Polling is not synchronized to every rendered frame.', 'SystemPort → LinuxSystem'],
+  ['Screen lock', 'Lucent UI + Wayland security + PAM', 'Native ext-session-lock surfaces and authentication adapter; stock fallback remains in the wrapper.', 'SessionPort / AuthenticationPort / lucent-lock.py'],
+  ['Idle and sleep handling', 'Stock Omarchy / system services', 'Existing timing and sleep policy remain. Wrapper routes lock requests to native lock with fallback.', 'omarchy-system-sleep-lock wrapper'],
+  ['Login', 'Lucent UI + greetd + compositor', 'Separate greeter process. greetd authenticates/starts a session; the desktop process is not the login manager.', 'lucent-login.py / lucent-greeter'],
+  ['Polkit permission prompts', 'Stock Omarchy agent', 'Retained. Lucent does not implement its own authorization dialog or authentication mechanism.', 'Stock shell/service'],
+  ['Updates, packages and maintenance', 'Arch / Omarchy', 'Installed package and Omarchy commands remain. A custom visual shell does not replace the distribution.', 'pacman / Omarchy tools'],
+];
+---
+<DocGuide chapter="system" title="Lucent and Omarchy ownership map" heading="Know who owns" accent="every desktop layer." description="A source-based map of native Lucent UI, retained Omarchy behavior, system services and unfinished replacements." sections={sections} audience="Desktop integration guide">
+  <section id="startup"><span class="eyebrow">01 / WHAT ACTUALLY STARTS</span><h2>The stock shell still runs.</h2>
+    <p>The current Lucent integration starts a user service from a marked Hyprland autostart block. Its Python supervisor launches the Rust desktop, waits for rendered bar/dock/widget surfaces, hands notification ownership to Lucent, then hides the stock bar. It keeps the original visibility and notification settings for recovery.</p>
+    <p>This is a partial shell replacement. Omarchy's background, polkit, idle integration and specialized IPC paths remain available. A stock-shell restart is sometimes needed to release its notification bus name, and the handoff refuses to interrupt an active secure stock lock. On failure or service stop, the supervisor restores the previous stock state.</p>
+    <CodeBlock code={`Omarchy Hyprland session
+  ├─ stock shell / background / permission and session services
+  └─ user autostart → lucent.service
+       → lucent-session.py supervisor
+       → lucent-desktop
+       → render surfaces → notification handoff → hide stock bar
+
+Stop / crash → supervisor and ExecStopPost restore stock state`} label="Current startup ownership; not a fully removed stock shell" />
+    <p>Read the implementation: <a href={sourceUrl('scripts/lucent-session.py')}>handoff supervisor</a> and <a href={sourceUrl('scripts/lucent-setup.py')}>user-level installer</a>. Removing the remaining stock process requires replacing its responsibilities first; uninstalling it now would break existing behavior.</p>
+  </section>
+  <section id="ownership"><span class="eyebrow">02 / CURRENT RESPONSIBILITIES</span><h2>Rendering and behavior<br />can have different owners.</h2>
+    <div class="table-scroll"><table><thead><tr><th>Capability</th><th>Owner</th><th>Current behavior</th><th>Configuration / implementation</th></tr></thead><tbody>{ownership.map(([feature, owner, behavior, source]) => <tr><td>{feature}</td><td>{owner}</td><td>{behavior}</td><td>{source}</td></tr>)}</tbody></table></div>
+    <p>This maps the integrations implemented in this repository. User-installed applications and custom menu extensions can add commands outside this list. Hardware-specific Wi-Fi, Bluetooth, battery, brightness and physical display behavior require hardware tests; a VM does not prove them.</p>
+  </section>
+  <section id="rendering"><span class="eyebrow">03 / WHO DRAWS WHAT</span><h2>Lucent paints its surfaces.<br />Hyprland composes the screen.</h2>
+    <p>The reusable runtime creates Wayland layer surfaces. The bar requests a top strip. The dock/launcher draws inside a transparent full-output surface; widgets use a layer below ordinary windows. The desktop's geometry determines the visible panels and input regions inside those surfaces. Widgets are not tiled application windows.</p>
+    <p>CPU code samples animations and computes layout. Our renderer translates paint instructions into GPU resources and commands through wgpu's Vulkan backend. Hyprland combines the rendered buffers with other applications and the stock background. Chrome and the terminal draw their own contents; Hyprland supplies their compositor decorations.</p>
+    <p>Secure lock surfaces use the session-lock protocol, not the ordinary launcher overlay. The greeter runs in a separate login environment. These clients share framework and design code while retaining different security and lifecycle responsibilities.</p>
+    <p>See <a href={withBase('/docs/library/')}>the library guide</a> for event-loop and renderer details, or <a href={withBase('/docs/desktop/')}>desktop configuration</a> for practical settings.</p>
+  </section>
+  <section id="menus"><span class="eyebrow">04 / KEEP EXISTING ACTIONS</span><h2>Native picker.<br />Installed definitions.</h2>
+    <p>The menu adapter reads <code>/usr/share/omarchy/default/omarchy/omarchy-menu.jsonc</code> (or the configured Omarchy root), then merges <code>~/.config/omarchy/extensions/omarchy-menu.jsonc</code>. User actions take precedence. Select/input wrappers return the exact original selected value after releasing keyboard focus.</p>
+    <p>Known routes explicitly map background selection to Lucent's carousel and app selection to Lucent's launcher. Omarchy theme, font and power-profile providers still execute their original tools. Other actions retain their installed behavior, including direct stock-shell IPC. The adapter does not infer ownership by guessing command names.</p>
+    <p>Trusted menu configuration may contain shell expressions. Application desktop entries, labels, search input and dynamic provider values are handled separately; arbitrary user-entered text is not turned into a shell command. Read <a href={sourceUrl('docs/native-menu.md')}>the full menu contract</a>.</p>
+  </section>
+  <section id="verify"><span class="eyebrow">05 / CHECK THE CURRENT SESSION</span><h2>Inspect before changing integration.</h2>
+    <CodeBlock code="systemctl --user status lucent.service\nlucent-cli inspect\nhyprctl -j binds\nhyprctl -j layers\npgrep -a -f 'lucent|quickshell|omarchy-shell'" label="Read-only commands inside the guest; process arguments can contain local paths" />
+    <p>The source map is the contract for the prepared installation. Omarchy updates can change menu definitions and startup services. Review the installed definitions and user overrides after updates, then test both the native path and rollback. Keep local dumps and screenshots containing personal information out of Git.</p>
+  </section>
+</DocGuide>

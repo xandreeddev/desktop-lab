@@ -334,6 +334,13 @@ needed. Re-run the token
 generator and activation after changing this token. No packaged Omarchy file is
 modified; fullscreen/no-gap compositor policies may still override decorations.
 
+The same generated block maps `component.window.gap_out` to Hyprland's outside
+margin (16 logical pixels) and `gap_in` to each side of an internal split (8).
+The bar reserves only its top inset plus capsule height (16 + 32 = 48).
+Hyprland adds the outside gap once, placing a normal tiled window's outer border
+at y=64 and x=16. Client content begins inside its compositor border. Keeping the
+bar's reservation free of bottom padding avoids adding the same gap twice.
+
 
 ## Dependency injection and protocol boundaries
 

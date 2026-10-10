@@ -22,6 +22,8 @@ Astro's explicit background mode; manage it from the same directory:
 ```sh
 npm run status
 npm run stop
+# Restart with LAN access when needed:
+npm run dev -- --host 0.0.0.0
 ```
 
 The site is independent of the VMs and does not start or modify them. Commands in
@@ -126,3 +128,14 @@ study is explicitly a browser illustration, not the native shell running in a pa
 Browser validation covers gallery/architecture tabs and arrow-key navigation,
 motion expansion/collapse, clipboard text including newlines, guide accordions,
 internal links, the measurement endpoint, responsive layouts and reduced motion.
+
+## Documentation audiences
+
+- `/docs/desktop/`: everyday preferences, launcher sizes, shortcuts and recovery.
+- `/docs/system/`: Lucent, Omarchy, compositor and system-service ownership.
+- `/docs/library/`: reusable framework API and runtime, independent of desktop configuration.
+- `/docs/review/`: domain/port/adapter assessment, fixes and open design work.
+
+The deeper framework, domain, client and execution chapters remain linked from
+these entry points. Repository skills live in `.agents/skills/lucent-framework`
+and `.agents/skills/lucent-desktop`; their instructions link to maintained guides.

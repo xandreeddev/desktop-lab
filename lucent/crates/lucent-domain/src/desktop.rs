@@ -66,16 +66,8 @@ pub trait CompositorPort: Send + Sync {
     fn snapshot(&self) -> Result<CompositorSnapshot>;
     fn switch_workspace(&self, id: i32) -> Result<()>;
     fn focus_window(&self, address: &str) -> Result<()>;
-    fn watch(
-        &self,
-        emit: &mut dyn FnMut(Result<CompositorSnapshot>),
-        stop: &dyn crate::StopSignal,
-    ) {
-        while !stop.cancelled() {
-            emit(self.snapshot());
-            stop.wait(std::time::Duration::from_secs(2));
-        }
-    }
+    /// Adapters own event delivery, reconnects and any polling strategy.
+    fn watch(&self, emit: &mut dyn FnMut(Result<CompositorSnapshot>), stop: &dyn crate::StopSignal);
 }
 pub trait SettingsPort: Send + Sync {
     fn load(&self) -> Result<DesktopSettings>;
@@ -87,6 +79,14 @@ pub struct Placement {
     pub x: f32,
     pub y: f32,
 }
+/// Preferred logical dimensions. Absent values use the client's design defaults.
+/// Height is a ceiling: the launcher can shrink to fit its current contents.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LauncherSize {
+    pub width: Option<u32>,
+    pub max_height: Option<u32>,
+}
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DesktopSettings {
@@ -96,6 +96,7 @@ pub struct DesktopSettings {
     pub notes: String,
     pub pinned: Vec<AppId>,
     pub light: bool,
+    pub launcher: LauncherSize,
 }
 impl Default for DesktopSettings {
     fn default() -> Self {
@@ -108,6 +109,7 @@ impl Default for DesktopSettings {
             notes: String::new(),
             pinned: Vec::new(),
             light: false,
+            launcher: LauncherSize::default(),
         }
     }
 }

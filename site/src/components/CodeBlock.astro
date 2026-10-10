@@ -1,6 +1,6 @@
 ---
 import { Code } from 'astro:components';
-interface Props { code: string; lang?: 'rust' | 'bash'; label?: string; }
+interface Props { code: string; lang?: 'rust' | 'bash' | 'json'; label?: string; }
 const { code, lang = 'bash', label = 'Terminal' } = Astro.props;
 ---
 <div class="code-block">

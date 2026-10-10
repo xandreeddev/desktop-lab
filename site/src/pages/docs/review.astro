@@ -1,0 +1,65 @@
+---
+import DocGuide from '../../layouts/DocGuide.astro';
+import { withBase } from '../../data/urls';
+import { sourceUrl } from '../../data/source';
+const sections: [string, string][] = [['verdict','01 · Assessment'],['concepts','02 · Domain concepts'],['ports','03 · Ports and adapters'],['findings','04 · Findings and changes'],['next','05 · Next architectural steps']];
+const ports = [
+  ['ApplicationPort', 'Discover and launch applications', 'XdgApplications', 'XDG files and direct process arguments'],
+  ['CompositorPort', 'Read windows/workspaces, focus, switch and watch', 'Hyprland', 'Hyprland request/event sockets; reconnect policy in adapter'],
+  ['SettingsPort', 'Load and save DesktopSettings', 'JsonSettings', 'Validated JSON and atomic replacement'],
+  ['ClockPort', 'Supply local date and time', 'LocalClock', 'System time through chrono'],
+  ['SystemPort', 'Sample CPU, memory, volume and network state', 'LinuxSystem', 'Linux counters, wpctl and nmcli'],
+  ['AudioPort', 'Raise, lower or mute audio', 'WirePlumber', 'Bounded wpctl commands'],
+  ['MediaPort', 'Read metadata and control playback', 'Playerctl', 'Bounded playerctl commands'],
+  ['WeatherPort', 'Return configured location weather', 'OpenMeteo', 'Local configuration and bounded HTTP command'],
+  ['WallpaperPort', 'List, read and apply backgrounds', 'OmarchyWallpaper', 'Filesystem discovery and Omarchy tool'],
+  ['SessionPort', 'Request a secure lock', 'OmarchySession', 'Native-lock wrapper with stock fallback'],
+  ['NotificationPort', 'Watch notifications and control their lifecycle', 'FreedesktopNotifications', 'D-Bus transport around pure notification policy'],
+  ['AuthenticationPort', 'Run a trusted authentication conversation', 'PamLocker / Greetd', 'PAM or greetd; separate lock/login composition roots'],
+  ['StopSignal', 'Cooperative cancellation and bounded waiting', 'WatchStop', 'Maps the framework cancellation handle into the domain contract'],
+  ['AssetPort (presentation)', 'Supply decoded images and symbols', 'NativeAssets', 'SVG/image loading; deliberately outside the pure domain'],
+];
+---
+<DocGuide chapter="review" title="Architecture review" heading="Good boundaries." accent="Explicit remaining work." description="A review of the implemented dependency graph, ports, adapters, entities, value types and runtime responsibilities, with targeted fixes and a practical refactoring order." sections={sections}>
+  <section id="verdict"><span class="eyebrow">01 / REVIEW CONCLUSION</span><h2>The separation is useful.<br />It is not finished everywhere.</h2>
+    <p>The framework has real independent clients and avoids desktop/OS-service dependencies. The desktop receives adapters through port contracts, while production wiring lives in composition roots. Use cases depend only on the domain. These are meaningful boundaries, not just directory names.</p>
+    <p>The domain is mostly typed data and small behavior models. Some types enforce invariants, while others are public records whose callers can construct invalid values. The desktop still centralizes several features, the runtime has one ordered effects worker, and service error handling is uneven. Those limits should guide the next changes rather than adding more empty crates or abstractions.</p>
+    <p>This review accompanies configurable launcher sizing. It changes two concrete boundary issues and adds dependency-graph checks. It does not claim a complete framework redesign or removal of all stock shell services.</p>
+  </section>
+  <section id="concepts"><span class="eyebrow">02 / NAME THE CONCEPT</span><h2>Entities, value types,<br />snapshots and policies.</h2>
+    <div class="table-scroll"><table><thead><tr><th>Concept</th><th>Current examples</th><th>Assessment</th></tr></thead><tbody>
+      <tr><td>Entity identity</td><td>Application + AppId, Window address, Workspace ID, Notification ID</td><td>AppId distinguishes desktop-entry identity from arbitrary strings. Other IDs remain strings/integers; stronger wrappers would prevent mixing them if used across more APIs.</td></tr>
+      <tr><td>Value types / VOs</td><td>Placement, Date, LaunchCommand, LauncherSize</td><td>These describe values rather than independent identities. Public fields make them lightweight records, not fully validated value objects. Do not infer validity merely from the Rust type name.</td></tr>
+      <tr><td>Invariant-bearing value</td><td>Secret</td><td>Encapsulated storage, zeroization and no Debug/Clone reduce accidental copying or logging. This is a stronger boundary than a public String field.</td></tr>
+      <tr><td>Stateful domain behavior</td><td>FocusTimer</td><td>Transitions and remaining time are explicit. Time is supplied as input, making behavior deterministic without system calls.</td></tr>
+      <tr><td>Service snapshot</td><td>CompositorSnapshot, SystemSnapshot, MediaSnapshot, WeatherSnapshot</td><td>Data returned by adapters. Transport and rendering details stay outside; error/unavailable states still need more consistent client handling.</td></tr>
+      <tr><td>Preference aggregate</td><td>DesktopSettings</td><td>Persisted preferences with backward-compatible defaults. Geometry resolution and design tokens stay in the client. Serde currently couples the domain record to the stored schema.</td></tr>
+      <tr><td>Use cases</td><td>Search ranking, activate application, move/snap widget, menu selection, notification inbox, validate settings</td><td>Pure policy or port calls. They do not launch processes, access files or render. Notification transport invokes the same policy as tests.</td></tr>
+    </tbody></table></div>
+    <p>The new <code>LauncherSize</code> stores optional preferred dimensions. The settings validation use case rejects zero dimensions. The client enforces useful control sizes and screen/grid limits. Keeping screen pixels, theme tokens and compositor calls out of domain policy preserves the boundary.</p>
+    <p>Remaining invariant work: <code>AppId</code> permits empty strings, <code>Date</code> permits impossible dates and <code>Placement</code> permits non-finite floats until validated. Before extending these public APIs, add fallible constructors or boundary validation backed by behavior tests. Avoid a mass wrapper rename that changes names without enforcing a rule.</p>
+  </section>
+  <section id="ports"><span class="eyebrow">03 / CONTRACTS AND IMPLEMENTATIONS</span><h2>Ports describe needs.<br />Adapters supply behavior.</h2>
+    <div class="table-scroll"><table><thead><tr><th>Port</th><th>Contract</th><th>Adapter</th><th>Implementation</th></tr></thead><tbody>{ports.map(([port, contract, adapter, implementation]) => <tr><td>{port}</td><td>{contract}</td><td>{adapter}</td><td>{implementation}</td></tr>)}</tbody></table></div>
+    <p><code>DesktopAdapters</code> holds injected implementations through <code>Arc&lt;dyn …Port&gt;</code> handles. <code>desktop_adapters()</code> chooses concrete adapters. A trait-object call is an ordinary synchronous Rust call; the effects/subscription machinery decides which thread invokes it.</p>
+    <p>The <a href={sourceUrl('lucent/apps/lucent-desktop/src/platform.rs')}>desktop composition root</a> is the only desktop module selecting production service implementations. <a href={sourceUrl('lucent/apps/lucent-desktop/src/test_adapters.rs')}>In-memory adapters</a> let client tests exercise behavior without executing host commands. Lock and login have their own composition roots.</p>
+    <p>No dedicated NetworkPort, BluetoothPort, BatteryPort, BrightnessPort or tray port exists yet. A network label in SystemSnapshot is not an implementation of network management. See <a href={withBase('/docs/system/')}>the system map</a> for retained tools and services.</p>
+  </section>
+  <section id="findings"><span class="eyebrow">04 / CONCRETE REVIEW RESULTS</span><h2>Fix the boundary.<br />Check the behavior.</h2>
+    <div class="table-scroll"><table><thead><tr><th>Finding</th><th>Action / current status</th><th>Evidence</th></tr></thead><tbody>
+      <tr><td>CompositorPort contained a default two-second polling loop.</td><td>Removed the implementation from the domain contract. Hyprland owns watching/reconnects; the test adapter supplies its own behavior.</td><td>Domain desktop.rs; services compositor.rs; use-case fake.</td></tr>
+      <tr><td>The existing settings validation use case was not applied by JsonSettings.</td><td>Load and save now call it. Invalid saves fail before replacing the original file; optional launcher values preserve older settings.</td><td>Real file-adapter round-trip and rejection test.</td></tr>
+      <tr><td>Boundary tests covered direct dependencies only.</td><td>Added transitive local dependency checks for the engine and use cases.</td><td>tests/test_architecture.py</td></tr>
+      <tr><td>Launcher dimensions were fixed presentation constants.</td><td>Added persisted preferences and token defaults. Client geometry resolves them; neither domain nor renderer learns about launcher placement.</td><td>Resizing, keyboard, migration, clipping and native visual tests.</td></tr>
+      <tr><td>Desktop owns launcher, bar and widget state in one struct.</td><td>Still open. Notifications demonstrate existing child-message composition. Extract the launcher along that proven pattern when changing its state model next.</td><td>desktop.rs versus notifications.rs.</td></tr>
+      <tr><td>One effects worker and unbounded channels can accumulate slow work.</td><td>Still open. Separate ordered persistence from independent service actions, with explicit cancellation/backpressure semantics and ordering tests.</td><td>lucent-wayland run_inner and lucent-api Effects.</td></tr>
+      <tr><td>Some discovery/provider failures become empty/default values.</td><td>Still open. Model loading, empty, unavailable and failed separately where the UI needs to explain them.</td><td>platform.rs and desktop initialization/subscriptions.</td></tr>
+      <tr><td>One shared viewport and generic surface IDs limit per-output behavior.</td><td>Still open. Introduce an output-aware desktop model before claiming robust independent multi-monitor layouts.</td><td>Desktop.viewport and runtime surface reconciliation.</td></tr>
+    </tbody></table></div>
+    <p>Tests verify boundaries and selected behaviors; they do not prove every operating-system feature works. Native visual tests use the real renderer, while hardware, login and secure-lock testing require separate environments.</p>
+  </section>
+  <section id="next"><span class="eyebrow">05 / REFACTORING ORDER</span><h2>Use implemented use cases<br />to justify each abstraction.</h2>
+    <ol class="guide-steps"><li>Extract launcher state/messages/view into a child component without changing the framework contract. Keep adapters passed through explicit dependencies.</li><li>Strengthen domain values where invalid inputs can reach persistence or external commands; preserve migration behavior.</li><li>Separate ordered settings writes from independent effects, then define overload/cancellation behavior.</li><li>Add output identity and per-output geometry, then verify scaling and hotplug in a real compositor session.</li><li>Replace retained stock capabilities one at a time through a port, adapter, usable client and rollback test. Remove the stock shell only after its remaining responsibilities have replacements.</li></ol>
+    <p>For changes, use the repository's <a href={sourceUrl('.agents/skills/lucent-framework/SKILL.md')}>framework skill</a> or <a href={sourceUrl('.agents/skills/lucent-desktop/SKILL.md')}>desktop/integration skill</a>. The <a href={withBase('/docs/library/')}>library guide</a> and <a href={withBase('/docs/desktop/')}>user configuration guide</a> keep implementation concepts separate from everyday settings.</p>
+  </section>
+</DocGuide>

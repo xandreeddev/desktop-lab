@@ -168,6 +168,177 @@ fn every_visible_launcher_row_fits_even_after_scrolling() {
         }
     }
 }
+
+#[test]
+fn launcher_size_preserves_selection_and_limits_at_every_preset() {
+    use lucent_domain::LauncherSize;
+    let mut app = fixture(50, false);
+    let layout = Layout::new(fonts(&app));
+    for viewport in [(1920., 1080.), (1366., 768.), (390., 580.), (320., 360.)] {
+        app.update(
+            Message::Resize("dock", viewport.0, viewport.1),
+            &mut Effects::default(),
+        );
+        for size in crate::shell_layout::LAUNCHER_PRESETS
+            .map(|(_, size)| size)
+            .into_iter()
+            .chain([
+                LauncherSize {
+                    width: Some(777),
+                    max_height: Some(699),
+                },
+                LauncherSize {
+                    width: Some(u32::MAX),
+                    max_height: Some(u32::MAX),
+                },
+                LauncherSize {
+                    width: Some(320),
+                    max_height: Some(224),
+                },
+            ])
+        {
+            app.update(Message::Mode(Mode::Apps), &mut Effects::default());
+            app.update(Message::Select(49), &mut Effects::default());
+            app.update(Message::LauncherSize(size), &mut Effects::default());
+            let rendered = scene(&app, &layout, &mut Interaction::default(), 1.);
+            let panel = rendered
+                .hits
+                .iter()
+                .find(|h| h.id == "dock-panel")
+                .unwrap()
+                .rect;
+            assert!(panel.x >= 16. && panel.x + panel.w <= viewport.0 - 16.);
+            let top =
+                lucent_design::component::panel::BAR_HEIGHT + lucent_design::layout::SECTION_GAP;
+            assert!(panel.y >= top && panel.y + panel.h <= viewport.1 - 16.);
+            assert_eq!(panel.w % 32., 0.);
+            assert_eq!(panel.h % 16., 0.);
+            let last = rendered
+                .hits
+                .iter()
+                .find(|h| h.id == "result-49")
+                .expect("selected last result stays visible when resized");
+            assert!(fully_visible(last.rect, last.clip));
+            for hit in rendered
+                .hits
+                .iter()
+                .filter(|h| h.id.starts_with("result-") || h.id == "launcher-search")
+            {
+                assert!(
+                    fully_visible(hit.rect, hit.clip),
+                    "cropped {} for {size:?} at {viewport:?}",
+                    hit.id
+                );
+            }
+            app.update(Message::Mode(Mode::Themes), &mut Effects::default());
+            let rendered = scene(&app, &layout, &mut Interaction::default(), 1.);
+            for id in [
+                "theme-dark",
+                "theme-light",
+                "launcher-size-small",
+                "launcher-size-default",
+                "launcher-size-large",
+            ] {
+                let hit = rendered.hits.iter().find(|h| h.id == id).unwrap();
+                assert!(
+                    fully_visible(hit.rect, hit.clip),
+                    "cropped {id} for {size:?} at {viewport:?}"
+                );
+                assert!(hit.rect.h >= 32.);
+            }
+        }
+    }
+    app.update(
+        Message::Resize("dock", 1920., 1080.),
+        &mut Effects::default(),
+    );
+    app.update(
+        Message::LauncherSize(LauncherSize::default()),
+        &mut Effects::default(),
+    );
+    app.update(Message::Mode(Mode::Apps), &mut Effects::default());
+    let rendered = scene(&app, &layout, &mut Interaction::default(), 1.);
+    let panel = rendered
+        .hits
+        .iter()
+        .find(|h| h.id == "dock-panel")
+        .unwrap()
+        .rect;
+    assert_eq!((panel.w, panel.h), (640., 640.));
+    assert_eq!(
+        rendered
+            .hits
+            .iter()
+            .filter(|h| h.id.starts_with("result-"))
+            .count(),
+        10
+    );
+}
+
+#[test]
+fn launcher_size_commands_keyboard_presets_and_settings_roundtrip() {
+    use lucent_domain::{DesktopSettings, LauncherSize};
+    let mut app = fixture(50, false);
+    assert!(
+        app.command("launcher size 800 720").is_err(),
+        "do not promise a saved change before settings load"
+    );
+    app.settings_writable = true;
+    for command in [
+        "launcher size",
+        "launcher size 0 720",
+        "launcher size 800 -1",
+        "launcher size 800 NaN",
+        "launcher size 800 720 extra",
+        "launcher size 319 224",
+        "launcher size 320 223",
+    ] {
+        assert!(app.command(command).is_err(), "accepted {command}");
+    }
+    let message = app.command("launcher size 777 699").unwrap().unwrap();
+    let mut effects = Effects::default();
+    app.update(message, &mut effects);
+    assert_eq!(
+        app.settings.launcher,
+        LauncherSize {
+            width: Some(777),
+            max_height: Some(699)
+        }
+    );
+    assert!(effects.redraw.contains("dock"));
+    assert_eq!(
+        effects.tasks.len(),
+        1,
+        "save through the injected settings adapter"
+    );
+    let data = serde_json::to_string(&app.settings).unwrap();
+    let restored: DesktopSettings = serde_json::from_str(&data).unwrap();
+    assert_eq!(restored, app.settings);
+    let legacy: DesktopSettings =
+        serde_json::from_str(r#"{"version":1,"light":true,"notes":"keep my notes"}"#).unwrap();
+    assert_eq!(legacy.launcher, LauncherSize::default());
+    assert!(legacy.light);
+    assert_eq!(legacy.notes, "keep my notes");
+    app.update(Message::Mode(Mode::Themes), &mut Effects::default());
+    for _ in 0..4 {
+        key(&mut app, Key::Down);
+    }
+    key(&mut app, Key::Enter);
+    assert_eq!(
+        app.settings.launcher,
+        crate::shell_layout::LAUNCHER_PRESETS[2].1
+    );
+    key(&mut app, Key::Up);
+    key(&mut app, Key::Enter);
+    assert_eq!(app.settings.launcher, LauncherSize::default());
+    app.update(
+        Message::LauncherSize(restored.launcher),
+        &mut Effects::default(),
+    );
+    let reset = app.command("launcher size reset").unwrap().unwrap();
+    app.update(reset, &mut Effects::default());
+    assert_eq!(app.settings.launcher, LauncherSize::default());
+}
 #[test]
 fn search_text_icons_and_caret_share_a_centered_line_box() {
     let mut app = fixture(9, false);
@@ -575,6 +746,11 @@ fn visual_regressions() {
     );
     for light in [false, true] {
         for (name, mode, count, selected, query, now, width) in [
+            ("launcher-size-default", Mode::Apps, 30, 29, "", 1., 1024.),
+            ("launcher-size-small", Mode::Apps, 30, 29, "", 1., 1024.),
+            ("launcher-size-large", Mode::Apps, 30, 29, "", 1., 1024.),
+            ("launcher-size-custom", Mode::Apps, 30, 29, "", 1., 1024.),
+            ("themes-small-screen", Mode::Themes, 9, 4, "", 1., 320.),
             ("apps-first", Mode::Apps, 9, 0, "", 1., 640.),
             ("apps-last", Mode::Apps, 9, 8, "", 1., 640.),
             ("apps-empty", Mode::Apps, 0, 0, "no results", 1., 640.),
@@ -613,9 +789,26 @@ fn visual_regressions() {
             if light && matches!(name, "lock" | "greeter") {
                 continue;
             }
+            let height = if name.starts_with("launcher-size-") {
+                1080.
+            } else if name == "themes-small-screen" {
+                360.
+            } else {
+                580.
+            };
             let mut app = fixture(count, light);
+            let preference = match name {
+                "launcher-size-small" => crate::shell_layout::LAUNCHER_PRESETS[0].1,
+                "launcher-size-large" => crate::shell_layout::LAUNCHER_PRESETS[2].1,
+                "launcher-size-custom" => lucent_domain::LauncherSize {
+                    width: Some(777),
+                    max_height: Some(699),
+                },
+                _ => lucent_domain::LauncherSize::default(),
+            };
+            app.update(Message::LauncherSize(preference), &mut Effects::default());
             app.update(
-                Message::Resize("dock", width, 580.),
+                Message::Resize("dock", width, height),
                 &mut Effects::default(),
             );
             app.update(Message::Mode(mode), &mut Effects::default());
@@ -641,11 +834,11 @@ fn visual_regressions() {
                     &app.view(&ViewContext {
                         surface: "widgets",
                         width,
-                        height: 580.,
+                        height,
                         now,
                     }),
                     width,
-                    580.,
+                    height,
                     &Interaction::default(),
                     now,
                 )
@@ -711,7 +904,7 @@ fn visual_regressions() {
                 });
                 menu.init(&mut Effects::default());
                 for msg in [
-                    lucent_menu::Message::Resize(width, 580.),
+                    lucent_menu::Message::Resize(width, height),
                     lucent_menu::Message::Query(query.into()),
                     lucent_menu::Message::Select(selected),
                 ] {
@@ -721,13 +914,13 @@ fn visual_regressions() {
                     .view(&ViewContext {
                         surface: "menu",
                         width,
-                        height: 580.,
+                        height,
                         now,
                     })
                     .map(|_| Message::Quit);
                 let mut input = Interaction::default();
-                input.synchronize(&layout.build(&tree, width, 580., &input, now));
-                layout.build(&tree, width, 580., &input, now)
+                input.synchronize(&layout.build(&tree, width, height, &input, now));
+                layout.build(&tree, width, height, &input, now)
             } else if matches!(name, "lock" | "greeter") {
                 let mode = if name == "lock" {
                     lucent_session::Mode::Lock
@@ -776,11 +969,11 @@ fn visual_regressions() {
                 let cx = ViewContext {
                     surface: "lock",
                     width,
-                    height: 580.,
+                    height,
                     now,
                 };
                 let tree = session.view(&cx).map(|_| Message::Quit);
-                layout.build(&tree, width, 580., &Interaction::default(), now)
+                layout.build(&tree, width, height, &Interaction::default(), now)
             } else if name.starts_with("notification") {
                 app.notifications.snapshot=lucent_domain::NotificationSnapshot {active:vec![lucent_domain::Notification {id:1,app:"Lucent fixture".into(),summary:"A notification rendered by our framework".into(),body:"Shared design tokens, measured text wrapping, native actions and keyboard focus.".into(),actions:vec![lucent_domain::NotificationAction {id:"default".into(),label:"Open fixture".into()}],critical:false,resident:false,transient:false,timeout_ms:0}],..Default::default()};
                 app.notifications.ready = true;
@@ -788,10 +981,10 @@ fn visual_regressions() {
                 let cx = ViewContext {
                     surface: "notifications",
                     width,
-                    height: 580.,
+                    height,
                     now,
                 };
-                layout.build(&app.view(&cx), width, 580., &Interaction::default(), now)
+                layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
             } else if name == "icon-catalog" {
                 let icons = lucent_design::app_icons::ALL
                     .iter()
@@ -811,7 +1004,7 @@ fn visual_regressions() {
                     })
                     .collect();
                 let root = Element::grid(8, icons).gap(8.).padding(12.).fill();
-                layout.build(&root, width, 580., &Interaction::default(), now)
+                layout.build(&root, width, height, &Interaction::default(), now)
             } else if name.starts_with("bar") {
                 app.media.title = "A long media title that must stay inside its own capsule".into();
                 app.system.volume = Some(100);
@@ -826,10 +1019,10 @@ fn visual_regressions() {
                 let cx = ViewContext {
                     surface: "bar",
                     width,
-                    height: 580.,
+                    height,
                     now,
                 };
-                layout.build(&app.view(&cx), width, 580., &Interaction::default(), now)
+                layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
             } else {
                 if name == "dock" {
                     app.update(Message::CloseLauncher, &mut Effects::default());
@@ -837,8 +1030,8 @@ fn visual_regressions() {
                 scene(&app, &layout, &mut Interaction::default(), now)
             };
             let mut paint = vec![Paint::Shape {
-                rect: Rect::new(0., 0., width, 580.),
-                clip: Rect::new(0., 0., width, 580.),
+                rect: Rect::new(0., 0., width, height),
+                clip: Rect::new(0., 0., width, height),
                 color: Color::hex(if light { 0xc9c3b9 } else { 0x28272d }),
                 radius: 0.,
                 shadow: false,
@@ -846,8 +1039,10 @@ fn visual_regressions() {
             paint.extend(scene.paint);
             for scale in [1, 2] {
                 let id = format!("{name}-{}-{scale}x", if light { "light" } else { "dark" });
-                let (w, h) = (width as u32 * scale, 580 * scale);
-                let actual = canvas.snapshot(width as u32, 580, scale, &paint).unwrap();
+                let (w, h) = (width as u32 * scale, height as u32 * scale);
+                let actual = canvas
+                    .snapshot(width as u32, height as u32, scale, &paint)
+                    .unwrap();
                 let path = baselines.join(format!("{id}.png"));
                 let save = |path: &std::path::Path, bytes: &[u8]| {
                     image::save_buffer(path, bytes, w, h, image::ColorType::Rgba8).unwrap()
@@ -1152,6 +1347,14 @@ fn bar_capsules_share_grid_do_not_overlap_and_keep_active_workspace_visible() {
     use lucent_design::{component, layout as grid};
     let mut app = fixture(0, false);
     let layout = Layout::new(fonts(&app));
+    let surface = app.surfaces().into_iter().find(|s| s.id == "bar").unwrap();
+    // The compositor owns the gap below the visible capsules. Reserving that
+    // gap again here pushes tiled windows away from the shell spacing grid.
+    let visible_bottom = component::bar::TOP + component::pill::HEIGHT;
+    assert_eq!(surface.exclusive_zone as f32, visible_bottom);
+    assert_eq!(surface.height as f32, visible_bottom);
+    assert_eq!(component::window::GAP_OUT, grid::SHELL_INSET);
+    assert_eq!(component::window::GAP_IN * 2., grid::SECTION_GAP);
     for width in [320., 390., 640., 1024., 1280., 1366., 1920.] {
         for count in 1..=8 {
             app.compositor.workspaces = (1..=count)

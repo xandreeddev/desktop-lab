@@ -6,6 +6,7 @@ use lucent_design::{
     component::{bar, dock, dock_row, input, launcher, panel, pill},
     layout, space,
 };
+use lucent_domain::LauncherSize;
 
 pub fn floor(value: f32, step: f32) -> f32 {
     (value.max(0.) / step).floor() * step
@@ -52,21 +53,55 @@ pub fn body_height(mode: Mode, content_height: f32) -> f32 {
         })
     .max(0.)
 }
-pub fn launcher_size(mode: Mode, results: usize, viewport: (f32, f32)) -> (f32, f32) {
-    let width = if mode == Mode::Wallpapers {
+pub const LAUNCHER_PRESETS: [(&str, LauncherSize); 3] = [
+    (
+        "Small",
+        LauncherSize {
+            width: Some(launcher::SMALL_WIDTH as u32),
+            max_height: Some(launcher::SMALL_MAX_HEIGHT as u32),
+        },
+    ),
+    (
+        "Default",
+        LauncherSize {
+            width: None,
+            max_height: None,
+        },
+    ),
+    (
+        "Large",
+        LauncherSize {
+            width: Some(launcher::LARGE_WIDTH as u32),
+            max_height: Some(launcher::LARGE_MAX_HEIGHT as u32),
+        },
+    ),
+];
+
+pub fn launcher_size(
+    mode: Mode,
+    results: usize,
+    viewport: (f32, f32),
+    preference: LauncherSize,
+) -> (f32, f32) {
+    let default_width = if mode == Mode::Wallpapers {
         panel::WALLPAPER_WIDTH
     } else {
         panel::LAUNCHER_WIDTH
     };
+    let width = floor(
+        preference
+            .width
+            .map_or(default_width, |w| w as f32)
+            .max(launcher::MIN_WIDTH),
+        layout::SHELL_STEP * 2.,
+    );
     let width = width.min(floor(
         viewport.0 - layout::SHELL_INSET * 2.,
         layout::SHELL_STEP * 2.,
     ));
     let body = match mode {
         Mode::Apps => {
-            results.min(launcher::VISIBLE_ROWS as usize).max(1) as f32 * launcher::ROW_HEIGHT
-                + layout::SECTION_GAP
-                + input::HEIGHT
+            results.max(1) as f32 * launcher::ROW_HEIGHT + layout::SECTION_GAP + input::HEIGHT
         }
         Mode::Commands => COMMANDS.len() as f32 * launcher::ROW_HEIGHT,
         Mode::Widgets => {
@@ -75,7 +110,10 @@ pub fn launcher_size(mode: Mode, results: usize, viewport: (f32, f32)) -> (f32, 
                 + launcher::RESET_HEIGHT
         }
         Mode::Themes => {
-            launcher::THEME_HEIGHT + layout::SECTION_GAP + launcher::THEME_CAPTION_HEIGHT
+            launcher::THEME_HEIGHT
+                + layout::SECTION_GAP * 2.
+                + launcher::THEME_CAPTION_HEIGHT
+                + launcher::SIZE_BUTTON_HEIGHT
         }
         Mode::Wallpapers => panel::WALLPAPER_BODY_HEIGHT,
     };
@@ -83,11 +121,20 @@ pub fn launcher_size(mode: Mode, results: usize, viewport: (f32, f32)) -> (f32, 
         (body_top() + body + dock::CONTENT_INSET * 2.).max(panel::LAUNCHER_MIN_HEIGHT),
         layout::SHELL_STEP,
     );
-    let available = bottom(viewport.1) - panel::BAR_HEIGHT - layout::SECTION_GAP;
+    let max_height = preference
+        .max_height
+        .map_or(launcher::MAX_HEIGHT, |h| h as f32)
+        .max(panel::LAUNCHER_MIN_HEIGHT);
+    let available = (bottom(viewport.1) - panel::BAR_HEIGHT - layout::SECTION_GAP).min(max_height);
     (width, height.min(floor(available, layout::SHELL_STEP)))
 }
-pub fn visible_rows(mode: Mode, results: usize, viewport: (f32, f32)) -> usize {
-    let (_, height) = launcher_size(mode, results, viewport);
+pub fn visible_rows(
+    mode: Mode,
+    results: usize,
+    viewport: (f32, f32),
+    preference: LauncherSize,
+) -> usize {
+    let (_, height) = launcher_size(mode, results, viewport, preference);
     (body_height(mode, height - dock::CONTENT_INSET * 2.) / launcher::ROW_HEIGHT)
         .floor()
         .max(1.) as usize

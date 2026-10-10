@@ -1,0 +1,4 @@
+interface:
+  display_name: "Lucent framework"
+  short_description: "Review and extend the Rust framework boundaries"
+  default_prompt: "Use $lucent-framework to implement or review a framework change in this repository."

@@ -14,7 +14,7 @@ const state = [
   ['Composed child state', 'notifications::Center', 'Owns notification presentation and messages; the parent lifts its view and effects into the desktop application.'],
 ];
 const surfaces = [
-  ['bar', 'Top', 'No keyboard capture', 'A 64-pixel surface and exclusive zone keep tiled windows below it. Only controls receive pointer input.'],
+  ['bar', 'Top', 'No keyboard capture', 'A 48-pixel surface and exclusive zone cover the top inset and capsules; Hyprland adds the 16-pixel window gap once. Only controls receive pointer input.'],
   ['widgets', 'Bottom', 'On demand', 'A full-output layer below normal windows. Widget hit regions allow clicks through the empty desktop.'],
   ['dock · closed', 'Top', 'None', 'The native surface fills the output, but its painted dock and input regions occupy the bottom portion.'],
   ['dock · open', 'Overlay', 'Exclusive', 'The same client surface hosts the launcher/pickers and captures outside clicks for dismissal.'],

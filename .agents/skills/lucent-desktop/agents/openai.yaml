@@ -1,0 +1,4 @@
+interface:
+  display_name: "Lucent desktop"
+  short_description: "Configure, test and integrate the Lucent desktop"
+  default_prompt: "Use $lucent-desktop to implement and verify a desktop change in the test VM."

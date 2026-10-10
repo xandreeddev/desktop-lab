@@ -92,9 +92,11 @@ def outputs(tree):
         ROOT / 'lucent/crates/lucent-design/src/tokens.rs': rust_text,
         ROOT / 'site/src/styles/tokens.css': '\n'.join(css) + '\n',
         ROOT / 'configs/lucent/window-rules.lua': (
-            '-- Generated from component.window.radius in design/tokens.json.\n'
+            '-- Generated from component.window tokens in design/tokens.json.\n'
             '-- Compositor default; explicit app rules and Omarchy gap toggles retain precedence.\n'
             'hl.config({\n'
+            f'  general = {{ gaps_out = {values["component.window.gap_out"]:g}, '
+            f'gaps_in = {values["component.window.gap_in"]:g} }},\n'
             f'  decoration = {{ rounding = {values["component.window.radius"]:g} }},\n'
             '})\n'
         ),
