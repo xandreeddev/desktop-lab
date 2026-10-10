@@ -432,3 +432,30 @@ A failed download or decode preserves the selected wallpaper. Cancellation is
 cooperative between bounded calls; an in-flight HTTP call can finish after its
 request has been replaced. Preview failures leave placeholders. Color extraction
 uses one dominant seed, not a full multi-color image quantizer or theme editor.
+
+## Large JPEG wallpaper decoding correction
+
+A valid 12000×6750 progressive JPEG exposed a gap in the catalog validation:
+compressed size was accepted, but full-resolution decoding exceeded the shared
+128 MiB output budget. The optional asset loader hid the limit error, so the
+browser incorrectly reported a generic decoding failure.
+
+The raster adapter now uses scaled DCT decoding for large 8-bit RGB/grayscale
+JPEGs before final resampling. Previews, palette extraction, desktop, lock and
+login share that path. Ordinary-size images retain the existing decoder and
+pixel behavior. The downloaded original remains untouched. Explicit wallpaper
+actions preserve typed read/limit/decode failures in their error messages.
+
+File reads stop at 32 MiB plus one byte; headers enforce 16384 pixels per side
+and 100 megapixels. Scaled output stays within 128 MiB. Progressive JPEG source
+coefficients need additional memory, so large decodes are serialized inside the
+adapter. This is not a claim that total process RSS stays under 128 MiB.
+
+The private reproduction confirmed the original limit failure, then successfully
+loaded the same image at 64×36, 128×72, 1024×576 and 4096×2304. The first debug
+reproduction across all four sizes took 33 seconds with peak process RSS of
+655320 KiB on the host; this includes decoding/resampling and is not a VM/GPU or
+optimized desktop benchmark. The image and captures are not committed.
+Synthetic tests cover scaled pixel output and rejection of hostile dimensions
+before allocation. The optional private reproduction test requires
+`LUCENT_TEST_IMAGE` and is ignored by default.
