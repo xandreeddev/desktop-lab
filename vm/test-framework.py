@@ -113,7 +113,7 @@ def eventually(predicate, description, timeout=10):
 def suite():
     assert session('omarchy-shell','lock','isLocked').strip()=='false', 'Unlock the VM first'
     assert 'Vulkan' in inspect()['adapter']
-    assert {s['id'] for s in inspect()['surfaces']}=={'bar','widgets','dock'}
+    assert {'background','bar','widgets','dock'}<={s['id'] for s in inspect()['surfaces']}
     cli('launcher','close');time.sleep(0.7)
     move(950,400)
     # A noninteracting pointer move must not make the idle animation loop run forever.
@@ -182,19 +182,19 @@ def suite():
     screenshot('lucent-framework-wallpapers.png')
     click('apply-wallpaper')
     assert not inspect()['client']['error'], inspect()['client']['error']
-    assert remote('readlink','/home/omarchy/.local/state/omarchy/current/background').strip()
+    assert remote('readlink','/home/omarchy/.local/state/lucent/wallpaper').strip()
     key(1);time.sleep(0.7)
-    # The stock bar must recover on stopping Lucent, and disappear again on restart.
+    # A stop/restart must not silently start a competing stock visual shell.
     session('systemctl','--user','stop','lucent.service')
-    assert remote('bash','-c','test ! -e ~/.local/state/omarchy/toggles/bar-off && echo restored').strip()=='restored'
+    assert not remote('sh','-c','pgrep -x quickshell || true').strip()
     session('systemctl','--user','start','lucent.service')
     eventually(lambda:inspect()['client']['applications']>0,'Lucent did not recover')
-    eventually(lambda:remote('bash','-c','test -e ~/.local/state/omarchy/toggles/bar-off && echo hidden || true').strip()=='hidden','Stock bar was not hidden after readiness')
+    assert not remote('sh','-c','pgrep -x quickshell || true').strip()
     screenshot('lucent-framework-desktop.png')
-    report={'vulkan':True,'native_surfaces':3,'animated_dock_launcher':True,'keyboard_search':True,
+    report={'vulkan':True,'native_surfaces':4,'animated_dock_launcher':True,'keyboard_search':True,
             'real_application_launch':True,'terminal_rounding':rounding,'workspace_switch':True,'widget_drag':True,'position_restored':True,'token_grid_snap':True,
             'timer_start_pause_reset':True,'notes_input':True,'wallpaper_selector_and_apply':True,
-            'stock_bar_restored_on_stop':True,'restart':True,'application_count':inspect()['client']['applications']}
+            'native_only_restart':True,'restart':True,'application_count':inspect()['client']['applications']}
     (REPORT/'lucent-framework-integration.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(report,indent=2))
 
@@ -202,11 +202,10 @@ def suite():
 def main():
     # The test mutates widget settings and wallpaper; retain the caller's state.
     settings=remote('bash','-c','cat ~/.local/state/lucent/desktop.json 2>/dev/null || true')
-    wallpaper=remote('readlink','/home/omarchy/.local/state/omarchy/current/background').strip()
+    wallpaper=remote('readlink','/home/omarchy/.local/state/lucent/wallpaper').strip()
     awake=json.loads(session('omarchy-toggle-idle','status'))['enabled']
     try:
         session('omarchy-toggle-idle','stay-awake')
-        session('omarchy-shell','idle','disable')
         for window in json.loads(session('hyprctl','-j','clients')):
             if window['class']=='org.omarchy.screensaver':
                 session('hyprctl','dispatch',f'hl.dsp.window.close({{ window = "address:{window["address"]}" }})')
@@ -219,11 +218,10 @@ def main():
         else:
             remote('rm','-f','/home/omarchy/.local/state/lucent/desktop.json')
         if wallpaper:
-            session('omarchy-theme-bg-set',wallpaper)
+            remote('ln','-sfn',wallpaper,'/home/omarchy/.local/state/lucent/wallpaper')
         session('systemctl','--user','start','lucent.service')
         if not awake:
             session('omarchy-toggle-idle','allow-idle')
-            session('omarchy-shell','idle','enable')
 
 
 if __name__=='__main__':

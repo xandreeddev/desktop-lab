@@ -7,4 +7,5 @@ pub type Images = Vec<(String, Arc<ImageData>)>;
 pub trait AssetPort: Send + Sync {
     fn initial(&self) -> BTreeMap<String, Arc<ImageData>>;
     fn load(&self, apps: &[Application], wallpapers: &[Wallpaper]) -> Images;
+    fn background(&self, path: &str) -> Option<Arc<ImageData>>;
 }

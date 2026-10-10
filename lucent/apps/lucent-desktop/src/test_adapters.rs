@@ -39,6 +39,12 @@ impl ClockPort for Fake {
         }
     }
 }
+impl ThemePort for Fake {
+    fn apply(&self, mode: ThemeMode) -> Result<()> {
+        self.calls.lock().unwrap().push(mode.name());
+        Ok(())
+    }
+}
 impl SystemPort for Fake {
     fn sample(&self) -> Result<SystemSnapshot> {
         Ok(SystemSnapshot::default())
@@ -87,6 +93,7 @@ pub fn adapters() -> DesktopAdapters {
 }
 pub fn with(fake: Arc<Fake>) -> DesktopAdapters {
     DesktopAdapters {
+        theme: fake.clone(),
         apps: fake.clone(),
         compositor: None,
         settings: fake.clone(),

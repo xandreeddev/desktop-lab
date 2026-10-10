@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev pkg-config mesa-vulkan-drivers libpam0g-dev libclang-dev dbus
+      - run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev pkg-config mesa-vulkan-drivers libpam0g-dev libpolkit-agent-1-dev libclang-dev dbus
       - run: rustup update stable && rustup component add rustfmt clippy
       - run: cargo fmt --manifest-path lucent/Cargo.toml --all --check
       - run: cargo clippy --manifest-path lucent/Cargo.toml --locked --workspace --all-targets -- -D warnings

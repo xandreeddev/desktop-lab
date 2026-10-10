@@ -81,8 +81,8 @@ class MenuRoutes(unittest.TestCase):
             'custom': {'action': 'omarchy-theme-bg-switcher'},
         })
         model = routes.Model(defaults, {'style.background': {'action': 'my-wallpaper-tool'}})
-        self.assertEqual(model.items['style.theme']['provider'], 'themes')
-        self.assertIsNone(model.items['style.theme']['action'])
+        self.assertIsNone(model.items['style.theme']['provider'])
+        self.assertEqual(model.items['style.theme']['action'], ['lucent-cli','themes','open'])
         self.assertEqual(model.items['style.background']['action'], 'my-wallpaper-tool')
         self.assertEqual(model.items['custom']['action'], 'omarchy-theme-bg-switcher')
         self.assertEqual(defaults['style.background']['action'], ['lucent-cli', 'wallpapers', 'open'])

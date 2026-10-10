@@ -52,8 +52,21 @@ impl WeatherPort for OpenMeteo {
         crate::weather()
     }
 }
-pub struct OmarchyWallpaper;
-impl WallpaperPort for OmarchyWallpaper {
+pub struct LucentTheme;
+impl ThemePort for LucentTheme {
+    fn apply(&self, mode: ThemeMode) -> Result<()> {
+        let home = std::env::var("HOME")
+            .map_err(|_| DomainError::Unavailable("Missing home directory".into()))?;
+        crate::command_with_timeout(
+            "python3",
+            &[&format!("{home}/.local/lib/lucent/theme.py"), mode.name()],
+            std::time::Duration::from_secs(45),
+        )
+        .map(|_| ())
+    }
+}
+pub struct LucentWallpaper;
+impl WallpaperPort for LucentWallpaper {
     fn list(&self) -> Vec<Wallpaper> {
         crate::wallpapers()
     }
@@ -64,8 +77,8 @@ impl WallpaperPort for OmarchyWallpaper {
         crate::apply_wallpaper(path)
     }
 }
-pub struct OmarchySession;
-impl SessionPort for OmarchySession {
+pub struct LucentSession;
+impl SessionPort for LucentSession {
     fn lock(&self) -> Result<()> {
         let home = std::env::var("HOME")
             .map_err(|_| DomainError::Unavailable("Missing home directory".into()))?;

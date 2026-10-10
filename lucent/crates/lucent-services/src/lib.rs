@@ -101,7 +101,12 @@ mod settings_tests {
 }
 /// Bounded command adapter. stdout is drained concurrently; timeouts kill and reap the child.
 pub fn command(program: &str, args: &[&str]) -> Result<String> {
+    command_with_timeout(program, args, Duration::from_secs(5))
+}
+pub fn command_with_timeout(program: &str, args: &[&str], timeout: Duration) -> Result<String> {
+    use std::os::unix::process::CommandExt;
     let mut child = Command::new(program)
+        .process_group(0)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -109,33 +114,60 @@ pub fn command(program: &str, args: &[&str]) -> Result<String> {
         .spawn()
         .map_err(|e| DomainError::Unavailable(format!("{program}: {e}")))?;
     let mut stdout = child.stdout.take().unwrap();
-    let reader = std::thread::spawn(move || {
+    let (send, receive) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
         let mut bytes = Vec::new();
         let _ = (&mut stdout).take(8 * 1024 * 1024).read_to_end(&mut bytes);
-        bytes
+        let _ = send.send(bytes);
     });
     let start = Instant::now();
+    let mut status = None;
+    let mut output = None;
     loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let bytes = reader.join().unwrap_or_default();
-                if status.success() {
-                    return Ok(String::from_utf8_lossy(&bytes).trim().into());
-                }
-                return Err(DomainError::Unavailable(format!(
-                    "{program} reported {}",
-                    status.code().unwrap_or(-1)
-                )));
-            }
-            Ok(None) => {}
-            Err(e) => return Err(DomainError::Failed(e.to_string())),
+        if status.is_none() {
+            status = child
+                .try_wait()
+                .map_err(|error| DomainError::Failed(error.to_string()))?;
         }
-        if start.elapsed() > Duration::from_secs(5) {
+        if output.is_none() {
+            output = receive.try_recv().ok();
+        }
+        if let (Some(status), Some(bytes)) = (status, output.as_ref()) {
+            if status.success() {
+                return Ok(String::from_utf8_lossy(bytes).trim().into());
+            }
+            return Err(DomainError::Unavailable(format!(
+                "{program} reported {}",
+                status.code().unwrap_or(-1)
+            )));
+        }
+        if start.elapsed() > timeout {
+            // This child created its own group. A descendant can retain stdout
+            // even after the direct child exits: bound that wait as well.
+            unsafe {
+                libc::kill(-(child.id() as i32), libc::SIGKILL);
+            }
             let _ = child.kill();
             let _ = child.wait();
             return Err(DomainError::Unavailable(format!("{program} timed out")));
         }
         std::thread::sleep(Duration::from_millis(10));
+    }
+}
+#[cfg(test)]
+mod command_tests {
+    use super::*;
+    #[test]
+    fn descendants_cannot_hold_the_effect_worker_after_the_parent_exits() {
+        let start = Instant::now();
+        let result = command_with_timeout(
+            "sh",
+            &["-c", "sleep 10 & exit 0"],
+            Duration::from_millis(100),
+        );
+        assert!(result.is_err());
+        assert!(start.elapsed() < Duration::from_secs(2));
+        assert_eq!(command("printf", &["ok"]).unwrap(), "ok");
     }
 }
 pub fn clock() -> ClockSnapshot {
@@ -322,22 +354,24 @@ pub fn apply_wallpaper(path: &str) -> Result<()> {
             "Wallpaper must be an existing absolute file path".into(),
         ));
     }
-    // Omarchy owns the background layer and persistence. Its adapter avoids a
-    // competing wallpaper daemon and updates the normal theme background link.
-    command(
-        "omarchy-theme-bg-set",
-        &[path
-            .to_str()
-            .ok_or_else(|| DomainError::Invalid("Invalid wallpaper path".into()))?],
-    )
-    .map(|_| ())
+    let home = std::env::var_os("HOME")
+        .ok_or_else(|| DomainError::Unavailable("Missing home directory".into()))?;
+    let directory = PathBuf::from(home).join(".local/state/lucent");
+    fs::create_dir_all(&directory).map_err(|e| DomainError::Failed(e.to_string()))?;
+    let temporary = directory.join("wallpaper.new");
+    let _ = fs::remove_file(&temporary);
+    std::os::unix::fs::symlink(path, &temporary)
+        .and_then(|_| fs::rename(&temporary, directory.join("wallpaper")))
+        .map_err(|e| DomainError::Failed(e.to_string()))
 }
 
-/// Omarchy owns the current wallpaper link; the client reads it without changing it.
+/// Lucent owns wallpaper selection; the legacy path is only an initial migration source.
 pub fn current_wallpaper() -> String {
     std::env::var_os("HOME")
         .and_then(|home| {
-            fs::canonicalize(PathBuf::from(home).join(".local/state/omarchy/current/background"))
+            let home = PathBuf::from(home);
+            fs::canonicalize(home.join(".local/state/lucent/wallpaper"))
+                .or_else(|_| fs::canonicalize(home.join(".local/state/omarchy/current/background")))
                 .ok()
         })
         .map(|p| p.to_string_lossy().into())

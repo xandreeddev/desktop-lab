@@ -49,6 +49,9 @@ def install(binary_dir, wallpaper_user=None):
         temporary=link.with_suffix('.new');temporary.unlink(missing_ok=True)
         temporary.symlink_to(directory/'wallpaper');temporary.replace(link)
         wallpaper_env=f'LUCENT_GREETER_WALLPAPER={directory}/wallpaper '
+        theme_link=Path('/etc/greetd/lucent-theme-mode')
+        temporary=theme_link.with_suffix('.new');temporary.unlink(missing_ok=True)
+        temporary.symlink_to(directory/'theme-mode');temporary.replace(theme_link)
     text=(ROOT/'configs/lucent/greetd/config.toml').read_text().replace('command = "','command = "env HOME=/var/lib/lucent/greeter '+wallpaper_env,1)
     Path('/etc/greetd/lucent.toml').write_text(text)
     # Refresh this installation's active config without changing the selected manager.

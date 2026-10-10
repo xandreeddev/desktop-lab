@@ -10,4 +10,9 @@ playerctl
 wireplumber
 networkmanager
 curl
-# Current Omarchy integration calls its existing background and lock commands.
+# Native authorization UI, headless idle backend, secure emergency fallback.
+polkit
+swayidle
+hyprlock
+wl-clipboard
+wtype

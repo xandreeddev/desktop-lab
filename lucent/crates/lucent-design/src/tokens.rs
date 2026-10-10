@@ -419,6 +419,12 @@ pub mod component {
         pub const MINOR_OPACITY: f32 = 0.18;
         pub const MAJOR_OPACITY: f32 = 0.38;
     }
+    pub mod osd {
+        pub const WIDTH: f32 = 400.0;
+        pub const PADDING: f32 = 16.0;
+        pub const MARGIN: f32 = 20.0;
+        pub const TRACK: f32 = 4.0;
+    }
 }
 pub mod icon {
     pub const TINY: f32 = 16.0;

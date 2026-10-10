@@ -334,3 +334,61 @@ Executed on this build:
 This supersedes the earlier note about greetd only being exercised on VT9: the VM
 was started from its powered-off state and its selected greetd manager was used.
 Suspend/resume and physical display hotplug remain untested.
+
+## Native shell ownership and outward theme export
+
+This update supersedes earlier descriptions of a stock shell kept behind Lucent.
+The active integration now stops the installed stock shell and its supervisor.
+Lucent renders the background, menus, notifications, permission prompts and OSD
+as well as its existing desktop components. Headless swayidle and clipboard
+capture replace the corresponding stock-shell services. Explicit rollback is the
+only path that restores stock shell UI.
+
+Lucent's generated light/dark tokens are authoritative. `ThemePort` is implemented
+by `LucentTheme`, which exports application configuration through installed
+Omarchy templates in headless mode, preserving the selected wallpaper. GTK,
+terminal and browser integration consume those exports. Login and the emergency
+locker follow the same selected mode. There is no reverse theme hook.
+
+Executed for this update:
+
+- 58 Rust behavior tests, workspace formatting and warning-free Clippy; release
+  workspace build. The freedesktop notification protocol integration test passed
+  in an isolated D-Bus session.
+- 41 Python tests covering backup/rollback, outward theme export, managed CSS,
+  startup readiness, command routing, clipboard privacy/bounds and lock recovery.
+- 132 native Vulkan visual comparisons passed at 1×/2× and existing narrow
+  layouts. The 12 new references cover authorization, OSD and light lock/login;
+  the 120 previous references remain unchanged. Fixtures use synthetic data.
+- Generated checks for 398 design tokens and 58 app icons; ShellCheck. Astro
+  check/build and 484 built links/assets across 13 pages passed at the Pages base
+  path.
+- In the existing Omarchy VM, activation left one Lucent desktop, four persistent
+  surfaces, a ready notification owner and active authorization/idle/clipboard
+  services, with no Quickshell process. The existing wallpaper was preserved.
+- The actual audio keybinding opened the native selector. OSD appeared and
+  expired. Repeated light/dark changes reached the application export and greeter
+  mode without publisher failures; inspection reported no theme export error.
+- Native polkit presentation denied cancellation and an incorrect password, then
+  authorized a harmless command after correct authentication through
+  libpolkit-agent's trusted helper.
+- Native secure lock/unlock passed. The independent token-themed hyprlock
+  recovery client also locked/unlocked successfully while the native service
+  remained available. Native-start failure selection/deadlines were simulated
+  in unit tests; this update did not disable the live secure locker to inject a
+  failure.
+- Explicit rollback restored the prior application theme and stock shell.
+  Reactivation restored native ownership. Replaying the packaged startup command
+  kept the same Lucent service process and did not start Quickshell.
+
+Guest validation used Hyprland 0.56.2, Omarchy 4.0.4 and Mesa 26.2.2 software
+Vulkan at 1920×1080, scale 1. These checks are functional evidence, not new
+performance measurements. Private VM captures and credentials are not published.
+
+Remaining limits: native tray hosting, Wi-Fi QR and custom stock QML plugins are
+not implemented. New Wi-Fi configuration and Bluetooth pairing use separate
+terminal applications; the full native control center remains future work.
+Application theme support varies and does not recolor websites. This update did
+not repeat a full reboot/login or test automatic idle timeout, clipboard paste
+interaction, suspend/resume, physical networking/Bluetooth/brightness/battery or
+physical multi-monitor behavior. The existing stay-awake preference was retained.

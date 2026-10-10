@@ -779,6 +779,8 @@ fn visual_regressions() {
             ("notification-history", Mode::Apps, 0, 0, "", 1., 390.),
             ("lock", Mode::Apps, 0, 0, "", 1., 640.),
             ("greeter", Mode::Apps, 0, 0, "", 1., 640.),
+            ("authorization", Mode::Apps, 0, 0, "", 1., 640.),
+            ("osd", Mode::Apps, 0, 0, "", 1., 640.),
             ("menu", Mode::Apps, 0, 0, "", 1., 960.),
             ("menu-last-narrow", Mode::Apps, 0, 22, "", 1., 390.),
             ("menu-empty", Mode::Apps, 0, 0, "no such action", 1., 640.),
@@ -786,9 +788,6 @@ fn visual_regressions() {
             ("widget-drag-grid", Mode::Apps, 0, 0, "", 1., 960.),
             ("menu-submenu", Mode::Apps, 0, 0, "", 1., 640.),
         ] {
-            if light && matches!(name, "lock" | "greeter") {
-                continue;
-            }
             let height = if name.starts_with("launcher-size-") {
                 1080.
             } else if name == "themes-small-screen" {
@@ -921,9 +920,33 @@ fn visual_regressions() {
                 let mut input = Interaction::default();
                 input.synchronize(&layout.build(&tree, width, height, &input, now));
                 layout.build(&tree, width, height, &input, now)
-            } else if matches!(name, "lock" | "greeter") {
+            } else if name == "osd" {
+                app.update(
+                    Message::Osd(crate::osd::Feedback {
+                        message: "Output volume".into(),
+                        value: "70".into(),
+                        progress_text: "70%".into(),
+                        max: "100".into(),
+                    }),
+                    &mut Effects::default(),
+                );
+                layout.build(
+                    &app.view(&ViewContext {
+                        surface: "osd",
+                        width,
+                        height,
+                        now,
+                    }),
+                    width,
+                    height,
+                    &Interaction::default(),
+                    now,
+                )
+            } else if matches!(name, "lock" | "greeter" | "authorization") {
                 let mode = if name == "lock" {
                     lucent_session::Mode::Lock
+                } else if name == "authorization" {
+                    lucent_session::Mode::Authorization
                 } else {
                     lucent_session::Mode::Login
                 };
@@ -931,6 +954,10 @@ fn visual_regressions() {
                     mode,
                     "fixture".into(),
                     Arc::new(crate::test_adapters::Fake::default()),
+                )
+                .with_theme(light)
+                .with_authorization(
+                    "Authentication is required to change this system setting".into(),
                 );
                 // Original deterministic landscape gradient, never a private VM image.
                 let mut pixels = Vec::new();
@@ -953,7 +980,7 @@ fn visual_regressions() {
                     }))),
                     &mut Effects::default(),
                 );
-                if name == "lock" {
+                if matches!(name, "lock" | "authorization") {
                     session.update(
                         lucent_session::Message::Prompt(lucent_domain::AuthPrompt {
                             kind: lucent_domain::PromptKind::Secret,
@@ -1421,4 +1448,63 @@ fn wallpaper_fixtures() -> Vec<lucent_domain::Wallpaper> {
             name: name.into(),
         })
         .collect()
+}
+
+#[test]
+fn theme_intent_saves_preferences_then_propagates_through_the_port() {
+    let fake = Arc::new(crate::test_adapters::Fake::default());
+    let mut app = Desktop::new(crate::test_adapters::with(fake.clone()));
+    assert!(app.command("theme light").is_err());
+    app.settings_writable = true;
+    app.settings.notes = "Keep these notes".into();
+    let mut effects = Effects::default();
+    app.update(app.command("theme light").unwrap().unwrap(), &mut effects);
+    assert!(app.settings.light);
+    assert_eq!(app.settings.notes, "Keep these notes");
+    for task in effects.tasks {
+        app.update(task(), &mut Effects::default());
+    }
+    assert_eq!(*fake.calls.lock().unwrap(), ["save", "light"]);
+    app.update(
+        Message::ThemeApplied(Err(lucent_domain::DomainError::Unavailable(
+            "Export failed".into(),
+        ))),
+        &mut Effects::default(),
+    );
+    app.update(Message::Completed(Ok(())), &mut Effects::default());
+    assert!(
+        !app.theme_error.is_empty(),
+        "unrelated successful effects cannot erase the export error"
+    );
+}
+
+#[test]
+fn feedback_stops_scheduling_after_expiry_and_has_no_keyboard_grab() {
+    let mut app = fixture(0, false);
+    app.update(
+        Message::Osd(crate::osd::Feedback {
+            message: "Volume".into(),
+            ..Default::default()
+        }),
+        &mut Effects::default(),
+    );
+    let spec = app.surfaces().into_iter().find(|s| s.id == "osd").unwrap();
+    assert_eq!(spec.keyboard, Keyboard::None);
+    assert!(!spec.capture_all);
+    app.update(
+        Message::OsdTick,
+        &mut Effects {
+            now: 2.,
+            ..Default::default()
+        },
+    );
+    app.update(
+        Message::OsdTick,
+        &mut Effects {
+            now: 3.,
+            ..Default::default()
+        },
+    );
+    assert!(app.osd.feedback.is_none());
+    assert!(!app.animating("osd", 3.));
 }

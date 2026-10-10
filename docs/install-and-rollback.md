@@ -70,5 +70,9 @@ python3 scripts/lucent-setup.py activate
 python3 scripts/lucent-setup.py rollback
 ```
 
-It retains stock Omarchy session services and manages only its own user service,
-bar visibility, two shortcuts and login command. See [Lucent usage](../lucent/README.md).
+It uses native desktop, authorization and lock clients, headless idle/clipboard
+adapters and Lucent token exports. Packaged startup and bindings stay intact;
+user PATH wrappers route stock shell entry points to Lucent. Explicit rollback
+stops native services, restores appearance and starts the installed stock shell.
+Install the dependencies listed in `manifests/lucent-dependencies.txt` first.
+See [Lucent usage](../lucent/README.md).

@@ -128,7 +128,12 @@ class LucentIntegrationTests(unittest.TestCase):
             path.parent.mkdir(parents=True)
             original = '-- User appearance\nhl.config({general={gaps_in=6}})\n'
             path.write_text(original)
-            with patch.object(module, 'run'), patch.object(module.subprocess, 'run'):
+            def checked_run(*args):
+                # systemd reports an unloaded, non-failed path unit as exit 1.
+                # Clearing that state is optional; enabling the unit is required.
+                if 'reset-failed' in args:
+                    raise module.subprocess.CalledProcessError(1,args)
+            with patch.object(module, 'run', side_effect=checked_run), patch.object(module, 'native_ready'), patch.object(module.subprocess, 'run'), patch.object(module.subprocess, 'Popen'), patch.object(module.shutil, 'which', return_value='/fixture/backend'), patch.object(module.time, 'sleep'):
                 module.activate()
                 once = path.read_text()
                 self.assertTrue((module.BACKUP/'menu-enabled').exists())

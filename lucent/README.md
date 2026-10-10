@@ -43,11 +43,11 @@ Inside the guest:
 See the separate [desktop configuration guide](https://xandreeddev.github.io/desktop-lab/docs/desktop/)
 and [framework library guide](https://xandreeddev.github.io/desktop-lab/docs/library/).
 The [system ownership map](https://xandreeddev.github.io/desktop-lab/docs/system/)
-identifies every current integration category and remaining stock-shell dependency.
+identifies current native features, retained backends and unsupported stock plugins.
 
 ## Build and install
 
-Arch dependencies: `rust clang pam pkgconf wayland libxkbcommon fontconfig vulkan-icd-loader`
+Arch dependencies: `rust clang pam polkit pkgconf wayland libxkbcommon fontconfig vulkan-icd-loader swayidle hyprlock wl-clipboard wtype`
 and a Vulkan driver. Desktop adapters use `playerctl`, `wireplumber`,
 `networkmanager` and `curl`; missing services show their unavailable state.
 
@@ -64,10 +64,12 @@ Installation is per-user. Activation adds marked blocks to Hyprland's user
 `.bash_profile` for lock and native menu-command wrappers. The appearance block applies the shared
 panel radius as the compositor default for ordinary app windows, including
 Chromium and Foot. Explicit window rules and Omarchy gapless/fullscreen policies
-retain precedence. The service hands off notifications and hides Omarchy's bar **after
-the desktop has rendered and Lucent owns the notification bus**. The handoff uses
-a guarded stock-shell restart; unlock before first activation. Stopping, crashing or rolling back
-restores its previous visibility. Packaged Omarchy configuration is untouched.
+retain precedence. Activation replaces the stock visual shell after checking the
+native surfaces, while keeping distribution backends and window bindings.
+Permission prompts use libpolkit-agent with Lucent presentation; idle handling uses
+headless swayidle, and clipboard capture has a separate private service. Stop/crash
+does not launch stock UI. Explicit rollback restores the previous integration.
+Packaged Omarchy files are untouched. Unlock before changing shell ownership.
 
 `lucent-menu` is a separate, short-lived framework client with an exclusive
 Wayland keyboard surface. `MenuEntry` holds display text and the original return
@@ -110,7 +112,10 @@ invalidation and compositor frame callbacks; animations stop at their endpoint.
 
 Edit `design/tokens.json`, then run `python3 scripts/generate-design-tokens.py`.
 `lucent-design` exposes typed primitive, semantic and component tokens plus
-`Theme` recipes. Views use these tokens for colors, type, spacing, corners,
+`Theme` recipes. The selected Lucent mode also exports tokens outward to supported
+applications through `ThemePort` → `LucentTheme`. Omarchy is only a headless
+template exporter; there is no reverse theme authority or hook.
+Views use these tokens for colors, type, spacing, corners,
 geometry and motion. The reusable engine remains independent of the theme.
 
 Rounded controls use separate horizontal and vertical padding through
@@ -157,6 +162,7 @@ is performed and personal location is excluded from this repository.
 lucent-cli launcher toggle  # also open / close
 lucent-cli wallpapers open
 lucent-cli widgets open
+lucent-cli theme light  # or dark; exports application colors too
 lucent-cli inspect
 lucent-cli quit
 ```
@@ -193,11 +199,12 @@ and measurements. The old card prototype and its tests are historical milestones
 The prepared VM uses **software Vulkan (Mesa lavapipe)**. The host GPU is not
 passed through; the compositor uses virgl. [Graphics details](../docs/lucent-vulkan.md).
 The reference layout and primary launcher/selector transitions are implemented;
-this is not complete Lucid feature or pixel parity. Tray hosting, clipboard/emoji modes, custom control-center dialogs, automatic
+this is not complete Lucid feature or pixel parity. Tray hosting, a complete control center, automatic
 wallpaper palette extraction, widget resizing, fractional scaling, multi-output
 placement and full Unicode shaping remain future work. Notification history is
-in memory; images, markup, inline replies and sound are not implemented. Stock Omarchy continues
-handling session services. The framework has no Qt/GTK dependency.
+in memory; images, markup, inline replies and sound are not implemented. System services retain OS responsibilities; the stock Quickshell process is stopped.
+The framework has no Qt/GTK dependency. The polkit adapter uses GLib/GIO for the
+standard authentication library, while its visual client uses our Vulkan renderer.
 
 Native visual tests render the real client through Vulkan at 1× and 2×. Run
 `python3 vm/test-visual.py` from the repository root to use the prepared VM, or
@@ -212,8 +219,8 @@ for baseline review and CI behavior.
 
 The bar lock button and **Super+Ctrl+L** request `lucent-lock.service`, which renders
 through the same framework on secure Wayland lock surfaces. The installed Omarchy
-PAM policy verifies the current account; Esc never unlocks. The idle and sleep-lock commands route through narrow user-level wrappers; stock
-locking remains a recovery fallback. Notification history opens from the bar's bell or
+PAM policy verifies the current account; Esc never unlocks. The idle and sleep-lock commands route through narrow user-level wrappers; an independent token-themed hyprlock
+provides emergency recovery. Notification history opens from the bar's bell or
 `lucent-cli notifications toggle`.
 
 Login integration is a separate root-level step in the test VM:
@@ -234,7 +241,7 @@ and secret prompts; no autologin, credential storage, or improvised authenticati
 
 
 Lock and login screens use the selected desktop wallpaper with centered cover
-fitting. The locker loads Omarchy's current background asynchronously, so image
+fitting. The locker loads Lucent's selected background asynchronously, so image
 decoding does not delay secure locking. Missing images leave an opaque fallback.
 The login installer publishes one account's wallpaper under
 `/var/lib/lucent/wallpapers/<uid>/wallpaper`. The directory belongs to that account

@@ -380,11 +380,11 @@ DND, dismissal and application actions. History is in memory. Markup, image hint
 inline replies, sound and Omarchy-specific executable hints are not advertised.
 Applications using standard action signals work without shell evaluation.
 
-Quickshell retains its notification server for the process lifetime. Activation
-records the original plugin state, disables only `omarchy.notifications`, uses
-Omarchy's guarded shell restart while unlocked, and checks Lucent's bus ownership
-before hiding the stock bar. Stop/failure restores the plugin and bar state. The
-stock lock/polkit/idle services stay installed.
+Native integration stops the stock shell and its restart supervisor after checking
+rendered surfaces. The native notification adapter then owns the standard bus name.
+Systemd restarts Lucent after failures. Explicit rollback restores the stock
+integration; stopping the desktop does not secretly start another visual shell.
+Permission dialogs use libpolkit-agent with the same native `SessionScreen`.
 
 `SessionScreen` is a separate framework client with an injected
 `AuthenticationPort`. `PamLocker` authenticates the current UID through the installed

@@ -58,11 +58,16 @@ def main():
         vm.key(28); prompt('System')
         assert any(h['id'] == 'menu-back' for s in menus.state()['surfaces'] for h in s['hits'])
         vm.screenshot('lucent-native-system-submenu.png')
-        vm.key(1); prompt('Omarchy')
+        vm.key(1); prompt('Lucent')
         click_menu('menu-close'); vm.eventually(menus.is_closed, 'Close did not cancel')
         checks += ['super_k_dispatches_native_submenu', 'submenu_back_button', 'escape_returns_to_parent', 'close_cancels_tree']
 
-        for route, title in [('theme', 'Theme'), ('style.font', 'Font')]:
+        p = menus.caller('omarchy-menu', 'summon', 'theme'); processes.append(p)
+        vm.eventually(lambda:vm.inspect()['client']['mode']=='Themes' and vm.inspect()['client']['launcher'],'Theme route did not open Lucent')
+        assert p.wait(timeout=10)==0
+        vm.cli('launcher','close')
+        checks.append('theme_route_uses_lucent_tokens')
+        for route, title in [('style.font', 'Font')]:
             p = menus.caller('omarchy-menu', 'summon', route); processes.append(p)
             prompt(title)
             assert menus.state()['client']['results'] > 0
