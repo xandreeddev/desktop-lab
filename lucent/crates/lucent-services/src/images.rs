@@ -1,9 +1,12 @@
 use lucent_api::ImageData;
 use std::{
     fs,
+    io::Read,
     path::{Path, PathBuf},
     sync::Arc,
 };
+mod raster;
+pub use raster::LoadError;
 
 /// Source texture budgets for the desktop's current components at up to 2× output scale.
 pub const ICON_PIXELS: u32 = 128;
@@ -11,44 +14,50 @@ pub const SYMBOL_PIXELS: u32 = 256;
 pub const PREVIEW_PIXELS: u32 = 1024;
 
 pub fn load(path: &Path, size: u32) -> Option<Arc<ImageData>> {
-    let bytes = fs::read(path).ok()?;
+    try_load(path, size).ok()
+}
+
+/// Keep a useful failure for explicit wallpaper actions; optional assets may use `load`.
+pub fn try_load(path: &Path, size: u32) -> Result<Arc<ImageData>, LoadError> {
+    let mut bytes = Vec::new();
+    fs::File::open(path)
+        .and_then(|file| file.take(32 * 1024 * 1024 + 1).read_to_end(&mut bytes))
+        .map_err(LoadError::Read)?;
     if bytes.len() > 32 * 1024 * 1024 {
-        return None;
+        return Err(LoadError::Limit("Image file exceeds 32 MiB"));
+    }
+    if size == 0 || size > 4096 {
+        return Err(LoadError::Limit("Image texture size must be 1–4096 pixels"));
     }
     let (width, height, rgba) = if path.extension().is_some_and(|s| s == "svg") {
-        let options = resvg::usvg::Options {
-            resources_dir: path.parent().map(Path::to_path_buf),
-            ..Default::default()
-        };
-        let tree = resvg::usvg::Tree::from_data(&bytes, &options).ok()?;
-        let scale = size as f32 / tree.size().width().max(tree.size().height());
-        let width = (tree.size().width() * scale).ceil() as u32;
-        let height = (tree.size().height() * scale).ceil() as u32;
-        let mut pixmap = resvg::tiny_skia::Pixmap::new(width, height)?;
-        resvg::render(
-            &tree,
-            resvg::tiny_skia::Transform::from_scale(scale, scale),
-            &mut pixmap.as_mut(),
-        );
-        let mut pixels = pixmap.take();
-        for px in pixels.as_chunks_mut::<4>().0.iter_mut() {
-            if px[3] > 0 {
-                for c in 0..3 {
-                    px[c] = (u32::from(px[c]) * 255 / u32::from(px[3])).min(255) as u8;
+        (|| {
+            let options = resvg::usvg::Options {
+                resources_dir: path.parent().map(Path::to_path_buf),
+                ..Default::default()
+            };
+            let tree = resvg::usvg::Tree::from_data(&bytes, &options).ok()?;
+            let scale = size as f32 / tree.size().width().max(tree.size().height());
+            let width = (tree.size().width() * scale).ceil() as u32;
+            let height = (tree.size().height() * scale).ceil() as u32;
+            let mut pixmap = resvg::tiny_skia::Pixmap::new(width, height)?;
+            resvg::render(
+                &tree,
+                resvg::tiny_skia::Transform::from_scale(scale, scale),
+                &mut pixmap.as_mut(),
+            );
+            let mut pixels = pixmap.take();
+            for px in pixels.as_chunks_mut::<4>().0.iter_mut() {
+                if px[3] > 0 {
+                    for c in 0..3 {
+                        px[c] = (u32::from(px[c]) * 255 / u32::from(px[3])).min(255) as u8;
+                    }
                 }
             }
-        }
-        (width, height, pixels)
+            Some((width, height, pixels))
+        })()
+        .ok_or_else(|| LoadError::Decode("Invalid SVG image".into()))?
     } else {
-        let mut reader = image::ImageReader::new(std::io::Cursor::new(&bytes))
-            .with_guessed_format()
-            .ok()?;
-        let mut limits = image::Limits::default();
-        limits.max_image_width = Some(16384);
-        limits.max_image_height = Some(16384);
-        limits.max_alloc = Some(128 * 1024 * 1024);
-        reader.limits(limits);
-        let decoded = reader.decode().ok()?;
+        let decoded = raster::decode(&bytes, size)?;
         // Do not invent detail by enlarging small raster originals. Filter premultiplied
         // pixels so transparent borders cannot introduce dark/colored fringes.
         let image = if decoded.width() > size || decoded.height() > size {
@@ -76,7 +85,7 @@ pub fn load(path: &Path, size: u32) -> Option<Arc<ImageData>> {
         };
         (image.width(), image.height(), image.into_raw())
     };
-    Some(Arc::new(ImageData {
+    Ok(Arc::new(ImageData {
         key: format!("{}:{size}", path.display()),
         width,
         height,

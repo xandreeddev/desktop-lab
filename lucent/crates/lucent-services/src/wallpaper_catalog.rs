@@ -40,11 +40,8 @@ impl WallpaperCatalogPort for OnlineWallpapers {
             .as_str()
             .ok_or_else(|| DomainError::Failed("Missing download".into()))?;
         // Validate decoding before anything can replace the current wallpaper.
-        if crate::images::load(Path::new(path), 64).is_none() {
-            return Err(DomainError::Invalid(
-                "Downloaded image could not be decoded".into(),
-            ));
-        }
+        crate::images::try_load(Path::new(path), 64)
+            .map_err(|error| DomainError::Invalid(format!("Downloaded wallpaper: {error}")))?;
         Ok(Wallpaper {
             path: path.into(),
             name: item.title.clone(),
@@ -54,8 +51,8 @@ impl WallpaperCatalogPort for OnlineWallpapers {
 pub struct ImagePalette;
 impl PaletteGenerationPort for ImagePalette {
     fn seed(&self, path: &str) -> Result<Rgb> {
-        let image = crate::images::load(Path::new(path), 128)
-            .ok_or_else(|| DomainError::Invalid("Could not decode wallpaper colors".into()))?;
+        let image = crate::images::try_load(Path::new(path), 128)
+            .map_err(|error| DomainError::Invalid(format!("Wallpaper colors: {error}")))?;
         Ok(dominant_seed(&image.rgba))
     }
 }

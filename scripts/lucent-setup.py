@@ -116,6 +116,8 @@ ExecStart=/usr/bin/python3 %h/.local/lib/lucent/wallpaper.py
     (unit.parent/'lucent-wallpaper-sync.path').write_text('''[Unit]
 Description=Publish Lucent wallpaper and appearance for login
 [Path]
+# Selection replaces a symlink atomically; observe its directory entry as well.
+PathChanged=%h/.local/state/lucent
 PathChanged=%h/.local/state/lucent/wallpaper
 PathChanged=%h/.local/state/lucent/theme/mode
 PathChanged=%h/.local/state/lucent/theme/palette.json
@@ -138,6 +140,7 @@ RestartSec=1
     run('systemctl', '--user', 'daemon-reload')
     subprocess.run(['systemctl','--user','reset-failed','lucent-wallpaper-sync.service','lucent-wallpaper-sync.path'],check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     run('systemctl','--user','enable','--now','lucent-wallpaper-sync.path')
+    run('systemctl','--user','restart','lucent-wallpaper-sync.path')
     run('systemctl','--user','start','lucent-wallpaper-sync.service')
     print('Installed. Test with systemctl --user start lucent.service before activating login startup.')
 
