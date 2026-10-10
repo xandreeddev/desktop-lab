@@ -83,6 +83,7 @@ sets `SITE_URL` and `SITE_BASE_PATH`; no deployment secrets are embedded in outp
 
 - `/`: desktop tour, three experiments, architecture/API, motion, surfaces and measurements.
 - `/docs/start-here/`: beginner walkthrough from Linux boot to registration, loading and rendering.
+- `/docs/execution/`: source-backed construction/declaration/execution path, adapter wiring, first-frame handshake, interactive coordinate illustration, launcher trace and architecture assessment.
 - `/docs/`: programming model, interactive frame lifecycle, API, domain and rendering.
 - `/docs/domain/`: actual domain models, all service ports, adapters, use cases and failures.
 - `/docs/framework/`: component contract, workers, layout, input, motion and Vulkan internals.
@@ -104,6 +105,13 @@ Implementation guides import selected Rust sources with `?raw` at build time.
 `src/data/source.ts` extracts snippets using explicit markers and rejects missing
 markers during the build. Keep prose, adapter tables and source links aligned
 with implementation changes; snippets alone cannot verify narrative claims.
+
+The execution guide's coordinate explorer illustrates `shell_layout::panel_origin`
+in browser JavaScript/SVG using current design tokens. It does not execute Rust
+or Vulkan. Its sample sizes are the initial dock and minimum launcher dimensions;
+the live desktop derives final sizes from content. Keep its calculation aligned
+with that Rust function and check controls, keyboard navigation, scaling and
+mobile layout when editing the guide.
 
 The technical source of truth is `docs/lucent-framework.md`,
 `reports/lucent-framework.md`, `lucent/README.md` and the measurement JSON under

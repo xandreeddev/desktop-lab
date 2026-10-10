@@ -1,5 +1,9 @@
 # Framework concepts and client boundaries
 
+For a guided source-level reading, see [Follow the wiring: main to a frame](https://xandreeddev.github.io/desktop-lab/docs/execution/).
+It separates construction, declarations and execution, follows `desktop_ports()`
+through the first frame and a launcher action, and records the current architecture's strengths and limits.
+
 The framework is a small, implemented vertical stack. Clients include `lucent-desktop`, the shared `SessionScreen` used by
 `lucent-lock` and `lucent-greeter`, the native `lucent-menu` picker, and the independent `hello-layer` counter. There are no empty
 crates standing in for future subsystems.
