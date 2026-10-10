@@ -45,6 +45,7 @@ pub struct SessionScreen {
     assets: Option<Arc<dyn SessionAssets>>,
     wallpaper: Option<Arc<ImageData>>,
     light: bool,
+    palette: Option<domain::ThemePalette>,
     authorization: String,
 }
 impl SessionScreen {
@@ -61,6 +62,7 @@ impl SessionScreen {
             assets: None,
             wallpaper: None,
             light: false,
+            palette: None,
             authorization: String::new(),
         }
     }
@@ -70,6 +72,10 @@ impl SessionScreen {
     }
     pub fn with_theme(mut self, light: bool) -> Self {
         self.light = light;
+        self
+    }
+    pub fn with_palette(mut self, palette: Option<domain::ThemePalette>) -> Self {
+        self.palette = palette.filter(|value| value.validate().is_ok());
         self
     }
     pub fn with_authorization(mut self, message: String) -> Self {
@@ -103,7 +109,11 @@ impl SessionScreen {
 impl Component for SessionScreen {
     type Message = Message;
     fn view(&self, cx: &ViewContext) -> Element<Message> {
-        let t = Theme::new(self.light);
+        let t = self
+            .palette
+            .as_ref()
+            .map(Theme::from_palette)
+            .unwrap_or_else(|| Theme::new(self.light));
         let title = if self.mode == Mode::Lock {
             "Welcome back"
         } else if self.mode == Mode::Authorization {

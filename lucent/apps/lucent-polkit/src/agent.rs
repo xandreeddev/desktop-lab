@@ -206,6 +206,12 @@ mod implementation {
                     name,
                     adapter,
                 )
+                .with_palette(
+                    lucent_services::JsonSettings::default()
+                        .load()
+                        .ok()
+                        .and_then(|s| s.palette),
+                )
                 .with_theme(light)
                 .with_authorization(message);
                 let _ = lucent_wayland::run(screen);

@@ -21,7 +21,70 @@ pub struct Theme {
     pub info: Color,
     pub focus: Color,
 }
+pub fn palettes() -> &'static [lucent_domain::ThemePalette] {
+    static PALETTES: std::sync::OnceLock<Vec<lucent_domain::ThemePalette>> =
+        std::sync::OnceLock::new();
+    PALETTES.get_or_init(|| {
+        serde_json::from_str(include_str!("../../../../configs/lucent/palettes.json"))
+            .expect("generated palette catalog")
+    })
+}
+pub fn selected_palette(settings: &lucent_domain::DesktopSettings) -> lucent_domain::ThemePalette {
+    settings
+        .palette
+        .clone()
+        .unwrap_or_else(|| palettes()[usize::from(settings.light)].clone())
+}
+/// Map a wallpaper seed into the same semantic role graph as named presets.
+pub fn wallpaper_palette(seed: lucent_domain::Rgb) -> lucent_domain::ThemePalette {
+    use lucent_domain::Rgb;
+    let black = Rgb::new(0, 0, 0);
+    let white = Rgb::new(255, 255, 255);
+    let mut value = palettes()[0].clone();
+    value.id = format!("wallpaper-{}", seed.hex().trim_start_matches('#'));
+    value.name = format!("Wallpaper {}", seed.hex());
+    let c = &mut value.colors;
+    c.surface = black.mix(seed, palette_recipe::SURFACE_SEED);
+    c.surface_container = black.mix(seed, palette_recipe::CONTAINER_SEED);
+    c.on_surface = seed.mix(white, palette_recipe::FOREGROUND_WHITE);
+    c.primary = seed.mix(white, palette_recipe::ACCENT_WHITE);
+    while c.primary.contrast(c.surface) < 4.5 {
+        c.primary = c.primary.mix(white, palette_recipe::CONTRAST_STEP);
+    }
+    c.on_primary = if black.contrast(c.primary) >= white.contrast(c.primary) {
+        black
+    } else {
+        white
+    };
+    c.focus = c.primary;
+    value
+}
 impl Theme {
+    pub fn from_palette(palette: &lucent_domain::ThemePalette) -> Self {
+        fn color(rgb: lucent_domain::Rgb) -> Color {
+            let [r, g, b] = rgb.channels();
+            Color(
+                f32::from(r) / 255.,
+                f32::from(g) / 255.,
+                f32::from(b) / 255.,
+                1.,
+            )
+        }
+        let c = &palette.colors;
+        Self {
+            surface: color(c.surface),
+            surface_container: color(c.surface_container),
+            on_surface: color(c.on_surface),
+            primary: color(c.primary),
+            on_primary: color(c.on_primary),
+            error: color(c.error),
+            success: color(c.success),
+            warning: color(c.warning),
+            info: color(c.info),
+            focus: color(c.focus),
+        }
+    }
+
     pub fn new(light: bool) -> Self {
         macro_rules! roles {
             ($mode:ident) => {
@@ -133,5 +196,40 @@ mod tests {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod palette_tests {
+    use super::*;
+    #[test]
+    fn presets_and_wallpaper_colors_preserve_semantic_contrast() {
+        for palette in palettes() {
+            palette.validate().unwrap();
+        }
+        for r in (0..=255).step_by(51) {
+            for g in (0..=255).step_by(51) {
+                for b in (0..=255).step_by(51) {
+                    wallpaper_palette(lucent_domain::Rgb::new(r, g, b))
+                        .validate()
+                        .unwrap();
+                }
+            }
+        }
+    }
+    #[test]
+    fn legacy_settings_and_saved_palette_round_trip_without_losing_identity() {
+        let old: lucent_domain::DesktopSettings =
+            serde_json::from_str(r#"{"version":1,"light":true}"#).unwrap();
+        assert_eq!(selected_palette(&old).name, "Pearl");
+        let palette = wallpaper_palette(lucent_domain::Rgb::new(60, 100, 170));
+        let settings = lucent_domain::DesktopSettings {
+            palette: Some(palette.clone()),
+            ..Default::default()
+        };
+        let saved: lucent_domain::DesktopSettings =
+            serde_json::from_str(&serde_json::to_string(&settings).unwrap()).unwrap();
+        assert_eq!(selected_palette(&saved), palette);
+        assert!(serde_json::from_str::<lucent_domain::Rgb>(r##""#zz00ff""##).is_err());
     }
 }

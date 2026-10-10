@@ -17,6 +17,8 @@ pub fn desktop_adapters() -> DesktopAdapters {
             .map(|h| Arc::new(h) as Arc<dyn CompositorPort>),
         settings: Arc::new(JsonSettings::default()),
         theme: Arc::new(LucentTheme),
+        palette_generation: Arc::new(lucent_services::wallpaper_catalog::ImagePalette),
+        catalog: Arc::new(lucent_services::wallpaper_catalog::OnlineWallpapers),
         clock: Arc::new(LocalClock),
         system: Arc::new(LinuxSystem::default()),
         audio: Arc::new(WirePlumber),

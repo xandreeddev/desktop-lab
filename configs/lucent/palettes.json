@@ -1,0 +1,82 @@
+[
+  {
+    "id": "dark",
+    "name": "Moonstone",
+    "colors": {
+      "surface": "#2c5184",
+      "surface_container": "#1b6a7d",
+      "on_surface": "#bce8f4",
+      "primary": "#73dcee",
+      "on_primary": "#153f5b",
+      "error": "#ffcfbc",
+      "success": "#a7ead3",
+      "warning": "#f4d48f",
+      "info": "#bce8f4",
+      "focus": "#73dcee"
+    }
+  },
+  {
+    "id": "light",
+    "name": "Pearl",
+    "colors": {
+      "surface": "#badbea",
+      "surface_container": "#b1e9eb",
+      "on_surface": "#17334b",
+      "primary": "#176075",
+      "on_primary": "#ffffff",
+      "error": "#9c2e16",
+      "success": "#236144",
+      "warning": "#754e08",
+      "info": "#176075",
+      "focus": "#176075"
+    }
+  },
+  {
+    "id": "ocean",
+    "name": "Ocean",
+    "colors": {
+      "surface": "#15232d",
+      "surface_container": "#243845",
+      "on_surface": "#e5f2fb",
+      "primary": "#83c7eb",
+      "on_primary": "#12252f",
+      "error": "#ffcfbc",
+      "success": "#a7ead3",
+      "warning": "#f4d48f",
+      "info": "#bce8f4",
+      "focus": "#83c7eb"
+    }
+  },
+  {
+    "id": "forest",
+    "name": "Forest",
+    "colors": {
+      "surface": "#18261f",
+      "surface_container": "#293b30",
+      "on_surface": "#e4f2e8",
+      "primary": "#9ed8ae",
+      "on_primary": "#142a1c",
+      "error": "#ffcfbc",
+      "success": "#a7ead3",
+      "warning": "#f4d48f",
+      "info": "#bce8f4",
+      "focus": "#9ed8ae"
+    }
+  },
+  {
+    "id": "ember",
+    "name": "Ember",
+    "colors": {
+      "surface": "#2b201c",
+      "surface_container": "#423027",
+      "on_surface": "#fbece5",
+      "primary": "#f6b18e",
+      "on_primary": "#312016",
+      "error": "#ffcfbc",
+      "success": "#a7ead3",
+      "warning": "#f4d48f",
+      "info": "#bce8f4",
+      "focus": "#f6b18e"
+    }
+  }
+]

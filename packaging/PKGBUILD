@@ -1,7 +1,7 @@
 # Build from this repository checkout: cd packaging && makepkg -si
 pkgname=lucent-desktop
 pkgver=0.1.0
-pkgrel=6
+pkgrel=7
 pkgdesc='Native Rust Wayland shell framework and desktop client'
 arch=('x86_64')
 url='https://github.com/xandreeddev/desktop-lab'

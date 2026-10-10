@@ -1219,6 +1219,8 @@ name = "lucent-design"
 version = "0.1.0"
 dependencies = [
  "lucent-api",
+ "lucent-domain",
+ "serde_json",
 ]
 
 [[package]]
@@ -1316,6 +1318,7 @@ dependencies = [
  "lucent-services",
  "lucent-ui",
  "lucent-wayland",
+ "serde_json",
  "zeroize",
 ]
 

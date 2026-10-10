@@ -102,7 +102,7 @@ struct State<A: Application> {
     handle: LoopHandle<'static, Self>,
     sender: channel::Sender<RuntimeEvent<A::Message>>,
     tasks: mpsc::Sender<api::Task<A::Message>>,
-    subscriptions: BTreeMap<&'static str, api::Cancellation>,
+    subscriptions: BTreeMap<String, api::Cancellation>,
     connection: Connection,
 }
 /// Run any framework application, with no desktop-specific types in the backend.
@@ -451,7 +451,7 @@ impl<A: Application> State<A> {
             keep
         });
         for subscription in wanted {
-            if self.subscriptions.contains_key(subscription.id) {
+            if self.subscriptions.contains_key(&subscription.id) {
                 continue;
             }
             let cancel = api::Cancellation::default();

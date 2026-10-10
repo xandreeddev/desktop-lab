@@ -63,11 +63,12 @@ Restart=on-failure
 RestartSec=3
 ''')
     for source,target in [('lucent-theme.py','theme.py'),('lucent-controls.py','controls.py'),
-                          ('lucent-compat.py','compat.py'),('lucent-idle.py','idle.py'),
+                          ('lucent-catalog.py','catalog.py'),('lucent-compat.py','compat.py'),('lucent-idle.py','idle.py'),
                           ('lucent-clipboard.py','clipboard.py'),('clipboard_store.py','clipboard_store.py'),
                           ('lucent-stop-stock.py','stop_stock.py')]:
         shutil.copy2(ROOT/'scripts'/source,helper.parent/target)
     shutil.copytree(ROOT/'configs/lucent/themes',helper.parent/'themes',dirs_exist_ok=True)
+    shutil.copy2(ROOT/'configs/lucent/palettes.json',helper.parent/'palettes.json')
     state=HOME/'.local/state/lucent'
     state.mkdir(parents=True,exist_ok=True)
     wallpaper=state/'wallpaper'
@@ -117,6 +118,7 @@ Description=Publish Lucent wallpaper and appearance for login
 [Path]
 PathChanged=%h/.local/state/lucent/wallpaper
 PathChanged=%h/.local/state/lucent/theme/mode
+PathChanged=%h/.local/state/lucent/theme/palette.json
 Unit=lucent-wallpaper-sync.service
 [Install]
 WantedBy=default.target

@@ -54,12 +54,17 @@ impl WeatherPort for OpenMeteo {
 }
 pub struct LucentTheme;
 impl ThemePort for LucentTheme {
-    fn apply(&self, mode: ThemeMode) -> Result<()> {
+    fn apply(&self, palette: &ThemePalette) -> Result<()> {
+        palette.validate()?;
         let home = std::env::var("HOME")
             .map_err(|_| DomainError::Unavailable("Missing home directory".into()))?;
         crate::command_with_timeout(
             "python3",
-            &[&format!("{home}/.local/lib/lucent/theme.py"), mode.name()],
+            &[
+                &format!("{home}/.local/lib/lucent/theme.py"),
+                "palette",
+                &serde_json::to_string(palette).map_err(|e| DomainError::Invalid(e.to_string()))?,
+            ],
             std::time::Duration::from_secs(45),
         )
         .map(|_| ())

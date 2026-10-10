@@ -32,6 +32,6 @@ def publish(source, directory, name="wallpaper"):
 if __name__=='__main__':
     state=Path.home()/'.local/state/lucent'
     directory=Path('/var/lib/lucent/wallpapers')/str(os.getuid())
-    for source,name in [(state/'wallpaper','wallpaper'),(state/'theme/mode','theme-mode')]:
+    for source,name in [(state/'wallpaper','wallpaper'),(state/'theme/mode','theme-mode'),(state/'theme/palette.json','palette.json')]:
         try: publish(source,directory,name)
         except FileNotFoundError: pass # Keep the last good published asset.

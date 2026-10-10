@@ -95,7 +95,10 @@ pub struct DesktopSettings {
     pub visible_widgets: Vec<String>,
     pub notes: String,
     pub pinned: Vec<AppId>,
+    /// Legacy preference, used only when no palette has been selected.
     pub light: bool,
+    pub palette: Option<crate::ThemePalette>,
+    pub saved_palettes: Vec<crate::ThemePalette>,
     pub launcher: LauncherSize,
 }
 impl Default for DesktopSettings {
@@ -109,6 +112,8 @@ impl Default for DesktopSettings {
             notes: String::new(),
             pinned: Vec::new(),
             light: false,
+            palette: None,
+            saved_palettes: Vec::new(),
             launcher: LauncherSize::default(),
         }
     }

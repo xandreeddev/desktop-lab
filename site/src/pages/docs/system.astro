@@ -6,11 +6,12 @@ import { sourceUrl } from '../../data/source';
 const sections: [string, string][] = [['startup','01 · Startup'],['ownership','02 · Responsibility map'],['theming','03 · Theme authority'],['menus','04 · Compatibility adapters'],['verify','05 · Inspect and recover']];
 const ownership = [
   ['Bar, dock, launcher, widgets', 'Lucent desktop', 'Components describe trees; the framework lays out, animates and renders Vulkan buffers.'],
+  ['Online wallpaper catalogs', 'Lucent native browser', 'WallpaperCatalogPort → OnlineWallpapers uses Wallhaven API / Alpha Coders public pages. PaletteGenerationPort → ImagePalette extracts a dominant seed; Lucent design recipes create the semantic colors.'],
   ['Desktop wallpaper', 'Lucent background surface', 'WallpaperPort → LucentWallpaper persists the selected file. AssetPort → NativeAssets decodes it off the UI thread.'],
   ['Notifications, history, DND', 'Lucent', 'FreedesktopNotifications owns the D-Bus name. Native components render toasts and history; notification shortcuts route here.'],
-  ['Light/dark and shell appearance', 'Lucent tokens', 'design/tokens.json → compiled theme → components. DesktopSettings.light chooses the mode.'],
+  ['Palette and shell appearance', 'Lucent tokens + selected palette', 'Named semantic sets or wallpaper-derived colors → components. DesktopSettings.palette persists the full role set.'],
   ['Application colors and mode', 'Lucent export → applications', 'ThemePort → LucentTheme → theme.py. Omarchy is a headless template exporter, never the theme authority.'],
-  ['Lock and login', 'Lucent clients + PAM / greetd', 'Secure session-lock surfaces for locking; a separate greeter process for login. Both share the selected wallpaper and mode.'],
+  ['Lock and login', 'Lucent clients + PAM / greetd', 'Secure session-lock surfaces for locking; a separate greeter process for login. Both share the selected wallpaper and semantic palette.'],
   ['Permission prompts', 'Lucent UI + libpolkit-agent', 'A standard registered polkit agent creates a native authorization client. The trusted library/helper performs authentication.'],
   ['Idle and sleep', 'swayidle + Lucent lock adapter', 'Headless compositor/logind integration. Stay-awake suppresses idle locking, while sleep and explicit lock handlers remain.'],
   ['Lock recovery', 'Independent hyprlock', 'Emergency fallback if the native locker fails. Uses exported Lucent tokens and wallpaper; no stock shell is started.'],
@@ -53,12 +54,12 @@ Theme selection    → ThemePort → LucentTheme → app exports`} label="Active
        ├─ generated Rust → Lucent clients
        ├─ generated CSS → documentation/design system
        ├─ window rules → Hyprland
-       └─ light/dark export → application configuration
+       └─ selected semantic palette → application configuration
             ├─ Omarchy templates (headless, background preserved)
             ├─ GTK named colors + desktop color-scheme
             ├─ Foot / tmux colors and browser toolbar policy
-            └─ login mode + emergency lock configuration`} label="Omarchy consumes generated tokens; it does not send a theme back into Lucent" />
-    <p>Choose Dark or Light in Lucent. The component updates its palette, persists the preference, then invokes <code>ThemePort</code> on the ordered effect worker. <code>LucentTheme</code> runs the export adapter. The standard Omarchy theme picker is replaced, and arbitrary stock theme names are rejected while the integration is active.</p>
+            └─ login palette + emergency lock configuration`} label="Omarchy consumes generated tokens; it does not send a theme back into Lucent" />
+    <p>Choose a named palette or extract colors from a wallpaper. The component updates its semantic roles, persists the complete palette, then invokes <code>ThemePort</code> on the ordered effect worker. <code>LucentTheme</code> runs the export adapter. The standard Omarchy theme picker is replaced, and arbitrary stock theme names are rejected while the integration is active. Light/dark is only an application compatibility hint derived from the palette’s surface luminance.</p>
     <p>The exporter calls the installed template generator with <code>OMARCHY_THEME_HEADLESS=1</code> and <code>OMARCHY_THEME_SKIP_BACKGROUND=1</code>. It does not run theme hooks or a reverse synchronization loop. Application support differs: GTK applications may override named colors; browsers may need a reload/restart for managed toolbar colors; websites and app-specific themes remain their own content.</p>
     <p>Exports have a first-run backup and managed CSS blocks. Failures appear as <code>theme_error</code> in inspection and in the theme panel. The native palette can change before an external application finishes applying its export. See <a href={withBase('/design-system/')}>the token reference</a> and <a href={sourceUrl('scripts/lucent-theme.py')}>the export adapter</a>.</p>
   </section>

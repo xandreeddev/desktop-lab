@@ -32,7 +32,7 @@ flowchart TD
 | `lucent-domain` | Application IDs/commands, windows/workspaces, desktop settings, clock/date, media/system/weather snapshots, timer state; application/compositor/settings ports |
 | `lucent-usecases` | Ranked app search, launch-versus-focus policy, validated widget movement, visibility, settings validation |
 | `lucent-api` | Declarative elements, typed component messages, async effects, subscriptions, surface intent, animations, widget registration |
-| `lucent-design` | Optional Lucent visual language: generated primitive/semantic/component tokens, light/dark theme and recipes |
+| `lucent-design` | Optional Lucent visual language: generated primitive/semantic/component tokens, named semantic palettes and wallpaper-color recipes |
 | `lucent-ui` | Layout constraints, clipping, hit testing, drag threshold, text input, retained hover/focus state |
 | `lucent-render` | One wgpu Vulkan device, rounded primitives, shadows, cached text/images, clipping and alpha composition |
 | `lucent-wayland` | SCTK layer surfaces, seats/keyboard/pointer, callback scheduling, subscription lifetime, effect worker, bounded local IPC |
@@ -54,7 +54,7 @@ behind effects and service ports. This is a declarative view with explicit mutab
 state, rather than a purely functional application.
 
 `design/tokens.json` is the shared source for primitive palette/spacing/type,
-semantic light/dark roles, component geometry and motion. Run
+semantic palette roles, component geometry and motion. Run
 `python3 scripts/generate-design-tokens.py` after editing it. Generated Rust
 constants live in `lucent-design`; CSS variables feed the Astro site. CI checks
 references, types, cycles and generated drift. Native views use token references,
@@ -418,3 +418,12 @@ the authentication card. `ImageFit::{Fill, Contain, Cover}` belongs to the frame
 cover preserves aspect ratio and clips a centered image to its layout box. An
 opaque base remains even when decoding fails. A user path unit synchronizes the
 login copy, so the greeter never needs access to the desktop account's home.
+
+
+Online wallpaper search is a native client of `WallpaperCatalogPort`; its
+`OnlineWallpapers` adapter owns HTTP, provider parsing and cache paths. The browser
+uses a generation-keyed subscription, independently of the ordered effect worker.
+`PaletteGenerationPort` supplies a dominant RGB seed, and the design crate maps
+that seed to validated semantic roles. `ThemePort` accepts the complete selected
+palette; application export and lock/login receive those same values. The generic
+framework has no wallpaper/provider/palette policy.

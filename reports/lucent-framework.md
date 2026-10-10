@@ -392,3 +392,43 @@ Application theme support varies and does not recolor websites. This update did
 not repeat a full reboot/login or test automatic idle timeout, clipboard paste
 interaction, suspend/resume, physical networking/Bluetooth/brightness/battery or
 physical multi-monitor behavior. The existing stay-awake preference was retained.
+
+## Native wallpaper catalogs and semantic palettes
+
+The appearance selector now presents named color sets instead of a light/dark
+switch. Moonstone, Pearl, Ocean, Forest and Ember are generated from the design
+tokens. Wallpaper extraction produces a deterministic dominant seed, then maps
+it through a contrast-checked semantic recipe. The complete selected palette and
+up to 24 distinct wallpaper palettes persist in desktop settings. Legacy mode is
+only a migration fallback and an application compatibility hint.
+
+The native wallpaper client browses local files, Wallhaven and Alpha Coders.
+`WallpaperCatalogPort` is implemented by `OnlineWallpapers`; bounded HTTPS and
+provider parsing are isolated in the installed catalog helper. Image sampling is
+behind `PaletteGenerationPort` / `ImagePalette`. A separate subscription worker
+loads results and previews, with request generations rejecting stale replies.
+Settings and theme exports remain on the ordered effect worker. The generic
+framework contains no provider-specific logic.
+
+Executed for this update:
+
+- 64 Rust behavior tests, formatting and warning-free Clippy; 47 Python tests.
+- 148 native Vulkan visual comparisons passed at 1×/2×. Sixteen new references
+  cover online browsing, narrow/error states and a named palette. Sixteen existing
+  theme/wallpaper references were intentionally reviewed and updated; 116 other
+  references remain unchanged. All fixtures are synthetic.
+- Generated checks for 455 design tokens and 58 app icons; ShellCheck. Astro
+  check/build and all 484 built links/assets across 13 pages passed with the
+  project Pages base path.
+- Real provider search, preview and original-image downloads from the host.
+  Live searches from the VM returned distinct pages for both providers:
+  Wallhaven returned 24 results on each tested page; Alpha Coders returned 27
+  and 29. These counts describe the test response, not a provider guarantee.
+
+Alpha Coders uses public page metadata because its old API endpoint is unavailable;
+markup changes or site challenges can require an adapter update. Wallhaven uses
+its SFW API. No provider account, API key or third-party wallpaper asset is bundled.
+A failed download or decode preserves the selected wallpaper. Cancellation is
+cooperative between bounded calls; an in-flight HTTP call can finish after its
+request has been replaced. Preview failures leave placeholders. Color extraction
+uses one dominant seed, not a full multi-color image quantizer or theme editor.
