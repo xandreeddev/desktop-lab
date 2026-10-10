@@ -459,3 +459,18 @@ optimized desktop benchmark. The image and captures are not committed.
 Synthetic tests cover scaled pixel output and rejection of hostile dimensions
 before allocation. The optional private reproduction test requires
 `LUCENT_TEST_IMAGE` and is ignored by default.
+
+The live retry also exposed a wallpaper-only publication issue: watching the
+selected symlink did not observe its atomic replacement. The path unit now also
+watches its parent directory and is restarted during installation to refresh
+watches. The publisher still copies only the selected wallpaper and appearance
+files; it does not publish other directory contents.
+
+Final verification: 66 Rust behavior tests, the explicit private-image
+reproduction, 47 Python tests, formatting/Clippy and all 148 unchanged Vulkan
+visual comparisons passed. Astro check/build and all 484 links/assets passed.
+In the VM, the originally failing image was applied through the native browser,
+its displayed background was inspected, and both original bytes and the selected
+palette were preserved. Two wallpaper-only changes synchronized automatically to
+the login copy. Native secure lock/unlock passed with the large image selected.
+The greeter binary was updated, but a full logout/login or reboot was not repeated.
