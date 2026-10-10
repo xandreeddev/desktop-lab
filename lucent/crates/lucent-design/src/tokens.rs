@@ -361,7 +361,7 @@ pub mod component {
         pub const WALLPAPER_WIDTH: f32 = 1248.0;
         pub const LAUNCHER_WIDTH: f32 = 640.0;
         pub const LAUNCHER_MIN_HEIGHT: f32 = 224.0;
-        pub const BAR_HEIGHT: f32 = 64.0;
+        pub const BAR_HEIGHT: f32 = 48.0;
         pub const WALLPAPER_BODY_HEIGHT: f32 = 304.0;
     }
     pub mod focus {
@@ -381,6 +381,8 @@ pub mod component {
     }
     pub mod window {
         pub const RADIUS: f32 = 20.0;
+        pub const GAP_OUT: f32 = 16.0;
+        pub const GAP_IN: f32 = 8.0;
     }
     pub mod notification {
         pub const WIDTH: f32 = 400.0;

@@ -8,7 +8,7 @@ const ownership = [
   ['Bar, dock and launcher', 'Lucent', 'Desktop component → framework layout → Vulkan surface buffers.', 'desktop.rs / views.rs'],
   ['Application discovery and launch', 'Lucent policy + system apps', 'XDG desktop entries; argument-array launch. Dock prefers focusing a known window.', 'ApplicationPort → XdgApplications'],
   ['Windows, splits, tiling and focus', 'Hyprland', 'Lucent requests workspace changes/focus through Hyprland IPC. It does not tile or render application contents.', 'CompositorPort → Hyprland'],
-  ['Window borders and rounded corners', 'Hyprland + shared token', 'Generated decoration default in user looknfeel.lua. Per-window rules and fullscreen behavior retain precedence.', 'window-rules.lua / lucent-setup.py'],
+  ['Window spacing and rounded corners', 'Hyprland + shared tokens', 'Generated gaps and decoration defaults in user looknfeel.lua. The bar reserves its visible height; Hyprland supplies the gap below it. Per-window rules and fullscreen behavior retain precedence.', 'window-rules.lua / lucent-setup.py'],
   ['Monitors, input, keymaps and scaling', 'Hyprland / system configuration', 'Lucent receives output and seat events; integer surface scale is supported. Per-output desktop state is unfinished.', '~/.config/hypr/'],
   ['Desktop widgets and drag grid', 'Lucent', 'Layer surfaces below normal windows. Client geometry, token grid, persisted positions and visibility.', 'widgets.rs / shell_layout.rs'],
   ['Light and dark shell palette', 'Lucent', 'Semantic design tokens. This switch changes Lucent components, not installed application themes.', 'DesktopSettings.light / lucent-design'],

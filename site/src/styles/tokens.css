@@ -290,7 +290,7 @@
   --component-panel-wallpaper-width: 1248px;
   --component-panel-launcher-width: 640px;
   --component-panel-launcher-min-height: 224px;
-  --component-panel-bar-height: 64px;
+  --component-panel-bar-height: 48px;
   --component-panel-wallpaper-body-height: 304px;
   --component-focus-width: 2px;
   --component-input-height: 48px;
@@ -302,6 +302,8 @@
   --component-switch-thumb: 14px;
   --component-switch-inset: 2px;
   --component-window-radius: var(--radius-panel);
+  --component-window-gap-out: var(--layout-shell-inset);
+  --component-window-gap-in: var(--space-sm);
   --component-notification-width: 400px;
   --component-notification-margin: var(--space-lg);
   --component-notification-padding: var(--space-lg);

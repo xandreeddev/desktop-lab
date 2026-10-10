@@ -208,7 +208,9 @@ fn launcher_size_preserves_selection_and_limits_at_every_preset() {
                 .unwrap()
                 .rect;
             assert!(panel.x >= 16. && panel.x + panel.w <= viewport.0 - 16.);
-            assert!(panel.y >= 80. && panel.y + panel.h <= viewport.1 - 16.);
+            let top =
+                lucent_design::component::panel::BAR_HEIGHT + lucent_design::layout::SECTION_GAP;
+            assert!(panel.y >= top && panel.y + panel.h <= viewport.1 - 16.);
             assert_eq!(panel.w % 32., 0.);
             assert_eq!(panel.h % 16., 0.);
             let last = rendered
@@ -1345,6 +1347,14 @@ fn bar_capsules_share_grid_do_not_overlap_and_keep_active_workspace_visible() {
     use lucent_design::{component, layout as grid};
     let mut app = fixture(0, false);
     let layout = Layout::new(fonts(&app));
+    let surface = app.surfaces().into_iter().find(|s| s.id == "bar").unwrap();
+    // The compositor owns the gap below the visible capsules. Reserving that
+    // gap again here pushes tiled windows away from the shell spacing grid.
+    let visible_bottom = component::bar::TOP + component::pill::HEIGHT;
+    assert_eq!(surface.exclusive_zone as f32, visible_bottom);
+    assert_eq!(surface.height as f32, visible_bottom);
+    assert_eq!(component::window::GAP_OUT, grid::SHELL_INSET);
+    assert_eq!(component::window::GAP_IN * 2., grid::SECTION_GAP);
     for width in [320., 390., 640., 1024., 1280., 1366., 1920.] {
         for count in 1..=8 {
             app.compositor.workspaces = (1..=count)
