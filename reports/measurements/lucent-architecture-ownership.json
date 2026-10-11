@@ -1,0 +1,32 @@
+{
+  "source_commit": "a3b21554a7aa42bf11ad98dfa57429713a67825e",
+  "rust_unit_tests": 83,
+  "python_tests": 49,
+  "visual_comparisons": 148,
+  "baseline_changes": 0,
+  "shadow_blur_scales": [
+    1,
+    2
+  ],
+  "native_workspaces": {
+    "actual_compositor_workspaces": true,
+    "client_shortcuts": true,
+    "native_workspace_switch": true,
+    "scope": "Prepared single-monitor wide VM"
+  },
+  "native_runtime": {
+    "launcher_input": true,
+    "independent_application_service": true,
+    "application_survives_shell_restart": true,
+    "restart_restores_background": true,
+    "native_lock_unlock": true,
+    "surface_fault_injection": false,
+    "notes": "Native VM checks. Presentation recovery policy is unit-tested; driver fault injection is not covered here."
+  },
+  "desktop_binary_sha256": "abed9d5c4b281cf02464345f5289518243df46b8647cad9d82fb07cbea78db04",
+  "limits": [
+    "Boundary source checks are textual; dependency resolution covers local workspace declarations rather than registry internals",
+    "Date and Placement invariants and larger client decomposition remain open",
+    "Native login greeter service was not replaced or restarted in this milestone"
+  ]
+}

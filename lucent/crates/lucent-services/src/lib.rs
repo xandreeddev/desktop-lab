@@ -82,12 +82,19 @@ mod settings_tests {
         fs::write(&store.path, br#"{"version":1,"notes":"retained"}"#).unwrap();
         let mut settings = store.load().unwrap();
         assert_eq!(settings.launcher, LauncherSize::default());
+        settings.pinned = vec![AppId::new("org.example.App.desktop").unwrap()];
         settings.launcher = LauncherSize {
             width: Some(800),
             max_height: Some(720),
         };
         store.save(&settings).unwrap();
         assert_eq!(store.load().unwrap(), settings);
+        let stored: serde_json::Value =
+            serde_json::from_slice(&fs::read(&store.path).unwrap()).unwrap();
+        assert_eq!(
+            stored["pinned"],
+            serde_json::json!(["org.example.App.desktop"])
+        );
         let saved = fs::read(&store.path).unwrap();
         settings.launcher.width = Some(0);
         assert!(store.save(&settings).is_err());
@@ -96,6 +103,10 @@ mod settings_tests {
         assert!(store.load().is_err());
         fs::write(&store.path, br#"{"version":2}"#).unwrap();
         assert!(store.load().is_err());
+        let invalid_id = br#"{"version":1,"pinned":["/tmp/app.desktop"],"notes":"keep me"}"#;
+        fs::write(&store.path, invalid_id).unwrap();
+        assert!(store.load().is_err());
+        assert_eq!(fs::read(&store.path).unwrap(), invalid_id);
         fs::remove_dir_all(directory).unwrap();
     }
 }

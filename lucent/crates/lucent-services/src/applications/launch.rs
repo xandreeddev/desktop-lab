@@ -100,7 +100,7 @@ mod tests {
         const TEST: &str = "applications::launch::tests::application_survives_launcher_unit_exit";
         if let Ok(directory) = std::env::var("LUCENT_LAUNCH_FIXTURE") {
             let mut app = Application {
-                id: lucent_domain::AppId("lucent-lifetime-fixture.desktop".into()),
+                id: lucent_domain::AppId::new("lucent-lifetime-fixture.desktop").unwrap(),
                 name: "Lifetime fixture".into(), description: String::new(), keywords: vec![],
                 icon: String::new(), startup_class: String::new(),
                 command: LaunchCommand {

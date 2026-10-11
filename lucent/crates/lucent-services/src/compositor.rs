@@ -90,49 +90,9 @@ impl CompositorPort for Hyprland {
             .to_owned();
         let ws = self.json("j/workspaces")?;
         let clients = self.json("j/clients")?;
-        let mut workspaces: Vec<_> = ws
-            .as_array()
-            .into_iter()
-            .flatten()
-            .map(|v| Workspace {
-                id: v["id"].as_i64().unwrap_or(0) as i32,
-                name: v["name"].as_str().unwrap_or("").into(),
-                windows: v["windows"].as_u64().unwrap_or(0) as usize,
-                active: v["id"].as_i64() == Some(active as i64),
-            })
-            .filter(|w| w.id > 0)
-            .collect();
-        for id in 1..=6 {
-            if !workspaces.iter().any(|w| w.id == id) {
-                workspaces.push(Workspace {
-                    id,
-                    name: id.to_string(),
-                    windows: 0,
-                    active: id == active,
-                });
-            }
-        }
-        workspaces.sort_by_key(|w| w.id);
-        let windows = clients
-            .as_array()
-            .into_iter()
-            .flatten()
-            .map(|v| {
-                let address = v["address"].as_str().unwrap_or("").to_owned();
-                Window {
-                    focused: address == focused,
-                    address,
-                    app_class: v["class"].as_str().unwrap_or("").into(),
-                    title: v["title"].as_str().unwrap_or("").into(),
-                    workspace: v["workspace"]["id"].as_i64().unwrap_or(0) as i32,
-                }
-            })
-            .collect();
-        Ok(CompositorSnapshot {
-            workspaces,
-            windows,
-        })
+        Ok(decode_snapshot(active, &focused, &ws, &clients))
     }
+
     fn switch_workspace(&self, id: i32) -> Result<()> {
         if id < 1 {
             return Err(DomainError::Invalid("Invalid workspace".into()));
@@ -158,5 +118,70 @@ impl CompositorPort for Hyprland {
         } else {
             Err(DomainError::Failed(result))
         }
+    }
+}
+
+fn decode_snapshot(active: i32, focused: &str, ws: &Value, clients: &Value) -> CompositorSnapshot {
+    let mut workspaces: Vec<_> = ws
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|v| Workspace {
+            id: v["id"].as_i64().unwrap_or(0) as i32,
+            name: v["name"].as_str().unwrap_or("").into(),
+            windows: v["windows"].as_u64().unwrap_or(0) as usize,
+            active: v["id"].as_i64() == Some(active as i64),
+        })
+        .collect();
+    workspaces.sort_by_key(|w| w.id);
+    let windows = clients
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|v| {
+            let address = v["address"].as_str().unwrap_or("").to_owned();
+            Window {
+                focused: address == focused,
+                address,
+                app_class: v["class"].as_str().unwrap_or("").into(),
+                title: v["title"].as_str().unwrap_or("").into(),
+                workspace: v["workspace"]["id"].as_i64().unwrap_or(0) as i32,
+            }
+        })
+        .collect();
+    CompositorSnapshot {
+        workspaces,
+        windows,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn adapter_reports_actual_workspaces_including_special_without_inventing_shortcuts() {
+        let snapshot = decode_snapshot(
+            9,
+            "0xabc",
+            &serde_json::json!([
+                {"id":9,"name":"Work","windows":2},
+                {"id":-99,"name":"special:scratchpad","windows":1}
+            ]),
+            &serde_json::json!([
+                {"address":"0xabc","class":"editor","title":"Work","workspace":{"id":9}}
+            ]),
+        );
+        assert_eq!(
+            snapshot.workspaces.iter().map(|w| w.id).collect::<Vec<_>>(),
+            [-99, 9]
+        );
+        assert!(snapshot.workspaces[1].active);
+        assert_eq!(snapshot.workspaces[1].name, "Work");
+        assert!(snapshot.windows[0].focused);
+        assert!(
+            decode_snapshot(1, "", &serde_json::json!([]), &serde_json::json!([]))
+                .workspaces
+                .is_empty()
+        );
     }
 }

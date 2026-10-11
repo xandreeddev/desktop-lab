@@ -2,7 +2,7 @@
 
 The three local VMs are independent clones of an installed Omarchy base. A flattened read-only copy of the base disk backs three private qcow2 overlays. Each VM has its own NVRAM, MAC address and loopback SSH port. Nothing in a clone writes the original disk. Runtime inventory, images, SSH keys, credentials and raw reports are excluded from Git.
 
-Start only one lab VM at a time on a 16 GiB host. Each clone is configured for 3 GiB RAM and two vCPUs.
+Start only one lab VM at a time on a memory-limited host. New clones default to 3 GiB RAM and two vCPUs; the current Lucent performance run uses 6 GiB and six vCPUs. Inspect the domain configuration before comparing results or changing its resources.
 
 ```sh
 python3 vm/lab.py status

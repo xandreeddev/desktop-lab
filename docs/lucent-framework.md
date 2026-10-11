@@ -292,7 +292,8 @@ python3 vm/test-launcher.py
 ```
 
 CI installs Mesa Vulkan, selects lavapipe and runs the snapshots explicitly.
-Normal workspace tests skip that one GPU test. Differences above 8/255 in any
+Normal workspace tests skip GPU tests. CI also runs focused texture-residency,
+rounded-clipping and parameterized-shadow pixel tests. Differences above 8/255 in any
 channel count as changed; more than 0.1% changed pixels overall or 1% in any
 64×64 tile fails the case, so a missing small icon cannot hide in the background. Missing
 images or dimensions also fail. Actual and difference images plus an HTML report

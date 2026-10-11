@@ -234,11 +234,14 @@ impl Desktop {
                 if let Some(app) = self
                     .apps
                     .iter()
-                    .find(|a| a.id.0.eq_ignore_ascii_case(&format!("{query}.desktop")))
+                    .find(|a| {
+                        a.id.as_str()
+                            .eq_ignore_ascii_case(&format!("{query}.desktop"))
+                    })
                     .or_else(|| {
                         self.apps
                             .iter()
-                            .find(|a| a.id.0.to_lowercase().contains(query))
+                            .find(|a| a.id.as_str().to_lowercase().contains(query))
                     })
                     && !apps.iter().any(|a| a.id == app.id)
                 {
@@ -247,13 +250,11 @@ impl Desktop {
             }
         }
         for window in &self.compositor.windows {
-            if let Some(app) = self.apps.iter().find(|a| {
-                a.startup_class.eq_ignore_ascii_case(&window.app_class)
-                    || a.id
-                        .0
-                        .trim_end_matches(".desktop")
-                        .eq_ignore_ascii_case(&window.app_class)
-            }) && !apps.iter().any(|a| a.id == app.id)
+            if let Some(app) = self
+                .apps
+                .iter()
+                .find(|a| a.matches_window_class(&window.app_class))
+                && !apps.iter().any(|a| a.id == app.id)
             {
                 apps.push(app);
             }
@@ -356,7 +357,7 @@ impl Desktop {
             return;
         }
         if matches!(action, Action::Terminal) {
-            if let Some(app) = self.apps.iter().find(|a| a.id.0 == "foot.desktop") {
+            if let Some(app) = self.apps.iter().find(|a| a.id.as_str() == "foot.desktop") {
                 self.launch(&app.id, false, effects);
             }
             return;
@@ -1214,7 +1215,7 @@ impl api::Application for Desktop {
         }))
     }
     fn inspect(&self) -> String {
-        serde_json::json!({"palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.background.is_some(), "notifications_ready":self.notifications.ready,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher,"launcher_size":self.settings.launcher,"launcher_panel_size":[self.panel_width.target_value(),self.panel_height.target_value()],"mode":self.mode.name(),"query":self.query,"selected":self.selected,"result_count":self.results.len(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(&a.id.0).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":!self.drag_origins.is_empty(),"notes":self.settings.notes,"timer_seconds":self.timer.remaining,"error":self.error}).to_string()
+        serde_json::json!({"palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.background.is_some(), "notifications_ready":self.notifications.ready,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher,"launcher_size":self.settings.launcher,"launcher_panel_size":[self.panel_width.target_value(),self.panel_height.target_value()],"mode":self.mode.name(),"query":self.query,"selected":self.selected,"result_count":self.results.len(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":!self.drag_origins.is_empty(),"notes":self.settings.notes,"timer_seconds":self.timer.remaining,"error":self.error}).to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
         (surface == "osd" && self.osd.animating(now))

@@ -3,7 +3,66 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct AppId(pub String);
+#[serde(try_from = "String", into = "String")]
+pub struct AppId(String);
+impl AppId {
+    /// An XDG desktop-file identity, not a filesystem path or command.
+    pub fn new(value: impl Into<String>) -> Result<Self> {
+        let value = value.into();
+        if value.len() <= ".desktop".len()
+            || !value.ends_with(".desktop")
+            || value.chars().any(|c| c.is_control() || c == '/')
+        {
+            return Err(DomainError::Invalid("Application ID must be a non-empty desktop-file identity without path separators or control characters".into()));
+        }
+        Ok(Self(value))
+    }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+impl TryFrom<String> for AppId {
+    type Error = DomainError;
+    fn try_from(value: String) -> Result<Self> {
+        Self::new(value)
+    }
+}
+impl From<AppId> for String {
+    fn from(id: AppId) -> Self {
+        id.0
+    }
+}
+#[cfg(test)]
+mod app_id_tests {
+    use super::*;
+    #[test]
+    fn desktop_identity_is_validated_by_construction_and_deserialization() {
+        use serde::de::value::{Error, StringDeserializer};
+        for value in [
+            "",
+            ".desktop",
+            "app",
+            "/tmp/app.desktop",
+            "app\0.desktop",
+            "line\n.desktop",
+        ] {
+            assert!(AppId::new(value).is_err(), "accepted {value:?}");
+            assert!(AppId::deserialize(StringDeserializer::<Error>::new(value.into())).is_err());
+        }
+        for value in [
+            "org.example.App.desktop",
+            "Google Contacts.desktop",
+            "nested-app.desktop",
+        ] {
+            let id = AppId::new(value).unwrap();
+            assert_eq!(id.as_str(), value);
+            assert_eq!(
+                AppId::deserialize(StringDeserializer::<Error>::new(value.into())).unwrap(),
+                id
+            );
+        }
+    }
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Application {
     pub id: AppId,
@@ -13,6 +72,19 @@ pub struct Application {
     pub icon: String,
     pub startup_class: String,
     pub command: LaunchCommand,
+}
+impl Application {
+    /// Match an observed compositor class using desktop-entry hints. Missing
+    /// classes carry no identity and must never match another missing hint.
+    pub fn matches_window_class(&self, class: &str) -> bool {
+        !class.is_empty()
+            && (self.startup_class.eq_ignore_ascii_case(class)
+                || self
+                    .id
+                    .as_str()
+                    .strip_suffix(".desktop")
+                    .is_some_and(|id| id.eq_ignore_ascii_case(class)))
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LaunchCommand {

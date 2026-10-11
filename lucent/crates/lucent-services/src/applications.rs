@@ -171,7 +171,7 @@ pub fn parse_entry(
     let argv = parse_exec(&unescape(value("Exec")), &name, path, &icon)?;
     let directory = unescape(value("Path"));
     Ok(Some(Application {
-        id: AppId(id.into()),
+        id: AppId::new(id)?,
         name,
         description: localized("Comment"),
         keywords: localized("Keywords")

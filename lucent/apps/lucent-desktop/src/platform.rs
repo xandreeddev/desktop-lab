@@ -79,14 +79,14 @@ impl AssetPort for NativeAssets {
         let mut result = vec![];
         let mut seen = BTreeSet::new();
         for app in apps {
-            if let Some(asset) = lucent_design::app_icons::lookup(&app.id.0)
+            if let Some(asset) = lucent_design::app_icons::lookup(app.id.as_str())
                 && let Some(image) = images::svg(
                     asset.svg,
                     images::ICON_PIXELS,
                     format!("lucent-app:{}", asset.id),
                 )
             {
-                result.push((format!("app:{}", app.id.0), image));
+                result.push((format!("app:{}", app.id.as_str()), image));
             } else if seen.insert(app.icon.clone())
                 && let Some(image) = images::icon(&app.icon)
             {

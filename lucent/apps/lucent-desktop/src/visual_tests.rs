@@ -45,7 +45,7 @@ fn fixture(count: usize, light: bool) -> Desktop {
     ];
     app.apps = (0..count)
         .map(|n| App {
-            id: AppId(
+            id: AppId::new(
                 [
                     "foot.desktop",
                     "org.gnome.Nautilus.desktop",
@@ -56,9 +56,9 @@ fn fixture(count: usize, light: bool) -> Desktop {
                     "libreoffice-writer.desktop",
                     "omacalc.desktop",
                     "unmapped-fixture.desktop",
-                ][n % 9]
-                    .into(),
-            ),
+                ][n % 9],
+            )
+            .unwrap(),
             name: names[n % names.len()].into(),
             description: String::new(),
             keywords: vec![],
@@ -77,9 +77,9 @@ fn fixture(count: usize, light: bool) -> Desktop {
         })
         .collect();
     for a in &app.apps {
-        if let Some(asset) = lucent_design::app_icons::lookup(&a.id.0) {
+        if let Some(asset) = lucent_design::app_icons::lookup(a.id.as_str()) {
             app.images.insert(
-                format!("app:{}", a.id.0),
+                format!("app:{}", a.id.as_str()),
                 lucent_services::images::svg(asset.svg, 128, format!("lucent-app:{}", asset.id))
                     .unwrap(),
             );
@@ -611,12 +611,9 @@ fn drag_grid_matches_snap_spacing_and_never_captures_input() {
         .paint
         .iter()
         .filter_map(|p| match p {
-            Paint::Shape {
-                rect,
-                shadow: false,
-                ..
-            } if rect.w == width && rect.h == cx.height
-                || rect.h == width && rect.w == cx.width =>
+            Paint::Shape { rect, .. }
+                if rect.w == width && rect.h == cx.height
+                    || rect.h == width && rect.w == cx.width =>
             {
                 Some(*rect)
             }
@@ -1096,7 +1093,6 @@ fn visual_regressions() {
                 clip: Rect::new(0., 0., width, height).into(),
                 color: Color::hex(if light { 0xc9c3b9 } else { 0x28272d }),
                 radius: 0.,
-                shadow: false,
             }];
             paint.extend(scene.paint);
             for scale in [1, 2] {
@@ -1323,14 +1319,10 @@ fn settled_shell_geometry_obeys_grid_and_contains_its_controls() {
                     .paint
                     .iter()
                     .find_map(|p| match p {
-                        Paint::Shape {
-                            rect,
-                            color,
-                            shadow: false,
-                            ..
-                        } if *color == app.widget_color()
-                            && rect.h == component::input::HEIGHT
-                            && fully_visible(input, *rect) =>
+                        Paint::Shape { rect, color, .. }
+                            if *color == app.widget_color()
+                                && rect.h == component::input::HEIGHT
+                                && fully_visible(input, *rect) =>
                         {
                             Some(*rect)
                         }
@@ -1423,7 +1415,7 @@ fn bar_capsules_share_grid_do_not_overlap_and_keep_active_workspace_visible() {
                     active: id == count,
                 })
                 .collect();
-            let geometry = crate::shell_layout::BarLayout::new(width, count as usize);
+            let geometry = crate::shell_layout::BarLayout::new(width, count.max(6) as usize);
             let mut groups = vec![geometry.workspaces, geometry.system];
             groups.extend(geometry.media);
             groups.extend(geometry.clock);

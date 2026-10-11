@@ -116,8 +116,11 @@ impl Theme {
                 duration: motion::HOVER,
                 curve: motion::DECELERATE,
             };
-            e.style.shadow_color = palette::BLACK.alpha(opacity::SHADOW);
-            e.style.shadow_offset = space::XS;
+            if let Some(shadow) = &mut e.style.shadow {
+                shadow.color = palette::BLACK.alpha(opacity::SHADOW);
+                shadow.offset = (0., elevation::OFFSET);
+                shadow.blur = elevation::BLUR;
+            }
             for child in &mut e.children {
                 visit(theme, child);
             }
