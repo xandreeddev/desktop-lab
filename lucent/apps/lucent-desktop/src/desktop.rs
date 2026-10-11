@@ -1,59 +1,13 @@
+use crate::actions::Action;
 use crate::adapters::{DesktopAdapters, WatchStop};
+use crate::launcher::Mode;
+use crate::launcher::{self, Launcher};
+use crate::widget_catalog::WIDGETS;
 use lucent_api::{self as api, *};
 use lucent_design::{component::panel, motion};
 use lucent_domain::{self as domain, *};
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Mode {
-    Apps,
-    Commands,
-    Wallpapers,
-    Themes,
-    Widgets,
-}
-impl Mode {
-    pub const ALL: [Self; 5] = [
-        Self::Apps,
-        Self::Commands,
-        Self::Wallpapers,
-        Self::Themes,
-        Self::Widgets,
-    ];
-    pub fn cycle(self, delta: i32) -> Self {
-        let index = Self::ALL.iter().position(|mode| *mode == self).unwrap() as i32;
-        Self::ALL[(index + delta).rem_euclid(Self::ALL.len() as i32) as usize]
-    }
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Apps => "Apps",
-            Self::Commands => "Commands",
-            Self::Wallpapers => "Wallpapers",
-            Self::Themes => "Themes",
-            Self::Widgets => "Widgets",
-        }
-    }
-}
-#[derive(Clone, Copy, Debug)]
-pub enum Action {
-    Lock,
-    VolumeUp,
-    VolumeDown,
-    Mute,
-    PlayPause,
-    Next,
-    Previous,
-    Terminal,
-    Quit,
-}
-pub const COMMANDS: [(&str, Action, &str); 6] = [
-    ("New terminal", Action::Terminal, "command"),
-    ("Lock screen", Action::Lock, "lock"),
-    ("Volume up", Action::VolumeUp, "volume"),
-    ("Volume down", Action::VolumeDown, "volume"),
-    ("Mute / unmute", Action::Mute, "volume"),
-    ("Close Lucent", Action::Quit, "power"),
-];
 #[derive(Clone)]
 pub enum Message {
     Notifications(crate::notifications::Message),
@@ -70,13 +24,7 @@ pub enum Message {
     System(domain::Result<SystemSnapshot>),
     Media(domain::Result<MediaSnapshot>),
     Weather(domain::Result<WeatherSnapshot>),
-    ToggleLauncher,
-    CloseLauncher,
-    Mode(Mode),
-    Query(String),
-    Select(usize),
-    Navigate(i32),
-    Activate,
+    Launcher(launcher::Message),
     Launch(AppId, bool),
     Workspace(i32),
     Action(Action),
@@ -107,16 +55,6 @@ pub enum Message {
     Quit,
 }
 pub const SPATIAL: [f32; 4] = motion::SPATIAL;
-pub const DECEL: [f32; 4] = motion::DECELERATE;
-pub const WIDGETS: [(&str, &str, &str); 7] = [
-    ("calendar", "Calendar", "Your month at a glance"),
-    ("clock", "Clock", "Large, stacked time"),
-    ("weather", "Weather", "Current local conditions"),
-    ("media", "Media", "Now playing and controls"),
-    ("system", "System", "Live CPU and memory"),
-    ("notes", "Notes", "A thought to keep nearby"),
-    ("timer", "Focus", "A 25-minute focus timer"),
-];
 pub struct Desktop {
     pub notifications: crate::notifications::Center,
     pub osd: crate::osd::Osd,
@@ -139,15 +77,7 @@ pub struct Desktop {
     palette_intent: crate::palette_intent::Intent,
     pub wallpapers: Vec<Wallpaper>,
     pub wallpaper_index: usize,
-    pub launcher: bool,
-    pub mode: Mode,
-    pub query: String,
-    pub results: Vec<usize>,
-    pub selected: usize,
-    pub scroll: usize,
-    pub reveal: Motion,
-    pub panel_width: Motion,
-    pub panel_height: Motion,
+    pub launcher: Launcher,
     pub carousel: Motion,
     pub viewport: (f32, f32),
     pub timer: FocusTimer,
@@ -185,15 +115,7 @@ impl Desktop {
             palette_intent: Default::default(),
             wallpapers: vec![],
             wallpaper_index: 0,
-            launcher: false,
-            mode: Mode::Apps,
-            query: String::new(),
-            results: vec![],
-            selected: 0,
-            scroll: 0,
-            reveal: Motion::fixed(0.),
-            panel_width: Motion::fixed(panel::INITIAL_WIDTH),
-            panel_height: Motion::fixed(panel::DOCK_HEIGHT),
+            launcher: Launcher::default(),
             carousel: Motion::fixed(0.),
             viewport: (1920., 1080.),
             timer: FocusTimer::default(),
@@ -328,72 +250,60 @@ impl Desktop {
     pub fn dock_width(&self) -> f32 {
         crate::shell_layout::dock_width(self.dock_apps().len() + 1)
     }
-    fn retarget_panel_transition(&mut self, now: f64) {
-        let (width, height) = if self.launcher {
-            crate::shell_layout::launcher_size(
-                self.mode,
-                self.results.len(),
-                self.viewport,
-                self.settings.launcher,
-            )
-        } else {
-            (self.dock_width(), panel::DOCK_HEIGHT)
-        };
-        self.panel_width.target(width, now, motion::PANEL, SPATIAL);
-        self.panel_height
-            .target(height, now, motion::PANEL, SPATIAL);
-        self.reveal.target(
-            if self.launcher { 1. } else { 0. },
-            now,
-            if self.launcher {
-                motion::ENTER
+    fn launcher_geometry(&self) -> launcher::Geometry {
+        launcher::Geometry {
+            viewport: self.viewport,
+            preferred: self.settings.launcher,
+            dock_width: self.dock_width(),
+            palettes: if self.launcher.mode() == Mode::Themes {
+                self.palette_choices().len()
             } else {
-                motion::EXIT
+                0
             },
-            DECEL,
-        );
-    }
-    fn choose(&mut self, index: usize, _now: f64) {
-        let count = match self.mode {
-            Mode::Apps => self.results.len(),
-            Mode::Commands => COMMANDS.len(),
-            Mode::Widgets => WIDGETS.len() + 1,
-            Mode::Themes => {
-                self.palette_choices().len() + 1 + crate::shell_layout::LAUNCHER_PRESETS.len()
-            }
-            Mode::Wallpapers => self.wallpapers.len(),
-        };
-        self.selected = index.min(count.saturating_sub(1));
-        let mut rows = crate::shell_layout::visible_rows(
-            self.mode,
-            self.results.len(),
-            self.viewport,
-            self.settings.launcher,
-        );
-        if self.mode == Mode::Themes {
-            let (_, height) = crate::shell_layout::launcher_size(
-                self.mode,
-                0,
-                self.viewport,
-                self.settings.launcher,
-            );
-            rows = crate::shell_layout::palette_rows(
-                height - lucent_design::component::dock::CONTENT_INSET * 2.,
-            );
+            wallpapers: self.wallpapers.len(),
         }
-        let row_count = if self.mode == Mode::Themes {
-            self.palette_choices().len() + 1
-        } else if self.mode == Mode::Widgets {
-            WIDGETS.len()
+    }
+    fn retarget_panel_transition(&mut self, now: f64) {
+        self.launcher.reconcile(self.launcher_geometry(), now);
+    }
+    fn update_launcher(&mut self, message: launcher::Message, effects: &mut Effects<Message>) {
+        let palettes = if self.launcher.mode() == Mode::Themes
+            || matches!(message, launcher::Message::Mode(Mode::Themes))
+        {
+            self.palette_choices()
         } else {
-            count
+            Vec::new()
         };
-        let selected = self.selected.min(row_count.saturating_sub(1));
-        self.scroll = self
-            .scroll
-            .min(selected)
-            .max((selected + 1).saturating_sub(rows))
-            .min(row_count.saturating_sub(rows));
+        let mut geometry = self.launcher_geometry();
+        geometry.palettes = palettes.len();
+        let input = launcher::Input {
+            apps: &self.apps,
+            settings: &self.settings,
+            palettes: &palettes,
+            wallpapers: &self.wallpapers,
+            wallpaper_index: self.wallpaper_index,
+            browser: &self.browser,
+        };
+        let mut intent = None;
+        effects.delegate(
+            |child| intent = self.launcher.update(message, input, geometry, child),
+            Message::Launcher,
+        );
+        if let Some(intent) = intent {
+            use launcher::Intent;
+            let message = match intent {
+                Intent::Launch(id, prefer) => Message::Launch(id, prefer),
+                Intent::Action(action) => Message::Action(action),
+                Intent::Wallpaper(index, apply) => Message::Wallpaper(index, apply),
+                Intent::Browser(message) => Message::Browser(message),
+                Intent::ToggleWidget(id) => Message::ToggleWidget(id),
+                Intent::ResetLayout => Message::ResetLayout,
+                Intent::Palette(palette) => Message::Palette(palette),
+                Intent::ExtractPalette => Message::ExtractPalette,
+                Intent::LauncherSize(size) => Message::LauncherSize(size),
+            };
+            self.update(message, effects);
+        }
     }
     fn launch(&self, id: &AppId, prefer_running: bool, effects: &mut Effects<Message>) {
         let Some(app) = self.apps.iter().find(|a| &a.id == id).cloned() else {
@@ -505,7 +415,8 @@ impl Component for Desktop {
                     |child| self.wallpaper.load(current_wallpaper, child),
                     Message::WallpaperSelection,
                 );
-                self.results = lucent_usecases::search_applications(&self.apps, "");
+                self.launcher
+                    .refresh(&self.apps, self.launcher_geometry(), now);
                 let assets = self.adapters.assets.clone();
                 let apps = self.apps.clone();
                 let walls = self.wallpapers.clone();
@@ -623,111 +534,10 @@ impl Component for Desktop {
                 effects.redraw("bar");
                 effects.redraw("widgets");
             }
-            Message::ToggleLauncher => {
-                self.launcher = !self.launcher;
-                if self.launcher {
-                    self.mode = Mode::Apps;
-                    self.query.clear();
-                    self.results = lucent_usecases::search_applications(&self.apps, "");
-                    self.choose(0, now);
-                }
-                self.retarget_panel_transition(now);
-                effects.redraw("dock");
-            }
-            Message::CloseLauncher => {
-                self.launcher = false;
-                self.retarget_panel_transition(now);
-                effects.redraw("dock");
-            }
-            Message::Mode(mode) => {
-                self.launcher = true;
-                self.mode = mode;
-                self.query.clear();
-                self.results = lucent_usecases::search_applications(&self.apps, "");
-                self.scroll = 0;
-                self.choose(0, now);
-                self.retarget_panel_transition(now);
-                effects.redraw("dock");
-            }
-            Message::Query(query) => {
-                self.query = query;
-                self.results = lucent_usecases::search_applications(&self.apps, &self.query);
-                self.scroll = 0;
-                self.choose(0, now);
-                self.retarget_panel_transition(now);
-                effects.redraw("dock");
-            }
-            Message::Select(index) => {
-                self.choose(index, now);
-                effects.redraw("dock");
-            }
-            Message::Navigate(delta) => {
-                if self.mode == Mode::Wallpapers && self.browser.source.is_some() {
-                    self.browser
-                        .update(crate::wallpaper_browser::Message::Navigate(delta));
-                    effects.redraw("dock");
-                } else if self.mode == Mode::Wallpapers {
-                    let index = (self.wallpaper_index as i32 + delta)
-                        .clamp(0, self.wallpapers.len().saturating_sub(1) as i32)
-                        as usize;
-                    self.update(Message::Wallpaper(index, false), effects);
-                } else {
-                    self.choose((self.selected as i32 + delta).max(0) as usize, now);
-                    effects.redraw("dock");
-                }
-            }
-            Message::Activate => {
-                if self.mode == Mode::Wallpapers && self.browser.source.is_some() {
-                    use crate::wallpaper_browser::Message as Browse;
-                    self.update(
-                        Message::Browser(
-                            if self.browser.items.is_empty()
-                                || self.browser.query != self.browser.submitted
-                            {
-                                Browse::Search(1)
-                            } else {
-                                Browse::Download(true)
-                            },
-                        ),
-                        effects,
-                    );
-                } else if self.mode == Mode::Wallpapers {
-                    self.update(Message::Wallpaper(self.wallpaper_index, true), effects);
-                } else if self.mode == Mode::Themes {
-                    if let Some(palette) = self.palette_choices().get(self.selected) {
-                        self.update(Message::Palette(palette.clone()), effects);
-                    } else if self.selected == self.palette_choices().len() {
-                        self.update(Message::ExtractPalette, effects);
-                    } else if let Some((_, size)) = crate::shell_layout::LAUNCHER_PRESETS
-                        .get(self.selected - self.palette_choices().len() - 1)
-                    {
-                        self.update(Message::LauncherSize(*size), effects);
-                    }
-                } else if self.mode == Mode::Widgets {
-                    let message = WIDGETS
-                        .get(self.selected)
-                        .map(|(id, _, _)| Message::ToggleWidget((*id).into()))
-                        .unwrap_or(Message::ResetLayout);
-                    self.update(message, effects);
-                } else if self.mode == Mode::Commands {
-                    if let Some((_, action, _)) = COMMANDS.get(self.selected) {
-                        self.perform(*action, effects);
-                    }
-                } else if self.mode == Mode::Apps
-                    && let Some(index) = self.results.get(self.selected)
-                {
-                    let id = self.apps[*index].id.clone();
-                    self.launch(&id, false, effects);
-                    self.launcher = false;
-                    self.retarget_panel_transition(now);
-                    effects.redraw("dock");
-                }
-            }
+            Message::Launcher(message) => self.update_launcher(message, effects),
             Message::Launch(id, prefer) => {
                 self.launch(&id, prefer, effects);
-                self.launcher = false;
-                self.retarget_panel_transition(now);
-                effects.redraw("dock");
+                self.update_launcher(launcher::Message::Close, effects);
             }
             Message::Workspace(id) => {
                 if let Some(hypr) = self.adapters.compositor.clone() {
@@ -891,7 +701,10 @@ impl Component for Desktop {
             }
             Message::BrowserSearch(provider, query) => {
                 use crate::wallpaper_browser::Message as Browse;
-                self.update(Message::Mode(Mode::Wallpapers), effects);
+                self.update(
+                    Message::Launcher(launcher::Message::Mode(Mode::Wallpapers)),
+                    effects,
+                );
                 for message in [
                     Browse::Source(Some(provider)),
                     Browse::Query(query),
@@ -951,7 +764,6 @@ impl Component for Desktop {
             Message::LauncherSize(size) => {
                 self.settings.launcher = size;
                 self.retarget_panel_transition(now);
-                self.choose(self.selected, now);
                 self.save(effects);
                 effects.redraw("dock");
             }
@@ -967,7 +779,6 @@ impl Component for Desktop {
                     effects.redraw("dock");
                 }
                 self.retarget_panel_transition(now);
-                self.choose(self.selected, now);
                 effects.redraw(id);
             }
             Message::Completed(result) => {
@@ -1058,7 +869,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "dock",
-                layer: if self.launcher {
+                layer: if self.launcher.open() {
                     Layer::Overlay
                 } else {
                     Layer::Top
@@ -1067,13 +878,13 @@ impl api::Application for Desktop {
                 width: 0,
                 height: 0,
                 exclusive_zone: -1,
-                keyboard: if self.launcher {
+                keyboard: if self.launcher.open() {
                     Keyboard::Exclusive
                 } else {
                     Keyboard::None
                 },
                 visible: true,
-                capture_all: self.launcher,
+                capture_all: self.launcher.open(),
             },
         ]
     }
@@ -1152,37 +963,10 @@ impl api::Application for Desktop {
                 width,
                 height,
             } => Some(Message::Resize(surface, width, height)),
-            Event::Outside { surface: "dock" } if self.launcher => Some(Message::CloseLauncher),
-            Event::Key {
-                surface: "dock",
-                key,
-            } if self.launcher => match key {
-                Key::Tab => Some(Message::Mode(self.mode.cycle(1))),
-                Key::BackTab => Some(Message::Mode(self.mode.cycle(-1))),
-                Key::Escape => Some(Message::CloseLauncher),
-                Key::Enter => Some(Message::Activate),
-                Key::Up => Some(Message::Navigate(-1)),
-                Key::Left
-                    if self.mode == Mode::Themes
-                        || (self.mode == Mode::Wallpapers && self.browser.source.is_none()) =>
-                {
-                    Some(Message::Navigate(-1))
-                }
-                Key::Down => Some(Message::Navigate(1)),
-                Key::Right
-                    if self.mode == Mode::Themes
-                        || (self.mode == Mode::Wallpapers && self.browser.source.is_none()) =>
-                {
-                    Some(Message::Navigate(1))
-                }
-                Key::Home if self.mode == Mode::Wallpapers => Some(Message::Wallpaper(0, false)),
-                _ => None,
-            },
-            Event::Scroll {
-                surface: "dock",
-                lines,
-            } if self.launcher => Some(Message::Navigate(if lines > 0. { 1 } else { -1 })),
-            _ => None,
+            event => self
+                .launcher
+                .event(event, self.browser.source.is_some())
+                .map(Message::Launcher),
         }
     }
     fn command(&self, command: &str) -> std::result::Result<Option<Message>, String> {
@@ -1281,12 +1065,12 @@ impl api::Application for Desktop {
             "theme light" => Message::Theme(true),
             "theme dark" => Message::Theme(false),
             "notifications toggle" => Message::Notifications(crate::notifications::Message::Toggle),
-            "launcher toggle" => Message::ToggleLauncher,
-            "launcher close" => Message::CloseLauncher,
-            "launcher open" => Message::Mode(Mode::Apps),
-            "wallpapers open" => Message::Mode(Mode::Wallpapers),
-            "widgets open" => Message::Mode(Mode::Widgets),
-            "themes open" => Message::Mode(Mode::Themes),
+            "launcher toggle" => Message::Launcher(launcher::Message::Toggle),
+            "launcher close" => Message::Launcher(launcher::Message::Close),
+            "launcher open" => Message::Launcher(launcher::Message::Mode(Mode::Apps)),
+            "wallpapers open" => Message::Launcher(launcher::Message::Mode(Mode::Wallpapers)),
+            "widgets open" => Message::Launcher(launcher::Message::Mode(Mode::Widgets)),
+            "themes open" => Message::Launcher(launcher::Message::Mode(Mode::Themes)),
             "quit" => Message::Quit,
             _ => return Err(
                 "Use launcher toggle|open|close|size, wallpapers open, widgets open, themes open, inspect, or quit"
@@ -1295,18 +1079,10 @@ impl api::Application for Desktop {
         }))
     }
     fn inspect(&self) -> String {
-        serde_json::json!({"palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher,"launcher_size":self.settings.launcher,"launcher_panel_size":[self.panel_width.target_value(),self.panel_height.target_value()],"mode":self.mode.name(),"query":self.query,"selected":self.selected,"result_count":self.results.len(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":!self.drag_origins.is_empty(),"notes":self.settings.notes,"timer_seconds":self.timer.remaining,"error":self.error_message(),"settings_error":self.settings_error,"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable}).to_string()
+        serde_json::json!({"palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":!self.drag_origins.is_empty(),"notes":self.settings.notes,"timer_seconds":self.timer.remaining,"error":self.error_message(),"settings_error":self.settings_error,"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable}).to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
         (surface == "osd" && self.osd.animating(now))
-            || surface == "dock"
-                && [
-                    self.reveal,
-                    self.panel_width,
-                    self.panel_height,
-                    self.carousel,
-                ]
-                .iter()
-                .any(|m| m.active(now))
+            || (surface == "dock" && (self.launcher.animating(now) || self.carousel.active(now)))
     }
 }

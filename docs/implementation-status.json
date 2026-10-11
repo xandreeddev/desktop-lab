@@ -179,7 +179,9 @@
         "Grid snapping uses wider intermediates; invalid bounds do not mutate settings and invalid release clears transient drag state",
         "Settings failures retain their own visible error through unrelated successful effects; invalid files remain preserved",
         "112 Rust tests, 49 Python checks, 148 unchanged visual comparisons and focused native calendar/drag/save/restart/invalid-settings checks passed",
-        "Larger launcher and widget component extraction remains open"
+        "Launcher private state, messages, event routing, selector views and panel motion extracted into a child controller; borrowed inputs and typed intents preserve adapter/use-case ownership",
+        "126 Rust tests and 53 Python checks pass, including child behavior, exact motion restart and child/root import guard; 148 existing Vulkan comparisons pass without baseline changes",
+        "Native validation of the extracted child and further widget coordination extraction remain open"
       ]
     },
     {
@@ -435,7 +437,7 @@
     },
     {
       "milestone": "derivative-coverage",
-      "status": "locally_verified",
+      "status": "merged",
       "source_commit": "dd363f1c2b98331e86fc80967a88a2fde9e61db1",
       "checks": [
         "122 Rust unit tests and 52 Python checks passed",
@@ -443,13 +445,15 @@
         "148 existing visual comparisons passed on each driver without baseline or tolerance changes",
         "Clippy, formatting, tokens/icons and Astro check/build passed",
         "Full release build and reversible native user-binary deployment passed",
-        "Native launcher, restart, independent application lifetime and secure lock/unlock passed"
+        "Native launcher, restart, independent application lifetime and secure lock/unlock passed",
+        "All six exact-head checks, protected-main merge and Pages deployment passed"
       ],
       "pending": [
-        "Exact-head CI, protected-main merge and Pages",
         "Root greeter remains on its earlier wallpaper-transaction binary; interactive login was not repeated",
         "Other requirement groups"
-      ]
+      ],
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/15",
+      "merge_commit": "46b2854ab0b1d18b3b98a135fdab9bb2de4190ce"
     }
   ]
 }

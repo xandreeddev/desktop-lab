@@ -697,6 +697,11 @@ impl Motion {
         }
     }
     pub fn value(self, now: f64) -> f32 {
+        // The inverse-curve search is approximate. Preserve the exact starting
+        // value so retargeting cannot introduce a size-dependent discontinuity.
+        if now <= self.start {
+            return self.from;
+        }
         if now >= self.start + self.duration {
             return self.to;
         }
@@ -739,9 +744,11 @@ mod tests {
     fn interrupted_motion_is_continuous_and_finishes() {
         let mut m = Motion::fixed(0.);
         m.target(1., 0., 0.5, [0.38, 1.21, 0.22, 1.]);
+        assert_eq!(m.value(-1.), 0.);
+        assert_eq!(m.value(0.), 0.);
         let v = m.value(0.2);
         m.target(0., 0.2, 0.3, [0.05, 0.7, 0.1, 1.]);
-        assert!((m.value(0.2) - v).abs() < 0.001);
+        assert_eq!(m.value(0.2), v);
         assert!(!m.active(1.));
         assert_eq!(m.value(1.), 0.);
     }

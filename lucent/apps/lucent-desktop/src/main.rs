@@ -1,5 +1,8 @@
+mod actions;
 mod adapters;
+mod artwork;
 mod desktop;
+mod launcher;
 mod notifications;
 mod osd;
 mod palette_intent;
@@ -9,6 +12,7 @@ mod shell_layout;
 mod views;
 mod wallpaper_browser;
 mod wallpaper_selection;
+mod widget_catalog;
 mod widgets;
 mod workspaces;
 use desktop::Desktop;

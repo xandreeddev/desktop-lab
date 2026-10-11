@@ -129,3 +129,8 @@ class Boundaries(unittest.TestCase):
             elif isinstance(node, ast.ImportFrom):
                 modules.add(node.module)
         self.assertLessEqual(modules, {'json', 're'})
+
+    def test_launcher_does_not_import_the_root_component_or_adapter_bundle(self):
+        root = ROOT / 'lucent/apps/lucent-desktop/src'
+        paths = sources(root / 'launcher') + [root / 'artwork.rs', root / 'actions.rs', root / 'widget_catalog.rs']
+        self.assert_no_platform_operations(paths, ('crate::desktop', 'crate::adapters', 'crate::platform'))

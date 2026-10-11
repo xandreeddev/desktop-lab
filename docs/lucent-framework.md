@@ -436,11 +436,37 @@ a pure desktop-domain concept. Framework crates do not depend on the domain,
 Lucent's visual theme, service adapters or authentication adapters.
 
 This is a practical ports-and-adapters structure, not a claim of a finished framework.
-The launcher still shares `Desktop` state; audio/media use CLI adapters and polling;
+The launcher owns private interaction and motion state; widget coordination still
+lives in `Desktop`. Audio/media use CLI adapters and polling;
 layout has no general scroll container or complex-script shaping. OS operations
 stay behind ports, while pure search, launch/focus, positioning and notification
 expiry policy live in `lucent-usecases`. Architecture dependency checks enforce
 these boundaries in CI.
+
+## Launcher composition
+
+`launcher::Launcher` privately owns open/mode/query/results/selection/scroll and
+panel motion. `launcher::View` borrows that state, current domain snapshots and
+already-decoded `Artwork`. It builds the five-mode selector without importing
+`Desktop`, its adapter bundle, or production implementations. The desktop maps its
+element handlers through `Message::Launcher` and delegates child effects.
+
+Child updates accept current `Input` and client `Geometry`; they return optional
+typed `Intent` values such as Launch, Palette or ToggleWidget. The root coordinates
+shared settings, appearance transactions and application-port effects. Search
+ranking remains a pure use case. This child has no event loop and is not another
+`Application` implementation; the root calls it on the framework's UI thread.
+There is no need to store copies of the desktop or add a framework dependency on
+desktop concepts just to compose borrowed inputs.
+
+Discovery refresh preserves an active query and removes stale result indices.
+Resize and preference changes clamp selection/scroll before painting. Keyboard
+routing is scoped to the open dock surface; online wallpaper input retains its
+own browser state. Dock/launcher shape motion stays in the child, while wallpaper
+carousel motion remains with appearance coordination. `Motion::value` now returns
+its exact starting value at/before the start timestamp, preventing the inverse
+curve approximation from introducing a discontinuity when a transition reverses.
+This does not establish a frame-pacing or memory improvement.
 
 ## Notifications and secure session UI
 

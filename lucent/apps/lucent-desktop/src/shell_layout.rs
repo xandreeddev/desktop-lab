@@ -1,6 +1,6 @@
 //! Pure desktop geometry. Views and animation targets share these calculations.
 //! Grid policy belongs to this client/design system, never to the renderer.
-use crate::desktop::{COMMANDS, Mode, WIDGETS};
+use crate::{actions::COMMANDS, launcher::Mode, widget_catalog::WIDGETS};
 use lucent_api::Rect;
 use lucent_design::{
     component::{bar, dock, dock_row, input, launcher, panel, pill},
