@@ -1,0 +1,95 @@
+{
+  "source_commit": "f218a6c963d3aa3fb87c95338c8bd906c16f3d33",
+  "change": "Renderer scene admission, bounded text preparation and fallible frame submission",
+  "architecture": "Validation and resource preparation stay in lucent-render; domain ports, supplied adapters, desktop policy and generated design tokens are unchanged.",
+  "checks": {
+    "rust_unit_tests": 167,
+    "python_checks": 60,
+    "clippy": "passed",
+    "formatting": "passed",
+    "design_tokens": 457,
+    "application_icons": 58,
+    "shellcheck": "passed",
+    "astro_check_build": "passed",
+    "pages_path_links": "passed"
+  },
+  "drivers": [
+    {
+      "adapter": "llvmpipe (LLVM 22.1.8, 256 bits)",
+      "driver": "Mesa 26.2.3-arch1.1 (LLVM 22.1.8)",
+      "backend": "Vulkan",
+      "focused_renderer_tests_passed": 9,
+      "visual_comparisons_passed": 172
+    },
+    {
+      "adapter": "AMD Radeon Graphics (RADV RENOIR)",
+      "driver": "Mesa 26.2.3-arch1.1",
+      "backend": "Vulkan",
+      "focused_renderer_tests_passed": 9,
+      "visual_comparisons_passed": 172
+    }
+  ],
+  "baseline_updates": 0,
+  "tolerance_changes": 0,
+  "admission_limits": {
+    "geometry": "Finite 2^24 coordinate/effect/color envelope; nonnegative dimensions and exact f32 clip indexing",
+    "images": "Requested device maximum 2D texture dimension",
+    "geometry_buffers": "Device buffer, clip storage-binding, host slice and draw-index limits; exact-fit fallback when geometric growth exceeds the device limit",
+    "text_bytes_per_primitive": 65536,
+    "glyph_supersampled_max_edge": 8192,
+    "glyph_supersampled_max_pixels": 16777216,
+    "existing_physical_text_mask_cap": [
+      4096,
+      1024
+    ]
+  },
+  "rejection_regression": [
+    "Oversized image, NaN text size and extreme shape geometry fail before resource preparation",
+    "A later oversized glyph fails after a valid image upload without changing previous target pixels, geometry-buffer payload or pinned scene resources",
+    "A zero-reuse-budget fixture evicts temporary rejected-scene resources while retaining the previous frame",
+    "A valid subsequent frame renders on the same canvas and GPU"
+  ],
+  "native": {
+    "environment": "Existing Lucent software-Vulkan VM",
+    "deployed_binary_sha256": {
+      "lucent-desktop": "7eade9658ef45ce9ff9bdd18af15b7ca9f4812d25c76dbdbd03746478dccd548"
+    },
+    "rollback_copy_retained": true,
+    "launcher": {
+      "checks": [
+        "panel_and_rows_on_shell_grid",
+        "equal_launcher_insets",
+        "uniform_row_pitch",
+        "input_on_shell_grid",
+        "top_bar_clock_on_shell_grid",
+        "keyboard_selection_without_hover",
+        "visible_rows_unclipped",
+        "search_focus_visible",
+        "tab_all_five_sections",
+        "shift_tab_reverse",
+        "widget_keyboard_selection",
+        "search_focus_restored_after_mode_switch"
+      ],
+      "settings_unchanged": true
+    },
+    "runtime": {
+      "launcher_input": true,
+      "independent_application_service": true,
+      "application_survives_shell_restart": true,
+      "restart_restores_background": true,
+      "native_lock_unlock": true,
+      "surface_fault_injection": false,
+      "notes": "Native VM checks. Presentation recovery policy is unit-tested; driver fault injection is not covered here."
+    },
+    "final_desktop_ready": true,
+    "deployment_scope": "Desktop executable only; existing lock/login executables were not replaced"
+  },
+  "limits": [
+    "Bounds validate renderer requests; they do not cap total process memory or prove allocation/device-loss recovery",
+    "The native runtime still treats a rendering error as fatal; previous-frame retention and subsequent rendering were verified through the offscreen Canvas API",
+    "Font parsing and upstream lucent-ui layout admission are separate boundaries",
+    "Text rasterization remains synchronous on cache misses; no latency or memory improvement is claimed",
+    "Hardware tests are offscreen; native hardware frame pacing, fractional scaling, hotplug and sleep/resume remain unverified",
+    "Existing secure lock/unlock passed; interactive root-greeter login was not rerun"
+  ]
+}

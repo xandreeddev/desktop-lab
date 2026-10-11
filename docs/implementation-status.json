@@ -336,7 +336,7 @@
     {
       "id": "renderer-input-validation",
       "owner": "lucent-render and presentation preparation",
-      "status": "in_progress",
+      "status": "implemented",
       "acceptance": [
         "Output dimensions and padded snapshot readback are checked before GPU work",
         "Scene texture, text and geometry inputs are bounded or fail explicitly",
@@ -347,7 +347,7 @@
         "Static review found unchecked snapshot multiplication/readback sizing and missing device texture-limit validation before surface configuration",
         "Output validation implemented in renderer-owned extent.rs; scene-resource validation remains open",
         "162 Rust tests, eight focused Vulkan tests and 172 unchanged visual comparisons pass on both software/hardware drivers; native desktop launcher/restart/application-survival and existing secure lock/unlock pass. See reports/measurements/lucent-render-extents.json. Scene-resource validation remains open.",
-        "Scene preflight and fallible Canvas::paint implemented; 167 workspace tests, Clippy and nine focused software Vulkan tests pass. Native and full visual verification for this change are pending."
+        "Scene validation and fallible Canvas::paint pass 167 Rust tests, nine focused renderer checks and 172 unchanged visual comparisons on each of software/hardware Vulkan. Native launcher/restart/application-survival and existing secure lock/unlock pass. See reports/measurements/lucent-render-scenes.json; device-memory failure and upstream layout remain separate boundaries."
       ]
     }
   ],
@@ -699,6 +699,25 @@
         "Scene-resource input validation and other requirement groups"
       ],
       "merge_commit": "2a3298c580db6c548cdda6faeb22bc1731ba1281"
+    },
+    {
+      "milestone": "renderer-scene-validation",
+      "status": "locally_verified",
+      "source_commit": "f218a6c963d3aa3fb87c95338c8bd906c16f3d33",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/24",
+      "checks": [
+        "167 Rust tests, 60 Python checks, Clippy and formatting passed",
+        "Generated tokens/icons, shellcheck and Astro check/build passed",
+        "Nine focused Vulkan renderer tests and 172 visual comparisons passed on both software and hardware drivers",
+        "No visual baselines or tolerances changed",
+        "Desktop release build, reversible deployment, native launcher/restart and application survival passed",
+        "Existing secure lock/unlock passed; final normal desktop ready",
+        "Local/LAN documentation serves current renderer contracts and outstanding notification findings"
+      ],
+      "pending": [
+        "All six exact-head checks, protected-main merge and Pages",
+        "Other requirement groups"
+      ]
     }
   ]
 }
