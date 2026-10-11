@@ -48,13 +48,13 @@
       "evidence": [
         "Bounded queue ordering, independent work, overload, cancellation, panic and shutdown tests passed",
         "Native launcher and secure lock/unlock passed",
-        "Subscription ingress now shares a bounded 64-value runtime queue; producer cancellation, stale-generation filtering, calloop dispatch bounds and live worker limits are tested. Native verification pending."
+        "Subscription ingress now shares a bounded 64-value runtime queue; producer cancellation, stale-generation filtering, calloop dispatch bounds and live worker limits are tested. Native launcher, restart, secure lock and live wallpaper subscription checks passed."
       ]
     },
     {
       "id": "subscription-delivery",
       "owner": "lucent-wayland runtime",
-      "status": "in_progress",
+      "status": "implemented",
       "acceptance": [
         "Queued background messages have a fixed count bound",
         "Overloaded producers yield and cancellation releases their wait",
@@ -66,7 +66,7 @@
         "Bounded FIFO delivery, cancellation/disconnection, remaining-work wakeups and dispatch batches tested",
         "Stable/replaced identities, duplicate IDs, panic reporting, cooperative drop and retiring-worker limits tested",
         "122 Rust tests and 52 Python checks passed; Clippy, formatting and documentation checks passed",
-        "Native release deployment and integration pending"
+        "Release build and reversible native deployment passed; launcher/restart/application survival/secure lock and live provider subscription/palette persistence checks passed."
       ]
     },
     {
@@ -152,7 +152,8 @@
         "Cold launcher opening included a 246.42 ms maximum frame interval; warmed samples were near 16.5 ms median with up to 19.56 ms observed maximum. Detailed stage profiling, hardware GPU, scaling/hotplug and sleep/resume remain open.",
         "Opt-in bounded CPU-stage profiling verified natively, including default-off behavior and runtime-override restoration after intentional failure; 113 Rust tests, 52 Python checks and focused GPU cold/warm test passed.",
         "Profiled 120-second run: 0.600% main-process CPU, 588.68 MiB mean RSS, zero background/closed-dock idle frames. Cold launcher gap 101.35 ms while maximum measured dock frame work was 10.63 ms; the gap is not explained by its view/layout/text work alone.",
-        "Same-binary normal-mode 120-second comparison: 0.592% main-process CPU, 589.60 MiB mean RSS, zero background/closed-dock idle frames. First-open maximum interval 24.25 ms; warm maxima 18.26\u201321.18 ms. This is not a controlled overhead estimate or proof the earlier hitch is fixed."
+        "Same-binary normal-mode 120-second comparison: 0.592% main-process CPU, 589.60 MiB mean RSS, zero background/closed-dock idle frames. First-open maximum interval 24.25 ms; warm maxima 18.26\u201321.18 ms. This is not a controlled overhead estimate or proof the earlier hitch is fixed.",
+        "Five focused offscreen renderer tests passed on Radeon hardware Vulkan. Visual comparison against software baselines passed 80/148 cases; 68 small coverage differences require follow-up. This is not a hardware desktop performance measurement."
       ]
     },
     {
@@ -408,6 +409,25 @@
       ],
       "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/13",
       "merge_commit": "ed637ad3bdb37e6ad042179482269d5dcadc483a"
+    },
+    {
+      "milestone": "bounded-delivery",
+      "status": "locally_verified",
+      "source_commit": "176c3e0768f394983697f1d534533a898fc55f87",
+      "checks": [
+        "122 Rust unit tests and 52 Python checks passed",
+        "Clippy, formatting, boundary tests and Astro check/build passed",
+        "Full release and reversible native user-binary deployment passed",
+        "Native launcher, application survival, restart and secure lock/unlock passed",
+        "Live Wallhaven/Alpha Coders streams, palette persistence and login-copy synchronization passed",
+        "Original wallpaper/preferences restored",
+        "Five focused hardware-Vulkan renderer tests passed"
+      ],
+      "pending": [
+        "Exact-head CI, protected-main merge and Pages",
+        "68 hardware visual cases differ from software baselines; shader follow-up remains open",
+        "Other requirement groups"
+      ]
     }
   ]
 }

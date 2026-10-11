@@ -1,0 +1,613 @@
+{
+  "source_commit": "176c3e0768f394983697f1d534533a898fc55f87",
+  "renderer_changed_in_this_milestone": false,
+  "adapter": "AMD Radeon Graphics (RADV RENOIR)",
+  "driver": "Mesa 26.2.3-arch1.1",
+  "backend": "Vulkan",
+  "mode": "Offscreen debug correctness tests; not native desktop pacing or a release performance benchmark",
+  "focused_renderer_tests_passed": 5,
+  "visual_comparisons": 148,
+  "passed": 80,
+  "failed": 68,
+  "baseline_updates": 0,
+  "comparison_target": "Existing software-Vulkan baselines with unchanged tolerances",
+  "findings": [
+    "Inspected narrow launcher: 20 pixels exceed the channel tolerance; differences include square-corner alpha and text-edge coverage",
+    "Native layout geometry and source images are unchanged in this delivery milestone",
+    "Derivative evaluation is a candidate for follow-up; no shader root cause or fix is claimed in this report"
+  ],
+  "results": [
+    {
+      "case": "launcher-size-default-dark-1x",
+      "result": "Passed"
+    },
+    {
+      "case": "launcher-size-default-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "launcher-size-small-dark-1x",
+      "result": "Passed"
+    },
+    {
+      "case": "launcher-size-small-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "launcher-size-large-dark-1x",
+      "result": "Passed"
+    },
+    {
+      "case": "launcher-size-large-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "launcher-size-custom-dark-1x",
+      "result": "Passed"
+    },
+    {
+      "case": "launcher-size-custom-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "themes-small-screen-dark-1x",
+      "result": "Passed"
+    },
+    {
+      "case": "themes-small-screen-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "apps-first-dark-1x",
+      "result": "0.005% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "apps-first-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "apps-last-dark-1x",
+      "result": "0.005% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "apps-last-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "apps-empty-dark-1x",
+      "result": "0.003% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "apps-empty-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "apps-long-input-dark-1x",
+      "result": "0.005% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "apps-long-input-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "apps-narrow-dark-1x",
+      "result": "0.009% changed pixels; worst tile 12.50%"
+    },
+    {
+      "case": "apps-narrow-dark-2x",
+      "result": "0.002% changed pixels; worst tile 3.12%"
+    },
+    {
+      "case": "apps-opening-dark-1x",
+      "result": "0.004% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "apps-opening-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "commands-dark-1x",
+      "result": "0.005% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "commands-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "themes-dark-1x",
+      "result": "0.021% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "themes-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "widgets-dark-1x",
+      "result": "0.006% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "widgets-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "wallpapers-empty-dark-1x",
+      "result": "0.004% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "wallpapers-empty-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "wallpapers-dark-1x",
+      "result": "0.002% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "wallpapers-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "wallpapers-online-dark-1x",
+      "result": "0.002% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "wallpapers-online-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "wallpapers-online-narrow-dark-1x",
+      "result": "0.005% changed pixels; worst tile 12.50%"
+    },
+    {
+      "case": "wallpapers-online-narrow-dark-2x",
+      "result": "0.001% changed pixels; worst tile 3.12%"
+    },
+    {
+      "case": "wallpapers-online-error-dark-1x",
+      "result": "0.006% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "wallpapers-online-error-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "palette-ocean-dark-1x",
+      "result": "0.021% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "palette-ocean-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "icon-catalog-dark-1x",
+      "result": "0.056% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "icon-catalog-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "bar-dark-1x",
+      "result": "0.002% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "bar-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "bar-dense-dark-1x",
+      "result": "0.001% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "bar-dense-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "bar-narrow-dark-1x",
+      "result": "0.005% changed pixels; worst tile 12.50%"
+    },
+    {
+      "case": "bar-narrow-dark-2x",
+      "result": "0.001% changed pixels; worst tile 3.12%"
+    },
+    {
+      "case": "dock-dark-1x",
+      "result": "0.003% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "dock-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "notification-dark-1x",
+      "result": "0.005% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "notification-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "notification-history-dark-1x",
+      "result": "0.010% changed pixels; worst tile 12.50%"
+    },
+    {
+      "case": "notification-history-dark-2x",
+      "result": "0.001% changed pixels; worst tile 3.12%"
+    },
+    {
+      "case": "lock-dark-1x",
+      "result": "Passed"
+    },
+    {
+      "case": "lock-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "greeter-dark-1x",
+      "result": "Passed"
+    },
+    {
+      "case": "greeter-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "authorization-dark-1x",
+      "result": "Passed"
+    },
+    {
+      "case": "authorization-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "osd-dark-1x",
+      "result": "0.003% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "osd-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "menu-dark-1x",
+      "result": "0.004% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "menu-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "menu-last-narrow-dark-1x",
+      "result": "0.009% changed pixels; worst tile 12.50%"
+    },
+    {
+      "case": "menu-last-narrow-dark-2x",
+      "result": "0.002% changed pixels; worst tile 3.12%"
+    },
+    {
+      "case": "menu-empty-dark-1x",
+      "result": "0.004% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "menu-empty-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "menu-input-dark-1x",
+      "result": "0.004% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "menu-input-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "widget-drag-grid-dark-1x",
+      "result": "0.009% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "widget-drag-grid-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "menu-submenu-dark-1x",
+      "result": "0.004% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "menu-submenu-dark-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "launcher-size-default-light-1x",
+      "result": "Passed"
+    },
+    {
+      "case": "launcher-size-default-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "launcher-size-small-light-1x",
+      "result": "Passed"
+    },
+    {
+      "case": "launcher-size-small-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "launcher-size-large-light-1x",
+      "result": "Passed"
+    },
+    {
+      "case": "launcher-size-large-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "launcher-size-custom-light-1x",
+      "result": "Passed"
+    },
+    {
+      "case": "launcher-size-custom-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "themes-small-screen-light-1x",
+      "result": "Passed"
+    },
+    {
+      "case": "themes-small-screen-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "apps-first-light-1x",
+      "result": "0.006% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "apps-first-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "apps-last-light-1x",
+      "result": "0.006% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "apps-last-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "apps-empty-light-1x",
+      "result": "0.004% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "apps-empty-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "apps-long-input-light-1x",
+      "result": "0.005% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "apps-long-input-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "apps-narrow-light-1x",
+      "result": "0.010% changed pixels; worst tile 12.50%"
+    },
+    {
+      "case": "apps-narrow-light-2x",
+      "result": "0.002% changed pixels; worst tile 3.12%"
+    },
+    {
+      "case": "apps-opening-light-1x",
+      "result": "0.005% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "apps-opening-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "commands-light-1x",
+      "result": "0.005% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "commands-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "themes-light-1x",
+      "result": "0.021% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "themes-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "widgets-light-1x",
+      "result": "0.006% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "widgets-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "wallpapers-empty-light-1x",
+      "result": "0.004% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "wallpapers-empty-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "wallpapers-light-1x",
+      "result": "0.002% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "wallpapers-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "wallpapers-online-light-1x",
+      "result": "0.002% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "wallpapers-online-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "wallpapers-online-narrow-light-1x",
+      "result": "0.005% changed pixels; worst tile 12.50%"
+    },
+    {
+      "case": "wallpapers-online-narrow-light-2x",
+      "result": "0.001% changed pixels; worst tile 3.12%"
+    },
+    {
+      "case": "wallpapers-online-error-light-1x",
+      "result": "0.006% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "wallpapers-online-error-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "palette-ocean-light-1x",
+      "result": "0.021% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "palette-ocean-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "icon-catalog-light-1x",
+      "result": "0.054% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "icon-catalog-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "bar-light-1x",
+      "result": "0.003% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "bar-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "bar-dense-light-1x",
+      "result": "0.002% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "bar-dense-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "bar-narrow-light-1x",
+      "result": "0.007% changed pixels; worst tile 12.50%"
+    },
+    {
+      "case": "bar-narrow-light-2x",
+      "result": "0.001% changed pixels; worst tile 3.12%"
+    },
+    {
+      "case": "dock-light-1x",
+      "result": "0.003% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "dock-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "notification-light-1x",
+      "result": "0.005% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "notification-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "notification-history-light-1x",
+      "result": "0.010% changed pixels; worst tile 12.50%"
+    },
+    {
+      "case": "notification-history-light-2x",
+      "result": "0.001% changed pixels; worst tile 3.12%"
+    },
+    {
+      "case": "lock-light-1x",
+      "result": "Passed"
+    },
+    {
+      "case": "lock-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "greeter-light-1x",
+      "result": "Passed"
+    },
+    {
+      "case": "greeter-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "authorization-light-1x",
+      "result": "Passed"
+    },
+    {
+      "case": "authorization-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "osd-light-1x",
+      "result": "0.004% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "osd-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "menu-light-1x",
+      "result": "0.004% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "menu-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "menu-last-narrow-light-1x",
+      "result": "0.010% changed pixels; worst tile 12.50%"
+    },
+    {
+      "case": "menu-last-narrow-light-2x",
+      "result": "0.002% changed pixels; worst tile 3.12%"
+    },
+    {
+      "case": "menu-empty-light-1x",
+      "result": "0.005% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "menu-empty-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "menu-input-light-1x",
+      "result": "0.004% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "menu-input-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "widget-drag-grid-light-1x",
+      "result": "0.009% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "widget-drag-grid-light-2x",
+      "result": "Passed"
+    },
+    {
+      "case": "menu-submenu-light-1x",
+      "result": "0.005% changed pixels; worst tile 1.17%"
+    },
+    {
+      "case": "menu-submenu-light-2x",
+      "result": "Passed"
+    }
+  ]
+}
