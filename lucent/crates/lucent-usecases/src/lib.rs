@@ -74,15 +74,13 @@ pub fn snap_placement(placement: Placement, step: f32) -> Result<Placement> {
     Placement::new(snap(placement.x()), snap(placement.y()))
 }
 
-/// Clamp a valid position to client-supplied bounds. Validate every external
-/// dimension before mutation, so NaN/negative extents cannot poison saved state.
-pub fn move_widget(
-    settings: &mut DesktopSettings,
-    id: &str,
+/// Compute a bounded preview without mutating persisted preferences. Clients
+/// supply dimensions; no grid, compositor or rendering policy lives here.
+pub fn constrain_placement(
     placement: Placement,
     size: (f32, f32),
     viewport: (f32, f32),
-) -> Result<()> {
+) -> Result<Placement> {
     if [size.0, size.1, viewport.0, viewport.1]
         .iter()
         .any(|value| !value.is_finite() || *value < 0.)
@@ -91,10 +89,21 @@ pub fn move_widget(
             "Widget and output dimensions must be finite and non-negative".into(),
         ));
     }
-    let position = Placement::new(
+    Placement::new(
         placement.x().clamp(0., (viewport.0 - size.0).max(0.)),
         placement.y().clamp(0., (viewport.1 - size.1).max(0.)),
-    )?;
+    )
+}
+
+/// Commit a bounded position only after validation succeeds.
+pub fn move_widget(
+    settings: &mut DesktopSettings,
+    id: &str,
+    placement: Placement,
+    size: (f32, f32),
+    viewport: (f32, f32),
+) -> Result<()> {
+    let position = constrain_placement(placement, size, viewport)?;
     settings.positions.insert(id.into(), position);
     Ok(())
 }

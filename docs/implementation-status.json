@@ -241,6 +241,9 @@
         "Richer notes calendar and weather behavior",
         "Keyboard and pointer interaction tests",
         "Transient drag preview cannot be persisted by an unrelated settings change"
+      ],
+      "evidence": [
+        "Widget host now retains previews separately from saved preferences. Injected-adapter regression verifies unrelated saves exclude the preview; release commits the snapped result. Hide/reset/invalid-input cancellation and clamped-origin tests pass. Native verification for this change is pending."
       ]
     },
     {
@@ -557,7 +560,7 @@
     },
     {
       "milestone": "settings-persistence",
-      "status": "locally_verified",
+      "status": "merged",
       "checks": [
         "147 Rust tests and Clippy pass",
         "54 Python checks, formatting, generated assets and Astro check/build passed",
@@ -567,13 +570,29 @@
         "Native filesystem-write failure preserved the original file and exposed retry",
         "Retry saved the latest edit; acknowledged notes survived restart",
         "Widget, launcher, application-survival and secure lock/unlock checks passed",
-        "Failure injection removed; original preferences and workspace restored; normal desktop ready"
+        "Failure injection removed; original preferences and workspace restored; normal desktop ready",
+        "All six exact-head checks, protected-main merge and Pages deployment passed"
       ],
       "pending": [
-        "Exact-head CI, protected-main merge and Pages",
         "Other requirement groups"
       ],
-      "source_commit": "239a51ca7cc71adce98e25b9067f172361684ea8"
+      "source_commit": "239a51ca7cc71adce98e25b9067f172361684ea8",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/19",
+      "merge_commit": "1887fc2c7136f9d900c39a627545adb065781016"
+    },
+    {
+      "milestone": "widget-drag-preview",
+      "status": "in_progress",
+      "checks": [
+        "151 Rust tests passed",
+        "Clippy with warnings denied passed",
+        "54 Python checks and Astro check/build passed"
+      ],
+      "pending": [
+        "Vulkan visual regression, release build and native preview/save/release verification",
+        "Exact-head CI, protected-main merge and Pages",
+        "Other requirement groups"
+      ]
     }
   ]
 }

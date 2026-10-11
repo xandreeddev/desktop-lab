@@ -571,7 +571,11 @@ fn widget_drag_is_continuous_until_release_then_snaps_and_clamps() {
     send(&mut app, false);
     assert_eq!(
         app.settings.positions["calendar"],
-        Placement::new(201., 183.).unwrap()
+        Placement::new(20., 110.).unwrap()
+    );
+    assert_eq!(
+        app.widgets.preview_position("calendar"),
+        Some(Placement::new(201., 183.).unwrap())
     );
     send(&mut app, true);
     assert_eq!(
@@ -579,6 +583,7 @@ fn widget_drag_is_continuous_until_release_then_snaps_and_clamps() {
         Placement::new(208., 176.).unwrap()
     );
     assert!(!app.widgets.grid_visible());
+    send(&mut app, false);
     app.update(
         Message::Widgets(crate::widgets::Message::Move(
             "calendar".into(),
@@ -595,6 +600,70 @@ fn widget_drag_is_continuous_until_release_then_snaps_and_clamps() {
         Placement::new(370., 304.).unwrap()
     );
     assert!(lucent_usecases::snap_placement(Placement::new(0., 0.).unwrap(), 0.).is_err());
+}
+
+#[test]
+fn unrelated_preference_save_during_drag_cannot_persist_the_preview() {
+    use lucent_domain::{DesktopSettings, Placement, Result, SettingsPort};
+    #[derive(Default)]
+    struct Store(std::sync::Mutex<Vec<DesktopSettings>>);
+    impl SettingsPort for Store {
+        fn load(&self) -> Result<DesktopSettings> {
+            Ok(DesktopSettings::default())
+        }
+        fn save(&self, settings: &DesktopSettings) -> Result<()> {
+            self.0.lock().unwrap().push(settings.clone());
+            Ok(())
+        }
+    }
+    let store = Arc::new(Store::default());
+    let mut adapters = crate::test_adapters::adapters();
+    adapters.settings = store.clone();
+    let mut app = Desktop::new(adapters);
+    app.settings_writable = true;
+    let origin = Placement::new(32., 96.).unwrap();
+    app.settings.positions.insert("calendar".into(), origin);
+    let movement = |finished| {
+        Message::Widgets(crate::widgets::Message::Move(
+            "calendar".into(),
+            DragEvent {
+                dx: 93.,
+                dy: 71.,
+                finished,
+            },
+        ))
+    };
+    let mut effects = Effects::default();
+    app.update(movement(false), &mut effects);
+    assert!(effects.tasks.is_empty());
+    let preview = app.widgets.preview_position("calendar").unwrap();
+    assert_ne!(preview, origin);
+    app.update(
+        Message::Widgets(crate::widgets::Message::Notes("Keep this edit".into())),
+        &mut effects,
+    );
+    while let Some(task) = effects.tasks.pop() {
+        app.update(task.run(), &mut effects);
+    }
+    assert_eq!(store.0.lock().unwrap()[0].positions["calendar"], origin);
+    assert_eq!(store.0.lock().unwrap()[0].notes, "Keep this edit");
+    assert_eq!(app.widgets.preview_position("calendar"), Some(preview));
+    app.update(movement(true), &mut effects);
+    while let Some(task) = effects.tasks.pop() {
+        app.update(task.run(), &mut effects);
+    }
+    let stored = store.0.lock().unwrap();
+    assert_eq!(stored.len(), 2);
+    assert_eq!(
+        stored[1].positions["calendar"],
+        lucent_usecases::snap_placement(
+            preview,
+            lucent_design::component::widget_layout::GRID_STEP
+        )
+        .unwrap()
+    );
+    assert_eq!(stored[1].notes, "Keep this edit");
+    assert!(!app.widgets.grid_visible());
 }
 #[test]
 fn drag_grid_matches_snap_spacing_and_never_captures_input() {
@@ -1724,7 +1793,7 @@ fn invalid_drag_does_not_persist_positions_or_leave_grid_visible() {
         )),
         &mut Effects::default(),
     );
-    let position = app.settings.positions["calendar"];
+    let position = app.settings.positions.get("calendar").copied();
     let mut effects = Effects::default();
     app.update(
         Message::Widgets(crate::widgets::Message::Move(
@@ -1737,7 +1806,7 @@ fn invalid_drag_does_not_persist_positions_or_leave_grid_visible() {
         )),
         &mut effects,
     );
-    assert_eq!(app.settings.positions["calendar"], position);
+    assert_eq!(app.settings.positions.get("calendar").copied(), position);
     assert!(!app.widgets.grid_visible());
     assert!(effects.tasks.is_empty());
     assert!(app.error.contains("finite"));
