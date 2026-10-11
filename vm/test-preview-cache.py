@@ -34,6 +34,7 @@ def suite():
     tag = 'zzzz-lucent-preview-' + uuid.uuid4().hex
     checks = []
     samples = []
+    online = {}
     try:
         remote('python3', '-c', '''from pathlib import Path
 import struct,sys,zlib
@@ -78,6 +79,17 @@ for i in range(73):
         eventually(lambda: cache()['wanted'] == 0 and not cache()['active'], 'Closed demand did not stop', timeout=8)
         assert cache()['bytes'] <= cache()['closed_budget_bytes']
         checks.append('closing_browser_releases_extra_cpu_previews')
+        # Exercise the thumbnail adapter for both real providers without
+        # downloading/applying originals or changing the user's palette.
+        for provider in ('wallhaven', 'alpha-coders'):
+            cli('wallpapers', 'search', provider, 'landscape')
+            eventually(lambda: client()['wallpaper_browser']['count'] > 0 and
+                       not client()['wallpaper_browser']['busy'],
+                       provider + ' preview page did not finish', timeout=90)
+            usage = client()['prepared_assets']['online_previews']
+            assert usage['unique_images'] > 0
+            online[provider] = usage
+        checks.append('live_provider_pages_use_thumbnail_adapter')
         assert client()['wallpaper'] == initial['wallpaper']
         assert remote('cat', state) == saved
     finally:
@@ -87,7 +99,7 @@ for i in range(73):
         eventually(lambda: client()['background_ready'], 'Normal desktop not ready', timeout=35)
         assert client()['wallpaper'] == initial['wallpaper']
         assert remote('cat', state) == saved
-    report = {'checks': checks, 'retention_samples': samples,
+    report = {'checks': checks, 'retention_samples': samples, 'online_previews': online,
               'wallpaper_and_preferences_unchanged': True, 'owned_test_files_removed': True}
     (v['REPORT'] / 'lucent-preview-cache.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2), flush=True)
