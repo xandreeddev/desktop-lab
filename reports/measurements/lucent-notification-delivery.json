@@ -1,0 +1,97 @@
+{
+  "source_commit": "75baec13f4b6727966cde15326ced0a8258fdb85",
+  "change": "Bounded notification signal admission, idle disconnect recovery and exclusive D-Bus name ownership",
+  "architecture": "Protocol queue, connection lifetime and name acquisition remain in FreedesktopNotifications. NotificationPort and the pure NotificationInbox policy are unchanged. The desktop inspection API exposes notification-history visibility for reversible native checks.",
+  "checks": {
+    "rust_unit_tests": 170,
+    "python_checks": 60,
+    "private_bus_protocol_tests": 4,
+    "clippy": "passed",
+    "formatting": "passed",
+    "design_tokens": 457,
+    "application_icons": 58,
+    "shellcheck": "passed",
+    "astro_check_build": "passed",
+    "pages_path_links": "passed"
+  },
+  "reproductions": [
+    "With the watch consumer stalled and 256 close signals queued, Notify accepted another request instead of returning overload",
+    "Terminating an idle private daemon produced no unavailable update before the three-second test deadline",
+    "Default name flags displaced an existing private-bus notification server"
+  ],
+  "admission": {
+    "pending_signal_limit": 256,
+    "maximum_drained_batch": 256,
+    "producer_waits_for_capacity": false,
+    "notify_reserves_worst_case_eviction": true,
+    "nonresident_action_requires_two_slots": true,
+    "rejection_preserves_inbox_revision_and_id_allocation": true,
+    "expiration_defers_until_capacity": true
+  },
+  "private_bus": {
+    "fixtures": "Each protocol test owns a private dbus-daemon and explicit address; no environment mutation selects the desktop bus",
+    "normal_protocol_and_actions": "passed",
+    "stalled_delivery_saturation_and_recovery": "passed",
+    "idle_disconnect_and_restart_at_same_address": "passed",
+    "exclusive_name_contention_release_and_reacquisition": "passed",
+    "adapter_unit_cases": [
+      "Two-signal rejection and one-slot resident action",
+      "D-Bus/local close rejection and retry",
+      "Expiration batches defer without losing active notifications",
+      "Connection teardown discards pending signals and rejects offline actions"
+    ]
+  },
+  "native": {
+    "environment": "Existing Lucent software-Vulkan VM",
+    "deployed_binary_sha256": {
+      "lucent-desktop": "ec1287a5c531801e81713b38f1855d35ec6a14cadf66ecef8436746fcb3bb9be"
+    },
+    "rollback_copy_retained": true,
+    "notifications": {
+      "protocol_ready": true,
+      "replacement_preserves_identity": true,
+      "native_action_click": true,
+      "native_dismiss_click": true,
+      "native_expiration": true,
+      "transient_fixtures_cleaned": true,
+      "history_closed": true,
+      "desktop_bus_restarted": false
+    },
+    "launcher": {
+      "checks": [
+        "panel_and_rows_on_shell_grid",
+        "equal_launcher_insets",
+        "uniform_row_pitch",
+        "input_on_shell_grid",
+        "top_bar_clock_on_shell_grid",
+        "keyboard_selection_without_hover",
+        "visible_rows_unclipped",
+        "search_focus_visible",
+        "tab_all_five_sections",
+        "shift_tab_reverse",
+        "widget_keyboard_selection",
+        "search_focus_restored_after_mode_switch"
+      ],
+      "settings_unchanged": true
+    },
+    "runtime": {
+      "launcher_input": true,
+      "independent_application_service": true,
+      "application_survives_shell_restart": true,
+      "restart_restores_background": true,
+      "native_lock_unlock": true,
+      "surface_fault_injection": false,
+      "notes": "Native VM checks. Presentation recovery policy is unit-tested; driver fault injection is not covered here."
+    },
+    "final_desktop_ready": true,
+    "deployment_scope": "Desktop executable only; existing lock/login executables were not replaced"
+  },
+  "limits": [
+    "The bounded pending queue can coexist with one drained batch; zbus buffers, decoded requests, snapshots and other owners have separate memory costs",
+    "Accepted signals are best effort across disconnect; old pending signals are discarded and are not durably replayed",
+    "Inbox/history remain in memory; persistence, grouping and rich notifications remain pending",
+    "Existing 100 ms watch interval and two-second connection-failure backoff remain; no CPU or memory improvement measurement is claimed",
+    "Bus loss and contention were tested only on private daemons; the host and guest desktop buses were not restarted by those fixtures",
+    "Native UI tests verify action/dismiss clicks, replacement and expiration; signal protocol semantics have separate private-bus evidence"
+  ]
+}

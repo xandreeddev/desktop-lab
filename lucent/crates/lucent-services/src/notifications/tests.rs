@@ -145,7 +145,13 @@ impl Drop for Watcher {
         self.stop.0.store(true, Ordering::Relaxed);
         self.resume();
         if let Some(worker) = self.worker.take() {
-            worker.join().unwrap();
+            let failed = worker.join().is_err();
+            // Preserve an original test failure so Bus::drop can still reap
+            // the private daemon instead of aborting on a second panic.
+            assert!(
+                !failed || std::thread::panicking(),
+                "notification test worker failed"
+            );
         }
     }
 }
@@ -200,6 +206,7 @@ fn notification_backpressure_preserves_state_and_recovers_after_stall() {
         std::thread::sleep(Duration::from_millis(10));
     }
     let id = notify(&proxy, 0).unwrap();
+    assert_eq!(id, (SIGNAL_LIMIT + 1) as u32, "rejection consumed an ID");
     loop {
         assert!(Instant::now() < deadline);
         if watch.snapshot().active.iter().any(|n| n.id == id) {
