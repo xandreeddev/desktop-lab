@@ -9,6 +9,29 @@ use std::{
 use zbus::{blocking::connection::Builder, zvariant::OwnedValue};
 const NAME: &str = "org.freedesktop.Notifications";
 const PATH: &str = "/org/freedesktop/Notifications";
+const SIGNAL_LIMIT: usize = 256;
+#[derive(Debug)]
+enum AdmissionError {
+    Offline,
+    Full,
+}
+impl AdmissionError {
+    fn message(&self) -> &'static str {
+        match self {
+            Self::Offline => "Notification delivery is disconnected; retry after recovery",
+            Self::Full => "Notification delivery is busy; retry after it drains",
+        }
+    }
+    fn domain(self) -> DomainError {
+        DomainError::Unavailable(self.message().into())
+    }
+    fn dbus(self) -> zbus::fdo::Error {
+        match self {
+            Self::Offline => zbus::fdo::Error::Disconnected(self.message().into()),
+            Self::Full => zbus::fdo::Error::LimitsExceeded(self.message().into()),
+        }
+    }
+}
 enum Signal {
     Closed(u32, CloseReason),
     Action(u32, String),
@@ -18,6 +41,29 @@ struct Store {
     inbox: NotificationInbox,
     signals: VecDeque<Signal>,
     revision: u64,
+    online: bool,
+}
+impl Store {
+    // Called while holding state, before any mutation. This is admission, not a
+    // blocking reservation: the producer must never wait for this queue to drain.
+    fn admit(&self, count: usize) -> std::result::Result<(), AdmissionError> {
+        if !self.online {
+            return Err(AdmissionError::Offline);
+        }
+        if count > SIGNAL_LIMIT.saturating_sub(self.signals.len()) {
+            return Err(AdmissionError::Full);
+        }
+        Ok(())
+    }
+    fn expire(&mut self, now: u64) {
+        let capacity = SIGNAL_LIMIT.saturating_sub(self.signals.len());
+        for id in self.inbox.due(now).into_iter().take(capacity) {
+            self.inbox.close(id);
+            self.signals
+                .push_back(Signal::Closed(id, CloseReason::Expired));
+            self.revision = self.revision.wrapping_add(1);
+        }
+    }
 }
 struct Shared {
     state: Mutex<Store>,
@@ -25,12 +71,46 @@ struct Shared {
     epoch: Instant,
 }
 impl Shared {
-    fn mutate<T>(&self, f: impl FnOnce(&mut Store) -> T) -> T {
+    fn mutate<T, E>(
+        &self,
+        f: impl FnOnce(&mut Store) -> std::result::Result<T, E>,
+    ) -> std::result::Result<T, E> {
         let mut state = self.state.lock().unwrap();
-        let result = f(&mut state);
+        let result = f(&mut state)?;
         state.revision = state.revision.wrapping_add(1);
         self.changed.notify_one();
-        result
+        Ok(result)
+    }
+    fn close(&self, id: u32, reason: CloseReason) -> std::result::Result<(), AdmissionError> {
+        self.mutate(|state| {
+            if state.inbox.get(id).is_some() {
+                state.admit(1)?;
+                state.inbox.close(id);
+                state.signals.push_back(Signal::Closed(id, reason));
+            }
+            Ok(())
+        })
+    }
+}
+// Pending signals belong to this bus connection. Never replay old actions on a
+// new bus; accepted signal delivery remains best effort across a disconnect.
+struct Online(Arc<Shared>);
+impl Online {
+    fn new(shared: Arc<Shared>) -> Self {
+        shared.state.lock().unwrap().online = true;
+        Self(shared)
+    }
+}
+impl Drop for Online {
+    fn drop(&mut self) {
+        let mut state = self
+            .0
+            .state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        state.online = false;
+        state.signals.clear();
+        self.0.changed.notify_all();
     }
 }
 pub struct FreedesktopNotifications(Arc<Shared>);
@@ -100,7 +180,10 @@ impl Server {
             transient: flag("transient"),
             timeout_ms: expire_timeout,
         };
-        Ok(shared.mutate(|state| {
+        shared.mutate(|state| {
+            // Receiving can evict one active notification. Admit its worst-case
+            // signal before assigning an ID or changing the inbox.
+            state.admit(1).map_err(AdmissionError::dbus)?;
             let (id, evicted) = state
                 .inbox
                 .receive(note, shared.epoch.elapsed().as_millis() as u64);
@@ -109,19 +192,17 @@ impl Server {
                     .signals
                     .push_back(Signal::Closed(id, CloseReason::Undefined));
             }
-            id
-        }))
+            Ok(id)
+        })
     }
-    fn close_notification(&self, id: u32) {
-        if let Some(shared) = self.0.upgrade() {
-            shared.mutate(|state| {
-                if state.inbox.close(id) {
-                    state
-                        .signals
-                        .push_back(Signal::Closed(id, CloseReason::Requested));
-                }
-            });
-        }
+    fn close_notification(&self, id: u32) -> zbus::fdo::Result<()> {
+        let shared = self
+            .0
+            .upgrade()
+            .ok_or_else(|| zbus::fdo::Error::Disconnected("Server stopped".into()))?;
+        shared
+            .close(id, CloseReason::Requested)
+            .map_err(AdmissionError::dbus)
     }
     // Declared for introspection; the delivery loop emits these outside the inbox mutex.
     #[zbus(signal)]
@@ -137,10 +218,22 @@ impl Server {
         action_key: &str,
     ) -> zbus::Result<()>;
 }
-impl NotificationPort for FreedesktopNotifications {
-    fn watch(&self, emit: &mut dyn FnMut(Result<NotificationSnapshot>), stop: &dyn StopSignal) {
+impl FreedesktopNotifications {
+    // Private connection selection keeps protocol testing out of the domain port.
+    fn watch_with(
+        &self,
+        emit: &mut dyn FnMut(Result<NotificationSnapshot>),
+        stop: &dyn StopSignal,
+        connect: impl Fn() -> zbus::Result<Builder<'static>>,
+    ) {
         while !stop.cancelled() {
-            let connection = Builder::session()
+            let connection = connect()
+                // Activation owns shell replacement. The delivery adapter must
+                // not steal another server's name or silently lose its own.
+                .map(|b| {
+                    b.replace_existing_names(false)
+                        .allow_name_replacements(false)
+                })
                 .and_then(|b| b.serve_at(PATH, Server(Arc::downgrade(&self.0))))
                 .and_then(|b| b.name(NAME))
                 .and_then(|b| b.build());
@@ -154,16 +247,14 @@ impl NotificationPort for FreedesktopNotifications {
                     continue;
                 }
             };
+            let online = Online::new(self.0.clone());
             let mut revision = u64::MAX;
             while !stop.cancelled() {
-                let mut state = self.0.state.lock().unwrap();
-                for id in state.inbox.due(self.0.epoch.elapsed().as_millis() as u64) {
-                    state.inbox.close(id);
-                    state
-                        .signals
-                        .push_back(Signal::Closed(id, CloseReason::Expired));
-                    state.revision = state.revision.wrapping_add(1);
+                if connection.is_closed() {
+                    break;
                 }
+                let mut state = self.0.state.lock().unwrap();
+                state.expire(self.0.epoch.elapsed().as_millis() as u64);
                 let snapshot = if revision != state.revision {
                     revision = state.revision;
                     Some(state.inbox.snapshot())
@@ -174,6 +265,9 @@ impl NotificationPort for FreedesktopNotifications {
                 drop(state);
                 let mut disconnected = false;
                 for signal in signals {
+                    if stop.cancelled() {
+                        break;
+                    }
                     let result = match signal {
                         Signal::Closed(id, reason) => connection.emit_signal(
                             None::<&str>,
@@ -190,9 +284,12 @@ impl NotificationPort for FreedesktopNotifications {
                             &(id, action),
                         ),
                     };
-                    disconnected |= result.is_err();
+                    if result.is_err() {
+                        disconnected = true;
+                        break;
+                    }
                 }
-                if disconnected {
+                if disconnected || stop.cancelled() {
                     break;
                 }
                 if let Some(snapshot) = snapshot {
@@ -208,16 +305,24 @@ impl NotificationPort for FreedesktopNotifications {
                     );
                 }
             }
+            drop(online);
+            drop(connection);
+            if !stop.cancelled() {
+                emit(Err(DomainError::Unavailable(
+                    "Notification bus disconnected".into(),
+                )));
+            }
         }
     }
+}
+impl NotificationPort for FreedesktopNotifications {
+    fn watch(&self, emit: &mut dyn FnMut(Result<NotificationSnapshot>), stop: &dyn StopSignal) {
+        self.watch_with(emit, stop, Builder::session);
+    }
     fn dismiss(&self, id: u32) -> Result<()> {
-        self.0.mutate(|s| {
-            if s.inbox.close(id) {
-                s.signals
-                    .push_back(Signal::Closed(id, CloseReason::Dismissed));
-            }
-        });
-        Ok(())
+        self.0
+            .close(id, CloseReason::Dismissed)
+            .map_err(AdmissionError::domain)
     }
     fn invoke(&self, id: u32, action: &str) -> Result<()> {
         self.0.mutate(|s| {
@@ -229,6 +334,8 @@ impl NotificationPort for FreedesktopNotifications {
                 return Err(DomainError::Invalid("Unknown notification action".into()));
             }
             let resident = note.resident;
+            s.admit(if resident { 1 } else { 2 })
+                .map_err(AdmissionError::domain)?;
             s.signals.push_back(Signal::Action(id, action.into()));
             if !resident {
                 s.inbox.close(id);
@@ -239,90 +346,18 @@ impl NotificationPort for FreedesktopNotifications {
         })
     }
     fn set_do_not_disturb(&self, enabled: bool) -> Result<()> {
-        self.0.mutate(|s| s.inbox.dnd(enabled));
-        Ok(())
+        self.0.mutate(|s| {
+            s.inbox.dnd(enabled);
+            Ok(())
+        })
     }
     fn clear_history(&self) -> Result<()> {
-        self.0.mutate(|s| s.inbox.clear_history());
-        Ok(())
+        self.0.mutate(|s| {
+            s.inbox.clear_history();
+            Ok(())
+        })
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    struct Stop(AtomicBool);
-    impl StopSignal for Stop {
-        fn cancelled(&self) -> bool {
-            self.0.load(Ordering::Relaxed)
-        }
-        fn wait(&self, d: Duration) {
-            std::thread::sleep(d);
-        }
-    }
-    #[test]
-    #[ignore = "Run under a private dbus-run-session; must never claim a real desktop notification name"]
-    fn notification_protocol() {
-        let server = Arc::new(FreedesktopNotifications::default());
-        let stop = Arc::new(Stop(AtomicBool::new(false)));
-        let (s, r) = std::sync::mpsc::channel();
-        let worker = {
-            let server = server.clone();
-            let stop = stop.clone();
-            std::thread::spawn(move || {
-                server.watch(
-                    &mut |v| {
-                        let _ = s.send(v);
-                    },
-                    stop.as_ref(),
-                )
-            })
-        };
-        r.recv_timeout(Duration::from_secs(5)).unwrap().unwrap();
-        let connection = zbus::blocking::Connection::session().unwrap();
-        let proxy = zbus::blocking::Proxy::new(&connection, NAME, PATH, NAME).unwrap();
-        let info: (String, String, String, String) =
-            proxy.call("GetServerInformation", &()).unwrap();
-        assert_eq!(info.0, "Lucent");
-        let mut actions = proxy.receive_signal("ActionInvoked").unwrap();
-        let notify = |replaces: u32, timeout: i32| -> u32 {
-            proxy
-                .call(
-                    "Notify",
-                    &(
-                        "Fixture",
-                        replaces,
-                        "",
-                        "A real protocol message",
-                        "Body",
-                        vec!["default", "Open"],
-                        HashMap::<String, OwnedValue>::new(),
-                        timeout,
-                    ),
-                )
-                .unwrap()
-        };
-        let id = notify(0, 0);
-        assert_eq!(notify(id, 0), id);
-        assert!(server.invoke(id, "invented").is_err());
-        server.invoke(id, "default").unwrap();
-        let (tx, rx) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            let message = actions.next().unwrap();
-            let data: (u32, String) = message.body().deserialize().unwrap();
-            tx.send(data).unwrap();
-        });
-        assert_eq!(
-            rx.recv_timeout(Duration::from_secs(3)).unwrap(),
-            (id, "default".into())
-        );
-        let expires = notify(0, 30);
-        std::thread::sleep(Duration::from_millis(250));
-        let state = server.0.state.lock().unwrap().inbox.snapshot();
-        assert!(!state.active.iter().any(|n| n.id == expires));
-        assert!(state.history.iter().any(|n| n.id == expires));
-        stop.0.store(true, Ordering::Relaxed);
-        worker.join().unwrap();
-    }
-}
+mod tests;
