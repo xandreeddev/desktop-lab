@@ -229,6 +229,30 @@ density and area-resolved once, then cached at output resolution. Text origins
 snap to physical pixels; shapes continue moving at subpixel coordinates. The full
 framebuffer is not supersampled. Complex-script shaping and IME remain open.
 
+`Canvas::paint` returns `Result<(), Error>`. Renderer-owned validation checks output
+extents, finite scene geometry, image dimensions and instance/clip buffer sizes
+against the requested device's limits. Clips also obey the storage-binding limit
+and the exact integer range of their f32 indices. Geometric buffer growth falls
+back to an exact fit when rounding up would exceed a valid device limit.
+
+Scene admission uses a finite 2²⁴ envelope for coordinates, effects and color
+components, with nonnegative dimensions. Nonempty text requires a font and a
+positive finite normal size; each text primitive is limited to 64 KiB of UTF-8.
+Text masks retain their existing 4096×1024 physical-pixel cap and 2× coverage
+supersampling. Before rasterization, glyph bitmaps must fit an 8192-pixel edge
+and 16,777,216 pixels. These are renderer validity limits, not desktop design
+tokens, typography choices or a total memory budget.
+
+The renderer reserves packed scene buffers fallibly and prepares all resources
+before updating geometry buffers or submitting a frame. A preparation error
+retains the canvas's previous resources and target pixels. Temporary uploads
+lose their preparation references and become eligible for normal cache eviction;
+active resources on other canvases remain pinned. A subsequent valid scene can
+render on the same canvas. The native runtime still treats a rendering error as
+fatal and uses its existing supervision; it does not automatically continue
+displaying an old scene. Device-memory exhaustion, font parsing and upstream
+layout validation remain separate concerns.
+
 Source icons prefer SVG or high-resolution theme assets (128 px app icons,
 256 px line symbols). Wallpaper previews use up to 1024 px per edge and Lanczos
 resampling of premultiplied pixels; small originals are not enlarged. GPU image

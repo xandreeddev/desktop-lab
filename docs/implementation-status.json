@@ -256,6 +256,9 @@
         "Supported rich content and actions",
         "Reliable reconnect and bounded storage",
         "Native interaction and protocol tests"
+      ],
+      "evidence": [
+        "Static follow-up found an unbounded adapter-local signal queue and no explicit idle connection-disconnect observation. Isolated D-Bus saturation/restart tests remain required; bounded inbox/history and runtime delivery do not prove these adapter properties."
       ]
     },
     {
@@ -343,7 +346,8 @@
       "evidence": [
         "Static review found unchecked snapshot multiplication/readback sizing and missing device texture-limit validation before surface configuration",
         "Output validation implemented in renderer-owned extent.rs; scene-resource validation remains open",
-        "162 Rust tests, eight focused Vulkan tests and 172 unchanged visual comparisons pass on both software/hardware drivers; native desktop launcher/restart/application-survival and existing secure lock/unlock pass. See reports/measurements/lucent-render-extents.json. Scene-resource validation remains open."
+        "162 Rust tests, eight focused Vulkan tests and 172 unchanged visual comparisons pass on both software/hardware drivers; native desktop launcher/restart/application-survival and existing secure lock/unlock pass. See reports/measurements/lucent-render-extents.json. Scene-resource validation remains open.",
+        "Scene preflight and fallible Canvas::paint implemented; 167 workspace tests, Clippy and nine focused software Vulkan tests pass. Native and full visual verification for this change are pending."
       ]
     }
   ],
@@ -677,7 +681,7 @@
     },
     {
       "milestone": "renderer-output-validation",
-      "status": "locally_verified",
+      "status": "merged",
       "source_commit": "e2683b046e5d82c50322301877b1a3836bef03be",
       "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/23",
       "checks": [
@@ -688,12 +692,13 @@
         "Desktop release build and reversible native deployment passed",
         "Native launcher layout/navigation, restart and application survival passed",
         "Existing secure lock/unlock passed; final normal desktop ready",
-        "Local and LAN documentation serves the expanded architecture review"
+        "Local and LAN documentation serves the expanded architecture review",
+        "All six exact-head checks, protected-main merge and Pages deployment passed"
       ],
       "pending": [
-        "Exact-head CI, protected-main merge and Pages",
         "Scene-resource input validation and other requirement groups"
-      ]
+      ],
+      "merge_commit": "2a3298c580db6c548cdda6faeb22bc1731ba1281"
     }
   ]
 }
