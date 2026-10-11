@@ -110,6 +110,12 @@ impl Application for Example {
     fn animating(&self, _: &str, now: f64) -> bool {
         self.counter.motion.is_some_and(|m| m.active(now))
     }
+    fn inspect(&self) -> String {
+        format!(
+            "{{\"level\":{},\"count\":{}}}",
+            self.level, self.counter.count
+        )
+    }
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     lucent_wayland::run(Example::default())
