@@ -1,6 +1,6 @@
 //! Widget presentation borrows snapshots and prepared artwork, never the desktop root.
 use super::{Host, Message, default_position, widget_size};
-use crate::{actions::Action, artwork::Artwork};
+use crate::{actions::Action, artwork::Artwork, persistence::Status};
 use lucent_api::*;
 use lucent_design::*;
 use lucent_domain::{
@@ -11,6 +11,7 @@ use lucent_domain::{
 #[derive(Clone, Copy)]
 pub struct Input<'a> {
     pub settings: &'a DesktopSettings,
+    pub save_status: Status,
     pub clock: &'a ClockSnapshot,
     pub system: &'a SystemSnapshot,
     pub media: &'a MediaSnapshot,
@@ -505,6 +506,30 @@ pub(super) fn system(d: &View<'_>, _: &ViewContext) -> Element<Message> {
     .fill()
 }
 pub(super) fn notes(d: &View<'_>, _: &ViewContext) -> Element<Message> {
+    let caption = match d.input.save_status {
+        Status::Saved => "Saved",
+        Status::Saving => "Saving…",
+        Status::Retrying => "Retrying save…",
+        Status::Failed => "Save failed · Retry",
+        Status::Unavailable => "Settings unavailable",
+    };
+    let status = d
+        .label(caption, font::MICRO)
+        .at(component::notes::INSET, component::notes::CAPTION_TOP)
+        .size(
+            component::notes::CONTENT_WIDTH,
+            component::notes::CAPTION_HEIGHT,
+        );
+    let status = if d.input.save_status == Status::Failed {
+        status
+            .color(d.theme().error)
+            .on_click(Message::RetrySave)
+            .id("notes-save-retry")
+    } else if d.input.save_status == Status::Retrying {
+        status.color(d.theme().error)
+    } else {
+        status.opacity(opacity::SECONDARY)
+    };
     Element::stack(vec![
         d.label("Notes", font::HEADING)
             .size(
@@ -528,13 +553,7 @@ pub(super) fn notes(d: &View<'_>, _: &ViewContext) -> Element<Message> {
         .color(d.ink())
         .background(d.surface_color())
         .radius(radius::CONTROL),
-        d.label("Saved automatically", font::MICRO)
-            .at(component::notes::INSET, component::notes::CAPTION_TOP)
-            .size(
-                component::notes::CONTENT_WIDTH,
-                component::notes::CAPTION_HEIGHT,
-            )
-            .opacity(opacity::SECONDARY),
+        status,
     ])
     .fill()
 }

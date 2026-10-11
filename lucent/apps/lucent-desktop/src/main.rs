@@ -6,6 +6,7 @@ mod launcher;
 mod notifications;
 mod osd;
 mod palette_intent;
+mod persistence;
 mod platform;
 mod ports;
 mod shell_layout;

@@ -835,10 +835,17 @@ fn visual_regressions() {
             ("menu-empty", Mode::Apps, 0, 0, "no such action", 1., 640.),
             ("menu-input", Mode::Apps, 0, 0, "A reminder", 1., 640.),
             ("widget-drag-grid", Mode::Apps, 0, 0, "", 1., 960.),
+            ("notes-saved", Mode::Apps, 0, 0, "", 1., 390.),
+            ("notes-saving", Mode::Apps, 0, 0, "", 1., 390.),
+            ("notes-retrying", Mode::Apps, 0, 0, "", 1., 390.),
+            ("notes-failed", Mode::Apps, 0, 0, "", 1., 390.),
+            ("notes-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("menu-submenu", Mode::Apps, 0, 0, "", 1., 640.),
         ] {
             let height = if name.starts_with("launcher-size-") {
                 1080.
+            } else if name.starts_with("notes-") {
+                320.
             } else if name == "themes-small-screen" {
                 360.
             } else {
@@ -881,7 +888,21 @@ fn visual_regressions() {
             if name == "palette-ocean" {
                 app.settings.palette = Some(lucent_design::palettes()[2].clone());
             }
-            let scene = if name == "widget-drag-grid" {
+            let scene = if let Some(state) = name.strip_prefix("notes-") {
+                let app = notes_fixture(state, light);
+                layout.build(
+                    &app.view(&ViewContext {
+                        surface: "widgets",
+                        width,
+                        height,
+                        now,
+                    }),
+                    width,
+                    height,
+                    &Interaction::default(),
+                    now,
+                )
+            } else if name == "widget-drag-grid" {
                 app.settings.visible_widgets = vec!["calendar".into(), "weather".into()];
                 app.update(
                     Message::Widgets(crate::widgets::Message::Move(
@@ -1782,6 +1803,118 @@ fn widget_catalog_covers_selector_views_geometry_and_ipc() {
         );
     }
     assert!(app.command("widget missing show").is_err());
+}
+
+fn notes_fixture(state: &str, light: bool) -> Desktop {
+    let mut app = fixture(0, light);
+    app.settings_writable = state != "unavailable";
+    app.settings.visible_widgets = vec!["notes".into()];
+    app.settings.notes = "An idea to keep".into();
+    app.settings.positions.insert(
+        "notes".into(),
+        lucent_domain::Placement::new(48., 80.).unwrap(),
+    );
+    if matches!(state, "saving" | "failed" | "retrying") {
+        app.update(
+            Message::Widgets(crate::widgets::Message::Notes(app.settings.notes.clone())),
+            &mut Effects::default(),
+        );
+    }
+    if matches!(state, "failed" | "retrying") {
+        let failure = app
+            .runtime_failure(RuntimeFailure {
+                source: "effect queue settings".into(),
+                reason: "fixture save failure".into(),
+            })
+            .unwrap();
+        app.update(failure, &mut Effects::default());
+    }
+    if state == "retrying" {
+        app.update(
+            Message::Persistence(crate::persistence::Message::Retry),
+            &mut Effects::default(),
+        );
+    }
+    app
+}
+
+#[test]
+fn settings_save_failure_survives_unrelated_success_and_widget_retry_acknowledges_it() {
+    let mut app = notes_fixture("failed", false);
+    app.update(Message::Completed(Ok(())), &mut Effects::default());
+    assert!(app.error_message().contains("fixture save failure"));
+    let layout = Layout::new(fonts(&app));
+    let cx = ViewContext {
+        surface: "widgets",
+        width: 390.,
+        height: 320.,
+        now: 1.,
+    };
+    let scene = layout.build(
+        &app.view(&cx),
+        cx.width,
+        cx.height,
+        &Interaction::default(),
+        cx.now,
+    );
+    let retry = scene
+        .hits
+        .iter()
+        .find(|hit| hit.id == "notes-save-retry")
+        .unwrap();
+    assert!(fully_visible(retry.rect, retry.clip.bounds));
+    let mut effects = Effects::default();
+    app.update(retry.click.clone().unwrap(), &mut effects);
+    assert_eq!(effects.tasks.len(), 1);
+    assert!(app.error_message().contains("fixture save failure"));
+    app.update(effects.tasks.remove(0).run(), &mut effects);
+    assert!(app.error_message().is_empty());
+    let inspect: serde_json::Value = serde_json::from_str(&app.inspect()).unwrap();
+    assert_eq!(inspect["settings_save_status"], "saved");
+    assert_eq!(inspect["settings_save_error"], "");
+    assert!(effects.tasks.is_empty());
+}
+
+#[test]
+fn pending_saves_and_load_failure_never_render_a_saved_caption() {
+    use crate::persistence::Status;
+    for (state, status, caption) in [
+        ("saving", Status::Saving, "Saving…"),
+        ("unavailable", Status::Unavailable, "Settings unavailable"),
+    ] {
+        let app = notes_fixture(state, false);
+        assert_eq!(app.persistence.status(app.settings_writable), status);
+        let layout = Layout::new(fonts(&app));
+        let cx = ViewContext {
+            surface: "widgets",
+            width: 390.,
+            height: 320.,
+            now: 1.,
+        };
+        let scene = layout.build(
+            &app.view(&cx),
+            cx.width,
+            cx.height,
+            &Interaction::default(),
+            cx.now,
+        );
+        assert!(
+            scene
+                .paint
+                .iter()
+                .any(|paint| matches!(paint, Paint::Text { text, .. } if text == caption))
+        );
+        assert!(
+            !scene
+                .paint
+                .iter()
+                .any(|paint| matches!(paint, Paint::Text { text, .. } if text == "Saved"))
+        );
+        assert!(!scene.hits.iter().any(|hit| hit.id == "notes-save-retry"));
+        if state == "unavailable" {
+            assert!(app.command("settings retry").is_err());
+        }
+    }
 }
 
 #[test]

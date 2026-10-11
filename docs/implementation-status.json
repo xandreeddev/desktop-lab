@@ -142,7 +142,8 @@
         "Harness uses current idle integration and restores preferences",
         "Source hardware and workload metadata are detected",
         "Current startup idle interaction and memory results are recorded",
-        "CPU preparation layout upload and presentation measurements have explicit scope"
+        "CPU preparation layout upload and presentation measurements have explicit scope",
+        "Application-owned prepared previews have byte accounting and bounded lifetime without losing density quality"
       ],
       "evidence": [
         "Harness now detects guest metadata and records binary hash and cache counters",
@@ -155,7 +156,8 @@
         "Profiled 120-second run: 0.600% main-process CPU, 588.68 MiB mean RSS, zero background/closed-dock idle frames. Cold launcher gap 101.35 ms while maximum measured dock frame work was 10.63 ms; the gap is not explained by its view/layout/text work alone.",
         "Same-binary normal-mode 120-second comparison: 0.592% main-process CPU, 589.60 MiB mean RSS, zero background/closed-dock idle frames. First-open maximum interval 24.25 ms; warm maxima 18.26\u201321.18 ms. This is not a controlled overhead estimate or proof the earlier hitch is fixed.",
         "Five focused offscreen renderer tests passed on Radeon hardware Vulkan. Visual comparison against software baselines passed 80/148 cases; 68 small coverage differences require follow-up. This is not a hardware desktop performance measurement.",
-        "Cross-driver coverage follow-up: all 148 existing comparisons and six focused renderer tests pass on both Radeon hardware Vulkan and llvmpipe after selecting fine derivatives. Baselines/tolerances unchanged; hardware desktop performance remains unmeasured."
+        "Cross-driver coverage follow-up: all 148 existing comparisons and six focused renderer tests pass on both Radeon hardware Vulkan and llvmpipe after selecting fine derivatives. Baselines/tolerances unchanged; hardware desktop performance remains unmeasured.",
+        "Static review confirms Desktop.images retains each distinct selected wallpaper preview with no eviction. The 64-item startup preload cap does not cap lifetime retention, and renderer GPU-cache eviction cannot release these CPU-owned images. RSS attribution and bounded demand-loading remain open."
       ]
     },
     {
@@ -237,7 +239,8 @@
         "Grid aligned resizing and placement",
         "Per-monitor persisted layouts",
         "Richer notes calendar and weather behavior",
-        "Keyboard and pointer interaction tests"
+        "Keyboard and pointer interaction tests",
+        "Transient drag preview cannot be persisted by an unrelated settings change"
       ]
     },
     {
@@ -293,7 +296,7 @@
     {
       "id": "settings-persistence",
       "owner": "desktop persistence coordinator and settings adapter",
-      "status": "pending",
+      "status": "implemented",
       "acceptance": [
         "Coalesce pending preference snapshots while allowing an accepted save to finish",
         "Newest requested state survives worker overload or has an explicit recoverable failure",
@@ -302,7 +305,8 @@
         "Injected failure, delayed completion and overload tests preserve newer intent"
       ],
       "evidence": [
-        "Static review: Desktop::save queues full snapshots into the bounded settings queue and uses generic Message::Completed. Settings save status and retry are not feature-owned. Native disk-failure and overload verification remains open."
+        "Static review: Desktop::save queues full snapshots into the bounded settings queue and uses generic Message::Completed. Settings save status and retry are not feature-owned. Native disk-failure and overload verification remains open.",
+        "A client coordinator coalesces pending preferences, retains save failure and exposes acknowledged status/retry. Burst/rejection/failure/stale-completion and root/widget tests pass. All 168 visual comparisons, a real native filesystem-write failure/retry/restart and restoration passed; evidence is in reports/measurements/lucent-settings-persistence.json."
       ]
     }
   ],
@@ -532,7 +536,7 @@
     },
     {
       "milestone": "widget-host",
-      "status": "locally_verified",
+      "status": "merged",
       "checks": [
         "141 Rust unit tests and 54 Python checks passed",
         "Clippy, formatting and Astro check/build passed",
@@ -541,13 +545,35 @@
         "Native notes persistence, timer start/pause/reset, calendar input, drag grid/snapping and widget selection passed",
         "Notes and positions survived restart; original preferences and workspace restored",
         "Launcher modes/focus/grid and application survival checks passed",
-        "Native secure lock/unlock passed; final normal desktop ready"
+        "Native secure lock/unlock passed; final normal desktop ready",
+        "All six exact-head checks, protected-main merge and Pages deployment passed"
+      ],
+      "pending": [
+        "Other requirement groups"
+      ],
+      "source_commit": "5d8a394b2f29a85c72ba4023aad1b796fe3a3ec4",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/18",
+      "merge_commit": "a27674a82d9bb3c0f836d0f8155bced16bd00af0"
+    },
+    {
+      "milestone": "settings-persistence",
+      "status": "locally_verified",
+      "checks": [
+        "147 Rust tests and Clippy pass",
+        "54 Python checks, formatting, generated assets and Astro check/build passed",
+        "20 new notes-state baselines reviewed; existing 148 images preserved",
+        "168 Vulkan comparisons passed, including 20 reviewed new save-state images",
+        "Desktop release build and reversible native deployment passed",
+        "Native filesystem-write failure preserved the original file and exposed retry",
+        "Retry saved the latest edit; acknowledged notes survived restart",
+        "Widget, launcher, application-survival and secure lock/unlock checks passed",
+        "Failure injection removed; original preferences and workspace restored; normal desktop ready"
       ],
       "pending": [
         "Exact-head CI, protected-main merge and Pages",
         "Other requirement groups"
       ],
-      "source_commit": "5d8a394b2f29a85c72ba4023aad1b796fe3a3ec4"
+      "source_commit": "239a51ca7cc71adce98e25b9067f172361684ea8"
     }
   ]
 }
