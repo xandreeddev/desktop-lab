@@ -1,0 +1,34 @@
+{
+  "source_commit": "77129a527f56393a882d4fa165b76dce0c96ccac",
+  "rust_unit_tests": 113,
+  "python_tests": 52,
+  "visual_comparisons": 148,
+  "baseline_changes": 0,
+  "native": {
+    "profiling_default_off": true,
+    "profiling_activation": true,
+    "intentional_failure_restores_service": true,
+    "launcher_restart_and_application_survival": true,
+    "secure_lock_unlock": true,
+    "final_normal_mode": true
+  },
+  "binary_sha256": {
+    "lucent-desktop": "49d52cf2367496fcc9752998b5dc97f009b8e2cd9731fca4bbb0d2d2eaae4ae8",
+    "lucent-cli": "863c3e260b95f2b0694c01e4021e886396879046028094778dfc9cb51c565d19",
+    "lucent-menu": "6162a3f1853fdccd038d93ea76af8d977652393138f5174e05063c9fc1ff7916",
+    "lucent-lock": "667ac8195b7b7cfa55938ee6a07d12c59ef1e7f334528a12b0d9e3ed44cb03fb",
+    "lucent-greeter": "649bb5ea5b04ad25ca96210ca3c24274cb63b984634c4657f87d545308b748de",
+    "lucent-polkit": "351e0868cf1e49b12568872a0bf5b137795a7527ffc6c026ea9f918f02d77931"
+  },
+  "measurements": [
+    "lucent-frame-profile-120.json",
+    "lucent-frame-profile-normal-120.json"
+  ],
+  "limits": [
+    "Successful frame CPU wall times include driver waits; GPU execution and scanout are not measured",
+    "Text rasterization and upload times are nested within preparation",
+    "Resident mappings and partial payload counters do not yield total GPU memory",
+    "Event handling/reconciliation, other surfaces, deferred submissions and compositor waits need correlation",
+    "The root greeter retains its wallpaper-transaction binary; interactive login was not repeated"
+  ]
+}

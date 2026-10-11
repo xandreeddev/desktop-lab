@@ -230,6 +230,37 @@ inspection IPC expose active/total payload bytes, hits, misses and evictions.
 CPU prepared images, framebuffers and driver allocations are separate from these
 counts. Text rasterization still occurs synchronously on a text-cache miss.
 
+## Frame profiling
+
+The runtime reads `LUCENT_PROFILE_FRAMES=1` at startup. Profiling is off by default
+and adds no timers or redraw requests. When enabled, `lucent-cli inspect` includes
+up to 120 successful frame samples per surface. Failed or deferred presentations
+are not included. The public component and domain APIs do not change.
+
+A sample separates client `view`, framework `layout`, native `input` region work,
+surface `configure` and buffer `acquire`, renderer `prepare`, command `encode`,
+queue `submit`, buffer `present`, resource `retire`, and runtime `bookkeeping`.
+These are CPU wall-clock durations: driver calls can block. They do not measure
+GPU execution or when pixels reach the display. Text rasterization and texture
+upload are nested breakdowns within `prepare`, not additional stages to add to it.
+Cache misses and uploaded texture payload explain resource work on each frame.
+
+From the prepared host, run `python3 vm/measure-framework.py --seconds 120 --profile`.
+The harness creates its own temporary systemd runtime override, restarts only
+Lucent, records startup and cold/warm launcher samples, then removes the override
+and restarts the original configuration even after failure. It also restores the
+prior stay-awake state. The guest must already be unlocked. Results remain in
+`reports/local` for review. Inspection and profiling can affect the workload;
+compare them with the normal-mode idle and submission-interval reports.
+
+Memory evidence separates two Linux `smaps_rollup` snapshots (RSS/PSS and mapping
+categories) from known payload counts. Prepared image bytes cover only unique
+images referenced by current scenes, excluding application asset caches. Geometry
+buffers report requested bytes. Surface color bytes describe one buffer per
+surface, not the driver's unknown allocation count. Texture counters exclude
+framebuffers and driver overhead. These numbers neither sum to total GPU memory
+nor explain every resident allocation.
+
 ## Widget registration
 
 `WidgetRegistry<Client, Message>` maps stable widget IDs and descriptors to view

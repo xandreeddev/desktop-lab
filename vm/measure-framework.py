@@ -13,6 +13,7 @@ import runpy
 import statistics
 import subprocess
 import time
+import uuid
 
 
 @contextmanager
@@ -27,7 +28,52 @@ def stay_awake(remote):
             remote('python3', '-c', marker + 'p.unlink(missing_ok=True)')
 
 
-def measure(h, seconds):
+@contextmanager
+def frame_profiling(remote, session, enabled):
+    """A private runtime-only unit override, removed even after measurement failure."""
+    if not enabled:
+        yield
+        return
+    tag = uuid.uuid4().hex
+    prefix = "from pathlib import Path; import os,sys; p=Path('/run/user')/str(os.getuid())/'systemd/user/lucent.service.d'/('90-lucent-measure-'+sys.argv[1]+'.conf'); "
+    try:
+        remote('python3', '-c', prefix + "p.parent.mkdir(parents=True,exist_ok=True); p.open('x').write('[Service]\\nEnvironment=LUCENT_PROFILE_FRAMES=1\\n')", tag)
+        session('systemctl', '--user', 'daemon-reload')
+        yield
+    finally:
+        remote('python3', '-c', prefix + 'p.unlink(missing_ok=True)', tag)
+        session('systemctl', '--user', 'daemon-reload')
+        session('systemctl', '--user', 'restart', 'lucent.service')
+
+
+def summarize_profiles(surface, since):
+    samples = [sample for sample in surface.get('frame_profiles', []) if sample['submitted_ms'] >= since]
+    if not samples:
+        return None
+
+    def stats(values):
+        return {'median': round(statistics.median(values), 4), 'max': round(max(values), 4)}
+
+    return {'frames': len(samples), 'total_ms': stats([p['total_ms'] for p in samples]),
+            'stages_ms': {key: stats([p['stages_ms'][key] for p in samples]) for key in samples[0]['stages_ms']},
+            'prepare_breakdown_ms': {key: stats([p['prepare_breakdown_ms'][key] for p in samples]) for key in samples[0]['prepare_breakdown_ms']},
+            'resources_total': {key: sum(p['resources'][key] for p in samples) for key in samples[0]['resources']},
+            'slowest': max(samples, key=lambda p: p['total_ms']), 'samples': samples}
+
+
+def resident_breakdown(remote, pid):
+    """One Linux smaps snapshot in KiB; no addresses, paths or GPU-memory inference."""
+    keys = ('Rss', 'Pss', 'Pss_Anon', 'Pss_File', 'Pss_Shmem', 'Shared_Clean', 'Shared_Dirty',
+            'Private_Clean', 'Private_Dirty', 'Anonymous', 'Swap')
+    try:
+        text = remote('cat', f'/proc/{int(pid)}/smaps_rollup')
+    except subprocess.CalledProcessError:
+        return None
+    return {key: int(value.split()[0]) for line in text.splitlines() if ':' in line
+            for key, value in [line.split(':', 1)] if key in keys}
+
+
+def measure(h, seconds, require_profile=False):
     cli, inspect, session, remote = h['cli'], h['inspect'], h['session'], h['remote']
     # Capture provenance before the workload; development may continue during a long idle run.
     root = Path(__file__).resolve().parents[1]
@@ -38,6 +84,9 @@ def measure(h, seconds):
     session('systemctl', '--user', 'restart', 'lucent.service')
     h['eventually'](lambda: inspect()['client']['background_ready'], 'Startup did not produce a wallpaper', timeout=60)
     ready_ms = (time.monotonic() - started) * 1000
+    startup = inspect()
+    if require_profile and not startup.get('frame_profiling'):
+        raise AssertionError('Frame profiling did not activate; install the profiling-capable runtime and check service overrides')
     cli('launcher', 'close')
     h['move'](960, 400)
     time.sleep(1.5)  # Let the headless idle adapter observe the temporary marker.
@@ -68,9 +117,11 @@ def measure(h, seconds):
                             'median_frame_interval_ms': round(statistics.median(intervals), 2),
                             'max_frame_interval_ms': round(max(intervals), 2),
                             'observed_frame_span_ms': round(frames[-1]-frames[0], 2),
-                            'cache_misses': state.get('gpu_cache', {}).get('misses', 0) - before.get('gpu_cache', {}).get('misses', 0)})
+                            'cache_misses': state.get('gpu_cache', {}).get('misses', 0) - before.get('gpu_cache', {}).get('misses', 0),
+                            'cpu_profile': summarize_profiles(surface, start)})
     pid = int(remote('pgrep', '-x', 'lucent-desktop').strip())
     before_idle = inspect()
+    resident_before = resident_breakdown(remote, pid)
     frames_before = {s['id']: s['frames'] for s in before_idle['surfaces']}
     group = session('systemctl', '--user', 'show', 'lucent.service', '-p', 'ControlGroup', '--value').strip()
 
@@ -98,6 +149,12 @@ def measure(h, seconds):
               'displays': displays, **hardware, 'adapter': after_idle['adapter'],
               'restart_to_background_ready_ms': round(ready_ms, 2),
               'animations': transitions, 'idle': idle, 'idle_extra_frames': extra,
+              'frame_profiling': before_idle.get('frame_profiling', False),
+              'startup_profiles': {s['id']: summarize_profiles(s, 0) for s in startup['surfaces']} if require_profile else None,
+              'profile_memory_before_idle': before_idle.get('profile_memory'),
+              'profile_memory_after_idle': after_idle.get('profile_memory'),
+              'resident_kib_before_idle': resident_before,
+              'resident_kib_after_idle': resident_breakdown(remote, pid),
               'gpu_cache_before_idle': before_idle.get('gpu_cache'), 'gpu_cache_after_idle': after_idle.get('gpu_cache'),
               'workload': {'visible_widgets': before_idle['client']['widgets'], 'launcher': 'closed',
                            'applications': before_idle['client']['applications']},
@@ -105,7 +162,9 @@ def measure(h, seconds):
                         'animation': 'Render submission intervals, not scanout or isolated GPU execution time',
                         'resources': 'Texture payload only; driver/framebuffer/CPU prepared-image memory excluded',
                         'cache_misses': 'Shared application cache, including other surfaces updated during the sample',
-                        'service_cpu': 'Lucent cgroup including helpers; compositor and separately launched apps excluded'}}
+                        'service_cpu': 'Lucent cgroup including helpers; compositor and separately launched apps excluded',
+                        'cpu_profile': 'Successful frame submissions only; CPU-side wall-clock stages include driver waits. Preparation breakdown is nested, not additive. Instrumentation and inspection can affect the workload.',
+                        'resident_breakdown': 'Two smaps_rollup snapshots in KiB; not interval averages or separate GPU-memory measurements'}}
     (h['REPORT']/'lucent-framework-performance.json').write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps(report, indent=2))
 
@@ -113,12 +172,16 @@ def measure(h, seconds):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--seconds', type=int, default=120)
+    parser.add_argument('--profile', action='store_true', help='Temporarily enable bounded per-frame CPU-stage profiling')
     args = parser.parse_args()
     if args.seconds < 1:
         parser.error('seconds must be positive')
     h = runpy.run_path(str(Path(__file__).with_name('test-framework.py')), run_name='harness')
     with stay_awake(h['remote']):
-        measure(h, args.seconds)
+        with frame_profiling(h['remote'], h['session'], args.profile):
+            measure(h, args.seconds, args.profile)
+        if args.profile:
+            h['eventually'](lambda: h['inspect']()['client']['background_ready'], 'Original runtime did not become ready after profiling', timeout=60)
 
 
 if __name__ == '__main__':

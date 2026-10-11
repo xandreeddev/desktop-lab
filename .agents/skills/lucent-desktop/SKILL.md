@@ -24,6 +24,8 @@ For a requested VM test/deployment:
 3. Build the requested binaries, preserve a rollback copy, install through a temporary file and atomic rename, then restart only `lucent.service`. A shell UI change does not require reinstalling login or changing disks. Check service readiness, `lucent-cli inspect`, keyboard/click interaction and settings after restart.
 4. Use existing `vm/test-*.py` helpers where applicable; inspect their effects before running a broad suite. Capture sanitized local evidence and distinguish VM-only verification from hardware tests.
 
+Use `python3 vm/measure-framework.py --seconds 120 --profile` for bounded CPU-stage samples. Its private systemd runtime override and stay-awake marker are restored on failure. Check actual profile activation and restoration; compare instrumented results with normal-mode measurements. Review source/binary identity and remove personal data before publishing reports.
+
 For docs, keep library explanations under the library guides and runtime preferences under the desktop guide. `cd site && npm run dev -- --host 0.0.0.0` serves on LAN when requested; verify the actual listening port and HTTP response. Do not terminate unrelated servers. Source/built links must respect `withBase` for GitHub Pages.
 
 Follow the existing protected-main PR workflow. Checks must pass before a merge. This skill does not itself authorize publishing, changing repository permissions or modifying the host desktop. Preserve the alias identity for commits and keep personal paths, location, credentials and unreviewed VM captures out of public artifacts.

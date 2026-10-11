@@ -492,3 +492,48 @@ samples had roughly 16.5 ms medians and a maximum of 19.56 ms. These are submiss
 intervals, not compositor presentation timestamps. Detailed CPU stage profiling,
 hardware-GPU runs and suspend/hotplug workloads remain open. The earlier 120-second
 report is retained for provenance; this sample predates the wallpaper transaction work.
+
+
+### Opt-in CPU-stage profiling
+
+The [profiled 120-second run](measurements/lucent-frame-profile-120.json) uses the
+profiling release recorded in its source/binary metadata. Per-surface history is
+bounded at 120 successful submissions and disabled by default. CPU stages include
+driver waits; text rasterization and texture uploads are nested within preparation.
+No GPU execution or compositor scanout timestamps are measured.
+
+First launcher opening: maximum submission interval 101.35 ms; maximum measured
+successful dock frame 10.63 ms. Per-stage maxima were view 0.43 ms, layout 0.36 ms,
+preparation 3.97 ms (raster 0.99 ms, uploads 2.82 ms), submit 9.58 ms and present
+9.18 ms. These maxima occurred on different frames and are not additive. The gap
+is outside the successful dock-frame measurements; other surfaces, event handling,
+reconciliation, retries and compositor scheduling still need correlation. This
+sample does not identify a single root cause. All warmed transitions uploaded no
+new textures. A startup background frame took 138.79 ms with a 48 MiB image upload.
+
+Idle main/service CPU were 0.600%/1.397% of one core; mean/max RSS were
+588.68/590.42 MiB. Background and closed dock submitted zero idle frames. Current
+scenes referenced 52.33 MiB of prepared images; requested geometry buffers were
+27.22 KiB and one color buffer per surface totals 24.08 MiB. These exclude
+application asset caches and unknown driver allocations/buffer counts. RSS/PSS
+snapshots have separate scopes and cannot be added to payload counters. The
+200 MiB target is still unmet. Host scheduling and instrumentation can affect
+these VM measurements.
+
+Executed: 113 Rust behavior tests, 52 Python checks, focused cold/warm Vulkan
+profiling test, 148 unchanged visual comparisons, Clippy/formatting, token/icon
+checks and Astro check/build. Native tests verified default-off profiling,
+activation and original service restoration after intentional failure, launcher
+input, independent application lifetime, shell restart and secure lock/unlock.
+User binaries were deployed atomically with rollback copies; the root greeter
+retains its earlier wallpaper-transaction binary and interactive login was not
+repeated in this milestone.
+
+The [normal-mode comparison](measurements/lucent-frame-profile-normal-120.json)
+used the same clean source and executable with profiling disabled. Over 120
+seconds, main/service CPU were 0.592%/1.345% and mean/max RSS were
+589.60/590.31 MiB. Background/closed-dock idle frames remained zero. The first
+opening's maximum submission interval was 24.25 ms; warm maxima ranged from
+18.26 to 21.18 ms. These two runs show variability and are not a controlled
+estimate of profiler overhead or evidence that the earlier hitch is fixed.
+The VM was left ready in normal mode with its previous idle preference restored.
