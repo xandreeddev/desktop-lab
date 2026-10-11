@@ -1,4 +1,5 @@
 //! Desktop entities and ports. No compositor, D-Bus, UI or filesystem operations.
+use crate::{Date, Placement};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -146,11 +147,6 @@ pub trait SettingsPort: Send + Sync {
     fn save(&self, settings: &DesktopSettings) -> Result<()>;
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Placement {
-    pub x: f32,
-    pub y: f32,
-}
 /// Preferred logical dimensions. Absent values use the client's design defaults.
 /// Height is a ceiling: the launcher can shrink to fit its current contents.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -188,28 +184,6 @@ impl Default for DesktopSettings {
             saved_palettes: Vec::new(),
             launcher: LauncherSize::default(),
         }
-    }
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Date {
-    pub year: i32,
-    pub month: u32,
-    pub day: u32,
-    /// Monday = 0.
-    pub weekday: u32,
-}
-impl Date {
-    pub fn days_in_month(year: i32, month: u32) -> u32 {
-        match month {
-            4 | 6 | 9 | 11 => 30,
-            2 if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) => 29,
-            2 => 28,
-            1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-            _ => 0,
-        }
-    }
-    pub fn first_weekday(self) -> u32 {
-        (self.weekday + 7 - (self.day - 1) % 7) % 7
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]

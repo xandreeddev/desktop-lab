@@ -1,0 +1,26 @@
+{
+  "source_commit": "657e357b08dc9e3b04738d76c813d69d21e8d6ff",
+  "rust_unit_tests": 112,
+  "python_tests": 49,
+  "visual_comparisons": 148,
+  "baseline_changes": 0,
+  "calendar_reference_comparison": "Every day in two 400-year Gregorian cycles (negative and positive years), plus i32 year extremes by cycle equivalence",
+  "native": {
+    "native_calendar_buttons_render": true,
+    "native_drag_grid_snap_and_restart": true,
+    "invalid_saved_coordinates_preserved_and_reported": true
+  },
+  "binary_sha256": {
+    "lucent-desktop": "7585ee46098037c454ea0de55626cbbada9d9df26577ffe7acbce4e26155172b",
+    "lucent-cli": "863c3e260b95f2b0694c01e4021e886396879046028094778dfc9cb51c565d19",
+    "lucent-menu": "8bfc31d9da71eac194f9a8e53824aa55801298385d7a5daff7a9221830dcd28c",
+    "lucent-lock": "48f89e744fba28aec3b1faec95c713dc07089f4f27e1bc29465cf5096a60206d",
+    "lucent-greeter": "e7c1b72db1363e3b416128c914889a909e37e34e4a33aaa1d03cbce555aafda9",
+    "lucent-polkit": "2d64b8372bb4bb7955b447c403f20a719effa123b3cf98d0beb8ff970693a05d"
+  },
+  "limits": [
+    "LaunchCommand and LauncherSize remain records with boundary validation; not every domain record is a validated value object",
+    "Larger launcher/widget component extraction remains open",
+    "The root greeter binary retains the wallpaper-transaction release; this milestone does not claim a new interactive-login verification"
+  ]
+}

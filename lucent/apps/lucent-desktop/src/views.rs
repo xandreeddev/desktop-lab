@@ -177,7 +177,9 @@ impl Desktop {
                 self.label(
                     format!(
                         "{}, {:02}/{:02}",
-                        weekdays[date.weekday as usize], date.day, date.month
+                        weekdays[date.weekday() as usize],
+                        date.day(),
+                        date.month()
                     ),
                     font::CAPTION,
                 )
@@ -718,7 +720,7 @@ impl Desktop {
         let error = if self.mode == Mode::Themes && !self.theme_error.is_empty() {
             &self.theme_error
         } else {
-            &self.error
+            self.error_message()
         };
         if !error.is_empty() {
             elements.push(

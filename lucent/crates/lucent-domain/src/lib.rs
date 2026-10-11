@@ -16,3 +16,6 @@ pub use appearance::*;
 
 mod wallpaper_catalog;
 pub use wallpaper_catalog::*;
+
+mod values;
+pub use values::*;

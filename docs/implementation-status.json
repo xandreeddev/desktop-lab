@@ -151,7 +151,11 @@
         "Token-supplied Shadow parameters replace shader styling constants; focused 1x/2x Vulkan test passed",
         "AppId construction/deserialization reject invalid desktop-file identities; settings compatibility and preservation tested",
         "Application window-class matching shared by use case and dock, avoiding empty identity matches",
-        "Further domain invariants and client component extraction remain open"
+        "Date derives weekdays and rejects impossible dates; Placement construction/deserialization enforce finite coordinates without changing valid JSON shape",
+        "Grid snapping uses wider intermediates; invalid bounds do not mutate settings and invalid release clears transient drag state",
+        "Settings failures retain their own visible error through unrelated successful effects; invalid files remain preserved",
+        "112 Rust tests, 49 Python checks, 148 unchanged visual comparisons and focused native calendar/drag/save/restart/invalid-settings checks passed",
+        "Larger launcher and widget component extraction remains open"
       ]
     },
     {
@@ -325,7 +329,7 @@
     },
     {
       "milestone": "wallpaper-transactions",
-      "status": "locally_verified",
+      "status": "merged",
       "source_commit": "b54341c0be956da4d306d3541c0df56dcb057dfb",
       "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/11",
       "checks": [
@@ -334,12 +338,31 @@
         "Clippy, formatting, 457 tokens, 58 icons and Astro check/build passed",
         "Release build, immutable selection/native failure/restart/login-copy checks passed",
         "Live provider selection, palette persistence, launcher/application survival and secure lock/unlock passed",
-        "User binaries and root greeter updated atomically with rollback copies"
+        "User binaries and root greeter updated atomically with rollback copies",
+        "All six required checks, protected-main merge and Pages deployment passed"
       ],
       "pending": [
-        "Protected-main exact-head CI and merge",
         "Interactive login with the updated greeter executable",
         "Other requirement groups"
+      ],
+      "merge_commit": "688506fd158ee843530efce2403c906d0ea7469e"
+    },
+    {
+      "milestone": "domain-values",
+      "status": "locally_verified",
+      "source_commit": "657e357b08dc9e3b04738d76c813d69d21e8d6ff",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/12",
+      "checks": [
+        "112 Rust unit tests and 49 Python tests passed",
+        "Calendar behavior compared with chrono across two complete 400-year cycles",
+        "148 Vulkan visual comparisons passed without baseline changes",
+        "Clippy, formatting, generated tokens/icons and Astro check/build passed",
+        "Release build and focused native calendar/grid/save/restart/invalid-settings tests passed",
+        "Original VM settings, palette and workspace restored"
+      ],
+      "pending": [
+        "Protected-main exact-head CI, merge and Pages",
+        "Larger component extraction and other requirement groups"
       ]
     }
   ]

@@ -83,6 +83,9 @@ mod settings_tests {
         fs::write(&store.path, br#"{"version":1,"notes":"retained"}"#).unwrap();
         let mut settings = store.load().unwrap();
         assert_eq!(settings.launcher, LauncherSize::default());
+        settings
+            .positions
+            .insert("clock".into(), Placement::new(-12.5, 800.).unwrap());
         settings.pinned = vec![AppId::new("org.example.App.desktop").unwrap()];
         settings.launcher = LauncherSize {
             width: Some(800),
@@ -96,6 +99,10 @@ mod settings_tests {
             stored["pinned"],
             serde_json::json!(["org.example.App.desktop"])
         );
+        assert_eq!(
+            stored["positions"]["clock"],
+            serde_json::json!({"x":-12.5,"y":800.})
+        );
         let saved = fs::read(&store.path).unwrap();
         settings.launcher.width = Some(0);
         assert!(store.save(&settings).is_err());
@@ -108,6 +115,11 @@ mod settings_tests {
         fs::write(&store.path, invalid_id).unwrap();
         assert!(store.load().is_err());
         assert_eq!(fs::read(&store.path).unwrap(), invalid_id);
+        let invalid_position =
+            br#"{"version":1,"positions":{"clock":{"x":1e39,"y":10}},"notes":"keep me"}"#;
+        fs::write(&store.path, invalid_position).unwrap();
+        assert!(store.load().is_err());
+        assert_eq!(fs::read(&store.path).unwrap(), invalid_position);
         fs::remove_dir_all(directory).unwrap();
     }
 }
@@ -185,15 +197,43 @@ mod command_tests {
 pub fn clock() -> ClockSnapshot {
     let now = chrono::Local::now();
     ClockSnapshot {
-        date: Date {
-            year: now.year(),
-            month: now.month(),
-            day: now.day(),
-            weekday: now.weekday().num_days_from_monday(),
-        },
+        date: Date::new(now.year(), now.month(), now.day()).expect("valid calendar date"),
         hour: now.hour(),
         minute: now.minute(),
         unix_seconds: now.timestamp().max(0) as u64,
+    }
+}
+#[cfg(test)]
+mod calendar_adapter_tests {
+    use super::*;
+    #[test]
+    fn domain_calendar_agrees_with_chrono_across_positive_and_negative_leap_cycles() {
+        for year in [-400, 1600] {
+            let mut observed = chrono::NaiveDate::from_ymd_opt(year, 1, 1).unwrap();
+            let end = chrono::NaiveDate::from_ymd_opt(year + 400, 1, 1).unwrap();
+            while observed < end {
+                let domain = Date::new(observed.year(), observed.month(), observed.day()).unwrap();
+                assert_eq!(
+                    domain.weekday(),
+                    observed.weekday().num_days_from_monday(),
+                    "{observed}"
+                );
+                let first = observed.with_day(1).unwrap();
+                assert_eq!(
+                    domain.first_weekday(),
+                    first.weekday().num_days_from_monday()
+                );
+                observed = observed.succ_opt().unwrap();
+            }
+        }
+        for year in [i32::MIN, i32::MAX] {
+            let reference =
+                chrono::NaiveDate::from_ymd_opt(2000 + year.rem_euclid(400), 12, 31).unwrap();
+            assert_eq!(
+                Date::new(year, 12, 31).unwrap().weekday(),
+                reference.weekday().num_days_from_monday()
+            );
+        }
     }
 }
 #[derive(Default)]
