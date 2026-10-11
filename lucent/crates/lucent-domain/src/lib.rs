@@ -5,6 +5,9 @@ pub use desktop::*;
 mod ports;
 pub use ports::*;
 
+mod audio;
+pub use audio::*;
+
 mod notifications;
 pub use notifications::*;
 mod authentication;

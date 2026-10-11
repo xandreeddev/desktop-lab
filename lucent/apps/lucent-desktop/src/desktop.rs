@@ -23,6 +23,8 @@ pub enum Message {
     Compositor(domain::Result<CompositorSnapshot>),
     Clock(ClockSnapshot),
     System(domain::Result<SystemSnapshot>),
+    Audio(domain::Result<AudioSnapshot>),
+    AudioCompleted(domain::Result<()>),
     Media(domain::Result<MediaSnapshot>),
     Weather(domain::Result<WeatherSnapshot>),
     Launcher(launcher::Message),
@@ -67,6 +69,7 @@ pub struct Desktop {
     pub compositor: CompositorSnapshot,
     pub clock: ClockSnapshot,
     pub system: SystemSnapshot,
+    pub audio: crate::audio::Audio,
     pub media: MediaSnapshot,
     pub weather: Option<WeatherSnapshot>,
     pub browser: crate::wallpaper_browser::Browser,
@@ -104,6 +107,7 @@ impl Desktop {
             compositor: CompositorSnapshot::default(),
             clock: adapters.clock.now(),
             system: SystemSnapshot::default(),
+            audio: Default::default(),
             media: MediaSnapshot::default(),
             weather: None,
             browser: Default::default(),
@@ -389,6 +393,19 @@ impl Desktop {
             }
             return;
         }
+        let command = match action {
+            Action::VolumeUp => Some(AudioCommand::Raise),
+            Action::VolumeDown => Some(AudioCommand::Lower),
+            Action::Mute => Some(AudioCommand::ToggleMute),
+            _ => None,
+        };
+        if let Some(command) = command {
+            let adapter = self.adapters.audio.clone();
+            effects.task_on("audio", move || {
+                Message::AudioCompleted(adapter.control(command))
+            });
+            return;
+        }
         let adapters = self.adapters.clone();
         effects.task_on(
             if matches!(action, Action::Lock) {
@@ -399,9 +416,6 @@ impl Desktop {
             move || {
                 Message::Completed(match action {
                     Action::Lock => adapters.session.lock(),
-                    Action::VolumeUp => adapters.audio.control(AudioCommand::Raise),
-                    Action::VolumeDown => adapters.audio.control(AudioCommand::Lower),
-                    Action::Mute => adapters.audio.control(AudioCommand::ToggleMute),
                     Action::PlayPause => adapters.media.control(MediaCommand::PlayPause),
                     Action::Next => adapters.media.control(MediaCommand::Next),
                     Action::Previous => adapters.media.control(MediaCommand::Previous),
@@ -575,10 +589,7 @@ impl Component for Desktop {
                 self.clock = clock;
             }
             Message::System(Ok(value)) => {
-                if self.system.volume != value.volume
-                    || self.system.muted != value.muted
-                    || self.system.network != value.network
-                {
+                if self.system.network != value.network {
                     effects.redraw("bar");
                 }
                 if self.settings.visible_widgets.iter().any(|w| w == "system") {
@@ -587,6 +598,17 @@ impl Component for Desktop {
                 self.system = value;
             }
             Message::System(Err(_)) => {}
+            Message::Audio(value) => {
+                if self.audio.observe(value) {
+                    effects.redraw("bar");
+                }
+            }
+            Message::AudioCompleted(result) => {
+                if let Err(error) = &result {
+                    self.error = error.to_string();
+                }
+                self.audio.completed(result);
+            }
             Message::Media(result) => {
                 let value = result.unwrap_or_default();
                 if self.media != value {
@@ -921,7 +943,14 @@ impl api::Application for Desktop {
         let media = self.adapters.media.clone();
         let weather = self.adapters.weather.clone();
         let notifications = self.adapters.notifications.clone();
+        let audio = self.adapters.audio.clone();
         let mut s = vec![
+            Subscription::stream("audio", move |out, cancel| {
+                audio.watch(
+                    &mut |value| out.send(Message::Audio(value)),
+                    &WatchStop(cancel),
+                );
+            }),
             Subscription::stream("notifications", move |out, cancel| {
                 notifications.watch(
                     &mut |value| {
@@ -1106,7 +1135,7 @@ impl api::Application for Desktop {
         }))
     }
     fn inspect(&self) -> String {
-        serde_json::json!({"wallpaper_index":self.wallpaper_index, "wallpaper_count":self.wallpapers.len(), "prepared_assets": {
+        serde_json::json!({"audio":self.audio.inspect(),"wallpaper_index":self.wallpaper_index, "wallpaper_count":self.wallpapers.len(), "prepared_assets": {
             "icons": crate::previews::usage(self.images.values()),
             "local_previews": self.previews.inspect(),
             "online_previews": crate::previews::usage(self.browser.previews.values()),

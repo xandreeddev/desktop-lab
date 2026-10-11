@@ -49,6 +49,9 @@ impl SystemPort for Fake {
     }
 }
 impl AudioPort for Fake {
+    fn watch(&self, emit: &mut dyn FnMut(Result<AudioSnapshot>), _: &dyn StopSignal) {
+        emit(Ok(AudioSnapshot::default()));
+    }
     fn control(&self, _: AudioCommand) -> Result<()> {
         self.calls.lock().unwrap().push("audio");
         Ok(())

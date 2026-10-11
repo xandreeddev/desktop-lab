@@ -202,13 +202,18 @@
     {
       "id": "control-center",
       "owner": "domain service ports adapters and desktop client",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "Native network connection and Wi-Fi setup",
         "Native Bluetooth discovery pairing and controls",
         "Audio device volume microphone and routing controls",
         "Battery power profile brightness and session controls",
         "Service loading unavailable error and reconnect states"
+      ],
+      "progress": [
+        "Native audio domain values/port, adapter-owned libpulse event loop, bounded commands, reconnect and explicit client observation state implemented; top bar no longer polls wpctl.",
+        "Pure control policy, identity/bounds/balance tests and private PipeWire protocol/cancellation tests pass. Full audio panel, live stream-routing, physical hardware and native desktop deployment validation remain open.",
+        "182 workspace tests plus the new bounded-admission unit check, two isolated audio protocol tests, workspace Clippy, 60 Python checks, software-Vulkan desktop visual regressions (160.81 s), and Astro checks/link validation passed. No visual goldens or tolerances changed. Native guest deployment validation remains pending."
       ]
     },
     {
@@ -758,6 +763,23 @@
       "pending": [
         "All six exact-head checks, protected-main merge and Pages",
         "Audio integration and remaining framework controls",
+        "Other requirement groups"
+      ]
+    },
+    {
+      "milestone": "native-audio-service",
+      "status": "locally_verified",
+      "checks": [
+        "Validated pure audio values, default-output keyboard policy, and client loading/ready/unavailable state",
+        "Device identity, channel balance, route validation, bounds and bounded command admission unit tests",
+        "Isolated PipeWire tests: output/input controls, default preference requests with explicit policy fixture, external events, removal/reconnect, idle observation, shutdown and cancelled callback storage",
+        "Workspace Rust tests, Clippy, Python checks, unchanged software-Vulkan visual baselines and Astro build/link checks"
+      ],
+      "pending": [
+        "Native guest deployment and live application stream-routing validation",
+        "Control-center child, sliders and bounded/coalesced drag commands",
+        "Physical audio devices, card profiles/ports and hardware behavior",
+        "Exact-head CI, PR review and merge",
         "Other requirement groups"
       ]
     }

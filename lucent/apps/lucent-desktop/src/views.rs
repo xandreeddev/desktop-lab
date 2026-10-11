@@ -192,11 +192,6 @@ impl Desktop {
             ])
             .on_click(Message::Launcher(launcher::Message::Mode(Mode::Widgets)))
             .id("bar-clock");
-        let volume = self
-            .system
-            .volume
-            .map(|v| v.to_string())
-            .unwrap_or_else(|| "—".into());
         let right = self
             .pill(vec![
                 bar_icon("notifications")
@@ -208,16 +203,9 @@ impl Desktop {
                 bar_icon("volume")
                     .on_click(Message::Action(Action::Mute))
                     .id("bar-mute"),
-                self.label(
-                    if self.system.muted {
-                        "×".into()
-                    } else {
-                        volume
-                    },
-                    font::CAPTION,
-                )
-                .width(Length::Fixed(component::bar::CONTROL_SIZE))
-                .align(Align::Center),
+                self.label(self.audio.label(), font::CAPTION)
+                    .width(Length::Fixed(component::bar::CONTROL_SIZE))
+                    .align(Align::Center),
                 bar_icon("lock")
                     .on_click(Message::Action(Action::Lock))
                     .id("bar-lock"),

@@ -198,8 +198,6 @@ pub struct SystemSnapshot {
     pub cpu_percent: f32,
     pub memory_used_mib: u64,
     pub memory_total_mib: u64,
-    pub volume: Option<u32>,
-    pub muted: bool,
     pub network: String,
 }
 #[derive(Clone, Debug, Default, PartialEq)]

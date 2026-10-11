@@ -18,17 +18,6 @@ impl SystemPort for LinuxSystem {
             .sample()
     }
 }
-pub struct WirePlumber;
-impl AudioPort for WirePlumber {
-    fn control(&self, command: AudioCommand) -> Result<()> {
-        let args: &[&str] = match command {
-            AudioCommand::Raise => &["set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+"],
-            AudioCommand::Lower => &["set-volume", "@DEFAULT_AUDIO_SINK@", "5%-"],
-            AudioCommand::ToggleMute => &["set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"],
-        };
-        crate::command("wpctl", args).map(|_| ())
-    }
-}
 pub struct Playerctl;
 impl MediaPort for Playerctl {
     fn snapshot(&self) -> Result<MediaSnapshot> {

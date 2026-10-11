@@ -1,6 +1,7 @@
 mod actions;
 mod adapters;
 mod artwork;
+mod audio;
 mod desktop;
 mod launcher;
 mod notifications;

@@ -21,7 +21,7 @@ pub fn desktop_adapters() -> DesktopAdapters {
         catalog: Arc::new(lucent_services::wallpaper_catalog::OnlineWallpapers),
         clock: Arc::new(LocalClock),
         system: Arc::new(LinuxSystem::default()),
-        audio: Arc::new(WirePlumber),
+        audio: Arc::new(lucent_services::audio::PulseAudio::default()),
         media: Arc::new(Playerctl),
         weather: Arc::new(OpenMeteo),
         wallpaper: Arc::new(LucentWallpaper),

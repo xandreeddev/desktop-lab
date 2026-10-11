@@ -12,8 +12,8 @@ import desktopSource from '../../../../lucent/apps/lucent-desktop/src/desktop.rs
 import launcherSource from '../../../../lucent/apps/lucent-desktop/src/launcher/mod.rs?raw';
 import runtimeSource from '../../../../lucent/crates/lucent-wayland/src/lib.rs?raw';
 import apiSource from '../../../../lucent/crates/lucent-api/src/lib.rs?raw';
-import audioSource from '../../../../lucent/crates/lucent-services/src/desktop_adapters.rs?raw';
-import domainPorts from '../../../../lucent/crates/lucent-domain/src/ports.rs?raw';
+import audioSource from '../../../../lucent/crates/lucent-services/src/audio/mod.rs?raw';
+import domainPorts from '../../../../lucent/crates/lucent-domain/src/audio.rs?raw';
 import geometrySource from '../../../../lucent/apps/lucent-desktop/src/shell_layout.rs?raw';
 import usecaseSource from '../../../../lucent/crates/lucent-usecases/src/lib.rs?raw';
 const sections: [string, string][] = [
@@ -96,7 +96,7 @@ let desktop = Desktop::new(adapters);
 lucent_wayland::run(desktop)`} lang="rust" label="Equivalent spelling · names added to expose the handoffs" />
     <p><code>desktop_adapters()</code> is a factory function in the executable. Its job is to choose implementations and put them into a record. This location is called the <strong>composition root</strong>: the place where the final application is assembled.</p>
     <CodeBlock code={excerpt(platformSource, 'pub fn desktop_adapters()', 'pub struct NativeAssets;')} lang="rust" label="Live source · production adapter choices" />
-    <p>Consider <code>audio: Arc::new(WirePlumber)</code>. <code>audio</code> is the field name. <code>WirePlumber</code> is our concrete adapter. <code>Arc::new</code> gives it shared ownership so the client and a worker can hold handles to the same adapter. The object is stored through the <code>AudioPort</code> contract.</p>
+    <p>Consider <code>audio: Arc::new(PulseAudio::default())</code>. <code>audio</code> is the field name. <code>PulseAudio</code> is our concrete adapter. <code>Arc::new</code> gives it shared ownership so the client and a worker can hold handles to the same adapter. The object is stored through the <code>AudioPort</code> contract.</p>
     <CodeBlock code={excerpt(adaptersSource, '#[derive(Clone)]', '/// Adapts the framework')} lang="rust" label="Live source · injected adapters held through their port contracts" />
     <p><strong>Naming rule:</strong> a <code>Port</code> is a contract. An <strong>adapter</strong> is an implementation supplied for that contract. Domain traits keep names such as <code>AudioPort</code> and <code>SettingsPort</code>; the provided implementations are grouped in <code>DesktopAdapters</code>, created by <code>desktop_adapters()</code> and stored as <code>self.adapters</code>. The bundle’s fields still use port types so each implementation remains replaceable.</p>
     <div class="table-scroll"><table><thead><tr><th>Expression</th><th>Read it as</th><th>What actually happens</th></tr></thead><tbody>
@@ -106,10 +106,12 @@ lucent_wayland::run(desktop)`} lang="rust" label="Equivalent spelling · names a
       <tr><td>effects.task(move || …)</td><td>Record work and move the captured handles/data into it.</td><td>The runtime later sends the closure to its effect worker. This is where the thread handoff happens.</td></tr>
     </tbody></table></div>
     <h3>A port and its adapter, side by side in the call chain.</h3>
-    <CodeBlock code={excerpt(domainPorts, 'pub trait AudioPort', '#[derive(Clone, Copy, Debug, PartialEq, Eq)]\npub enum MediaCommand')} lang="rust" label="Live source · domain contract" />
-    <CodeBlock code={excerpt(audioSource, 'pub struct WirePlumber;', 'pub struct Playerctl;')} lang="rust" label="Live source · adapter implements the contract using wpctl" />
-    <p>The trait defines a capability. The adapter implements it by invoking <code>wpctl</code> with an argument list. The composition root chooses that adapter. A view can describe a “Volume up” button without knowing which executable implements audio control.</p>
-    <p>Constructing <code>WirePlumber</code> does not start the system’s WirePlumber daemon. Similarly, <code>Hyprland::from_env()</code> reads and validates connection information; the runtime separately establishes the Wayland connection used for drawing. A Rust module import resolves code names at build time. It does not discover services, scan for adapters or register them with Linux.</p>
+    <CodeBlock code={excerpt(domainPorts, 'pub trait AudioPort', '#[cfg(test)]')} lang="rust" label="Live source · domain audio contract" />
+    <CodeBlock code={excerpt(audioSource, 'impl AudioPort for PulseAudio', '#[cfg(test)]')} lang="rust" label="Live source · observation and bounded command admission" />
+    <p>The runtime starts the audio subscription once. Its worker calls <code>watch</code>, which creates a libpulse connection and a private native event loop. Device notifications trigger bounded snapshot queries; accepted snapshots become <code>Message::Audio</code>. The desktop updates its client-owned audio state and marks the bar dirty. No audio operation happens in a view or Vulkan command.</p>
+    <p>A volume action takes a different path: its effect worker calls <code>control</code>, which admits a request to a 32-entry queue and wakes the audio loop through a socket pair. The loop validates the selected object, invokes libpulse, refreshes after acknowledgement and returns the result. Default-output key steps are pure policy in <code>lucent-usecases::audio</code>. Backend handles and callback allocations stay inside the adapter; cancellation unregisters callbacks before their storage is released.</p>
+    <p>Constructing <code>PulseAudio::default()</code> does not start a daemon or open a connection. The subscription starts observation; the existing system audio service handles sound. Similarly, <code>Hyprland::from_env()</code> reads connection information; the runtime separately establishes Wayland drawing. Imports resolve Rust names at build time. They do not discover or register Linux services.</p>
+    <p>Commands acknowledge protocol acceptance, not a transaction with device hotplug or a guarantee of physical sound. Known-stale IDs fail; service restart clears availability and creates fresh IDs. The private protocol tests supply default-device policy explicitly, so they do not prove hardware or WirePlumber policy behavior. The native audio control-center panel and live stream-routing integration remain open.</p>
     <p><code>Desktop::new</code> stores the bundle in <code>self.adapters</code>. <code>run</code> then takes ownership of the Desktop inside the runtime’s state. These values generally live until that runtime exits. Tests construct the same client with <a href={sourceUrl('lucent/apps/lucent-desktop/src/test_adapters.rs')}>in-memory adapters</a>, which record calls instead of launching apps or changing audio. The test asset adapter still prepares bundled artwork.</p>
     <div class="callout"><strong>Why this wiring exists</strong><p>Choosing adapters once makes production dependencies visible and replaceable. A new audio backend needs an implementation and a different assignment here; it does not require changing the launcher view or the Vulkan renderer.</p></div>
   </section>

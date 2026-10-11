@@ -16,7 +16,7 @@ const ownership = [
   ['Idle and sleep', 'swayidle + Lucent lock adapter', 'Headless compositor/logind integration. Stay-awake suppresses idle locking, while sleep and explicit lock handlers remain.'],
   ['Lock recovery', 'Independent hyprlock', 'Emergency fallback if the native locker fails. Uses exported Lucent tokens and wallpaper; no stock shell is started.'],
   ['Keybinding and nested menus', 'Lucent picker + installed definitions', 'Omarchy supplies binding/action data. lucent-menu renders the picker with the framework and returns the original selected value.'],
-  ['Audio, display and power menus', 'Lucent picker + system commands', 'Typed picker requests from compatibility adapters. pactl/wpctl, Hyprland and powerprofilesctl perform operations.'],
+  ['Audio, display and power menus', 'Lucent picker + system commands', 'Compatibility menus still use the native picker and system commands. The top bar and Rust volume actions use a native audio adapter; device-panel replacement remains open. Hyprland and powerprofilesctl perform display/power operations.'],
   ['Network and Bluetooth', 'Native selection + system tools', 'Saved connections and known devices have native selectors. New Wi-Fi setup uses nmtui; pairing uses bluetoothctl’s agent in a terminal. These are separate system applications.'],
   ['Clipboard and emoji', 'Lucent picker + headless capture', 'Private bounded history via wl-paste; sensitivity hints are honored. Emoji data is read from the installed distribution. Selection copies/pastes after releasing focus.'],
   ['Volume and brightness feedback', 'Lucent OSD', 'Existing backend shortcuts translate to transient native feedback, with no notification history entry or keyboard grab.'],

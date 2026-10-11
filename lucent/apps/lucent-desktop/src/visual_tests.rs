@@ -1209,7 +1209,7 @@ fn visual_regressions() {
                 layout.build(&root, width, height, &Interaction::default(), now)
             } else if name.starts_with("bar") {
                 app.media.title = "A long media title that must stay inside its own capsule".into();
-                app.system.volume = Some(100);
+                app.audio.observe(Ok(crate::audio::fixture()));
                 app.compositor.workspaces = (1..=8)
                     .map(|id| lucent_domain::Workspace {
                         id,

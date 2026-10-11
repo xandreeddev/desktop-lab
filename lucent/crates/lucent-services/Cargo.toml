@@ -14,3 +14,4 @@ resvg = "0.45"
 zbus = "5.19"
 lucent-usecases = { path = "../lucent-usecases" }
 jpeg-decoder = { version = "0.3.2", default-features = false }
+pulse = { version = "1.23.0", package = "libpulse-sys" }
