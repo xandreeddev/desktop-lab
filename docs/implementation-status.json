@@ -243,7 +243,7 @@
         "Transient drag preview cannot be persisted by an unrelated settings change"
       ],
       "evidence": [
-        "Widget host now retains previews separately from saved preferences. Injected-adapter regression verifies unrelated saves exclude the preview; release commits the snapped result. Hide/reset/invalid-input cancellation and clamped-origin tests pass. Native verification for this change is pending."
+        "Widget host now retains previews separately from saved preferences. Injected-adapter regression verifies unrelated saves exclude the preview; release commits the snapped result. Hide/reset/invalid-input cancellation and clamped-origin tests pass. Native held-drag/unrelated-save/release/restart check passed; original preferences and workspace restored. See reports/measurements/lucent-widget-drag-preview.json."
       ]
     },
     {
@@ -582,17 +582,22 @@
     },
     {
       "milestone": "widget-drag-preview",
-      "status": "in_progress",
+      "status": "locally_verified",
       "checks": [
         "151 Rust tests passed",
         "Clippy with warnings denied passed",
-        "54 Python checks and Astro check/build passed"
+        "54 Python checks and Astro check/build passed",
+        "168 Vulkan visual comparisons passed with unchanged baselines",
+        "Desktop release build and reversible native deployment passed",
+        "Native held-drag test saved another preference without persisting the preview; release snapped, saved and survived restart",
+        "Widget/launcher/application survival and secure lock/unlock checks passed",
+        "Original preferences and workspace restored; normal desktop ready"
       ],
       "pending": [
-        "Vulkan visual regression, release build and native preview/save/release verification",
         "Exact-head CI, protected-main merge and Pages",
         "Other requirement groups"
-      ]
+      ],
+      "source_commit": "8efe02d33bc4289cd45fa0abd36319f3d5871dcc"
     }
   ]
 }
