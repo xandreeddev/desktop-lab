@@ -132,7 +132,9 @@
         "Mean process RSS 526.35 MiB exceeds the initial 200 MiB target; hardware GPU behavior remains unmeasured",
         "600-second idle on architecture milestone: 0.542% main-process CPU, 530.36 MiB mean RSS; background and closed dock submitted zero frames. See lucent-framework-idle-600.json.",
         "Cold launcher opening included a 246.42 ms maximum frame interval; warmed samples were near 16.5 ms median with up to 19.56 ms observed maximum. Detailed stage profiling, hardware GPU, scaling/hotplug and sleep/resume remain open.",
-        "Opt-in bounded per-surface CPU-stage profiling implemented; nested raster/upload durations, payload counters and private runtime-override restoration tested. Native profile results pending."
+        "Opt-in bounded CPU-stage profiling verified natively, including default-off behavior and runtime-override restoration after intentional failure; 113 Rust tests, 52 Python checks and focused GPU cold/warm test passed.",
+        "Profiled 120-second run: 0.600% main-process CPU, 588.68 MiB mean RSS, zero background/closed-dock idle frames. Cold launcher gap 101.35 ms while maximum measured dock frame work was 10.63 ms; the gap is not explained by its view/layout/text work alone.",
+        "Same-binary normal-mode 120-second comparison: 0.592% main-process CPU, 589.60 MiB mean RSS, zero background/closed-dock idle frames. First-open maximum interval 24.25 ms; warm maxima 18.26\u201321.18 ms. This is not a controlled overhead estimate or proof the earlier hitch is fixed."
       ]
     },
     {
@@ -366,6 +368,26 @@
         "Larger component extraction and other requirement groups"
       ],
       "merge_commit": "2cbd96b8a2903854326fb70ab740787b48970445"
+    },
+    {
+      "milestone": "frame-profiling",
+      "status": "locally_verified",
+      "source_commit": "77129a527f56393a882d4fa165b76dce0c96ccac",
+      "checks": [
+        "113 Rust unit tests, 52 Python checks and focused cold/warm Vulkan test passed",
+        "148 visual comparisons passed without baseline changes",
+        "Clippy, formatting, generated tokens/icons, Astro check/build and Pages-path links passed",
+        "Release build and reversible native user-binary deployment passed",
+        "Native default-off profiling, activation and intentional-failure restoration passed",
+        "Native launcher, application survival, restart and secure lock/unlock passed",
+        "Profiled and normal-mode 120-second measurements recorded with source/binary/hardware identity",
+        "Final native desktop ready with profiling disabled"
+      ],
+      "pending": [
+        "Exact-head CI, protected-main merge and Pages",
+        "Event/reconciliation/other-surface correlation for submission gaps",
+        "Memory reduction, remaining workload/hardware validation and other requirement groups"
+      ]
     }
   ]
 }
