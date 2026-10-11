@@ -1,10 +1,7 @@
 //! A small declarative shell API. Public types contain no Wayland or GPU handles.
 use std::{
     collections::BTreeSet,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::{Arc, Condvar, Mutex},
     time::Duration,
 };
 
@@ -499,15 +496,43 @@ pub trait Application: Component {
     fn inspect(&self) -> String {
         "{}".into()
     }
+    /// Translate a scheduling failure into a client message. Unhandled failures
+    /// stop the runtime with an error (secure clients retain their lock protocol).
+    fn runtime_failure(&self, _failure: RuntimeFailure) -> Option<Self::Message> {
+        None
+    }
     fn animating(&self, _surface: &str, _now: f64) -> bool {
         false
     }
 }
 
 pub type Task<M> = Box<dyn FnOnce() -> M + Send>;
+/// Each named queue executes in submission order on an independent worker.
+/// Queue names belong to the client; the engine knows no desktop service names.
+pub struct ScheduledTask<M> {
+    pub queue: &'static str,
+    pub cancellation: Cancellation,
+    task: Task<M>,
+}
+impl<M> ScheduledTask<M> {
+    /// Execute after admission/cancellation checks; useful for deterministic client tests.
+    pub fn run(self) -> M {
+        (self.task)()
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeFailure {
+    pub source: String,
+    pub reason: String,
+}
+impl std::fmt::Display for RuntimeFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.source, self.reason)
+    }
+}
 pub struct Effects<M> {
     pub now: f64,
-    pub tasks: Vec<Task<M>>,
+    pub tasks: Vec<ScheduledTask<M>>,
     pub redraw: BTreeSet<&'static str>,
     pub exit: bool,
 }
@@ -523,7 +548,24 @@ impl<M> Default for Effects<M> {
 }
 impl<M> Effects<M> {
     pub fn task(&mut self, task: impl FnOnce() -> M + Send + 'static) {
-        self.tasks.push(Box::new(task));
+        self.task_on("default", task);
+    }
+    pub fn task_on(&mut self, queue: &'static str, task: impl FnOnce() -> M + Send + 'static) {
+        self.task_cancellable_on(queue, Cancellation::default(), task);
+    }
+    /// Cancellation skips queued work and suppresses obsolete completions. Running
+    /// operations cooperate by capturing this token and checking it at safe points.
+    pub fn task_cancellable_on(
+        &mut self,
+        queue: &'static str,
+        cancellation: Cancellation,
+        task: impl FnOnce() -> M + Send + 'static,
+    ) {
+        self.tasks.push(ScheduledTask {
+            queue,
+            cancellation,
+            task: Box::new(task),
+        });
     }
     pub fn redraw(&mut self, surface: &'static str) {
         self.redraw.insert(surface);
@@ -546,34 +588,31 @@ impl<M> Effects<M> {
         let map = Arc::new(map);
         for task in child.tasks {
             let map = map.clone();
-            self.task(move || map(task()));
+            self.task_cancellable_on(task.queue, task.cancellation.clone(), move || {
+                map(task.run())
+            });
         }
     }
     pub fn quit(&mut self) {
         self.exit = true;
     }
 }
-#[derive(Clone)]
-pub struct Cancellation(Arc<AtomicBool>);
-impl Default for Cancellation {
-    fn default() -> Self {
-        Self(Arc::new(AtomicBool::new(false)))
-    }
-}
+#[derive(Clone, Default)]
+pub struct Cancellation(Arc<(Mutex<bool>, Condvar)>);
 impl Cancellation {
     pub fn cancel(&self) {
-        self.0.store(true, Ordering::Relaxed);
+        *self.0.0.lock().unwrap_or_else(|e| e.into_inner()) = true;
+        self.0.1.notify_all();
     }
     pub fn cancelled(&self) -> bool {
-        self.0.load(Ordering::Relaxed)
+        *self.0.0.lock().unwrap_or_else(|e| e.into_inner())
     }
     pub fn sleep(&self, duration: Duration) {
-        let start = std::time::Instant::now();
-        while !self.cancelled() && start.elapsed() < duration {
-            std::thread::sleep(
-                (duration - start.elapsed().min(duration)).min(Duration::from_millis(100)),
-            );
-        }
+        let state = self.0.0.lock().unwrap_or_else(|e| e.into_inner());
+        let _ = self
+            .0
+            .1
+            .wait_timeout_while(state, duration, |cancelled| !*cancelled);
     }
 }
 pub struct Emitter<M>(Arc<dyn Fn(M) + Send + Sync>);
@@ -703,6 +742,7 @@ mod tests {
 pub struct FrameDemand {
     dirty: bool,
     pending: bool,
+    deferred: bool,
 }
 impl FrameDemand {
     pub fn invalidate(&mut self) {
@@ -711,8 +751,17 @@ impl FrameDemand {
     pub fn ready(&mut self) {
         self.pending = false;
     }
+    /// No buffer was submitted. Preserve damage but wait for a runtime retry timer.
+    pub fn defer(&mut self) {
+        self.pending = false;
+        self.dirty = true;
+        self.deferred = true;
+    }
+    pub fn retry_ready(&mut self) {
+        self.deferred = false;
+    }
     pub fn begin(&mut self) -> bool {
-        if !self.dirty || self.pending {
+        if !self.dirty || self.pending || self.deferred {
             return false;
         }
         self.dirty = false;
@@ -800,6 +849,21 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
 mod scheduling_tests {
     use super::*;
     #[test]
+    fn skipped_frames_wait_for_retry_and_preserve_damage() {
+        let mut frames = FrameDemand::default();
+        frames.invalidate();
+        assert!(frames.begin());
+        frames.defer();
+        frames.invalidate();
+        frames.ready(); // A late compositor callback must not bypass backoff.
+        assert!(!frames.begin());
+        frames.retry_ready();
+        assert!(frames.begin());
+        assert!(!frames.begin());
+        frames.ready();
+        assert!(!frames.begin());
+    }
+    #[test]
     fn idle_never_requests_frames() {
         let mut frames = FrameDemand::default();
         assert!(!frames.begin());
@@ -856,12 +920,14 @@ mod composition_tests {
             |child| {
                 assert_eq!(child.now, 12.);
                 child.redraw("panel");
-                child.task(|| 42);
+                child.task_on("settings", || 42);
             },
             |n| format!("child:{n}"),
         );
         assert!(parent.redraw.contains("panel"));
-        assert_eq!(parent.tasks.pop().unwrap()(), "child:42");
+        let task = parent.tasks.pop().unwrap();
+        assert_eq!(task.queue, "settings");
+        assert_eq!(task.run(), "child:42");
     }
     #[test]
     fn registry_rejects_duplicate_stable_ids() {

@@ -1210,7 +1210,7 @@ fn desktop_actions_use_injected_adapters_without_executing_host_commands() {
         let mut effects = Effects::default();
         app.update(Message::Action(action), &mut effects);
         for task in effects.tasks {
-            app.update(task(), &mut Effects::default());
+            app.update(task.run(), &mut Effects::default());
         }
     }
     assert_eq!(*fake.calls.lock().unwrap(), ["audio", "media", "lock"]);
@@ -1495,7 +1495,7 @@ fn theme_intent_saves_preferences_then_propagates_through_the_port() {
     assert!(app.settings.light);
     assert_eq!(app.settings.notes, "Keep these notes");
     for task in effects.tasks {
-        app.update(task(), &mut Effects::default());
+        app.update(task.run(), &mut Effects::default());
     }
     assert_eq!(*fake.calls.lock().unwrap(), ["save", "light"]);
     app.update(

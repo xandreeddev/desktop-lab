@@ -215,7 +215,9 @@ impl Desktop {
         if self.settings_writable {
             let settings = self.settings.clone();
             let store = self.adapters.settings.clone();
-            effects.task(move || Message::Completed(store.save(&settings)));
+            effects.task_on("settings", move || {
+                Message::Completed(store.save(&settings))
+            });
         }
     }
     pub fn dock_apps(&self) -> Vec<&domain::Application> {
@@ -335,7 +337,7 @@ impl Desktop {
         };
         let apps = self.adapters.apps.clone();
         let hypr = self.adapters.compositor.clone();
-        effects.task(move || {
+        effects.task_on("launch", move || {
             Message::Completed(if let Some(hypr) = hypr {
                 lucent_usecases::activate_application(
                     apps.as_ref(),
@@ -360,18 +362,25 @@ impl Desktop {
             return;
         }
         let adapters = self.adapters.clone();
-        effects.task(move || {
-            Message::Completed(match action {
-                Action::Lock => adapters.session.lock(),
-                Action::VolumeUp => adapters.audio.control(AudioCommand::Raise),
-                Action::VolumeDown => adapters.audio.control(AudioCommand::Lower),
-                Action::Mute => adapters.audio.control(AudioCommand::ToggleMute),
-                Action::PlayPause => adapters.media.control(MediaCommand::PlayPause),
-                Action::Next => adapters.media.control(MediaCommand::Next),
-                Action::Previous => adapters.media.control(MediaCommand::Previous),
-                _ => Ok(()),
-            })
-        });
+        effects.task_on(
+            if matches!(action, Action::Lock) {
+                "session"
+            } else {
+                "controls"
+            },
+            move || {
+                Message::Completed(match action {
+                    Action::Lock => adapters.session.lock(),
+                    Action::VolumeUp => adapters.audio.control(AudioCommand::Raise),
+                    Action::VolumeDown => adapters.audio.control(AudioCommand::Lower),
+                    Action::Mute => adapters.audio.control(AudioCommand::ToggleMute),
+                    Action::PlayPause => adapters.media.control(MediaCommand::PlayPause),
+                    Action::Next => adapters.media.control(MediaCommand::Next),
+                    Action::Previous => adapters.media.control(MediaCommand::Previous),
+                    _ => Ok(()),
+                })
+            },
+        );
     }
 }
 impl Component for Desktop {
@@ -420,15 +429,21 @@ impl Component for Desktop {
                 self.applied_wallpaper = current_wallpaper;
                 let assets = self.adapters.assets.clone();
                 let path = self.applied_wallpaper.clone();
-                effects.task(move || Message::Background(assets.background(&path)));
+                effects.task_on("assets", move || {
+                    Message::Background(assets.background(&path))
+                });
                 self.results = lucent_usecases::search_applications(&self.apps, "");
                 let assets = self.adapters.assets.clone();
                 let apps = self.apps.clone();
                 let walls = self.wallpapers.clone();
-                effects.task(move || Message::Images(assets.load(&apps, &walls)));
+                effects.task_on("assets", move || {
+                    Message::Images(assets.load(&apps, &walls))
+                });
                 let theme = self.adapters.theme.clone();
                 let palette = lucent_design::selected_palette(&self.settings);
-                effects.task(move || Message::ThemeApplied(theme.apply(&palette)));
+                effects.task_on("theme", move || {
+                    Message::ThemeApplied(theme.apply(&palette))
+                });
                 self.retarget_panel_transition(now);
                 for id in [
                     "bar",
@@ -609,7 +624,9 @@ impl Component for Desktop {
             }
             Message::Workspace(id) => {
                 if let Some(hypr) = self.adapters.compositor.clone() {
-                    effects.task(move || Message::Completed(hypr.switch_workspace(id)));
+                    effects.task_on("controls", move || {
+                        Message::Completed(hypr.switch_workspace(id))
+                    });
                 }
             }
             Message::Action(action) => self.perform(action, effects),
@@ -621,7 +638,7 @@ impl Component for Desktop {
                     if apply {
                         let path = self.wallpapers[index].path.clone();
                         let wallpaper = self.adapters.wallpaper.clone();
-                        effects.task(move || {
+                        effects.task_on("appearance", move || {
                             let result = wallpaper.apply(&path);
                             Message::WallpaperApplied(path, result)
                         });
@@ -636,7 +653,9 @@ impl Component for Desktop {
                         self.error.clear();
                         let assets = self.adapters.assets.clone();
                         let path = self.applied_wallpaper.clone();
-                        effects.task(move || Message::Background(assets.background(&path)));
+                        effects.task_on("assets", move || {
+                            Message::Background(assets.background(&path))
+                        });
                     }
                     Err(e) => self.error = e.to_string(),
                 }
@@ -730,7 +749,7 @@ impl Component for Desktop {
             }
             Message::SetWallpaper(path) => {
                 let wallpaper = self.adapters.wallpaper.clone();
-                effects.task(move || {
+                effects.task_on("appearance", move || {
                     let result = wallpaper.apply(&path);
                     Message::WallpaperApplied(path, result)
                 });
@@ -761,7 +780,9 @@ impl Component for Desktop {
                 self.settings.palette = Some(palette.clone());
                 self.save(effects);
                 let theme = self.adapters.theme.clone();
-                effects.task(move || Message::ThemeApplied(theme.apply(&palette)));
+                effects.task_on("theme", move || {
+                    Message::ThemeApplied(theme.apply(&palette))
+                });
                 for id in [
                     "bar",
                     "widgets",
@@ -776,7 +797,9 @@ impl Component for Desktop {
             Message::ExtractPalette => {
                 let path = self.applied_wallpaper.clone();
                 let adapter = self.adapters.palette_generation.clone();
-                effects.task(move || Message::ExtractedPalette(adapter.seed(&path)));
+                effects.task_on("assets", move || {
+                    Message::ExtractedPalette(adapter.seed(&path))
+                });
             }
             Message::ExtractedPalette(result) => match result {
                 Ok(seed) => self.update(
@@ -807,7 +830,7 @@ impl Component for Desktop {
                     let adapter = self.adapters.wallpaper.clone();
                     let wall = wallpaper.clone();
                     let seed = *seed;
-                    effects.task(move || {
+                    effects.task_on("appearance", move || {
                         let result = adapter.apply(&wall.path);
                         Message::DownloadedApplied(wall, seed, result)
                     });
@@ -836,7 +859,9 @@ impl Component for Desktop {
                         .unwrap_or(0);
                     self.carousel = Motion::fixed(self.wallpaper_index as f32);
                     let assets = self.adapters.assets.clone();
-                    effects.task(move || Message::Images(assets.load(&[], &[wallpaper])));
+                    effects.task_on("assets", move || {
+                        Message::Images(assets.load(&[], &[wallpaper]))
+                    });
                     if let Some(seed) = seed {
                         self.update(
                             Message::Palette(lucent_design::wallpaper_palette(seed)),
@@ -879,6 +904,11 @@ impl Component for Desktop {
     }
 }
 impl api::Application for Desktop {
+    fn runtime_failure(&self, failure: api::RuntimeFailure) -> Option<Message> {
+        Some(Message::Completed(Err(DomainError::Failed(
+            failure.to_string(),
+        ))))
+    }
     fn name(&self) -> &'static str {
         "lucent"
     }

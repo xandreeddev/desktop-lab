@@ -1,0 +1,21 @@
+{
+  "launcher_input": true,
+  "independent_application_service": true,
+  "application_survives_shell_restart": true,
+  "restart_restores_background": true,
+  "native_lock_unlock": true,
+  "surface_fault_injection": false,
+  "notes": "Native VM checks. Presentation recovery policy is unit-tested; driver fault injection is not covered here.",
+  "baseline": "395498fdd38012f8443621f4880fb8056f83b280",
+  "unit_checks": {
+    "rust": 74,
+    "python": 47,
+    "visual_comparisons": 148,
+    "systemd_launch_lifetime": true
+  },
+  "limits": [
+    "Vulkan recovery uses unit-tested policy; driver fault injection remains unverified",
+    "Subscription event delivery remains unbounded",
+    "No performance improvement is claimed from this functional validation"
+  ]
+}

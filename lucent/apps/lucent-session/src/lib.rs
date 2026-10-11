@@ -399,7 +399,7 @@ impl api::Application for SessionScreen {
     fn init(&mut self, effects: &mut Effects<Message>) {
         if let Some(assets) = self.assets.clone() {
             // Secure surfaces and authentication start before image decoding.
-            effects.task(move || Message::Wallpaper(assets.wallpaper()));
+            effects.task_on("assets", move || Message::Wallpaper(assets.wallpaper()));
         }
         if self.mode != Mode::Login {
             self.begin();
