@@ -329,6 +329,22 @@
         "Native generated-library and live-provider checks passed; 172 visual comparisons passed",
         "Sanitized evidence and measurements: reports/measurements/lucent-preview-cache.json"
       ]
+    },
+    {
+      "id": "renderer-input-validation",
+      "owner": "lucent-render and presentation preparation",
+      "status": "in_progress",
+      "acceptance": [
+        "Output dimensions and padded snapshot readback are checked before GPU work",
+        "Scene texture, text and geometry inputs are bounded or fail explicitly",
+        "Device validity checks remain separate from allocation failure and recovery claims",
+        "Boundary tests, Vulkan rejection/recovery and native rendering evidence are recorded"
+      ],
+      "evidence": [
+        "Static review found unchecked snapshot multiplication/readback sizing and missing device texture-limit validation before surface configuration",
+        "Output validation implemented in renderer-owned extent.rs; scene-resource validation remains open",
+        "162 Rust tests, eight focused Vulkan tests and 172 unchanged visual comparisons pass on both software/hardware drivers; native desktop launcher/restart/application-survival and existing secure lock/unlock pass. See reports/measurements/lucent-render-extents.json. Scene-resource validation remains open."
+      ]
     }
   ],
   "evidence": [
@@ -642,18 +658,41 @@
     },
     {
       "milestone": "wallpaper-test-checkpoint",
-      "status": "locally_verified",
+      "status": "merged",
       "checks": [
         "60 Python checks, including six checkpoint lifecycle cases, passed",
         "Private checkpoint reconstruction preserves metadata, bytes and read-only image permissions",
         "Changed/corrupt/symlink replacements are rejected without overwriting existing content",
         "Both native wallpaper transaction and live-provider workflows restored the original desktop",
         "Unique private settings/image scratch paths were removed after successful restoration",
-        "Astro check/build passed; desktop/runtime implementation unchanged"
+        "Astro check/build passed; desktop/runtime implementation unchanged",
+        "All six exact-head checks, protected-main merge and Pages deployment passed"
+      ],
+      "pending": [
+        "Other requirement groups"
+      ],
+      "source_commit": "99603f98549225105bc96049ff289aae47a98149",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/22",
+      "merge_commit": "e680d9556cfddbab8fa0d9b1402aaa230ff661dd"
+    },
+    {
+      "milestone": "renderer-output-validation",
+      "status": "locally_verified",
+      "source_commit": "e2683b046e5d82c50322301877b1a3836bef03be",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/23",
+      "checks": [
+        "162 Rust tests, 60 Python checks, Clippy and formatting passed",
+        "Generated tokens/icons, shellcheck and Astro check/build passed",
+        "Eight focused Vulkan renderer tests passed on software and hardware drivers",
+        "172 visual comparisons passed on each driver without baseline or tolerance changes",
+        "Desktop release build and reversible native deployment passed",
+        "Native launcher layout/navigation, restart and application survival passed",
+        "Existing secure lock/unlock passed; final normal desktop ready",
+        "Local and LAN documentation serves the expanded architecture review"
       ],
       "pending": [
         "Exact-head CI, protected-main merge and Pages",
-        "Other requirement groups"
+        "Scene-resource input validation and other requirement groups"
       ]
     }
   ]

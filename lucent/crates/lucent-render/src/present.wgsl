@@ -29,8 +29,9 @@ fn round_distance(point:vec2<f32>,rect:vec4<f32>,requested_radius:f32)->f32 {
     return length(max(q,vec2(0.0)))+min(max(q.x,q.y),0.0)-radius;
 }
 @fragment fn fs(v:Vertex)->@location(0) vec4<f32> {
-    let point=v.local+v.rect.xy;
-    if any(point<v.clip.xy)||any(point>v.clip.xy+v.clip.zw){discard;}
+    // Use the actual sample center for clip boundaries, avoiding interpolation
+    // drift when a fractional boundary lands exactly on a physical pixel.
+    let point=v.position.xy/viewport.z;
     let d=round_distance(v.local,vec4(0.0,0.0,v.rect.zw),v.params.x);
     // Default derivatives may use a coarse quad estimate on one GPU and fine
     // differences on another. Coverage needs the same per-fragment choice.
@@ -50,5 +51,8 @@ fn round_distance(point:vec2<f32>,rect:vec4<f32>,requested_radius:f32)->f32 {
     coverage=min(coverage,1.0-smoothstep(-clip_aa,clip_aa,clip_distance));
     var pixel=vec4(1.0);
     if v.params.y>0.5&&v.params.y<1.5 {pixel=textureSample(image,filtering,v.uv.xy+(v.local/v.rect.zw)*v.uv.zw);}
+    // Keep clipped lanes through derivative evaluation and implicit-LOD sampling.
+    // Early discard faded the last corner of odd-sized images on llvmpipe.
+    if any(point<v.clip.xy)||any(point>=v.clip.xy+v.clip.zw){discard;}
     return vec4(pixel.rgb*v.color.rgb*v.color.a,pixel.a*v.color.a)*coverage;
 }
