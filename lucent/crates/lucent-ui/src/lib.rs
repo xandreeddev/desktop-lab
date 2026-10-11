@@ -7,21 +7,21 @@ use std::{collections::BTreeMap, sync::Arc};
 pub enum Paint {
     Outline {
         rect: Rect,
-        clip: Rect,
+        clip: Clip,
         color: Color,
         radius: f32,
         width: f32,
     },
     Shape {
         rect: Rect,
-        clip: Rect,
+        clip: Clip,
         color: Color,
         radius: f32,
         shadow: bool,
     },
     Text {
         rect: Rect,
-        clip: Rect,
+        clip: Clip,
         text: String,
         size: f32,
         face: usize,
@@ -30,7 +30,9 @@ pub enum Paint {
     },
     Image {
         rect: Rect,
-        clip: Rect,
+        /// Normalized source coordinates; cover fitting crops pixels, not destination geometry.
+        uv: Rect,
+        clip: Clip,
         data: Arc<ImageData>,
         radius: f32,
         opacity: f32,
@@ -41,7 +43,7 @@ pub enum Paint {
 pub struct Hit<M> {
     pub id: String,
     pub rect: Rect,
-    pub clip: Rect,
+    pub clip: Clip,
     pub radius: f32,
     pub click: Option<M>,
     pub hover: Option<M>,
@@ -54,19 +56,13 @@ pub struct Hit<M> {
 }
 impl<M> Hit<M> {
     pub fn contains(&self, x: f32, y: f32) -> bool {
-        if !self.rect.contains(x, y) || !self.clip.contains(x, y) {
-            return false;
-        }
-        let r = self.radius.min(self.rect.w / 2.).min(self.rect.h / 2.);
-        let dx = (x - self.rect.x - self.rect.w / 2.).abs() - (self.rect.w / 2. - r);
-        let dy = (y - self.rect.y - self.rect.h / 2.).abs() - (self.rect.h / 2. - r);
-        dx.max(0.).hypot(dy.max(0.)) + dx.max(dy).min(0.) <= r
+        self.clip.contains(x, y) && RoundedRect::new(self.rect, self.radius).contains(x, y)
     }
 }
 pub struct Scene<M> {
     pub paint: Vec<Paint>,
     pub hits: Vec<Hit<M>>,
-    pub regions: Vec<(Rect, f32)>,
+    pub regions: Vec<Clip>,
 }
 impl<M> Default for Scene<M> {
     fn default() -> Self {
@@ -224,7 +220,16 @@ impl Layout {
     ) -> Scene<M> {
         let mut scene = Scene::default();
         let rect = Rect::new(0., 0., width, height);
-        self.place(root, rect, rect, 1., &mut scene, interaction, now, "root");
+        self.place(
+            root,
+            rect,
+            rect.into(),
+            1.,
+            &mut scene,
+            interaction,
+            now,
+            "root",
+        );
         scene
     }
     #[allow(clippy::too_many_arguments)]
@@ -232,7 +237,7 @@ impl Layout {
         &self,
         e: &Element<M>,
         rect: Rect,
-        clip: Rect,
+        clip: Clip,
         opacity: f32,
         scene: &mut Scene<M>,
         interaction: &Interaction<M>,
@@ -249,9 +254,9 @@ impl Layout {
             return;
         }
         let own_clip = if e.style.clip {
-            clip.intersect(rect)
+            clip.with_rounded(rect, e.style.radius)
         } else {
-            clip
+            clip.clone()
         };
         let interactive =
             e.click.is_some() || e.input.is_some() || e.drag.is_some() || e.hover.is_some();
@@ -267,7 +272,7 @@ impl Layout {
             if e.style.shadow {
                 scene.paint.push(Paint::Shape {
                     rect: Rect::new(rect.x, rect.y + e.style.shadow_offset, rect.w, rect.h),
-                    clip,
+                    clip: clip.clone(),
                     color: e.style.shadow_color.alpha(e.style.shadow_color.3 * alpha),
                     radius: e.style.radius,
                     shadow: true,
@@ -275,18 +280,18 @@ impl Layout {
             }
             scene.paint.push(Paint::Shape {
                 rect,
-                clip,
+                clip: clip.clone(),
                 color,
                 radius: e.style.radius,
                 shadow: false,
             });
         }
         if interactive {
-            scene.regions.push((rect.intersect(clip), e.style.radius));
+            scene.regions.push(clip.with_rounded(rect, e.style.radius));
             scene.hits.push(Hit {
                 id: id.clone(),
                 rect,
-                clip,
+                clip: clip.clone(),
                 radius: e.style.radius,
                 click: e.click.clone(),
                 hover: e.hover.clone(),
@@ -371,36 +376,19 @@ impl Layout {
                     });
                 }
             }
-            Kind::Image(data) => scene.paint.push(Paint::Image {
-                rect: if e.style.image_fit != ImageFit::Fill
-                    && data.width() > 0
-                    && data.height() > 0
-                {
-                    let (x, y) = (
-                        inner.w / data.width() as f32,
-                        inner.h / data.height() as f32,
-                    );
-                    let factor = if e.style.image_fit == ImageFit::Cover {
-                        x.max(y)
-                    } else {
-                        x.min(y)
-                    };
-                    let (w, h) = (data.width() as f32 * factor, data.height() as f32 * factor);
-                    Rect::new(
-                        inner.x + (inner.w - w) / 2.,
-                        inner.y + (inner.h - h) / 2.,
-                        w,
-                        h,
-                    )
-                } else {
-                    inner
-                },
-                clip: own_clip.intersect(inner),
-                data: data.clone(),
-                radius: e.style.radius,
-                opacity: alpha,
-                tint: e.style.image_tint,
-            }),
+            Kind::Image(data) => {
+                let (rect, uv) =
+                    image_geometry(inner, data.width(), data.height(), e.style.image_fit);
+                scene.paint.push(Paint::Image {
+                    rect,
+                    uv,
+                    clip: own_clip.intersect(inner),
+                    data: data.clone(),
+                    radius: e.style.radius,
+                    opacity: alpha,
+                    tint: e.style.image_tint,
+                });
+            }
             _ => {}
         }
         let is_row = matches!(e.kind, Kind::Row);
@@ -489,7 +477,7 @@ impl Layout {
             self.place(
                 child,
                 Rect::new(x, y, w, h),
-                own_clip,
+                own_clip.clone(),
                 alpha,
                 scene,
                 interaction,
@@ -527,6 +515,34 @@ fn align_offset(align: Align, remaining: f32) -> f32 {
         Align::End => remaining,
     }
     .max(0.)
+}
+
+fn image_geometry(bounds: Rect, width: u32, height: u32, fit: ImageFit) -> (Rect, Rect) {
+    let full = Rect::new(0., 0., 1., 1.);
+    if fit == ImageFit::Fill || bounds.w <= 0. || bounds.h <= 0. {
+        return (bounds, full);
+    }
+    let (x, y) = (bounds.w / width as f32, bounds.h / height as f32);
+    let factor = if fit == ImageFit::Cover {
+        x.max(y)
+    } else {
+        x.min(y)
+    };
+    let (w, h) = (width as f32 * factor, height as f32 * factor);
+    if fit == ImageFit::Cover {
+        let (u, v) = (bounds.w / w, bounds.h / h);
+        (bounds, Rect::new((1. - u) / 2., (1. - v) / 2., u, v))
+    } else {
+        (
+            Rect::new(
+                bounds.x + (bounds.w - w) / 2.,
+                bounds.y + (bounds.h - h) / 2.,
+                w,
+                h,
+            ),
+            full,
+        )
+    }
 }
 
 struct Press<M> {
@@ -702,7 +718,9 @@ impl<M: Clone> Interaction<M> {
                 .hits
                 .iter()
                 .filter(|h| {
-                    h.tab_stop && h.rect.intersect(h.clip).w > 0. && h.rect.intersect(h.clip).h > 0.
+                    h.tab_stop
+                        && h.rect.intersect(h.clip.bounds).w > 0.
+                        && h.rect.intersect(h.clip.bounds).h > 0.
                 })
                 .collect();
             if !stops.is_empty() {
@@ -781,7 +799,7 @@ mod tests {
         let h: Hit<()> = Hit {
             id: "a".into(),
             rect: Rect::new(0., 0., 100., 100.),
-            clip: Rect::new(0., 0., 100., 100.),
+            clip: Rect::new(0., 0., 100., 100.).into(),
             radius: 20.,
             click: None,
             hover: None,
@@ -800,7 +818,7 @@ mod tests {
         let hit = Hit {
             id: "input".into(),
             rect: Rect::new(0., 0., 100., 30.),
-            clip: Rect::new(0., 0., 100., 30.),
+            clip: Rect::new(0., 0., 100., 30.).into(),
             radius: 0.,
             click: None,
             hover: None,
@@ -835,7 +853,7 @@ mod tests {
         let h = Hit {
             id: "a".into(),
             rect: Rect::new(0., 0., 100., 100.),
-            clip: Rect::new(0., 0., 100., 100.),
+            clip: Rect::new(0., 0., 100., 100.).into(),
             radius: 0.,
             click: Some(1),
             hover: None,

@@ -72,11 +72,17 @@
     {
       "id": "rounded-clipping",
       "owner": "lucent-ui and lucent-render",
-      "status": "pending",
+      "status": "implemented",
       "acceptance": [
         "Cover images retain destination rounding",
         "Rounded parent clips apply consistently to content and hit testing",
         "Pixel tests at 1x and 2x cover crop and nesting"
+      ],
+      "evidence": [
+        "Shared Clip geometry retains rounded ancestor intersections in rendering, hits and native input regions",
+        "Vulkan pixel tests passed at 1x and 2x for crop, nesting, opaque image edges and input agreement",
+        "79 Rust tests, 48 Python tests and 148 visual comparisons passed; 18 intentional baselines reviewed",
+        "Native VM launcher/restart and secure lock/unlock passed"
       ]
     },
     {
@@ -246,7 +252,7 @@
     },
     {
       "milestone": "resource-lifecycle",
-      "status": "locally_verified",
+      "status": "merged",
       "source_commit": "c4c707fa021a9265e4c6558d1e19392fa1b1e4f8",
       "checks": [
         "78 Rust unit tests and 48 Python tests passed",
@@ -254,7 +260,26 @@
         "Two native Vulkan resource tests passed",
         "Clippy, formatting and documentation build passed",
         "Native launcher/restart/secure lock checks passed",
-        "Current 120-second VM measurement recorded with detected metadata"
+        "Current 120-second VM measurement recorded with detected metadata",
+        "All six required checks, protected-main merge and Pages deployment passed"
+      ],
+      "pending": [
+        "Remaining requirement groups"
+      ],
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/8",
+      "merge_commit": "b69fc84cc8c4e35a86567e7ffc0289b63066900c"
+    },
+    {
+      "milestone": "rounded-clipping",
+      "status": "locally_verified",
+      "source_commit": "65244ce710174c72a329e70a6eb96549b2251c69",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/9",
+      "checks": [
+        "79 Rust unit tests and 48 Python tests passed",
+        "Focused 1x/2x Vulkan clipping test and 148 visual comparisons passed",
+        "18 affected visual baselines reviewed; unrelated baselines retained",
+        "Release build, Clippy, formatting and documentation build passed",
+        "Native launcher/restart/application survival/secure lock/unlock passed"
       ],
       "pending": [
         "Protected-main CI and merge",

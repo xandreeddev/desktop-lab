@@ -489,19 +489,19 @@ mod tests {
                 &mut Effects::default(),
             );
             let scene = layout.build(&app.view(&cx), width, height, &Interaction::default(), 0.);
-            let (rect, clip) = scene
+            let (rect, uv, clip) = scene
                 .paint
                 .iter()
                 .find_map(|p| match p {
-                    Paint::Image { rect, clip, .. } => Some((rect, clip)),
+                    Paint::Image { rect, uv, clip, .. } => Some((rect, uv, clip)),
                     _ => None,
                 })
                 .expect("wallpaper must be painted");
             assert!(rect.w >= width && rect.h >= height);
-            assert_eq!(rect.w / rect.h, 2.);
+            assert!(((rect.w / uv.w) / (rect.h / uv.h) - 2.).abs() < 0.001);
             assert_eq!(rect.x + rect.w / 2., width / 2.);
             assert_eq!(rect.y + rect.h / 2., height / 2.);
-            assert_eq!(*clip, Rect::new(0., 0., width, height));
+            assert_eq!(clip.bounds, Rect::new(0., 0., width, height));
             app.update(Message::Wallpaper(None), &mut Effects::default());
         }
     }

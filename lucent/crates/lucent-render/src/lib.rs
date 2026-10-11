@@ -96,16 +96,28 @@ impl Gpu {
         });
         let frame_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: Some("viewport"),
-            entries: &[BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+            entries: &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
         });
         let sampler = device.create_sampler(&SamplerDescriptor {
             mag_filter: FilterMode::Linear,
@@ -119,7 +131,7 @@ impl Gpu {
             bind_group_layouts: &[Some(&texture_layout), Some(&frame_layout)],
             immediate_size: 0,
         });
-        let attributes = vertex_attr_array![0=>Float32x4,1=>Float32x4,2=>Float32x4,3=>Float32x4];
+        let attributes = vertex_attr_array![0=>Float32x4,1=>Float32x4,2=>Float32x4,3=>Float32x4,4=>Float32x4,5=>Float32x4];
         let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("framework primitives"),
             layout: Some(&layout),
@@ -128,7 +140,7 @@ impl Gpu {
                 entry_point: Some("vs"),
                 compilation_options: Default::default(),
                 buffers: &[Some(VertexBufferLayout {
-                    array_stride: 64,
+                    array_stride: 96,
                     step_mode: VertexStepMode::Instance,
                     attributes: &attributes,
                 })],
@@ -280,6 +292,8 @@ pub struct Canvas {
     instances: Buffer,
     capacity: usize,
     resources: Vec<Rc<TextureResource>>,
+    clips: Buffer,
+    clip_capacity: usize,
 }
 impl Canvas {
     pub fn new(gpu: Rc<Gpu>) -> Self {
@@ -289,17 +303,29 @@ impl Canvas {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let clips = gpu.device.create_buffer(&BufferDescriptor {
+            label: Some("rounded clip chain"),
+            size: 32,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
         let frame_group = gpu.device.create_bind_group(&BindGroupDescriptor {
             label: None,
             layout: &gpu.frame_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: viewport.as_entire_binding(),
-            }],
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: viewport.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: clips.as_entire_binding(),
+                },
+            ],
         });
         let instances = gpu.device.create_buffer(&BufferDescriptor {
             label: None,
-            size: 64,
+            size: 96,
             usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -310,6 +336,8 @@ impl Canvas {
             instances,
             capacity: 1,
             resources: Vec::new(),
+            clips,
+            clip_capacity: 1,
         }
     }
     pub fn paint(
@@ -322,6 +350,7 @@ impl Canvas {
     ) {
         let mut records = Vec::with_capacity(paint.len());
         let mut textures = Vec::with_capacity(paint.len());
+        let mut clip_records = Vec::<[f32; 8]>::new();
         for primitive in paint {
             let (rect, clip, color, radius, kind, stroke, texture) = match primitive {
                 Paint::Outline {
@@ -330,7 +359,7 @@ impl Canvas {
                     color,
                     radius,
                     width,
-                } => (*rect, *clip, *color, *radius, 3., *width, self.gpu.white()),
+                } => (*rect, clip, *color, *radius, 3., *width, self.gpu.white()),
                 Paint::Shape {
                     rect,
                     clip,
@@ -339,7 +368,7 @@ impl Canvas {
                     shadow,
                 } => (
                     *rect,
-                    *clip,
+                    clip,
                     *color,
                     *radius,
                     if *shadow { 2. } else { 0. },
@@ -353,9 +382,10 @@ impl Canvas {
                     radius,
                     opacity,
                     tint,
+                    ..
                 } => (
                     *rect,
-                    *clip,
+                    clip,
                     tint.alpha(tint.3 * *opacity),
                     *radius,
                     1.,
@@ -392,7 +422,7 @@ impl Canvas {
                             w,
                             h,
                         ),
-                        *clip,
+                        clip,
                         *color,
                         0.,
                         1.,
@@ -404,9 +434,49 @@ impl Canvas {
             if rect.w <= 0. || rect.h <= 0. || color.3 <= 0. {
                 continue;
             }
+            let clip_start = clip_records.len();
+            for shape in clip.shapes() {
+                clip_records.push([
+                    shape.rect.x,
+                    shape.rect.y,
+                    shape.rect.w,
+                    shape.rect.h,
+                    shape.radius,
+                    0.,
+                    0.,
+                    0.,
+                ]);
+            }
+            let uv = match primitive {
+                Paint::Image { uv, .. } => *uv,
+                _ => Rect::new(0., 0., 1., 1.),
+            };
+            let bounds = clip.bounds;
             records.push([
-                rect.x, rect.y, rect.w, rect.h, color.0, color.1, color.2, color.3, radius, kind,
-                stroke, 0., clip.x, clip.y, clip.w, clip.h,
+                rect.x,
+                rect.y,
+                rect.w,
+                rect.h,
+                color.0,
+                color.1,
+                color.2,
+                color.3,
+                radius,
+                kind,
+                stroke,
+                0.,
+                bounds.x,
+                bounds.y,
+                bounds.w,
+                bounds.h,
+                uv.x,
+                uv.y,
+                uv.w,
+                uv.h,
+                clip_start as f32,
+                clip.shapes().len() as f32,
+                0.,
+                0.,
             ]);
             textures.push(texture);
         }
@@ -414,10 +484,41 @@ impl Canvas {
             self.capacity = records.len().next_power_of_two();
             self.instances = self.gpu.device.create_buffer(&BufferDescriptor {
                 label: None,
-                size: (self.capacity * 64) as u64,
+                size: (self.capacity * 96) as u64,
                 usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });
+        }
+        if clip_records.len() > self.clip_capacity {
+            self.clip_capacity = clip_records.len().next_power_of_two();
+            self.clips = self.gpu.device.create_buffer(&BufferDescriptor {
+                label: Some("rounded clip chain"),
+                size: (self.clip_capacity * 32) as u64,
+                usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            self.frame_group = self.gpu.device.create_bind_group(&BindGroupDescriptor {
+                label: None,
+                layout: &self.gpu.frame_layout,
+                entries: &[
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: self.viewport.as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: self.clips.as_entire_binding(),
+                    },
+                ],
+            });
+        }
+        if !clip_records.is_empty() {
+            let bytes: Vec<u8> = clip_records
+                .iter()
+                .flatten()
+                .flat_map(|f| f.to_ne_bytes())
+                .collect();
+            self.gpu.queue.write_buffer(&self.clips, 0, &bytes);
         }
         let bytes: Vec<u8> = records
             .iter()
@@ -563,7 +664,8 @@ mod resource_tests {
             let image = Arc::new(ImageData::from_rgba("same-file", 1, 1, rgba.to_vec()).unwrap());
             let paint = [Paint::Image {
                 rect,
-                clip: rect,
+                clip: rect.into(),
+                uv: Rect::new(0., 0., 1., 1.),
                 data: image,
                 radius: 0.,
                 opacity: 1.,
@@ -587,7 +689,8 @@ mod resource_tests {
         let rect = Rect::new(0., 0., 64., 64.);
         let image = |key: &str, size: u32| Paint::Image {
             rect,
-            clip: rect,
+            clip: rect.into(),
+            uv: Rect::new(0., 0., 1., 1.),
             data: Arc::new(
                 ImageData::from_rgba(key, size, size, vec![255; (size * size * 4) as usize])
                     .unwrap(),
@@ -632,6 +735,92 @@ mod resource_tests {
         assert!(gpu.cache_stats().bytes < before.budget_bytes);
         panel.snapshot(64, 64, 1, &bar).unwrap();
         assert_eq!(gpu.cache_stats().misses, after.misses);
+    }
+}
+
+#[cfg(test)]
+mod clipping_tests {
+    use super::*;
+    use lucent_api::{Color, Element, ImageData};
+    use lucent_ui::{Interaction, Layout};
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn rounded_cover_and_nested_clips_match_pixels_and_input_at_both_densities() {
+        let fonts = Arc::new(vec![]);
+        let gpu = Gpu::headless(fonts.clone()).unwrap();
+        let layout = Layout::new(fonts);
+        let mut canvas = Canvas::new(gpu);
+        let image = Arc::new(ImageData::from_rgba("wide fixture", 2, 1, vec![255; 8]).unwrap());
+        let cover = Element::<()>::image(image)
+            .size(64., 64.)
+            .cover()
+            .radius(16.)
+            .on_click(());
+        let nested = Element::stack(vec![
+            Element::stack(vec![
+                Element::new(lucent_api::Kind::Empty)
+                    .size(64., 64.)
+                    .background(Color::hex(0xffffff))
+                    .on_click(()),
+            ])
+            .size(48., 48.)
+            .at(8., 4.)
+            .radius(16.)
+            .clip(),
+        ])
+        .size(64., 64.)
+        .radius(24.)
+        .clip();
+        for root in [cover, nested] {
+            let scene = layout.build(&root, 64., 64., &Interaction::default(), 0.);
+            for scale in [1, 2] {
+                let pixels = canvas.snapshot(64, 64, scale, &scene.paint).unwrap();
+                let alpha = |x: usize, y: usize| pixels[(y * 64 * scale as usize + x) * 4 + 3];
+                assert_eq!(
+                    alpha(scale as usize, scale as usize),
+                    0,
+                    "rounded corner was filled"
+                );
+                assert_eq!(alpha(32 * scale as usize, 32 * scale as usize), 255);
+                // Away from anti-aliased boundaries, GPU coverage, hit testing
+                // and the native-region scanline contract must all agree.
+                for (x, y) in [(1., 1.), (9., 5.), (32., 32.), (60., 60.)] {
+                    let hit = scene.hits.iter().any(|hit| hit.contains(x, y));
+                    let region = scene.regions.iter().any(|clip| clip.contains(x, y));
+                    assert_eq!(hit, region);
+                    let opaque =
+                        alpha((x * scale as f32) as usize, (y * scale as f32) as usize) > 127;
+                    assert_eq!(
+                        hit, opaque,
+                        "input/pixel disagreement at {x},{y}, scale {scale}"
+                    );
+                }
+            }
+        }
+        // Cover must crop the source around its center, without stretching its
+        // aspect ratio or rounding the oversized source rectangle instead.
+        let mut pixels = Vec::new();
+        for _ in 0..4 {
+            for x in 0..8 {
+                pixels.extend_from_slice(if (2..6).contains(&x) {
+                    &[0, 255, 0, 255]
+                } else {
+                    &[255, 0, 0, 255]
+                });
+            }
+        }
+        let image = Arc::new(ImageData::from_rgba("crop fixture", 8, 4, pixels).unwrap());
+        let root = Element::<()>::image(image).size(64., 64.).cover();
+        let scene = layout.build(&root, 64., 64., &Interaction::default(), 0.);
+        for scale in [1, 2] {
+            let pixels = canvas.snapshot(64, 64, scale, &scene.paint).unwrap();
+            for x in [16, 48] {
+                let offset = ((32 * scale * 64 * scale + x * scale) * 4) as usize;
+                assert_eq!(&pixels[offset..offset + 4], &[0, 255, 0, 255]);
+            }
+            assert_eq!(pixels[3], 255, "unrounded image edges must not fade");
+        }
     }
 }
 /// GPU presentation target. Must be dropped before its native Wayland surface.
