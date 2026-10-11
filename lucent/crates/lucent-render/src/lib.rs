@@ -17,9 +17,10 @@ mod presentation;
 mod profiling;
 pub use profiling::{PaintProfile, RenderProfile, ResourceProfile};
 mod raster;
+mod scene;
 pub use cache::CacheStats;
 use cache::ResourceCache;
-use extent::PhysicalExtent;
+use extent::{PhysicalExtent, ReadbackLayout};
 use presentation::{Recovery, SurfaceFailure};
 pub type Error = Box<dyn std::error::Error>;
 struct TextureResource {
@@ -144,7 +145,7 @@ impl Gpu {
                 entry_point: Some("vs"),
                 compilation_options: Default::default(),
                 buffers: &[Some(VertexBufferLayout {
-                    array_stride: 96,
+                    array_stride: scene::INSTANCE_BYTES,
                     step_mode: VertexStepMode::Instance,
                     attributes: &attributes,
                 })],
@@ -300,14 +301,24 @@ impl Gpu {
         face: usize,
         profile: &mut ResourceProfile,
         enabled: bool,
-    ) -> Rc<TextureResource> {
-        let key = format!("text:{face}:{size:.3}:{scale}:{text}");
-        let font = self.fonts.get(face).unwrap_or(&self.fonts[0]);
+    ) -> Result<Rc<TextureResource>, Error> {
+        let font = self
+            .fonts
+            .get(face)
+            .or_else(|| self.fonts.first())
+            .ok_or("text requires at least one font")?;
+        let key = format!("text:{face}:{}:{scale}:{text}", size.to_bits());
         if let Some(v) = self.cache.borrow_mut().get(&key) {
-            return v;
+            return Ok(v);
         }
         let started = profiling::start(enabled);
-        let (pixels, width, height) = raster::text(font, text, size, scale);
+        let (pixels, width, height) = raster::text(
+            font,
+            text,
+            size,
+            scale,
+            self.device.limits().max_texture_dimension_2d,
+        )?;
         if enabled {
             profile.text_raster += profiling::elapsed(started);
             profile.text_misses += 1;
@@ -324,7 +335,7 @@ impl Gpu {
         self.cache
             .borrow_mut()
             .insert(key, texture.clone(), texture.bytes);
-        texture
+        Ok(texture)
     }
 }
 /// Draws an existing Paint scene into a native buffer or an offscreen test target.
@@ -341,6 +352,25 @@ pub struct Canvas {
     profiling: bool,
     last_profile: Option<PaintProfile>,
 }
+struct PreparedScene {
+    instances: Vec<u8>,
+    clips: Vec<u8>,
+    textures: Vec<Rc<TextureResource>>,
+    geometry: scene::Geometry,
+}
+struct ValidatedScene<'a> {
+    width: u32,
+    height: u32,
+    scale: u32,
+    paint: &'a [Paint],
+    geometry: scene::Geometry,
+    validation: Duration,
+}
+fn append_record(bytes: &mut Vec<u8>, record: &[f32]) {
+    for value in record {
+        bytes.extend_from_slice(&value.to_ne_bytes());
+    }
+}
 impl Canvas {
     pub fn new(gpu: Rc<Gpu>) -> Self {
         let viewport = gpu.device.create_buffer(&BufferDescriptor {
@@ -351,7 +381,7 @@ impl Canvas {
         });
         let clips = gpu.device.create_buffer(&BufferDescriptor {
             label: Some("rounded clip chain"),
-            size: 32,
+            size: scene::CLIP_BYTES,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -371,7 +401,7 @@ impl Canvas {
         });
         let instances = gpu.device.create_buffer(&BufferDescriptor {
             label: None,
-            size: 96,
+            size: scene::INSTANCE_BYTES,
             usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -390,23 +420,56 @@ impl Canvas {
     }
     /// Requested geometry-buffer payload, excluding driver allocation overhead.
     pub fn buffer_payload_bytes(&self) -> u64 {
-        self.capacity as u64 * 96 + self.clip_capacity as u64 * 32 + 16
+        self.capacity as u64 * scene::INSTANCE_BYTES
+            + self.clip_capacity as u64 * scene::CLIP_BYTES
+            + 16
     }
-    pub fn paint(
+    fn validate_scene<'a>(
         &mut self,
-        view: &TextureView,
         width: u32,
         height: u32,
         scale: u32,
-        paint: &[Paint],
-    ) {
-        let started = profiling::start(self.profiling);
-        let mut profile = PaintProfile::default();
+        paint: &'a [Paint],
+    ) -> Result<ValidatedScene<'a>, Error> {
         self.last_profile = None;
-        let mut records = Vec::with_capacity(paint.len());
-        let mut textures = Vec::with_capacity(paint.len());
-        let mut clip_records = Vec::<[f32; 8]>::new();
-        for primitive in paint {
+        let started = profiling::start(self.profiling);
+        let limits = self.gpu.device.limits();
+        PhysicalExtent::new(width, height, scale, limits.max_texture_dimension_2d)?;
+        let geometry = scene::validate(
+            paint,
+            scale,
+            &self.gpu.fonts,
+            &limits,
+            self.capacity,
+            self.clip_capacity,
+        )?;
+        Ok(ValidatedScene {
+            width,
+            height,
+            scale,
+            paint,
+            geometry,
+            validation: profiling::elapsed(started),
+        })
+    }
+    fn prepare(
+        &self,
+        validated: &ValidatedScene<'_>,
+        profile: &mut PaintProfile,
+    ) -> Result<PreparedScene, Error> {
+        let ValidatedScene {
+            scale,
+            paint,
+            geometry,
+            ..
+        } = *validated;
+        let mut records = Vec::new();
+        records.try_reserve_exact(paint.len() * scene::INSTANCE_BYTES as usize)?;
+        let mut textures = Vec::new();
+        textures.try_reserve_exact(paint.len())?;
+        let mut clip_records = Vec::new();
+        clip_records.try_reserve_exact(geometry.clip_count * scene::CLIP_BYTES as usize)?;
+        for (index, primitive) in paint.iter().enumerate() {
             let (rect, clip, color, radius, kind, detail, texture) = match primitive {
                 Paint::Outline {
                     rect,
@@ -481,14 +544,17 @@ impl Canvas {
                     if text.is_empty() {
                         continue;
                     }
-                    let texture = self.gpu.text(
-                        text,
-                        *size,
-                        scale,
-                        *face,
-                        &mut profile.resources,
-                        self.profiling,
-                    );
+                    let texture = self
+                        .gpu
+                        .text(
+                            text,
+                            *size,
+                            scale,
+                            *face,
+                            &mut profile.resources,
+                            self.profiling,
+                        )
+                        .map_err(|e| format!("scene primitive {index}: {e}"))?;
                     let w = texture.width / scale as f32;
                     let h = texture.height / scale as f32;
                     let x = rect.x
@@ -518,66 +584,116 @@ impl Canvas {
             if rect.w <= 0. || rect.h <= 0. || color.3 <= 0. {
                 continue;
             }
-            let clip_start = clip_records.len();
+            let clip_start = clip_records.len() / scene::CLIP_BYTES as usize;
             for shape in clip.shapes() {
-                clip_records.push([
-                    shape.rect.x,
-                    shape.rect.y,
-                    shape.rect.w,
-                    shape.rect.h,
-                    shape.radius,
-                    0.,
-                    0.,
-                    0.,
-                ]);
+                append_record(
+                    &mut clip_records,
+                    &[
+                        shape.rect.x,
+                        shape.rect.y,
+                        shape.rect.w,
+                        shape.rect.h,
+                        shape.radius,
+                        0.,
+                        0.,
+                        0.,
+                    ],
+                );
             }
             let uv = match primitive {
                 Paint::Image { uv, .. } => *uv,
                 _ => Rect::new(0., 0., 1., 1.),
             };
             let bounds = clip.bounds;
-            records.push([
-                rect.x,
-                rect.y,
-                rect.w,
-                rect.h,
-                color.0,
-                color.1,
-                color.2,
-                color.3,
-                radius,
-                kind,
-                detail,
-                0.,
-                bounds.x,
-                bounds.y,
-                bounds.w,
-                bounds.h,
-                uv.x,
-                uv.y,
-                uv.w,
-                uv.h,
-                clip_start as f32,
-                clip.shapes().len() as f32,
-                0.,
-                0.,
-            ]);
+            append_record(
+                &mut records,
+                &[
+                    rect.x,
+                    rect.y,
+                    rect.w,
+                    rect.h,
+                    color.0,
+                    color.1,
+                    color.2,
+                    color.3,
+                    radius,
+                    kind,
+                    detail,
+                    0.,
+                    bounds.x,
+                    bounds.y,
+                    bounds.w,
+                    bounds.h,
+                    uv.x,
+                    uv.y,
+                    uv.w,
+                    uv.h,
+                    clip_start as f32,
+                    clip.shapes().len() as f32,
+                    0.,
+                    0.,
+                ],
+            );
             textures.push(texture);
         }
-        if records.len() > self.capacity {
-            self.capacity = records.len().next_power_of_two();
+        Ok(PreparedScene {
+            instances: records,
+            clips: clip_records,
+            textures,
+            geometry,
+        })
+    }
+    /// Draw a scene to a compatible BGRA8 target from this canvas's device.
+    /// Input rejection preserves current resources and submits no new frame.
+    /// Actual device-memory availability and external target compatibility remain
+    /// the caller/backend's responsibility.
+    pub fn paint(
+        &mut self,
+        view: &TextureView,
+        width: u32,
+        height: u32,
+        scale: u32,
+        paint: &[Paint],
+    ) -> Result<(), Error> {
+        let validated = self.validate_scene(width, height, scale, paint)?;
+        self.paint_validated(view, validated)
+    }
+    fn paint_validated(
+        &mut self,
+        view: &TextureView,
+        validated: ValidatedScene<'_>,
+    ) -> Result<(), Error> {
+        let started = profiling::start(self.profiling);
+        let mut profile = PaintProfile::default();
+        let (width, height, scale) = (validated.width, validated.height, validated.scale);
+        let PreparedScene {
+            instances,
+            clips,
+            textures,
+            geometry,
+        } = match self.prepare(&validated, &mut profile) {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                // Partially prepared resources have dropped their temporary
+                // references; current scenes remain pinned in their canvases.
+                self.gpu.cache.borrow_mut().trim();
+                return Err(error);
+            }
+        };
+        if textures.len() > self.capacity {
+            self.capacity = geometry.instances.capacity;
             self.instances = self.gpu.device.create_buffer(&BufferDescriptor {
                 label: None,
-                size: (self.capacity * 96) as u64,
+                size: geometry.instances.bytes,
                 usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });
         }
-        if clip_records.len() > self.clip_capacity {
-            self.clip_capacity = clip_records.len().next_power_of_two();
+        if clips.len() / scene::CLIP_BYTES as usize > self.clip_capacity {
+            self.clip_capacity = geometry.clips.capacity;
             self.clips = self.gpu.device.create_buffer(&BufferDescriptor {
                 label: Some("rounded clip chain"),
-                size: (self.clip_capacity * 32) as u64,
+                size: geometry.clips.bytes,
                 usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });
@@ -596,28 +712,18 @@ impl Canvas {
                 ],
             });
         }
-        if !clip_records.is_empty() {
-            let bytes: Vec<u8> = clip_records
-                .iter()
-                .flatten()
-                .flat_map(|f| f.to_ne_bytes())
-                .collect();
-            self.gpu.queue.write_buffer(&self.clips, 0, &bytes);
+        if !clips.is_empty() {
+            self.gpu.queue.write_buffer(&self.clips, 0, &clips);
         }
-        let bytes: Vec<u8> = records
-            .iter()
-            .flatten()
-            .flat_map(|f| f.to_ne_bytes())
-            .collect();
-        if !bytes.is_empty() {
-            self.gpu.queue.write_buffer(&self.instances, 0, &bytes);
+        if !instances.is_empty() {
+            self.gpu.queue.write_buffer(&self.instances, 0, &instances);
         }
         let view_bytes: Vec<u8> = [width as f32, height as f32, scale as f32, 0.]
             .iter()
             .flat_map(|f| f.to_ne_bytes())
             .collect();
         self.gpu.queue.write_buffer(&self.viewport, 0, &view_bytes);
-        profile.prepare = profiling::elapsed(started);
+        profile.prepare = validated.validation + profiling::elapsed(started);
         let started = profiling::start(self.profiling);
         let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
         {
@@ -653,6 +759,7 @@ impl Canvas {
         self.gpu.cache.borrow_mut().trim();
         profile.retire = profiling::elapsed(started);
         self.last_profile = self.profiling.then_some(profile);
+        Ok(())
     }
     /// Return premultiplied RGBA pixels at `width*scale` by `height*scale`.
     /// Invalid/overflowing sizes and device texture/readback limits return an
@@ -667,6 +774,7 @@ impl Canvas {
         let limits = self.gpu.device.limits();
         let physical = PhysicalExtent::new(width, height, scale, limits.max_texture_dimension_2d)?;
         let readback = physical.readback(limits.max_buffer_size)?;
+        let validated = self.validate_scene(width, height, scale, paint)?;
         let mut rgba = Vec::new();
         rgba.try_reserve_exact(readback.rgba_bytes)?;
         let extent = Extent3d {
@@ -684,13 +792,16 @@ impl Canvas {
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
             view_formats: &[],
         });
-        self.paint(
-            &texture.create_view(&Default::default()),
-            width,
-            height,
-            scale,
-            paint,
-        );
+        self.paint_validated(&texture.create_view(&Default::default()), validated)?;
+        self.readback(&texture, readback, rgba)
+    }
+    fn readback(
+        &self,
+        texture: &Texture,
+        readback: ReadbackLayout,
+        mut rgba: Vec<u8>,
+    ) -> Result<Vec<u8>, Error> {
+        let extent = texture.size();
         let buffer = self.gpu.device.create_buffer(&BufferDescriptor {
             label: Some("visual snapshot readback"),
             size: readback.buffer_bytes,
@@ -700,7 +811,7 @@ impl Canvas {
         let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
         encoder.copy_texture_to_buffer(
             TexelCopyTextureInfo {
-                texture: &texture,
+                texture,
                 mip_level: 0,
                 origin: Origin3d::ZERO,
                 aspect: TextureAspect::All,
@@ -710,7 +821,7 @@ impl Canvas {
                 layout: TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(readback.stride),
-                    rows_per_image: Some(physical.height),
+                    rows_per_image: Some(extent.height),
                 },
             },
             extent,
@@ -747,6 +858,127 @@ impl Drop for Canvas {
 mod resource_tests {
     use super::*;
     use lucent_api::{Color, ImageData};
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn scene_rejection_preserves_pixels_resources_and_subsequent_rendering() {
+        let font = fontdue::Font::from_bytes(
+            include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
+            Default::default(),
+        )
+        .unwrap();
+        let gpu = Gpu::headless(Arc::new(vec![font])).unwrap();
+        // Force unused partial preparations out immediately, while the current
+        // scene must remain pinned even over the reuse budget.
+        *gpu.cache.borrow_mut() = ResourceCache::new(0, 0);
+        let mut canvas = Canvas::new(gpu.clone());
+        canvas.profiling = true;
+        let rect = Rect::new(0., 0., 16., 16.);
+        let image = |key, width, rgba: [u8; 4]| Paint::Image {
+            rect,
+            clip: rect.into(),
+            uv: Rect::new(0., 0., 1., 1.),
+            data: Arc::new(
+                ImageData::from_rgba(key, width, 1, rgba.repeat(width as usize)).unwrap(),
+            ),
+            radius: 0.,
+            opacity: 1.,
+            tint: Color::hex(0xffffff),
+        };
+        let text = |size| Paint::Text {
+            rect,
+            clip: rect.into(),
+            text: "W".into(),
+            size,
+            face: 0,
+            color: Color::hex(0xffffff),
+            align: Align::Start,
+        };
+        let texture = gpu.device.create_texture(&TextureDescriptor {
+            label: Some("retained frame regression"),
+            size: Extent3d {
+                width: 16,
+                height: 16,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Bgra8Unorm,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&Default::default());
+        let read = |canvas: &Canvas| {
+            canvas
+                .readback(
+                    &texture,
+                    PhysicalExtent::new(16, 16, 1, 8192)
+                        .unwrap()
+                        .readback(4096)
+                        .unwrap(),
+                    Vec::with_capacity(16 * 16 * 4),
+                )
+                .unwrap()
+        };
+        canvas
+            .paint(&view, 16, 16, 1, &[image("current", 1, [255, 0, 0, 255])])
+            .unwrap();
+        let expected = [255, 0, 0, 255].repeat(16 * 16);
+        assert_eq!(read(&canvas), expected);
+        let resident = Rc::as_ptr(&canvas.resources[0]);
+        let buffer_bytes = canvas.buffer_payload_bytes();
+        let cache_bytes = gpu.cache_stats().bytes;
+        let oversized = gpu.device.limits().max_texture_dimension_2d + 1;
+        assert!(
+            oversized <= 16384,
+            "fixture requires a larger ImageData envelope than the requested device"
+        );
+        for invalid in [
+            image("too wide", oversized, [255; 4]),
+            text(f32::NAN),
+            Paint::Shape {
+                rect: Rect::new(f32::MAX, 0., 16., 16.),
+                clip: rect.into(),
+                color: Color::hex(0xffffff),
+                radius: 0.,
+            },
+        ] {
+            let misses = gpu.cache_stats().misses;
+            assert!(canvas.paint(&view, 16, 16, 1, &[invalid]).is_err());
+            assert_eq!(
+                gpu.cache_stats().misses,
+                misses,
+                "invalid input reached resource preparation"
+            );
+            assert_eq!(read(&canvas), expected);
+            assert!(canvas.last_profile.is_none());
+        }
+        // This request passes cheap scene validation, but its glyph bitmap is
+        // too large. An earlier, valid upload must be released after rejection.
+        let error = canvas
+            .paint(
+                &view,
+                16,
+                16,
+                1,
+                &[image("partial", 2, [0, 255, 0, 255]), text(4096.)],
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("glyph bitmap"), "{error}");
+        assert_eq!(read(&canvas), expected);
+        assert_eq!(canvas.buffer_payload_bytes(), buffer_bytes);
+        assert_eq!(canvas.resources.len(), 1);
+        assert_eq!(Rc::as_ptr(&canvas.resources[0]), resident);
+        assert_eq!(gpu.cache_stats().entries, 1);
+        assert_eq!(gpu.cache_stats().bytes, cache_bytes);
+        assert!(canvas.last_profile.is_none());
+        canvas
+            .paint(&view, 16, 16, 1, &[image("next", 1, [0, 255, 0, 255])])
+            .unwrap();
+        assert_eq!(read(&canvas), [0, 255, 0, 255].repeat(16 * 16));
+        assert_eq!(gpu.cache_stats().entries, 1);
+    }
 
     #[test]
     #[ignore = "requires a Vulkan driver"]
@@ -1258,6 +1490,7 @@ impl Renderer {
             scale,
             self.gpu.device.limits().max_texture_dimension_2d,
         )?;
+        let validated = self.canvas.validate_scene(width, height, scale, paint)?;
         let started = profiling::start(enabled);
         if self.reconfigure
             || self.config.width != physical.width
@@ -1300,13 +1533,8 @@ impl Renderer {
             }
         };
         profile.acquire = profiling::elapsed(started);
-        self.canvas.paint(
-            &frame.texture.create_view(&Default::default()),
-            width,
-            height,
-            scale,
-            paint,
-        );
+        self.canvas
+            .paint_validated(&frame.texture.create_view(&Default::default()), validated)?;
         profile.paint = self.canvas.last_profile.unwrap_or_default();
         let started = profiling::start(enabled);
         // Request a Wayland callback only when a buffer will actually be committed.
