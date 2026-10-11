@@ -883,6 +883,62 @@ mod clipping_tests {
 
     #[test]
     #[ignore = "requires a Vulkan driver"]
+    fn edge_coverage_is_mirror_symmetric_at_both_densities() {
+        let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
+        let mut canvas = Canvas::new(gpu);
+        for scale in [1, 2] {
+            // Exercise both quad phases, straight/rounded primitives and rounded
+            // ancestor clips. Reflection must not depend on a driver's choice of
+            // coarse derivatives or which corner of a quad contains the fragment.
+            for inset in [0., 3.] {
+                for radius in [0., 6.] {
+                    let rect = Rect::new(inset, inset, 32. - inset * 2., 24. - inset * 2.);
+                    for rounded_clip in [false, true] {
+                        let clip = if rounded_clip {
+                            lucent_api::Clip::from(rect).with_rounded(rect, 6.)
+                        } else {
+                            rect.into()
+                        };
+                        let pixels = canvas
+                            .snapshot(
+                                32,
+                                24,
+                                scale,
+                                &[Paint::Shape {
+                                    rect,
+                                    clip,
+                                    radius,
+                                    color: Color::hex(0xffffff),
+                                }],
+                            )
+                            .unwrap();
+                        let (w, h) = (32 * scale, 24 * scale);
+                        assert_eq!(pixels[(((h / 2) * w + w / 2) * 4 + 3) as usize], 255);
+                        if inset > 0. {
+                            assert_eq!(pixels[3], 0);
+                        }
+                        for y in 0..h {
+                            for x in 0..w {
+                                let alpha = |x, y| pixels[((y * w + x) * 4 + 3) as usize];
+                                let a = alpha(x, y);
+                                assert!(
+                                    a.abs_diff(alpha(w - 1 - x, y)) <= 2,
+                                    "horizontal coverage at {x},{y}, scale {scale}, inset {inset}, radius {radius}, clip {rounded_clip}"
+                                );
+                                assert!(
+                                    a.abs_diff(alpha(x, h - 1 - y)) <= 2,
+                                    "vertical coverage at {x},{y}, scale {scale}, inset {inset}, radius {radius}, clip {rounded_clip}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
     fn shadow_blur_is_supplied_by_the_client_and_scales_with_the_surface() {
         let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
         let mut canvas = Canvas::new(gpu);

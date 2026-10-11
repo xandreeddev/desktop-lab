@@ -251,6 +251,15 @@ inspection IPC expose active/total payload bytes, hits, misses and evictions.
 CPU prepared images, framebuffers and driver allocations are separate from these
 counts. Text rasterization still occurs synchronously on a text-cache miss.
 
+Primitive and rounded-clip coverage explicitly use WGSL `fwidthFine`. The
+unsuffixed derivative permits either fine or coarse evaluation, so using it for
+coverage can produce different alpha at the same corner on different drivers.
+See the [WGSL derivative definitions](https://www.w3.org/TR/WGSL/#derivative-builtin-functions).
+The renderer chooses the sampling rule; no desktop policy or token belongs in
+that calculation. A focused GPU fixture checks mirrored edge coverage at 1×/2×,
+both pixel-quad phases and rounded ancestor clipping. Visual baselines retain
+their existing pixel tolerances.
+
 ## Frame profiling
 
 The runtime reads `LUCENT_PROFILE_FRAMES=1` at startup. Profiling is off by default

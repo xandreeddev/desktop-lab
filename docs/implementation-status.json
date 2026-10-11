@@ -412,7 +412,7 @@
     },
     {
       "milestone": "bounded-delivery",
-      "status": "locally_verified",
+      "status": "merged",
       "source_commit": "176c3e0768f394983697f1d534533a898fc55f87",
       "checks": [
         "122 Rust unit tests and 52 Python checks passed",
@@ -421,13 +421,15 @@
         "Native launcher, application survival, restart and secure lock/unlock passed",
         "Live Wallhaven/Alpha Coders streams, palette persistence and login-copy synchronization passed",
         "Original wallpaper/preferences restored",
-        "Five focused hardware-Vulkan renderer tests passed"
+        "Five focused hardware-Vulkan renderer tests passed",
+        "All six exact-head checks, protected-main merge and Pages deployment passed"
       ],
       "pending": [
-        "Exact-head CI, protected-main merge and Pages",
         "68 hardware visual cases differ from software baselines; shader follow-up remains open",
         "Other requirement groups"
-      ]
+      ],
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/14",
+      "merge_commit": "bf5e925e3b170825e01c027599846ad7d3f7a864"
     }
   ]
 }
