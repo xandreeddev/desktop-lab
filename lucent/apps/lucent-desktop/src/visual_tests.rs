@@ -868,6 +868,15 @@ fn visual_regressions() {
             ("widgets", Mode::Widgets, 9, 6, "", 1., 640.),
             ("wallpapers-empty", Mode::Wallpapers, 9, 0, "", 1., 640.),
             ("wallpapers", Mode::Wallpapers, 9, 0, "", 1., 1280.),
+            (
+                "wallpapers-unavailable",
+                Mode::Wallpapers,
+                9,
+                0,
+                "",
+                1.,
+                1280.,
+            ),
             ("wallpapers-online", Mode::Wallpapers, 9, 0, "", 1., 960.),
             (
                 "wallpapers-online-narrow",
@@ -944,8 +953,20 @@ fn visual_regressions() {
                 &mut Effects::default(),
             );
             app.launcher.fixture_query(query.into());
-            if name == "wallpapers" {
+            if matches!(name, "wallpapers" | "wallpapers-unavailable") {
                 app.wallpapers = wallpaper_fixtures();
+            }
+            if name == "wallpapers-unavailable" {
+                let mut effects = Effects::default();
+                app.update(Message::Clock(app.clock.clone()), &mut effects);
+                while effects.tasks.pop().is_some() {
+                    app.update(
+                        Message::Previews(crate::previews::Message::WorkerFailed(
+                            "Unavailable fixture".into(),
+                        )),
+                        &mut effects,
+                    );
+                }
             }
             if name.starts_with("wallpapers-online") {
                 online_fixture(&mut app);
@@ -2017,4 +2038,65 @@ fn invalid_settings_remain_visible_after_unrelated_successful_effects() {
             .unwrap()
             .contains("invalid saved position")
     );
+}
+
+#[test]
+fn wallpaper_preview_demand_is_lazy_and_reaches_past_the_old_preload_limit() {
+    let mut app = fixture(0, false);
+    app.wallpapers = (0..200)
+        .map(|i| lucent_domain::Wallpaper {
+            name: format!("Wallpaper {i}"),
+            path: format!("/fixture/{i}"),
+        })
+        .collect();
+    let mut effects = Effects::default();
+    app.update(Message::Clock(app.clock.clone()), &mut effects);
+    assert!(
+        effects.tasks.is_empty(),
+        "closed browser must not decode the library"
+    );
+    app.update(Message::Wallpaper(150, false), &mut effects);
+    assert!(effects.tasks.is_empty());
+    effects.now = 5.; // settle carousel before opening the local browser
+    app.update(
+        Message::Launcher(launcher::Message::Mode(Mode::Wallpapers)),
+        &mut effects,
+    );
+    assert_eq!(effects.tasks.len(), 1);
+    let info = app.previews.inspect();
+    assert_eq!(info["wanted"], 7);
+    assert_eq!(info["active"], true);
+    // Inject the accepted image as a transaction would. Only UI-owned pixels
+    // change; the pure settings and wallpaper selection remain untouched.
+    let image = Arc::new(ImageData::from_rgba("late-library-item", 1, 1, vec![255; 4]).unwrap());
+    app.previews
+        .insert("/fixture/150".into(), image.clone())
+        .unwrap();
+    assert_eq!(
+        app.previews.view().get("/fixture/150").unwrap().cache_id(),
+        image.cache_id()
+    );
+    app.update(Message::Launcher(launcher::Message::Close), &mut effects);
+    effects.now = 10.;
+    app.update(Message::Clock(app.clock.clone()), &mut effects);
+    assert_eq!(app.previews.inspect()["wanted"], 0);
+}
+
+#[test]
+fn wallpaper_ranges_match_visible_cards_and_bound_large_libraries() {
+    let distance = lucent_design::component::wallpaper::VISIBLE_DISTANCE;
+    for center in [0., 3.2, 6.9, 64., 10000.4, -1., 1_000_000.] {
+        let range = launcher::visible_wallpapers(100_000, center);
+        assert!(range.len() <= 7);
+        for index in range.clone() {
+            assert!((index as f32 - center).abs() < distance);
+        }
+        if range.start > 0 {
+            assert!(((range.start - 1) as f32 - center).abs() >= distance);
+        }
+        if range.end < 100_000 {
+            assert!((range.end as f32 - center).abs() >= distance);
+        }
+    }
+    assert!(launcher::visible_wallpapers(100, f32::NAN).is_empty());
 }

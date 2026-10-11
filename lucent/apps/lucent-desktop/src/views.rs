@@ -53,6 +53,7 @@ impl Desktop {
                 browser: &self.browser,
             },
             artwork: self.artwork(),
+            previews: self.previews.view(),
             carousel: self.carousel,
             current_wallpaper: self.wallpaper.source_path(),
             error: self.error_message(),

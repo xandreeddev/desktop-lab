@@ -346,8 +346,11 @@ mod tests {
         fn initial(&self) -> BTreeMap<String, Arc<ImageData>> {
             BTreeMap::new()
         }
-        fn load(&self, _: &[Application], _: &[Wallpaper]) -> crate::ports::Images {
+        fn application_icons(&self, _: &[Application]) -> crate::ports::Images {
             vec![]
+        }
+        fn thumbnail(&self, path: &str) -> Result<Arc<ImageData>> {
+            self.background(path)
         }
         fn preview(&self, image: &ImageData) -> Arc<ImageData> {
             Arc::new(image.downsample(1))

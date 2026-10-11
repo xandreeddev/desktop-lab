@@ -144,7 +144,7 @@ impl Browser {
                             return;
                         }
                         if let Ok(path) = catalog.preview(&item)
-                            && let Ok(image) = assets.background(&path)
+                            && let Ok(image) = assets.thumbnail(&path)
                         {
                             if cancel.cancelled() {
                                 return;

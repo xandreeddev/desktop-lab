@@ -17,7 +17,8 @@ pub enum Message {
         Vec<Wallpaper>,
         domain::Result<Option<WallpaperAsset>>,
     ),
-    Images(Vec<(String, Arc<ImageData>)>),
+    Icons(Vec<(String, Arc<ImageData>)>),
+    Previews(crate::previews::Message),
     WallpaperSelection(crate::wallpaper_selection::Message),
     Compositor(domain::Result<CompositorSnapshot>),
     Clock(ClockSnapshot),
@@ -61,6 +62,7 @@ pub struct Desktop {
     pub settings_writable: bool,
     pub settings_error: String,
     pub images: BTreeMap<String, Arc<ImageData>>,
+    pub previews: crate::previews::Previews,
     pub wallpaper: crate::wallpaper_selection::Selection,
     pub compositor: CompositorSnapshot,
     pub clock: ClockSnapshot,
@@ -93,6 +95,7 @@ impl Desktop {
             settings_writable: false,
             settings_error: String::new(),
             images,
+            previews: crate::previews::Previews::new(adapters.assets.clone()),
             wallpaper: crate::wallpaper_selection::Selection::new(
                 adapters.wallpaper.clone(),
                 adapters.assets.clone(),
@@ -123,6 +126,36 @@ impl Desktop {
         effects.delegate(
             |child| self.wallpaper.choose(choice, child),
             Message::WallpaperSelection,
+        );
+    }
+    fn refresh_previews(&mut self, effects: &mut Effects<Message>) {
+        let mut requests = Vec::new();
+        if self.launcher.mode() == Mode::Wallpapers
+            && self.browser.source.is_none()
+            && (self.launcher.open() || self.launcher.animating(effects.now))
+        {
+            // Target plus currently visible cards, including interrupted motion.
+            // Only the client knows carousel geometry; views never start work.
+            for center in [
+                self.carousel.target_value(),
+                self.carousel.value(effects.now),
+            ] {
+                for index in launcher::visible_wallpapers(self.wallpapers.len(), center) {
+                    let wall = &self.wallpapers[index];
+                    requests.push(crate::previews::Request {
+                        key: wall.path.clone(),
+                        path: if wall.path == self.wallpaper.source_path() {
+                            self.wallpaper.asset_path().to_owned()
+                        } else {
+                            wall.path.clone()
+                        },
+                    });
+                }
+            }
+        }
+        effects.delegate(
+            |child| self.previews.demand(requests, child),
+            Message::Previews,
         );
     }
     fn apply_palette(&mut self, palette: ThemePalette, effects: &mut Effects<Message>) {
@@ -453,9 +486,8 @@ impl Component for Desktop {
                     .refresh(&self.apps, self.launcher_geometry(), now);
                 let assets = self.adapters.assets.clone();
                 let apps = self.apps.clone();
-                let walls = self.wallpapers.clone();
                 effects.task_on("assets", move || {
-                    Message::Images(assets.load(&apps, &walls))
+                    Message::Icons(assets.application_icons(&apps))
                 });
                 let theme = self.adapters.theme.clone();
                 let palette = lucent_design::selected_palette(&self.settings);
@@ -474,11 +506,15 @@ impl Component for Desktop {
                     effects.redraw(id);
                 }
             }
-            Message::Images(images) => {
+            Message::Icons(images) => {
                 self.images.extend(images);
                 effects.redraw("dock");
                 effects.redraw("widgets");
             }
+            Message::Previews(message) => effects.delegate(
+                |child| self.previews.update(message, child),
+                Message::Previews,
+            ),
             Message::WallpaperSelection(message) => {
                 use crate::wallpaper_selection::Outcome;
                 let mut outcome = None;
@@ -498,7 +534,9 @@ impl Component for Desktop {
                             .position(|wall| wall.path == source.path)
                             .unwrap_or(0);
                         self.carousel = Motion::fixed(self.wallpaper_index as f32);
-                        self.images.insert(source.path, prepared.preview);
+                        if let Err(error) = self.previews.insert(source.path, prepared.preview) {
+                            self.error = error.to_string();
+                        }
                         if let Some((revision, seed)) = prepared.seed
                             && self.palette_intent.accepts_wallpaper(revision)
                         {
@@ -752,10 +790,16 @@ impl Component for Desktop {
             }
             Message::Quit => effects.quit(),
         }
+        self.refresh_previews(effects);
     }
 }
 impl api::Application for Desktop {
     fn runtime_failure(&self, failure: api::RuntimeFailure) -> Option<Message> {
+        if failure.source == "effect queue previews" {
+            return Some(Message::Previews(crate::previews::Message::WorkerFailed(
+                failure.to_string(),
+            )));
+        }
         if failure.source == "effect queue settings" {
             return Some(Message::Persistence(
                 crate::persistence::Message::WorkerFailed(failure.to_string()),
@@ -940,6 +984,9 @@ impl api::Application for Desktop {
         }
     }
     fn command(&self, command: &str) -> std::result::Result<Option<Message>, String> {
+        if command == "wallpapers retry" {
+            return Ok(Some(Message::Previews(crate::previews::Message::Retry)));
+        }
         if command == "settings retry" {
             if !self.settings_writable {
                 return Err(
@@ -1059,7 +1106,13 @@ impl api::Application for Desktop {
         }))
     }
     fn inspect(&self) -> String {
-        serde_json::json!({"palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":self.widgets.grid_visible(),"notes":self.settings.notes,"timer_seconds":self.widgets.timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"settings_save_status":self.persistence.status(self.settings_writable).name(),"settings_save_error":self.persistence.error(),"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable}).to_string()
+        serde_json::json!({"wallpaper_index":self.wallpaper_index, "wallpaper_count":self.wallpapers.len(), "prepared_assets": {
+            "icons": crate::previews::usage(self.images.values()),
+            "local_previews": self.previews.inspect(),
+            "online_previews": crate::previews::usage(self.browser.previews.values()),
+            "background": crate::previews::usage(self.wallpaper.background.iter()),
+            "total": crate::previews::usage(self.images.values().chain(self.previews.images()).chain(self.browser.previews.values()).chain(self.wallpaper.background.iter())),
+        }, "palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":self.widgets.grid_visible(),"notes":self.settings.notes,"timer_seconds":self.widgets.timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"settings_save_status":self.persistence.status(self.settings_writable).name(),"settings_save_error":self.persistence.error(),"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable}).to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
         (surface == "osd" && self.osd.animating(now))

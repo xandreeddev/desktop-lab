@@ -11,7 +11,6 @@ pub use raster::LoadError;
 /// Source texture budgets for the desktop's current components at up to 2× output scale.
 pub const ICON_PIXELS: u32 = 128;
 pub const SYMBOL_PIXELS: u32 = 256;
-pub const PREVIEW_PIXELS: u32 = 1024;
 
 pub fn load(path: &Path, size: u32) -> Option<Arc<ImageData>> {
     try_load(path, size).ok()

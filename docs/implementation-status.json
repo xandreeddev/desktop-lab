@@ -582,7 +582,7 @@
     },
     {
       "milestone": "widget-drag-preview",
-      "status": "locally_verified",
+      "status": "merged",
       "checks": [
         "151 Rust tests passed",
         "Clippy with warnings denied passed",
@@ -591,13 +591,32 @@
         "Desktop release build and reversible native deployment passed",
         "Native held-drag test saved another preference without persisting the preview; release snapped, saved and survived restart",
         "Widget/launcher/application survival and secure lock/unlock checks passed",
-        "Original preferences and workspace restored; normal desktop ready"
+        "Original preferences and workspace restored; normal desktop ready",
+        "All six exact-head checks, protected-main merge and Pages deployment passed"
       ],
       "pending": [
-        "Exact-head CI, protected-main merge and Pages",
         "Other requirement groups"
       ],
-      "source_commit": "8efe02d33bc4289cd45fa0abd36319f3d5871dcc"
+      "source_commit": "8efe02d33bc4289cd45fa0abd36319f3d5871dcc",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/20",
+      "merge_commit": "32065c8156b22b4a0924fe7a8fca239e42fbceb1"
+    },
+    {
+      "milestone": "preview-cache",
+      "status": "in_progress",
+      "checks": [
+        "Bounded lazy local previews, read-only view inputs, one active decode and deduplicated prepared-byte accounting implemented",
+        "158 Rust tests and Clippy passed before final retention-release regression",
+        "54 Python checks and Astro check/build passed",
+        "Four new unavailable-preview images reviewed at 1x and 2x; existing 168 baselines preserved"
+      ],
+      "pending": [
+        "Final Rust checks and 172 visual comparisons",
+        "Release and native browsing/retry/retention verification",
+        "New measured performance comparison",
+        "Exact-head CI, protected-main merge and Pages",
+        "Other requirement groups"
+      ]
     }
   ]
 }

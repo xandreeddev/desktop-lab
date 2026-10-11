@@ -14,6 +14,16 @@ use lucent_api::*;
 use lucent_design::{component::panel, motion};
 use lucent_domain::{AppId, Application, DesktopSettings, LauncherSize, ThemePalette, Wallpaper};
 pub use view::View;
+/// The same range drives painting and worker demand; no scan of the full library.
+pub fn visible_wallpapers(count: usize, center: f32) -> std::ops::Range<usize> {
+    if !center.is_finite() {
+        return 0..0;
+    }
+    let distance = lucent_design::component::wallpaper::VISIBLE_DISTANCE;
+    let start = ((center - distance).floor() + 1.).max(0.) as usize;
+    let end = (center + distance).ceil().max(0.) as usize;
+    start.min(count)..end.min(count)
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
     Apps,
