@@ -27,8 +27,8 @@ def main():
         return v.remote('sha256sum', path).split()[0]
 
     assert v.session('omarchy-shell', 'lock', 'isLocked').strip() == 'false'
+    v.eventually(lambda: client()['background_ready'] and bool(selected()), 'Initial wallpaper did not become ready', timeout=35)
     original = selected()
-    assert original and client()['background_ready']
     state = '/home/omarchy/.local/state/lucent/desktop.json'
     backup = '/tmp/lucent-transaction-original-settings.json'
     v.remote('cp', state, backup)

@@ -1,0 +1,41 @@
+{
+  "source_commit": "b54341c0be956da4d306d3541c0df56dcb057dfb",
+  "rust_unit_tests": 104,
+  "python_tests": 49,
+  "visual_comparisons": 148,
+  "baseline_changes": 0,
+  "native_wallpaper_transactions": {
+    "immutable_snapshot_and_login_copy": true,
+    "decode_failure_preserves_selected_asset": true,
+    "restart_uses_immutable_snapshot": true,
+    "palette_reads_snapshot_and_exports": true
+  },
+  "live_providers": {
+    "wallhaven_search_download_colors": true,
+    "alpha_coders_search_pagination_wallpaper_only": true,
+    "named_palette_keyboard_restart_and_login_publication": true
+  },
+  "native_runtime": {
+    "launcher_and_application_survives_restart": true,
+    "secure_lock_unlock": true
+  },
+  "binary_sha256": {
+    "lucent-desktop": "92559d9712cda5cca960b8a1a514e3b0d4b67ed8388809df908a6d49b0f9e729",
+    "lucent-cli": "863c3e260b95f2b0694c01e4021e886396879046028094778dfc9cb51c565d19",
+    "lucent-menu": "34b8b570a747a770264383140bf952b852bcdd6923e0bf42d6bd54e6b5a8ce60",
+    "lucent-lock": "3ef8df7f9ab5f95727c8d20a1519f167eda1f85d7128babc39503692ff4aceda",
+    "lucent-greeter": "859ad0b596a3c9ea97373a841b79158a7418b60b8649478ccf0507f80cccd265",
+    "lucent-polkit": "9e06fd22c6f9cdff97bc4164b8f4bf4a6cbe1589403980105c7c8023d72a44ca"
+  },
+  "greeter": {
+    "root_binary_updated_atomically": true,
+    "current_session_restarted": false,
+    "interactive_login_tested_in_this_milestone": false
+  },
+  "limits": [
+    "Palette/settings/application/login exports remain separate eventual operations; no cross-file atomic transaction or power-loss durability claim",
+    "Storage is single-writer; one preparing candidate and latest pending request bound selection work",
+    "Existing source files are preserved; SVG sources must be self-contained",
+    "The ten-minute performance report measures the preceding architecture milestone, not this release"
+  ]
+}
