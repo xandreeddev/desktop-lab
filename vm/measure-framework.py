@@ -103,6 +103,7 @@ def measure(h, seconds):
               'scope': {'startup': 'Service restart through wallpaper-ready IPC, including SSH/polling overhead',
                         'animation': 'Render submission intervals, not scanout or isolated GPU execution time',
                         'resources': 'Texture payload only; driver/framebuffer/CPU prepared-image memory excluded',
+                        'cache_misses': 'Shared application cache, including other surfaces updated during the sample',
                         'service_cpu': 'Lucent cgroup including helpers; compositor and separately launched apps excluded'}}
     (h['REPORT']/'lucent-framework-performance.json').write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps(report, indent=2))

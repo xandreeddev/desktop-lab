@@ -114,7 +114,9 @@
       "evidence": [
         "Harness now detects guest metadata and records binary hash and cache counters",
         "Idle preference restoration tested on success and failure",
-        "Current 120-second native measurement running"
+        "Current native measurements recorded: 120-second idle, warm/cold launcher samples, restart readiness, hardware and binary identity",
+        "Mean process RSS 526.35 MiB exceeds the initial 200 MiB target; hardware GPU behavior remains unmeasured",
+        "10-minute idle, detailed CPU stage profiling, scaling/hotplug and sleep/resume workloads remain open"
       ]
     },
     {
@@ -241,6 +243,23 @@
       ],
       "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/7",
       "merge_commit": "3365773a02820c1b86b53733de9cae9cd80627ba"
+    },
+    {
+      "milestone": "resource-lifecycle",
+      "status": "locally_verified",
+      "source_commit": "c4c707fa021a9265e4c6558d1e19392fa1b1e4f8",
+      "checks": [
+        "78 Rust unit tests and 48 Python tests passed",
+        "148 visual comparisons passed without baseline updates",
+        "Two native Vulkan resource tests passed",
+        "Clippy, formatting and documentation build passed",
+        "Native launcher/restart/secure lock checks passed",
+        "Current 120-second VM measurement recorded with detected metadata"
+      ],
+      "pending": [
+        "Protected-main CI and merge",
+        "Remaining requirement groups"
+      ]
     }
   ]
 }
