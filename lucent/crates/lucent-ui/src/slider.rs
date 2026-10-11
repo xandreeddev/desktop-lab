@@ -125,14 +125,38 @@ mod tests {
         interaction.key(&first, &Key::Tab);
         assert_eq!(interaction.focus.as_deref(), Some("level"));
         assert!(interaction.focus_visible);
-        value(interaction.key(&first, &Key::Right), 0.3, true);
-        value(interaction.key(&first, &Key::Up), 0.4, true);
-        value(interaction.key(&first, &Key::Left), 0.3, true);
-        value(interaction.key(&first, &Key::Home), 0., true);
-        value(interaction.key(&first, &Key::End), 1., true);
+        value(
+            interaction.key(&first, &Key::Right).into_iter().next(),
+            0.3,
+            true,
+        );
+        value(
+            interaction.key(&first, &Key::Up).into_iter().next(),
+            0.4,
+            true,
+        );
+        value(
+            interaction.key(&first, &Key::Left).into_iter().next(),
+            0.3,
+            true,
+        );
+        value(
+            interaction.key(&first, &Key::Home).into_iter().next(),
+            0.,
+            true,
+        );
+        value(
+            interaction.key(&first, &Key::End).into_iter().next(),
+            1.,
+            true,
+        );
         let next = scene(0.6, &interaction);
         interaction.synchronize(&next);
-        value(interaction.key(&next, &Key::Down), 0.5, true);
+        value(
+            interaction.key(&next, &Key::Down).into_iter().next(),
+            0.5,
+            true,
+        );
     }
     #[test]
     fn hidden_control_cancels_capture_and_clipped_area_cannot_start_it() {

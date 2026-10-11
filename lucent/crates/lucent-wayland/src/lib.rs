@@ -611,6 +611,8 @@ impl<A: Application> State<A> {
             Keysym::ISO_Left_Tab => api::Key::BackTab,
             Keysym::Tab if self.modifiers.shift => api::Key::BackTab,
             Keysym::Tab => api::Key::Tab,
+            Keysym::Page_Up => api::Key::PageUp,
+            Keysym::Page_Down => api::Key::PageDown,
             Keysym::Home => api::Key::Home,
             Keysym::End => api::Key::End,
             Keysym::a if self.modifiers.ctrl => api::Key::SelectAll,
@@ -647,15 +649,14 @@ impl<A: Application> State<A> {
         }
         if let Some(s) = self.surfaces.get_mut(&id) {
             let before = s.interaction.focus.clone();
-            let message = s.interaction.key(&s.scene, &key);
+            let messages = s.interaction.key(&s.scene, &key);
             if before != s.interaction.focus {
                 s.demand.invalidate();
             }
-            if let Some(message) = message {
+            for message in messages {
                 self.message(message, qh);
-            } else {
-                self.draw_all(qh);
             }
+            self.draw_all(qh);
         }
     }
 }
@@ -897,11 +898,16 @@ impl<A: Application> PointerHandler for State<A> {
                         }
                     }
                     PointerEventKind::Axis { vertical, .. } => {
-                        scroll = Some(if vertical.discrete != 0 {
+                        let lines = if vertical.discrete != 0 {
                             vertical.discrete as f64
                         } else {
                             vertical.absolute / 15.
-                        })
+                        };
+                        if let Some(emitted) = s.interaction.scroll(&s.scene, x, y, lines) {
+                            messages.extend(emitted);
+                        } else {
+                            scroll = Some(lines);
+                        }
                     }
                     _ => continue,
                 }

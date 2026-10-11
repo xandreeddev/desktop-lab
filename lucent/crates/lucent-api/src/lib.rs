@@ -1,4 +1,6 @@
 //! A small declarative shell API. Public types contain no Wayland or GPU handles.
+mod scroll;
+pub use scroll::{ScrollEvent, ScrollSpec, ScrollStyle};
 mod slider;
 pub use slider::{SliderEvent, SliderSpec, SliderStyle};
 mod clip;
@@ -156,6 +158,7 @@ pub struct Style {
     pub tab_stop: bool,
     pub caret_width: f32,
     pub slider: SliderStyle,
+    pub scroll: ScrollStyle,
 }
 impl Default for Style {
     fn default() -> Self {
@@ -187,6 +190,7 @@ impl Default for Style {
             tab_stop: true,
             caret_width: 1.,
             slider: SliderStyle::default(),
+            scroll: ScrollStyle::default(),
         }
     }
 }
@@ -200,6 +204,7 @@ pub enum Kind {
     Image(Arc<ImageData>),
     Input { value: String, placeholder: String },
     Slider(SliderSpec),
+    Scroll(ScrollSpec),
     Empty,
 }
 #[derive(Clone, Copy, Debug)]
@@ -209,6 +214,7 @@ pub struct DragEvent {
     pub finished: bool,
 }
 pub type InputCallback<M> = Arc<dyn Fn(String) -> M + Send + Sync>;
+pub type ScrollCallback<M> = Arc<dyn Fn(ScrollEvent) -> M + Send + Sync>;
 pub type SliderCallback<M> = Arc<dyn Fn(SliderEvent) -> M + Send + Sync>;
 pub type DragCallback<M> = Arc<dyn Fn(DragEvent) -> M + Send + Sync>;
 #[derive(Clone)]
@@ -222,6 +228,7 @@ pub struct Element<M> {
     pub input: Option<InputCallback<M>>,
     pub drag: Option<DragCallback<M>>,
     pub slider: Option<SliderCallback<M>>,
+    pub scroll: Option<ScrollCallback<M>>,
     pub autofocus: bool,
 }
 impl<M> Element<M> {
@@ -236,6 +243,7 @@ impl<M> Element<M> {
             input: None,
             drag: None,
             slider: None,
+            scroll: None,
             autofocus: false,
         }
     }
@@ -296,6 +304,25 @@ impl<M> Element<M> {
         let mut e = Self::new(Kind::Slider(spec));
         e.slider = Some(Arc::new(on_change));
         e
+    }
+    /// A single content tree in a bounded vertical viewport. The controlled
+    /// offset is clamped by layout; wheel, scrollbar and keyboard reveal emit
+    /// ScrollEvent. Give the viewport a fixed/fill height and content an
+    /// intrinsic/fixed height. Children keep their own stable focus identities.
+    pub fn scroll(
+        spec: ScrollSpec,
+        content: Self,
+        on_change: impl Fn(ScrollEvent) -> M + Send + Sync + 'static,
+    ) -> Self {
+        let mut e = Self::new(Kind::Scroll(spec));
+        e.children = vec![content];
+        e.scroll = Some(Arc::new(on_change));
+        e.style.clip = true;
+        e
+    }
+    pub fn scroll_style(mut self, style: ScrollStyle) -> Self {
+        self.style.scroll = style;
+        self
     }
     pub fn slider_style(mut self, style: SliderStyle) -> Self {
         self.style.slider = style;
@@ -481,6 +508,8 @@ pub enum Key {
     BackTab,
     Home,
     End,
+    PageUp,
+    PageDown,
     SelectAll,
     ClearInput,
 }
@@ -878,6 +907,10 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
             let map = mapper.clone();
             Arc::new(move |event| map(callback(event))) as SliderCallback<N>
         });
+        let scroll = self.scroll.map(|f| {
+            let map = mapper.clone();
+            Arc::new(move |event| map(f(event))) as ScrollCallback<N>
+        });
         Element {
             id: self.id,
             kind: self.kind,
@@ -892,6 +925,7 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
             input,
             drag,
             slider,
+            scroll,
             autofocus: self.autofocus,
         }
     }

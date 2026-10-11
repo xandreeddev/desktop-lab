@@ -446,9 +446,9 @@ fn framework_buttons_support_keyboard_focus_and_activation_without_hover() {
     let scene = layout.build(&root, 220., 50., &interaction, 0.);
     interaction.key(&scene, &Key::Tab);
     assert_eq!(interaction.focus.as_deref(), Some("one"));
-    assert_eq!(interaction.key(&scene, &Key::Enter), Some(1));
+    assert_eq!(interaction.key(&scene, &Key::Enter), vec![1]);
     interaction.key(&scene, &Key::Tab);
-    assert_eq!(interaction.key(&scene, &Key::Text(" ".into())), Some(2));
+    assert_eq!(interaction.key(&scene, &Key::Text(" ".into())), vec![2]);
     interaction.key(&scene, &Key::BackTab);
     let focused = layout.build(&root, 220., 50., &interaction, 0.);
     assert!(

@@ -279,7 +279,8 @@
       ],
       "progress": [
         "Controlled normalized slider API, pointer capture, keyboard adjustment, shared paint/hit geometry and semantic token recipe implemented with an independent hello-layer client example. Audio integration, general scrolling, popup/tooltip lifecycle and accessibility remain incomplete.",
-        "176 Rust unit tests, 60 Python checks, focused Vulkan pixels at 1x/2x and existing software-Vulkan visual regressions pass. Independent native hello-layer checks pass for pointer capture, keyboard/focus, existing buttons, idle frame demand and shutdown on the 3 GiB/four-vCPU guest. See reports/measurements/lucent-framework-slider.json. Exact-head CI and merge are pending; audio integration remains separate."
+        "176 Rust unit tests, 60 Python checks, focused Vulkan pixels at 1x/2x and existing software-Vulkan visual regressions pass. Independent native hello-layer checks pass for pointer capture, keyboard/focus, existing buttons, idle frame demand and shutdown on the 3 GiB/four-vCPU guest. See reports/measurements/lucent-framework-slider.json. All six exact-head CI checks pass for PR #27; review and merge remain pending. Native audio observation is implemented in PR #28; the audio panel remains separate.",
+        "Draft controlled vertical scrolling adds wheel input, scrollbar capture, keyboard reveal and nested clip bookkeeping. 188 workspace Rust tests, 60 Python checks, formatting and workspace Clippy pass. Independent example, design-token recipe, focused scrolling pixel checks, native Wayland interaction and production audio-panel integration remain unfinished; this is not a completed framework-control milestone."
       ]
     },
     {
@@ -758,10 +759,11 @@
         "Validated normalized slider contract and semantic token recipe",
         "Software Vulkan pixels at 1x/2x and existing desktop visual regressions passed",
         "Native example pointer/keyboard/focus/idle/close checks passed; temporary unit and binary removed",
-        "Existing installed greeter sign-in reached the normal user desktop; authentication binaries unchanged"
+        "Existing installed greeter sign-in reached the normal user desktop; authentication binaries unchanged",
+        "All six exact-head CI checks pass for PR #27 at 2919e1bd08c90b5dcca2e11625b8918f9a4f9843; remains unmerged"
       ],
       "pending": [
-        "All six exact-head checks, protected-main merge and Pages",
+        "PR review, protected-main merge and Pages",
         "Audio integration and remaining framework controls",
         "Other requirement groups"
       ]
@@ -774,17 +776,19 @@
         "Device identity, channel balance, route validation, bounds and bounded command admission unit tests",
         "Isolated PipeWire tests: output/input controls, default preference requests with explicit policy fixture, external events, removal/reconnect, idle observation, shutdown and cancelled callback storage",
         "Workspace Rust tests, Clippy, Python checks, unchanged software-Vulkan visual baselines and Astro build/link checks",
-        "Release deployment to 3 GiB/four-vCPU VM; real default-output policy, external volume events, native bar clicks and desktop restart passed; temporary output removed and original audio restored"
+        "Release deployment to 3 GiB/four-vCPU VM; real default-output policy, external volume events, native bar clicks and desktop restart passed; temporary output removed and original audio restored",
+        "All six exact-head CI checks pass for PR #28 at 4a90b23779cdc3f87c8b20603aa058379253bd75; remains unmerged"
       ],
       "pending": [
         "Live application stream-routing validation",
         "Control-center child, sliders and bounded/coalesced drag commands",
         "Physical audio devices, card profiles/ports and hardware behavior",
-        "Exact-head CI, PR review and merge",
+        "PR review and merge",
         "Other requirement groups"
       ],
       "source_commit": "b8107121c8103257b27ffe57989106a9a49bb201",
-      "report": "reports/measurements/lucent-audio-service.json"
+      "report": "reports/measurements/lucent-audio-service.json",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/28"
     }
   ]
 }
