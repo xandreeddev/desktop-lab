@@ -7,7 +7,7 @@ const sections: [string, string][] = [['startup','01 · Startup'],['ownership','
 const ownership = [
   ['Bar, dock, launcher, widgets', 'Lucent desktop', 'Components describe trees; the framework lays out, animates and renders Vulkan buffers.'],
   ['Online wallpaper catalogs', 'Lucent native browser', 'WallpaperCatalogPort → OnlineWallpapers uses Wallhaven API / Alpha Coders public pages. PaletteGenerationPort → ImagePalette extracts a dominant seed; Lucent design recipes create the semantic colors.'],
-  ['Desktop wallpaper', 'Lucent background surface', 'WallpaperPort → LucentWallpaper persists the selected file. AssetPort → NativeAssets decodes it off the UI thread.'],
+  ['Desktop wallpaper', 'Lucent background surface', 'WallpaperPort → LucentWallpaper stages an immutable source copy; AssetPort → NativeAssets decodes it off the UI thread before the coordinator commits selection.'],
   ['Notifications, history, DND', 'Lucent', 'FreedesktopNotifications owns the D-Bus name. Native components render toasts and history; notification shortcuts route here.'],
   ['Palette and shell appearance', 'Lucent tokens + selected palette', 'Named semantic sets or wallpaper-derived colors → components. DesktopSettings.palette persists the full role set.'],
   ['Application colors and mode', 'Lucent export → applications', 'ThemePort → LucentTheme → theme.py. Omarchy is a headless template exporter, never the theme authority.'],

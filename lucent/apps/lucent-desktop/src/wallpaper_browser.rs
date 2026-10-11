@@ -15,7 +15,7 @@ pub enum Message {
     Preview(u64, String, Arc<ImageData>),
     Finished(u64),
     Download(bool),
-    Ready(u64, domain::Result<(Wallpaper, Option<Rgb>)>),
+    Ready(u64, domain::Result<(Wallpaper, bool)>),
 }
 #[derive(Clone)]
 enum Job {
@@ -126,7 +126,6 @@ impl Browser {
         let id = self.generation;
         let catalog = adapters.catalog.clone();
         let assets = adapters.assets.clone();
-        let palettes = adapters.palette_generation.clone();
         vec![Subscription::stream(
             format!("wallpaper-catalog-{id}"),
             move |out, cancel| match job {
@@ -145,7 +144,7 @@ impl Browser {
                             return;
                         }
                         if let Ok(path) = catalog.preview(&item)
-                            && let Some(image) = assets.background(&path)
+                            && let Ok(image) = assets.background(&path)
                         {
                             if cancel.cancelled() {
                                 return;
@@ -156,14 +155,7 @@ impl Browser {
                     out.send(Message::Finished(id));
                 }
                 Job::Download(item, colors) => {
-                    let result = catalog.download(&item).and_then(|wall| {
-                        let seed = if colors {
-                            Some(palettes.seed(&wall.path)?)
-                        } else {
-                            None
-                        };
-                        Ok((wall, seed))
-                    });
+                    let result = catalog.download(&item).map(|wall| (wall, colors));
                     if !cancel.cancelled() {
                         out.send(Message::Ready(id, result));
                     }

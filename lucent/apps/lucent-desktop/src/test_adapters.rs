@@ -77,11 +77,20 @@ impl WallpaperPort for Fake {
     fn list(&self) -> Vec<Wallpaper> {
         vec![]
     }
-    fn current(&self) -> String {
-        String::new()
+    fn current(&self) -> Result<Option<WallpaperAsset>> {
+        Ok(None)
     }
-    fn apply(&self, _: &str) -> Result<()> {
+    fn stage(&self, source: &Wallpaper) -> Result<WallpaperAsset> {
+        Ok(WallpaperAsset {
+            source: source.clone(),
+            path: source.path.clone(),
+        })
+    }
+    fn commit(&self, _: &WallpaperAsset) -> Result<()> {
         self.calls.lock().unwrap().push("wallpaper");
+        Ok(())
+    }
+    fn discard(&self, _: &WallpaperAsset) -> Result<()> {
         Ok(())
     }
 }

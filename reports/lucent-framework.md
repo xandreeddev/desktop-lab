@@ -474,3 +474,21 @@ its displayed background was inspected, and both original bytes and the selected
 palette were preserved. Two wallpaper-only changes synchronized automatically to
 the login copy. Native secure lock/unlock passed with the large image selected.
 The greeter binary was updated, but a full logout/login or reboot was not repeated.
+
+
+### Architecture milestone: ten-minute sample
+
+The [600-second report](measurements/lucent-framework-idle-600.json) records source
+and binary identity, six vCPUs, 5911 MiB guest RAM and software Vulkan at
+1920×1080/60 Hz/scale 1. Main-process CPU averaged 0.542% of one core; service CPU
+averaged 1.298%. Mean/max RSS were 530.36/530.61 MiB. RSS includes resident driver
+mappings; GPU memory was not separately measured. The 200 MiB target remains unmet.
+The background and closed dock submitted zero frames; the bar submitted 10 and
+widgets 129 as their timers changed content. Texture payload grew from 55.75 to
+56.67 MiB, within the 64 MiB reuse budget; these counters are not total GPU memory.
+
+The cold launcher opening included a 246.42 ms maximum submission interval. Warm
+samples had roughly 16.5 ms medians and a maximum of 19.56 ms. These are submission
+intervals, not compositor presentation timestamps. Detailed CPU stage profiling,
+hardware-GPU runs and suspend/hotplug workloads remain open. The earlier 120-second
+report is retained for provenance; this sample predates the wallpaper transaction work.

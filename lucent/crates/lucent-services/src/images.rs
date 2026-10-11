@@ -29,7 +29,15 @@ pub fn try_load(path: &Path, size: u32) -> Result<Arc<ImageData>, LoadError> {
     if size == 0 || size > 4096 {
         return Err(LoadError::Limit("Image texture size must be 1–4096 pixels"));
     }
-    let (width, height, rgba) = if path.extension().is_some_and(|s| s == "svg") {
+    // The separate login copy has no extension. Recognize XML/SVG by content
+    // as well as the source suffix; the SVG parser still validates the document.
+    let xml = bytes
+        .strip_prefix(b"\xef\xbb\xbf")
+        .unwrap_or(&bytes)
+        .iter()
+        .find(|byte| !byte.is_ascii_whitespace())
+        == Some(&b'<');
+    let (width, height, rgba) = if xml || path.extension().is_some_and(|s| s == "svg") {
         (|| {
             let options = resvg::usvg::Options {
                 resources_dir: path.parent().map(Path::to_path_buf),

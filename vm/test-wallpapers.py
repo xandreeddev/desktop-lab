@@ -23,7 +23,8 @@ def main():
     assert v.session('omarchy-shell','lock','isLocked').strip()=='false'
     state='/home/omarchy/.local/state/lucent/desktop.json'
     backup='/tmp/lucent-palette-original-settings.json'
-    wallpaper=v.remote('readlink','-f','/home/omarchy/.local/state/lucent/wallpaper').strip()
+    selected=v.inspect()['client']['wallpaper']
+    wallpaper=selected['path']
     v.remote('cp',state,backup)
     def client():return v.inspect()['client']
     def exported():return json.loads(v.remote('cat','/home/omarchy/.local/state/lucent/theme/palette.json'))
@@ -65,7 +66,7 @@ def main():
             print('Native secure lock/unlock passed with the selected palette',flush=True)
     finally:
         v.cli('wallpaper','set',wallpaper)
-        v.eventually(lambda:v.remote('readlink','-f','/home/omarchy/.local/state/lucent/wallpaper').strip()==wallpaper,'Original wallpaper not restored')
+        v.eventually(lambda:not client()['wallpaper_busy'] and client()['wallpaper']['source']['path']==selected['source']['path'],'Original wallpaper not restored')
         v.session('systemctl','--user','stop','lucent.service')
         v.remote('cp',backup,state)
         v.session('systemctl','--user','start','lucent.service')

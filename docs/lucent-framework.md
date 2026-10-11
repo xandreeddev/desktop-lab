@@ -438,3 +438,30 @@ uses a generation-keyed subscription, independently of the ordered effect worker
 that seed to validated semantic roles. `ThemePort` accepts the complete selected
 palette; application export and lock/login receive those same values. The generic
 framework has no wallpaper/provider/palette policy.
+
+
+Wallpaper selection uses a dedicated presentation coordinator (`wallpaper_selection.rs`).
+A ticket is reserved at user intent, before HTTP finishes. The coordinator stages a
+bounded immutable source copy through `WallpaperPort`, decodes through `AssetPort`,
+and optionally samples through `PaletteGenerationPort`. Only successfully prepared
+assets reach `commit`. A stale or failed preparation is discarded; one latest pending
+choice coalesces bursts of input. Once accepted, a commit finishes before the next
+choice starts. Its result carries the prepared image, avoiding a fallible second
+background decode after changing the selected path.
+
+`WallpaperAsset` is a domain data record with original-source provenance and a staged
+path, not proof of validity. The filesystem adapter verifies ownership and metadata.
+Selection links change by rename; this provides atomic visibility, not power-loss
+durability or a transaction across wallpaper, palette settings, app exports and login
+publication. The latter exports remain ordered, eventual operations with visible errors.
+The appearance queue is reserved for this coordinator; an ambiguous worker failure
+exits the native client and supervision reloads actual persisted state. The selected
+snapshot survives original-file edits. The store retains eight snapshots, preserves
+the selected one during pruning, and never removes source files. SVG sources must be
+self-contained. A legacy selection migrates on the next explicit choice.
+
+`palette_intent.rs` separates explicit color intent from automatic wallpaper colors.
+A later manual choice wins; extraction results also match the current asset. Small
+previews copy only prepared mip levels via `ImageData::downsample`, so retaining a
+preview does not retain its full-resolution background allocation. No provider,
+selection or color policy enters the generic renderer.

@@ -37,8 +37,12 @@ pub trait WeatherPort: Send + Sync {
 }
 pub trait WallpaperPort: Send + Sync {
     fn list(&self) -> Vec<Wallpaper>;
-    fn current(&self) -> String;
-    fn apply(&self, path: &str) -> Result<()>;
+    fn current(&self) -> Result<Option<WallpaperAsset>>;
+    /// Snapshot source bytes without changing the selection. Callers must decode
+    /// the returned asset before committing, then discard failed/stale candidates.
+    fn stage(&self, source: &Wallpaper) -> Result<WallpaperAsset>;
+    fn commit(&self, asset: &WallpaperAsset) -> Result<()>;
+    fn discard(&self, asset: &WallpaperAsset) -> Result<()>;
 }
 pub trait SessionPort: Send + Sync {
     fn lock(&self) -> Result<()>;

@@ -39,7 +39,7 @@ data = {
     'cpu_percent_one_core': round((ticks-initial)/os.sysconf('SC_CLK_TCK')/duration*100, 3),
     'rss_mib_mean': round(sum(rss_samples)/len(rss_samples)/1024, 2),
     'rss_mib_max': round(max(rss_samples)/1024, 2),
-    'scope': 'main process only; child processes and GPU allocations excluded',
+    'scope': 'main process CPU and resident mappings; child processes excluded; mapped driver/software-GPU memory may contribute to RSS',
     'gpu_memory': 'not measured',
     'virtualization': subprocess.check_output(['systemd-detect-virt'], text=True).strip(),
 }

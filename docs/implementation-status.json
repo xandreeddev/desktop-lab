@@ -88,12 +88,20 @@
     {
       "id": "wallpaper-transaction",
       "owner": "appearance use cases and adapters",
-      "status": "pending",
+      "status": "implemented",
       "acceptance": [
         "Local and online assets validate before selection commits",
         "Decode failures retain prior wallpaper and report a useful error",
         "Stale completions cannot replace newer selections",
         "Palette and login publication remain consistent"
+      ],
+      "evidence": [
+        "Source snapshots are staged and decoded before atomic selection; prepared pixels reach the committed background without a second fallible decode",
+        "Cancellation/coalescing, stale local/network results, explicit palette precedence, invalid decode and storage failures tested",
+        "Native generated-image test passed: original corruption, decode failure retention, restart, palette sampling and login-copy publication",
+        "Live Wallhaven and Alpha Coders search/download/pagination and palette-only behavior passed; native launcher/restart/secure lock passed",
+        "Root greeter executable updated with backup; interactive login was not rerun in this milestone",
+        "Theme and login exports remain separate eventual operations, not a cross-file atomic transaction"
       ]
     },
     {
@@ -122,7 +130,8 @@
         "Idle preference restoration tested on success and failure",
         "Current native measurements recorded: 120-second idle, warm/cold launcher samples, restart readiness, hardware and binary identity",
         "Mean process RSS 526.35 MiB exceeds the initial 200 MiB target; hardware GPU behavior remains unmeasured",
-        "10-minute idle, detailed CPU stage profiling, scaling/hotplug and sleep/resume workloads remain open"
+        "600-second idle on architecture milestone: 0.542% main-process CPU, 530.36 MiB mean RSS; background and closed dock submitted zero frames. See lucent-framework-idle-600.json.",
+        "Cold launcher opening included a 246.42 ms maximum frame interval; warmed samples were near 16.5 ms median with up to 19.56 ms observed maximum. Detailed stage profiling, hardware GPU, scaling/hotplug and sleep/resume remain open."
       ]
     },
     {
@@ -297,7 +306,7 @@
     },
     {
       "milestone": "architecture-ownership",
-      "status": "locally_verified",
+      "status": "merged",
       "source_commit": "a3b21554a7aa42bf11ad98dfa57429713a67825e",
       "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/10",
       "checks": [
@@ -305,11 +314,31 @@
         "1x/2x parameterized-shadow Vulkan test passed",
         "148 visual comparisons passed without baseline changes",
         "Clippy, formatting, 457 tokens, 58 icons and documentation build passed",
-        "Release build and native workspace/launcher/restart/secure lock tests passed"
+        "Release build and native workspace/launcher/restart/secure lock tests passed",
+        "All six required checks, protected-main merge and Pages deployment passed"
       ],
       "pending": [
-        "Protected-main CI and merge",
         "Remaining architecture invariants and component extraction",
+        "Other requirement groups"
+      ],
+      "merge_commit": "2ce09c2f690db8ffb441679a832c0532177db286"
+    },
+    {
+      "milestone": "wallpaper-transactions",
+      "status": "locally_verified",
+      "source_commit": "b54341c0be956da4d306d3541c0df56dcb057dfb",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/11",
+      "checks": [
+        "104 Rust unit tests and 49 Python tests passed",
+        "148 Vulkan visual comparisons passed without baseline changes",
+        "Clippy, formatting, 457 tokens, 58 icons and Astro check/build passed",
+        "Release build, immutable selection/native failure/restart/login-copy checks passed",
+        "Live provider selection, palette persistence, launcher/application survival and secure lock/unlock passed",
+        "User binaries and root greeter updated atomically with rollback copies"
+      ],
+      "pending": [
+        "Protected-main exact-head CI and merge",
+        "Interactive login with the updated greeter executable",
         "Other requirement groups"
       ]
     }

@@ -75,11 +75,17 @@ impl WallpaperPort for LucentWallpaper {
     fn list(&self) -> Vec<Wallpaper> {
         crate::wallpapers()
     }
-    fn current(&self) -> String {
-        crate::current_wallpaper()
+    fn current(&self) -> Result<Option<WallpaperAsset>> {
+        crate::wallpapers::WallpaperStore::default().current()
     }
-    fn apply(&self, path: &str) -> Result<()> {
-        crate::apply_wallpaper(path)
+    fn stage(&self, source: &Wallpaper) -> Result<WallpaperAsset> {
+        crate::wallpapers::WallpaperStore::default().stage(source)
+    }
+    fn commit(&self, asset: &WallpaperAsset) -> Result<()> {
+        crate::wallpapers::WallpaperStore::default().commit(asset)
+    }
+    fn discard(&self, asset: &WallpaperAsset) -> Result<()> {
+        crate::wallpapers::WallpaperStore::default().discard(asset)
     }
 }
 pub struct LucentSession;
