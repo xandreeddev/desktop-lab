@@ -557,14 +557,14 @@ fn widget_drag_is_continuous_until_release_then_snaps_and_clamps() {
         .insert("calendar".into(), Placement::new(20., 110.).unwrap());
     let send = |app: &mut Desktop, finished| {
         app.update(
-            Message::MoveWidget(
+            Message::Widgets(crate::widgets::Message::Move(
                 "calendar".into(),
                 DragEvent {
                     dx: 181.,
                     dy: 73.,
                     finished,
                 },
-            ),
+            )),
             &mut Effects::default(),
         )
     };
@@ -578,16 +578,16 @@ fn widget_drag_is_continuous_until_release_then_snaps_and_clamps() {
         app.settings.positions["calendar"],
         Placement::new(208., 176.).unwrap()
     );
-    assert!(app.drag_origins.is_empty());
+    assert!(!app.widgets.grid_visible());
     app.update(
-        Message::MoveWidget(
+        Message::Widgets(crate::widgets::Message::Move(
             "calendar".into(),
             DragEvent {
                 dx: 9999.,
                 dy: 9999.,
                 finished: true,
             },
-        ),
+        )),
         &mut Effects::default(),
     );
     assert_eq!(
@@ -614,14 +614,14 @@ fn drag_grid_matches_snap_spacing_and_never_captures_input() {
         cx.now,
     );
     app.update(
-        Message::MoveWidget(
+        Message::Widgets(crate::widgets::Message::Move(
             "calendar".into(),
             DragEvent {
                 dx: 25.,
                 dy: 35.,
                 finished: false,
             },
-        ),
+        )),
         &mut Effects::default(),
     );
     let dragging = layout.build(
@@ -657,14 +657,14 @@ fn drag_grid_matches_snap_spacing_and_never_captures_input() {
     assert_eq!(dragging.hits.len(), idle.hits.len());
     assert_eq!(dragging.regions.len(), idle.regions.len());
     app.update(
-        Message::MoveWidget(
+        Message::Widgets(crate::widgets::Message::Move(
             "calendar".into(),
             DragEvent {
                 dx: 25.,
                 dy: 35.,
                 finished: true,
             },
-        ),
+        )),
         &mut Effects::default(),
     );
     let released = layout.build(
@@ -884,14 +884,14 @@ fn visual_regressions() {
             let scene = if name == "widget-drag-grid" {
                 app.settings.visible_widgets = vec!["calendar".into(), "weather".into()];
                 app.update(
-                    Message::MoveWidget(
+                    Message::Widgets(crate::widgets::Message::Move(
                         "calendar".into(),
                         DragEvent {
                             dx: 151.,
                             dy: 73.,
                             finished: false,
                         },
-                    ),
+                    )),
                     &mut Effects::default(),
                 );
                 layout.build(
@@ -1217,7 +1217,7 @@ fn selection_fill_and_outline_move_together_on_the_first_frame() {
             .iter()
             .find(|h| h.id == format!("result-{index}"))
             .unwrap();
-        assert!(scene.paint.iter().any(|p|matches!(p,Paint::Shape {rect,color,..} if *rect==row.rect && *color==app.widget_color())),"selected fill must be immediate");
+        assert!(scene.paint.iter().any(|p|matches!(p,Paint::Shape {rect,color,..} if *rect==row.rect && *color==app.theme().surface_container)),"selected fill must be immediate");
         assert!(
             scene
                 .paint
@@ -1361,7 +1361,7 @@ fn settled_shell_geometry_obeys_grid_and_contains_its_controls() {
                     .iter()
                     .find_map(|p| match p {
                         Paint::Shape { rect, color, .. }
-                            if *color == app.widget_color()
+                            if *color == app.theme().surface_container
                                 && rect.h == component::input::HEIGHT
                                 && fully_visible(input, *rect) =>
                         {
@@ -1693,31 +1693,31 @@ fn invalid_drag_does_not_persist_positions_or_leave_grid_visible() {
     let mut app = fixture(0, false);
     app.settings_writable = true;
     app.update(
-        Message::MoveWidget(
+        Message::Widgets(crate::widgets::Message::Move(
             "calendar".into(),
             DragEvent {
                 dx: 10.,
                 dy: 20.,
                 finished: false,
             },
-        ),
+        )),
         &mut Effects::default(),
     );
     let position = app.settings.positions["calendar"];
     let mut effects = Effects::default();
     app.update(
-        Message::MoveWidget(
+        Message::Widgets(crate::widgets::Message::Move(
             "calendar".into(),
             DragEvent {
                 dx: f32::NAN,
                 dy: 0.,
                 finished: true,
             },
-        ),
+        )),
         &mut effects,
     );
     assert_eq!(app.settings.positions["calendar"], position);
-    assert!(app.drag_origins.is_empty());
+    assert!(!app.widgets.grid_visible());
     assert!(effects.tasks.is_empty());
     assert!(app.error.contains("finite"));
     assert!(effects.redraw.contains("widgets"));
@@ -1726,9 +1726,62 @@ fn invalid_drag_does_not_persist_positions_or_leave_grid_visible() {
 fn calendar_navigation_handles_extreme_messages_without_overflow() {
     let mut app = fixture(0, false);
     for delta in [i32::MAX, i32::MAX, i32::MIN, i32::MIN] {
-        app.update(Message::Month(delta), &mut Effects::default());
-        assert!((-120..=120).contains(&app.month_offset));
+        app.update(
+            Message::Widgets(crate::widgets::Message::Month(delta)),
+            &mut Effects::default(),
+        );
+        assert!((-120..=120).contains(&app.widgets.month_offset()));
     }
+}
+
+#[test]
+fn widget_catalog_covers_selector_views_geometry_and_ipc() {
+    let mut app = fixture(0, false);
+    let catalog = &crate::widgets::catalog::WIDGETS;
+    app.settings.visible_widgets = catalog.iter().map(|entry| entry.id.into()).collect();
+    let layout = Layout::new(fonts(&app));
+    let cx = ViewContext {
+        surface: "widgets",
+        width: 1920.,
+        height: 1080.,
+        now: 100.,
+    };
+    let widgets = layout.build(
+        &app.view(&cx),
+        cx.width,
+        cx.height,
+        &Interaction::default(),
+        cx.now,
+    );
+    app.update(
+        Message::Launcher(launcher::Message::Mode(Mode::Widgets)),
+        &mut Effects::default(),
+    );
+    let mut ids = std::collections::BTreeSet::new();
+    for (index, entry) in catalog.iter().enumerate() {
+        assert!(ids.insert(entry.id), "duplicate catalog entry");
+        let hit = widgets
+            .hits
+            .iter()
+            .find(|hit| hit.id == format!("widget-{}", entry.id))
+            .expect("catalog view exists");
+        assert_eq!((hit.rect.w, hit.rect.h), entry.size);
+        assert!(app.command(&format!("widget {} show", entry.id)).is_ok());
+        app.update(
+            Message::Launcher(launcher::Message::Select(index)),
+            &mut Effects::default(),
+        );
+        let selector = scene(&app, &layout, &mut Interaction::default(), 100.);
+        assert!(
+            selector
+                .hits
+                .iter()
+                .any(|hit| hit.id == format!("toggle-{}", entry.id)),
+            "selector scrolls to {}",
+            entry.id
+        );
+    }
+    assert!(app.command("widget missing show").is_err());
 }
 
 #[test]

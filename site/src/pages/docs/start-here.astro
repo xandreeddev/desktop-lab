@@ -4,7 +4,7 @@ import CodeBlock from '../../components/CodeBlock.astro';
 import { sourceUrl, excerpt } from '../../data/source';
 import { withBase } from '../../data/urls';
 import mainSource from '../../../../lucent/apps/lucent-desktop/src/main.rs?raw';
-import widgetSource from '../../../../lucent/apps/lucent-desktop/src/widgets.rs?raw';
+import widgetSource from '../../../../lucent/apps/lucent-desktop/src/widgets/catalog.rs?raw';
 const sections: [string, string][] = [
   ['map', '01 · The big picture'], ['files', '02 · Code vs programs'],
   ['boot', '03 · Boot to desktop'], ['main', '04 · Inside startup'],
@@ -35,7 +35,7 @@ const crates = [
 const registration = [
   ['A systemd unit', 'Installer writes lucent.service; daemon-reload makes the user manager reread units.', 'A configuration file tells the manager which process to start. Hyprland autostart explicitly starts it. Writing a unit is not the same as starting it.'],
   ['A Wayland interface', 'Hyprland advertises protocol objects; our runtime binds the interfaces it needs.', 'A local connection to the compositor. SCTK handles protocol plumbing. This does not register a Lucent widget with Linux.'],
-  ['A Lucent widget', 'Desktop::new calls widgets::registry; register stores a descriptor and view function.', 'An in-memory list inside lucent-desktop. A stable string such as clock identifies the widget in saved settings.'],
+  ['A Lucent widget', 'The client catalog supplies selector entries, geometry and view functions. The widget view builds the framework registry for its borrowed context.', 'An in-memory list inside lucent-desktop. A stable string such as clock identifies the widget in saved settings.'],
   ['An installed application', 'A package or installer writes a .desktop entry; XdgApplications discovers it.', 'A small metadata file describing name, icon and launch command. The launcher searches those records, not every executable on the disk.'],
   ['The notification service', 'The adapter requests org.freedesktop.Notifications on the session D-Bus.', 'A well-known local service name. Other applications send notifications to its current owner, so two competing notification servers cannot both own it.'],
   ['A subscription', 'The client returns a stream recipe with an ID; the runtime starts a worker for it.', 'A producer of typed messages inside the same application. The runtime retains or cancels it by ID.'],
@@ -111,9 +111,9 @@ lucent-cli: short-lived command sender to the running desktop`} label="Conceptua
   <section id="registration"><span class="eyebrow">06 / SEVERAL DIFFERENT REGISTRIES</span><h2>What gets “registered”?</h2>
     <div class="table-scroll"><table><thead><tr><th>Thing</th><th>Who registers or discovers it?</th><th>What that actually means</th></tr></thead><tbody>{registration.map(([thing, who, meaning]) => <tr><td>{thing}</td><td>{who}</td><td>{meaning}</td></tr>)}</tbody></table></div>
     <h3>A widget registration, in actual code.</h3>
-    <CodeBlock code={excerpt(widgetSource, 'pub fn registry()', 'pub fn widget_size')} lang="rust" label="Live source · the seven built-in widgets" />
-    <p>The tuple holds a stable ID, a title and a function. Rust functions can be stored as values and called later. <code>register</code> appends the descriptor/function pair and rejects duplicate IDs. When drawing a visible widget, the client looks up its ID and calls that stored function with current state and view context.</p>
-    <p>Registering a widget makes it available; saved visibility determines whether it is shown. Current widgets are compiled into the executable. Dropping a Rust file in a folder does not install a widget. The selector’s <code>WIDGETS</code> list and the view registry are currently maintained separately, so adding one requires updating both.</p>
+    <CodeBlock code={excerpt(widgetSource, 'pub const WIDGETS:', 'pub fn find')} lang="rust" label="Live source · the seven built-in widgets" />
+    <p>Each catalog definition holds a stable ID, title, description, token geometry and a function. Rust functions can be stored as values and called later. <code>register</code> appends the descriptor/function pair and rejects duplicate IDs. When drawing a visible widget, the client looks up its ID and calls that stored function with current state and view context.</p>
+    <p>Registering a widget makes it available; saved visibility determines whether it is shown. Current widgets are compiled into the executable. Dropping a Rust file in a folder does not install a widget. The selector, IPC validation, default geometry and view registry all use this single <code>WIDGETS</code> catalog. A new catalog entry must supply its compiled view function.</p>
   </section>
   <section id="loading"><span class="eyebrow">07 / THE INPUTS TO YOUR DESKTOP</span><h2>What gets loaded,<br />from where, and when?</h2>
     <div class="table-scroll"><table><thead><tr><th>Input</th><th>Location / provider</th><th>When it becomes available</th></tr></thead><tbody>
@@ -152,7 +152,7 @@ lucent-cli: short-lived command sender to the running desktop`} label="Conceptua
   <section id="changes"><span class="eyebrow">10 / WHAT A CHANGE ACTUALLY REQUIRES</span><h2>Which file should I edit?</h2>
     <div class="table-scroll"><table><thead><tr><th>Desired change</th><th>Owning layer</th><th>How it reaches the running system</th></tr></thead><tbody>
       <tr><td>Change row padding or a semantic color</td><td>design/tokens.json → generated Rust/CSS consumers</td><td>Run the generator, rebuild the Rust client, install it and restart the service. Astro uses the website consumer separately.</td></tr>
-      <tr><td>Add a widget</td><td>Client widget view/registry, size/default position and selector entry</td><td>Compile the function into the client, install/restart, then enable its stable ID through visibility settings.</td></tr>
+      <tr><td>Add a widget</td><td>Client widget view and one catalog entry with metadata and token geometry</td><td>Compile the function into the client, install/restart, then enable its stable ID through visibility settings.</td></tr>
       <tr><td>Change launch-versus-focus behavior</td><td>lucent-usecases and its tests</td><td>Rebuild the client depending on that crate. No Wayland protocol or shader change is needed.</td></tr>
       <tr><td>Add a system capability</td><td>Domain port → adapter → composition root → client messages/views</td><td>Implement the external work, choose its startup/subscription policy, build and install the client.</td></tr>
       <tr><td>Change a saved widget position</td><td>Client state and settings adapter</td><td>Drag/release updates it live and saves it. No compilation is needed.</td></tr>

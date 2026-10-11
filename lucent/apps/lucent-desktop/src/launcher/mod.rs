@@ -8,7 +8,7 @@ mod view;
 use crate::{
     actions::{Action, COMMANDS},
     shell_layout, wallpaper_browser,
-    widget_catalog::WIDGETS,
+    widgets::catalog::WIDGETS,
 };
 use lucent_api::*;
 use lucent_design::{component::panel, motion};
@@ -239,7 +239,7 @@ impl Launcher {
             Mode::Widgets => Some(
                 WIDGETS
                     .get(self.selected)
-                    .map(|(id, _, _)| Intent::ToggleWidget((*id).into()))
+                    .map(|entry| Intent::ToggleWidget(entry.id.into()))
                     .unwrap_or(Intent::ResetLayout),
             ),
             Mode::Themes => {

@@ -15,17 +15,11 @@ impl Desktop {
     pub fn surface_color(&self) -> Color {
         self.theme().surface
     }
-    pub fn widget_color(&self) -> Color {
-        self.theme().surface_container
-    }
     pub fn ink(&self) -> Color {
         self.theme().on_surface
     }
     pub fn accent(&self) -> Color {
         self.theme().primary
-    }
-    pub fn button(&self, label: impl Into<String>, message: Message) -> Element<Message> {
-        self.theme().button(label, message)
     }
     pub fn label(&self, text: impl Into<String>, size: f32) -> Element<Message> {
         Element::text(text).font(size).color(self.ink())
@@ -38,9 +32,6 @@ impl Desktop {
     }
     pub fn icon(&self, name: &str, size: f32) -> Element<Message> {
         self.artwork().icon(name, size)
-    }
-    pub fn icon_button(&self, id: &str, name: &str, message: Message) -> Element<Message> {
-        self.artwork().icon_button(id, name, message)
     }
     pub fn app_icon(&self, app: &App, size: f32) -> Element<Message> {
         self.artwork().app_icon(app, size)
