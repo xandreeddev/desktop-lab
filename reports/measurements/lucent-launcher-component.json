@@ -1,0 +1,73 @@
+{
+  "source_commit": "1157ecfe835a569502973c5daab9bbaf51d34ef2",
+  "rust_unit_tests": 126,
+  "python_tests": 53,
+  "visual_comparisons": 148,
+  "baseline_updates": 0,
+  "native": {
+    "keyboard": {
+      "checks": [
+        "panel_and_rows_on_shell_grid",
+        "equal_launcher_insets",
+        "uniform_row_pitch",
+        "input_on_shell_grid",
+        "top_bar_clock_on_shell_grid",
+        "keyboard_selection_without_hover",
+        "visible_rows_unclipped",
+        "search_focus_visible",
+        "tab_all_five_sections",
+        "shift_tab_reverse",
+        "widget_keyboard_selection",
+        "search_focus_restored_after_mode_switch"
+      ],
+      "settings_unchanged": true
+    },
+    "sizes": [
+      {
+        "custom": [
+          800.0,
+          720.0
+        ]
+      },
+      {
+        "survives_restart": true
+      },
+      {
+        "all_presets_clickable": true
+      }
+    ],
+    "runtime": {
+      "launcher_input": true,
+      "independent_application_service": true,
+      "application_survives_shell_restart": true,
+      "restart_restores_background": true,
+      "native_lock_unlock": true,
+      "surface_fault_injection": false,
+      "notes": "Native VM checks. Presentation recovery policy is unit-tested; driver fault injection is not covered here."
+    },
+    "live_wallhaven_and_alpha_coders": true,
+    "palette_keyboard_persistence_and_greeter_copy": true,
+    "original_preferences_and_wallpaper_restored": true,
+    "final_desktop_ready": true
+  },
+  "binary_sha256": {
+    "lucent-desktop": "6fc5b7edf5ce69c52411c362587bc3fab0b17d6a9082ef8e5c6714165d6f8ed0",
+    "lucent-cli": "863c3e260b95f2b0694c01e4021e886396879046028094778dfc9cb51c565d19",
+    "lucent-menu": "3b115f11a9c0cdbc1bbf6bfadabe44bd4d52b57cbccfa98f3c03a5c058e465e9",
+    "lucent-lock": "f8da338253ae9b5cdcd32c4e96cfada1ec95ca8f8bb414f6653d1485e8e073ff",
+    "lucent-greeter": "950b022d8887776c55abe864e7fc7eb5c3d3d21271a67a5addc17057d15b0176",
+    "lucent-polkit": "4659d9e106fbffc6305fe91d644297d2df6a2959334859e09d1ae78f9a53d9e7"
+  },
+  "ownership": [
+    "Launcher owns private interaction state, event routing, selector views and panel motion",
+    "Borrowed snapshots and decoded Artwork feed child views; no root or production-adapter imports",
+    "Typed intents return shared operations to Desktop; domain ports/use cases and framework dependencies retained"
+  ],
+  "limits": [
+    "No claim of memory or frame-pacing improvement; prior measured memory target remains unmet",
+    "Root greeter remains on its earlier binary and interactive login was not repeated",
+    "Widget coordination, service status, text/display capabilities and other requirement groups remain open",
+    "Early-error IPC cleanup requires a separate runtime lifecycle correction"
+  ],
+  "test_harness_correction": "Wallpaper test now waits for asynchronous initial wallpaper readiness after a restart; the first attempt ended before any wallpaper changes. Remaining checks passed after that correction."
+}
