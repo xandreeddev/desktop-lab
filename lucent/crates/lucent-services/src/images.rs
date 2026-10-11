@@ -85,12 +85,10 @@ pub fn try_load(path: &Path, size: u32) -> Result<Arc<ImageData>, LoadError> {
         };
         (image.width(), image.height(), image.into_raw())
     };
-    Ok(Arc::new(ImageData {
-        key: format!("{}:{size}", path.display()),
-        width,
-        height,
-        rgba,
-    }))
+    Ok(Arc::new(
+        ImageData::from_rgba(format!("{}:{size}", path.display()), width, height, rgba)
+            .map_err(|error| LoadError::Decode(error.to_string()))?,
+    ))
 }
 pub fn icon(name: &str) -> Option<Arc<ImageData>> {
     if Path::new(name).is_absolute() {
@@ -152,12 +150,7 @@ pub fn svg(source: &str, size: u32, key: String) -> Option<Arc<ImageData>> {
             }
         }
     }
-    Some(Arc::new(ImageData {
-        key,
-        width: size,
-        height: size,
-        rgba,
-    }))
+    Some(Arc::new(ImageData::from_rgba(key, size, size, rgba).ok()?))
 }
 
 /// Official Material Symbols Rounded; pinned SVG sources and Apache-2.0 license
@@ -206,10 +199,13 @@ pub fn symbol(name: &str, color: &str) -> Arc<ImageData> {
             }
         }
     }
-    Arc::new(ImageData {
-        key: format!("material-rounded:{name}:{color}"),
-        width: SYMBOL_PIXELS,
-        height: SYMBOL_PIXELS,
-        rgba,
-    })
+    Arc::new(
+        ImageData::from_rgba(
+            format!("material-rounded:{name}:{color}"),
+            SYMBOL_PIXELS,
+            SYMBOL_PIXELS,
+            rgba,
+        )
+        .expect("bundled symbol dimensions are bounded"),
+    )
 }

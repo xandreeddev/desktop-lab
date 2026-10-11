@@ -483,12 +483,9 @@ mod tests {
             };
             assert_eq!(app.view(&cx).style.background.3, 1.);
             app.update(
-                Message::Wallpaper(Some(Arc::new(ImageData {
-                    key: "wallpaper-fixture".into(),
-                    width: 4,
-                    height: 2,
-                    rgba: vec![255; 32],
-                }))),
+                Message::Wallpaper(Some(Arc::new(
+                    ImageData::from_rgba("wallpaper-fixture", 4, 2, vec![255; 32]).unwrap(),
+                ))),
                 &mut Effects::default(),
             );
             let scene = layout.build(&app.view(&cx), width, height, &Interaction::default(), 0.);

@@ -53,7 +53,19 @@ impl PaletteGenerationPort for ImagePalette {
     fn seed(&self, path: &str) -> Result<Rgb> {
         let image = crate::images::try_load(Path::new(path), 128)
             .map_err(|error| DomainError::Invalid(format!("Wallpaper colors: {error}")))?;
-        Ok(dominant_seed(&image.rgba))
+        // Presentation storage is premultiplied. Color extraction operates on
+        // straight RGB; only this small palette sample needs conversion back.
+        let mut rgba = image.pixels().to_vec();
+        for pixel in rgba.as_chunks_mut::<4>().0 {
+            let alpha = u32::from(pixel[3]);
+            for channel in &mut pixel[..3] {
+                *channel = (u32::from(*channel) * 255)
+                    .checked_div(alpha)
+                    .unwrap_or(0)
+                    .min(255) as u8;
+            }
+        }
+        Ok(dominant_seed(&rgba))
     }
 }
 fn dominant_seed(rgba: &[u8]) -> Rgb {

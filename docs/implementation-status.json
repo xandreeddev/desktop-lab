@@ -54,12 +54,19 @@
     {
       "id": "renderer-resources",
       "owner": "lucent-render with presentation asset adapters",
-      "status": "pending",
+      "status": "implemented",
       "acceptance": [
         "Textures needed by other surfaces remain resident",
         "Cache policy accounts for active resources and byte budgets",
         "Expensive image preparation leaves the paint path",
         "Resource lifecycle and measured timings are tested"
+      ],
+      "evidence": [
+        "Live canvases pin current textures; byte/entry LRU evicts only unused resources",
+        "ImageData validates immutable premultiplied mip storage on asset workers",
+        "GPU tests passed for cross-surface residency, release and same-name asset replacement",
+        "78 Rust tests, 48 Python tests and 148 visual comparisons passed",
+        "Native VM launcher, shell restart and secure lock/unlock passed"
       ]
     },
     {
@@ -97,12 +104,19 @@
     {
       "id": "performance-evidence",
       "owner": "measurement tooling and documentation",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "Harness uses current idle integration and restores preferences",
         "Source hardware and workload metadata are detected",
         "Current startup idle interaction and memory results are recorded",
         "CPU preparation layout upload and presentation measurements have explicit scope"
+      ],
+      "evidence": [
+        "Harness now detects guest metadata and records binary hash and cache counters",
+        "Idle preference restoration tested on success and failure",
+        "Current native measurements recorded: 120-second idle, warm/cold launcher samples, restart readiness, hardware and binary identity",
+        "Mean process RSS 526.35 MiB exceeds the initial 200 MiB target; hardware GPU behavior remains unmeasured",
+        "10-minute idle, detailed CPU stage profiling, scaling/hotplug and sleep/resume workloads remain open"
       ]
     },
     {
@@ -210,7 +224,7 @@
   "evidence": [
     {
       "milestone": "runtime-foundations",
-      "status": "locally_verified",
+      "status": "merged",
       "checks": [
         "74 Rust unit tests passed",
         "47 Python tests passed",
@@ -220,7 +234,27 @@
         "Native VM launcher/restart/application survival/lock/unlock passed",
         "148 Vulkan visual comparisons passed without baseline changes",
         "455 design tokens and 58 app icons verified",
-        "13 generated documentation pages and 484 links checked"
+        "13 generated documentation pages and 484 links checked",
+        "All six exact-head GitHub checks passed",
+        "Protected-main merge and GitHub Pages deployment succeeded"
+      ],
+      "pending": [
+        "Remaining requirement groups and explicitly unverified paths"
+      ],
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/7",
+      "merge_commit": "3365773a02820c1b86b53733de9cae9cd80627ba"
+    },
+    {
+      "milestone": "resource-lifecycle",
+      "status": "locally_verified",
+      "source_commit": "c4c707fa021a9265e4c6558d1e19392fa1b1e4f8",
+      "checks": [
+        "78 Rust unit tests and 48 Python tests passed",
+        "148 visual comparisons passed without baseline updates",
+        "Two native Vulkan resource tests passed",
+        "Clippy, formatting and documentation build passed",
+        "Native launcher/restart/secure lock checks passed",
+        "Current 120-second VM measurement recorded with detected metadata"
       ],
       "pending": [
         "Protected-main CI and merge",

@@ -1,4 +1,6 @@
 //! A small declarative shell API. Public types contain no Wayland or GPU handles.
+mod image;
+pub use image::{ImageData, ImageError, ImageLevel, reduce_premultiplied};
 use std::{
     collections::BTreeSet,
     sync::{Arc, Condvar, Mutex},
@@ -168,13 +170,6 @@ impl Default for Style {
             caret_width: 1.,
         }
     }
-}
-#[derive(Clone, Debug)]
-pub struct ImageData {
-    pub key: String,
-    pub width: u32,
-    pub height: u32,
-    pub rgba: Vec<u8>,
 }
 #[derive(Clone, Debug)]
 pub enum Kind {

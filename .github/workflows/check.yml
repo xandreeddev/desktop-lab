@@ -47,6 +47,7 @@ jobs:
         run: |
           export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name '*lvp*' -print -quit)"
           test -n "$VK_DRIVER_FILES"
+          cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render renderer_surface_resources -- --ignored --nocapture
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-desktop visual_regressions -- --ignored --nocapture
       - uses: actions/upload-artifact@v4
         if: always()
