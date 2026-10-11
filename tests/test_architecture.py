@@ -132,5 +132,12 @@ class Boundaries(unittest.TestCase):
 
     def test_launcher_does_not_import_the_root_component_or_adapter_bundle(self):
         root = ROOT / 'lucent/apps/lucent-desktop/src'
-        paths = sources(root / 'launcher') + [root / 'artwork.rs', root / 'actions.rs', root / 'widget_catalog.rs']
+        paths = sources(root / 'launcher') + [root / 'artwork.rs', root / 'actions.rs', root / 'widgets/catalog.rs']
         self.assert_no_platform_operations(paths, ('crate::desktop', 'crate::adapters', 'crate::platform'))
+
+    def test_widget_host_and_views_do_not_import_the_root_or_adapters(self):
+        paths = sources(ROOT / 'lucent/apps/lucent-desktop/src/widgets')
+        self.assert_no_platform_operations(paths,
+            ('crate::desktop', 'crate::adapters', 'crate::platform', 'crate::ports'))
+        for path in paths:
+            self.assertNotRegex(path.read_text(), r'\b(?:Desktop|DesktopAdapters)\b', str(path))

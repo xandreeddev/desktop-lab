@@ -1,123 +1,59 @@
-use crate::{
-    actions::Action,
-    desktop::{Desktop, Message},
-};
+//! Widget presentation borrows snapshots and prepared artwork, never the desktop root.
+use super::{Host, Message, default_position, widget_size};
+use crate::{actions::Action, artwork::Artwork};
 use lucent_api::*;
 use lucent_design::*;
-use lucent_domain::{Date, Placement, TimerPhase};
+use lucent_domain::{
+    ClockSnapshot, Date, DesktopSettings, MediaSnapshot, SystemSnapshot, TimerPhase,
+    WeatherSnapshot,
+};
 
-pub fn registry() -> WidgetRegistry<Desktop, Message> {
-    let mut registry = WidgetRegistry::default();
-    let entries: [(&str, &str, WidgetView<Desktop, Message>); 7] = [
-        ("calendar", "Calendar", calendar),
-        ("clock", "Clock", clock),
-        ("weather", "Weather", weather),
-        ("media", "Media", media),
-        ("system", "System", system),
-        ("notes", "Notes", notes),
-        ("timer", "Focus", timer),
-    ];
-    for (id, title, view) in entries {
-        registry
-            .register(
-                WidgetDescriptor {
-                    id,
-                    title,
-                    size: widget_size(id),
-                },
-                view,
-            )
-            .expect("unique built-in widget ID");
-    }
-    registry
+#[derive(Clone, Copy)]
+pub struct Input<'a> {
+    pub settings: &'a DesktopSettings,
+    pub clock: &'a ClockSnapshot,
+    pub system: &'a SystemSnapshot,
+    pub media: &'a MediaSnapshot,
+    pub weather: Option<&'a WeatherSnapshot>,
 }
-pub fn widget_size(id: &str) -> (f32, f32) {
-    match id {
-        "calendar" => (
-            component::widget_size::calendar::WIDTH,
-            component::widget_size::calendar::HEIGHT,
-        ),
-        "clock" => (
-            component::widget_size::clock::WIDTH,
-            component::widget_size::clock::HEIGHT,
-        ),
-        "weather" => (
-            component::widget_size::weather::WIDTH,
-            component::widget_size::weather::HEIGHT,
-        ),
-        "media" => (
-            component::widget_size::media::WIDTH,
-            component::widget_size::media::HEIGHT,
-        ),
-        "system" => (
-            component::widget_size::system::WIDTH,
-            component::widget_size::system::HEIGHT,
-        ),
-        "notes" => (
-            component::widget_size::notes::WIDTH,
-            component::widget_size::notes::HEIGHT,
-        ),
-        "timer" => (
-            component::widget_size::timer::WIDTH,
-            component::widget_size::timer::HEIGHT,
-        ),
-        _ => (
-            component::widget_size::fallback::WIDTH,
-            component::widget_size::fallback::HEIGHT,
-        ),
+pub struct View<'a> {
+    pub host: &'a Host,
+    pub input: Input<'a>,
+    pub artwork: Artwork<'a>,
+}
+impl View<'_> {
+    fn theme(&self) -> Theme {
+        self.artwork.theme
+    }
+    fn surface_color(&self) -> Color {
+        self.theme().surface
+    }
+    fn widget_color(&self) -> Color {
+        self.theme().surface_container
+    }
+    fn ink(&self) -> Color {
+        self.theme().on_surface
+    }
+    fn accent(&self) -> Color {
+        self.theme().primary
+    }
+    fn label(&self, text: impl Into<String>, size: f32) -> Element<Message> {
+        Element::text(text).font(size).color(self.ink())
+    }
+    fn button(&self, text: impl Into<String>, message: Message) -> Element<Message> {
+        self.theme().button(text, message)
+    }
+    fn icon(&self, name: &str, size: f32) -> Element<Message> {
+        self.artwork.icon(name, size)
+    }
+    fn icon_button(&self, id: &str, name: &str, message: Message) -> Element<Message> {
+        self.artwork.icon_button(id, name, message)
     }
 }
-pub fn default_position(id: &str, viewport: (f32, f32)) -> Placement {
-    let (x, y): (f32, f32) = match id {
-        "calendar" => (
-            component::widget_layout::LEFT,
-            component::widget_layout::TOP,
-        ),
-        "weather" => (
-            component::widget_layout::WEATHER_LEFT,
-            component::widget_layout::WEATHER_TOP,
-        ),
-        "clock" => (
-            viewport.0 - component::widget_layout::RIGHT_INSET,
-            component::widget_layout::CLOCK_TOP,
-        ),
-        "media" => (
-            viewport.0 - component::widget_layout::RIGHT_INSET,
-            component::widget_layout::MEDIA_TOP,
-        ),
-        "system" => (
-            component::widget_layout::LEFT,
-            component::widget_layout::SYSTEM_TOP,
-        ),
-        "notes" => (
-            component::widget_layout::SECOND_COLUMN,
-            component::widget_layout::TOP,
-        ),
-        "timer" => (
-            component::widget_layout::SECOND_COLUMN,
-            component::widget_layout::TIMER_TOP,
-        ),
-        _ => (
-            component::widget_layout::LEFT,
-            component::widget_layout::TOP,
-        ),
-    };
-    let size = widget_size(id);
-    let position = lucent_usecases::snap_placement(
-        Placement::new(x, y).expect("finite viewport and design tokens"),
-        component::widget_layout::GRID_STEP,
-    )
-    .expect("valid grid token and default placement");
-    Placement::new(
-        position.x().clamp(0., (viewport.0 - size.0).max(0.)),
-        position.y().clamp(0., (viewport.1 - size.1).max(0.)),
-    )
-    .expect("finite clamped default position")
-}
-impl Desktop {
+impl View<'_> {
     /// Decorative geometry only: grid lines never enter the pointer input region.
     fn drag_grid(&self, cx: &ViewContext) -> Vec<Element<Message>> {
-        if self.drag_origins.is_empty() {
+        if self.host.drag_origins.is_empty() {
             return vec![];
         }
         let step = component::widget_layout::GRID_STEP;
@@ -148,11 +84,13 @@ impl Desktop {
         }
         lines
     }
-    pub fn widgets(&self, cx: &ViewContext) -> Element<Message> {
+    pub fn render(&self, cx: &ViewContext) -> Element<Message> {
+        let registry = super::catalog::registry();
         let mut children = self.drag_grid(cx);
-        children.extend(self.settings.visible_widgets.iter().filter_map(|id| {
-            let content = self.registry.view(id, self, cx)?;
+        children.extend(self.input.settings.visible_widgets.iter().filter_map(|id| {
+            let content = registry.view(id, self, cx)?;
             let pos = self
+                .input
                 .settings
                 .positions
                 .get(id)
@@ -175,21 +113,21 @@ impl Desktop {
                     .radius(radius::WIDGET)
                     .clip()
                     .shadow()
-                    .on_drag(move |drag| Message::MoveWidget(drag_id.clone(), drag))
+                    .on_drag(move |drag| Message::Move(drag_id.clone(), drag))
                     .id(format!("widget-{id}")),
             )
         }));
         Element::stack(children).fill()
     }
 }
-fn clock(d: &Desktop, _: &ViewContext) -> Element<Message> {
+pub(super) fn clock(d: &View<'_>, _: &ViewContext) -> Element<Message> {
     Element::stack(vec![
-        d.label(format!("{:02}", d.clock.hour), font::CLOCK)
+        d.label(format!("{:02}", d.input.clock.hour), font::CLOCK)
             .font_face(1)
             .size(component::clock::WIDTH, component::clock::DIGIT_HEIGHT)
             .align(Align::Center)
             .at(0., component::clock::HOUR_TOP),
-        d.label(format!("{:02}", d.clock.minute), font::CLOCK)
+        d.label(format!("{:02}", d.input.clock.minute), font::CLOCK)
             .font_face(1)
             .size(component::clock::WIDTH, component::clock::DIGIT_HEIGHT)
             .align(Align::Center)
@@ -205,9 +143,9 @@ fn clock(d: &Desktop, _: &ViewContext) -> Element<Message> {
                     "Friday",
                     "Saturday",
                     "Sunday"
-                ][d.clock.date.weekday() as usize],
-                d.clock.date.day(),
-                months()[d.clock.date.month() as usize - 1]
+                ][d.input.clock.date.weekday() as usize],
+                d.input.clock.date.day(),
+                months()[d.input.clock.date.month() as usize - 1]
             ),
             font::SMALL,
         )
@@ -238,9 +176,9 @@ fn calendar_month(date: Date, offset: i32) -> (i32, u32, u32) {
     let month = date.month_start(offset).unwrap_or(date);
     (month.year(), month.month(), month.first_weekday())
 }
-fn calendar(d: &Desktop, _: &ViewContext) -> Element<Message> {
-    let date = d.clock.date;
-    let (year, month, first) = calendar_month(date, d.month_offset);
+pub(super) fn calendar(d: &View<'_>, _: &ViewContext) -> Element<Message> {
+    let date = d.input.clock.date;
+    let (year, month, first) = calendar_month(date, d.host.month_offset);
     let mut children = vec![
         d.label(
             format!("{} {}", months()[month as usize - 1], year),
@@ -280,7 +218,11 @@ fn calendar(d: &Desktop, _: &ViewContext) -> Element<Message> {
     }
     let days = Date::days_in_month(year, month);
     let prev_month = if month == 1 { 12 } else { month - 1 };
-    let prev_days = Date::days_in_month(if month == 1 { year - 1 } else { year }, prev_month);
+    let prev_days = if month == 1 {
+        31
+    } else {
+        Date::days_in_month(year, prev_month)
+    };
     for index in 0..42_u32 {
         let day = index as i32 - first as i32 + 1;
         let current = day > 0 && day <= days as i32;
@@ -291,7 +233,7 @@ fn calendar(d: &Desktop, _: &ViewContext) -> Element<Message> {
         } else {
             day
         };
-        let today = current && d.month_offset == 0 && day == date.day() as i32;
+        let today = current && d.host.month_offset == 0 && day == date.day() as i32;
         let x = component::calendar::LEFT + (index % 7) as f32 * component::calendar::COLUMN_WIDTH;
         let y =
             component::calendar::DAYS_TOP + (index / 7) as f32 * component::calendar::ROW_HEIGHT;
@@ -333,8 +275,9 @@ fn calendar(d: &Desktop, _: &ViewContext) -> Element<Message> {
     }
     Element::stack(children).fill()
 }
-fn weather(d: &Desktop, _: &ViewContext) -> Element<Message> {
+pub(super) fn weather(d: &View<'_>, _: &ViewContext) -> Element<Message> {
     let (temperature, description, symbol) = d
+        .input
         .weather
         .as_ref()
         .map(|w| {
@@ -382,10 +325,11 @@ fn weather(d: &Desktop, _: &ViewContext) -> Element<Message> {
     .fill()
 }
 
-fn media(d: &Desktop, _: &ViewContext) -> Element<Message> {
+pub(super) fn media(d: &View<'_>, _: &ViewContext) -> Element<Message> {
     let artwork = d
+        .artwork
         .images
-        .get(&d.media.art_url)
+        .get(&d.input.media.art_url)
         .cloned()
         .map(Element::image)
         .unwrap_or_else(|| {
@@ -395,15 +339,15 @@ fn media(d: &Desktop, _: &ViewContext) -> Element<Message> {
             )])
             .background(d.surface_color())
         });
-    let title = if d.media.title.is_empty() {
+    let title = if d.input.media.title.is_empty() {
         "Nothing playing"
     } else {
-        &d.media.title
+        &d.input.media.title
     };
-    let progress = if d.media.length == 0 {
+    let progress = if d.input.media.length == 0 {
         0.
     } else {
-        (d.media.position as f32 / d.media.length as f32).clamp(0., 1.)
+        (d.input.media.position as f32 / d.input.media.length as f32).clamp(0., 1.)
     };
     Element::stack(vec![
         artwork
@@ -419,7 +363,7 @@ fn media(d: &Desktop, _: &ViewContext) -> Element<Message> {
                 component::media::TITLE_HEIGHT,
             )
             .at(component::media::INSET, component::media::TITLE_TOP),
-        d.label(&d.media.artist, font::SMALL)
+        d.label(&d.input.media.artist, font::SMALL)
             .size(
                 component::media::CONTENT_WIDTH,
                 component::media::ARTIST_HEIGHT,
@@ -453,7 +397,11 @@ fn media(d: &Desktop, _: &ViewContext) -> Element<Message> {
         ),
         d.icon_button(
             "media-play",
-            if d.media.playing { "pause" } else { "play" },
+            if d.input.media.playing {
+                "pause"
+            } else {
+                "play"
+            },
             Message::Action(Action::PlayPause),
         )
         .size(component::media::PLAY_WIDTH, component::media::PLAY_HEIGHT)
@@ -470,8 +418,8 @@ fn media(d: &Desktop, _: &ViewContext) -> Element<Message> {
     ])
     .fill()
 }
-fn system(d: &Desktop, _: &ViewContext) -> Element<Message> {
-    let mem = &d.system;
+pub(super) fn system(d: &View<'_>, _: &ViewContext) -> Element<Message> {
+    let mem = &d.input.system;
     let fraction = if mem.memory_total_mib == 0 {
         0.
     } else {
@@ -556,7 +504,7 @@ fn system(d: &Desktop, _: &ViewContext) -> Element<Message> {
     ])
     .fill()
 }
-fn notes(d: &Desktop, _: &ViewContext) -> Element<Message> {
+pub(super) fn notes(d: &View<'_>, _: &ViewContext) -> Element<Message> {
     Element::stack(vec![
         d.label("Notes", font::HEADING)
             .size(
@@ -565,7 +513,7 @@ fn notes(d: &Desktop, _: &ViewContext) -> Element<Message> {
             )
             .at(component::notes::INSET, component::notes::HEADING_TOP),
         Element::input(
-            &d.settings.notes,
+            &d.input.settings.notes,
             "A thought to keep nearby…",
             Message::Notes,
         )
@@ -590,12 +538,12 @@ fn notes(d: &Desktop, _: &ViewContext) -> Element<Message> {
     ])
     .fill()
 }
-fn timer(d: &Desktop, _: &ViewContext) -> Element<Message> {
-    let seconds = d.timer.remaining;
-    let running = d.timer.phase == TimerPhase::Running;
+pub(super) fn timer(d: &View<'_>, _: &ViewContext) -> Element<Message> {
+    let seconds = d.host.timer.remaining;
+    let running = d.host.timer.phase == TimerPhase::Running;
     Element::stack(vec![
         d.label(
-            if d.timer.phase == TimerPhase::Finished {
+            if d.host.timer.phase == TimerPhase::Finished {
                 "Session complete"
             } else {
                 "Focus"

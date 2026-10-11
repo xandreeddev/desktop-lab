@@ -223,17 +223,17 @@ impl View<'_> {
                     .enumerate()
                     .skip(self.launcher.scroll)
                     .take(visible_rows)
-                    .map(|(index, (id, title, description))| {
+                    .map(|(index, entry)| {
+                        let (id, title, description) = (entry.id, entry.title, entry.description);
                         let on = self.input.settings.visible_widgets.iter().any(|w| w == id);
                         Element::row(vec![
                             self.icon(
-                                if *id == "media" { "music" } else { "widgets" },
+                                if id == "media" { "music" } else { "widgets" },
                                 icon::WIDGET,
                             ),
                             Element::column(vec![
-                                self.label(*title, font::BODY),
-                                self.label(*description, font::MICRO)
-                                    .opacity(opacity::MUTED),
+                                self.label(title, font::BODY),
+                                self.label(description, font::MICRO).opacity(opacity::MUTED),
                             ])
                             .width(Length::Fill),
                             self.theme().switch_indicator(on),
@@ -249,7 +249,7 @@ impl View<'_> {
                         .background(self.surface_color())
                         .selected(index == self.launcher.selected)
                         .on_hover(Message::Select(index))
-                        .on_click(Message::Request(Intent::ToggleWidget((*id).into())))
+                        .on_click(Message::Request(Intent::ToggleWidget(id.into())))
                         .id(format!("toggle-{id}"))
                     })
                     .collect();

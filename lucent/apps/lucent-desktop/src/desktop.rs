@@ -2,7 +2,7 @@ use crate::actions::Action;
 use crate::adapters::{DesktopAdapters, WatchStop};
 use crate::launcher::Mode;
 use crate::launcher::{self, Launcher};
-use crate::widget_catalog::WIDGETS;
+use crate::widgets::{self, catalog::WIDGETS};
 use lucent_api::{self as api, *};
 use lucent_design::{component::panel, motion};
 use lucent_domain::{self as domain, *};
@@ -29,12 +29,7 @@ pub enum Message {
     Workspace(i32),
     Action(Action),
     Wallpaper(usize, bool),
-    ToggleWidget(String),
-    MoveWidget(String, DragEvent),
-    Notes(String),
-    TimerToggle,
-    TimerReset,
-    Month(i32),
+    Widgets(widgets::Message),
     Theme(bool),
     Palette(ThemePalette),
     ExtractPalette,
@@ -46,10 +41,8 @@ pub enum Message {
     OsdTick,
     OsdClose,
     Bar(bool),
-    WidgetShow(String),
     SetWallpaper(String),
     LauncherSize(LauncherSize),
-    ResetLayout,
     Resize(&'static str, f32, f32),
     Completed(domain::Result<()>),
     Quit,
@@ -60,7 +53,7 @@ pub struct Desktop {
     pub osd: crate::osd::Osd,
     pub bar_visible: bool,
     pub theme_error: String,
-    pub registry: WidgetRegistry<Desktop, Message>,
+    pub widgets: widgets::Host,
     pub apps: Vec<domain::Application>,
     pub settings: DesktopSettings,
     pub settings_writable: bool,
@@ -80,10 +73,7 @@ pub struct Desktop {
     pub launcher: Launcher,
     pub carousel: Motion,
     pub viewport: (f32, f32),
-    pub timer: FocusTimer,
-    pub month_offset: i32,
     pub error: String,
-    pub drag_origins: BTreeMap<String, Placement>,
     pub adapters: DesktopAdapters,
 }
 impl Desktop {
@@ -94,7 +84,7 @@ impl Desktop {
             bar_visible: true,
             theme_error: String::new(),
             notifications: crate::notifications::Center::new(adapters.notifications.clone()),
-            registry: crate::widgets::registry(),
+            widgets: widgets::Host::default(),
             apps: vec![],
             settings: DesktopSettings::default(),
             settings_writable: false,
@@ -118,10 +108,7 @@ impl Desktop {
             launcher: Launcher::default(),
             carousel: Motion::fixed(0.),
             viewport: (1920., 1080.),
-            timer: FocusTimer::default(),
-            month_offset: 0,
             error: String::new(),
-            drag_origins: BTreeMap::new(),
             adapters,
         }
     }
@@ -296,13 +283,39 @@ impl Desktop {
                 Intent::Action(action) => Message::Action(action),
                 Intent::Wallpaper(index, apply) => Message::Wallpaper(index, apply),
                 Intent::Browser(message) => Message::Browser(message),
-                Intent::ToggleWidget(id) => Message::ToggleWidget(id),
-                Intent::ResetLayout => Message::ResetLayout,
+                Intent::ToggleWidget(id) => Message::Widgets(widgets::Message::Toggle(id)),
+                Intent::ResetLayout => Message::Widgets(widgets::Message::ResetLayout),
                 Intent::Palette(palette) => Message::Palette(palette),
                 Intent::ExtractPalette => Message::ExtractPalette,
                 Intent::LauncherSize(size) => Message::LauncherSize(size),
             };
             self.update(message, effects);
+        }
+    }
+    fn update_widgets(&mut self, message: widgets::Message, effects: &mut Effects<Message>) {
+        let mut intent = None;
+        effects.delegate(
+            |child| {
+                intent = self.widgets.update(
+                    message,
+                    widgets::Update {
+                        settings: &mut self.settings,
+                        viewport: self.viewport,
+                        unix_seconds: self.clock.unix_seconds,
+                    },
+                    child,
+                )
+            },
+            Message::Widgets,
+        );
+        match intent {
+            Some(widgets::Intent::Save) => self.save(effects),
+            Some(widgets::Intent::Action(action)) => self.perform(action, effects),
+            Some(widgets::Intent::Error(error)) => {
+                self.error = error.to_string();
+                effects.redraw("dock");
+            }
+            None => {}
         }
     }
     fn launch(&self, id: &AppId, prefer_running: bool, effects: &mut Effects<Message>) {
@@ -369,7 +382,19 @@ impl Component for Desktop {
                 .map(|image| Element::image(image.clone()).cover().fill())
                 .unwrap_or_else(|| Element::empty().fill().background(self.surface_color())),
             "bar" => self.bar(cx),
-            "widgets" => self.widgets(cx),
+            "widgets" => widgets::View {
+                host: &self.widgets,
+                input: widgets::Input {
+                    settings: &self.settings,
+                    clock: &self.clock,
+                    system: &self.system,
+                    media: &self.media,
+                    weather: self.weather.as_ref(),
+                },
+                artwork: self.artwork(),
+            }
+            .render(cx)
+            .map(Message::Widgets),
             "dock" => self.dock(cx),
             "notifications" => self
                 .notifications
@@ -499,13 +524,7 @@ impl Component for Desktop {
                     effects.redraw("bar");
                     effects.redraw("widgets");
                 }
-                let before = self.timer.remaining;
-                self.timer.tick(clock.unix_seconds);
-                if before != self.timer.remaining
-                    && self.settings.visible_widgets.iter().any(|w| w == "timer")
-                {
-                    effects.redraw("widgets");
-                }
+                self.update_widgets(widgets::Message::Tick(clock.unix_seconds), effects);
                 self.clock = clock;
             }
             Message::System(Ok(value)) => {
@@ -565,67 +584,7 @@ impl Component for Desktop {
                     effects.redraw("dock");
                 }
             }
-            Message::ToggleWidget(id) => {
-                lucent_usecases::toggle_widget(&mut self.settings, &id);
-                self.save(effects);
-                effects.redraw("widgets");
-                effects.redraw("dock");
-            }
-            Message::MoveWidget(id, drag) => {
-                let origin = *self.drag_origins.entry(id.clone()).or_insert_with(|| {
-                    self.settings
-                        .positions
-                        .get(&id)
-                        .copied()
-                        .unwrap_or_else(|| crate::widgets::default_position(&id, self.viewport))
-                });
-                let size = crate::widgets::widget_size(&id);
-                if drag.finished {
-                    self.drag_origins.remove(&id);
-                }
-                let move_result = (|| {
-                    let mut placement = Placement::new(origin.x() + drag.dx, origin.y() + drag.dy)?;
-                    if drag.finished {
-                        placement = lucent_usecases::snap_placement(
-                            placement,
-                            lucent_design::component::widget_layout::GRID_STEP,
-                        )?;
-                    }
-                    lucent_usecases::move_widget(
-                        &mut self.settings,
-                        &id,
-                        placement,
-                        size,
-                        self.viewport,
-                    )
-                })();
-                match move_result {
-                    Ok(()) if drag.finished => self.save(effects),
-                    Err(error) => {
-                        self.error = error.to_string();
-                        effects.redraw("dock");
-                    }
-                    _ => {}
-                }
-                effects.redraw("widgets");
-            }
-            Message::Notes(text) => {
-                self.settings.notes = text;
-                self.save(effects);
-                effects.redraw("widgets");
-            }
-            Message::TimerToggle => {
-                self.timer.toggle(self.clock.unix_seconds);
-                effects.redraw("widgets");
-            }
-            Message::TimerReset => {
-                self.timer = FocusTimer::default();
-                effects.redraw("widgets");
-            }
-            Message::Month(delta) => {
-                self.month_offset = self.month_offset.saturating_add(delta).clamp(-120, 120);
-                effects.redraw("widgets");
-            }
+            Message::Widgets(message) => self.update_widgets(message, effects),
             Message::ThemeApplied(result) => {
                 self.theme_error = result
                     .err()
@@ -648,11 +607,6 @@ impl Component for Desktop {
             Message::Bar(visible) => {
                 self.bar_visible = visible;
                 effects.redraw("bar");
-            }
-            Message::WidgetShow(id) => {
-                if !self.settings.visible_widgets.contains(&id) {
-                    self.update(Message::ToggleWidget(id), effects);
-                }
             }
             Message::SetWallpaper(path) => {
                 let name = path.rsplit('/').next().unwrap_or(&path).to_owned();
@@ -766,12 +720,6 @@ impl Component for Desktop {
                 self.retarget_panel_transition(now);
                 self.save(effects);
                 effects.redraw("dock");
-            }
-            Message::ResetLayout => {
-                self.drag_origins.clear();
-                self.settings.positions.clear();
-                self.save(effects);
-                effects.redraw("widgets");
             }
             Message::Resize(id, w, h) => {
                 if matches!(id, "widgets" | "dock") {
@@ -992,10 +940,10 @@ impl api::Application for Desktop {
             .strip_prefix("widget ")
             .and_then(|s| s.strip_suffix(" show"))
         {
-            if !WIDGETS.iter().any(|widget| widget.0 == id) {
+            if !WIDGETS.iter().any(|widget| widget.id == id) {
                 return Err("Unknown widget".into());
             }
-            return Ok(Some(Message::WidgetShow(id.into())));
+            return Ok(Some(Message::Widgets(widgets::Message::Show(id.into()))));
         }
         if matches!(command, "theme dark" | "theme light") && !self.settings_writable {
             return Err("Wait for saved settings to load before changing the theme".into());
@@ -1079,7 +1027,7 @@ impl api::Application for Desktop {
         }))
     }
     fn inspect(&self) -> String {
-        serde_json::json!({"palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":!self.drag_origins.is_empty(),"notes":self.settings.notes,"timer_seconds":self.timer.remaining,"error":self.error_message(),"settings_error":self.settings_error,"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable}).to_string()
+        serde_json::json!({"palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":self.widgets.grid_visible(),"notes":self.settings.notes,"timer_seconds":self.widgets.timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable}).to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
         (surface == "osd" && self.osd.animating(now))

@@ -318,7 +318,10 @@ nor explain every resident allocation.
 ## Widget registration
 
 `WidgetRegistry<Client, Message>` maps stable widget IDs and descriptors to view
-functions. Duplicate IDs are rejected. The desktop registers seven widgets and
+functions. Duplicate IDs are rejected. The desktop uses one catalog for selector
+metadata, IPC validation, token geometry and seven compiled view functions. Its
+small registry is rebuilt for the current borrowed view context and retains no
+snapshots or adapters. The widget host owns transient interaction state and
 persists positions/visibility by ID. The framework contains no built-in widget
 list. Registry views are stateless; a client stores their state or composes child
 `Component`s when local state is useful. Dynamic plugin loading is deferred.
@@ -449,7 +452,7 @@ port contract. Client `ports.rs` retains only the presentation asset contract;
 `Desktop::new(DesktopAdapters)` receives trait objects for applications, compositor,
 settings, clock, system sampling, audio, media, weather, wallpapers, session locking,
 notifications and presentation assets. `platform.rs` is the composition root that
-chooses concrete adapters. `desktop.rs`, `views.rs`, `widgets.rs` and the notification
+chooses concrete adapters. `desktop.rs`, `views.rs`, `widgets/` and the notification
 component contain no platform commands or concrete service selection. Test adapters
 can exercise the same component updates without inspecting or modifying the host.
 
@@ -460,8 +463,9 @@ a pure desktop-domain concept. Framework crates do not depend on the domain,
 Lucent's visual theme, service adapters or authentication adapters.
 
 This is a practical ports-and-adapters structure, not a claim of a finished framework.
-The launcher owns private interaction and motion state; widget coordination still
-lives in `Desktop`. Audio/media use CLI adapters and polling;
+The launcher owns private interaction and motion state; `widgets::Host` owns
+drag origins, calendar navigation and timer behavior. Both borrow explicit inputs
+and return typed intents for shared root operations. Audio/media use CLI adapters and polling;
 layout has no general scroll container or complex-script shaping. OS operations
 stay behind ports, while pure search, launch/focus, positioning and notification
 expiry policy live in `lucent-usecases`. Architecture dependency checks enforce
@@ -593,3 +597,24 @@ unrepresentable result; `move_widget` validates dimensions before mutation. An i
 finished drag clears its temporary origin/grid and leaves the last valid position
 unchanged. LauncherSize and LaunchCommand remain records with boundary validation;
 these changes do not imply that every domain record is a validated value object.
+
+
+## Widget composition
+
+`widgets::Host` privately owns drag origins, calendar navigation and the focus
+timer. Its update borrows `DesktopSettings` rather than storing another copy.
+`widgets::View` borrows clock/system/media/weather snapshots and prepared Artwork;
+no widget reads `Desktop` or selects an adapter. The root maps its element messages
+and delegates effects using the same framework API as the launcher.
+
+One `widgets::catalog::WIDGETS` entry supplies ID, title, description, token size,
+default placement and view function. Selector choices, IPC validation and widget
+rendering use that table. Add a compiled view and a catalog entry to extend it;
+there is no dynamic plugin loader.
+
+Dragging changes the in-memory position continuously. Release snaps/clamps and
+returns `Intent::Save`; the root queues its settings adapter. Hiding a widget clears
+its drag, and unknown/hidden IDs cannot mutate positions. Invalid geometry returns
+an error and clears transient state without requesting persistence. Notes also
+return Save; media buttons return an action intent. The root retains adapter
+ownership, and the renderer receives only generic elements.

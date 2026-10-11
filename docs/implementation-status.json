@@ -181,7 +181,8 @@
         "112 Rust tests, 49 Python checks, 148 unchanged visual comparisons and focused native calendar/drag/save/restart/invalid-settings checks passed",
         "Launcher private state, messages, event routing, selector views and panel motion extracted into a child controller; borrowed inputs and typed intents preserve adapter/use-case ownership",
         "126 Rust tests and 53 Python checks pass, including child behavior, exact motion restart and child/root import guard; 148 existing Vulkan comparisons pass without baseline changes",
-        "Native keyboard, custom size/presets/restart, live wallpaper providers, palette selection, application survival and secure lock/unlock passed; original preferences/wallpaper restored. Widget coordination extraction remains open."
+        "Native keyboard, custom size/presets/restart, live wallpaper providers, palette selection, application survival and secure lock/unlock passed; original preferences/wallpaper restored. Widget coordination extraction remains open.",
+        "Widget drag/calendar/timer state moved into a private child host with borrowed input and typed parent intents. One catalog supplies selector entries, IPC validation, geometry and compiled views. Child behavior, boundaries, unchanged Vulkan visuals and native input/persistence checks passed."
       ]
     },
     {
@@ -287,6 +288,21 @@
         "Audit found IPC cleanup only at the normal end of run_inner; earlier question-mark returns bypass cancellation and the wake-up connection. Process exit reclaims the thread, but library callers retrying in the same process are not covered.",
         "Owned IPC guard and nine isolated transport tests pass: early error/retry, immediate stop, missing/replaced socket, bind failure, full delivery, pending reply, partial/slow I/O and ready quit acknowledgement.",
         "Native two-cycle graceful quit acknowledgement/socket cleanup/restart passed, with a complete 53,352-byte profiled response containing 73 dock samples. Profiling restoration, launcher/application survival and secure lock/unlock passed."
+      ]
+    },
+    {
+      "id": "settings-persistence",
+      "owner": "desktop persistence coordinator and settings adapter",
+      "status": "pending",
+      "acceptance": [
+        "Coalesce pending preference snapshots while allowing an accepted save to finish",
+        "Newest requested state survives worker overload or has an explicit recoverable failure",
+        "Save failures remain visible until the matching or newer revision succeeds",
+        "Editable widgets distinguish pending, saved and failed state",
+        "Injected failure, delayed completion and overload tests preserve newer intent"
+      ],
+      "evidence": [
+        "Static review: Desktop::save queues full snapshots into the bounded settings queue and uses generic Message::Completed. Settings save status and retry are not feature-owned. Native disk-failure and overload verification remains open."
       ]
     }
   ],
@@ -495,7 +511,7 @@
     },
     {
       "milestone": "ipc-lifetime",
-      "status": "locally_verified",
+      "status": "merged",
       "source_commit": "2bf22e825fc56b67c3e0ddd9eb32f5b59663717c",
       "checks": [
         "135 Rust unit tests, including nine isolated IPC lifecycle tests, passed",
@@ -505,12 +521,33 @@
         "Complete profiled JSON response and profiling override restoration passed",
         "Intentional profiling-test failure cleanup passed",
         "Native launcher/application survival and secure lock/unlock passed",
-        "Final normal desktop ready with profiling disabled"
+        "Final normal desktop ready with profiling disabled",
+        "All six exact-head checks, protected-main merge and Pages deployment passed"
+      ],
+      "pending": [
+        "Native Wayland/driver fault injection and other requirement groups"
+      ],
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/17",
+      "merge_commit": "307cd3d70c28335827eff9e182c9ae73665a5647"
+    },
+    {
+      "milestone": "widget-host",
+      "status": "locally_verified",
+      "checks": [
+        "141 Rust unit tests and 54 Python checks passed",
+        "Clippy, formatting and Astro check/build passed",
+        "148 Vulkan visual comparisons passed without baseline changes",
+        "Desktop release build and reversible native desktop-binary deployment passed",
+        "Native notes persistence, timer start/pause/reset, calendar input, drag grid/snapping and widget selection passed",
+        "Notes and positions survived restart; original preferences and workspace restored",
+        "Launcher modes/focus/grid and application survival checks passed",
+        "Native secure lock/unlock passed; final normal desktop ready"
       ],
       "pending": [
         "Exact-head CI, protected-main merge and Pages",
-        "Native Wayland/driver fault injection and other requirement groups"
-      ]
+        "Other requirement groups"
+      ],
+      "source_commit": "5d8a394b2f29a85c72ba4023aad1b796fe3a3ec4"
     }
   ]
 }

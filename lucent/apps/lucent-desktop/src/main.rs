@@ -12,7 +12,6 @@ mod shell_layout;
 mod views;
 mod wallpaper_browser;
 mod wallpaper_selection;
-mod widget_catalog;
 mod widgets;
 mod workspaces;
 use desktop::Desktop;
