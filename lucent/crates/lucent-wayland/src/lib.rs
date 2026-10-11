@@ -51,11 +51,14 @@ use wayland_client::{
 use wgpu_handle::HasDisplayHandle;
 // Use the exact raw-window-handle version used by the renderer.
 use lucent_render::display_handle as wgpu_handle;
+mod delivery;
 mod effects;
 mod profiling;
+mod subscriptions;
 
 enum RuntimeEvent<M> {
     Message(M),
+    Subscription(subscriptions::Event<M>),
     Failure(api::RuntimeFailure),
     Command(String, mpsc::SyncSender<String>),
 }
@@ -108,9 +111,9 @@ struct State<A: Application> {
     exit: bool,
     error: Option<String>,
     handle: LoopHandle<'static, Self>,
-    sender: channel::Sender<RuntimeEvent<A::Message>>,
+    sender: delivery::Delivery<RuntimeEvent<A::Message>>,
     tasks: effects::Executor<A::Message>,
-    subscriptions: BTreeMap<String, api::Cancellation>,
+    subscriptions: subscriptions::Workers,
     connection: Connection,
 }
 /// Run any framework application, with no desktop-specific types in the backend.
@@ -165,7 +168,7 @@ fn run_inner<A: Application>(
     let gpu = Gpu::new(conn.backend(), fonts.clone())?;
     let mut event_loop: EventLoop<State<A>> = EventLoop::try_new()?;
     let handle = event_loop.handle();
-    let (sender, events) = channel::channel();
+    let (sender, events, _delivery_lifetime) = delivery::Delivery::channel();
     let completion = sender.clone();
     let tasks = effects::Executor::new(move |result| {
         let event = match result {
@@ -198,7 +201,7 @@ fn run_inner<A: Application>(
         handle: handle.clone(),
         sender: sender.clone(),
         tasks,
-        subscriptions: BTreeMap::new(),
+        subscriptions: subscriptions::Workers::default(),
         connection: conn.clone(),
     };
     let runtime =
@@ -236,10 +239,7 @@ fn run_inner<A: Application>(
                         continue;
                     }
                     let (tx, rx) = mpsc::sync_channel(1);
-                    if sender
-                        .send(RuntimeEvent::Command(text.trim().into(), tx))
-                        .is_err()
-                    {
+                    if !sender.send(RuntimeEvent::Command(text.trim().into(), tx)) {
                         break;
                     }
                     let result = rx
@@ -255,6 +255,11 @@ fn run_inner<A: Application>(
         if let channel::Event::Msg(event) = event {
             match event {
                 RuntimeEvent::Message(msg) => state.message(msg, &event_qh),
+                RuntimeEvent::Subscription(event) => match event.into_live() {
+                    Some(Ok(message)) => state.message(message, &event_qh),
+                    Some(Err(error)) => state.runtime_failure(error, &event_qh),
+                    None => {}
+                },
                 RuntimeEvent::Failure(error) => state.runtime_failure(error, &event_qh),
                 RuntimeEvent::Command(command, reply) => {
                     let response = if command == "inspect" {
@@ -282,9 +287,6 @@ fn run_inner<A: Application>(
     while !state.exit {
         event_loop.dispatch(None, &mut state)?;
         state.draw_all(&qh);
-    }
-    for cancel in state.subscriptions.values() {
-        cancel.cancel();
     }
     ipc_cancel.cancel();
     if ipc {
@@ -479,41 +481,9 @@ impl<A: Application> State<A> {
                 );
             }
         }
-        let wanted = self.app.subscriptions();
-        self.subscriptions.retain(|id, cancel| {
-            let keep = wanted.iter().any(|s| s.id == *id);
-            if !keep {
-                cancel.cancel();
-            }
-            keep
-        });
-        for subscription in wanted {
-            if self.subscriptions.contains_key(&subscription.id) {
-                continue;
-            }
-            let cancel = api::Cancellation::default();
-            let source = format!("subscription {}", subscription.id);
-            self.subscriptions.insert(subscription.id, cancel.clone());
-            let sender = self.sender.clone();
-            let failures = sender.clone();
-            std::thread::spawn(move || {
-                let cancelled = cancel.clone();
-                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    (subscription.run)(
-                        api::Emitter::new(move |message| {
-                            let _ = sender.send(RuntimeEvent::Message(message));
-                        }),
-                        cancel,
-                    )
-                }));
-                if result.is_err() && !cancelled.cancelled() {
-                    let _ = failures.send(RuntimeEvent::Failure(api::RuntimeFailure {
-                        source,
-                        reason: "subscription panicked".into(),
-                    }));
-                }
-            });
-        }
+        self.subscriptions
+            .reconcile(self.app.subscriptions(), &self.sender)
+            .map_err(|failure| failure.to_string())?;
         Ok(())
     }
     /// Some compositors update wl_output scale without repeating the preferred

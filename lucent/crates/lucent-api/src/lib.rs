@@ -567,8 +567,10 @@ impl<M> Effects<M> {
     pub fn task_on(&mut self, queue: &'static str, task: impl FnOnce() -> M + Send + 'static) {
         self.task_cancellable_on(queue, Cancellation::default(), task);
     }
-    /// Cancellation skips queued work and suppresses obsolete completions. Running
-    /// operations cooperate by capturing this token and checking it at safe points.
+    /// Cancellation skips queued work and checks again before result delivery.
+    /// Running operations cooperate by checking this token at safe points. Once
+    /// delivery starts, cancellation does not retract the result or undo effects;
+    /// clients still validate request identity where results can be superseded.
     pub fn task_cancellable_on(
         &mut self,
         queue: &'static str,
@@ -639,6 +641,9 @@ impl<M> Emitter<M> {
     pub fn new(f: impl Fn(M) + Send + Sync + 'static) -> Self {
         Self(Arc::new(f))
     }
+    /// Runtime subscription emitters apply bounded backpressure on this producer
+    /// thread. Do not hold a lock needed by the UI while sending. Cancellation
+    /// releases a waiting sender and discards obsolete subscription messages.
     pub fn send(&self, message: M) {
         (self.0)(message)
     }

@@ -1,0 +1,34 @@
+{
+  "source_commit": "176c3e0768f394983697f1d534533a898fc55f87",
+  "rust_unit_tests": 122,
+  "python_tests": 52,
+  "native": {
+    "launcher_input": true,
+    "application_survives_shell_restart": true,
+    "secure_lock_unlock": true,
+    "live_wallhaven_and_alpha_coders_subscriptions": true,
+    "palette_selection_persistence_and_greeter_copy": true,
+    "original_preferences_and_wallpaper_restored": true
+  },
+  "binary_sha256": {
+    "lucent-desktop": "b936d1b6c5fcd00c308c5d56358ef8d2521b59248d61a01b2d0b9f7a02eebc73",
+    "lucent-cli": "863c3e260b95f2b0694c01e4021e886396879046028094778dfc9cb51c565d19",
+    "lucent-menu": "3c1e3cc1a17abcd9b0b30e78776894b58c6668629044a8cd61e299d86e35c84a",
+    "lucent-lock": "4d7f7e932e55f6d9d2cddf6af377106bd1f03abd784233d11920482bfa6265d9",
+    "lucent-greeter": "d25d03e5d3bc4f760457c69788ffa094fbb3782726edbab4782d8b2bbcc76fb8",
+    "lucent-polkit": "e2cb45cc9ca1502a990eea129060c96d4ba035066f8177eb8602b1273c840cb9"
+  },
+  "runtime_limits": {
+    "waiting_messages": 64,
+    "live_subscription_workers_including_stopping": 64,
+    "messages_per_calloop_dispatch_max": 65
+  },
+  "hardware_correctness_report": "lucent-hardware-visual-check.json",
+  "limits": [
+    "Count bounds do not bound arbitrary client message bytes or promise producer fairness",
+    "Cancellation is cooperative; completed subscription IDs remain registered until removed",
+    "Accepted effect delivery is not retracted; client intent and transaction checks remain necessary",
+    "Hardware visual differences remain open; software-driver baselines were not changed",
+    "Root greeter remains on its earlier wallpaper-transaction binary and interactive login was not repeated"
+  ]
+}

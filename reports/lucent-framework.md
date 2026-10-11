@@ -537,3 +537,31 @@ opening's maximum submission interval was 24.25 ms; warm maxima ranged from
 18.26 to 21.18 ms. These two runs show variability and are not a controlled
 estimate of profiler overhead or evidence that the earlier hitch is fixed.
 The VM was left ready in normal mode with its previous idle preference restored.
+
+
+### Bounded runtime delivery
+
+[Delivery verification](measurements/lucent-bounded-delivery.json) records the
+source and deployed user-binary hashes. Runtime ingress holds 64 waiting messages;
+overloaded producers wait outside the UI thread. Cancellation releases that wait
+and invalidates queued events from a removed/replaced subscription. At most 64
+subscription bodies may remain live, including streams still stopping. Each
+calloop dispatch processes at most 65 values before yielding. These are count
+bounds, not payload-byte or producer-fairness guarantees. Already accepted effect
+delivery still requires the client's intent/transaction checks.
+
+122 Rust tests, 52 Python checks, Clippy, formatting and documentation checks
+passed. Tests exercise actual calloop wakeups/batches, cancellation without receiver
+progress, stale queued generations, worker limits, duplicate IDs and panic
+reporting. Native release checks passed for launcher/restart/application survival,
+secure lock/unlock, live Wallhaven/Alpha Coders subscriptions, palette persistence
+and login-copy synchronization. Original preferences and wallpaper were restored.
+
+The additional [hardware renderer check](measurements/lucent-hardware-visual-check.json)
+passed five focused Vulkan tests on Radeon/RADV, covering resources, clipping,
+shadows and profiling. Against unchanged software-driver visual baselines, 80 of
+148 cases passed and 68 exceeded the local pixel tolerance. An inspected narrow
+launcher differed at 20 pixels, including square-corner alpha and text edges.
+Renderer/shader/fixtures were unchanged in this delivery milestone. Baselines were
+not relaxed or regenerated. Cross-driver coverage needs a separate correction;
+these offscreen debug checks do not measure native hardware desktop pacing.
