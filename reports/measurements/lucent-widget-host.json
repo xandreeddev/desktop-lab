@@ -1,0 +1,57 @@
+{
+  "source_commit": "5d8a394b2f29a85c72ba4023aad1b796fe3a3ec4",
+  "rust_unit_tests": 141,
+  "python_tests": 54,
+  "unchanged_vulkan_visual_comparisons": 148,
+  "native": {
+    "widgets": {
+      "checks": [
+        "native_calendar_controls_repaint",
+        "native_note_edit_and_persistence",
+        "native_timer_start_pause_reset",
+        "native_drag_grid_and_release_snap",
+        "native_selector_and_ipc_share_widget_identity",
+        "notes_and_positions_survive_restart"
+      ],
+      "preferences_and_workspace_restored": true,
+      "no_existing_apps_closed": true
+    },
+    "launcher": {
+      "checks": [
+        "panel_and_rows_on_shell_grid",
+        "equal_launcher_insets",
+        "uniform_row_pitch",
+        "input_on_shell_grid",
+        "top_bar_clock_on_shell_grid",
+        "keyboard_selection_without_hover",
+        "visible_rows_unclipped",
+        "search_focus_visible",
+        "tab_all_five_sections",
+        "shift_tab_reverse",
+        "widget_keyboard_selection",
+        "search_focus_restored_after_mode_switch"
+      ],
+      "settings_unchanged": true
+    },
+    "runtime": {
+      "launcher_input": true,
+      "independent_application_service": true,
+      "application_survives_shell_restart": true,
+      "restart_restores_background": true,
+      "native_lock_unlock": true,
+      "surface_fault_injection": false,
+      "notes": "Native VM checks. Presentation recovery policy is unit-tested; driver fault injection is not covered here."
+    },
+    "final_normal_desktop_ready": true
+  },
+  "binary_sha256": {
+    "lucent-desktop": "d646317f5076c17793e166e1e0e1f621b692d9c9a08e77215d5e42f58e935e40"
+  },
+  "limits": [
+    "This client ownership refactor does not claim a memory or frame-pacing improvement",
+    "The small framework widget registry is constructed from the catalog for each borrowed view context; it does not cache snapshots or adapters",
+    "Settings-save overload and failure ownership remain a separate documented requirement",
+    "Per-output widget layouts, resizing and richer widget features remain open",
+    "Only the changed desktop binary was deployed; the root greeter and interactive login were not updated or retested"
+  ]
+}

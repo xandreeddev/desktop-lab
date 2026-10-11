@@ -181,7 +181,8 @@
         "112 Rust tests, 49 Python checks, 148 unchanged visual comparisons and focused native calendar/drag/save/restart/invalid-settings checks passed",
         "Launcher private state, messages, event routing, selector views and panel motion extracted into a child controller; borrowed inputs and typed intents preserve adapter/use-case ownership",
         "126 Rust tests and 53 Python checks pass, including child behavior, exact motion restart and child/root import guard; 148 existing Vulkan comparisons pass without baseline changes",
-        "Native keyboard, custom size/presets/restart, live wallpaper providers, palette selection, application survival and secure lock/unlock passed; original preferences/wallpaper restored. Widget coordination extraction remains open."
+        "Native keyboard, custom size/presets/restart, live wallpaper providers, palette selection, application survival and secure lock/unlock passed; original preferences/wallpaper restored. Widget coordination extraction remains open.",
+        "Widget drag/calendar/timer state moved into a private child host with borrowed input and typed parent intents. One catalog supplies selector entries, IPC validation, geometry and compiled views. Child behavior, boundaries, unchanged Vulkan visuals and native input/persistence checks passed."
       ]
     },
     {
@@ -531,17 +532,22 @@
     },
     {
       "milestone": "widget-host",
-      "status": "in_progress",
+      "status": "locally_verified",
       "checks": [
         "141 Rust unit tests and 54 Python checks passed",
         "Clippy, formatting and Astro check/build passed",
-        "148 Vulkan visual comparisons passed without baseline changes"
+        "148 Vulkan visual comparisons passed without baseline changes",
+        "Desktop release build and reversible native desktop-binary deployment passed",
+        "Native notes persistence, timer start/pause/reset, calendar input, drag grid/snapping and widget selection passed",
+        "Notes and positions survived restart; original preferences and workspace restored",
+        "Launcher modes/focus/grid and application survival checks passed",
+        "Native secure lock/unlock passed; final normal desktop ready"
       ],
       "pending": [
-        "Native deployment, widget interaction and restoration",
         "Exact-head CI, protected-main merge and Pages",
         "Other requirement groups"
-      ]
+      ],
+      "source_commit": "5d8a394b2f29a85c72ba4023aad1b796fe3a3ec4"
     }
   ]
 }

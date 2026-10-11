@@ -44,9 +44,13 @@ def suite():
         click('reset-layout')
         cli('launcher', 'close')
         eventually(lambda: not client()['positions'], 'Layout reset failed')
-        click('calendar-previous')
-        click('calendar-next')
-        checks.append('native_calendar_controls_receive_input')
+        def widget_frames():
+            return next(s['frames'] for s in v['inspect']()['surfaces'] if s['id'] == 'widgets')
+        for button in ('calendar-previous', 'calendar-next'):
+            before = widget_frames()
+            click(button)
+            eventually(lambda: widget_frames() > before, 'Calendar control did not repaint')
+        checks.append('native_calendar_controls_repaint')
 
         click('notes-input')
         v['text'](' widget test')
