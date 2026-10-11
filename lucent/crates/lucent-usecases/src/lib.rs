@@ -63,18 +63,19 @@ pub fn activate_application(
 /// Align a released widget to a client-supplied logical spacing grid.
 /// Screen-edge clamping remains the responsibility of `move_widget`.
 pub fn snap_placement(placement: Placement, step: f32) -> Result<Placement> {
-    if !step.is_finite() || step <= 0. || !placement.x.is_finite() || !placement.y.is_finite() {
+    if !step.is_finite() || step <= 0. {
         return Err(DomainError::Invalid(
-            "Finite coordinates and a positive grid step are required".into(),
+            "A finite positive grid step is required".into(),
         ));
     }
-    Ok(Placement {
-        x: (placement.x / step).round() * step,
-        y: (placement.y / step).round() * step,
-    })
+    // Wider intermediates avoid overflow for a large coordinate / small grid.
+    // The resulting f32 value must still satisfy Placement's finite invariant.
+    let snap = |value: f32| ((f64::from(value) / f64::from(step)).round() * f64::from(step)) as f32;
+    Placement::new(snap(placement.x()), snap(placement.y()))
 }
 
-/// Reject invalid coordinates, clamp to the usable output, and retain stable widget IDs.
+/// Clamp a valid position to client-supplied bounds. Validate every external
+/// dimension before mutation, so NaN/negative extents cannot poison saved state.
 pub fn move_widget(
     settings: &mut DesktopSettings,
     id: &str,
@@ -82,18 +83,19 @@ pub fn move_widget(
     size: (f32, f32),
     viewport: (f32, f32),
 ) -> Result<()> {
-    if !placement.x.is_finite() || !placement.y.is_finite() {
+    if [size.0, size.1, viewport.0, viewport.1]
+        .iter()
+        .any(|value| !value.is_finite() || *value < 0.)
+    {
         return Err(DomainError::Invalid(
-            "Widget coordinates must be finite".into(),
+            "Widget and output dimensions must be finite and non-negative".into(),
         ));
     }
-    settings.positions.insert(
-        id.into(),
-        Placement {
-            x: placement.x.clamp(0.0, (viewport.0 - size.0).max(0.0)),
-            y: placement.y.clamp(0.0, (viewport.1 - size.1).max(0.0)),
-        },
-    );
+    let position = Placement::new(
+        placement.x().clamp(0., (viewport.0 - size.0).max(0.)),
+        placement.y().clamp(0., (viewport.1 - size.1).max(0.)),
+    )?;
+    settings.positions.insert(id.into(), position);
     Ok(())
 }
 pub fn toggle_widget(settings: &mut DesktopSettings, id: &str) {
@@ -118,13 +120,6 @@ pub fn validate_settings(settings: &DesktopSettings) -> Result<()> {
 
     if settings.version != 1 {
         return Err(DomainError::Invalid("Unsupported settings version".into()));
-    }
-    if settings
-        .positions
-        .values()
-        .any(|p| !p.x.is_finite() || !p.y.is_finite())
-    {
-        return Err(DomainError::Invalid("Non-finite widget position".into()));
     }
     if settings.launcher.width == Some(0) || settings.launcher.max_height == Some(0) {
         return Err(DomainError::Invalid(
@@ -242,13 +237,9 @@ mod tests {
         assert_eq!(Date::days_in_month(2000, 2), 29);
         assert_eq!(Date::days_in_month(2100, 2), 28);
         assert_eq!(
-            Date {
-                year: 2026,
-                month: 10,
-                day: 8,
-                weekday: 3
-            }
-            .first_weekday(),
+            Date::new(2026, 10, 8)
+                .expect("valid calendar date")
+                .first_weekday(),
             3
         );
     }
@@ -258,21 +249,43 @@ mod tests {
         move_widget(
             &mut s,
             "clock",
-            Placement { x: 5000., y: -5. },
+            Placement::new(5000., -5.).unwrap(),
             (240., 240.),
             (1920., 1080.),
         )
         .unwrap();
-        assert_eq!(s.positions["clock"], Placement { x: 1680., y: 0. });
+        assert_eq!(s.positions["clock"], Placement::new(1680., 0.).unwrap());
         assert!(
             move_widget(
                 &mut s,
                 "clock",
-                Placement { x: f32::NAN, y: 0. },
-                (1., 1.),
+                Placement::new(1., 1.).unwrap(),
+                (f32::NAN, 1.),
                 (2., 2.)
             )
             .is_err()
         );
+    }
+    #[test]
+    fn invalid_output_bounds_do_not_mutate_layout_and_extreme_snaps_stay_finite() {
+        let point = Placement::new(10., 20.).unwrap();
+        let mut settings = DesktopSettings::default();
+        settings.positions.insert("clock".into(), point);
+        for (size, viewport) in [
+            ((f32::NAN, 1.), (2., 2.)),
+            ((1., 1.), (f32::INFINITY, 2.)),
+            ((-1., 1.), (2., 2.)),
+            ((1., 1.), (2., -1.)),
+        ] {
+            let before = settings.clone();
+            assert!(move_widget(&mut settings, "clock", point, size, viewport).is_err());
+            assert_eq!(settings, before);
+        }
+        let extreme = Placement::new(f32::MAX, -f32::MAX).unwrap();
+        assert_eq!(snap_placement(extreme, f32::from_bits(1)).unwrap(), extreme);
+        assert!(snap_placement(extreme, f32::MAX * 0.65).is_err());
+        for step in [0., -1., f32::NAN, f32::INFINITY] {
+            assert!(snap_placement(point, step).is_err());
+        }
     }
 }

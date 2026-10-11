@@ -27,12 +27,7 @@ impl SettingsPort for Fake {
 impl ClockPort for Fake {
     fn now(&self) -> ClockSnapshot {
         ClockSnapshot {
-            date: Date {
-                year: 2026,
-                month: 1,
-                day: 15,
-                weekday: 3,
-            },
+            date: Date::new(2026, 1, 15).expect("valid calendar date"),
             hour: 10,
             minute: 24,
             unix_seconds: 1_768_472_640,

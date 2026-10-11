@@ -100,13 +100,16 @@ pub fn default_position(id: &str, viewport: (f32, f32)) -> Placement {
         ),
     };
     let size = widget_size(id);
-    let Placement { x, y } =
-        lucent_usecases::snap_placement(Placement { x, y }, component::widget_layout::GRID_STEP)
-            .expect("valid grid token and default placement");
-    Placement {
-        x: x.clamp(0., (viewport.0 - size.0).max(0.)),
-        y: y.clamp(0., (viewport.1 - size.1).max(0.)),
-    }
+    let position = lucent_usecases::snap_placement(
+        Placement::new(x, y).expect("finite viewport and design tokens"),
+        component::widget_layout::GRID_STEP,
+    )
+    .expect("valid grid token and default placement");
+    Placement::new(
+        position.x().clamp(0., (viewport.0 - size.0).max(0.)),
+        position.y().clamp(0., (viewport.1 - size.1).max(0.)),
+    )
+    .expect("finite clamped default position")
 }
 impl Desktop {
     /// Decorative geometry only: grid lines never enter the pointer input region.
@@ -158,8 +161,8 @@ impl Desktop {
                 Element::stack(vec![content])
                     .size(size.0, size.1)
                     .at(
-                        pos.x.clamp(0., (cx.width - size.0).max(0.)),
-                        pos.y.clamp(0., (cx.height - size.1).max(0.)),
+                        pos.x().clamp(0., (cx.width - size.0).max(0.)),
+                        pos.y().clamp(0., (cx.height - size.1).max(0.)),
                     )
                     .background(if id == "calendar" || id == "media" {
                         self.surface_color()
@@ -199,9 +202,9 @@ fn clock(d: &Desktop, _: &ViewContext) -> Element<Message> {
                     "Friday",
                     "Saturday",
                     "Sunday"
-                ][d.clock.date.weekday as usize],
-                d.clock.date.day,
-                months()[d.clock.date.month as usize - 1]
+                ][d.clock.date.weekday() as usize],
+                d.clock.date.day(),
+                months()[d.clock.date.month() as usize - 1]
             ),
             font::SMALL,
         )
@@ -229,27 +232,8 @@ fn months() -> [&'static str; 12] {
 }
 /// Advance a calendar month while preserving the real weekday of its first day.
 fn calendar_month(date: Date, offset: i32) -> (i32, u32, u32) {
-    let (mut year, mut month, mut first) = (date.year, date.month, date.first_weekday());
-    for _ in 0..offset.unsigned_abs() {
-        if offset > 0 {
-            first = (first + Date::days_in_month(year, month)) % 7;
-            if month == 12 {
-                year += 1;
-                month = 1;
-            } else {
-                month += 1;
-            }
-        } else {
-            if month == 1 {
-                year -= 1;
-                month = 12;
-            } else {
-                month -= 1;
-            }
-            first = (first + 7 - Date::days_in_month(year, month) % 7) % 7;
-        }
-    }
-    (year, month, first)
+    let month = date.month_start(offset).unwrap_or(date);
+    (month.year(), month.month(), month.first_weekday())
 }
 fn calendar(d: &Desktop, _: &ViewContext) -> Element<Message> {
     let date = d.clock.date;
@@ -304,7 +288,7 @@ fn calendar(d: &Desktop, _: &ViewContext) -> Element<Message> {
         } else {
             day
         };
-        let today = current && d.month_offset == 0 && day == date.day as i32;
+        let today = current && d.month_offset == 0 && day == date.day() as i32;
         let x = component::calendar::LEFT + (index % 7) as f32 * component::calendar::COLUMN_WIDTH;
         let y =
             component::calendar::DAYS_TOP + (index / 7) as f32 * component::calendar::ROW_HEIGHT;
@@ -660,12 +644,7 @@ mod tests {
     use super::*;
     #[test]
     fn month_navigation_crosses_year_and_leap_day() {
-        let date = Date {
-            year: 2024,
-            month: 3,
-            day: 1,
-            weekday: 4,
-        };
+        let date = Date::new(2024, 3, 1).expect("valid calendar date");
         assert_eq!(calendar_month(date, -1), (2024, 2, 3));
         assert_eq!(calendar_month(date, -3), (2023, 12, 4));
         assert_eq!(calendar_month(date, 10), (2025, 1, 2));

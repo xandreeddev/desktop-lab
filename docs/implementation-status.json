@@ -151,7 +151,7 @@
         "Token-supplied Shadow parameters replace shader styling constants; focused 1x/2x Vulkan test passed",
         "AppId construction/deserialization reject invalid desktop-file identities; settings compatibility and preservation tested",
         "Application window-class matching shared by use case and dock, avoiding empty identity matches",
-        "Further domain invariants and client component extraction remain open"
+        "Date and Placement invariants are implemented with constructor/deserialization coverage; native validation and larger client component extraction remain open"
       ]
     },
     {
@@ -325,7 +325,7 @@
     },
     {
       "milestone": "wallpaper-transactions",
-      "status": "locally_verified",
+      "status": "merged",
       "source_commit": "b54341c0be956da4d306d3541c0df56dcb057dfb",
       "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/11",
       "checks": [
@@ -334,13 +334,14 @@
         "Clippy, formatting, 457 tokens, 58 icons and Astro check/build passed",
         "Release build, immutable selection/native failure/restart/login-copy checks passed",
         "Live provider selection, palette persistence, launcher/application survival and secure lock/unlock passed",
-        "User binaries and root greeter updated atomically with rollback copies"
+        "User binaries and root greeter updated atomically with rollback copies",
+        "All six required checks, protected-main merge and Pages deployment passed"
       ],
       "pending": [
-        "Protected-main exact-head CI and merge",
         "Interactive login with the updated greeter executable",
         "Other requirement groups"
-      ]
+      ],
+      "merge_commit": "688506fd158ee843530efce2403c906d0ea7469e"
     }
   ]
 }

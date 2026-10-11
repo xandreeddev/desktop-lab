@@ -465,3 +465,20 @@ A later manual choice wins; extraction results also match the current asset. Sma
 previews copy only prepared mip levels via `ImageData::downsample`, so retaining a
 preview does not retain its full-resolution background allocation. No provider,
 selection or color policy enters the generic renderer.
+
+
+`Date` and `Placement` now enforce demonstrated domain invariants through private
+storage. `Date::new(year, month, day)` validates Gregorian dates and derives weekdays;
+`month_start(offset)` performs constant-time checked month arithmetic. No OS clock,
+chrono or renderer dependency enters the domain. The service adapter converts its
+already-valid calendar date; tests compare weekdays with chrono across positive and
+negative leap-year cycles.
+
+`Placement::new(x, y)` and Serde deserialization reject non-finite values while
+retaining the existing `{ "x": ..., "y": ... }` settings representation. Negative
+coordinates are valid domain values. The client still supplies grid tokens and
+output/widget bounds. `snap_placement` uses wider intermediates and rejects an
+unrepresentable result; `move_widget` validates dimensions before mutation. An invalid
+finished drag clears its temporary origin/grid and leaves the last valid position
+unchanged. LauncherSize and LaunchCommand remain records with boundary validation;
+these changes do not imply that every domain record is a validated value object.

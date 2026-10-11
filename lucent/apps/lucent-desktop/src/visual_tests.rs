@@ -11,12 +11,7 @@ fn fixture(count: usize, light: bool) -> Desktop {
     app.settings.light = light;
     app.viewport = (640., 580.);
     app.clock = ClockSnapshot {
-        date: Date {
-            year: 2026,
-            month: 1,
-            day: 15,
-            weekday: 3,
-        },
+        date: Date::new(2026, 1, 15).expect("valid calendar date"),
         hour: 10,
         minute: 24,
         unix_seconds: 1_768_472_640,
@@ -528,7 +523,7 @@ fn widget_drag_is_continuous_until_release_then_snaps_and_clamps() {
     app.viewport = (640., 580.);
     app.settings
         .positions
-        .insert("calendar".into(), Placement { x: 20., y: 110. });
+        .insert("calendar".into(), Placement::new(20., 110.).unwrap());
     let send = |app: &mut Desktop, finished| {
         app.update(
             Message::MoveWidget(
@@ -545,12 +540,12 @@ fn widget_drag_is_continuous_until_release_then_snaps_and_clamps() {
     send(&mut app, false);
     assert_eq!(
         app.settings.positions["calendar"],
-        Placement { x: 201., y: 183. }
+        Placement::new(201., 183.).unwrap()
     );
     send(&mut app, true);
     assert_eq!(
         app.settings.positions["calendar"],
-        Placement { x: 208., y: 176. }
+        Placement::new(208., 176.).unwrap()
     );
     assert!(app.drag_origins.is_empty());
     app.update(
@@ -566,9 +561,9 @@ fn widget_drag_is_continuous_until_release_then_snaps_and_clamps() {
     );
     assert_eq!(
         app.settings.positions["calendar"],
-        Placement { x: 370., y: 304. }
+        Placement::new(370., 304.).unwrap()
     );
-    assert!(lucent_usecases::snap_placement(Placement { x: 0., y: 0. }, 0.).is_err());
+    assert!(lucent_usecases::snap_placement(Placement::new(0., 0.).unwrap(), 0.).is_err());
 }
 #[test]
 fn drag_grid_matches_snap_spacing_and_never_captures_input() {
@@ -1639,4 +1634,80 @@ fn palette_library_and_failed_download_preserve_user_intent() {
     );
     assert_eq!(app.wallpaper.source_path(), "existing");
     assert_eq!(app.settings.palette.as_ref().unwrap().name, "Pearl");
+}
+
+#[test]
+fn invalid_drag_does_not_persist_positions_or_leave_grid_visible() {
+    let mut app = fixture(0, false);
+    app.settings_writable = true;
+    app.update(
+        Message::MoveWidget(
+            "calendar".into(),
+            DragEvent {
+                dx: 10.,
+                dy: 20.,
+                finished: false,
+            },
+        ),
+        &mut Effects::default(),
+    );
+    let position = app.settings.positions["calendar"];
+    let mut effects = Effects::default();
+    app.update(
+        Message::MoveWidget(
+            "calendar".into(),
+            DragEvent {
+                dx: f32::NAN,
+                dy: 0.,
+                finished: true,
+            },
+        ),
+        &mut effects,
+    );
+    assert_eq!(app.settings.positions["calendar"], position);
+    assert!(app.drag_origins.is_empty());
+    assert!(effects.tasks.is_empty());
+    assert!(app.error.contains("finite"));
+    assert!(effects.redraw.contains("widgets"));
+}
+#[test]
+fn calendar_navigation_handles_extreme_messages_without_overflow() {
+    let mut app = fixture(0, false);
+    for delta in [i32::MAX, i32::MAX, i32::MIN, i32::MIN] {
+        app.update(Message::Month(delta), &mut Effects::default());
+        assert!((-120..=120).contains(&app.month_offset));
+    }
+}
+
+#[test]
+fn invalid_settings_remain_visible_after_unrelated_successful_effects() {
+    let mut app = fixture(0, false);
+    let mut effects = Effects::default();
+    app.update(
+        Message::Loaded(
+            vec![],
+            Err(lucent_domain::DomainError::Invalid(
+                "invalid saved position".into(),
+            )),
+            vec![],
+            Ok(None),
+        ),
+        &mut effects,
+    );
+    while !effects.tasks.is_empty() {
+        let result = effects.tasks.remove(0).run();
+        app.update(result, &mut effects);
+    }
+    app.update(Message::Completed(Ok(())), &mut effects);
+    assert!(!app.settings_writable);
+    assert!(app.error_message().contains("invalid saved position"));
+    assert!(app.command("launcher size 800 600").is_err());
+    let inspected: serde_json::Value = serde_json::from_str(&app.inspect()).unwrap();
+    assert_eq!(inspected["settings_writable"], false);
+    assert!(
+        inspected["error"]
+            .as_str()
+            .unwrap()
+            .contains("invalid saved position")
+    );
 }
