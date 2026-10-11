@@ -52,6 +52,7 @@ use wgpu_handle::HasDisplayHandle;
 // Use the exact raw-window-handle version used by the renderer.
 use lucent_render::display_handle as wgpu_handle;
 mod effects;
+mod profiling;
 
 enum RuntimeEvent<M> {
     Message(M),
@@ -71,6 +72,7 @@ struct Native<M> {
     interaction: Interaction<M>,
     regions: Vec<api::Clip>,
     frame_times: std::collections::VecDeque<f64>,
+    profiles: profiling::History,
 }
 enum SurfaceRole {
     Layer(LayerSurface),
@@ -102,6 +104,7 @@ struct State<A: Application> {
     keyboard_surface: Option<String>,
     modifiers: Modifiers,
     epoch: Instant,
+    profile_frames: bool,
     exit: bool,
     error: Option<String>,
     handle: LoopHandle<'static, Self>,
@@ -189,6 +192,7 @@ fn run_inner<A: Application>(
         keyboard_surface: None,
         modifiers: Modifiers::default(),
         epoch: Instant::now(),
+        profile_frames: std::env::var_os("LUCENT_PROFILE_FRAMES").is_some_and(|value| value == "1"),
         exit: false,
         error: None,
         handle: handle.clone(),
@@ -342,6 +346,7 @@ impl<A: Application> State<A> {
                     interaction: Interaction::default(),
                     regions: vec![],
                     frame_times: Default::default(),
+                    profiles: Default::default(),
                 },
             );
         }
@@ -349,7 +354,23 @@ impl<A: Application> State<A> {
     }
     fn inspect(&self) -> String {
         let cache = self.gpu.cache_stats();
-        serde_json::json!({"gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id,"width":s.width,"height":s.height,"scale":s.scale,"buffer_width":s.width*s.scale,"buffer_height":s.height*s.scale,"frames":s.renderer.frames,"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)}).to_string()
+        let mut scene_images = BTreeMap::new();
+        if self.profile_frames {
+            for surface in self.surfaces.values() {
+                for primitive in &surface.scene.paint {
+                    if let lucent_ui::Paint::Image { data, .. } = primitive {
+                        scene_images.insert(data.cache_id(), data.bytes() as u64);
+                    }
+                }
+            }
+        }
+        let profile_memory = self.profile_frames.then(|| serde_json::json!({
+            "scene_image_payload_bytes": scene_images.values().sum::<u64>(),
+            "geometry_buffer_payload_bytes": self.surfaces.values().map(|s| s.renderer.buffer_payload_bytes()).sum::<u64>(),
+            "one_color_buffer_per_surface_bytes": self.surfaces.values().map(|s| s.renderer.single_surface_buffer_bytes()).sum::<u64>(),
+            "scope":"Prepared image payloads referenced by current scenes only; app caches excluded. GPU buffer values are requested payloads, not driver allocations. Actual surface buffer counts and total GPU memory are unknown."
+        }));
+        serde_json::json!({"profile_memory":profile_memory,"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id,"width":s.width,"height":s.height,"scale":s.scale,"buffer_width":s.width*s.scale,"buffer_height":s.height*s.scale,"frames":s.renderer.frames,"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"frame_profiles":s.profiles.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)}).to_string()
     }
     fn message(&mut self, message: A::Message, qh: &QueueHandle<Self>) {
         let mut effects = Effects {
@@ -453,6 +474,7 @@ impl<A: Application> State<A> {
                         interaction: Interaction::default(),
                         regions: vec![],
                         frame_times: std::collections::VecDeque::new(),
+                        profiles: Default::default(),
                     },
                 );
             }
@@ -522,15 +544,21 @@ impl<A: Application> State<A> {
             if !s.configured || !s.demand.begin() {
                 continue;
             }
+            let total = self.profile_frames.then(Instant::now);
+            let started = self.profile_frames.then(Instant::now);
             let tree = self.app.view(&ViewContext {
                 surface: s.spec.id,
                 width: s.width as f32,
                 height: s.height as f32,
                 now,
             });
+            let view_ms = profiling::elapsed(started);
+            let started = self.profile_frames.then(Instant::now);
             let scene =
                 self.layout
                     .build(&tree, s.width as f32, s.height as f32, &s.interaction, now);
+            let layout_ms = profiling::elapsed(started);
+            let started = self.profile_frames.then(Instant::now);
             let focus = s.interaction.focus.clone();
             s.interaction.synchronize(&scene);
             if focus != s.interaction.focus {
@@ -565,6 +593,8 @@ impl<A: Application> State<A> {
             }
             let surface = s.role.wl_surface();
             surface.set_buffer_scale(s.scale as i32);
+            let input_ms = profiling::elapsed(started);
+            s.renderer.enable_profiling(self.profile_frames);
             match s
                 .renderer
                 .render(s.width, s.height, s.scale, &scene.paint, || {
@@ -598,15 +628,28 @@ impl<A: Application> State<A> {
                     continue;
                 }
             }
+            let started = self.profile_frames.then(Instant::now);
             if self.app.animating(s.spec.id, now) || s.interaction.animating(now) {
                 s.demand.invalidate();
             }
-            s.frame_times
-                .push_back(self.epoch.elapsed().as_secs_f64() * 1000.);
-            if s.frame_times.len() > 120 {
+            let submitted_ms = self.epoch.elapsed().as_secs_f64() * 1000.;
+            s.frame_times.push_back(submitted_ms);
+            if s.frame_times.len() > profiling::MAX_FRAMES {
                 s.frame_times.pop_front();
             }
             s.scene = scene;
+            if let Some(render) = s.renderer.last_profile {
+                s.profiles.push(profiling::FrameProfile {
+                    frame: s.renderer.frames,
+                    submitted_ms,
+                    view_ms,
+                    layout_ms,
+                    input_ms,
+                    bookkeeping_ms: profiling::elapsed(started),
+                    total_ms: profiling::elapsed(total),
+                    render,
+                });
+            }
         }
     }
     fn id_for(&self, surface: &wl_surface::WlSurface) -> Option<String> {

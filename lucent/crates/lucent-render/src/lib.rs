@@ -13,6 +13,8 @@ pub use wgpu::rwh as display_handle;
 use wgpu::{rwh::*, *};
 mod cache;
 mod presentation;
+mod profiling;
+pub use profiling::{PaintProfile, RenderProfile, ResourceProfile};
 mod raster;
 pub use cache::CacheStats;
 use cache::ResourceCache;
@@ -181,7 +183,13 @@ impl Gpu {
     pub fn cache_stats(&self) -> CacheStats {
         self.cache.borrow().stats()
     }
-    fn texture(&self, levels: &[lucent_api::ImageLevel]) -> Rc<TextureResource> {
+    fn texture(
+        &self,
+        levels: &[lucent_api::ImageLevel],
+        profile: &mut ResourceProfile,
+        enabled: bool,
+    ) -> Rc<TextureResource> {
+        let started = profiling::start(enabled);
         let first = &levels[0];
         let (width, height) = (first.width, first.height);
         let texture = self.device.create_texture(&TextureDescriptor {
@@ -234,49 +242,83 @@ impl Gpu {
                 },
             ],
         });
-        Rc::new(TextureResource {
+        let texture = Rc::new(TextureResource {
             group,
             width: width as f32,
             height: height as f32,
             _texture: texture,
             bytes: levels.iter().map(|level| level.rgba.len() as u64).sum(),
-        })
+        });
+        if enabled {
+            profile.texture_upload += profiling::elapsed(started);
+            profile.texture_upload_bytes += texture.bytes;
+        }
+        texture
     }
-    fn white(&self) -> Rc<TextureResource> {
+    fn white(&self, profile: &mut ResourceProfile, enabled: bool) -> Rc<TextureResource> {
         if let Some(v) = self.white.borrow().as_ref() {
             return v.clone();
         }
-        let v = self.texture(&[lucent_api::ImageLevel {
-            width: 1,
-            height: 1,
-            rgba: vec![255; 4],
-        }]);
+        let v = self.texture(
+            &[lucent_api::ImageLevel {
+                width: 1,
+                height: 1,
+                rgba: vec![255; 4],
+            }],
+            profile,
+            enabled,
+        );
         *self.white.borrow_mut() = Some(v.clone());
         v
     }
-    fn image(&self, data: &lucent_api::ImageData) -> Rc<TextureResource> {
+    fn image(
+        &self,
+        data: &lucent_api::ImageData,
+        profile: &mut ResourceProfile,
+        enabled: bool,
+    ) -> Rc<TextureResource> {
         let key = format!("image:{}", data.cache_id());
         if let Some(v) = self.cache.borrow_mut().get(&key) {
             return v;
         }
-        let texture = self.texture(data.levels());
+        if enabled {
+            profile.image_misses += 1;
+        }
+        let texture = self.texture(data.levels(), profile, enabled);
         self.cache
             .borrow_mut()
             .insert(key, texture.clone(), texture.bytes);
         texture
     }
-    fn text(&self, text: &str, size: f32, scale: u32, face: usize) -> Rc<TextureResource> {
+    fn text(
+        &self,
+        text: &str,
+        size: f32,
+        scale: u32,
+        face: usize,
+        profile: &mut ResourceProfile,
+        enabled: bool,
+    ) -> Rc<TextureResource> {
         let key = format!("text:{face}:{size:.3}:{scale}:{text}");
         let font = self.fonts.get(face).unwrap_or(&self.fonts[0]);
         if let Some(v) = self.cache.borrow_mut().get(&key) {
             return v;
         }
+        let started = profiling::start(enabled);
         let (pixels, width, height) = raster::text(font, text, size, scale);
-        let texture = self.texture(&[lucent_api::ImageLevel {
-            width,
-            height,
-            rgba: pixels,
-        }]);
+        if enabled {
+            profile.text_raster += profiling::elapsed(started);
+            profile.text_misses += 1;
+        }
+        let texture = self.texture(
+            &[lucent_api::ImageLevel {
+                width,
+                height,
+                rgba: pixels,
+            }],
+            profile,
+            enabled,
+        );
         self.cache
             .borrow_mut()
             .insert(key, texture.clone(), texture.bytes);
@@ -294,6 +336,8 @@ pub struct Canvas {
     resources: Vec<Rc<TextureResource>>,
     clips: Buffer,
     clip_capacity: usize,
+    profiling: bool,
+    last_profile: Option<PaintProfile>,
 }
 impl Canvas {
     pub fn new(gpu: Rc<Gpu>) -> Self {
@@ -338,7 +382,13 @@ impl Canvas {
             resources: Vec::new(),
             clips,
             clip_capacity: 1,
+            profiling: false,
+            last_profile: None,
         }
+    }
+    /// Requested geometry-buffer payload, excluding driver allocation overhead.
+    pub fn buffer_payload_bytes(&self) -> u64 {
+        self.capacity as u64 * 96 + self.clip_capacity as u64 * 32 + 16
     }
     pub fn paint(
         &mut self,
@@ -348,6 +398,9 @@ impl Canvas {
         scale: u32,
         paint: &[Paint],
     ) {
+        let started = profiling::start(self.profiling);
+        let mut profile = PaintProfile::default();
+        self.last_profile = None;
         let mut records = Vec::with_capacity(paint.len());
         let mut textures = Vec::with_capacity(paint.len());
         let mut clip_records = Vec::<[f32; 8]>::new();
@@ -359,20 +412,44 @@ impl Canvas {
                     color,
                     radius,
                     width,
-                } => (*rect, clip, *color, *radius, 3., *width, self.gpu.white()),
+                } => (
+                    *rect,
+                    clip,
+                    *color,
+                    *radius,
+                    3.,
+                    *width,
+                    self.gpu.white(&mut profile.resources, self.profiling),
+                ),
                 Paint::Shape {
                     rect,
                     clip,
                     color,
                     radius,
-                } => (*rect, clip, *color, *radius, 0., 0., self.gpu.white()),
+                } => (
+                    *rect,
+                    clip,
+                    *color,
+                    *radius,
+                    0.,
+                    0.,
+                    self.gpu.white(&mut profile.resources, self.profiling),
+                ),
                 Paint::Shadow {
                     rect,
                     clip,
                     color,
                     radius,
                     blur,
-                } => (*rect, clip, *color, *radius, 2., *blur, self.gpu.white()),
+                } => (
+                    *rect,
+                    clip,
+                    *color,
+                    *radius,
+                    2.,
+                    *blur,
+                    self.gpu.white(&mut profile.resources, self.profiling),
+                ),
                 Paint::Image {
                     rect,
                     clip,
@@ -388,7 +465,7 @@ impl Canvas {
                     *radius,
                     1.,
                     0.,
-                    self.gpu.image(data),
+                    self.gpu.image(data, &mut profile.resources, self.profiling),
                 ),
                 Paint::Text {
                     rect,
@@ -402,7 +479,14 @@ impl Canvas {
                     if text.is_empty() {
                         continue;
                     }
-                    let texture = self.gpu.text(text, *size, scale, *face);
+                    let texture = self.gpu.text(
+                        text,
+                        *size,
+                        scale,
+                        *face,
+                        &mut profile.resources,
+                        self.profiling,
+                    );
                     let w = texture.width / scale as f32;
                     let h = texture.height / scale as f32;
                     let x = rect.x
@@ -531,6 +615,8 @@ impl Canvas {
             .flat_map(|f| f.to_ne_bytes())
             .collect();
         self.gpu.queue.write_buffer(&self.viewport, 0, &view_bytes);
+        profile.prepare = profiling::elapsed(started);
+        let started = profiling::start(self.profiling);
         let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
         {
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
@@ -553,11 +639,18 @@ impl Canvas {
                 pass.draw(0..6, i as u32..i as u32 + 1);
             }
         }
-        self.gpu.queue.submit([encoder.finish()]);
+        let command = encoder.finish();
+        profile.encode = profiling::elapsed(started);
+        let started = profiling::start(self.profiling);
+        self.gpu.queue.submit([command]);
+        profile.submit = profiling::elapsed(started);
+        let started = profiling::start(self.profiling);
         // Keep each surface's current scene resident, including while other
         // surfaces redraw. Replacing the scene releases its obsolete references.
         self.resources = textures;
         self.gpu.cache.borrow_mut().trim();
+        profile.retire = profiling::elapsed(started);
+        self.last_profile = self.profiling.then_some(profile);
     }
     /// Return premultiplied RGBA pixels at `width*scale` by `height*scale`.
     pub fn snapshot(
@@ -651,6 +744,52 @@ impl Drop for Canvas {
 mod resource_tests {
     use super::*;
     use lucent_api::{Color, ImageData};
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn frame_profiling_distinguishes_cold_uploads_from_warm_draws() {
+        let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
+        let mut canvas = Canvas::new(gpu);
+        let image = Arc::new(ImageData::from_rgba("profile", 8, 8, vec![255; 256]).unwrap());
+        let rect = Rect::new(0., 0., 16., 16.);
+        let paint = [
+            Paint::Shape {
+                rect,
+                clip: rect.into(),
+                color: Color::hex(0xffffff),
+                radius: 0.,
+            },
+            Paint::Image {
+                rect,
+                clip: rect.into(),
+                data: image.clone(),
+                uv: Rect::new(0., 0., 1., 1.),
+                radius: 0.,
+                opacity: 1.,
+                tint: Color::hex(0xffffff),
+            },
+        ];
+        canvas.profiling = true;
+        let cold_pixels = canvas.snapshot(16, 16, 1, &paint).unwrap();
+        let cold = canvas.last_profile.unwrap();
+        assert_eq!(cold.resources.image_misses, 1);
+        assert_eq!(
+            cold.resources.texture_upload_bytes,
+            image.bytes() as u64 + 4
+        );
+        assert!(cold.resources.texture_upload <= cold.prepare);
+        assert_eq!(cold.resources.text_raster, Duration::ZERO);
+        assert!(canvas.buffer_payload_bytes() >= 16 + 96 * 2 + 32);
+        let warm_pixels = canvas.snapshot(16, 16, 1, &paint).unwrap();
+        let warm = canvas.last_profile.unwrap();
+        assert_eq!(warm.resources.image_misses, 0);
+        assert_eq!(warm.resources.texture_upload_bytes, 0);
+        assert_eq!(warm.resources.texture_upload, Duration::ZERO);
+        assert_eq!(cold_pixels, warm_pixels);
+        canvas.profiling = false;
+        assert_eq!(canvas.snapshot(16, 16, 1, &paint).unwrap(), cold_pixels);
+        assert!(canvas.last_profile.is_none());
+    }
 
     #[test]
     #[ignore = "requires a Vulkan driver"]
@@ -858,6 +997,7 @@ pub struct Renderer {
     reconfigure: bool,
     recovery: Recovery,
     pub frames: u64,
+    pub last_profile: Option<RenderProfile>,
 }
 /// A skipped presentation has no compositor callback; the runtime must schedule a retry.
 #[derive(Debug, PartialEq, Eq)]
@@ -923,7 +1063,23 @@ impl Renderer {
             reconfigure: true,
             recovery: Recovery::default(),
             frames: 0,
+            last_profile: None,
         })
+    }
+    pub fn buffer_payload_bytes(&self) -> u64 {
+        self.canvas.buffer_payload_bytes()
+    }
+    /// Color payload of one configured surface buffer. The driver determines how
+    /// many buffers it actually allocates; this is not total swapchain/GPU memory.
+    pub fn single_surface_buffer_bytes(&self) -> u64 {
+        u64::from(self.config.width) * u64::from(self.config.height) * 4
+    }
+    /// Disabled by default. Enabling records CPU calls for successful presentations.
+    pub fn enable_profiling(&mut self, enabled: bool) {
+        self.canvas.profiling = enabled;
+        if !enabled {
+            self.last_profile = None;
+        }
     }
     pub fn render(
         &mut self,
@@ -933,6 +1089,10 @@ impl Renderer {
         paint: &[Paint],
         before_present: impl FnOnce(),
     ) -> Result<RenderOutcome, Error> {
+        let enabled = self.canvas.profiling;
+        let total = profiling::start(enabled);
+        let mut profile = RenderProfile::default();
+        self.last_profile = None;
         if let Some(error) = self
             .gpu
             .device_failure
@@ -949,12 +1109,15 @@ impl Renderer {
         if physical.0 == 0 || physical.1 == 0 {
             return Ok(RenderOutcome::RetryAfter(self.recovery.retry()));
         }
+        let started = profiling::start(enabled);
         if self.reconfigure || self.config.width != physical.0 || self.config.height != physical.1 {
             self.config.width = physical.0;
             self.config.height = physical.1;
             self.surface.configure(&self.gpu.device, &self.config);
             self.reconfigure = false;
         }
+        profile.configure = profiling::elapsed(started);
+        let started = profiling::start(enabled);
         let frame = match self.surface.get_current_texture() {
             CurrentSurfaceTexture::Success(frame) => frame,
             CurrentSurfaceTexture::Suboptimal(frame) => {
@@ -984,6 +1147,7 @@ impl Renderer {
                 return Ok(RenderOutcome::RetryAfter(self.recovery.retry()));
             }
         };
+        profile.acquire = profiling::elapsed(started);
         self.canvas.paint(
             &frame.texture.create_view(&Default::default()),
             width,
@@ -991,9 +1155,14 @@ impl Renderer {
             scale,
             paint,
         );
+        profile.paint = self.canvas.last_profile.unwrap_or_default();
+        let started = profiling::start(enabled);
         // Request a Wayland callback only when a buffer will actually be committed.
         before_present();
         self.gpu.queue.present(frame);
+        profile.present = profiling::elapsed(started);
+        profile.total = profiling::elapsed(total);
+        self.last_profile = enabled.then_some(profile);
         self.frames += 1;
         self.recovery.presented();
         Ok(RenderOutcome::Presented)
