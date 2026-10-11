@@ -1,0 +1,44 @@
+{
+  "scope": "Native audio adapter and existing top-bar controls; full audio panel remains unfinished",
+  "source_commit": "b8107121c8103257b27ffe57989106a9a49bb201",
+  "binary": {
+    "name": "lucent-desktop",
+    "profile": "release",
+    "sha256": "7bedf697361bb7443abd0329171c589384465f5909847e34e242f8e4546ba688"
+  },
+  "validation": {
+    "rust": "182 workspace tests plus the subsequently added bounded-admission test and service suite pass",
+    "audio_protocol_tests": 2,
+    "python_checks": 60,
+    "formatting": "passed",
+    "clippy": "passed",
+    "astro_pages": 13,
+    "astro_links": 487,
+    "visual_regressions": "software Vulkan, 160.81 seconds, no golden or tolerance changes",
+    "native": [
+      "native_default_policy_and_external_volume_event",
+      "real_pointer_mute_and_unmute",
+      "desktop_restart_restores_audio_observation",
+      "owned_fixture_removed_and_original_audio_restored"
+    ]
+  },
+  "native_environment": {
+    "allocated_memory_mib": 3072,
+    "vcpus": 4,
+    "output_pixels": [
+      1920,
+      1080
+    ],
+    "scale": 1,
+    "render_backend": "software Vulkan"
+  },
+  "deployment": "Only the user desktop binary was replaced through an atomic rename with a preserved rollback binary. Login and lock binaries were not replaced. Existing native greeter sign-in reached the desktop. The temporary audio output was removed and original default output/channel volumes/mute state restored.",
+  "limitations": [
+    "Full audio control-center panel and drag-command coalescing remain unfinished",
+    "Stream route validation and native calls exist, but live playback/capture routing was not exercised",
+    "Private protocol tests supply default-device policy explicitly; the VM separately verified its real default-output policy",
+    "Physical sound, device profiles/ports and hardware behavior remain unverified",
+    "No fresh comparative RSS/CPU or hardware frame-pacing measurement",
+    "Exact-head CI, PR review and merge remain pending"
+  ]
+}

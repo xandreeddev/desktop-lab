@@ -212,8 +212,8 @@
       ],
       "progress": [
         "Native audio domain values/port, adapter-owned libpulse event loop, bounded commands, reconnect and explicit client observation state implemented; top bar no longer polls wpctl.",
-        "Pure control policy, identity/bounds/balance tests and private PipeWire protocol/cancellation tests pass. Full audio panel, live stream-routing, physical hardware and native desktop deployment validation remain open.",
-        "182 workspace tests plus the new bounded-admission unit check, two isolated audio protocol tests, workspace Clippy, 60 Python checks, software-Vulkan desktop visual regressions (160.81 s), and Astro checks/link validation passed. No visual goldens or tolerances changed. Native guest deployment validation remains pending."
+        "Pure control policy, identity/bounds/balance tests and private PipeWire protocol/cancellation tests pass. Full audio panel, live stream-routing, physical hardware and remaining hardware validation remain open.",
+        "182 workspace tests plus the new bounded-admission unit check, two isolated audio protocol tests, workspace Clippy, 60 Python checks, software-Vulkan desktop visual regressions (160.81 s), and Astro checks/link validation passed. No visual goldens or tolerances changed. Native guest validation also passes: actual default-output policy, external volume events, pointer mute/unmute and desktop restart; original audio settings restored. See reports/measurements/lucent-audio-service.json."
       ]
     },
     {
@@ -773,15 +773,18 @@
         "Validated pure audio values, default-output keyboard policy, and client loading/ready/unavailable state",
         "Device identity, channel balance, route validation, bounds and bounded command admission unit tests",
         "Isolated PipeWire tests: output/input controls, default preference requests with explicit policy fixture, external events, removal/reconnect, idle observation, shutdown and cancelled callback storage",
-        "Workspace Rust tests, Clippy, Python checks, unchanged software-Vulkan visual baselines and Astro build/link checks"
+        "Workspace Rust tests, Clippy, Python checks, unchanged software-Vulkan visual baselines and Astro build/link checks",
+        "Release deployment to 3 GiB/four-vCPU VM; real default-output policy, external volume events, native bar clicks and desktop restart passed; temporary output removed and original audio restored"
       ],
       "pending": [
-        "Native guest deployment and live application stream-routing validation",
+        "Live application stream-routing validation",
         "Control-center child, sliders and bounded/coalesced drag commands",
         "Physical audio devices, card profiles/ports and hardware behavior",
         "Exact-head CI, PR review and merge",
         "Other requirement groups"
-      ]
+      ],
+      "source_commit": "b8107121c8103257b27ffe57989106a9a49bb201",
+      "report": "reports/measurements/lucent-audio-service.json"
     }
   ]
 }
