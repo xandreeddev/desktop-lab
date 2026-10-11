@@ -32,7 +32,9 @@ fn round_distance(point:vec2<f32>,rect:vec4<f32>,requested_radius:f32)->f32 {
     let point=v.local+v.rect.xy;
     if any(point<v.clip.xy)||any(point>v.clip.xy+v.clip.zw){discard;}
     let d=round_distance(v.local,vec4(0.0,0.0,v.rect.zw),v.params.x);
-    let aa=max(fwidth(d),0.3);
+    // Default derivatives may use a coarse quad estimate on one GPU and fine
+    // differences on another. Coverage needs the same per-fragment choice.
+    let aa=max(fwidthFine(d),0.3);
     var coverage=1.0-smoothstep(-aa,aa,d);
     // Axis-aligned texture quads already have exact rasterized bounds. Fading
     // their straight edges creates seams on full-surface wallpaper images.
@@ -44,7 +46,7 @@ fn round_distance(point:vec2<f32>,rect:vec4<f32>,requested_radius:f32)->f32 {
         let shape=clips[v.clip_range.x+i];
         clip_distance=max(clip_distance,round_distance(point,shape.rect,shape.params.x));
     }
-    let clip_aa=max(fwidth(clip_distance),0.3);
+    let clip_aa=max(fwidthFine(clip_distance),0.3);
     coverage=min(coverage,1.0-smoothstep(-clip_aa,clip_aa,clip_distance));
     var pixel=vec4(1.0);
     if v.params.y>0.5&&v.params.y<1.5 {pixel=textureSample(image,filtering,v.uv.xy+(v.local/v.rect.zw)*v.uv.zw);}

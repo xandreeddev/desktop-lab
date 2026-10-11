@@ -1,0 +1,1233 @@
+{
+  "source_commit": "dd363f1c2b98331e86fc80967a88a2fde9e61db1",
+  "rust_unit_tests": 122,
+  "python_tests": 52,
+  "change": "Explicit fwidthFine for primitive and rounded-clip coverage",
+  "baseline_updates": 0,
+  "tolerance_changes": 0,
+  "prior_hardware_report": "lucent-hardware-visual-check.json",
+  "drivers": [
+    {
+      "adapter": "AMD Radeon Graphics (RADV RENOIR)",
+      "driver": "Mesa 26.2.3-arch1.1",
+      "backend": "Vulkan",
+      "focused_renderer_tests_passed": 6,
+      "visual_comparisons": [
+        {
+          "case": "launcher-size-default-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-default-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-small-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-small-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-large-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-large-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-custom-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-custom-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "themes-small-screen-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "themes-small-screen-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-first-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-first-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-last-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-last-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-empty-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-empty-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-long-input-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-long-input-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-narrow-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-narrow-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-opening-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-opening-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "commands-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "commands-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "themes-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "themes-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "widgets-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "widgets-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-empty-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-empty-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-narrow-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-narrow-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-error-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-error-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "palette-ocean-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "palette-ocean-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "icon-catalog-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "icon-catalog-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-dense-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-dense-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-narrow-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-narrow-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "dock-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "dock-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "notification-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "notification-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "notification-history-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "notification-history-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "lock-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "lock-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "greeter-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "greeter-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "authorization-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "authorization-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "osd-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "osd-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-last-narrow-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-last-narrow-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-empty-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-empty-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-input-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-input-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "widget-drag-grid-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "widget-drag-grid-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-submenu-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-submenu-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-default-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-default-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-small-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-small-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-large-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-large-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-custom-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-custom-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "themes-small-screen-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "themes-small-screen-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-first-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-first-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-last-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-last-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-empty-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-empty-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-long-input-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-long-input-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-narrow-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-narrow-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-opening-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-opening-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "commands-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "commands-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "themes-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "themes-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "widgets-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "widgets-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-empty-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-empty-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-narrow-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-narrow-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-error-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-error-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "palette-ocean-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "palette-ocean-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "icon-catalog-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "icon-catalog-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-dense-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-dense-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-narrow-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-narrow-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "dock-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "dock-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "notification-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "notification-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "notification-history-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "notification-history-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "lock-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "lock-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "greeter-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "greeter-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "authorization-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "authorization-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "osd-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "osd-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-last-narrow-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-last-narrow-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-empty-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-empty-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-input-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-input-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "widget-drag-grid-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "widget-drag-grid-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-submenu-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-submenu-light-2x",
+          "result": "Passed"
+        }
+      ]
+    },
+    {
+      "adapter": "llvmpipe (LLVM 22.1.8, 256 bits)",
+      "driver": "Mesa 26.2.3-arch1.1",
+      "backend": "Vulkan",
+      "focused_renderer_tests_passed": 6,
+      "visual_comparisons": [
+        {
+          "case": "launcher-size-default-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-default-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-small-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-small-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-large-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-large-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-custom-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-custom-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "themes-small-screen-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "themes-small-screen-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-first-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-first-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-last-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-last-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-empty-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-empty-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-long-input-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-long-input-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-narrow-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-narrow-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-opening-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-opening-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "commands-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "commands-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "themes-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "themes-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "widgets-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "widgets-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-empty-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-empty-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-narrow-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-narrow-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-error-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-error-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "palette-ocean-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "palette-ocean-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "icon-catalog-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "icon-catalog-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-dense-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-dense-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-narrow-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-narrow-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "dock-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "dock-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "notification-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "notification-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "notification-history-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "notification-history-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "lock-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "lock-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "greeter-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "greeter-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "authorization-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "authorization-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "osd-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "osd-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-last-narrow-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-last-narrow-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-empty-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-empty-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-input-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-input-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "widget-drag-grid-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "widget-drag-grid-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-submenu-dark-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-submenu-dark-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-default-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-default-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-small-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-small-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-large-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-large-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-custom-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "launcher-size-custom-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "themes-small-screen-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "themes-small-screen-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-first-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-first-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-last-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-last-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-empty-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-empty-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-long-input-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-long-input-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-narrow-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-narrow-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-opening-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "apps-opening-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "commands-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "commands-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "themes-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "themes-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "widgets-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "widgets-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-empty-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-empty-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-narrow-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-narrow-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-error-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "wallpapers-online-error-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "palette-ocean-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "palette-ocean-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "icon-catalog-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "icon-catalog-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-dense-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-dense-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-narrow-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "bar-narrow-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "dock-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "dock-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "notification-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "notification-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "notification-history-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "notification-history-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "lock-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "lock-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "greeter-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "greeter-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "authorization-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "authorization-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "osd-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "osd-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-last-narrow-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-last-narrow-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-empty-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-empty-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-input-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-input-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "widget-drag-grid-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "widget-drag-grid-light-2x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-submenu-light-1x",
+          "result": "Passed"
+        },
+        {
+          "case": "menu-submenu-light-2x",
+          "result": "Passed"
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Offscreen debug correctness checks do not measure native hardware frame pacing or release performance",
+    "Passing the existing pixel tolerance is not bitwise equality between drivers",
+    "Root greeter update and interactive login are outside this renderer deployment"
+  ],
+  "binary_sha256": {
+    "lucent-desktop": "ca0f13c29c419cb5a94eca913a7deeee37c9f2ee33e71d2ba3bdc28e3e301823",
+    "lucent-cli": "863c3e260b95f2b0694c01e4021e886396879046028094778dfc9cb51c565d19",
+    "lucent-menu": "2cd37bfc0f4d815c6a7c2b321d02a81c46cb38c6f777a6e3ca1c30ea2e7bd24e",
+    "lucent-lock": "e8285f715ba6ed3abb7368ccc54aa6e1b9342abd049d253f62ea5ea218caa80e",
+    "lucent-greeter": "19ecab604bad219c9af132d3bf369bdfe1ccb88abc201acfebf3f57b4af3cbe2",
+    "lucent-polkit": "bfdd495f32370b63184344e565dd7c8e4db3291fa33e81d548d608e45b5074b1"
+  },
+  "native": {
+    "launcher_input": true,
+    "independent_application_service": true,
+    "application_survives_shell_restart": true,
+    "restart_restores_background": true,
+    "native_lock_unlock": true,
+    "surface_fault_injection": false,
+    "notes": "Native VM checks. Presentation recovery policy is unit-tested; driver fault injection is not covered here."
+  }
+}
