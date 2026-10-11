@@ -2,7 +2,9 @@
 
 The three local VMs are independent clones of an installed Omarchy base. A flattened read-only copy of the base disk backs three private qcow2 overlays. Each VM has its own NVRAM, MAC address and loopback SSH port. Nothing in a clone writes the original disk. Runtime inventory, images, SSH keys, credentials and raw reports are excluded from Git.
 
-Start only one lab VM at a time on a memory-limited host. New clones default to 3 GiB RAM and two vCPUs; the current Lucent performance run uses 6 GiB and six vCPUs. Inspect the domain configuration before comparing results or changing its resources.
+Start only one lab VM at a time on a memory-limited host. New clones default to 3 GiB RAM and two vCPUs. The local Lucent guest now uses 3 GiB and four vCPUs after a host out-of-memory kill; previously recorded performance runs used 6 GiB and six vCPUs. Those historical measurements do not describe the smaller configuration. Inspect the domain configuration before comparing results or changing its resources.
+
+On a memory-limited development host, shut down the guest before Rust builds or GPU regression suites. Build with `CARGO_BUILD_JOBS=1`, then start the guest for deployment and native checks after the build finishes. Check `free -m` before starting: the host needs available physical memory for the guest allocation, QEMU/graphics overhead and host applications. Swap capacity is not spare physical memory, and reducing the guest allocation does not cap every host process. Keep the other lab guests shut down.
 
 ```sh
 python3 vm/lab.py status

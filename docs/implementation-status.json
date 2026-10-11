@@ -723,7 +723,7 @@
     },
     {
       "milestone": "notification-delivery",
-      "status": "locally_verified",
+      "status": "merged",
       "source_commit": "75baec13f4b6727966cde15326ced0a8258fdb85",
       "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/25",
       "checks": [
@@ -732,12 +732,13 @@
         "60 Python checks, generated tokens/icons, shellcheck and Astro check/build passed",
         "Desktop release build and reversible native deployment passed",
         "Native notification replacement, real action/dismiss clicks and expiration passed; only owned transient fixtures cleaned",
-        "Native launcher/restart/application survival and existing secure lock/unlock passed; final desktop ready"
+        "Native launcher/restart/application survival and existing secure lock/unlock passed; final desktop ready",
+        "All six exact-head checks, protected-main merge and Pages deployment passed"
       ],
       "pending": [
-        "All six exact-head checks, protected-main merge and Pages",
         "Persistent/rich/grouped notifications and other requirement groups"
-      ]
+      ],
+      "merge_commit": "45215700860c44b849e1239c3530bb8c72beb931"
     }
   ]
 }
