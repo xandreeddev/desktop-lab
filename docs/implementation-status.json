@@ -100,7 +100,8 @@
         "Shared Clip geometry retains rounded ancestor intersections in rendering, hits and native input regions",
         "Vulkan pixel tests passed at 1x and 2x for crop, nesting, opaque image edges and input agreement",
         "79 Rust tests, 48 Python tests and 148 visual comparisons passed; 18 intentional baselines reviewed",
-        "Native VM launcher/restart and secure lock/unlock passed"
+        "Native VM launcher/restart and secure lock/unlock passed",
+        "Explicit fine derivatives correct hardware/software corner coverage differences. Mirror-symmetry regression at 1x/2x and all 148 visual comparisons pass on both drivers without baseline/tolerance updates."
       ]
     },
     {
@@ -153,7 +154,8 @@
         "Opt-in bounded CPU-stage profiling verified natively, including default-off behavior and runtime-override restoration after intentional failure; 113 Rust tests, 52 Python checks and focused GPU cold/warm test passed.",
         "Profiled 120-second run: 0.600% main-process CPU, 588.68 MiB mean RSS, zero background/closed-dock idle frames. Cold launcher gap 101.35 ms while maximum measured dock frame work was 10.63 ms; the gap is not explained by its view/layout/text work alone.",
         "Same-binary normal-mode 120-second comparison: 0.592% main-process CPU, 589.60 MiB mean RSS, zero background/closed-dock idle frames. First-open maximum interval 24.25 ms; warm maxima 18.26\u201321.18 ms. This is not a controlled overhead estimate or proof the earlier hitch is fixed.",
-        "Five focused offscreen renderer tests passed on Radeon hardware Vulkan. Visual comparison against software baselines passed 80/148 cases; 68 small coverage differences require follow-up. This is not a hardware desktop performance measurement."
+        "Five focused offscreen renderer tests passed on Radeon hardware Vulkan. Visual comparison against software baselines passed 80/148 cases; 68 small coverage differences require follow-up. This is not a hardware desktop performance measurement.",
+        "Cross-driver coverage follow-up: all 148 existing comparisons and six focused renderer tests pass on both Radeon hardware Vulkan and llvmpipe after selecting fine derivatives. Baselines/tolerances unchanged; hardware desktop performance remains unmeasured."
       ]
     },
     {
@@ -430,6 +432,24 @@
       ],
       "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/14",
       "merge_commit": "bf5e925e3b170825e01c027599846ad7d3f7a864"
+    },
+    {
+      "milestone": "derivative-coverage",
+      "status": "locally_verified",
+      "source_commit": "dd363f1c2b98331e86fc80967a88a2fde9e61db1",
+      "checks": [
+        "122 Rust unit tests and 52 Python checks passed",
+        "Six focused GPU tests passed on hardware and software Vulkan",
+        "148 existing visual comparisons passed on each driver without baseline or tolerance changes",
+        "Clippy, formatting, tokens/icons and Astro check/build passed",
+        "Full release build and reversible native user-binary deployment passed",
+        "Native launcher, restart, independent application lifetime and secure lock/unlock passed"
+      ],
+      "pending": [
+        "Exact-head CI, protected-main merge and Pages",
+        "Root greeter remains on its earlier wallpaper-transaction binary; interactive login was not repeated",
+        "Other requirement groups"
+      ]
     }
   ]
 }
