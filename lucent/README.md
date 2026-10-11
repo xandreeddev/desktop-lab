@@ -202,10 +202,18 @@ and measurements. The old card prototype and its tests are historical milestones
 The prepared VM uses **software Vulkan (Mesa lavapipe)**. The host GPU is not
 passed through; the compositor uses virgl. [Graphics details](../docs/lucent-vulkan.md).
 The reference layout and primary launcher/selector transitions are implemented;
-this is not complete Lucid feature or pixel parity. Tray hosting, a complete control center, automatic
-wallpaper palette extraction, widget resizing, fractional scaling, multi-output
+this is not complete Lucid feature or pixel parity. Tray hosting, a complete control center,
+widget resizing, fractional scaling, multi-output
 placement and full Unicode shaping remain future work. Notification history is
 in memory; images, markup, inline replies and sound are not implemented. System services retain OS responsibilities; the stock Quickshell process is stopped.
+Notification delivery bounds queued close/action signals and returns an explicit
+overload error before changing state. Idle bus disconnects trigger reconnection;
+old pending signals are discarded rather than replayed on a new connection.
+The adapter refuses to displace an existing notification server.
+Run the protocol suite under `dbus-run-session -- cargo test --manifest-path
+lucent/Cargo.toml --locked -p lucent-services notification_ -- --ignored`.
+Each protocol fixture owns a private daemon; the native UI check is
+`python3 vm/test-notifications.py` in an unlocked guest.
 The framework has no Qt/GTK dependency. The polkit adapter uses GLib/GIO for the
 standard authentication library, while its visual client uses our Vulkan renderer.
 

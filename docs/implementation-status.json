@@ -258,7 +258,8 @@
         "Native interaction and protocol tests"
       ],
       "evidence": [
-        "Static follow-up found an unbounded adapter-local signal queue and no explicit idle connection-disconnect observation. Isolated D-Bus saturation/restart tests remain required; bounded inbox/history and runtime delivery do not prove these adapter properties."
+        "Static follow-up found an unbounded adapter-local signal queue and no explicit idle connection-disconnect observation. Isolated D-Bus saturation/restart tests remain required; bounded inbox/history and runtime delivery do not prove these adapter properties.",
+        "Private-bus tests reproduced queue saturation and missed idle disconnects. Adapter admission now bounds pending signals, preserves state on rejection and accounts for two-signal actions/expiration batches; connection teardown discards pending transport signals. Exclusive name ownership refuses replacement of either another server or this adapter. Four private-bus regressions and 170 Rust tests pass. Native replacement/action/dismiss/expiration, launcher/restart and existing secure lock checks pass; see reports/measurements/lucent-notification-delivery.json; persistent/rich/grouped notifications remain open."
       ]
     },
     {
@@ -702,7 +703,7 @@
     },
     {
       "milestone": "renderer-scene-validation",
-      "status": "locally_verified",
+      "status": "merged",
       "source_commit": "f218a6c963d3aa3fb87c95338c8bd906c16f3d33",
       "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/24",
       "checks": [
@@ -712,11 +713,30 @@
         "No visual baselines or tolerances changed",
         "Desktop release build, reversible deployment, native launcher/restart and application survival passed",
         "Existing secure lock/unlock passed; final normal desktop ready",
-        "Local/LAN documentation serves current renderer contracts and outstanding notification findings"
+        "Local/LAN documentation serves current renderer contracts and outstanding notification findings",
+        "All six exact-head checks, protected-main merge and Pages deployment passed"
+      ],
+      "pending": [
+        "Other requirement groups"
+      ],
+      "merge_commit": "cdcbbfb34e71176a4a9091859d55e074063ead65"
+    },
+    {
+      "milestone": "notification-delivery",
+      "status": "locally_verified",
+      "source_commit": "75baec13f4b6727966cde15326ced0a8258fdb85",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/25",
+      "checks": [
+        "Three protocol failures reproduced before their fixes: saturation admission, idle disconnect and name displacement",
+        "170 Rust tests and four private-daemon protocol tests passed; Clippy and formatting passed",
+        "60 Python checks, generated tokens/icons, shellcheck and Astro check/build passed",
+        "Desktop release build and reversible native deployment passed",
+        "Native notification replacement, real action/dismiss clicks and expiration passed; only owned transient fixtures cleaned",
+        "Native launcher/restart/application survival and existing secure lock/unlock passed; final desktop ready"
       ],
       "pending": [
         "All six exact-head checks, protected-main merge and Pages",
-        "Other requirement groups"
+        "Persistent/rich/grouped notifications and other requirement groups"
       ]
     }
   ]

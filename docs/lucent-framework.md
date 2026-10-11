@@ -522,6 +522,37 @@ This does not establish a frame-pacing or memory improvement.
 
 ## Notifications and secure session UI
 
+Notification protocol queues belong to the adapter. It admits at most 256 queued
+close/action signals and drains at most that many into one in-flight batch;
+concurrent producers can fill the next queue while that batch sends. This is
+separate from the pure inbox's 64 active/100 history limits, zbus buffers and the
+runtime's message queue. It is not a total process-memory bound.
+
+Admission happens under the inbox mutex before any state changes. Notify reserves
+capacity for its worst-case eviction; close/dismiss need one slot, and an action
+on a nonresident notification needs two. Overload returns D-Bus LimitsExceeded or
+DomainError::Unavailable without changing the notification, its revision or ID
+allocation. Producers never wait for queue space while holding the inbox lock.
+Timeout processing closes only as many notifications as available signal capacity
+permits; remaining expired entries are processed after delivery drains.
+
+The adapter refuses to replace an existing notification server and does not allow
+its own bus name to be replaced. Activation, not the adapter, owns shell switching.
+After a competing owner releases the name, the normal retry can acquire it.
+The watch loop observes a closed connection even when no signal is pending. It
+reports unavailability and reacquires the notification name on a new connection.
+In-memory inbox/history remain, while queued signals from the ended connection
+are discarded; delivery across disconnection is best effort, not durable or
+exactly once. Offline actions return an error. The existing 100 ms watch interval
+and two-second failed-connection backoff remain; no idle CPU improvement is claimed.
+
+Four protocol tests own private D-Bus daemons: normal protocol/actions, a stalled
+subscriber with saturation/recovery, idle daemon termination/restart at the same
+address, and exclusive name ownership without displacing another server. Pure adapter tests cover two-signal admission, deferred expiration
+and connection cleanup. `vm/test-notifications.py` separately exercises native
+action/dismiss clicks, replacement and timeout, using transient fixtures only;
+it does not restart the guest bus. History must be closed before that check.
+
 `NotificationInbox` owns replacement IDs, timeout policy, bounded active/history
 storage and DND. `FreedesktopNotifications` implements the standard D-Bus methods
 and action/close signals. `Center` is a framework component composed into `Desktop`

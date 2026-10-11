@@ -42,7 +42,7 @@ jobs:
       - run: cargo fmt --manifest-path lucent/Cargo.toml --all --check
       - run: cargo clippy --manifest-path lucent/Cargo.toml --locked --workspace --all-targets -- -D warnings
       - run: cargo test --manifest-path lucent/Cargo.toml --locked --workspace
-      - run: dbus-run-session -- cargo test --manifest-path lucent/Cargo.toml -p lucent-services notification_protocol -- --ignored
+      - run: dbus-run-session -- cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-services notification_ -- --ignored
       - name: Native Vulkan visual regressions
         run: |
           export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name '*lvp*' -print -quit)"
