@@ -367,7 +367,7 @@ fn search_text_icons_and_caret_share_a_centered_line_box() {
         {
             icons += 1;
             assert!((center - rect.y - rect.h / 2.).abs() < 0.01);
-            assert!((rect.w / rect.h - data.width as f32 / data.height as f32).abs() < 0.01);
+            assert!((rect.w / rect.h - data.width() as f32 / data.height() as f32).abs() < 0.01);
         }
         if let Paint::Shape { rect, clip, .. } = paint
             && rect.w == lucent_design::component::input::CARET_WIDTH
@@ -664,10 +664,10 @@ fn catalog_uses_desktop_identity_and_every_icon_rasterizes() {
     let mut pixels = std::collections::BTreeSet::new();
     for asset in ALL {
         let image = lucent_services::images::svg(asset.svg, 64, asset.id.into()).unwrap();
-        assert!(image.rgba.as_chunks::<4>().0.iter().any(|p| p[3] > 0));
+        assert!(image.pixels().as_chunks::<4>().0.iter().any(|p| p[3] > 0));
         assert!(
             image
-                .rgba
+                .pixels()
                 .as_chunks::<4>()
                 .0
                 .iter()
@@ -675,7 +675,7 @@ fn catalog_uses_desktop_identity_and_every_icon_rasterizes() {
             "artwork remains monochrome before theme tinting"
         );
         assert!(
-            pixels.insert(image.rgba.clone()),
+            pixels.insert(image.pixels().to_vec()),
             "each app pictogram is distinct"
         );
     }
@@ -1009,12 +1009,10 @@ fn visual_regressions() {
                     }
                 }
                 session.update(
-                    lucent_session::Message::Wallpaper(Some(Arc::new(ImageData {
-                        key: "session-wallpaper-fixture".into(),
-                        width: 320,
-                        height: 180,
-                        rgba: pixels,
-                    }))),
+                    lucent_session::Message::Wallpaper(Some(Arc::new(
+                        ImageData::from_rgba("session-wallpaper-fixture", 320, 180, pixels)
+                            .unwrap(),
+                    ))),
                     &mut Effects::default(),
                 );
                 if matches!(name, "lock" | "authorization") {
@@ -1574,12 +1572,9 @@ fn online_fixture(app: &mut Desktop) {
         }
         app.browser.previews.insert(
             item.id.clone(),
-            Arc::new(ImageData {
-                key: format!("synthetic-landscape-{i}"),
-                width: 160,
-                height: 96,
-                rgba,
-            }),
+            Arc::new(
+                ImageData::from_rgba(format!("synthetic-landscape-{i}"), 160, 96, rgba).unwrap(),
+            ),
         );
     }
 }

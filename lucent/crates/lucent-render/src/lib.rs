@@ -3,7 +3,6 @@ use lucent_api::{Align, Rect};
 use lucent_ui::Paint;
 use std::{
     cell::RefCell,
-    collections::HashMap,
     ffi::c_void,
     ptr::NonNull,
     rc::Rc,
@@ -12,8 +11,11 @@ use std::{
 };
 pub use wgpu::rwh as display_handle;
 use wgpu::{rwh::*, *};
+mod cache;
 mod presentation;
 mod raster;
+pub use cache::CacheStats;
+use cache::ResourceCache;
 use presentation::{Recovery, SurfaceFailure};
 pub type Error = Box<dyn std::error::Error>;
 struct TextureResource {
@@ -34,7 +36,7 @@ pub struct Gpu {
     frame_layout: BindGroupLayout,
     sampler: Sampler,
     fonts: Arc<Vec<fontdue::Font>>,
-    cache: RefCell<HashMap<String, Rc<TextureResource>>>,
+    cache: RefCell<ResourceCache<TextureResource>>,
     white: RefCell<Option<Rc<TextureResource>>>,
     device_failure: Arc<Mutex<Option<String>>>,
     pub adapter_description: String,
@@ -157,73 +159,53 @@ impl Gpu {
             frame_layout,
             sampler,
             fonts,
-            cache: RefCell::new(HashMap::new()),
+            cache: RefCell::new(ResourceCache::new(64 * 1024 * 1024, 1024)),
             white: RefCell::new(None),
             device_failure,
             adapter_description,
         }))
     }
-    fn texture(&self, bytes: &[u8], width: u32, height: u32, mipmaps: bool) -> Rc<TextureResource> {
-        let size = Extent3d {
-            width: width.max(1),
-            height: height.max(1),
-            depth_or_array_layers: 1,
-        };
+    /// Texture payload bytes exclude driver allocation overhead and surface buffers.
+    pub fn cache_stats(&self) -> CacheStats {
+        self.cache.borrow().stats()
+    }
+    fn texture(&self, levels: &[lucent_api::ImageLevel]) -> Rc<TextureResource> {
+        let first = &levels[0];
+        let (width, height) = (first.width, first.height);
         let texture = self.device.create_texture(&TextureDescriptor {
             label: Some("cached framework texture"),
-            size,
-            mip_level_count: if mipmaps {
-                width.max(height).ilog2() + 1
-            } else {
-                1
+            size: Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
             },
+            mip_level_count: levels.len() as u32,
             sample_count: 1,
             dimension: TextureDimension::D2,
             format: TextureFormat::Rgba8Unorm,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        self.queue.write_texture(
-            TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: 0,
-                origin: Origin3d::ZERO,
-                aspect: TextureAspect::All,
-            },
-            bytes,
-            TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(size.width * 4),
-                rows_per_image: Some(size.height),
-            },
-            size,
-        );
-        if mipmaps {
-            let (mut pixels, mut w, mut h) = (bytes.to_vec(), width, height);
-            let mut level = 1;
-            while w > 1 || h > 1 {
-                (pixels, w, h) = raster::reduce(&pixels, w, h);
-                self.queue.write_texture(
-                    TexelCopyTextureInfo {
-                        texture: &texture,
-                        mip_level: level,
-                        origin: Origin3d::ZERO,
-                        aspect: TextureAspect::All,
-                    },
-                    &pixels,
-                    TexelCopyBufferLayout {
-                        offset: 0,
-                        bytes_per_row: Some(w * 4),
-                        rows_per_image: Some(h),
-                    },
-                    Extent3d {
-                        width: w,
-                        height: h,
-                        depth_or_array_layers: 1,
-                    },
-                );
-                level += 1;
-            }
+        for (level, pixels) in levels.iter().enumerate() {
+            self.queue.write_texture(
+                TexelCopyTextureInfo {
+                    texture: &texture,
+                    mip_level: level as u32,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                &pixels.rgba,
+                TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(pixels.width * 4),
+                    rows_per_image: Some(pixels.height),
+                },
+                Extent3d {
+                    width: pixels.width,
+                    height: pixels.height,
+                    depth_or_array_layers: 1,
+                },
+            );
         }
         let view = texture.create_view(&Default::default());
         let group = self.device.create_bind_group(&BindGroupDescriptor {
@@ -245,41 +227,47 @@ impl Gpu {
             width: width as f32,
             height: height as f32,
             _texture: texture,
-            bytes: u64::from(width) * u64::from(height) * 4 * if mipmaps { 4 } else { 3 } / 3,
+            bytes: levels.iter().map(|level| level.rgba.len() as u64).sum(),
         })
     }
     fn white(&self) -> Rc<TextureResource> {
         if let Some(v) = self.white.borrow().as_ref() {
             return v.clone();
         }
-        let v = self.texture(&[255, 255, 255, 255], 1, 1, false);
+        let v = self.texture(&[lucent_api::ImageLevel {
+            width: 1,
+            height: 1,
+            rgba: vec![255; 4],
+        }]);
         *self.white.borrow_mut() = Some(v.clone());
         v
     }
     fn image(&self, data: &lucent_api::ImageData) -> Rc<TextureResource> {
-        let key = format!("image:{}", data.key);
-        if let Some(v) = self.cache.borrow().get(&key) {
-            return v.clone();
+        let key = format!("image:{}", data.cache_id());
+        if let Some(v) = self.cache.borrow_mut().get(&key) {
+            return v;
         }
-        let mut bytes = data.rgba.clone();
-        for p in bytes.as_chunks_mut::<4>().0 {
-            for c in 0..3 {
-                p[c] = (u16::from(p[c]) * u16::from(p[3]) / 255) as u8;
-            }
-        }
-        let texture = self.texture(&bytes, data.width, data.height, true);
-        self.cache.borrow_mut().insert(key, texture.clone());
+        let texture = self.texture(data.levels());
+        self.cache
+            .borrow_mut()
+            .insert(key, texture.clone(), texture.bytes);
         texture
     }
     fn text(&self, text: &str, size: f32, scale: u32, face: usize) -> Rc<TextureResource> {
         let key = format!("text:{face}:{size:.3}:{scale}:{text}");
         let font = self.fonts.get(face).unwrap_or(&self.fonts[0]);
-        if let Some(v) = self.cache.borrow().get(&key) {
-            return v.clone();
+        if let Some(v) = self.cache.borrow_mut().get(&key) {
+            return v;
         }
         let (pixels, width, height) = raster::text(font, text, size, scale);
-        let texture = self.texture(&pixels, width, height, false);
-        self.cache.borrow_mut().insert(key, texture.clone());
+        let texture = self.texture(&[lucent_api::ImageLevel {
+            width,
+            height,
+            rgba: pixels,
+        }]);
+        self.cache
+            .borrow_mut()
+            .insert(key, texture.clone(), texture.bytes);
         texture
     }
 }
@@ -291,6 +279,7 @@ pub struct Canvas {
     frame_group: BindGroup,
     instances: Buffer,
     capacity: usize,
+    resources: Vec<Rc<TextureResource>>,
 }
 impl Canvas {
     pub fn new(gpu: Rc<Gpu>) -> Self {
@@ -320,6 +309,7 @@ impl Canvas {
             frame_group,
             instances,
             capacity: 1,
+            resources: Vec::new(),
         }
     }
     pub fn paint(
@@ -465,17 +455,10 @@ impl Canvas {
             }
         }
         self.gpu.queue.submit([encoder.finish()]);
-        // Bound resources from old search strings without invalidating in-flight draws.
-        let cache = self.gpu.cache.borrow();
-        let over_budget =
-            cache.len() > 1024 || cache.values().map(|t| t.bytes).sum::<u64>() > 64 * 1024 * 1024;
-        drop(cache);
-        if over_budget {
-            self.gpu
-                .cache
-                .borrow_mut()
-                .retain(|_, v| Rc::strong_count(v) > 1);
-        }
+        // Keep each surface's current scene resident, including while other
+        // surfaces redraw. Replacing the scene releases its obsolete references.
+        self.resources = textures;
+        self.gpu.cache.borrow_mut().trim();
     }
     /// Return premultiplied RGBA pixels at `width*scale` by `height*scale`.
     pub fn snapshot(
@@ -556,6 +539,99 @@ impl Canvas {
         drop(mapped);
         buffer.unmap();
         Ok(rgba)
+    }
+}
+impl Drop for Canvas {
+    fn drop(&mut self) {
+        self.resources.clear();
+        self.gpu.cache.borrow_mut().trim();
+    }
+}
+
+#[cfg(test)]
+mod resource_tests {
+    use super::*;
+    use lucent_api::{Color, ImageData};
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn renderer_surface_resources_refresh_changed_assets() {
+        let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
+        let mut canvas = Canvas::new(gpu.clone());
+        let rect = Rect::new(0., 0., 8., 8.);
+        for rgba in [[255, 0, 0, 255], [0, 0, 255, 255]] {
+            let image = Arc::new(ImageData::from_rgba("same-file", 1, 1, rgba.to_vec()).unwrap());
+            let paint = [Paint::Image {
+                rect,
+                clip: rect,
+                data: image,
+                radius: 0.,
+                opacity: 1.,
+                tint: Color::hex(0xffffff),
+            }];
+            let pixels = canvas.snapshot(8, 8, 1, &paint).unwrap();
+            let center = (4 * 8 + 4) * 4;
+            assert_eq!(&pixels[center..center + 4], &rgba);
+        }
+        assert_eq!(
+            gpu.cache_stats().misses,
+            2,
+            "changed pixels reused a stale filename-based texture"
+        );
+    }
+
+    #[test]
+    #[ignore = "requires a Vulkan driver; uses an intentionally over-budget texture"]
+    fn renderer_surface_resources_remain_resident() {
+        let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
+        let rect = Rect::new(0., 0., 64., 64.);
+        let image = |key: &str, size: u32| Paint::Image {
+            rect,
+            clip: rect,
+            data: Arc::new(
+                ImageData::from_rgba(key, size, size, vec![255; (size * size * 4) as usize])
+                    .unwrap(),
+            ),
+            radius: 0.,
+            opacity: 1.,
+            tint: Color::hex(0xffffff),
+        };
+        let preparation = std::time::Instant::now();
+        let wallpaper = vec![image("large-resource-fixture", 4096)];
+        let prepared_in = preparation.elapsed();
+        let bar = vec![image("small-resource-fixture", 8)];
+        let mut background = Canvas::new(gpu.clone());
+        let mut panel = Canvas::new(gpu.clone());
+        let upload = std::time::Instant::now();
+        background.snapshot(64, 64, 1, &wallpaper).unwrap();
+        println!(
+            "4096px image preparation: {prepared_in:?}; first upload/render/readback: {:?}",
+            upload.elapsed()
+        );
+        panel.snapshot(64, 64, 1, &bar).unwrap();
+        let before = gpu.cache_stats();
+        assert!(before.active_bytes > before.budget_bytes);
+        let start = std::time::Instant::now();
+        for _ in 0..5 {
+            background.snapshot(64, 64, 1, &wallpaper).unwrap();
+            panel.snapshot(64, 64, 1, &bar).unwrap();
+        }
+        let after = gpu.cache_stats();
+        assert_eq!(
+            after.misses, before.misses,
+            "alternating surfaces re-uploaded resident textures"
+        );
+        assert_eq!(after.evictions, 0);
+        assert_eq!(after.hits - before.hits, 10);
+        println!(
+            "Ten alternating warm 64px snapshots (includes readback): {:?}; resident payload bytes: {}",
+            start.elapsed(),
+            after.bytes
+        );
+        drop(background);
+        assert!(gpu.cache_stats().bytes < before.budget_bytes);
+        panel.snapshot(64, 64, 1, &bar).unwrap();
+        assert_eq!(gpu.cache_stats().misses, after.misses);
     }
 }
 /// GPU presentation target. Must be dropped before its native Wayland surface.

@@ -216,9 +216,19 @@ premultiplied throughout filtering and blending. These are quality/resource
 budgets, separate from logical design dimensions. Source assets are prepared for
 the current components at up to 2× density, not arbitrary unlimited zoom.
 
-The cache evicts unused resources above 1024 entries or approximately 64 MiB of
-texture payload. In-flight resources remain alive, and decoded source images,
-framebuffers and driver allocations are separate from this cache budget.
+`ImageData::from_rgba` validates dimensions and creates immutable premultiplied
+pixels and all mip levels on the asset worker. Clones share storage. The renderer
+uploads prepared levels on a miss; it no longer clones, premultiplies or downsamples
+image pixels during paint. `pixels()` returns premultiplied RGBA, which adapters
+must account for when extracting colors.
+
+Each Canvas retains the textures for its current scene. A redraw on another
+surface cannot evict those active resources. The cache removes unused resources
+in least-recently-used order above 1024 entries or 64 MiB of texture payload.
+Active resources can exceed this reuse budget. `Gpu::cache_stats()` and the
+inspection IPC expose active/total payload bytes, hits, misses and evictions.
+CPU prepared images, framebuffers and driver allocations are separate from these
+counts. Text rasterization still occurs synchronously on a text-cache miss.
 
 ## Widget registration
 

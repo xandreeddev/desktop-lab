@@ -1,0 +1,26 @@
+{
+  "baseline": "3365773a02820c1b86b53733de9cae9cd80627ba",
+  "renderer": "Vulkan, Mesa lavapipe 26.2.3, LLVM 22.1.8",
+  "fixture": "4096x4096 opaque image and 8x8 image on two independent Canvas instances; 64x64 offscreen snapshots",
+  "image_preparation_ms": 132.2475,
+  "initial_upload_render_readback_ms": 170.049993,
+  "ten_alternating_warm_snapshots_ms": 1.8286,
+  "warm_texture_cache_misses": 0,
+  "resident_texture_payload_bytes": 89478824,
+  "resident_textures_survive_cross_surface_draw": true,
+  "unused_large_texture_released": true,
+  "same_name_replacement_changes_pixels": true,
+  "rust_unit_tests": 78,
+  "python_tests": 48,
+  "visual_comparisons": 148,
+  "native_vm": {
+    "launcher_input": true,
+    "independent_application_service": true,
+    "application_survives_shell_restart": true,
+    "restart_restores_background": true,
+    "native_lock_unlock": true,
+    "surface_fault_injection": false,
+    "notes": "Native VM checks. Presentation recovery policy is unit-tested; driver fault injection is not covered here."
+  },
+  "scope": "Synthetic regression timing includes readback, excludes compositor and scanout. Single observed run, no hardware-GPU or desktop-FPS inference. CPU prepared storage and driver/framebuffer overhead are not included in texture payload."
+}

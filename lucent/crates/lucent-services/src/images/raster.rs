@@ -148,12 +148,16 @@ mod tests {
         ));
         for size in [64, 128, 1024, 4096] {
             let image = super::super::try_load(std::path::Path::new(&path), size).unwrap();
-            assert!(image.width <= size && image.height <= size);
+            assert!(image.width() <= size && image.height() <= size);
             assert_eq!(
-                image.rgba.len(),
-                image.width as usize * image.height as usize * 4
+                image.pixels().len(),
+                image.width() as usize * image.height() as usize * 4
             );
-            println!("Decoded requested {size}: {}×{}", image.width, image.height);
+            println!(
+                "Decoded requested {size}: {}×{}",
+                image.width(),
+                image.height()
+            );
         }
     }
 }

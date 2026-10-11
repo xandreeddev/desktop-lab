@@ -4,29 +4,8 @@ use lucent_ui::text::{glyph_positions, line_metrics, width};
 /// Area reduction on premultiplied RGBA, including odd-sized edge texels.
 /// Used for texture mip levels and 2× text coverage supersampling.
 pub fn reduce(bytes: &[u8], width: u32, height: u32) -> (Vec<u8>, u32, u32) {
-    let (w, h) = ((width / 2).max(1), (height / 2).max(1));
-    let mut out = vec![0; (w * h * 4) as usize];
-    for y in 0..h {
-        for x in 0..w {
-            let (x0, x1) = (x * width / w, (x + 1) * width / w);
-            let (y0, y1) = (y * height / h, (y + 1) * height / h);
-            let samples = (x1 - x0) * (y1 - y0);
-            let mut channels = [0u32; 4];
-            for sy in y0..y1 {
-                for sx in x0..x1 {
-                    let at = ((sy * width + sx) * 4) as usize;
-                    for c in 0..4 {
-                        channels[c] += u32::from(bytes[at + c]);
-                    }
-                }
-            }
-            let at = ((y * w + x) * 4) as usize;
-            for c in 0..4 {
-                out[at + c] = ((channels[c] + samples / 2) / samples) as u8;
-            }
-        }
-    }
-    (out, w, h)
+    lucent_api::reduce_premultiplied(bytes, width, height)
+        .expect("bounded text raster has valid RGBA dimensions")
 }
 
 /// Rasterize coverage at twice the physical pixel density, then area-resolve once.
