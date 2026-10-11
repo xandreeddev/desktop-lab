@@ -621,7 +621,7 @@
     },
     {
       "milestone": "preview-cache",
-      "status": "locally_verified",
+      "status": "merged",
       "checks": [
         "159 Rust tests, 54 Python checks and Clippy passed",
         "Formatting, generated assets, shellcheck and Astro check/build passed",
@@ -630,13 +630,31 @@
         "Native 73-file lazy preview browsing, bounded cache turnover, corrupt-file retry and closed-browser shrink passed",
         "Live provider thumbnails, immutable-wallpaper recovery, widgets, launcher, application survival and secure lock/unlock passed",
         "Original wallpaper/preferences/workspace restored; test files removed; normal desktop ready",
-        "Sequential 120-second software-VM runs: mean RSS 588.26 to 389.93 MiB; prepared-image accounting available; CPU/frame-pacing improvement not claimed"
+        "Sequential 120-second software-VM runs: mean RSS 588.26 to 389.93 MiB; prepared-image accounting available; CPU/frame-pacing improvement not claimed",
+        "All six exact-head checks, protected-main merge and Pages deployment passed"
+      ],
+      "pending": [
+        "Other requirement groups"
+      ],
+      "source_commit": "3bef4c3ab3556215b7f275bd51b144492ea7ecaf",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/21",
+      "merge_commit": "425cf42f03684af7593e90034edda7b466c2f71a"
+    },
+    {
+      "milestone": "wallpaper-test-checkpoint",
+      "status": "locally_verified",
+      "checks": [
+        "60 Python checks, including six checkpoint lifecycle cases, passed",
+        "Private checkpoint reconstruction preserves metadata, bytes and read-only image permissions",
+        "Changed/corrupt/symlink replacements are rejected without overwriting existing content",
+        "Both native wallpaper transaction and live-provider workflows restored the original desktop",
+        "Unique private settings/image scratch paths were removed after successful restoration",
+        "Astro check/build passed; desktop/runtime implementation unchanged"
       ],
       "pending": [
         "Exact-head CI, protected-main merge and Pages",
         "Other requirement groups"
-      ],
-      "source_commit": "3bef4c3ab3556215b7f275bd51b144492ea7ecaf"
+      ]
     }
   ]
 }

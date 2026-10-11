@@ -11,6 +11,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'vm'))
+from wallpaper_checkpoint import GuestWallpaperCheckpoint
 spec = importlib.util.spec_from_file_location('v', ROOT / 'vm/test-framework.py')
 v = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(v)
@@ -29,10 +30,12 @@ def main():
     assert v.session('omarchy-shell', 'lock', 'isLocked').strip() == 'false'
     v.eventually(lambda: client()['background_ready'] and bool(selected()), 'Initial wallpaper did not become ready', timeout=35)
     original = selected()
+    checkpoint = GuestWallpaperCheckpoint(v.remote, original)
     state = '/home/omarchy/.local/state/lucent/desktop.json'
-    backup = '/tmp/lucent-transaction-original-settings.json'
+    scratch = v.remote('mktemp', '-d', '/tmp/lucent-wallpaper-transaction.XXXXXX').strip()
+    backup = scratch + '/settings.json'
     v.remote('cp', state, backup)
-    source = '/tmp/lucent-wallpaper-transaction.png'
+    source = scratch + '/image.png'
     report = {}
     try:
         # Generate PNG without guest image libraries, networking or private assets.
@@ -69,6 +72,7 @@ Path(sys.argv[1]).write_bytes(b'\\x89PNG\\r\\n\\x1a\\n' + chunk(b'IHDR', struct.
     finally:
         # A legacy original is copied on first reselection; retained snapshots can
         # be selected directly. Compare provenance instead of requiring a legacy path.
+        checkpoint.restore()
         v.cli('wallpaper', 'set', original['path'])
         v.eventually(lambda: not client()['wallpaper_busy'] and selected()['source']['path'] == original['source']['path'], 'Original wallpaper did not restore', timeout=30)
         v.session('systemctl', '--user', 'stop', 'lucent.service')
@@ -77,6 +81,8 @@ Path(sys.argv[1]).write_bytes(b'\\x89PNG\\r\\n\\x1a\\n' + chunk(b'IHDR', struct.
         v.eventually(lambda: client()['background_ready'], 'Restored wallpaper did not render', timeout=35)
         v.eventually(lambda: json.loads(v.remote('cat', '/home/omarchy/.local/state/lucent/theme/palette.json')) == client()['palette'], 'Original palette export did not restore', timeout=35)
         v.remote('rm', '-f', source, backup)
+        v.remote('rmdir', scratch)
+        checkpoint.discard()
         print('Original wallpaper and palette restored', flush=True)
     (ROOT / 'reports/local/lucent-wallpaper-transactions.json').write_text(json.dumps(report, indent=2) + '\n')
 

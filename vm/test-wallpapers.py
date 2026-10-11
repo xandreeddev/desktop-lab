@@ -14,6 +14,7 @@ import subprocess
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'vm'))
+from wallpaper_checkpoint import GuestWallpaperCheckpoint
 spec=importlib.util.spec_from_file_location('v', ROOT/'vm/test-framework.py');v=importlib.util.module_from_spec(spec);spec.loader.exec_module(v)
 
 def main():
@@ -24,8 +25,9 @@ def main():
     v.eventually(lambda: v.inspect()['client']['background_ready'] and v.inspect()['client']['wallpaper'] is not None,
                  'Initial wallpaper selection did not finish loading', timeout=40)
     state='/home/omarchy/.local/state/lucent/desktop.json'
-    backup='/tmp/lucent-palette-original-settings.json'
+    backup=v.remote('mktemp','/tmp/lucent-palette-settings.XXXXXX').strip()
     selected=v.inspect()['client']['wallpaper']
+    checkpoint=GuestWallpaperCheckpoint(v.remote,selected)
     wallpaper=selected['path']
     v.remote('cp',state,backup)
     def client():return v.inspect()['client']
@@ -67,6 +69,7 @@ def main():
             v.eventually(lambda:v.session('omarchy-shell','lock','isLocked').strip()=='false','Native unlock failed',timeout=20)
             print('Native secure lock/unlock passed with the selected palette',flush=True)
     finally:
+        checkpoint.restore()
         v.cli('wallpaper','set',wallpaper)
         v.eventually(lambda:not client()['wallpaper_busy'] and client()['wallpaper']['source']['path']==selected['source']['path'],'Original wallpaper not restored')
         v.session('systemctl','--user','stop','lucent.service')
@@ -75,6 +78,8 @@ def main():
         v.eventually(lambda:client()['background_ready'],'Restored desktop did not render',timeout=35)
         v.eventually(lambda:exported()==client()['palette'],'Original palette export did not restore',timeout=35)
         v.cli('wallpapers','open')
+        checkpoint.discard()
+        v.remote('rm','-f',backup)
         print('Original wallpaper and preferences restored; native wallpaper browser left open',flush=True)
 
 if __name__=='__main__':main()
