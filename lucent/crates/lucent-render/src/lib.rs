@@ -1288,6 +1288,56 @@ mod clipping_tests {
 
     #[test]
     #[ignore = "requires a Vulkan driver"]
+    fn slider_track_thumb_and_focus_render_at_both_densities() {
+        use lucent_api::{Key, SliderSpec, SliderStyle};
+        let fonts = Arc::new(vec![]);
+        let gpu = Gpu::headless(fonts.clone()).unwrap();
+        let layout = Layout::new(fonts);
+        let mut canvas = Canvas::new(gpu);
+        for value in [0., 0.5, 1.] {
+            let root = Element::stack(vec![
+                Element::slider(SliderSpec::new(value, 0.1).unwrap(), |event| event)
+                    .id("level")
+                    .size(112., 40.)
+                    .at(8., 12.)
+                    .padding_xy(8., 0.)
+                    .radius(8.)
+                    .slider_style(SliderStyle {
+                        track: Color::hex(0x0000ff),
+                        fill: Color::hex(0xff0000),
+                        thumb: Color::hex(0xffffff),
+                        track_height: 4.,
+                        thumb_diameter: 16.,
+                    }),
+            ]);
+            let mut interaction = Interaction::default();
+            let scene = layout.build(&root, 128., 64., &interaction, 0.);
+            interaction.key(&scene, &Key::Tab);
+            let scene = layout.build(&root, 128., 64., &interaction, 0.);
+            for scale in [1, 2] {
+                let pixels = canvas.snapshot(128, 64, scale, &scene.paint).unwrap();
+                let pixel = |x: u32, y: u32| {
+                    let offset = ((y * scale * 128 * scale + x * scale) * 4) as usize;
+                    &pixels[offset..offset + 4]
+                };
+                assert_eq!(pixel((24. + 80. * value) as u32, 32), &[255, 255, 255, 255]);
+                assert_eq!(pixel(1, 1), &[0, 0, 0, 0]);
+                assert!(pixel(64, 12)[3] > 0, "keyboard focus outline missing");
+                let track = pixel(if value < 0.5 { 64 } else { 40 }, 32);
+                assert_eq!(
+                    track,
+                    if value < 0.5 {
+                        &[0, 0, 255, 255]
+                    } else {
+                        &[255, 0, 0, 255]
+                    }
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
     fn rounded_cover_and_nested_clips_match_pixels_and_input_at_both_densities() {
         let fonts = Arc::new(vec![]);
         let gpu = Gpu::headless(fonts.clone()).unwrap();

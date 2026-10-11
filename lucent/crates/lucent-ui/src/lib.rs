@@ -1,6 +1,8 @@
 //! Layout, hit testing and retained interaction state for declarative components.
 use lucent_api::*;
+mod slider;
 pub mod text;
+pub use slider::SliderHit;
 use std::{collections::BTreeMap, sync::Arc};
 
 #[derive(Clone, Debug)]
@@ -56,6 +58,7 @@ pub struct Hit<M> {
     pub input: Option<InputCallback<M>>,
     pub value: String,
     pub drag: Option<DragCallback<M>>,
+    pub slider: Option<SliderHit<M>>,
     pub autofocus: bool,
     pub hover_transition: Transition,
     pub tab_stop: bool,
@@ -184,6 +187,7 @@ impl Layout {
                 .height,
             ),
             Kind::Image(_) => (32., 32.),
+            Kind::Slider(_) => (160., e.style.slider.thumb_diameter),
             Kind::Row => (
                 children.iter().map(|c| c.0).sum::<f32>() + gaps,
                 children.iter().map(|c| c.1).fold(0., f32::max),
@@ -264,11 +268,14 @@ impl Layout {
         } else {
             clip.clone()
         };
-        let interactive =
-            e.click.is_some() || e.input.is_some() || e.drag.is_some() || e.hover.is_some();
+        let interactive = e.click.is_some()
+            || e.input.is_some()
+            || e.drag.is_some()
+            || e.hover.is_some()
+            || e.slider.is_some();
         if e.style.background.3 > 0. && alpha > 0. {
             let mut color = e.style.background;
-            if e.click.is_some() || e.input.is_some() {
+            if e.click.is_some() || e.input.is_some() || e.slider.is_some() {
                 color = color.mix(
                     e.style.hover_color.alpha(color.3),
                     interaction.hover_amount(&id, now) * e.style.hover_color.3,
@@ -316,9 +323,23 @@ impl Layout {
                     String::new()
                 },
                 drag: e.drag.clone(),
+                slider: if let Kind::Slider(spec) = e.kind {
+                    e.slider.as_ref().map(|callback| {
+                        let (track, _) = slider::geometry(rect, e.style.padding, e.style.slider);
+                        SliderHit {
+                            spec,
+                            start: track.x,
+                            width: track.w,
+                            callback: callback.clone(),
+                        }
+                    })
+                } else {
+                    None
+                },
                 autofocus: e.autofocus,
                 hover_transition: e.style.hover_transition,
-                tab_stop: e.style.tab_stop && (e.click.is_some() || e.input.is_some()),
+                tab_stop: e.style.tab_stop
+                    && (e.click.is_some() || e.input.is_some() || e.slider.is_some()),
             });
         }
         let p = e.style.padding;
@@ -389,6 +410,14 @@ impl Layout {
                     });
                 }
             }
+            Kind::Slider(spec) => slider::paint(
+                scene,
+                rect,
+                own_clip.intersect(rect),
+                *spec,
+                &e.style,
+                alpha,
+            ),
             Kind::Image(data) => {
                 let (rect, uv) =
                     image_geometry(inner, data.width(), data.height(), e.style.image_fit);
@@ -573,6 +602,7 @@ pub struct Interaction<M> {
     motions: BTreeMap<String, Motion>,
     select_all: bool,
     input_buffer: Option<(String, String)>,
+    slider_buffer: Option<(String, f32)>,
 }
 impl<M> Default for Interaction<M> {
     fn default() -> Self {
@@ -585,11 +615,29 @@ impl<M> Default for Interaction<M> {
             motions: BTreeMap::new(),
             select_all: false,
             input_buffer: None,
+            slider_buffer: None,
         }
     }
 }
 impl<M: Clone> Interaction<M> {
     pub fn synchronize(&mut self, scene: &Scene<M>) {
+        if self.press.as_ref().is_some_and(|p| {
+            p.hit.slider.is_some()
+                && !scene
+                    .hits
+                    .iter()
+                    .any(|h| h.id == p.hit.id && h.slider.is_some())
+        }) {
+            self.press = None;
+        }
+        self.slider_buffer = self.focus.as_ref().and_then(|id| {
+            scene
+                .hits
+                .iter()
+                .find(|h| &h.id == id)
+                .and_then(|h| h.slider.as_ref())
+                .map(|s| (id.clone(), s.spec.value()))
+        });
         if self
             .focus
             .as_ref()
@@ -668,7 +716,11 @@ impl<M: Clone> Interaction<M> {
         if let Some(press) = &mut self.press {
             let (dx, dy) = (x - press.x, y - press.y);
             press.moved |= dx.hypot(dy) >= 5.;
-            if press.moved
+            if let Some(slider) = &press.hit.slider {
+                if let Some(message) = slider.event(x, false) {
+                    out.push(message);
+                }
+            } else if press.moved
                 && let Some(f) = &press.hit.drag
             {
                 out.push(f(DragEvent {
@@ -682,8 +734,9 @@ impl<M: Clone> Interaction<M> {
             .retain(|id, m| m.active(now) || self.hovered.as_ref() == Some(id));
         out
     }
-    pub fn press(&mut self, scene: &Scene<M>, x: f32, y: f32) {
+    pub fn press(&mut self, scene: &Scene<M>, x: f32, y: f32) -> Option<M> {
         self.focus_visible = false;
+        self.slider_buffer = None;
         self.press = scene
             .hits
             .iter()
@@ -706,9 +759,16 @@ impl<M: Clone> Interaction<M> {
                     moved: false,
                 }
             });
+        self.press
+            .as_ref()
+            .and_then(|p| p.hit.slider.as_ref())
+            .and_then(|s| s.event(x, false))
     }
     pub fn release(&mut self, x: f32, y: f32) -> Option<M> {
         let p = self.press.take()?;
+        if let Some(slider) = &p.hit.slider {
+            return slider.event(x, true);
+        }
         if p.moved {
             return p.hit.drag.map(|f| {
                 f(DragEvent {
@@ -748,6 +808,7 @@ impl<M: Clone> Interaction<M> {
                 };
                 let hit = stops[next];
                 self.focus = Some(hit.id.clone());
+                self.slider_buffer = None;
                 self.select_all = false;
                 self.input_buffer = hit
                     .input
@@ -755,6 +816,30 @@ impl<M: Clone> Interaction<M> {
                     .map(|_| (hit.id.clone(), hit.value.clone()));
             }
             return None;
+        }
+        if let Some(hit) = scene
+            .hits
+            .iter()
+            .find(|h| Some(&h.id) == self.focus.as_ref())
+            && let Some(slider) = &hit.slider
+        {
+            let previous = self
+                .slider_buffer
+                .as_ref()
+                .filter(|(id, _)| id == &hit.id)
+                .map_or(slider.spec.value(), |(_, value)| *value);
+            let value = match key {
+                Key::Left | Key::Down => (previous - slider.spec.step()).max(0.),
+                Key::Right | Key::Up => (previous + slider.spec.step()).min(1.),
+                Key::Home => 0.,
+                Key::End => 1.,
+                _ => return None,
+            };
+            self.slider_buffer = Some((hit.id.clone(), value));
+            return Some((slider.callback)(SliderEvent {
+                value,
+                finished: true,
+            }));
         }
         if (matches!(key, Key::Enter) || matches!(key, Key::Text(s) if s == " "))
             && let Some(hit) = scene
@@ -819,6 +904,7 @@ mod tests {
             input: None,
             value: String::new(),
             drag: None,
+            slider: None,
             autofocus: false,
             hover_transition: Transition::default(),
             tab_stop: true,
@@ -838,6 +924,7 @@ mod tests {
             input: Some(Arc::new(|s: String| s)),
             value: String::new(),
             drag: None,
+            slider: None,
             autofocus: true,
             hover_transition: Transition::default(),
             tab_stop: true,
@@ -873,6 +960,7 @@ mod tests {
             input: None,
             value: String::new(),
             drag: Some(Arc::new(|d: DragEvent| if d.finished { 3 } else { 2 })),
+            slider: None,
             autofocus: false,
             hover_transition: Transition::default(),
             tab_stop: true,
@@ -882,7 +970,7 @@ mod tests {
             ..Scene::default()
         };
         let mut i = Interaction::default();
-        i.press(&scene, 20., 20.);
+        assert_eq!(i.press(&scene, 20., 20.), None);
         assert_eq!(i.motion(&scene, 40., 20., 0.), vec![2]);
         assert_eq!(i.release(40., 20.), Some(3));
     }

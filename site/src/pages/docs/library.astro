@@ -18,7 +18,7 @@ const sections: [string, string][] = [['scope','01 · Library boundary'],['contr
     <CodeBlock code={excerpt(api, 'pub trait Component:', 'pub type Task<M>')} lang="rust" label="Actual Component and Application contracts" />
     <p>A Rust struct holds state. A message enum names possible changes. <code>view(&amp;self)</code> constructs an <code>Element</code> tree; <code>update(&amp;mut self)</code> changes state and records effects. An application also declares native surfaces, startup work and subscriptions. These are ordinary Rust method calls, not automatically discovered classes or registered DOM nodes.</p>
     <div class="table-scroll"><table><thead><tr><th>API value</th><th>Responsibility</th></tr></thead><tbody>
-      <tr><td>Element&lt;Message&gt;</td><td>Rows, columns, stacks, grids, text, images, inputs, styles and interaction messages.</td></tr>
+      <tr><td>Element&lt;Message&gt;</td><td>Rows, columns, stacks, grids, text, images, inputs, sliders, styles and interaction messages.</td></tr>
       <tr><td>ViewContext</td><td>Current surface ID, logical width/height and monotonic time.</td></tr>
       <tr><td>SurfaceSpec</td><td>Layer, anchor, size, reserved space, keyboard mode, visibility and input capture.</td></tr>
       <tr><td>Effects</td><td>Redraw requests, queued background tasks and exit requests. A redraw records intent; it does not submit GPU work.</td></tr>
@@ -30,6 +30,7 @@ const sections: [string, string][] = [['scope','01 · Library boundary'],['contr
     <CodeBlock code={excerpt(example, 'impl Component for Example', 'fn main()')} lang="rust" label="Live hello-layer parent component and surface declaration" />
     <p><code>Element::map</code> wraps a child's messages in the parent's message type. <code>Effects::delegate</code> invokes the child's update and merges its effects, wrapping background results too. The runtime calls the application's update; it does not automatically locate and call an update method on every node.</p>
     <p>Use stable element IDs where focus, hover or input state must survive rebuilding a view. Each visible native surface gets its own view. Child coordinates are resolved relative to their parent's content box. A surface anchor is a compositor request; a row's padding is a layout instruction inside that surface.</p>
+    <p>The example's slider is controlled by the client: <code>SliderSpec::new(value, step)</code> validates normalized values, and each <code>SliderEvent</code> returns the new value and whether the gesture finished. Its update stores that value and requests a redraw. Pointer capture, arrow keys, Home/End and focus belong to the framework; units and OS effects belong to the client. <code>Theme::slider</code> supplies semantic colors and spacing tokens. This demo does not control system audio, and native audio integration remains unfinished.</p>
   </section>
   <section id="execute"><span class="eyebrow">04 / WHEN THINGS HAPPEN</span><h2>One event loop owns state.</h2>
     <CodeBlock code={`run(application)

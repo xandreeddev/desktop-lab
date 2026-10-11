@@ -265,12 +265,15 @@
     {
       "id": "framework-controls",
       "owner": "lucent-api lucent-ui and lucent-wayland",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "Reusable scrolling and sliders",
         "Tooltips popup and focus lifecycle",
         "Controls demonstrated by real clients",
         "Behavior and visual regression coverage"
+      ],
+      "progress": [
+        "Controlled normalized slider API, pointer capture, keyboard adjustment, shared paint/hit geometry and semantic token recipe implemented with an independent hello-layer client example. Audio integration, general scrolling, popup/tooltip lifecycle and accessibility remain incomplete."
       ]
     },
     {

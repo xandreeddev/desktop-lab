@@ -130,16 +130,37 @@ impl Component for Counter {
 ```
 
 A parent can render `child.view(cx).map(ParentMessage::Child)` and delegate updates
-to the child using `effects.delegate(|child_fx| child.update(message, child_fx), ParentMessage::Child)`. Delegation preserves time, redraw requests and typed async results. Mapping also lifts input and drag callbacks. Stable element IDs
+to the child using `effects.delegate(|child_fx| child.update(message, child_fx), ParentMessage::Child)`. Delegation preserves time, redraw requests and typed async results. Mapping also lifts input, drag and slider callbacks. Stable element IDs
 preserve hover and keyboard focus between views. The client owns state; the
 runtime delivers messages on one UI thread. It never mutates a view tree in place.
 
-Supported primitives: text, image, button, single-line input, row, column, stack,
+Supported primitives: text, image, button, single-line input, slider, row, column, stack,
 grid and empty shape. `Length::{Fixed, Fill, Shrink}`, padding, gaps, alignment,
 absolute positioning within a stack, clipping, opacity, rounded corners and
 shadows cover the implemented clients. Rich text, selection/caret editing and
 IME protocols are not yet implemented. Registered font faces are chosen by index;
 layout and rendering use the same font metrics.
+
+`SliderSpec::new(value, step)` validates a normalized value in `0..=1` and a
+positive finite step no greater than one; invalid input returns `None`.
+`Element::slider(spec, callback)` produces a controlled input. Pointer press and
+motion emit `SliderEvent { value, finished: false }`; release emits `finished:
+true`, including outside the control. Arrow keys adjust by one step, Home/End
+select the endpoints, and Tab moves keyboard focus. Pointer positions are
+quantized to steps; the two endpoints remain reachable. Repeated keys accumulate
+even before the next frame. Removing the control cancels its captured gesture.
+
+The client stores the value in `update` and requests a redraw. It decides whether
+to apply a service command continuously or on release; the slider performs no OS
+operations and starts no timer or animation. `SliderStyle` supplies track, fill
+and thumb geometry/colors. `lucent-design::Theme::slider` uses semantic colors
+and generated component tokens. The `hello-layer` example demonstrates a demo
+level independent of any audio service. It does not change system volume.
+
+`lucent-ui` turns the track and thumb into ordinary shape paint commands, using
+the same padded track geometry for pointer mapping. The existing Vulkan renderer
+draws those shapes and the focus outline. Touch, accessibility announcements,
+vertical sliders and a general scroll container remain unfinished.
 
 ## Effects, subscriptions and services
 

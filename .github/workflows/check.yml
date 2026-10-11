@@ -53,6 +53,7 @@ jobs:
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render frame_profiling_distinguishes -- --ignored --nocapture
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render renderer_surface_resources -- --ignored --nocapture
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render edge_coverage_is_mirror_symmetric -- --ignored --nocapture
+          cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render slider_track_thumb_and_focus -- --ignored --nocapture
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render rounded_cover_and_nested_clips -- --ignored --nocapture
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render shadow_blur_is_supplied -- --ignored --nocapture
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-desktop visual_regressions -- --ignored --nocapture

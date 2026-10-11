@@ -485,6 +485,16 @@ pub mod component {
         pub const SWATCH: f32 = 24.0;
         pub const PALETTE_ROW: f32 = 56.0;
     }
+    pub mod slider {
+        pub const HEIGHT: f32 = 40.0;
+        pub const TRACK_HEIGHT: f32 = 4.0;
+        pub const THUMB_DIAMETER: f32 = 16.0;
+        pub const PADDING_INLINE: f32 = 8.0;
+    }
+    pub mod example {
+        pub const WIDTH: f32 = 448.0;
+        pub const HEIGHT: f32 = 384.0;
+    }
 }
 pub mod icon {
     pub const TINY: f32 = 16.0;

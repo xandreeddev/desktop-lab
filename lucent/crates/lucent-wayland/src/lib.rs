@@ -887,7 +887,9 @@ impl<A: Application> PointerHandler for State<A> {
                     PointerEventKind::Leave { .. } => s.interaction.leave(now),
                     PointerEventKind::Press { button: 0x110, .. } => {
                         outside = !s.scene.hits.iter().any(|h| h.contains(x, y));
-                        s.interaction.press(&s.scene, x, y);
+                        if let Some(message) = s.interaction.press(&s.scene, x, y) {
+                            messages.push(message);
+                        }
                     }
                     PointerEventKind::Release { button: 0x110, .. } => {
                         if let Some(m) = s.interaction.release(x, y) {

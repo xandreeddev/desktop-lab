@@ -1,4 +1,6 @@
 //! A small declarative shell API. Public types contain no Wayland or GPU handles.
+mod slider;
+pub use slider::{SliderEvent, SliderSpec, SliderStyle};
 mod clip;
 pub use clip::{Clip, RoundedRect};
 mod image;
@@ -153,6 +155,7 @@ pub struct Style {
     pub selected: bool,
     pub tab_stop: bool,
     pub caret_width: f32,
+    pub slider: SliderStyle,
 }
 impl Default for Style {
     fn default() -> Self {
@@ -183,6 +186,7 @@ impl Default for Style {
             selected: false,
             tab_stop: true,
             caret_width: 1.,
+            slider: SliderStyle::default(),
         }
     }
 }
@@ -195,6 +199,7 @@ pub enum Kind {
     Text(String),
     Image(Arc<ImageData>),
     Input { value: String, placeholder: String },
+    Slider(SliderSpec),
     Empty,
 }
 #[derive(Clone, Copy, Debug)]
@@ -204,6 +209,7 @@ pub struct DragEvent {
     pub finished: bool,
 }
 pub type InputCallback<M> = Arc<dyn Fn(String) -> M + Send + Sync>;
+pub type SliderCallback<M> = Arc<dyn Fn(SliderEvent) -> M + Send + Sync>;
 pub type DragCallback<M> = Arc<dyn Fn(DragEvent) -> M + Send + Sync>;
 #[derive(Clone)]
 pub struct Element<M> {
@@ -215,6 +221,7 @@ pub struct Element<M> {
     pub hover: Option<M>,
     pub input: Option<InputCallback<M>>,
     pub drag: Option<DragCallback<M>>,
+    pub slider: Option<SliderCallback<M>>,
     pub autofocus: bool,
 }
 impl<M> Element<M> {
@@ -228,6 +235,7 @@ impl<M> Element<M> {
             hover: None,
             input: None,
             drag: None,
+            slider: None,
             autofocus: false,
         }
     }
@@ -279,6 +287,19 @@ impl<M> Element<M> {
         });
         e.input = Some(Arc::new(on_change));
         e
+    }
+    /// A controlled scalar input with pointer capture and keyboard adjustment.
+    pub fn slider(
+        spec: SliderSpec,
+        on_change: impl Fn(SliderEvent) -> M + Send + Sync + 'static,
+    ) -> Self {
+        let mut e = Self::new(Kind::Slider(spec));
+        e.slider = Some(Arc::new(on_change));
+        e
+    }
+    pub fn slider_style(mut self, style: SliderStyle) -> Self {
+        self.style.slider = style;
+        self
     }
     pub fn id(mut self, id: impl Into<String>) -> Self {
         self.id = id.into();
@@ -853,6 +874,10 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
             let map = mapper.clone();
             Arc::new(move |event| map(drag(event))) as DragCallback<N>
         });
+        let slider = self.slider.map(|callback| {
+            let map = mapper.clone();
+            Arc::new(move |event| map(callback(event))) as SliderCallback<N>
+        });
         Element {
             id: self.id,
             kind: self.kind,
@@ -866,6 +891,7 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
             hover: self.hover.map(|m| mapper(m)),
             input,
             drag,
+            slider,
             autofocus: self.autofocus,
         }
     }

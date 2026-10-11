@@ -387,6 +387,12 @@
   --component-wallpaper-browser-footer-height: 40px;
   --component-wallpaper-browser-swatch: 24px;
   --component-wallpaper-browser-palette-row: 56px;
+  --component-slider-height: var(--space-wide);
+  --component-slider-track-height: var(--space-xs);
+  --component-slider-thumb-diameter: var(--space-lg);
+  --component-slider-padding-inline: var(--space-sm);
+  --component-example-width: 448px;
+  --component-example-height: 384px;
   --icon-tiny: 16px;
   --icon-small: 17px;
   --icon-compact: 18px;
