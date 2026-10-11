@@ -151,6 +151,26 @@ application exits. `Subscription::every` is a convenience for bounded periodic
 sources. A subscription whose parameters change must use a new ID or explicitly
 react to its own configuration; a stable ID is not automatically restarted.
 
+Runtime ingress is a shared FIFO with capacity for 64 waiting messages from
+subscriptions, effect completions and local IPC. When full, background producers
+wait; the UI never waits to enqueue. Each calloop dispatch handles at most 65
+values before yielding to other event sources. This bounds queued message count,
+not payload bytes or execution time; it does not promise fairness between producers.
+Subscription emitters must not hold locks that the UI needs. Cancellation releases
+an overloaded sender. A queued subscription event carries its lifetime token and
+is discarded before update if that stream was removed, including an older stream
+which used the same ID. Effect results already entering delivery are not retracted;
+clients retain their own request/transaction identity checks.
+
+At most 64 subscription bodies may be live, including cancelled streams which
+have not yet returned. A slot is released on normal return or panic. Duplicate IDs,
+thread-spawn errors and worker exhaustion fail explicitly; the runtime does not
+silently skip required streams. Drop cancels registered subscriptions even when the
+runtime returns through an error path. Cooperative bodies still need to respect
+their token. Completed streams keep their identity until removed; this is not an
+automatic service-reconnection policy. An overloaded sender checks runtime shutdown
+every five milliseconds; ordinary idle delivery adds no polling loop.
+
 The compositor adapter subscribes to Hyprland's event socket and queries fresh
 snapshots on relevant events, reconnecting after disconnection. Clock, system,
 media and weather adapters currently poll at 1 second, 5 seconds, 2 seconds and
@@ -170,8 +190,9 @@ entries, unsupported field codes and unsupported settings versions fail explicit
 exclusive zone, keyboard interactivity, visibility and full-input-capture intent.
 The runtime reconciles these declarations and keeps native handles private.
 
-The desktop uses three persistent native surfaces and an on-demand notification surface:
+The desktop uses four persistent native surfaces plus on-demand notification and feedback surfaces:
 
+- A background painting the selected wallpaper.
 - A top bar reserving 56 logical pixels.
 - A bottom-layer widget host with input regions matching interactive widgets.
 - A dock host switching from the top layer to an exclusive-keyboard overlay while

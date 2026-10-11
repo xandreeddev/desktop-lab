@@ -48,7 +48,25 @@
       "evidence": [
         "Bounded queue ordering, independent work, overload, cancellation, panic and shutdown tests passed",
         "Native launcher and secure lock/unlock passed",
-        "Subscription message delivery remains unbounded and is separate follow-up work"
+        "Subscription ingress now shares a bounded 64-value runtime queue; producer cancellation, stale-generation filtering, calloop dispatch bounds and live worker limits are tested. Native verification pending."
+      ]
+    },
+    {
+      "id": "subscription-delivery",
+      "owner": "lucent-wayland runtime",
+      "status": "in_progress",
+      "acceptance": [
+        "Queued background messages have a fixed count bound",
+        "Overloaded producers yield and cancellation releases their wait",
+        "Replaced subscription lifetimes cannot deliver stale queued events",
+        "Live worker limit counts cancelled streams still stopping",
+        "Calloop dispatch bounds and native behavior are verified"
+      ],
+      "evidence": [
+        "Bounded FIFO delivery, cancellation/disconnection, remaining-work wakeups and dispatch batches tested",
+        "Stable/replaced identities, duplicate IDs, panic reporting, cooperative drop and retiring-worker limits tested",
+        "122 Rust tests and 52 Python checks passed; Clippy, formatting and documentation checks passed",
+        "Native release deployment and integration pending"
       ]
     },
     {
@@ -371,7 +389,7 @@
     },
     {
       "milestone": "frame-profiling",
-      "status": "locally_verified",
+      "status": "merged",
       "source_commit": "77129a527f56393a882d4fa165b76dce0c96ccac",
       "checks": [
         "113 Rust unit tests, 52 Python checks and focused cold/warm Vulkan test passed",
@@ -381,13 +399,15 @@
         "Native default-off profiling, activation and intentional-failure restoration passed",
         "Native launcher, application survival, restart and secure lock/unlock passed",
         "Profiled and normal-mode 120-second measurements recorded with source/binary/hardware identity",
-        "Final native desktop ready with profiling disabled"
+        "Final native desktop ready with profiling disabled",
+        "All six exact-head checks, protected-main merge and Pages deployment passed"
       ],
       "pending": [
-        "Exact-head CI, protected-main merge and Pages",
         "Event/reconciliation/other-surface correlation for submission gaps",
         "Memory reduction, remaining workload/hardware validation and other requirement groups"
-      ]
+      ],
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/13",
+      "merge_commit": "ed637ad3bdb37e6ad042179482269d5dcadc483a"
     }
   ]
 }
