@@ -48,7 +48,7 @@ impl Desktop {
     }
     pub fn app_icon(&self, app: &App, size: f32) -> Element<Message> {
         self.images
-            .get(&format!("app:{}", app.id.0))
+            .get(&format!("app:{}", app.id.as_str()))
             .or_else(|| self.images.get(&app.icon))
             .or_else(|| self.images.get("app:fallback"))
             .cloned()
@@ -82,27 +82,18 @@ impl Desktop {
             .background(self.surface_color())
     }
     pub fn bar(&self, cx: &ViewContext) -> Element<Message> {
-        let geometry = shell_layout::BarLayout::new(cx.width, self.compositor.workspaces.len());
-        let active = self
-            .compositor
-            .workspaces
-            .iter()
-            .position(|w| w.active)
-            .unwrap_or(0);
-        let start = (active + 1).saturating_sub(geometry.workspace_count).min(
-            self.compositor
-                .workspaces
-                .len()
-                .saturating_sub(geometry.workspace_count),
-        );
+        let buttons = crate::workspaces::buttons(&self.compositor);
+        let geometry = shell_layout::BarLayout::new(cx.width, buttons.len());
+        let active = buttons.iter().position(|w| w.active).unwrap_or(0);
+        let start = (active + 1)
+            .saturating_sub(geometry.workspace_count)
+            .min(buttons.len().saturating_sub(geometry.workspace_count));
         let bar_icon = |name: &str| {
             self.icon(name, icon::TINY)
                 .size(component::bar::CONTROL_SIZE, component::bar::CONTROL_SIZE)
                 .padding(space::XS)
         };
-        let workspaces = self
-            .compositor
-            .workspaces
+        let workspaces = buttons
             .iter()
             .skip(start)
             .take(geometry.workspace_count)
@@ -133,7 +124,7 @@ impl Desktop {
                                 (component::bar::WORKSPACE_SIZE - component::bar::DOT_SIZE) / 2.,
                             )
                             .radius(radius::INDICATOR)
-                            .background(self.ink().alpha(if w.windows > 0 {
+                            .background(self.ink().alpha(if w.occupied {
                                 opacity::STRONG
                             } else {
                                 opacity::QUIET
@@ -312,11 +303,11 @@ impl Desktop {
                 .id("dock-launcher"),
         ];
         for app in self.dock_apps() {
-            let running = self.compositor.windows.iter().any(|w| {
-                w.app_class.eq_ignore_ascii_case(&app.startup_class)
-                    || w.app_class
-                        .eq_ignore_ascii_case(app.id.0.trim_end_matches(".desktop"))
-            });
+            let running = self
+                .compositor
+                .windows
+                .iter()
+                .any(|w| app.matches_window_class(&w.app_class));
             let mut content = vec![self.app_icon(app, icon::APP).at(
                 (component::dock_row::ITEM_SIZE - icon::APP) / 2.,
                 (component::dock_row::ITEM_SIZE - icon::APP) / 2.,
@@ -345,7 +336,7 @@ impl Desktop {
                     .radius(radius::CONTROL)
                     .background(self.surface_color())
                     .on_click(Message::Launch(app.id.clone(), true))
-                    .id(format!("dock-{}", app.id.0)),
+                    .id(format!("dock-{}", app.id.as_str())),
             );
         }
         Element::row(items)

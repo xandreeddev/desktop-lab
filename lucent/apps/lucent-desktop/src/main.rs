@@ -8,6 +8,7 @@ mod shell_layout;
 mod views;
 mod wallpaper_browser;
 mod widgets;
+mod workspaces;
 use desktop::Desktop;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     lucent_wayland::run(Desktop::new(platform::desktop_adapters()))

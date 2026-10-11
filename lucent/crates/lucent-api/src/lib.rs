@@ -104,6 +104,23 @@ pub enum ImageFit {
     Contain,
     Cover,
 }
+/// Presentation parameters in logical pixels. The renderer uses a smooth
+/// distance-field falloff outside the shape, truncated at three blur lengths.
+#[derive(Clone, Copy, Debug)]
+pub struct Shadow {
+    pub color: Color,
+    pub offset: (f32, f32),
+    pub blur: f32,
+}
+impl Default for Shadow {
+    fn default() -> Self {
+        Self {
+            color: Color(0., 0., 0., 0.2),
+            offset: (0., 4.),
+            blur: 8.,
+        }
+    }
+}
 #[derive(Clone, Debug)]
 pub struct Style {
     pub width: Length,
@@ -120,9 +137,7 @@ pub struct Style {
     pub align: Align,
     pub opacity: f32,
     pub clip: bool,
-    pub shadow: bool,
-    pub shadow_color: Color,
-    pub shadow_offset: f32,
+    pub shadow: Option<Shadow>,
     /// Tint and strength of the hover state layer; transparent disables it.
     pub hover_color: Color,
     pub hover_transition: Transition,
@@ -156,9 +171,7 @@ impl Default for Style {
             align: Align::Start,
             opacity: 1.,
             clip: false,
-            shadow: false,
-            shadow_color: Color(0., 0., 0., 0.2),
-            shadow_offset: 4.,
+            shadow: None,
             hover_color: Color::TRANSPARENT,
             hover_transition: Transition::default(),
             image_tint: Color::hex(0xffffff),
@@ -368,7 +381,11 @@ impl<M> Element<M> {
         self
     }
     pub fn shadow(mut self) -> Self {
-        self.style.shadow = true;
+        self.style.shadow = Some(Shadow::default());
+        self
+    }
+    pub fn with_shadow(mut self, shadow: Shadow) -> Self {
+        self.style.shadow = Some(shadow);
         self
     }
     pub fn on_click(mut self, msg: M) -> Self {

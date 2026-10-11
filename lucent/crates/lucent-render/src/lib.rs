@@ -352,7 +352,7 @@ impl Canvas {
         let mut textures = Vec::with_capacity(paint.len());
         let mut clip_records = Vec::<[f32; 8]>::new();
         for primitive in paint {
-            let (rect, clip, color, radius, kind, stroke, texture) = match primitive {
+            let (rect, clip, color, radius, kind, detail, texture) = match primitive {
                 Paint::Outline {
                     rect,
                     clip,
@@ -365,16 +365,14 @@ impl Canvas {
                     clip,
                     color,
                     radius,
-                    shadow,
-                } => (
-                    *rect,
+                } => (*rect, clip, *color, *radius, 0., 0., self.gpu.white()),
+                Paint::Shadow {
+                    rect,
                     clip,
-                    *color,
-                    *radius,
-                    if *shadow { 2. } else { 0. },
-                    0.,
-                    self.gpu.white(),
-                ),
+                    color,
+                    radius,
+                    blur,
+                } => (*rect, clip, *color, *radius, 2., *blur, self.gpu.white()),
                 Paint::Image {
                     rect,
                     clip,
@@ -463,7 +461,7 @@ impl Canvas {
                 color.3,
                 radius,
                 kind,
-                stroke,
+                detail,
                 0.,
                 bounds.x,
                 bounds.y,
@@ -743,6 +741,32 @@ mod clipping_tests {
     use super::*;
     use lucent_api::{Color, Element, ImageData};
     use lucent_ui::{Interaction, Layout};
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn shadow_blur_is_supplied_by_the_client_and_scales_with_the_surface() {
+        let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
+        let mut canvas = Canvas::new(gpu);
+        for scale in [1, 2] {
+            let mut samples = Vec::new();
+            for blur in [4., 12.] {
+                let paint = [Paint::Shadow {
+                    rect: Rect::new(16., 16., 24., 24.),
+                    clip: Rect::new(0., 0., 64., 64.).into(),
+                    color: Color(0., 0., 0., 1.),
+                    radius: 0.,
+                    blur,
+                }];
+                let pixels = canvas.snapshot(64, 64, scale, &paint).unwrap();
+                let offset = ((28 * scale * 64 * scale + 48 * scale) * 4 + 3) as usize;
+                samples.push(pixels[offset]);
+            }
+            assert!(
+                samples[1] > samples[0].saturating_add(60),
+                "blur was ignored: {samples:?}"
+            );
+        }
+    }
 
     #[test]
     #[ignore = "requires a Vulkan driver"]

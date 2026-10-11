@@ -15,7 +15,7 @@ struct Vertex {
 };
 @vertex fn vs(@builtin(vertex_index) index:u32,@location(0) rect:vec4<f32>,@location(1) color:vec4<f32>,@location(2) params:vec4<f32>,@location(3) clip:vec4<f32>,@location(4) uv:vec4<f32>,@location(5) clip_range:vec4<f32>)->Vertex {
     let corners=array<vec2<f32>,6>(vec2(0.0,0.0),vec2(1.0,0.0),vec2(0.0,1.0),vec2(0.0,1.0),vec2(1.0,0.0),vec2(1.0,1.0));
-    let pad=select(0.0,18.0,params.y>1.5&&params.y<2.5);
+    let pad=select(0.0,params.z*3.0,params.y>1.5&&params.y<2.5);
     let local=corners[index]*(rect.zw+vec2(pad*2.0))-vec2(pad);
     let point=rect.xy+local;
     var out:Vertex;
@@ -37,7 +37,7 @@ fn round_distance(point:vec2<f32>,rect:vec4<f32>,requested_radius:f32)->f32 {
     // Axis-aligned texture quads already have exact rasterized bounds. Fading
     // their straight edges creates seams on full-surface wallpaper images.
     if v.params.y>0.5&&v.params.y<1.5&&v.params.x<=0.0 {coverage=1.0;}
-    if v.params.y>1.5&&v.params.y<2.5 {coverage=exp(-max(d,0.0)*max(d,0.0)/65.0);}
+    if v.params.y>1.5&&v.params.y<2.5&&v.params.z>0.0 {coverage=exp(-max(d,0.0)*max(d,0.0)/(v.params.z*v.params.z));}
     if v.params.y>2.5 {coverage*=smoothstep(-aa,aa,d+v.params.z);}
     var clip_distance=-1e6;
     for(var i=0u;i<v.clip_range.y;i+=1u) {

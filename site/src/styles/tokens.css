@@ -455,4 +455,6 @@
   --palette-recipe-foreground-white: 0.9;
   --palette-recipe-accent-white: 0.35;
   --palette-recipe-contrast-step: 0.05;
+  --elevation-blur: var(--space-sm);
+  --elevation-offset: var(--space-xs);
 }

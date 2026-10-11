@@ -568,3 +568,7 @@ pub mod palette_recipe {
     pub const ACCENT_WHITE: f32 = 0.35;
     pub const CONTRAST_STEP: f32 = 0.05;
 }
+pub mod elevation {
+    pub const BLUR: f32 = 8.0;
+    pub const OFFSET: f32 = 4.0;
+}

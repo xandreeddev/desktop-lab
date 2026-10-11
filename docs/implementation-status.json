@@ -128,13 +128,21 @@
     {
       "id": "architecture-enforcement",
       "owner": "domain clients framework and tests",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "Workspace display policy is removed from compositor adapters",
         "Shadow appearance is token driven",
         "Launcher appearance and widget coordination have cohesive boundaries",
         "Value objects enforce demonstrated invariants",
         "Dependency guards include nested source and resolved target dependencies"
+      ],
+      "evidence": [
+        "Recursive source guards and alias/workspace/target/build/dev dependency resolution pass with regression fixtures",
+        "Compositor reports actual workspaces; client owns shortcut buttons",
+        "Token-supplied Shadow parameters replace shader styling constants; focused 1x/2x Vulkan test passed",
+        "AppId construction/deserialization reject invalid desktop-file identities; settings compatibility and preservation tested",
+        "Application window-class matching shared by use case and dock, avoiding empty identity matches",
+        "Further domain invariants and client component extraction remain open"
       ]
     },
     {
@@ -271,7 +279,7 @@
     },
     {
       "milestone": "rounded-clipping",
-      "status": "locally_verified",
+      "status": "merged",
       "source_commit": "65244ce710174c72a329e70a6eb96549b2251c69",
       "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/9",
       "checks": [
@@ -279,12 +287,13 @@
         "Focused 1x/2x Vulkan clipping test and 148 visual comparisons passed",
         "18 affected visual baselines reviewed; unrelated baselines retained",
         "Release build, Clippy, formatting and documentation build passed",
-        "Native launcher/restart/application survival/secure lock/unlock passed"
+        "Native launcher/restart/application survival/secure lock/unlock passed",
+        "All six required checks, protected-main merge and Pages deployment passed"
       ],
       "pending": [
-        "Protected-main CI and merge",
         "Remaining requirement groups"
-      ]
+      ],
+      "merge_commit": "a9adf57746b11363a6681ec5fe67d3992514bed1"
     }
   ]
 }

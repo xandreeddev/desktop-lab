@@ -50,11 +50,10 @@ pub fn activate_application(
 ) -> Result<()> {
     if prefer_running
         && let Ok(snapshot) = compositor.snapshot()
-        && let Some(window) = snapshot.windows.iter().find(|w| {
-            let id = app.id.0.trim_end_matches(".desktop");
-            w.app_class.eq_ignore_ascii_case(&app.startup_class)
-                || w.app_class.eq_ignore_ascii_case(id)
-        })
+        && let Some(window) = snapshot
+            .windows
+            .iter()
+            .find(|w| app.matches_window_class(&w.app_class))
     {
         return compositor.focus_window(&window.address);
     }
@@ -141,7 +140,7 @@ mod tests {
     use std::sync::Mutex;
     fn app(name: &str) -> Application {
         Application {
-            id: AppId(format!("{name}.desktop")),
+            id: AppId::new(format!("{name}.desktop")).unwrap(),
             name: name.into(),
             description: String::new(),
             keywords: vec![],
@@ -214,6 +213,16 @@ mod tests {
         activate_application(&fake, &fake, &app("foot"), true).unwrap();
         activate_application(&fake, &fake, &app("foot"), false).unwrap();
         assert_eq!(*fake.calls.lock().unwrap(), vec!["focus", "launch"]);
+    }
+    #[test]
+    fn window_identity_never_matches_missing_hints_or_strips_multiple_suffixes() {
+        let mut candidate = app("editor.desktop");
+        candidate.startup_class.clear();
+        assert!(!candidate.matches_window_class(""));
+        assert!(!candidate.matches_window_class("editor"));
+        assert!(candidate.matches_window_class("EDITOR.desktop"));
+        candidate.startup_class = "CustomEditor".into();
+        assert!(candidate.matches_window_class("customeditor"));
     }
     #[test]
     fn timer_catches_up_without_counting_callback_ticks() {

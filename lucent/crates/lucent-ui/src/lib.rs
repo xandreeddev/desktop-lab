@@ -17,7 +17,13 @@ pub enum Paint {
         clip: Clip,
         color: Color,
         radius: f32,
-        shadow: bool,
+    },
+    Shadow {
+        rect: Rect,
+        clip: Clip,
+        color: Color,
+        radius: f32,
+        blur: f32,
     },
     Text {
         rect: Rect,
@@ -269,13 +275,22 @@ impl Layout {
                 );
             }
             color.3 *= alpha;
-            if e.style.shadow {
-                scene.paint.push(Paint::Shape {
-                    rect: Rect::new(rect.x, rect.y + e.style.shadow_offset, rect.w, rect.h),
+            if let Some(shadow) = e.style.shadow {
+                scene.paint.push(Paint::Shadow {
+                    rect: Rect::new(
+                        rect.x + shadow.offset.0,
+                        rect.y + shadow.offset.1,
+                        rect.w,
+                        rect.h,
+                    ),
                     clip: clip.clone(),
-                    color: e.style.shadow_color.alpha(e.style.shadow_color.3 * alpha),
+                    color: shadow.color.alpha(shadow.color.3 * alpha),
                     radius: e.style.radius,
-                    shadow: true,
+                    blur: if shadow.blur.is_finite() {
+                        shadow.blur.max(0.)
+                    } else {
+                        0.
+                    },
                 });
             }
             scene.paint.push(Paint::Shape {
@@ -283,7 +298,6 @@ impl Layout {
                 clip: clip.clone(),
                 color,
                 radius: e.style.radius,
-                shadow: false,
             });
         }
         if interactive {
@@ -372,7 +386,6 @@ impl Layout {
                         clip: own_clip.intersect(inner),
                         color: e.style.foreground.alpha(e.style.foreground.3 * alpha),
                         radius: 0.,
-                        shadow: false,
                     });
                 }
             }
