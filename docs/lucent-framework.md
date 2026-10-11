@@ -162,6 +162,14 @@ the same padded track geometry for pointer mapping. The existing Vulkan renderer
 draws those shapes and the focus outline. Touch, accessibility announcements,
 vertical sliders and a general scroll container remain unfinished.
 
+`vm/test-slider.py --binary lucent/target/debug/hello-layer` verifies the
+independent example with real guest pointer/keyboard input. Build with the guest
+shut down, then run the harness in an unlocked single-monitor scale-1 guest. It
+uses a temporary executable and unit and removes both afterward. The example
+exposes its level/count through the framework inspection socket. See the
+[sanitized slider evidence](../reports/measurements/lucent-framework-slider.json)
+for the tested binary and the limits of this native check.
+
 ## Effects, subscriptions and services
 
 `Effects::task` runs a blocking operation on an ordered worker and returns a typed
