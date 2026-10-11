@@ -3,12 +3,13 @@ pub mod applications;
 pub mod compositor;
 pub mod desktop_adapters;
 pub mod images;
+pub mod wallpapers;
 use chrono::{Datelike, Timelike};
 use lucent_domain::*;
 use std::{
     fs,
     io::Read,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::{Command, Stdio},
     time::{Duration, Instant},
 };
@@ -359,34 +360,14 @@ pub fn wallpapers() -> Vec<Wallpaper> {
     files.dedup_by(|a, b| a.path == b.path);
     files
 }
-pub fn apply_wallpaper(path: &str) -> Result<()> {
-    let path = Path::new(path);
-    if !path.is_absolute() || !path.is_file() {
-        return Err(DomainError::Invalid(
-            "Wallpaper must be an existing absolute file path".into(),
-        ));
-    }
-    let home = std::env::var_os("HOME")
-        .ok_or_else(|| DomainError::Unavailable("Missing home directory".into()))?;
-    let directory = PathBuf::from(home).join(".local/state/lucent");
-    fs::create_dir_all(&directory).map_err(|e| DomainError::Failed(e.to_string()))?;
-    let temporary = directory.join("wallpaper.new");
-    let _ = fs::remove_file(&temporary);
-    std::os::unix::fs::symlink(path, &temporary)
-        .and_then(|_| fs::rename(&temporary, directory.join("wallpaper")))
-        .map_err(|e| DomainError::Failed(e.to_string()))
-}
-
-/// Lucent owns wallpaper selection; the legacy path is only an initial migration source.
+/// Native session clients read the selected immutable asset. Initial stock
+/// migration is read-only; explicit selection is owned by WallpaperStore.
 pub fn current_wallpaper() -> String {
-    std::env::var_os("HOME")
-        .and_then(|home| {
-            let home = PathBuf::from(home);
-            fs::canonicalize(home.join(".local/state/lucent/wallpaper"))
-                .or_else(|_| fs::canonicalize(home.join(".local/state/omarchy/current/background")))
-                .ok()
-        })
-        .map(|p| p.to_string_lossy().into())
+    wallpapers::WallpaperStore::default()
+        .current()
+        .ok()
+        .flatten()
+        .map(|asset| asset.path)
         .unwrap_or_default()
 }
 

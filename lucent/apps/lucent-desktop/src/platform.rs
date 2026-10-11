@@ -34,8 +34,12 @@ pub fn desktop_adapters() -> DesktopAdapters {
 }
 pub struct NativeAssets;
 impl AssetPort for NativeAssets {
-    fn background(&self, path: &str) -> Option<Arc<ImageData>> {
-        images::load(std::path::Path::new(path), 4096)
+    fn preview(&self, image: &ImageData) -> Arc<ImageData> {
+        Arc::new(image.downsample(images::PREVIEW_PIXELS))
+    }
+    fn background(&self, path: &str) -> Result<Arc<ImageData>> {
+        images::try_load(std::path::Path::new(path), 4096)
+            .map_err(|error| DomainError::Failed(error.to_string()))
     }
     fn initial(&self) -> BTreeMap<String, Arc<lucent_api::ImageData>> {
         let mut result = BTreeMap::new();

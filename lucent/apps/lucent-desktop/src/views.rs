@@ -814,7 +814,7 @@ impl Desktop {
         );
         cards.push(
             self.button(
-                if self.applied_wallpaper == self.wallpapers[self.wallpaper_index].path {
+                if self.wallpaper.source_path() == self.wallpapers[self.wallpaper_index].path {
                     "Applied"
                 } else {
                     "Apply wallpaper"

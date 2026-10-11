@@ -79,7 +79,7 @@
     "cpu_percent_one_core": 0.417,
     "rss_mib_mean": 526.35,
     "rss_mib_max": 528.58,
-    "scope": "main process only; child processes and GPU allocations excluded",
+    "scope": "main process CPU and resident mappings; child processes excluded; mapped driver/software-GPU memory may contribute to RSS",
     "gpu_memory": "not measured",
     "virtualization": "kvm",
     "service_cpu_percent_one_core": 1.195

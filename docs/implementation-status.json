@@ -88,7 +88,7 @@
     {
       "id": "wallpaper-transaction",
       "owner": "appearance use cases and adapters",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "Local and online assets validate before selection commits",
         "Decode failures retain prior wallpaper and report a useful error",
@@ -122,7 +122,8 @@
         "Idle preference restoration tested on success and failure",
         "Current native measurements recorded: 120-second idle, warm/cold launcher samples, restart readiness, hardware and binary identity",
         "Mean process RSS 526.35 MiB exceeds the initial 200 MiB target; hardware GPU behavior remains unmeasured",
-        "10-minute idle, detailed CPU stage profiling, scaling/hotplug and sleep/resume workloads remain open"
+        "600-second idle on architecture milestone: 0.542% main-process CPU, 530.36 MiB mean RSS; background and closed dock submitted zero frames. See lucent-framework-idle-600.json.",
+        "Cold launcher opening included a 246.42 ms maximum frame interval; warmed samples were near 16.5 ms median with up to 19.56 ms observed maximum. Detailed stage profiling, hardware GPU, scaling/hotplug and sleep/resume remain open."
       ]
     },
     {
@@ -297,7 +298,7 @@
     },
     {
       "milestone": "architecture-ownership",
-      "status": "locally_verified",
+      "status": "merged",
       "source_commit": "a3b21554a7aa42bf11ad98dfa57429713a67825e",
       "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/10",
       "checks": [
@@ -305,13 +306,14 @@
         "1x/2x parameterized-shadow Vulkan test passed",
         "148 visual comparisons passed without baseline changes",
         "Clippy, formatting, 457 tokens, 58 icons and documentation build passed",
-        "Release build and native workspace/launcher/restart/secure lock tests passed"
+        "Release build and native workspace/launcher/restart/secure lock tests passed",
+        "All six required checks, protected-main merge and Pages deployment passed"
       ],
       "pending": [
-        "Protected-main CI and merge",
         "Remaining architecture invariants and component extraction",
         "Other requirement groups"
-      ]
+      ],
+      "merge_commit": "2ce09c2f690db8ffb441679a832c0532177db286"
     }
   ]
 }

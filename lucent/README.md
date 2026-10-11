@@ -260,3 +260,12 @@ Wallpaper + colors. Alpha Coders uses public HTML metadata because its former AP
 endpoint is unavailable; provider errors remain visible without changing the
 active desktop. Downloads and source metadata stay in `~/Pictures/Wallpapers/Lucent`.
 No provider images or private desktop captures are published as visual fixtures.
+
+
+Wallpaper selections now stage a private immutable snapshot before decoding and
+committing it. Decode failures keep the prior selection; slow downloads cannot
+supersede newer local choices. Later manual palette choices take precedence over
+older automatic color work. The selected snapshot survives original-file edits;
+app-theme and login exports synchronize afterward. See the [domain guide](../site/src/pages/docs/domain.astro)
+for port contracts and `vm/test-wallpaper-transactions.py` for the native failure,
+restart, palette and login-publication check.

@@ -1621,7 +1621,13 @@ fn palette_library_and_failed_download_preserve_user_intent() {
     app.update(Message::Palette(palette.clone()), &mut effects);
     app.update(Message::Theme(true), &mut effects);
     assert!(app.palette_choices().iter().any(|p| p == &palette));
-    app.applied_wallpaper = "existing".into();
+    app.wallpaper.current = Some(lucent_domain::WallpaperAsset {
+        source: lucent_domain::Wallpaper {
+            path: "existing".into(),
+            name: "Existing".into(),
+        },
+        path: "existing".into(),
+    });
     app.update(
         Message::Browser(crate::wallpaper_browser::Message::Ready(
             0,
@@ -1631,6 +1637,6 @@ fn palette_library_and_failed_download_preserve_user_intent() {
         )),
         &mut effects,
     );
-    assert_eq!(app.applied_wallpaper, "existing");
+    assert_eq!(app.wallpaper.source_path(), "existing");
     assert_eq!(app.settings.palette.as_ref().unwrap().name, "Pearl");
 }

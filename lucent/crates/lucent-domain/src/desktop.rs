@@ -244,10 +244,17 @@ pub struct WeatherSnapshot {
     pub description: String,
     pub code: u32,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Wallpaper {
     pub path: String,
     pub name: String,
+}
+/// A stable copy of a wallpaper source. Image decoding belongs to presentation;
+/// selection commits only after that copy has been decoded successfully.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WallpaperAsset {
+    pub source: Wallpaper,
+    pub path: String,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TimerPhase {

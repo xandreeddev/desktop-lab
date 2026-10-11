@@ -15,7 +15,7 @@ impl std::fmt::Display for ImageError {
 }
 impl std::error::Error for ImageError {}
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ImageLevel {
     pub width: u32,
     pub height: u32,
@@ -72,6 +72,27 @@ impl ImageData {
                 levels,
             }),
         })
+    }
+    /// Copy an already prepared mip chain at or below the requested dimensions.
+    /// A small preview does not retain the full-resolution allocation. This only
+    /// copies premultiplied pixels; it neither decodes nor resamples the source.
+    /// Prepare on an asset worker, outside the UI/render thread.
+    pub fn downsample(&self, max_dimension: u32) -> Self {
+        let index = self
+            .levels()
+            .iter()
+            .position(|level| level.width.max(level.height) <= max_dimension.max(1))
+            .unwrap_or(self.levels().len() - 1);
+        if index == 0 {
+            return self.clone();
+        }
+        Self {
+            key: self.key.clone(),
+            prepared: Arc::new(Prepared {
+                id: NEXT_IMAGE.fetch_add(1, Ordering::Relaxed),
+                levels: self.levels()[index..].to_vec(),
+            }),
+        }
     }
     pub fn width(&self) -> u32 {
         self.prepared.levels[0].width
@@ -154,6 +175,19 @@ fn reduce(bytes: &[u8], width: u32, height: u32) -> (Vec<u8>, u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn preview_copies_only_small_mips_without_premultiplying_again() {
+        let image = ImageData::from_rgba("alpha", 8, 4, [240, 80, 40, 128].repeat(32)).unwrap();
+        let preview = image.downsample(3);
+        assert_eq!((preview.width(), preview.height()), (2, 1));
+        assert_eq!(preview.pixels(), image.levels()[2].rgba);
+        assert!(preview.bytes() < image.bytes());
+        assert_ne!(preview.cache_id(), image.cache_id());
+        assert_eq!(image.downsample(8).cache_id(), image.cache_id());
+        assert_eq!(image.downsample(0).width(), 1);
+        drop(image);
+        assert_eq!(&preview.pixels()[..4], &[120, 40, 20, 128]);
+    }
     #[test]
     fn validates_storage_before_preparing_mips() {
         assert!(ImageData::from_rgba("empty", 0, 1, vec![]).is_err());
