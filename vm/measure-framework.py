@@ -29,6 +29,10 @@ def stay_awake(remote):
 
 def measure(h, seconds):
     cli, inspect, session, remote = h['cli'], h['inspect'], h['session'], h['remote']
+    # Capture provenance before the workload; development may continue during a long idle run.
+    root = Path(__file__).resolve().parents[1]
+    source = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
+    dirty = subprocess.run(['git', 'diff', '--quiet', 'HEAD'], cwd=root).returncode != 0
     assert session('omarchy-shell', 'lock', 'isLocked').strip() == 'false', 'Unlock the guest first'
     started = time.monotonic()
     session('systemctl', '--user', 'restart', 'lucent.service')
@@ -89,9 +93,6 @@ def measure(h, seconds):
     monitors = json.loads(session('hyprctl', '-j', 'monitors'))
     displays = [{key: monitor.get(key) for key in ('width', 'height', 'refreshRate', 'scale', 'transform')}
                 for monitor in monitors]
-    root = Path(__file__).resolve().parents[1]
-    source = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
-    dirty = subprocess.run(['git', 'diff', '--quiet', 'HEAD'], cwd=root).returncode != 0
     report = {'source_commit': source, 'source_working_tree_changed': dirty,
               'binary_sha256': remote('sha256sum', '/home/omarchy/.local/bin/lucent-desktop').split()[0],
               'displays': displays, **hardware, 'adapter': after_idle['adapter'],

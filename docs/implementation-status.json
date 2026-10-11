@@ -294,6 +294,24 @@
         "Remaining requirement groups"
       ],
       "merge_commit": "a9adf57746b11363a6681ec5fe67d3992514bed1"
+    },
+    {
+      "milestone": "architecture-ownership",
+      "status": "locally_verified",
+      "source_commit": "a3b21554a7aa42bf11ad98dfa57429713a67825e",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/10",
+      "checks": [
+        "83 Rust unit tests and 49 Python tests passed",
+        "1x/2x parameterized-shadow Vulkan test passed",
+        "148 visual comparisons passed without baseline changes",
+        "Clippy, formatting, 457 tokens, 58 icons and documentation build passed",
+        "Release build and native workspace/launcher/restart/secure lock tests passed"
+      ],
+      "pending": [
+        "Protected-main CI and merge",
+        "Remaining architecture invariants and component extraction",
+        "Other requirement groups"
+      ]
     }
   ]
 }
