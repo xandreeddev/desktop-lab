@@ -69,7 +69,7 @@ struct Native<M> {
     demand: FrameDemand,
     scene: Scene<M>,
     interaction: Interaction<M>,
-    regions: Vec<(api::Rect, f32)>,
+    regions: Vec<api::Clip>,
     frame_times: std::collections::VecDeque<f64>,
 }
 enum SurfaceRole {
@@ -349,7 +349,7 @@ impl<A: Application> State<A> {
     }
     fn inspect(&self) -> String {
         let cache = self.gpu.cache_stats();
-        serde_json::json!({"gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id,"width":s.width,"height":s.height,"scale":s.scale,"buffer_width":s.width*s.scale,"buffer_height":s.height*s.scale,"frames":s.renderer.frames,"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.x,"y":h.clip.y,"width":h.clip.w,"height":h.clip.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)}).to_string()
+        serde_json::json!({"gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id,"width":s.width,"height":s.height,"scale":s.scale,"buffer_width":s.width*s.scale,"buffer_height":s.height*s.scale,"frames":s.renderer.frames,"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)}).to_string()
     }
     fn message(&mut self, message: A::Message, qh: &QueueHandle<Self>) {
         let mut effects = Effects {
@@ -537,15 +537,20 @@ impl<A: Application> State<A> {
                 s.demand.invalidate();
             }
             let regions = if s.spec.capture_all {
-                vec![(api::Rect::new(0., 0., s.width as f32, s.height as f32), 0.)]
+                vec![api::Clip::from(api::Rect::new(
+                    0.,
+                    0.,
+                    s.width as f32,
+                    s.height as f32,
+                ))]
             } else {
                 scene.regions.clone()
             };
             if regions != s.regions {
                 match Region::new(&self.compositor) {
                     Ok(region) => {
-                        for (rect, radius) in &regions {
-                            add_region(&region, *rect, *radius);
+                        for clip in &regions {
+                            add_region(&region, clip);
                         }
                         s.role
                             .wl_surface()
@@ -697,28 +702,25 @@ fn configure_layer(layer: &LayerSurface, spec: &api::SurfaceSpec) {
         api::Keyboard::Exclusive => KeyboardInteractivity::Exclusive,
     });
 }
-fn add_region(region: &Region, rect: api::Rect, radius: f32) {
-    let radius = radius.min(rect.w / 2.).min(rect.h / 2.);
-    if radius < 1. {
-        region.add(
-            rect.x as i32,
-            rect.y as i32,
-            rect.w.ceil() as i32,
-            rect.h.ceil() as i32,
-        );
+fn add_region(region: &Region, clip: &api::Clip) {
+    let rect = clip.bounds;
+    if clip.shapes().is_empty() {
+        let top = (rect.y - 0.5).ceil() as i32;
+        let bottom = (rect.y + rect.h - 0.5).ceil() as i32;
+        if bottom > top
+            && let Some((left, right)) = clip.integer_span(top)
+        {
+            region.add(left, top, right - left, bottom - top);
+        }
         return;
     }
     for row in rect.y.floor() as i32..(rect.y + rect.h).ceil() as i32 {
-        let edge =
-            ((row as f32 + 0.5 - rect.y - rect.h / 2.).abs() - (rect.h / 2. - radius)).max(0.);
-        let inset = radius - (radius * radius - edge * edge).max(0.).sqrt();
-        let left = (rect.x + inset).ceil() as i32;
-        let right = (rect.x + rect.w - inset).floor() as i32;
-        if right > left {
+        if let Some((left, right)) = clip.integer_span(row) {
             region.add(left, row, right - left, 1);
         }
     }
 }
+
 impl<A: Application> CompositorHandler for State<A> {
     fn scale_factor_changed(
         &mut self,

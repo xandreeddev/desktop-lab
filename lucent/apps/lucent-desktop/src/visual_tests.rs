@@ -150,7 +150,7 @@ fn every_visible_launcher_row_fits_even_after_scrolling() {
                 assert_eq!(rows.len(), count.min(7));
                 for row in rows {
                     assert!(
-                        fully_visible(row.rect, row.clip),
+                        fully_visible(row.rect, row.clip.bounds),
                         "cropped {} at {width}: {:?} in {:?}",
                         row.id,
                         row.rect,
@@ -218,14 +218,14 @@ fn launcher_size_preserves_selection_and_limits_at_every_preset() {
                 .iter()
                 .find(|h| h.id == "result-49")
                 .expect("selected last result stays visible when resized");
-            assert!(fully_visible(last.rect, last.clip));
+            assert!(fully_visible(last.rect, last.clip.bounds));
             for hit in rendered
                 .hits
                 .iter()
                 .filter(|h| h.id.starts_with("result-") || h.id == "launcher-search")
             {
                 assert!(
-                    fully_visible(hit.rect, hit.clip),
+                    fully_visible(hit.rect, hit.clip.bounds),
                     "cropped {} for {size:?} at {viewport:?}",
                     hit.id
                 );
@@ -246,7 +246,7 @@ fn launcher_size_preserves_selection_and_limits_at_every_preset() {
                         .find(|h| h.id == id)
                         .expect("selected palette and size controls remain reachable");
                     assert!(
-                        fully_visible(hit.rect, hit.clip),
+                        fully_visible(hit.rect, hit.clip.bounds),
                         "cropped {id} for {size:?} at {viewport:?}"
                     );
                     assert!(hit.rect.h >= 32.);
@@ -374,7 +374,7 @@ fn search_text_icons_and_caret_share_a_centered_line_box() {
         {
             carets += 1;
             assert!(
-                fully_visible(*rect, *clip),
+                fully_visible(*rect, clip.bounds),
                 "caret should stay inside input"
             );
             assert!(
@@ -471,7 +471,7 @@ fn command_rows_center_icons_and_labels_inside_rounded_endcaps() {
                 "command contents share a vertical center"
             );
             assert!(rect.x - row.rect.x >= 16., "content clears curved endcap");
-            assert!(fully_visible(*rect, row.clip));
+            assert!(fully_visible(*rect, row.clip.bounds));
         }
     }
     app.update(Message::CloseLauncher, &mut Effects::default());
@@ -1093,7 +1093,7 @@ fn visual_regressions() {
             };
             let mut paint = vec![Paint::Shape {
                 rect: Rect::new(0., 0., width, height),
-                clip: Rect::new(0., 0., width, height),
+                clip: Rect::new(0., 0., width, height).into(),
                 color: Color::hex(if light { 0xc9c3b9 } else { 0x28272d }),
                 radius: 0.,
                 shadow: false,
@@ -1232,7 +1232,7 @@ fn notification_controls_fit_at_normal_and_narrow_widths() {
             let scene = layout.build(&tree, width, 720., &Interaction::default(), 0.);
             for hit in scene.hits {
                 assert!(
-                    fully_visible(hit.rect, hit.clip),
+                    fully_visible(hit.rect, hit.clip.bounds),
                     "cropped notification control {}: {:?} in {:?}",
                     hit.id,
                     hit.rect,
@@ -1303,7 +1303,7 @@ fn settled_shell_geometry_obeys_grid_and_contains_its_controls() {
                     || hit.id == "wallpaper-next"
                 {
                     assert!(
-                        fully_visible(hit.rect, hit.clip),
+                        fully_visible(hit.rect, hit.clip.bounds),
                         "clipped {} in {mode:?} at {width}x{height}",
                         hit.id
                     );
@@ -1369,7 +1369,7 @@ fn settled_shell_geometry_obeys_grid_and_contains_its_controls() {
                     .iter()
                     .filter(|h| h.id.starts_with("theme-") || h.id == "palette-from-wallpaper")
                 {
-                    assert!(fully_visible(hit.rect, hit.clip));
+                    assert!(fully_visible(hit.rect, hit.clip.bounds));
                     assert_eq!(
                         hit.rect.x - panel.x,
                         panel.x + panel.w - hit.rect.x - hit.rect.w
@@ -1604,7 +1604,7 @@ fn online_browser_controls_and_selected_result_fit_at_small_and_large_sizes() {
         ] {
             let hit = rendered.hits.iter().find(|h| h.id == id).unwrap();
             assert!(
-                fully_visible(hit.rect, hit.clip),
+                fully_visible(hit.rect, hit.clip.bounds),
                 "{id} clipped at {width}×{height}: {:?} {:?}",
                 hit.rect,
                 hit.clip
@@ -1616,7 +1616,7 @@ fn online_browser_controls_and_selected_result_fit_at_small_and_large_sizes() {
                 .iter()
                 .find(|h| h.id == "online-wallpaper-5")
                 .expect("last result reachable");
-            assert!(fully_visible(selected.rect, selected.clip));
+            assert!(fully_visible(selected.rect, selected.clip.bounds));
         }
     }
 }

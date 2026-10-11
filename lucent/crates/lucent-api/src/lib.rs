@@ -1,4 +1,6 @@
 //! A small declarative shell API. Public types contain no Wayland or GPU handles.
+mod clip;
+pub use clip::{Clip, RoundedRect};
 mod image;
 pub use image::{ImageData, ImageError, ImageLevel, reduce_premultiplied};
 use std::{
