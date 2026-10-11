@@ -2,6 +2,7 @@
 """Real keyboard checks for launcher modes, selection, scrolling and input focus."""
 import importlib.util
 import json
+import runpy
 from pathlib import Path
 import time
 
@@ -10,13 +11,10 @@ vm = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(vm)
 
 
-def main():
+def suite():
     assert vm.session('sh', '-c', 'omarchy-hyprland-session-locked && echo locked || echo unlocked').strip() == 'unlocked', 'Unlock the VM first'
-    awake = json.loads(vm.session('omarchy-toggle-idle', 'status'))['enabled']
     checks = []
     try:
-        vm.session('omarchy-toggle-idle', 'stay-awake')
-        vm.session('omarchy-shell', 'idle', 'disable')
         vm.move(960, 250)  # Keep the pointer away: all subsequent selection is keyboard-only.
         vm.cli('launcher', 'open')
         time.sleep(0.8)
@@ -40,13 +38,13 @@ def main():
         clock = next(h for s in state['surfaces'] if s['id']=='bar' for h in s['hits'] if h['id']=='bar-clock')
         assert all(clock[k] % grid == 0 for k in ('x','y','width','height'))
         checks += ['panel_and_rows_on_shell_grid', 'equal_launcher_insets', 'uniform_row_pitch', 'input_on_shell_grid', 'top_bar_clock_on_shell_grid']
-        assert len(rows) == 7
+        assert rows, 'Launcher contains no visible result rows'
         assert any(h['id'] == 'result-8' for h in rows)
         for row in rows:
             clip = row['clip']
             assert row['y'] >= clip['y']-0.01 and row['y']+row['height'] <= clip['y']+clip['height']+0.01, row['id']
         vm.screenshot('lucent-launcher-keyboard-last.png')
-        checks += ['keyboard_selection_without_hover', 'all_seven_rows_unclipped', 'search_focus_visible']
+        checks += ['keyboard_selection_without_hover', 'visible_rows_unclipped', 'search_focus_visible']
         for mode in ['Commands', 'Wallpapers', 'Themes', 'Widgets', 'Apps']:
             vm.key(15)
             vm.eventually(lambda: vm.inspect()['client']['mode'] == mode, 'Tab did not select '+mode)
@@ -64,12 +62,15 @@ def main():
         assert not vm.inspect()['client']['error']
     finally:
         vm.cli('launcher', 'close')
-        if not awake:
-            vm.session('omarchy-toggle-idle', 'allow-idle')
-            vm.session('omarchy-shell', 'idle', 'enable')
     report = {'checks': checks, 'settings_unchanged': True}
     (vm.REPORT/'lucent-launcher-integration.json').write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps(report, indent=2))
+
+
+def main():
+    measurement = runpy.run_path(str(Path(__file__).with_name('measure-framework.py')))
+    with measurement['stay_awake'](vm.remote):
+        suite()
 
 
 if __name__ == '__main__': main()

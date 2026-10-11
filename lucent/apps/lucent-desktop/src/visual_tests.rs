@@ -1,6 +1,7 @@
 //! Deterministic fixtures use the production layout, fonts, shaders and Vulkan renderer.
 //! Run ignored snapshots explicitly; no session, D-Bus service or compositor is needed.
-use crate::desktop::{Desktop, Message, Mode};
+use crate::desktop::{Desktop, Message};
+use crate::launcher::{self, Mode};
 use lucent_api::*;
 use lucent_domain::{AppId, Application as App, ClockSnapshot, Date, LaunchCommand};
 use lucent_ui::{Interaction, Layout, Paint, Scene};
@@ -80,8 +81,10 @@ fn fixture(count: usize, light: bool) -> Desktop {
             );
         }
     }
-    app.results = (0..count).collect();
-    app.update(Message::Mode(Mode::Apps), &mut Effects::default());
+    app.update(
+        Message::Launcher(launcher::Message::Mode(Mode::Apps)),
+        &mut Effects::default(),
+    );
     app
 }
 fn fonts(app: &Desktop) -> Arc<Vec<fontdue::Font>> {
@@ -135,7 +138,10 @@ fn every_visible_launcher_row_fits_even_after_scrolling() {
                 &mut Effects::default(),
             );
             for index in [0, count - 1] {
-                app.update(Message::Select(index), &mut Effects::default());
+                app.update(
+                    Message::Launcher(launcher::Message::Select(index)),
+                    &mut Effects::default(),
+                );
                 let scene = scene(&app, &layout, &mut Interaction::default(), 1.);
                 let rows: Vec<_> = scene
                     .hits
@@ -192,8 +198,14 @@ fn launcher_size_preserves_selection_and_limits_at_every_preset() {
                 },
             ])
         {
-            app.update(Message::Mode(Mode::Apps), &mut Effects::default());
-            app.update(Message::Select(49), &mut Effects::default());
+            app.update(
+                Message::Launcher(launcher::Message::Mode(Mode::Apps)),
+                &mut Effects::default(),
+            );
+            app.update(
+                Message::Launcher(launcher::Message::Select(49)),
+                &mut Effects::default(),
+            );
             app.update(Message::LauncherSize(size), &mut Effects::default());
             let rendered = scene(&app, &layout, &mut Interaction::default(), 1.);
             let panel = rendered
@@ -225,9 +237,15 @@ fn launcher_size_preserves_selection_and_limits_at_every_preset() {
                     hit.id
                 );
             }
-            app.update(Message::Mode(Mode::Themes), &mut Effects::default());
+            app.update(
+                Message::Launcher(launcher::Message::Mode(Mode::Themes)),
+                &mut Effects::default(),
+            );
             for index in 0..app.palette_choices().len() {
-                app.update(Message::Select(index), &mut Effects::default());
+                app.update(
+                    Message::Launcher(launcher::Message::Select(index)),
+                    &mut Effects::default(),
+                );
                 let rendered = scene(&app, &layout, &mut Interaction::default(), 1.);
                 for id in [
                     format!("theme-{}", app.palette_choices()[index].id),
@@ -257,7 +275,10 @@ fn launcher_size_preserves_selection_and_limits_at_every_preset() {
         Message::LauncherSize(LauncherSize::default()),
         &mut Effects::default(),
     );
-    app.update(Message::Mode(Mode::Apps), &mut Effects::default());
+    app.update(
+        Message::Launcher(launcher::Message::Mode(Mode::Apps)),
+        &mut Effects::default(),
+    );
     let rendered = scene(&app, &layout, &mut Interaction::default(), 1.);
     let panel = rendered
         .hits
@@ -320,7 +341,10 @@ fn launcher_size_commands_keyboard_presets_and_settings_roundtrip() {
     assert_eq!(legacy.launcher, LauncherSize::default());
     assert!(legacy.light);
     assert_eq!(legacy.notes, "keep my notes");
-    app.update(Message::Mode(Mode::Themes), &mut Effects::default());
+    app.update(
+        Message::Launcher(launcher::Message::Mode(Mode::Themes)),
+        &mut Effects::default(),
+    );
     for _ in 0..(app.palette_choices().len() + 3) {
         key(&mut app, Key::Down);
     }
@@ -343,8 +367,9 @@ fn launcher_size_commands_keyboard_presets_and_settings_roundtrip() {
 #[test]
 fn search_text_icons_and_caret_share_a_centered_line_box() {
     let mut app = fixture(9, false);
-    app.query =
-        "A long input that must keep the caret visible without escaping the field ".repeat(3);
+    app.launcher.fixture_query(
+        "A long input that must keep the caret visible without escaping the field ".repeat(3),
+    );
     let layout = Layout::new(fonts(&app));
     let scene = scene(&app, &layout, &mut Interaction::default(), 1.);
     let input = scene
@@ -391,12 +416,12 @@ fn tab_cycles_sections_and_arrows_activate_the_selected_item() {
         Mode::Apps,
     ] {
         key(&mut app, Key::Tab);
-        assert_eq!(app.mode, expected);
+        assert_eq!(app.launcher.mode(), expected);
     }
     key(&mut app, Key::BackTab);
-    assert_eq!(app.mode, Mode::Widgets);
+    assert_eq!(app.launcher.mode(), Mode::Widgets);
     key(&mut app, Key::Down);
-    assert_eq!(app.selected, 1);
+    assert_eq!(app.launcher.selected(), 1);
     let before = app.settings.visible_widgets.contains(&"clock".into());
     key(&mut app, Key::Enter);
     assert_ne!(
@@ -404,7 +429,7 @@ fn tab_cycles_sections_and_arrows_activate_the_selected_item() {
         app.settings.visible_widgets.contains(&"clock".into())
     );
     key(&mut app, Key::BackTab);
-    assert_eq!(app.mode, Mode::Themes);
+    assert_eq!(app.launcher.mode(), Mode::Themes);
     key(&mut app, Key::Right);
     key(&mut app, Key::Enter);
     assert!(app.settings.light);
@@ -436,7 +461,10 @@ fn framework_buttons_support_keyboard_focus_and_activation_without_hover() {
 #[test]
 fn command_rows_center_icons_and_labels_inside_rounded_endcaps() {
     let mut app = fixture(9, false);
-    app.update(Message::Mode(Mode::Commands), &mut Effects::default());
+    app.update(
+        Message::Launcher(launcher::Message::Mode(Mode::Commands)),
+        &mut Effects::default(),
+    );
     let layout = Layout::new(fonts(&app));
     let command_scene = scene(&app, &layout, &mut Interaction::default(), 1.);
     let rows: Vec<_> = command_scene
@@ -469,7 +497,10 @@ fn command_rows_center_icons_and_labels_inside_rounded_endcaps() {
             assert!(fully_visible(*rect, row.clip.bounds));
         }
     }
-    app.update(Message::CloseLauncher, &mut Effects::default());
+    app.update(
+        Message::Launcher(launcher::Message::Close),
+        &mut Effects::default(),
+    );
     let dock = scene(&app, &layout, &mut Interaction::default(), 1.);
     let panel = dock.hits.iter().find(|h| h.id == "dock-panel").unwrap();
     let slots: Vec<_> = dock
@@ -828,9 +859,15 @@ fn visual_regressions() {
                 Message::Resize("dock", width, height),
                 &mut Effects::default(),
             );
-            app.update(Message::Mode(mode), &mut Effects::default());
-            app.update(Message::Select(selected), &mut Effects::default());
-            app.query = query.into();
+            app.update(
+                Message::Launcher(launcher::Message::Mode(mode)),
+                &mut Effects::default(),
+            );
+            app.update(
+                Message::Launcher(launcher::Message::Select(selected)),
+                &mut Effects::default(),
+            );
+            app.launcher.fixture_query(query.into());
             if name == "wallpapers" {
                 app.wallpapers = wallpaper_fixtures();
             }
@@ -1079,7 +1116,10 @@ fn visual_regressions() {
                 layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
             } else {
                 if name == "dock" {
-                    app.update(Message::CloseLauncher, &mut Effects::default());
+                    app.update(
+                        Message::Launcher(launcher::Message::Close),
+                        &mut Effects::default(),
+                    );
                 }
                 scene(&app, &layout, &mut Interaction::default(), now)
             };
@@ -1165,7 +1205,7 @@ fn selection_fill_and_outline_move_together_on_the_first_frame() {
     for (step, index) in [1, 5, 2, 8, 0].into_iter().enumerate() {
         let now = 1. + step as f64 * 0.01;
         app.update(
-            Message::Select(index),
+            Message::Launcher(launcher::Message::Select(index)),
             &mut Effects {
                 now,
                 ..Default::default()
@@ -1192,9 +1232,9 @@ fn desktop_actions_use_injected_adapters_without_executing_host_commands() {
     let fake = Arc::new(crate::test_adapters::Fake::default());
     let mut app = Desktop::new(crate::test_adapters::with(fake.clone()));
     for action in [
-        crate::desktop::Action::VolumeUp,
-        crate::desktop::Action::PlayPause,
-        crate::desktop::Action::Lock,
+        crate::actions::Action::VolumeUp,
+        crate::actions::Action::PlayPause,
+        crate::actions::Action::Lock,
     ] {
         let mut effects = Effects::default();
         app.update(Message::Action(action), &mut effects);
@@ -1259,8 +1299,14 @@ fn settled_shell_geometry_obeys_grid_and_contains_its_controls() {
             &mut Effects::default(),
         );
         for mode in Mode::ALL {
-            app.update(Message::Mode(mode), &mut Effects::default());
-            app.update(Message::Select(19), &mut Effects::default());
+            app.update(
+                Message::Launcher(launcher::Message::Mode(mode)),
+                &mut Effects::default(),
+            );
+            app.update(
+                Message::Launcher(launcher::Message::Select(19)),
+                &mut Effects::default(),
+            );
             let rendered = scene(&app, &layout, &mut Interaction::default(), 1.);
             let panel = rendered
                 .hits
@@ -1364,7 +1410,10 @@ fn settled_shell_geometry_obeys_grid_and_contains_its_controls() {
                 }
             }
         }
-        app.update(Message::CloseLauncher, &mut Effects::default());
+        app.update(
+            Message::Launcher(launcher::Message::Close),
+            &mut Effects::default(),
+        );
         let rendered = scene(&app, &layout, &mut Interaction::default(), 1.);
         let panel = rendered
             .hits
@@ -1574,7 +1623,10 @@ fn online_browser_controls_and_selected_result_fit_at_small_and_large_sizes() {
             Message::Resize("dock", width, height),
             &mut Effects::default(),
         );
-        app.update(Message::Mode(Mode::Wallpapers), &mut Effects::default());
+        app.update(
+            Message::Launcher(launcher::Message::Mode(Mode::Wallpapers)),
+            &mut Effects::default(),
+        );
         online_fixture(&mut app);
         app.browser.selected = 5;
         let rendered = scene(&app, &layout, &mut Interaction::default(), 1.);

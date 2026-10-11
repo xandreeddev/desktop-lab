@@ -21,6 +21,8 @@ def main():
     parser.add_argument('--login-file',type=Path)
     args=parser.parse_args()
     assert v.session('omarchy-shell','lock','isLocked').strip()=='false'
+    v.eventually(lambda: v.inspect()['client']['background_ready'] and v.inspect()['client']['wallpaper'] is not None,
+                 'Initial wallpaper selection did not finish loading', timeout=40)
     state='/home/omarchy/.local/state/lucent/desktop.json'
     backup='/tmp/lucent-palette-original-settings.json'
     selected=v.inspect()['client']['wallpaper']

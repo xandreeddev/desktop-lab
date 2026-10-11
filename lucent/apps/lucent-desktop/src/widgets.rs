@@ -1,4 +1,7 @@
-use crate::desktop::{Action, Desktop, Message};
+use crate::{
+    actions::Action,
+    desktop::{Desktop, Message},
+};
 use lucent_api::*;
 use lucent_design::*;
 use lucent_domain::{Date, Placement, TimerPhase};
