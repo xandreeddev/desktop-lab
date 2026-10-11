@@ -39,9 +39,13 @@ def main():
             with m['frame_profiling'](h['remote'], h['session'], True):
                 h['session']('systemctl', '--user', 'restart', 'lucent.service')
                 ready()
-                for _ in range(4):
+                for _ in range(8):
                     h['cli']('launcher', 'open'); time.sleep(.7)
                     h['cli']('launcher', 'close'); time.sleep(.7)
+                    snapshot = h['inspect']()
+                    dock = next(s for s in snapshot['surfaces'] if s['id'] == 'dock')
+                    if len(dock['frame_profiles']) >= 60:
+                        break
                 snapshot = h['inspect']()
                 assert snapshot['frame_profiling']
                 dock = next(s for s in snapshot['surfaces'] if s['id'] == 'dock')

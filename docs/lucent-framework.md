@@ -193,7 +193,7 @@ The runtime reconciles these declarations and keeps native handles private.
 The desktop uses four persistent native surfaces plus on-demand notification and feedback surfaces:
 
 - A background painting the selected wallpaper.
-- A top bar reserving 56 logical pixels.
+- A top bar reserving 48 logical pixels (the token-defined 16-pixel inset plus 32-pixel capsules).
 - A bottom-layer widget host with input regions matching interactive widgets.
 - A dock host switching from the top layer to an exclusive-keyboard overlay while
   the launcher is open. Clicking outside closes it; otherwise transparent areas

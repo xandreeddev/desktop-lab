@@ -276,7 +276,7 @@
     {
       "id": "runtime-shutdown",
       "owner": "lucent-wayland IPC lifecycle",
-      "status": "in_progress",
+      "status": "implemented",
       "acceptance": [
         "IPC listener and socket cleanup run after normal exit and early initialization/reconciliation/dispatch errors",
         "Runtime retry in the same process cannot retain a blocked listener from the prior run",
@@ -285,7 +285,8 @@
       ],
       "evidence": [
         "Audit found IPC cleanup only at the normal end of run_inner; earlier question-mark returns bypass cancellation and the wake-up connection. Process exit reclaims the thread, but library callers retrying in the same process are not covered.",
-        "Owned IPC guard and nine isolated transport tests pass: early error/retry, immediate stop, missing/replaced socket, bind failure, full delivery, pending reply, partial/slow I/O and ready quit acknowledgement. Native runtime validation is pending."
+        "Owned IPC guard and nine isolated transport tests pass: early error/retry, immediate stop, missing/replaced socket, bind failure, full delivery, pending reply, partial/slow I/O and ready quit acknowledgement.",
+        "Native two-cycle graceful quit acknowledgement/socket cleanup/restart passed, with a complete 53,352-byte profiled response containing 73 dock samples. Profiling restoration, launcher/application survival and secure lock/unlock passed."
       ]
     }
   ],
@@ -491,6 +492,25 @@
       ],
       "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/16",
       "merge_commit": "3c229daa472275557cdb7ba7fb27e44a4a1a877d"
+    },
+    {
+      "milestone": "ipc-lifetime",
+      "status": "locally_verified",
+      "source_commit": "2bf22e825fc56b67c3e0ddd9eb32f5b59663717c",
+      "checks": [
+        "135 Rust unit tests, including nine isolated IPC lifecycle tests, passed",
+        "53 Python checks, Clippy, formatting and Astro check/build passed",
+        "Full release build and reversible user-binary deployment passed",
+        "Two native graceful quit/acknowledgement/socket cleanup/restart cycles passed",
+        "Complete profiled JSON response and profiling override restoration passed",
+        "Intentional profiling-test failure cleanup passed",
+        "Native launcher/application survival and secure lock/unlock passed",
+        "Final normal desktop ready with profiling disabled"
+      ],
+      "pending": [
+        "Exact-head CI, protected-main merge and Pages",
+        "Native Wayland/driver fault injection and other requirement groups"
+      ]
     }
   ]
 }
