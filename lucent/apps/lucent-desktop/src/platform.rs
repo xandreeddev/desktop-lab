@@ -35,7 +35,11 @@ pub fn desktop_adapters() -> DesktopAdapters {
 pub struct NativeAssets;
 impl AssetPort for NativeAssets {
     fn preview(&self, image: &ImageData) -> Arc<ImageData> {
-        Arc::new(image.downsample(images::PREVIEW_PIXELS))
+        Arc::new(image.downsample(PREVIEW_DIMENSION))
+    }
+    fn thumbnail(&self, path: &str) -> Result<Arc<ImageData>> {
+        images::try_load(std::path::Path::new(path), PREVIEW_DIMENSION)
+            .map_err(|error| DomainError::Failed(error.to_string()))
     }
     fn background(&self, path: &str) -> Result<Arc<ImageData>> {
         images::try_load(std::path::Path::new(path), 4096)
@@ -79,7 +83,7 @@ impl AssetPort for NativeAssets {
         );
         result
     }
-    fn load(&self, apps: &[Application], wallpapers: &[Wallpaper]) -> Images {
+    fn application_icons(&self, apps: &[Application]) -> Images {
         let mut result = vec![];
         let mut seen = BTreeSet::new();
         for app in apps {
@@ -95,13 +99,6 @@ impl AssetPort for NativeAssets {
                 && let Some(image) = images::icon(&app.icon)
             {
                 result.push((app.icon.clone(), image));
-            }
-        }
-        for wall in wallpapers.iter().take(64) {
-            if let Some(image) =
-                images::load(std::path::Path::new(&wall.path), images::PREVIEW_PIXELS)
-            {
-                result.push((wall.path.clone(), image));
             }
         }
         result

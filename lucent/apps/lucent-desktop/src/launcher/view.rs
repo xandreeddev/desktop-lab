@@ -6,6 +6,7 @@ pub struct View<'a> {
     pub launcher: &'a Launcher,
     pub input: Input<'a>,
     pub artwork: Artwork<'a>,
+    pub previews: crate::previews::View<'a>,
     pub carousel: Motion,
     pub current_wallpaper: &'a str,
     pub error: &'a str,
@@ -472,9 +473,7 @@ impl View<'_> {
         let selected = self.carousel.value(cx.now);
         let mut cards = vec![];
         // Render distant cards first so the central hero remains on top.
-        let mut order: Vec<_> = (0..self.input.wallpapers.len())
-            .filter(|i| (*i as f32 - selected).abs() < component::wallpaper::VISIBLE_DISTANCE)
-            .collect();
+        let mut order: Vec<_> = visible_wallpapers(self.input.wallpapers.len(), selected).collect();
         order.sort_by(|a, b| {
             ((*b as f32 - selected).abs()).total_cmp(&(*a as f32 - selected).abs())
         });
@@ -491,12 +490,19 @@ impl View<'_> {
                     * (abs.min(1.) * component::wallpaper::NEAR_STEP
                         + (abs - 1.).max(0.) * component::wallpaper::FAR_STEP);
             let image = self
-                .artwork
-                .images
+                .previews
                 .get(&wall.path)
                 .cloned()
                 .map(|data| Element::image(data).contain())
-                .unwrap_or_else(|| Element::empty().background(self.widget_color()));
+                .unwrap_or_else(|| {
+                    if self.previews.error(&wall.path).is_some() {
+                        self.label("Preview unavailable", font::SMALL)
+                            .align(Align::Center)
+                            .background(self.widget_color())
+                    } else {
+                        Element::empty().background(self.widget_color())
+                    }
+                });
             let active = i == self.input.wallpaper_index;
             cards.push(
                 Element::stack(vec![

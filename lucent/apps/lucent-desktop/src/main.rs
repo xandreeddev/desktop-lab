@@ -9,6 +9,7 @@ mod palette_intent;
 mod persistence;
 mod platform;
 mod ports;
+mod previews;
 mod shell_layout;
 mod views;
 mod wallpaper_browser;

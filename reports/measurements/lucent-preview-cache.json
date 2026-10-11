@@ -1,0 +1,187 @@
+{
+  "source_commit": "3bef4c3ab3556215b7f275bd51b144492ea7ecaf",
+  "rust_unit_tests": 159,
+  "python_tests": 54,
+  "vulkan_visual_comparisons": 172,
+  "preserved_existing_baselines": 168,
+  "reviewed_new_unavailable_preview_baselines": 4,
+  "native": {
+    "preview_cache": {
+      "checks": [
+        "closed_browser_does_not_eagerly_decode_library",
+        "native_navigation_beyond_64_with_bounded_retention",
+        "decode_failure_and_explicit_retry",
+        "closing_browser_releases_extra_cpu_previews",
+        "live_provider_pages_use_thumbnail_adapter"
+      ],
+      "retention_samples": [
+        {
+          "active": false,
+          "bytes": 50577312,
+          "closed_budget_bytes": 8388608,
+          "entries": 16,
+          "entry_limit": 16,
+          "failed": 0,
+          "pinned_bytes": 22265940,
+          "reuse_budget_bytes": 67108864,
+          "wanted": 7,
+          "wanted_ready": 7
+        },
+        {
+          "active": false,
+          "bytes": 64195592,
+          "closed_budget_bytes": 8388608,
+          "entries": 14,
+          "entry_limit": 16,
+          "failed": 0,
+          "pinned_bytes": 39146828,
+          "reuse_budget_bytes": 67108864,
+          "wanted": 7,
+          "wanted_ready": 7
+        },
+        {
+          "active": false,
+          "bytes": 67108848,
+          "closed_budget_bytes": 8388608,
+          "entries": 12,
+          "entry_limit": 16,
+          "failed": 0,
+          "pinned_bytes": 39146828,
+          "reuse_budget_bytes": 67108864,
+          "wanted": 7,
+          "wanted_ready": 7
+        },
+        {
+          "active": false,
+          "bytes": 67108848,
+          "closed_budget_bytes": 8388608,
+          "entries": 12,
+          "entry_limit": 16,
+          "failed": 0,
+          "pinned_bytes": 39146828,
+          "reuse_budget_bytes": 67108864,
+          "wanted": 7,
+          "wanted_ready": 7
+        },
+        {
+          "active": false,
+          "bytes": 67108848,
+          "closed_budget_bytes": 8388608,
+          "entries": 12,
+          "entry_limit": 16,
+          "failed": 0,
+          "pinned_bytes": 39146828,
+          "reuse_budget_bytes": 67108864,
+          "wanted": 7,
+          "wanted_ready": 7
+        },
+        {
+          "active": false,
+          "bytes": 67108848,
+          "closed_budget_bytes": 8388608,
+          "entries": 12,
+          "entry_limit": 16,
+          "failed": 0,
+          "pinned_bytes": 39146828,
+          "reuse_budget_bytes": 67108864,
+          "wanted": 7,
+          "wanted_ready": 7
+        },
+        {
+          "active": false,
+          "bytes": 67108848,
+          "closed_budget_bytes": 8388608,
+          "entries": 12,
+          "entry_limit": 16,
+          "failed": 0,
+          "pinned_bytes": 39146828,
+          "reuse_budget_bytes": 67108864,
+          "wanted": 7,
+          "wanted_ready": 7
+        }
+      ],
+      "online_previews": {
+        "wallhaven": {
+          "bytes": 13414080,
+          "unique_images": 24
+        },
+        "alpha-coders": {
+          "bytes": 11008980,
+          "unique_images": 27
+        }
+      },
+      "wallpaper_and_preferences_unchanged": true,
+      "owned_test_files_removed": true
+    },
+    "wallpaper_transactions": {
+      "immutable_snapshot_and_login_copy": true,
+      "decode_failure_preserves_selected_asset": true,
+      "restart_uses_immutable_snapshot": true,
+      "palette_reads_snapshot_and_exports": true
+    },
+    "widgets": {
+      "checks": [
+        "native_calendar_controls_repaint",
+        "native_note_edit_and_persistence",
+        "native_timer_start_pause_reset",
+        "native_drag_preview_excluded_from_unrelated_save",
+        "native_drag_grid_and_release_snap",
+        "native_selector_and_ipc_share_widget_identity",
+        "notes_and_positions_survive_restart"
+      ],
+      "preferences_and_workspace_restored": true,
+      "no_existing_apps_closed": true
+    },
+    "launcher": {
+      "checks": [
+        "panel_and_rows_on_shell_grid",
+        "equal_launcher_insets",
+        "uniform_row_pitch",
+        "input_on_shell_grid",
+        "top_bar_clock_on_shell_grid",
+        "keyboard_selection_without_hover",
+        "visible_rows_unclipped",
+        "search_focus_visible",
+        "tab_all_five_sections",
+        "shift_tab_reverse",
+        "widget_keyboard_selection",
+        "search_focus_restored_after_mode_switch"
+      ],
+      "settings_unchanged": true
+    },
+    "runtime": {
+      "launcher_input": true,
+      "independent_application_service": true,
+      "application_survives_shell_restart": true,
+      "restart_restores_background": true,
+      "native_lock_unlock": true,
+      "surface_fault_injection": false,
+      "notes": "Native VM checks. Presentation recovery policy is unit-tested; driver fault injection is not covered here."
+    },
+    "final_normal_desktop_ready": true
+  },
+  "binary_sha256": {
+    "lucent-desktop": "3e43838a1431cc815e63de8b8a4bc48d96404bf580b14c5011b143263be4898d",
+    "lucent-cli": "b64df50aec0aef9875384665ba75274022d7f537edab768db87344e8c9381665"
+  },
+  "limits": [
+    "Local wanted previews may exceed the 64 MiB reuse budget within the 16-entry and 1024-pixel dimension limits; one decode may also be in flight",
+    "Prepared storage counts deduplicate immutable allocations; they exclude in-flight work, scene references, decoder scratch, fonts and GPU/driver allocations",
+    "Online previews retain one provider page and remain separate from the local cache policy",
+    "Native cache testing used single-monitor software Vulkan; hardware pacing, fractional scale and hotplug were not tested",
+    "Desktop and CLI were deployed; root greeter and interactive login were not updated or retested",
+    "The sequential before/after runs share detected configuration but are not a controlled hardware or allocation-attribution experiment"
+  ],
+  "performance": {
+    "before": "lucent-preview-cache-before-120.json",
+    "after": "lucent-preview-cache-after-120.json",
+    "rss_mib_mean_before": 588.26,
+    "rss_mib_mean_after": 389.93,
+    "observed_rss_mib_reduction": 198.33,
+    "main_cpu_percent_before": 0.7,
+    "main_cpu_percent_after": 0.825,
+    "prepared_bytes_after": 62739672,
+    "target_200_mib_met": false,
+    "cpu_or_frame_pacing_improvement_claimed": false
+  }
+}

@@ -157,7 +157,8 @@
         "Same-binary normal-mode 120-second comparison: 0.592% main-process CPU, 589.60 MiB mean RSS, zero background/closed-dock idle frames. First-open maximum interval 24.25 ms; warm maxima 18.26\u201321.18 ms. This is not a controlled overhead estimate or proof the earlier hitch is fixed.",
         "Five focused offscreen renderer tests passed on Radeon hardware Vulkan. Visual comparison against software baselines passed 80/148 cases; 68 small coverage differences require follow-up. This is not a hardware desktop performance measurement.",
         "Cross-driver coverage follow-up: all 148 existing comparisons and six focused renderer tests pass on both Radeon hardware Vulkan and llvmpipe after selecting fine derivatives. Baselines/tolerances unchanged; hardware desktop performance remains unmeasured.",
-        "Static review confirms Desktop.images retains each distinct selected wallpaper preview with no eviction. The 64-item startup preload cap does not cap lifetime retention, and renderer GPU-cache eviction cannot release these CPU-owned images. RSS attribution and bounded demand-loading remain open."
+        "Static review confirms Desktop.images retains each distinct selected wallpaper preview with no eviction. The 64-item startup preload cap does not cap lifetime retention, and renderer GPU-cache eviction cannot release these CPU-owned images. RSS attribution and bounded demand-loading remain open.",
+        "Local previews now have bounded lazy ownership and deduplicated prepared-byte counters. Native 73-file browsing/retry/close checks and sequential 120-second runs passed: RSS 588.26 to 389.93 MiB; CPU 0.700% to 0.825%. The 200 MiB target is still unmet; online page lifetime, output-aware background preparation and hardware behavior remain separate work."
       ]
     },
     {
@@ -310,6 +311,23 @@
       "evidence": [
         "Static review: Desktop::save queues full snapshots into the bounded settings queue and uses generic Message::Completed. Settings save status and retry are not feature-owned. Native disk-failure and overload verification remains open.",
         "A client coordinator coalesces pending preferences, retains save failure and exposes acknowledged status/retry. Burst/rejection/failure/stale-completion and root/widget tests pass. All 168 visual comparisons, a real native filesystem-write failure/retry/restart and restoration passed; evidence is in reports/measurements/lucent-settings-persistence.json."
+      ]
+    },
+    {
+      "id": "preview-ownership",
+      "owner": "desktop presentation coordinator and AssetPort adapter",
+      "status": "implemented",
+      "acceptance": [
+        "No eager local-library decoding while the browser is closed",
+        "Bounded demand, one active decode, bounded retained entries and visible-image preservation",
+        "Explicit failure retry and rejection of obsolete results without overriding committed pixels",
+        "Prepared-image byte accounting with a stated scope",
+        "Native browsing beyond 64 files and before/after process measurements"
+      ],
+      "evidence": [
+        "Injected-adapter tests cover coalescing, failure/retry/rejection, stale results, transaction precedence, retention/release and byte identity",
+        "Native generated-library and live-provider checks passed; 172 visual comparisons passed",
+        "Sanitized evidence and measurements: reports/measurements/lucent-preview-cache.json"
       ]
     }
   ],
@@ -582,7 +600,7 @@
     },
     {
       "milestone": "widget-drag-preview",
-      "status": "locally_verified",
+      "status": "merged",
       "checks": [
         "151 Rust tests passed",
         "Clippy with warnings denied passed",
@@ -591,13 +609,34 @@
         "Desktop release build and reversible native deployment passed",
         "Native held-drag test saved another preference without persisting the preview; release snapped, saved and survived restart",
         "Widget/launcher/application survival and secure lock/unlock checks passed",
-        "Original preferences and workspace restored; normal desktop ready"
+        "Original preferences and workspace restored; normal desktop ready",
+        "All six exact-head checks, protected-main merge and Pages deployment passed"
+      ],
+      "pending": [
+        "Other requirement groups"
+      ],
+      "source_commit": "8efe02d33bc4289cd45fa0abd36319f3d5871dcc",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/20",
+      "merge_commit": "32065c8156b22b4a0924fe7a8fca239e42fbceb1"
+    },
+    {
+      "milestone": "preview-cache",
+      "status": "locally_verified",
+      "checks": [
+        "159 Rust tests, 54 Python checks and Clippy passed",
+        "Formatting, generated assets, shellcheck and Astro check/build passed",
+        "172 Vulkan visual comparisons passed; 168 existing baselines preserved and four new unavailable-preview images reviewed",
+        "Desktop/CLI release build and reversible native deployment passed",
+        "Native 73-file lazy preview browsing, bounded cache turnover, corrupt-file retry and closed-browser shrink passed",
+        "Live provider thumbnails, immutable-wallpaper recovery, widgets, launcher, application survival and secure lock/unlock passed",
+        "Original wallpaper/preferences/workspace restored; test files removed; normal desktop ready",
+        "Sequential 120-second software-VM runs: mean RSS 588.26 to 389.93 MiB; prepared-image accounting available; CPU/frame-pacing improvement not claimed"
       ],
       "pending": [
         "Exact-head CI, protected-main merge and Pages",
         "Other requirement groups"
       ],
-      "source_commit": "8efe02d33bc4289cd45fa0abd36319f3d5871dcc"
+      "source_commit": "3bef4c3ab3556215b7f275bd51b144492ea7ecaf"
     }
   ]
 }
