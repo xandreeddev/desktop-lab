@@ -276,7 +276,7 @@
     {
       "id": "runtime-shutdown",
       "owner": "lucent-wayland IPC lifecycle",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "IPC listener and socket cleanup run after normal exit and early initialization/reconciliation/dispatch errors",
         "Runtime retry in the same process cannot retain a blocked listener from the prior run",
@@ -284,7 +284,8 @@
         "Socket ownership and cleanup behavior have isolated transport tests"
       ],
       "evidence": [
-        "Audit found IPC cleanup only at the normal end of run_inner; earlier question-mark returns bypass cancellation and the wake-up connection. Process exit reclaims the thread, but library callers retrying in the same process are not covered."
+        "Audit found IPC cleanup only at the normal end of run_inner; earlier question-mark returns bypass cancellation and the wake-up connection. Process exit reclaims the thread, but library callers retrying in the same process are not covered.",
+        "Owned IPC guard and nine isolated transport tests pass: early error/retry, immediate stop, missing/replaced socket, bind failure, full delivery, pending reply, partial/slow I/O and ready quit acknowledgement. Native runtime validation is pending."
       ]
     }
   ],
@@ -471,7 +472,7 @@
     },
     {
       "milestone": "launcher-component",
-      "status": "locally_verified",
+      "status": "merged",
       "source_commit": "1157ecfe835a569502973c5daab9bbaf51d34ef2",
       "checks": [
         "126 Rust unit tests and 53 Python checks passed",
@@ -482,12 +483,14 @@
         "Custom size persistence, restart and clickable presets passed",
         "Live provider search/download/pagination, palette keyboard selection and greeter copy synchronization passed",
         "Launcher application survival, native secure lock/unlock and final desktop readiness passed",
-        "Original preferences and wallpaper restored"
+        "Original preferences and wallpaper restored",
+        "All six exact-head checks, protected-main merge and Pages deployment passed"
       ],
       "pending": [
-        "Exact-head CI, protected-main merge and Pages",
         "Further widget coordination and other requirement groups"
-      ]
+      ],
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/16",
+      "merge_commit": "3c229daa472275557cdb7ba7fb27e44a4a1a877d"
     }
   ]
 }

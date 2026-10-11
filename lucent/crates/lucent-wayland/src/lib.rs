@@ -33,15 +33,10 @@ use smithay_client_toolkit::{
 use std::{
     collections::BTreeMap,
     fs::{self, File},
-    io::{BufRead, BufReader, Read, Write},
-    os::unix::{
-        fs::PermissionsExt,
-        net::{UnixListener, UnixStream},
-    },
     path::PathBuf,
     rc::Rc,
     sync::{Arc, mpsc},
-    time::{Duration, Instant},
+    time::Instant,
 };
 use wayland_client::{
     Connection, Proxy, QueueHandle,
@@ -53,6 +48,7 @@ use wgpu_handle::HasDisplayHandle;
 use lucent_render::display_handle as wgpu_handle;
 mod delivery;
 mod effects;
+mod ipc;
 mod profiling;
 mod subscriptions;
 
@@ -214,42 +210,19 @@ fn run_inner<A: Application>(
     let lock = File::create(runtime.join(format!("{}.lock", state.app.name())))?;
     lock.try_lock()
         .map_err(|_| "This framework client is already running")?;
-    let ipc_cancel = api::Cancellation::default();
-    if ipc {
+    let _ipc = if ipc {
         if socket_path.exists() {
             fs::remove_file(&socket_path)?;
         }
-        let listener = UnixListener::bind(&socket_path)?;
-        fs::set_permissions(&socket_path, fs::Permissions::from_mode(0o600))?;
-        let cancel = ipc_cancel.clone();
-        std::thread::spawn(move || {
-            for incoming in listener.incoming() {
-                if cancel.cancelled() {
-                    break;
-                }
-                if let Ok(mut stream) = incoming {
-                    let _ = stream.set_read_timeout(Some(Duration::from_secs(1)));
-                    let _ = stream.set_write_timeout(Some(Duration::from_secs(1)));
-                    let mut text = String::new();
-                    if BufReader::new(&stream)
-                        .take(4096)
-                        .read_line(&mut text)
-                        .is_err()
-                    {
-                        continue;
-                    }
-                    let (tx, rx) = mpsc::sync_channel(1);
-                    if !sender.send(RuntimeEvent::Command(text.trim().into(), tx)) {
-                        break;
-                    }
-                    let result = rx
-                        .recv_timeout(Duration::from_secs(3))
-                        .unwrap_or_else(|_| "error: client not responding".into());
-                    let _ = writeln!(stream, "{result}");
-                }
-            }
-        });
-    }
+        let delivery = sender.clone();
+        Some(ipc::Server::bind(&socket_path, move |command, cancel| {
+            delivery
+                .scoped(cancel)
+                .send(RuntimeEvent::Command(command.text, command.reply))
+        })?)
+    } else {
+        None
+    };
     let event_qh = qh.clone();
     handle.insert_source(events, move |event, _, state| {
         if let channel::Event::Msg(event) = event {
@@ -287,11 +260,6 @@ fn run_inner<A: Application>(
     while !state.exit {
         event_loop.dispatch(None, &mut state)?;
         state.draw_all(&qh);
-    }
-    ipc_cancel.cancel();
-    if ipc {
-        let _ = UnixStream::connect(&socket_path);
-        let _ = fs::remove_file(socket_path);
     }
     eprintln!("{} stopped cleanly", state.app.name());
     if let Some(error) = state.error.take() {
