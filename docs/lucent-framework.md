@@ -193,7 +193,7 @@ The runtime reconciles these declarations and keeps native handles private.
 The desktop uses four persistent native surfaces plus on-demand notification and feedback surfaces:
 
 - A background painting the selected wallpaper.
-- A top bar reserving 56 logical pixels.
+- A top bar reserving 48 logical pixels (the token-defined 16-pixel inset plus 32-pixel capsules).
 - A bottom-layer widget host with input regions matching interactive widgets.
 - A dock host switching from the top layer to an exclusive-keyboard overlay while
   the launcher is open. Clicking outside closes it; otherwise transparent areas
@@ -259,6 +259,30 @@ The renderer chooses the sampling rule; no desktop policy or token belongs in
 that calculation. A focused GPU fixture checks mirrored edge coverage at 1×/2×,
 both pixel-quad phases and rounded ancestor clipping. Visual baselines retain
 their existing pixel tolerances.
+
+## IPC transport lifetime
+
+The runtime holds its command server in an owned guard declared after the
+application instance lock. Normal return, early errors and unwinding drop the
+guard: cancel delivery, wake the transport's I/O loop, join its worker and remove
+its recorded socket file if that path still has the same device/inode. Cleanup
+therefore happens before the instance lock is released. A missing or replaced
+socket path cannot prevent the worker from waking; shutdown uses calloop's poller
+notifier rather than opening another connection to the pathname.
+
+This is a separate sleeping I/O loop, not a second application-state owner. It
+forwards commands into the same bounded UI queue. Its producer cancellation token
+releases an overloaded send before joining; pending replies also observe shutdown.
+Connected reads/writes use absolute one-second deadlines and short cancellation
+checks. A slow byte stream cannot repeatedly extend the timeout. The command
+limit remains 4096 bytes and the response wait remains three seconds. A ready
+reply gets one bounded write even during shutdown so `quit` can acknowledge the
+command that caused the exit.
+
+The idle listener has no periodic polling timer. Filesystem cleanup is best-effort
+and identity-checked; it does not guarantee recovery from arbitrary filesystem
+failures or same-user interference. Runtime error paths are covered through owned
+transport scope tests; native Wayland/driver fault injection remains separate.
 
 ## Frame profiling
 

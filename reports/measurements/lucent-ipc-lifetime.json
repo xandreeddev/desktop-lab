@@ -1,0 +1,48 @@
+{
+  "source_commit": "2bf22e825fc56b67c3e0ddd9eb32f5b59663717c",
+  "rust_unit_tests": 135,
+  "python_tests": 53,
+  "isolated_ipc_tests": 9,
+  "native": {
+    "ipc": {
+      "graceful_quit_ack_socket_cleanup_and_restart_cycles": 2,
+      "complete_profiled_json_bytes": 53352,
+      "dock_frame_profiles": 73,
+      "profiling_and_idle_override_restored": true,
+      "native_wayland_error_injection": false
+    },
+    "runtime": {
+      "launcher_input": true,
+      "independent_application_service": true,
+      "application_survives_shell_restart": true,
+      "restart_restores_background": true,
+      "native_lock_unlock": true,
+      "surface_fault_injection": false,
+      "notes": "Native VM checks. Presentation recovery policy is unit-tested; driver fault injection is not covered here."
+    },
+    "profiling_failure_cleanup": true,
+    "final_normal_desktop_ready": true
+  },
+  "binary_sha256": {
+    "lucent-desktop": "154439937be894c15e15e5d28d1a828e52f9bd28a297c9d705e594fd3f7d1314",
+    "lucent-cli": "863c3e260b95f2b0694c01e4021e886396879046028094778dfc9cb51c565d19",
+    "lucent-menu": "c6cd53b930292b1223eab0ded242e5afb5afc118c2ab2fe54f4c8bcd944bf4b3",
+    "lucent-lock": "eac3e2b6673bd7cbb2667e309b36c11816d798fd1455462cd0e0a6d78188412b",
+    "lucent-greeter": "681629525b29a595e42329d8ebca8aab8ec597ef75ff6d9f1dad1d3b64af2729",
+    "lucent-polkit": "b88d3135e837b1d8b8edc374004215d5c89e929adeee60f7fc80016b33ce6905"
+  },
+  "transport_policy": {
+    "maximum_command_bytes": 4096,
+    "connected_read_absolute_deadline_seconds": 1,
+    "connected_write_absolute_deadline_seconds": 1,
+    "response_wait_seconds": 3,
+    "connected_cancellation_check_milliseconds": 25,
+    "idle_periodic_polling": false
+  },
+  "limits": [
+    "Native Wayland and GPU fault injection were not performed; early return/retry is covered by isolated owned-transport scope tests",
+    "Filesystem removal is best-effort and checks the recorded identity; it does not guarantee recovery from arbitrary filesystem failures or same-user interference",
+    "The root greeter retains its earlier binary and interactive login was not repeated",
+    "This change does not claim a memory or frame-pacing improvement"
+  ]
+}
