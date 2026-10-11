@@ -12,12 +12,14 @@ use std::{
 pub use wgpu::rwh as display_handle;
 use wgpu::{rwh::*, *};
 mod cache;
+mod extent;
 mod presentation;
 mod profiling;
 pub use profiling::{PaintProfile, RenderProfile, ResourceProfile};
 mod raster;
 pub use cache::CacheStats;
 use cache::ResourceCache;
+use extent::PhysicalExtent;
 use presentation::{Recovery, SurfaceFailure};
 pub type Error = Box<dyn std::error::Error>;
 struct TextureResource {
@@ -653,6 +655,8 @@ impl Canvas {
         self.last_profile = self.profiling.then_some(profile);
     }
     /// Return premultiplied RGBA pixels at `width*scale` by `height*scale`.
+    /// Invalid/overflowing sizes and device texture/readback limits return an
+    /// error before rendering. Device limits do not guarantee available memory.
     pub fn snapshot(
         &mut self,
         width: u32,
@@ -660,13 +664,14 @@ impl Canvas {
         scale: u32,
         paint: &[Paint],
     ) -> Result<Vec<u8>, Error> {
-        if width == 0 || height == 0 || scale == 0 {
-            return Err("nonzero snapshot dimensions required".into());
-        }
-        let (w, h) = (width * scale, height * scale);
+        let limits = self.gpu.device.limits();
+        let physical = PhysicalExtent::new(width, height, scale, limits.max_texture_dimension_2d)?;
+        let readback = physical.readback(limits.max_buffer_size)?;
+        let mut rgba = Vec::new();
+        rgba.try_reserve_exact(readback.rgba_bytes)?;
         let extent = Extent3d {
-            width: w,
-            height: h,
+            width: physical.width,
+            height: physical.height,
             depth_or_array_layers: 1,
         };
         let texture = self.gpu.device.create_texture(&TextureDescriptor {
@@ -686,10 +691,9 @@ impl Canvas {
             scale,
             paint,
         );
-        let stride = (w * 4).div_ceil(COPY_BYTES_PER_ROW_ALIGNMENT) * COPY_BYTES_PER_ROW_ALIGNMENT;
         let buffer = self.gpu.device.create_buffer(&BufferDescriptor {
             label: Some("visual snapshot readback"),
-            size: u64::from(stride) * u64::from(h),
+            size: readback.buffer_bytes,
             usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -705,8 +709,8 @@ impl Canvas {
                 buffer: &buffer,
                 layout: TexelCopyBufferLayout {
                     offset: 0,
-                    bytes_per_row: Some(stride),
-                    rows_per_image: Some(h),
+                    bytes_per_row: Some(readback.stride),
+                    rows_per_image: Some(physical.height),
                 },
             },
             extent,
@@ -722,9 +726,8 @@ impl Canvas {
         })?;
         receiver.recv_timeout(std::time::Duration::from_secs(10))??;
         let mapped = buffer.slice(..).get_mapped_range()?;
-        let mut rgba = Vec::with_capacity((w * h * 4) as usize);
-        for row in mapped.chunks(stride as usize) {
-            for pixel in row[..(w * 4) as usize].as_chunks::<4>().0 {
+        for row in mapped.chunks_exact(readback.stride as usize) {
+            for pixel in row[..readback.row_bytes].as_chunks::<4>().0 {
                 rgba.extend_from_slice(&[pixel[2], pixel[1], pixel[0], pixel[3]]);
             }
         }
@@ -744,6 +747,50 @@ impl Drop for Canvas {
 mod resource_tests {
     use super::*;
     use lucent_api::{Color, ImageData};
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn snapshot_rejects_invalid_extents_without_poisoning_the_device() {
+        let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
+        let limit = gpu.device.limits().max_texture_dimension_2d;
+        let mut canvas = Canvas::new(gpu);
+        for (width, height, scale) in [
+            (0, 1, 1),
+            (1, 0, 1),
+            (1, 1, 0),
+            (u32::MAX, 1, 2),
+            (1, u32::MAX, 2),
+            (limit + 1, 1, 1),
+            (1, limit + 1, 1),
+        ] {
+            assert!(canvas.snapshot(width, height, scale, &[]).is_err());
+        }
+        // A non-aligned row verifies padding removal and channel order. Running
+        // after rejection also detects accidental invalid commands reaching wgpu.
+        let rect = Rect::new(0., 0., 65., 3.);
+        let image =
+            Arc::new(ImageData::from_rgba("readback", 1, 1, vec![0x12, 0x34, 0x56, 255]).unwrap());
+        let paint = [Paint::Image {
+            rect,
+            clip: rect.into(),
+            data: image,
+            uv: Rect::new(0., 0., 1., 1.),
+            radius: 0.,
+            opacity: 1.,
+            tint: Color::hex(0xffffff),
+        }];
+        for scale in [1, 2] {
+            let pixels = canvas.snapshot(65, 3, scale, &paint).unwrap();
+            assert_eq!(pixels.len(), (65 * 3 * scale * scale * 4) as usize);
+            for (index, pixel) in pixels.as_chunks::<4>().0.iter().enumerate() {
+                assert_eq!(
+                    *pixel,
+                    [0x12, 0x34, 0x56, 255],
+                    "scale {scale}, pixel {index}"
+                );
+            }
+        }
+    }
 
     #[test]
     #[ignore = "requires a Vulkan driver"]
@@ -880,6 +927,50 @@ mod clipping_tests {
     use super::*;
     use lucent_api::{Color, Element, ImageData};
     use lucent_ui::{Interaction, Layout};
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn opaque_images_retain_coverage_on_odd_sized_targets_and_clips() {
+        let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
+        let mut canvas = Canvas::new(gpu);
+        let image =
+            Arc::new(ImageData::from_rgba("odd edges", 1, 1, vec![255, 0, 0, 255]).unwrap());
+        for (width, height) in [(1, 1), (3, 5), (17, 11), (65, 3), (67, 5)] {
+            for scale in [1, 2] {
+                for inset in [0., 0.75] {
+                    let rect = Rect::new(0., 0., width as f32, height as f32);
+                    let clip = Rect::new(inset, inset, rect.w - inset * 2., rect.h - inset * 2.);
+                    if clip.w <= 0. || clip.h <= 0. {
+                        continue;
+                    }
+                    let paint = [Paint::Image {
+                        rect,
+                        clip: clip.into(),
+                        data: image.clone(),
+                        uv: Rect::new(0., 0., 1., 1.),
+                        radius: 0.,
+                        opacity: 1.,
+                        tint: Color::hex(0xffffff),
+                    }];
+                    let pixels = canvas.snapshot(width, height, scale, &paint).unwrap();
+                    let physical_width = width * scale;
+                    for (index, pixel) in pixels.as_chunks::<4>().0.iter().enumerate() {
+                        let x = (index as u32 % physical_width) as f32 + 0.5;
+                        let y = (index as u32 / physical_width) as f32 + 0.5;
+                        let expected = if clip.contains(x / scale as f32, y / scale as f32) {
+                            [255, 0, 0, 255]
+                        } else {
+                            [0; 4]
+                        };
+                        assert_eq!(
+                            *pixel, expected,
+                            "{width}x{height}, scale {scale}, inset {inset}, pixel {index}"
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     #[ignore = "requires a Vulkan driver"]
@@ -1158,17 +1249,22 @@ impl Renderer {
         {
             return Err(error.into());
         }
-        let physical = (
-            width.checked_mul(scale).ok_or("Surface width overflow")?,
-            height.checked_mul(scale).ok_or("Surface height overflow")?,
-        );
-        if physical.0 == 0 || physical.1 == 0 {
+        if width == 0 || height == 0 || scale == 0 {
             return Ok(RenderOutcome::RetryAfter(self.recovery.retry()));
         }
+        let physical = PhysicalExtent::new(
+            width,
+            height,
+            scale,
+            self.gpu.device.limits().max_texture_dimension_2d,
+        )?;
         let started = profiling::start(enabled);
-        if self.reconfigure || self.config.width != physical.0 || self.config.height != physical.1 {
-            self.config.width = physical.0;
-            self.config.height = physical.1;
+        if self.reconfigure
+            || self.config.width != physical.width
+            || self.config.height != physical.height
+        {
+            self.config.width = physical.width;
+            self.config.height = physical.height;
             self.surface.configure(&self.gpu.device, &self.config);
             self.reconfigure = false;
         }
