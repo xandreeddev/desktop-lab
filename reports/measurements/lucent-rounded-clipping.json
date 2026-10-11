@@ -1,0 +1,34 @@
+{
+  "source_commit": "65244ce710174c72a329e70a6eb96549b2251c69",
+  "rust_unit_tests": 79,
+  "python_tests": 48,
+  "visual_comparisons": 148,
+  "reviewed_baseline_changes": 18,
+  "vulkan_driver": "Mesa lavapipe 26.2.3, LLVM 22.1.8",
+  "pixel_scales": [
+    1,
+    2
+  ],
+  "checks": [
+    "centered source UV crop",
+    "rounded destination bounds",
+    "nested rounded clip intersection",
+    "hit and input geometry agree",
+    "unrounded wallpaper edges remain opaque"
+  ],
+  "native_vm": {
+    "launcher_input": true,
+    "independent_application_service": true,
+    "application_survives_shell_restart": true,
+    "restart_restores_background": true,
+    "native_lock_unlock": true,
+    "surface_fault_injection": false,
+    "notes": "Native VM checks. Presentation recovery policy is unit-tested; driver fault injection is not covered here."
+  },
+  "desktop_binary_sha256": "7b9e8b8606534502f5aa54a4c826af52735999e347f3eb83a0f135735faf52f2",
+  "limits": [
+    "Wayland input regions quantize to integer logical cells; partially covered antialiased edges are not equivalent to input coverage",
+    "GPU pixel tests use CPU Vulkan; hardware-GPU and fractional-output validation remain open",
+    "Native login greeter service was not replaced or restarted in this milestone"
+  ]
+}
