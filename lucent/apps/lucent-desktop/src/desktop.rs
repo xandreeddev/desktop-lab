@@ -30,6 +30,7 @@ pub enum Message {
     Action(Action),
     Wallpaper(usize, bool),
     Widgets(widgets::Message),
+    Persistence(crate::persistence::Message),
     Theme(bool),
     Palette(ThemePalette),
     ExtractPalette,
@@ -56,6 +57,7 @@ pub struct Desktop {
     pub widgets: widgets::Host,
     pub apps: Vec<domain::Application>,
     pub settings: DesktopSettings,
+    pub persistence: crate::persistence::Persistence,
     pub settings_writable: bool,
     pub settings_error: String,
     pub images: BTreeMap<String, Arc<ImageData>>,
@@ -87,6 +89,7 @@ impl Desktop {
             widgets: widgets::Host::default(),
             apps: vec![],
             settings: DesktopSettings::default(),
+            persistence: crate::persistence::Persistence::new(adapters.settings.clone()),
             settings_writable: false,
             settings_error: String::new(),
             images,
@@ -163,6 +166,8 @@ impl Desktop {
     pub fn error_message(&self) -> &str {
         if !self.settings_error.is_empty() {
             &self.settings_error
+        } else if !self.persistence.error().is_empty() {
+            self.persistence.error()
         } else if !self.wallpaper.error.is_empty() {
             &self.wallpaper.error
         } else {
@@ -183,13 +188,12 @@ impl Desktop {
         }
         choices
     }
-    pub fn save(&self, effects: &mut Effects<Message>) {
+    pub fn save(&mut self, effects: &mut Effects<Message>) {
         if self.settings_writable {
-            let settings = self.settings.clone();
-            let store = self.adapters.settings.clone();
-            effects.task_on("settings", move || {
-                Message::Completed(store.save(&settings))
-            });
+            effects.delegate(
+                |child| self.persistence.request(&self.settings, child),
+                Message::Persistence,
+            );
         }
     }
     pub fn dock_apps(&self) -> Vec<&domain::Application> {
@@ -310,6 +314,10 @@ impl Desktop {
         );
         match intent {
             Some(widgets::Intent::Save) => self.save(effects),
+            Some(widgets::Intent::RetrySave) => self.update(
+                Message::Persistence(crate::persistence::Message::Retry),
+                effects,
+            ),
             Some(widgets::Intent::Action(action)) => self.perform(action, effects),
             Some(widgets::Intent::Error(error)) => {
                 self.error = error.to_string();
@@ -390,6 +398,7 @@ impl Component for Desktop {
                     system: &self.system,
                     media: &self.media,
                     weather: self.weather.as_ref(),
+                    save_status: self.persistence.status(self.settings_writable),
                 },
                 artwork: self.artwork(),
             }
@@ -585,6 +594,14 @@ impl Component for Desktop {
                 }
             }
             Message::Widgets(message) => self.update_widgets(message, effects),
+            Message::Persistence(message) => {
+                if self.settings_writable {
+                    effects.delegate(
+                        |child| self.persistence.update(message, child),
+                        Message::Persistence,
+                    );
+                }
+            }
             Message::ThemeApplied(result) => {
                 self.theme_error = result
                     .err()
@@ -739,6 +756,11 @@ impl Component for Desktop {
 }
 impl api::Application for Desktop {
     fn runtime_failure(&self, failure: api::RuntimeFailure) -> Option<Message> {
+        if failure.source == "effect queue settings" {
+            return Some(Message::Persistence(
+                crate::persistence::Message::WorkerFailed(failure.to_string()),
+            ));
+        }
         // A panic/admission failure may leave commit completion ambiguous. Let
         // supervision restart the client and load the actual persisted selection
         // instead of leaving the coordinator busy or guessing whether it committed.
@@ -918,6 +940,16 @@ impl api::Application for Desktop {
         }
     }
     fn command(&self, command: &str) -> std::result::Result<Option<Message>, String> {
+        if command == "settings retry" {
+            if !self.settings_writable {
+                return Err(
+                    "Settings are unavailable; fix the load error before retrying saves".into(),
+                );
+            }
+            return Ok(Some(Message::Persistence(
+                crate::persistence::Message::Retry,
+            )));
+        }
         if let Some(payload) = command.strip_prefix("osd show ") {
             return serde_json::from_str(payload)
                 .map(|value| Some(Message::Osd(value)))
@@ -1027,7 +1059,7 @@ impl api::Application for Desktop {
         }))
     }
     fn inspect(&self) -> String {
-        serde_json::json!({"palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":self.widgets.grid_visible(),"notes":self.settings.notes,"timer_seconds":self.widgets.timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable}).to_string()
+        serde_json::json!({"palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":self.widgets.grid_visible(),"notes":self.settings.notes,"timer_seconds":self.widgets.timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"settings_save_status":self.persistence.status(self.settings_writable).name(),"settings_save_error":self.persistence.error(),"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable}).to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
         (surface == "osd" && self.osd.animating(now))

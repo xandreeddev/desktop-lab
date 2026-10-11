@@ -15,6 +15,7 @@ pub enum Message {
     Show(String),
     Move(String, DragEvent),
     Notes(String),
+    RetrySave,
     TimerToggle,
     TimerReset,
     Tick(u64),
@@ -24,6 +25,7 @@ pub enum Message {
 }
 pub enum Intent {
     Save,
+    RetrySave,
     Action(Action),
     Error(lucent_domain::DomainError),
 }
@@ -156,6 +158,7 @@ impl Host {
                 Some(Intent::Save)
             }
             Message::Action(action) => Some(Intent::Action(action)),
+            Message::RetrySave => Some(Intent::RetrySave),
         }
     }
 }

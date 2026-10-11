@@ -618,3 +618,30 @@ its drag, and unknown/hidden IDs cannot mutate positions. Invalid geometry retur
 an error and clears transient state without requesting persistence. Notes also
 return Save; media buttons return an action intent. The root retains adapter
 ownership, and the renderer receives only generic elements.
+
+
+## Preference persistence
+
+The desktop's persistence child receives its adapter through `SettingsPort`.
+Requests carry monotonically checked revisions and immutable snapshots. Only one
+settings task is outstanding; edits during that task replace the pending snapshot.
+After its completion, the newest pending revision runs. A 1,000-edit unit fixture
+therefore writes only the first accepted and final requested values.
+
+Save failures belong to this child. An unrelated `Message::Completed(Ok(()))`
+cannot clear them. Worker rejection or panic marks the active save failed;
+explicit retry or a newer edit can attempt the retained snapshot again. Matching
+completion updates acknowledged state and clears the error only on success.
+Notes borrow unavailable/saving/retrying/saved/failed status and return a retry
+intent. The root invokes persistence; widget presentation never calls its adapter.
+
+`lucent-cli settings retry` retries a failed save. Inspection exposes
+`settings_save_status` and `settings_save_error`. Waiting for saved state is required
+before terminating the process if the latest edits must survive. This does not add
+shutdown flushing, cross-process writer arbitration or fsync/power-loss durability.
+The existing adapter validates settings and replaces the file through rename.
+
+Widget dragging still changes the shared aggregate while the gesture is in
+progress. Its own save waits for release, but another preference change can include
+that intermediate position. Separating preview placement from committed state is
+tracked as follow-up widget work.

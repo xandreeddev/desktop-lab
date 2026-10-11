@@ -237,7 +237,8 @@
         "Grid aligned resizing and placement",
         "Per-monitor persisted layouts",
         "Richer notes calendar and weather behavior",
-        "Keyboard and pointer interaction tests"
+        "Keyboard and pointer interaction tests",
+        "Transient drag preview cannot be persisted by an unrelated settings change"
       ]
     },
     {
@@ -293,7 +294,7 @@
     {
       "id": "settings-persistence",
       "owner": "desktop persistence coordinator and settings adapter",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "Coalesce pending preference snapshots while allowing an accepted save to finish",
         "Newest requested state survives worker overload or has an explicit recoverable failure",
@@ -302,7 +303,8 @@
         "Injected failure, delayed completion and overload tests preserve newer intent"
       ],
       "evidence": [
-        "Static review: Desktop::save queues full snapshots into the bounded settings queue and uses generic Message::Completed. Settings save status and retry are not feature-owned. Native disk-failure and overload verification remains open."
+        "Static review: Desktop::save queues full snapshots into the bounded settings queue and uses generic Message::Completed. Settings save status and retry are not feature-owned. Native disk-failure and overload verification remains open.",
+        "A client coordinator now coalesces pending preferences, retains save failure and exposes acknowledged status/retry. Isolated burst/rejection/failure/stale-completion and root/widget behavior tests pass. Visual/native checks pending."
       ]
     }
   ],
@@ -532,7 +534,7 @@
     },
     {
       "milestone": "widget-host",
-      "status": "locally_verified",
+      "status": "merged",
       "checks": [
         "141 Rust unit tests and 54 Python checks passed",
         "Clippy, formatting and Astro check/build passed",
@@ -541,13 +543,31 @@
         "Native notes persistence, timer start/pause/reset, calendar input, drag grid/snapping and widget selection passed",
         "Notes and positions survived restart; original preferences and workspace restored",
         "Launcher modes/focus/grid and application survival checks passed",
-        "Native secure lock/unlock passed; final normal desktop ready"
+        "Native secure lock/unlock passed; final normal desktop ready",
+        "All six exact-head checks, protected-main merge and Pages deployment passed"
       ],
       "pending": [
-        "Exact-head CI, protected-main merge and Pages",
         "Other requirement groups"
       ],
-      "source_commit": "5d8a394b2f29a85c72ba4023aad1b796fe3a3ec4"
+      "source_commit": "5d8a394b2f29a85c72ba4023aad1b796fe3a3ec4",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/18",
+      "merge_commit": "a27674a82d9bb3c0f836d0f8155bced16bd00af0"
+    },
+    {
+      "milestone": "settings-persistence",
+      "status": "in_progress",
+      "checks": [
+        "147 Rust tests and Clippy pass",
+        "54 Python checks, formatting, generated assets and Astro check/build passed",
+        "20 new notes-state baselines reviewed; existing 148 images preserved"
+      ],
+      "pending": [
+        "New notes-state visuals",
+        "Native filesystem-failure/retry and restoration checks",
+        "Release build and exact-head CI",
+        "Protected-main merge and Pages",
+        "Other requirement groups"
+      ]
     }
   ]
 }
