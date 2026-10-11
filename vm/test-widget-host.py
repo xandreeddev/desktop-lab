@@ -79,6 +79,18 @@ def suite():
             v['move'](x + index * 15, y + index * 6)
             time.sleep(.025)
         eventually(lambda: client()['widget_grid'], 'Drag grid did not appear')
+        # Saving another preference while the pointer is held must see the
+        # committed layout, not the transient preview rendered under the hand.
+        assert 'calendar' not in client()['positions']
+        cli('launcher', 'size', '800', '720')
+        eventually(lambda: client()['settings_save_status'] == 'saved' and
+                   json.loads(remote('cat', state))['launcher'] == {'width': 800, 'max_height': 720},
+                   'Unrelated preference save not acknowledged')
+        assert 'calendar' not in json.loads(remote('cat', state))['positions']
+        preview = v['hit']('widget-calendar')
+        assert abs(preview['x'] - hit['x'] - 180) < 1
+        assert abs(preview['y'] - hit['y'] - 72) < 1
+        checks.append('native_drag_preview_excluded_from_unrelated_save')
         v['button'](False)
         eventually(lambda: not client()['widget_grid'] and 'calendar' in client()['positions'], 'Drag did not finish')
         position = client()['positions']['calendar']
@@ -112,7 +124,7 @@ def suite():
         remote('cp', backup, state)
         session('systemctl', '--user', 'start', 'lucent.service')
         eventually(lambda: client()['background_ready'] and client()['settings_writable'], 'Original desktop not ready', timeout=35)
-        for field in ('positions', 'widgets', 'notes', 'wallpaper', 'palette'):
+        for field in ('positions', 'widgets', 'notes', 'wallpaper', 'palette', 'launcher_size'):
             assert client()[field] == initial[field], 'Failed to restore ' + field
         session('hyprctl', 'dispatch', f'hl.dsp.focus({{ workspace = "{workspace}" }})')
         remote('rm', '-f', backup)

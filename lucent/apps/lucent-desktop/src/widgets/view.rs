@@ -54,7 +54,7 @@ impl View<'_> {
 impl View<'_> {
     /// Decorative geometry only: grid lines never enter the pointer input region.
     fn drag_grid(&self, cx: &ViewContext) -> Vec<Element<Message>> {
-        if self.host.drag_origins.is_empty() {
+        if !self.host.grid_visible() {
             return vec![];
         }
         let step = component::widget_layout::GRID_STEP;
@@ -91,11 +91,9 @@ impl View<'_> {
         children.extend(self.input.settings.visible_widgets.iter().filter_map(|id| {
             let content = registry.view(id, self, cx)?;
             let pos = self
-                .input
-                .settings
-                .positions
-                .get(id)
-                .copied()
+                .host
+                .preview_position(id)
+                .or_else(|| self.input.settings.positions.get(id).copied())
                 .unwrap_or_else(|| default_position(id, (cx.width, cx.height)));
             let size = widget_size(id);
             let drag_id = id.clone();

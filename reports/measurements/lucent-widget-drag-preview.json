@@ -1,0 +1,58 @@
+{
+  "source_commit": "8efe02d33bc4289cd45fa0abd36319f3d5871dcc",
+  "rust_unit_tests": 151,
+  "python_tests": 54,
+  "vulkan_visual_comparisons": 168,
+  "unchanged_baselines": true,
+  "native": {
+    "widgets": {
+      "checks": [
+        "native_calendar_controls_repaint",
+        "native_note_edit_and_persistence",
+        "native_timer_start_pause_reset",
+        "native_drag_preview_excluded_from_unrelated_save",
+        "native_drag_grid_and_release_snap",
+        "native_selector_and_ipc_share_widget_identity",
+        "notes_and_positions_survive_restart"
+      ],
+      "preferences_and_workspace_restored": true,
+      "no_existing_apps_closed": true
+    },
+    "launcher": {
+      "checks": [
+        "panel_and_rows_on_shell_grid",
+        "equal_launcher_insets",
+        "uniform_row_pitch",
+        "input_on_shell_grid",
+        "top_bar_clock_on_shell_grid",
+        "keyboard_selection_without_hover",
+        "visible_rows_unclipped",
+        "search_focus_visible",
+        "tab_all_five_sections",
+        "shift_tab_reverse",
+        "widget_keyboard_selection",
+        "search_focus_restored_after_mode_switch"
+      ],
+      "settings_unchanged": true
+    },
+    "runtime": {
+      "launcher_input": true,
+      "independent_application_service": true,
+      "application_survives_shell_restart": true,
+      "restart_restores_background": true,
+      "native_lock_unlock": true,
+      "surface_fault_injection": false,
+      "notes": "Native VM checks. Presentation recovery policy is unit-tested; driver fault injection is not covered here."
+    },
+    "final_normal_desktop_ready": true
+  },
+  "binary_sha256": {
+    "lucent-desktop": "a21b95c56b1f71d1400e8d60c4ea8a25e52eb6c4ad9bea11d3fafab26ba7f073"
+  },
+  "limits": [
+    "The held-drag regression uses a native single-monitor software-Vulkan VM; hotplug, fractional scaling and touch cancellation are not covered",
+    "Output-resize origin behavior and reset/hide cancellation are unit tested",
+    "This change does not claim a measured memory or frame-pacing improvement",
+    "Only the desktop binary was deployed; root greeter and interactive login were not updated or retested"
+  ]
+}
