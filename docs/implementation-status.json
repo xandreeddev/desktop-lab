@@ -1,0 +1,231 @@
+{
+  "objective": "Complete the codebase audit fixes and the identified framework and desktop feature backlog while preserving architecture",
+  "baseline": "395498fdd38012f8443621f4880fb8056f83b280",
+  "status": "in_progress",
+  "completion_rule": "An item is verified only when its behavior, boundary checks, documentation and applicable native integration checks have evidence. Implemented without verification remains incomplete.",
+  "requirements": [
+    {
+      "id": "application-lifetime",
+      "owner": "lucent-services application adapter",
+      "status": "implemented",
+      "acceptance": [
+        "Applications survive desktop service restart",
+        "Arguments and environment remain literal",
+        "Launch failures are reported",
+        "Terminal and graphical launches work"
+      ],
+      "evidence": [
+        "Isolated systemd unit test passed: parent exit survival, literal arguments/environment/cwd, exec failure",
+        "Native VM launcher opened a terminal which survived a lucent.service restart"
+      ]
+    },
+    {
+      "id": "presentation-recovery",
+      "owner": "lucent-render and lucent-wayland",
+      "status": "implemented",
+      "acceptance": [
+        "Timeout and occlusion do not exit the client",
+        "Outdated and lost surfaces recover",
+        "Skipped frames preserve demand without spinning",
+        "Device failure retains secure lock recovery"
+      ],
+      "evidence": [
+        "Recovery policy and skipped-frame demand unit tests passed",
+        "Native VM startup, shell restart and secure lock/unlock passed",
+        "Driver fault injection remains unverified"
+      ]
+    },
+    {
+      "id": "effect-scheduling",
+      "owner": "lucent-api and lucent-wayland",
+      "status": "implemented",
+      "acceptance": [
+        "Slow assets and theme exports do not delay interactive or lock actions",
+        "Settings writes retain order",
+        "Work and queues have bounds",
+        "Cancellation and worker failure are observable"
+      ],
+      "evidence": [
+        "Bounded queue ordering, independent work, overload, cancellation, panic and shutdown tests passed",
+        "Native launcher and secure lock/unlock passed",
+        "Subscription message delivery remains unbounded and is separate follow-up work"
+      ]
+    },
+    {
+      "id": "renderer-resources",
+      "owner": "lucent-render with presentation asset adapters",
+      "status": "pending",
+      "acceptance": [
+        "Textures needed by other surfaces remain resident",
+        "Cache policy accounts for active resources and byte budgets",
+        "Expensive image preparation leaves the paint path",
+        "Resource lifecycle and measured timings are tested"
+      ]
+    },
+    {
+      "id": "rounded-clipping",
+      "owner": "lucent-ui and lucent-render",
+      "status": "pending",
+      "acceptance": [
+        "Cover images retain destination rounding",
+        "Rounded parent clips apply consistently to content and hit testing",
+        "Pixel tests at 1x and 2x cover crop and nesting"
+      ]
+    },
+    {
+      "id": "wallpaper-transaction",
+      "owner": "appearance use cases and adapters",
+      "status": "pending",
+      "acceptance": [
+        "Local and online assets validate before selection commits",
+        "Decode failures retain prior wallpaper and report a useful error",
+        "Stale completions cannot replace newer selections",
+        "Palette and login publication remain consistent"
+      ]
+    },
+    {
+      "id": "text-and-accessibility",
+      "owner": "lucent-api lucent-ui lucent-wayland lucent-render",
+      "status": "pending",
+      "acceptance": [
+        "Caret selection navigation deletion and clipboard work across clients",
+        "Grapheme editing complex-script shaping and font fallback work",
+        "IME integration works",
+        "Accessibility semantics and platform bridge work"
+      ]
+    },
+    {
+      "id": "performance-evidence",
+      "owner": "measurement tooling and documentation",
+      "status": "pending",
+      "acceptance": [
+        "Harness uses current idle integration and restores preferences",
+        "Source hardware and workload metadata are detected",
+        "Current startup idle interaction and memory results are recorded",
+        "CPU preparation layout upload and presentation measurements have explicit scope"
+      ]
+    },
+    {
+      "id": "architecture-enforcement",
+      "owner": "domain clients framework and tests",
+      "status": "pending",
+      "acceptance": [
+        "Workspace display policy is removed from compositor adapters",
+        "Shadow appearance is token driven",
+        "Launcher appearance and widget coordination have cohesive boundaries",
+        "Value objects enforce demonstrated invariants",
+        "Dependency guards include nested source and resolved target dependencies"
+      ]
+    },
+    {
+      "id": "display-support",
+      "owner": "lucent-api lucent-wayland and desktop layout",
+      "status": "pending",
+      "acceptance": [
+        "Explicit output targeting",
+        "Per-monitor layout persistence",
+        "Fractional scaling",
+        "Hotplug and output recreation verification"
+      ]
+    },
+    {
+      "id": "control-center",
+      "owner": "domain service ports adapters and desktop client",
+      "status": "pending",
+      "acceptance": [
+        "Native network connection and Wi-Fi setup",
+        "Native Bluetooth discovery pairing and controls",
+        "Audio device volume microphone and routing controls",
+        "Battery power profile brightness and session controls",
+        "Service loading unavailable error and reconnect states"
+      ]
+    },
+    {
+      "id": "system-tray",
+      "owner": "domain service adapter and desktop client",
+      "status": "pending",
+      "acceptance": [
+        "StatusNotifier watcher and item lifecycle",
+        "Icons activation and context menus",
+        "Service restart and item disconnect tests"
+      ]
+    },
+    {
+      "id": "launcher-and-dock",
+      "owner": "application domain adapters and desktop components",
+      "status": "pending",
+      "acceptance": [
+        "Installed application changes update discovery",
+        "Launch activation and supported desktop integration",
+        "Pinning reordering and persistence",
+        "Autohide and interaction coverage"
+      ]
+    },
+    {
+      "id": "widgets",
+      "owner": "desktop widget host and domain services",
+      "status": "pending",
+      "acceptance": [
+        "Grid aligned resizing and placement",
+        "Per-monitor persisted layouts",
+        "Richer notes calendar and weather behavior",
+        "Keyboard and pointer interaction tests"
+      ]
+    },
+    {
+      "id": "notifications",
+      "owner": "domain use cases notification adapter and client",
+      "status": "pending",
+      "acceptance": [
+        "Persistent history and grouping",
+        "Supported rich content and actions",
+        "Reliable reconnect and bounded storage",
+        "Native interaction and protocol tests"
+      ]
+    },
+    {
+      "id": "framework-controls",
+      "owner": "lucent-api lucent-ui and lucent-wayland",
+      "status": "pending",
+      "acceptance": [
+        "Reusable scrolling and sliders",
+        "Tooltips popup and focus lifecycle",
+        "Controls demonstrated by real clients",
+        "Behavior and visual regression coverage"
+      ]
+    },
+    {
+      "id": "delivery",
+      "owner": "repository docs CI packaging and VM integration",
+      "status": "pending",
+      "acceptance": [
+        "Library and desktop guides match implementation",
+        "Skills describe current contracts",
+        "Native VM validation with reversible deployment",
+        "Protected-main CI and Pages deployment",
+        "Requirement-by-requirement completion audit"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "milestone": "runtime-foundations",
+      "status": "locally_verified",
+      "checks": [
+        "74 Rust unit tests passed",
+        "47 Python tests passed",
+        "Clippy passed with warnings denied",
+        "Astro check and build passed",
+        "Isolated systemd lifetime integration passed",
+        "Native VM launcher/restart/application survival/lock/unlock passed",
+        "148 Vulkan visual comparisons passed without baseline changes",
+        "455 design tokens and 58 app icons verified",
+        "13 generated documentation pages and 484 links checked"
+      ],
+      "pending": [
+        "Protected-main CI and merge",
+        "Remaining requirement groups"
+      ]
+    }
+  ]
+}

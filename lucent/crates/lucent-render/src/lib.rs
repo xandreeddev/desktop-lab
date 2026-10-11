@@ -1,10 +1,20 @@
 //! Shared Vulkan device and cached text/image resources for arbitrary framework scenes.
 use lucent_api::{Align, Rect};
 use lucent_ui::Paint;
-use std::{cell::RefCell, collections::HashMap, ffi::c_void, ptr::NonNull, rc::Rc, sync::Arc};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    ffi::c_void,
+    ptr::NonNull,
+    rc::Rc,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 pub use wgpu::rwh as display_handle;
 use wgpu::{rwh::*, *};
+mod presentation;
 mod raster;
+use presentation::{Recovery, SurfaceFailure};
 pub type Error = Box<dyn std::error::Error>;
 struct TextureResource {
     group: BindGroup,
@@ -26,6 +36,7 @@ pub struct Gpu {
     fonts: Arc<Vec<fontdue::Font>>,
     cache: RefCell<HashMap<String, Rc<TextureResource>>>,
     white: RefCell<Option<Rc<TextureResource>>>,
+    device_failure: Arc<Mutex<Option<String>>>,
     pub adapter_description: String,
 }
 impl Gpu {
@@ -54,6 +65,12 @@ impl Gpu {
         eprintln!("lucent GPU: {adapter_description}");
         let (device, queue) =
             pollster::block_on(adapter.request_device(&DeviceDescriptor::default()))?;
+        let device_failure = Arc::new(Mutex::new(None));
+        let failure = device_failure.clone();
+        device.set_device_lost_callback(move |reason, message| {
+            *failure.lock().unwrap_or_else(|e| e.into_inner()) =
+                Some(format!("Vulkan device lost ({reason:?}): {message}"));
+        });
         let texture_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: Some("cached image"),
             entries: &[
@@ -142,6 +159,7 @@ impl Gpu {
             fonts,
             cache: RefCell::new(HashMap::new()),
             white: RefCell::new(None),
+            device_failure,
             adapter_description,
         }))
     }
@@ -546,7 +564,17 @@ pub struct Renderer {
     gpu: Rc<Gpu>,
     config: SurfaceConfiguration,
     canvas: Canvas,
+    display: RawDisplayHandle,
+    window: RawWindowHandle,
+    reconfigure: bool,
+    recovery: Recovery,
     pub frames: u64,
+}
+/// A skipped presentation has no compositor callback; the runtime must schedule a retry.
+#[derive(Debug, PartialEq, Eq)]
+pub enum RenderOutcome {
+    Presented,
+    RetryAfter(Duration),
 }
 impl Renderer {
     /// # Safety
@@ -556,11 +584,12 @@ impl Renderer {
         display: RawDisplayHandle,
         surface: *mut c_void,
     ) -> Result<Self, Error> {
+        let window = RawWindowHandle::Wayland(WaylandWindowHandle::new(
+            NonNull::new(surface).ok_or("Null surface")?,
+        ));
         let target = SurfaceTargetUnsafe::RawHandle {
             raw_display_handle: Some(display),
-            raw_window_handle: RawWindowHandle::Wayland(WaylandWindowHandle::new(
-                NonNull::new(surface).ok_or("Null surface")?,
-            )),
+            raw_window_handle: window,
         };
         // SAFETY: guaranteed by this function's caller.
         let surface = unsafe { gpu.instance.create_surface_unsafe(target) }?;
@@ -600,6 +629,10 @@ impl Renderer {
             gpu,
             config,
             canvas,
+            display,
+            window,
+            reconfigure: true,
+            recovery: Recovery::default(),
             frames: 0,
         })
     }
@@ -609,18 +642,58 @@ impl Renderer {
         height: u32,
         scale: u32,
         paint: &[Paint],
-    ) -> Result<(), Error> {
-        let physical = (width * scale, height * scale);
-        if self.config.width != physical.0 || self.config.height != physical.1 {
+        before_present: impl FnOnce(),
+    ) -> Result<RenderOutcome, Error> {
+        if let Some(error) = self
+            .gpu
+            .device_failure
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+        {
+            return Err(error.into());
+        }
+        let physical = (
+            width.checked_mul(scale).ok_or("Surface width overflow")?,
+            height.checked_mul(scale).ok_or("Surface height overflow")?,
+        );
+        if physical.0 == 0 || physical.1 == 0 {
+            return Ok(RenderOutcome::RetryAfter(self.recovery.retry()));
+        }
+        if self.reconfigure || self.config.width != physical.0 || self.config.height != physical.1 {
             self.config.width = physical.0;
             self.config.height = physical.1;
             self.surface.configure(&self.gpu.device, &self.config);
+            self.reconfigure = false;
         }
         let frame = match self.surface.get_current_texture() {
-            CurrentSurfaceTexture::Success(frame) | CurrentSurfaceTexture::Suboptimal(frame) => {
+            CurrentSurfaceTexture::Success(frame) => frame,
+            CurrentSurfaceTexture::Suboptimal(frame) => {
+                self.reconfigure = true;
                 frame
             }
-            other => return Err(format!("Surface presentation: {other:?}").into()),
+            other => {
+                let failure = match other {
+                    CurrentSurfaceTexture::Timeout => SurfaceFailure::Timeout,
+                    CurrentSurfaceTexture::Occluded => SurfaceFailure::Occluded,
+                    CurrentSurfaceTexture::Outdated => SurfaceFailure::Outdated,
+                    CurrentSurfaceTexture::Lost => SurfaceFailure::Lost,
+                    _ => return Err(format!("Surface presentation: {other:?}").into()),
+                };
+                self.reconfigure |= failure.reconfigure();
+                if failure.recreate() {
+                    // SAFETY: new() requires these native handles to outlive this renderer.
+                    self.surface = unsafe {
+                        self.gpu
+                            .instance
+                            .create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
+                                raw_display_handle: Some(self.display),
+                                raw_window_handle: self.window,
+                            })
+                    }?;
+                }
+                return Ok(RenderOutcome::RetryAfter(self.recovery.retry()));
+            }
         };
         self.canvas.paint(
             &frame.texture.create_view(&Default::default()),
@@ -629,8 +702,11 @@ impl Renderer {
             scale,
             paint,
         );
+        // Request a Wayland callback only when a buffer will actually be committed.
+        before_present();
         self.gpu.queue.present(frame);
         self.frames += 1;
-        Ok(())
+        self.recovery.presented();
+        Ok(RenderOutcome::Presented)
     }
 }

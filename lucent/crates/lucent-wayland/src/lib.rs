@@ -1,8 +1,11 @@
 //! Generic event-driven Wayland runtime. Desktop policy lives entirely in clients.
-use calloop::{EventLoop, LoopHandle, channel};
+use calloop::{
+    EventLoop, LoopHandle, channel,
+    timer::{TimeoutAction, Timer},
+};
 use calloop_wayland_source::WaylandSource;
 use lucent_api::{self as api, Application, Effects, FrameDemand, ViewContext};
-use lucent_render::{Error, Gpu, Renderer};
+use lucent_render::{Error, Gpu, RenderOutcome, Renderer};
 use lucent_ui::{Interaction, Layout, Scene};
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState, FrameCallbackData, Region, SurfaceData},
@@ -48,9 +51,11 @@ use wayland_client::{
 use wgpu_handle::HasDisplayHandle;
 // Use the exact raw-window-handle version used by the renderer.
 use lucent_render::display_handle as wgpu_handle;
+mod effects;
 
 enum RuntimeEvent<M> {
     Message(M),
+    Failure(api::RuntimeFailure),
     Command(String, mpsc::SyncSender<String>),
 }
 struct Native<M> {
@@ -101,7 +106,7 @@ struct State<A: Application> {
     error: Option<String>,
     handle: LoopHandle<'static, Self>,
     sender: channel::Sender<RuntimeEvent<A::Message>>,
-    tasks: mpsc::Sender<api::Task<A::Message>>,
+    tasks: effects::Executor<A::Message>,
     subscriptions: BTreeMap<String, api::Cancellation>,
     connection: Connection,
 }
@@ -158,16 +163,13 @@ fn run_inner<A: Application>(
     let mut event_loop: EventLoop<State<A>> = EventLoop::try_new()?;
     let handle = event_loop.handle();
     let (sender, events) = channel::channel();
-    let (task_sender, task_receiver) = mpsc::channel::<api::Task<A::Message>>();
     let completion = sender.clone();
-    // A single ordered effects worker makes configuration writes deterministic.
-    std::thread::spawn(move || {
-        for task in task_receiver {
-            let message = task();
-            if completion.send(RuntimeEvent::Message(message)).is_err() {
-                break;
-            }
-        }
+    let tasks = effects::Executor::new(move |result| {
+        let event = match result {
+            effects::Completion::Message(message) => RuntimeEvent::Message(message),
+            effects::Completion::Failure(error) => RuntimeEvent::Failure(error),
+        };
+        let _ = completion.send(event);
     });
     let mut state = State {
         surfaces: BTreeMap::new(),
@@ -191,7 +193,7 @@ fn run_inner<A: Application>(
         error: None,
         handle: handle.clone(),
         sender: sender.clone(),
-        tasks: task_sender,
+        tasks,
         subscriptions: BTreeMap::new(),
         connection: conn.clone(),
     };
@@ -249,6 +251,7 @@ fn run_inner<A: Application>(
         if let channel::Event::Msg(event) = event {
             match event {
                 RuntimeEvent::Message(msg) => state.message(msg, &event_qh),
+                RuntimeEvent::Failure(error) => state.runtime_failure(error, &event_qh),
                 RuntimeEvent::Command(command, reply) => {
                     let response = if command == "inspect" {
                         state.inspect()
@@ -355,6 +358,15 @@ impl<A: Application> State<A> {
         self.app.update(message, &mut effects);
         self.effects(effects, qh);
     }
+    fn runtime_failure(&mut self, failure: api::RuntimeFailure, qh: &QueueHandle<Self>) {
+        eprintln!("{} runtime failure: {failure}", self.app.name());
+        if let Some(message) = self.app.runtime_failure(failure.clone()) {
+            self.message(message, qh);
+        } else {
+            self.error = Some(failure.to_string());
+            self.exit = true;
+        }
+    }
     fn effects(&mut self, effects: Effects<A::Message>, qh: &QueueHandle<Self>) {
         if self.authorize_unlock.is_none() {
             self.exit |= effects.exit;
@@ -371,7 +383,9 @@ impl<A: Application> State<A> {
             return;
         }
         for task in effects.tasks {
-            let _ = self.tasks.send(task);
+            if let Err(failure) = self.tasks.submit(task) {
+                self.runtime_failure(failure, qh);
+            }
         }
         if let Err(e) = self.reconcile(qh) {
             self.error = Some(e.to_string());
@@ -455,15 +469,26 @@ impl<A: Application> State<A> {
                 continue;
             }
             let cancel = api::Cancellation::default();
+            let source = format!("subscription {}", subscription.id);
             self.subscriptions.insert(subscription.id, cancel.clone());
             let sender = self.sender.clone();
+            let failures = sender.clone();
             std::thread::spawn(move || {
-                (subscription.run)(
-                    api::Emitter::new(move |message| {
-                        let _ = sender.send(RuntimeEvent::Message(message));
-                    }),
-                    cancel,
-                )
+                let cancelled = cancel.clone();
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    (subscription.run)(
+                        api::Emitter::new(move |message| {
+                            let _ = sender.send(RuntimeEvent::Message(message));
+                        }),
+                        cancel,
+                    )
+                }));
+                if result.is_err() && !cancelled.cancelled() {
+                    let _ = failures.send(RuntimeEvent::Failure(api::RuntimeFailure {
+                        source,
+                        reason: "subscription panicked".into(),
+                    }));
+                }
             });
         }
         Ok(())
@@ -534,10 +559,38 @@ impl<A: Application> State<A> {
             }
             let surface = s.role.wl_surface();
             surface.set_buffer_scale(s.scale as i32);
-            surface.frame(qh, FrameCallbackData(surface.clone()));
-            if let Err(e) = s.renderer.render(s.width, s.height, s.scale, &scene.paint) {
-                self.error = Some(e.to_string());
-                self.exit = true;
+            match s
+                .renderer
+                .render(s.width, s.height, s.scale, &scene.paint, || {
+                    surface.frame(qh, FrameCallbackData(surface.clone()));
+                }) {
+                Ok(RenderOutcome::Presented) => {}
+                Ok(RenderOutcome::RetryAfter(delay)) => {
+                    s.demand.defer();
+                    let surface = surface.clone();
+                    // Identify the native surface, not its reusable logical name.
+                    // A removed/recreated panel must not inherit an old retry timer.
+                    if let Err(error) = self.handle.insert_source(
+                        Timer::from_duration(delay),
+                        move |_, _, state| {
+                            if let Some(id) = state.id_for(&surface)
+                                && let Some(native) = state.surfaces.get_mut(&id)
+                            {
+                                native.demand.retry_ready();
+                            }
+                            TimeoutAction::Drop
+                        },
+                    ) {
+                        self.error = Some(error.to_string());
+                        self.exit = true;
+                    }
+                    continue;
+                }
+                Err(e) => {
+                    self.error = Some(e.to_string());
+                    self.exit = true;
+                    continue;
+                }
             }
             if self.app.animating(s.spec.id, now) || s.interaction.animating(now) {
                 s.demand.invalidate();
@@ -594,7 +647,10 @@ impl<A: Application> State<A> {
             }
             s.interaction.focus_visible = true;
         }
-        let logical_id = self.surfaces[&id].spec.id;
+        let Some(logical_id) = self.surfaces.get(&id).map(|s| s.spec.id) else {
+            self.keyboard_surface = None;
+            return;
+        };
         if let Some(message) = self.app.event(api::Event::Key {
             surface: logical_id,
             key: key.clone(),

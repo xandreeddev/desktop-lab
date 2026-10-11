@@ -1,11 +1,11 @@
-//! XDG desktop entry discovery and direct argv launching.
+//! XDG desktop entry discovery and isolated argument-array launching.
+mod launch;
 use lucent_domain::*;
 use std::{
     collections::BTreeMap,
     fs,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
 };
 
 #[derive(Default)]
@@ -58,35 +58,7 @@ impl ApplicationPort for XdgApplications {
         Ok(entries.into_values().flatten().collect())
     }
     fn launch(&self, app: &Application) -> Result<()> {
-        let command = &app.command;
-        let mut process = if command.terminal {
-            let terminal = ["foot", "alacritty", "kitty"]
-                .into_iter()
-                .find(|p| executable(p))
-                .ok_or_else(|| {
-                    DomainError::Unavailable("No supported terminal is installed".into())
-                })?;
-            let mut c = Command::new(terminal);
-            c.arg("-e").arg(&command.program);
-            c
-        } else {
-            Command::new(&command.program)
-        };
-        process
-            .args(&command.args)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-        if let Some(path) = &command.directory {
-            process.current_dir(path);
-        }
-        let mut child = process
-            .spawn()
-            .map_err(|e| DomainError::Failed(format!("Cannot launch {}: {e}", app.name)))?;
-        std::thread::spawn(move || {
-            let _ = child.wait();
-        });
-        Ok(())
+        launch::application(app)
     }
 }
 fn walk(path: &Path, depth: u8, out: &mut Vec<PathBuf>) {
