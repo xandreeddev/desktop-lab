@@ -137,13 +137,20 @@ impl Gpu {
             immediate_size: 0,
         });
         let attributes = vertex_attr_array![0=>Float32x4,1=>Float32x4,2=>Float32x4,3=>Float32x4,4=>Float32x4,5=>Float32x4];
+        let constants = [(
+            "SHADOW_OUTSET",
+            f64::from(lucent_api::Shadow::blur_outset(1.)),
+        )];
         let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("framework primitives"),
             layout: Some(&layout),
             vertex: VertexState {
                 module: &module,
                 entry_point: Some("vs"),
-                compilation_options: Default::default(),
+                compilation_options: PipelineCompilationOptions {
+                    constants: &constants,
+                    ..Default::default()
+                },
                 buffers: &[Some(VertexBufferLayout {
                     array_stride: scene::INSTANCE_BYTES,
                     step_mode: VertexStepMode::Instance,
@@ -156,7 +163,10 @@ impl Gpu {
             fragment: Some(FragmentState {
                 module: &module,
                 entry_point: Some("fs"),
-                compilation_options: Default::default(),
+                compilation_options: PipelineCompilationOptions {
+                    constants: &constants,
+                    ..Default::default()
+                },
                 targets: &[Some(ColorTargetState {
                     format: TextureFormat::Bgra8Unorm,
                     blend: Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING),

@@ -67,8 +67,33 @@ def text(value):
     for char in value: key(codes[chars.index(char)])
 
 
+def layer_geometry(surface_id):
+    """Compositor placement is separate from framework surface-local geometry."""
+    namespace = 'lucent-' + surface_id
+    matches = []
+    def visit(value):
+        if isinstance(value, dict):
+            if value.get('namespace') == namespace:
+                matches.append(value)
+            for child in value.values(): visit(child)
+        elif isinstance(value, list):
+            for child in value: visit(child)
+    visit(json.loads(session('hyprctl', '-j', 'layers')))
+    assert len(matches) == 1, f'Expected one native {namespace} layer'
+    return matches[0]
+
+
 def hit(identifier):
-    return next(h for s in inspect()['surfaces'] for h in s['hits'] if h['id']==identifier)
+    state = inspect()
+    surface, local = next((s, h) for s in state['surfaces'] for h in s['hits'] if h['id']==identifier)
+    origin = layer_geometry(surface['id'])
+    result = dict(local)
+    result['x'] += origin['x']
+    result['y'] += origin['y']
+    result['clip'] = dict(local['clip'])
+    result['clip']['x'] += origin['x']
+    result['clip']['y'] += origin['y']
+    return result
 
 
 def click(identifier):

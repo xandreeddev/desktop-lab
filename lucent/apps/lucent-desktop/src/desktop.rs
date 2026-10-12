@@ -812,14 +812,16 @@ impl Component for Desktop {
                 if id == "background" {
                     match crate::ports::BackgroundTarget::from_surface(w, h, scale) {
                         Ok(target) => effects.delegate(
-                            |child| self.wallpaper.resize(target, child),
+                            |child| {
+                                self.viewport = (w, h);
+                                self.wallpaper.resize(target, child);
+                            },
                             Message::WallpaperSelection,
                         ),
                         Err(error) => self.error = error.to_string(),
                     }
                 }
-                if matches!(id, "widgets" | "dock") {
-                    self.viewport = (w, h);
+                if id == "background" {
                     effects.redraw("dock");
                 }
                 self.retarget_panel_transition(now);
@@ -949,9 +951,13 @@ impl api::Application for Desktop {
                 } else {
                     Layer::Top
                 },
-                anchor: Anchor::Fill,
+                anchor: Anchor::Bottom,
                 width: 0,
-                height: 0,
+                height: if self.launcher.expanded() {
+                    self.viewport.1.max(1.) as u32
+                } else {
+                    crate::shell_layout::dock_surface_height(self.viewport.1)
+                },
                 exclusive_zone: -1,
                 keyboard: if self.launcher.open() {
                     Keyboard::Exclusive
@@ -1198,7 +1204,7 @@ impl api::Application for Desktop {
         }))
     }
     fn inspect(&self) -> String {
-        serde_json::json!({"audio":self.audio.inspect(),"wallpaper_presentation":self.wallpaper.inspect_presentation(),"wallpaper_index":self.wallpaper_index, "wallpaper_count":self.wallpapers.len(), "prepared_assets": {
+        serde_json::json!({"desktop_viewport":self.viewport,"dock_surface_expanded":self.launcher.expanded(),"launcher_opening":self.launcher.opening(),"audio":self.audio.inspect(),"wallpaper_presentation":self.wallpaper.inspect_presentation(),"wallpaper_index":self.wallpaper_index, "wallpaper_count":self.wallpapers.len(), "prepared_assets": {
             "icons": crate::previews::usage(self.images.values()),
             "local_previews": self.previews.inspect(),
             "online_previews": crate::previews::usage(self.browser.previews.values()),

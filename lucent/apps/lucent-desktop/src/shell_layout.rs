@@ -1,10 +1,10 @@
 //! Pure desktop geometry. Views and animation targets share these calculations.
 //! Grid policy belongs to this client/design system, never to the renderer.
 use crate::{actions::COMMANDS, launcher::Mode, widgets::catalog::WIDGETS};
-use lucent_api::Rect;
+use lucent_api::{Rect, Shadow};
 use lucent_design::{
     component::{bar, dock, dock_row, input, launcher, panel, pill},
-    layout, space,
+    elevation, layout, space,
 };
 use lucent_domain::LauncherSize;
 
@@ -24,6 +24,22 @@ pub fn panel_origin(viewport: (f32, f32), size: (f32, f32)) -> (f32, f32) {
         floor(viewport.0 / 2., layout::SHELL_STEP) - size.0 / 2.,
         bottom(viewport.1) - size.1,
     )
+}
+/// The settled dock needs only its shape, shadow and existing bottom inset.
+/// Floor the upper crop edge on the same display grid; retain the actual
+/// output height's remainder rather than moving the dock onto another grid.
+pub fn dock_surface_height(viewport_height: f32) -> u32 {
+    let top = bottom(viewport_height) - panel::DOCK_HEIGHT;
+    let shadow_top = top + elevation::OFFSET - Shadow::blur_outset(elevation::BLUR);
+    (viewport_height - floor(top.min(shadow_top), layout::SHELL_STEP))
+        .ceil()
+        .max(1.) as u32
+}
+/// Surface-local position within a bottom-anchored crop. Display placement
+/// remains authoritative; native buffer size must not change the output grid.
+pub fn dock_origin(viewport: (f32, f32), surface: (f32, f32), size: (f32, f32)) -> (f32, f32) {
+    let (x, y) = panel_origin((surface.0, viewport.1), size);
+    (x, y - (viewport.1 - surface.1))
 }
 pub fn audio_panel(viewport: (f32, f32)) -> Rect {
     use lucent_design::component::audio;

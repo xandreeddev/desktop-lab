@@ -82,10 +82,29 @@ fn fixture(count: usize, light: bool) -> Desktop {
         }
     }
     app.update(
+        Message::Launcher(launcher::Message::Submitted {
+            height: 580.,
+            now: 0.,
+        }),
+        &mut Effects::default(),
+    );
+    app.update(
         Message::Launcher(launcher::Message::Mode(Mode::Apps)),
         &mut Effects::default(),
     );
     app
+}
+/// The offscreen canvas is immediately available at the requested full size.
+/// Native tests separately exercise the asynchronous configure/submission path.
+fn resize_fixture(app: &mut Desktop, width: f32, height: f32) {
+    app.update(
+        Message::Resize("background", width, height, 1),
+        &mut Effects::default(),
+    );
+    app.update(
+        Message::Launcher(launcher::Message::Submitted { height, now: 0. }),
+        &mut Effects::default(),
+    );
 }
 fn fonts(app: &Desktop) -> Arc<Vec<fontdue::Font>> {
     Arc::new(
@@ -133,10 +152,7 @@ fn every_visible_launcher_row_fits_even_after_scrolling() {
         let mut app = fixture(count, false);
         let layout = Layout::new(fonts(&app));
         for width in [640., 390.] {
-            app.update(
-                Message::Resize("dock", width, 580., 1),
-                &mut Effects::default(),
-            );
+            resize_fixture(&mut app, width, 580.);
             for index in [0, count - 1] {
                 app.update(
                     Message::Launcher(launcher::Message::Select(index)),
@@ -176,10 +192,7 @@ fn launcher_size_preserves_selection_and_limits_at_every_preset() {
     let mut app = fixture(50, false);
     let layout = Layout::new(fonts(&app));
     for viewport in [(1920., 1080.), (1366., 768.), (390., 580.), (320., 360.)] {
-        app.update(
-            Message::Resize("dock", viewport.0, viewport.1, 1),
-            &mut Effects::default(),
-        );
+        resize_fixture(&mut app, viewport.0, viewport.1);
         for size in crate::shell_layout::LAUNCHER_PRESETS
             .map(|(_, size)| size)
             .into_iter()
@@ -267,10 +280,7 @@ fn launcher_size_preserves_selection_and_limits_at_every_preset() {
             }
         }
     }
-    app.update(
-        Message::Resize("dock", 1920., 1080., 1),
-        &mut Effects::default(),
-    );
+    resize_fixture(&mut app, 1920., 1080.);
     app.update(
         Message::LauncherSize(LauncherSize::default()),
         &mut Effects::default(),
@@ -823,6 +833,103 @@ fn image_comparison_detects_a_clipped_row() {
 }
 
 #[test]
+fn compact_dock_resize_cannot_replace_the_display_viewport() {
+    let mut app = Desktop::new(crate::test_adapters::adapters());
+    app.update(
+        Message::Resize("background", 1920., 1080., 1),
+        &mut Effects::default(),
+    );
+    app.update(
+        Message::Resize("dock", 1920., 120., 1),
+        &mut Effects::default(),
+    );
+    assert_eq!(app.viewport, (1920., 1080.));
+    app.update(
+        Message::Resize("background", f32::NAN, 20., 1),
+        &mut Effects::default(),
+    );
+    assert_eq!(app.viewport, (1920., 1080.));
+    let dock = app.surfaces().into_iter().find(|s| s.id == "dock").unwrap();
+    assert_eq!(dock.anchor, Anchor::Bottom);
+    assert_eq!(dock.height, 120);
+    assert!(!dock.capture_all);
+}
+
+#[test]
+#[ignore = "requires Vulkan; run explicitly with --ignored"]
+fn compact_dock_pixels_match_the_full_surface() {
+    let base = fixture(9, false);
+    let fonts = fonts(&base);
+    let layout = Layout::new(fonts.clone());
+    let gpu = lucent_render::Gpu::headless(fonts).unwrap();
+    let mut canvas = lucent_render::Canvas::new(gpu);
+    for light in [false, true] {
+        for (width, height) in [(1920, 1080), (1280, 720), (960, 540), (390, 700)] {
+            let mut app = fixture(9, light);
+            resize_fixture(&mut app, width as f32, height as f32);
+            app.update(
+                Message::Launcher(launcher::Message::Close),
+                &mut Effects::default(),
+            );
+            let compact_height = crate::shell_layout::dock_surface_height(height as f32);
+            let build = |native_height: u32| {
+                let cx = ViewContext {
+                    surface: "dock",
+                    width: width as f32,
+                    height: native_height as f32,
+                    now: 1.,
+                };
+                layout.build(
+                    &app.view(&cx),
+                    cx.width,
+                    cx.height,
+                    &Interaction::default(),
+                    cx.now,
+                )
+            };
+            let full = build(height);
+            let compact = build(compact_height);
+            let offset = (height - compact_height) as f32;
+            assert_eq!(full.hits.len(), compact.hits.len());
+            for (a, b) in full.hits.iter().zip(&compact.hits) {
+                assert_eq!(a.id, b.id);
+                assert_eq!(
+                    a.rect,
+                    Rect::new(b.rect.x, b.rect.y + offset, b.rect.w, b.rect.h)
+                );
+                assert!(fully_visible(b.rect, b.clip.bounds));
+            }
+            for scale in [1, 2] {
+                let expected = canvas.snapshot(width, height, scale, &full.paint).unwrap();
+                let pixels = canvas
+                    .snapshot(width, compact_height, scale, &compact.paint)
+                    .unwrap();
+                let mut actual = vec![0; expected.len()];
+                let start = ((height - compact_height) * scale * width * scale * 4) as usize;
+                assert!(
+                    expected[..start].iter().all(|byte| *byte == 0),
+                    "crop must retain the entire shadow"
+                );
+                actual[start..].copy_from_slice(&pixels);
+                // Changing the native extent changes floating-point vertex
+                // interpolation. Permit only one 8-bit quantization step;
+                // existing whole-desktop snapshot tolerances stay unchanged.
+                let max_error = expected
+                    .iter()
+                    .zip(&actual)
+                    .map(|(a, b)| a.abs_diff(*b))
+                    .max()
+                    .unwrap();
+                assert!(
+                    max_error <= 1,
+                    "cropping changed {width}x{height}/{scale}x/light={light} pixels by {max_error}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 #[ignore = "requires Vulkan; run explicitly with --ignored"]
 fn visual_regressions() {
     let base = fixture(9, false);
@@ -957,10 +1064,7 @@ fn visual_regressions() {
                 _ => lucent_domain::LauncherSize::default(),
             };
             app.update(Message::LauncherSize(preference), &mut Effects::default());
-            app.update(
-                Message::Resize("dock", width, height, 1),
-                &mut Effects::default(),
-            );
+            resize_fixture(&mut app, width, height);
             app.update(
                 Message::Launcher(launcher::Message::Mode(mode)),
                 &mut Effects::default(),
@@ -1480,10 +1584,7 @@ fn settled_shell_geometry_obeys_grid_and_contains_its_controls() {
         (1366., 768.),
         (1920., 1080.),
     ] {
-        app.update(
-            Message::Resize("dock", width, height, 1),
-            &mut Effects::default(),
-        );
+        resize_fixture(&mut app, width, height);
         for mode in Mode::ALL {
             app.update(
                 Message::Launcher(launcher::Message::Mode(mode)),
@@ -1805,10 +1906,7 @@ fn online_browser_controls_and_selected_result_fit_at_small_and_large_sizes() {
     let mut app = fixture(0, false);
     let layout = Layout::new(fonts(&app));
     for (width, height) in [(960., 768.), (390., 580.), (320., 360.)] {
-        app.update(
-            Message::Resize("dock", width, height, 1),
-            &mut Effects::default(),
-        );
+        resize_fixture(&mut app, width, height);
         app.update(
             Message::Launcher(launcher::Message::Mode(Mode::Wallpapers)),
             &mut Effects::default(),

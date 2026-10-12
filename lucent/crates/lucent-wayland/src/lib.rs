@@ -497,6 +497,7 @@ impl<A: Application> State<A> {
     }
     fn draw_all(&mut self, qh: &QueueHandle<Self>) {
         let now = self.epoch.elapsed().as_secs_f64();
+        let mut submitted = Vec::new();
         for s in self.surfaces.values_mut() {
             if !s.configured || !s.demand.begin() {
                 continue;
@@ -595,6 +596,12 @@ impl<A: Application> State<A> {
                 s.frame_times.pop_front();
             }
             s.scene = scene;
+            submitted.push(api::Event::FrameSubmitted {
+                surface: s.spec.id,
+                width: s.width as f32,
+                height: s.height as f32,
+                now,
+            });
             if let Some(render) = s.renderer.last_profile {
                 s.profiles.push(profiling::FrameProfile {
                     frame: s.renderer.frames,
@@ -607,6 +614,13 @@ impl<A: Application> State<A> {
                     render,
                 });
             }
+        }
+        let messages: Vec<_> = submitted
+            .into_iter()
+            .filter_map(|event| self.app.event(event))
+            .collect();
+        if !messages.is_empty() {
+            self.messages(messages, qh);
         }
     }
     fn id_for(&self, surface: &wl_surface::WlSurface) -> Option<String> {

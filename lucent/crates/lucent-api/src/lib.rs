@@ -116,6 +116,14 @@ pub struct Shadow {
     pub offset: (f32, f32),
     pub blur: f32,
 }
+impl Shadow {
+    /// Outward support of the renderer's truncated shadow falloff. Layout
+    /// policies can retain this space without copying a backend constant.
+    /// Call with the validated non-negative blur used for painting.
+    pub fn blur_outset(blur: f32) -> f32 {
+        blur * 3.
+    }
+}
 impl Default for Shadow {
     fn default() -> Self {
         Self {
@@ -515,6 +523,15 @@ pub enum Key {
 }
 #[derive(Clone, Debug)]
 pub enum Event {
+    /// A successful buffer submission, after view/layout/render. This is not
+    /// scanout or a compositor display acknowledgement. `now` is the view's
+    /// animation time; dimensions are the submitted logical buffer extent.
+    FrameSubmitted {
+        surface: &'static str,
+        width: f32,
+        height: f32,
+        now: f64,
+    },
     Resize {
         surface: &'static str,
         /// Logical dimensions; this event also fires when integer buffer scale changes.

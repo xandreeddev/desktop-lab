@@ -3,6 +3,7 @@
 @group(1) @binding(0) var<uniform> viewport: vec4<f32>;
 struct ClipShape { rect: vec4<f32>, params: vec4<f32> };
 @group(1) @binding(1) var<storage,read> clips: array<ClipShape>;
+override SHADOW_OUTSET: f32;
 struct Vertex {
     @builtin(position) position: vec4<f32>,
     @location(0) local: vec2<f32>,
@@ -15,7 +16,7 @@ struct Vertex {
 };
 @vertex fn vs(@builtin(vertex_index) index:u32,@location(0) rect:vec4<f32>,@location(1) color:vec4<f32>,@location(2) params:vec4<f32>,@location(3) clip:vec4<f32>,@location(4) uv:vec4<f32>,@location(5) clip_range:vec4<f32>)->Vertex {
     let corners=array<vec2<f32>,6>(vec2(0.0,0.0),vec2(1.0,0.0),vec2(0.0,1.0),vec2(0.0,1.0),vec2(1.0,0.0),vec2(1.0,1.0));
-    let pad=select(0.0,params.z*3.0,params.y>1.5&&params.y<2.5);
+    let pad=select(0.0,params.z*SHADOW_OUTSET,params.y>1.5&&params.y<2.5);
     let local=corners[index]*(rect.zw+vec2(pad*2.0))-vec2(pad);
     let point=rect.xy+local;
     var out:Vertex;

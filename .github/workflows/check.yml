@@ -59,6 +59,7 @@ jobs:
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render rounded_cover_and_nested_clips -- --ignored --nocapture
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render trimmed_cover_preserves_pixels -- --ignored --nocapture
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render shadow_blur_is_supplied -- --ignored --nocapture
+          cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-desktop compact_dock_pixels -- --ignored --nocapture
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-desktop visual_regressions -- --ignored --nocapture
       - uses: actions/upload-artifact@v4
         if: always()

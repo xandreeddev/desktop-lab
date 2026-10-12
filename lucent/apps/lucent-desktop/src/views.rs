@@ -238,7 +238,8 @@ impl Desktop {
             .value(cx.now)
             .max(component::dock::MINIMUM_HEIGHT);
         let reveal = self.launcher.reveal().value(cx.now).clamp(0., 1.);
-        let (x, y) = shell_layout::panel_origin((cx.width, cx.height), (width, height));
+        let (x, y) =
+            shell_layout::dock_origin(self.viewport, (cx.width, cx.height), (width, height));
         let mut children = vec![];
         if reveal < 0.999 {
             children.push(self.dock_row().opacity((1. - reveal * 2.).max(0.)).at(
