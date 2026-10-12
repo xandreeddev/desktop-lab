@@ -27,7 +27,7 @@ def client():
     return vm.inspect()['client']
 
 
-def check_settled(scale):
+def settled_state(scale):
     state = vm.inspect()
     assert not state['client']['widget_grid']
     assert 'widgets' not in {s['id'] for s in state['surfaces']}
@@ -45,6 +45,18 @@ def check_settled(scale):
         for widget in group['members']:
             vm.hit('widget-' + widget)
     return state
+
+
+def check_settled(scale):
+    result = []
+    def ready():
+        try:
+            result[:] = [settled_state(scale)]
+            return True
+        except (AssertionError, KeyError, StopIteration):
+            return False
+    vm.eventually(ready, f'Widget buffers did not settle at scale {scale}', timeout=20)
+    return result[0]
 
 
 def begin_drag():
