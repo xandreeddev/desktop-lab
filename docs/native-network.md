@@ -171,3 +171,17 @@ It does not establish a native desktop panel or physical-hardware compatibility.
 Protocol references: [NetworkManager](https://networkmanager.dev/docs/api/latest/gdbus-org.freedesktop.NetworkManager.html),
 [wireless device](https://networkmanager.dev/docs/api/latest/gdbus-org.freedesktop.NetworkManager.Device.Wireless.html),
 [wireless security](https://networkmanager.dev/docs/api/latest/settings-802-11-wireless-security.html).
+
+## Native panel evidence
+
+The prepared guest passed real pointer/keyboard masked input, Tab/Shift+Tab/Enter,
+visible and hidden WPA2 joins and DHCP, saved activation, targeted disconnect,
+confirmed Forget, volatile-profile cleanup, radio toggles, compatibility entrypoints
+and surface release. Existing profiles, routes, wallpaper and the desktop process
+were preserved. See [the panel report](../reports/measurements/lucent-network-panel.json).
+
+The two-minute warm idle sample measured 225.33 MiB mean process RSS and 0.567%
+of one logical core. The 200 MiB target remains unmet; software-driver mappings
+can contribute to RSS and separate GPU allocation was not measured. Physical
+Wi-Fi, SAE/OWE/enterprise, secret-agent prompts, captive portals and suspend
+remain unverified. This report does not establish a complete control center.

@@ -218,7 +218,8 @@
         "Pure control policy, identity/bounds/balance tests and private PipeWire protocol/cancellation tests pass. Full audio panel, live stream-routing, physical hardware and remaining hardware validation remain open.",
         "182 workspace tests plus the new bounded-admission unit check, two isolated audio protocol tests, workspace Clippy, 60 Python checks, software-Vulkan desktop visual regressions (160.81 s), and Astro checks/link validation passed. No visual goldens or tolerances changed. Native guest validation also passes: actual default-output policy, external volume events, pointer mute/unmute and desktop restart; original audio settings restored. See reports/measurements/lucent-audio-service.json.",
         "Native audio child provides output/input/app tabs, framework sliders/scrolling, default/route selectors, token-based open/close motion and bounded/coalesced commands. Real deadline recovery exposed stale retry identities: available controls retain Retry; replaced controls expose Dismiss and require a fresh selection. 204 Rust tests, 62 Python checks, 212 software-Vulkan comparisons and native output/input/stream controls, playback/capture routing, compatibility entrypoints, sustained drag, device removal, service disconnect/reconnect, idle and restart checks pass. See reports/measurements/lucent-audio-panel.json. Physical audio/card profiles and other control-center services remain incomplete.",
-        "Native network domain values/port and NetworkManager D-Bus adapter implemented with bounded signal-driven observation/commands, explicit acceptance versus completion and safe credential/error handling. 232 Rust tests, six private D-Bus protocol tests and 68 Python checks pass. Guest NetworkManager with owned simulated radios passes real WPA2/hidden association and DHCP, targeted disconnect/reactivation/forget, radio changes, removal/stale IDs and original-profile/route/desktop cleanup. See reports/measurements/lucent-network-service.json. The independent consumer is tested; desktop injection, native network panel and masked input remain unfinished."
+        "Native network domain values/port and NetworkManager D-Bus adapter implemented with bounded signal-driven observation/commands, explicit acceptance versus completion and safe credential/error handling. 232 Rust tests, six private D-Bus protocol tests and 68 Python checks pass. Guest NetworkManager with owned simulated radios passes real WPA2/hidden association and DHCP, targeted disconnect/reactivation/forget, radio changes, removal/stale IDs and original-profile/route/desktop cleanup. See reports/measurements/lucent-network-service.json. The independent consumer is tested; desktop injection, native network panel and masked input remain unfinished.",
+        "Native network child, framework masked edit/submit controls, generation-bound secret forms, native operation selectors, ownership/motion/error behavior and compatibility routes now implemented. 245 Rust tests, 70 Python checks, 248 software-Vulkan comparisons with 36 new baselines and real pointer/keyboard WPA2/hidden joins, DHCP, saved operations, radio changes and complete owned-fixture cleanup pass. Two-minute warm idle is 225.33 MiB mean RSS and 0.567% of one core; the 200 MiB memory target remains unmet. See reports/measurements/lucent-network-panel.json. Secret-agent, enterprise, physical networking and other control-center services remain unfinished."
       ]
     },
     {
@@ -920,6 +921,33 @@
       ],
       "source_commit": "edc37bdf22e7ae762d8f812ab1ec2153032917b1",
       "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/34"
+    },
+    {
+      "milestone": "native-network-panel",
+      "source_commit": "c068ca4fca902d2cdba9bd157bb113d43ab8888c",
+      "report": "reports/measurements/lucent-network-panel.json",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/35",
+      "verified": [
+        "bar_opens_native_panel",
+        "scan_and_real_ap_discovery",
+        "masked_input_tab_backtab_enter_no_secret_in_inspect",
+        "regular_user_wpa2_association_and_dhcp",
+        "targeted_disconnect_saved_activation_confirmed_forget",
+        "native_hidden_join_and_temporary_profile_cleanup",
+        "wifi_radio_changes",
+        "compatibility_and_escape_release_surface",
+        "virtual_device_removal_observed",
+        "original_profiles_routes_wallpaper_desktop_and_fixture_cleanup"
+      ],
+      "pending": [
+        "Network secret-agent prompts; enterprise/WEP/VPN provisioning; physical Wi-Fi, SAE/OWE, captive portals and suspend/hotplug reliability.",
+        "Native Bluetooth, brightness, battery/power profiles and tray lifecycle; physical audio/card profiles.",
+        "RSS below 200 MiB, active overlay/decode peaks, GPU allocations, hardware pacing and longer idle/fault checks.",
+        "Per-output/fractional scale and hotplug; richer dock/widget/notification/settings behavior and packaging/migrations.",
+        "Text shaping/fallback, IME, grapheme/caret/selection/clipboard editing, accessibility, touch and richer scrolling/focus lifecycle.",
+        "Existing greeter ClearInput only clears secret storage, not the username; failed retries can append identity text. Test login used bounded Backspace and short Enter holds. This client bug is not fixed in this milestone.",
+        "Secure-client build alignment/revalidation and the remaining acceptance ledger in docs/implementation-status.json."
+      ]
     }
   ]
 }

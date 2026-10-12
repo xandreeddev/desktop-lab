@@ -1,0 +1,111 @@
+{
+  "milestone": "native-network-panel",
+  "status": "verified_for_recorded_scope",
+  "scope": "Native desktop network child and generic masked input; regular-user guest operations through an owned simulated WPA2/hidden AP. Physical Wi-Fi and complete control-center delivery remain unfinished.",
+  "source_commit": "c068ca4fca902d2cdba9bd157bb113d43ab8888c",
+  "source_commit_scope": "Runtime sources and baselines compiled and tested at this commit; later commits add evidence/docs only.",
+  "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/35",
+  "binary": {
+    "sha256": "4c4613093600b35a61687635baca1d66ad874bdf63ec7f6b71b1eec4826c55d7",
+    "profile": "release",
+    "cargo_build_jobs": 1
+  },
+  "cli_sha256": "302b55bfadd066dff9453ac51608633973bde2ea6f9ef77a3d190f1f085de84c",
+  "architecture": [
+    "Composition root selects NetworkManager and injects Arc<dyn NetworkPort>; child update/view have no transport or root imports.",
+    "One signal subscription supplies observed network state; the previous nmcli system-status poll and network terminal wizard are removed.",
+    "MaskedInput stores count/placeholder and edit callback; generic input buffers/hit values hold no password. InputEdit Debug redacts deltas.",
+    "Private generation-bound form owns a zeroizing Secret; submission consumes non-Clone/non-Debug credentials into one owned effect. Join retries require new credentials.",
+    "Current IDs and original SSID octets are validated; acceptance does not mutate observed connection/scan state. Close releases input, then unmounts after token-defined motion.",
+    "Shared row measurement uses allocated fill widths, and intrinsic text fitting accounts for padding subtraction roundoff. Regression tests cover clipping."
+  ],
+  "checks": {
+    "rust_workspace_passed": 245,
+    "python_passed": 70,
+    "workspace_clippy": "passed",
+    "format": "passed",
+    "tokens": 491,
+    "app_icons": 58,
+    "software_vulkan_comparisons": 248,
+    "new_network_baselines": 36,
+    "existing_baselines_changed": 0,
+    "visual_seconds": 219.96,
+    "astro": "0 errors, warnings or hints",
+    "built_pages": 13,
+    "links_and_assets_checked": 487,
+    "native": [
+      "bar_opens_native_panel",
+      "scan_and_real_ap_discovery",
+      "masked_input_tab_backtab_enter_no_secret_in_inspect",
+      "regular_user_wpa2_association_and_dhcp",
+      "targeted_disconnect_saved_activation_confirmed_forget",
+      "native_hidden_join_and_temporary_profile_cleanup",
+      "wifi_radio_changes",
+      "compatibility_and_escape_release_surface",
+      "virtual_device_removal_observed",
+      "original_profiles_routes_wallpaper_desktop_and_fixture_cleanup"
+    ]
+  },
+  "native_environment": {
+    "virtualization": "kvm",
+    "configured_memory_mib": 3072,
+    "vcpus": 4,
+    "display": {
+      "width": 1920,
+      "height": 1080,
+      "scale": 1
+    },
+    "renderer": "software Vulkan via Mesa llvmpipe",
+    "network": "real NetworkManager; owned mac80211_hwsim radios, hostapd and DHCP"
+  },
+  "deployment": {
+    "atomic_install": true,
+    "rollback_copies_preserved": true,
+    "login_binaries_replaced": false,
+    "service": "lucent.service",
+    "service_restarts": 0,
+    "post_startup_stability_seconds": 120
+  },
+  "restoration": {
+    "original_profiles": true,
+    "default_routes": true,
+    "wallpaper": true,
+    "desktop_pid_during_network_test": true,
+    "owned_fixture_removed": true,
+    "idle_preference": true
+  },
+  "performance": {
+    "restart_to_background_ready_ms": 1775.86,
+    "idle": {
+      "duration_seconds": 120.0,
+      "process": "lucent-desktop",
+      "cpu_percent_one_core": 0.567,
+      "rss_mib_mean": 225.33,
+      "rss_mib_max": 228.65,
+      "scope": "main process CPU and resident mappings; child processes excluded; mapped driver/software-GPU memory may contribute to RSS",
+      "gpu_memory": "not measured",
+      "virtualization": "kvm",
+      "service_cpu_percent_one_core": 0.881
+    },
+    "extra_frames_120s": {
+      "background": 0,
+      "bar": 2,
+      "calendar": 26,
+      "clock": 26,
+      "dock": 0,
+      "system": 26
+    },
+    "memory_target_mib": 200,
+    "memory_target_met": false,
+    "notes": "A single warm workload on a capped software-rendered guest. Not a peak-memory bound, hardware benchmark or comparative memory reduction. GPU allocations were not separately measured."
+  },
+  "pending": [
+    "Network secret-agent prompts; enterprise/WEP/VPN provisioning; physical Wi-Fi, SAE/OWE, captive portals and suspend/hotplug reliability.",
+    "Native Bluetooth, brightness, battery/power profiles and tray lifecycle; physical audio/card profiles.",
+    "RSS below 200 MiB, active overlay/decode peaks, GPU allocations, hardware pacing and longer idle/fault checks.",
+    "Per-output/fractional scale and hotplug; richer dock/widget/notification/settings behavior and packaging/migrations.",
+    "Text shaping/fallback, IME, grapheme/caret/selection/clipboard editing, accessibility, touch and richer scrolling/focus lifecycle.",
+    "Existing greeter ClearInput only clears secret storage, not the username; failed retries can append identity text. Test login used bounded Backspace and short Enter holds. This client bug is not fixed in this milestone.",
+    "Secure-client build alignment/revalidation and the remaining acceptance ledger in docs/implementation-status.json."
+  ]
+}
