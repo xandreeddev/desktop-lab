@@ -217,7 +217,8 @@
         "Native audio domain values/port, adapter-owned libpulse event loop, bounded commands, reconnect and explicit client observation state implemented; top bar no longer polls wpctl.",
         "Pure control policy, identity/bounds/balance tests and private PipeWire protocol/cancellation tests pass. Full audio panel, live stream-routing, physical hardware and remaining hardware validation remain open.",
         "182 workspace tests plus the new bounded-admission unit check, two isolated audio protocol tests, workspace Clippy, 60 Python checks, software-Vulkan desktop visual regressions (160.81 s), and Astro checks/link validation passed. No visual goldens or tolerances changed. Native guest validation also passes: actual default-output policy, external volume events, pointer mute/unmute and desktop restart; original audio settings restored. See reports/measurements/lucent-audio-service.json.",
-        "Native audio child provides output/input/app tabs, framework sliders/scrolling, default/route selectors, token-based open/close motion and bounded/coalesced commands. Real deadline recovery exposed stale retry identities: available controls retain Retry; replaced controls expose Dismiss and require a fresh selection. 204 Rust tests, 62 Python checks, 212 software-Vulkan comparisons and native output/input/stream controls, playback/capture routing, compatibility entrypoints, sustained drag, device removal, service disconnect/reconnect, idle and restart checks pass. See reports/measurements/lucent-audio-panel.json. Physical audio/card profiles and other control-center services remain incomplete."
+        "Native audio child provides output/input/app tabs, framework sliders/scrolling, default/route selectors, token-based open/close motion and bounded/coalesced commands. Real deadline recovery exposed stale retry identities: available controls retain Retry; replaced controls expose Dismiss and require a fresh selection. 204 Rust tests, 62 Python checks, 212 software-Vulkan comparisons and native output/input/stream controls, playback/capture routing, compatibility entrypoints, sustained drag, device removal, service disconnect/reconnect, idle and restart checks pass. See reports/measurements/lucent-audio-panel.json. Physical audio/card profiles and other control-center services remain incomplete.",
+        "Native network domain values/port and NetworkManager D-Bus adapter implemented with bounded signal-driven observation/commands, explicit acceptance versus completion and safe credential/error handling. 232 Rust tests, six private D-Bus protocol tests and 68 Python checks pass. Guest NetworkManager with owned simulated radios passes real WPA2/hidden association and DHCP, targeted disconnect/reactivation/forget, radio changes, removal/stale IDs and original-profile/route/desktop cleanup. See reports/measurements/lucent-network-service.json. The independent consumer is tested; desktop injection, native network panel and masked input remain unfinished."
       ]
     },
     {
@@ -885,10 +886,10 @@
         "Native placement/capture/snapped release/restart/integer-scale cancellation and existing desktop workflow passed; preferences/output/idle restored",
         "Shared supervisor/readiness deployed; both normal 120-second measurements survived beyond the startup deadline; active source/link/pixels verified",
         "Fresh same-wallpaper/workload sequential samples: mean RSS 252.18 to 224.93 MiB; matching prepared assets; current release restored and running hash verified",
-        "All six CI checks passed on measured runtime checkpoint; final documentation/evidence-head checks tracked in PR"
+        "All six final CI checks passed on PR #33 head 6563dbbb14f78807c125ab94304d908ff6187d73; review and merge remain pending"
       ],
       "pending": [
-        "Final documentation/evidence-head CI, review and merge; no automatic merge",
+        "Review and merge; no automatic merge",
         "224.93 MiB mean RSS remains above the 200 MiB target; decoder peaks, allocator/driver retention and total GPU memory remain unbounded by this crop",
         "Active drag preview and open overlays retain full-output buffers; group redraws fan out to all widget buffers",
         "Native transition scanout/flicker, hardware desktop pacing, long-idle and fault injection remain unverified",
@@ -897,6 +898,28 @@
       ],
       "source_commit": "78c4aa055f3a3bef6a63a3d0ffc8cbe195003572",
       "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/33"
+    },
+    {
+      "milestone": "native-network-service",
+      "status": "locally_verified",
+      "report": "reports/measurements/lucent-network-service.json",
+      "checks": [
+        "232 Rust workspace tests, fmt/Clippy and 68 Python checks passed; six private D-Bus protocol fixtures avoid the host service",
+        "Known dynamic-object UnknownObject/UnknownMethod reads recover within an absolute deadline and preserve unrelated IDs; unsupported controls still fail",
+        "Real guest NetworkManager: regular-user scan, WPA2/hidden joins and DHCP, disconnect/reactivate/forget, Wi-Fi radio, device removal/stale handles and complete owned fixture cleanup passed",
+        "Existing desktop binary/PID unchanged; active service with NRestarts=0; original profiles/default routes restored; no permissive polkit rule or root adapter",
+        "Astro check/build and 13 pages/487 links passed with zero errors/warnings/hints; final evidence-head CI tracked on PR #34"
+      ],
+      "pending": [
+        "Review and merge; verify final evidence-head CI on PR #34; stacked on PR #33; no automatic merge",
+        "Desktop composition-root injection, native network child/panel, masked secret input/focus, loading/error/selector/stale-target behavior and compatibility entrypoint/keybinding replacement",
+        "Proper secret-agent/retry design for saved profiles needing new credentials; enterprise/WEP provisioning, VPN editing and captive-portal UX",
+        "Physical Wi-Fi, hardware radio switches, SAE/OWE interoperability, dense catalog/signal pressure and suspend/reconnect",
+        "Incremental per-object state caching; current refresh reads a bounded whole catalog; bounds do not cap transport/daemon incoming allocations",
+        "Remaining framework, OS-service, desktop, secure-authentication and delivery acceptance groups in docs/implementation-status.json"
+      ],
+      "source_commit": "edc37bdf22e7ae762d8f812ab1ec2153032917b1",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/34"
     }
   ]
 }

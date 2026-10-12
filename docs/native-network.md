@@ -139,6 +139,11 @@ enterprise provisioning, secret-agent prompting for saved profiles with missing
 credentials, SAE/OWE interoperability, captive portal UX, suspend and the native
 panel remain separate acceptance work.
 
+The [service evidence](../reports/measurements/lucent-network-service.json) records
+the tested binary and simulated-radio workflow: scan, WPA2/hidden association,
+DHCP, disconnect/reactivation/forget, radio changes, removal and owned cleanup.
+It does not establish a native desktop panel or physical-hardware compatibility.
+
 Protocol references: [NetworkManager](https://networkmanager.dev/docs/api/latest/gdbus-org.freedesktop.NetworkManager.html),
 [wireless device](https://networkmanager.dev/docs/api/latest/gdbus-org.freedesktop.NetworkManager.Device.Wireless.html),
 [wireless security](https://networkmanager.dev/docs/api/latest/settings-802-11-wireless-security.html).
