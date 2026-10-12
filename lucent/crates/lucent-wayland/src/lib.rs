@@ -463,6 +463,7 @@ impl<A: Application> State<A> {
     /// buffer-scale event on every existing layer surface. Track entered outputs
     /// as well, so an idle bar/dock does not retain a low-density buffer.
     fn refresh_output_scales(&mut self, qh: &QueueHandle<Self>) {
+        let mut events = Vec::new();
         for surface in self.surfaces.values_mut() {
             let Some(data) = surface.role.wl_surface().data::<SurfaceData<()>>() else {
                 continue;
@@ -477,6 +478,19 @@ impl<A: Application> State<A> {
             {
                 surface.scale = scale;
                 surface.demand.invalidate();
+                if surface.configured {
+                    events.push(api::Event::Resize {
+                        surface: surface.spec.id,
+                        width: surface.width as f32,
+                        height: surface.height as f32,
+                        scale,
+                    });
+                }
+            }
+        }
+        for event in events {
+            if let Some(message) = self.app.event(event) {
+                self.message(message, qh);
             }
         }
         self.draw_all(qh);
@@ -719,9 +733,21 @@ impl<A: Application> CompositorHandler for State<A> {
     ) {
         if let Some(id) = self.id_for(surface)
             && let Some(s) = self.surfaces.get_mut(&id)
+            && s.scale != factor.max(1) as u32
         {
             s.scale = factor.max(1) as u32;
             s.demand.invalidate();
+            if s.configured {
+                let event = api::Event::Resize {
+                    surface: s.spec.id,
+                    width: s.width as f32,
+                    height: s.height as f32,
+                    scale: s.scale,
+                };
+                if let Some(message) = self.app.event(event) {
+                    self.message(message, qh);
+                }
+            }
         }
         self.draw_all(qh);
     }
@@ -788,6 +814,7 @@ impl<A: Application> LayerShellHandler for State<A> {
                 surface: s.spec.id,
                 width: s.width as f32,
                 height: s.height as f32,
+                scale: s.scale,
             };
             if let Some(message) = self.app.event(event) {
                 self.message(message, qh);

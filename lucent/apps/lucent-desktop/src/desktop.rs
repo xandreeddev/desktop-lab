@@ -46,7 +46,7 @@ pub enum Message {
     Bar(bool),
     SetWallpaper(String),
     LauncherSize(LauncherSize),
-    Resize(&'static str, f32, f32),
+    Resize(&'static str, f32, f32, u32),
     Completed(domain::Result<()>),
     Quit,
 }
@@ -206,6 +206,8 @@ impl Desktop {
             self.persistence.error()
         } else if !self.wallpaper.error.is_empty() {
             &self.wallpaper.error
+        } else if let Some(error) = self.wallpaper.presentation_error() {
+            error
         } else {
             &self.error
         }
@@ -806,7 +808,16 @@ impl Component for Desktop {
                 self.save(effects);
                 effects.redraw("dock");
             }
-            Message::Resize(id, w, h) => {
+            Message::Resize(id, w, h, scale) => {
+                if id == "background" {
+                    match crate::ports::BackgroundTarget::from_surface(w, h, scale) {
+                        Ok(target) => effects.delegate(
+                            |child| self.wallpaper.resize(target, child),
+                            Message::WallpaperSelection,
+                        ),
+                        Err(error) => self.error = error.to_string(),
+                    }
+                }
                 if matches!(id, "widgets" | "dock") {
                     self.viewport = (w, h);
                     effects.redraw("dock");
@@ -1048,7 +1059,8 @@ impl api::Application for Desktop {
                 surface,
                 width,
                 height,
-            } => Some(Message::Resize(surface, width, height)),
+                scale,
+            } => Some(Message::Resize(surface, width, height, scale)),
             event => self
                 .launcher
                 .event(event, self.browser.source.is_some())
@@ -1056,6 +1068,11 @@ impl api::Application for Desktop {
         }
     }
     fn command(&self, command: &str) -> std::result::Result<Option<Message>, String> {
+        if command == "wallpaper retry" {
+            return Ok(Some(Message::WallpaperSelection(
+                crate::wallpaper_selection::Message::RetryPresentation,
+            )));
+        }
         if command == "wallpapers retry" {
             return Ok(Some(Message::Previews(crate::previews::Message::Retry)));
         }
@@ -1181,7 +1198,7 @@ impl api::Application for Desktop {
         }))
     }
     fn inspect(&self) -> String {
-        serde_json::json!({"audio":self.audio.inspect(),"wallpaper_index":self.wallpaper_index, "wallpaper_count":self.wallpapers.len(), "prepared_assets": {
+        serde_json::json!({"audio":self.audio.inspect(),"wallpaper_presentation":self.wallpaper.inspect_presentation(),"wallpaper_index":self.wallpaper_index, "wallpaper_count":self.wallpapers.len(), "prepared_assets": {
             "icons": crate::previews::usage(self.images.values()),
             "local_previews": self.previews.inspect(),
             "online_previews": crate::previews::usage(self.browser.previews.values()),

@@ -31,6 +31,7 @@ struct Prepared {
 pub struct ImageData {
     /// Human-readable asset identity. Texture identity uses immutable storage instead.
     pub key: String,
+    aspect_size: (u32, u32),
     prepared: Arc<Prepared>,
 }
 impl ImageData {
@@ -67,6 +68,7 @@ impl ImageData {
         }
         Ok(Self {
             key: key.into(),
+            aspect_size: (width, height),
             prepared: Arc::new(Prepared {
                 id: NEXT_IMAGE.fetch_add(1, Ordering::Relaxed),
                 levels,
@@ -88,11 +90,35 @@ impl ImageData {
         }
         Self {
             key: self.key.clone(),
+            aspect_size: self.aspect_size,
             prepared: Arc::new(Prepared {
                 id: NEXT_IMAGE.fetch_add(1, Ordering::Relaxed),
                 levels: self.levels()[index..].to_vec(),
             }),
         }
+    }
+    /// Retain the coarsest mip chain that still supplies at least one texel per
+    /// physical output pixel for a cover image. Keep the base if the source is
+    /// already too small. Prepare on an asset worker; this copies only retained
+    /// pixels and never enlarges an original or retains discarded allocations.
+    pub fn downsample_for_cover(&self, width: u32, height: u32) -> Result<Self, ImageError> {
+        if width == 0 || height == 0 {
+            return Err(ImageError(
+                "Cover target must have positive physical dimensions",
+            ));
+        }
+        let level = self
+            .levels()
+            .iter()
+            .take_while(|level| level.width >= width && level.height >= height)
+            .last()
+            .unwrap_or(&self.levels()[0]);
+        Ok(self.downsample(level.width.max(level.height)))
+    }
+    /// Dimensions defining the image's natural aspect, independent of retained
+    /// mip storage. Odd mip sizes must not alter cover cropping or containment.
+    pub fn aspect_size(&self) -> (u32, u32) {
+        self.aspect_size
     }
     pub fn width(&self) -> u32 {
         self.prepared.levels[0].width
@@ -175,6 +201,30 @@ fn reduce(bytes: &[u8], width: u32, height: u32) -> (Vec<u8>, u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cover_retains_physical_density_and_aspect_without_finer_allocations() {
+        let image = ImageData::from_rgba("cover", 64, 36, vec![255; 64 * 36 * 4]).unwrap();
+        let normal = image.downsample_for_cover(16, 9).unwrap();
+        let hidpi = image.downsample_for_cover(32, 18).unwrap();
+        assert_eq!((normal.width(), normal.height()), (16, 9));
+        assert_eq!((hidpi.width(), hidpi.height()), (32, 18));
+        assert_eq!(normal.aspect_size(), (64, 36));
+        assert!(normal.bytes() < image.bytes() / 4);
+        assert_ne!(normal.cache_id(), image.cache_id());
+        assert_eq!(normal.pixels(), image.levels()[2].rgba);
+        assert_eq!(hidpi.pixels(), image.levels()[1].rgba);
+        let tall_target = image.downsample_for_cover(8, 32).unwrap();
+        assert_eq!(tall_target.cache_id(), image.cache_id());
+        assert_eq!(
+            image.downsample_for_cover(1000, 1000).unwrap().cache_id(),
+            image.cache_id()
+        );
+        assert!(image.downsample_for_cover(0, 9).is_err());
+        let odd = ImageData::from_rgba("odd", 65, 37, vec![255; 65 * 37 * 4]).unwrap();
+        let trimmed = odd.downsample_for_cover(16, 9).unwrap();
+        assert_eq!(trimmed.aspect_size(), (65, 37));
+        assert_eq!((trimmed.width(), trimmed.height()), (16, 9));
+    }
     #[test]
     fn preview_copies_only_small_mips_without_premultiplying_again() {
         let image = ImageData::from_rgba("alpha", 8, 4, [240, 80, 40, 128].repeat(32)).unwrap();

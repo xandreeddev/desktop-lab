@@ -469,8 +469,8 @@ impl Layout {
                 alpha,
             ),
             Kind::Image(data) => {
-                let (rect, uv) =
-                    image_geometry(inner, data.width(), data.height(), e.style.image_fit);
+                let (width, height) = data.aspect_size();
+                let (rect, uv) = image_geometry(inner, width, height, e.style.image_fit);
                 scene.paint.push(Paint::Image {
                     rect,
                     uv,
@@ -1105,6 +1105,24 @@ impl<M: Clone> Interaction<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn trimmed_odd_image_keeps_cover_and_contain_geometry() {
+        let source = ImageData::from_rgba("odd aspect", 65, 37, vec![255; 65 * 37 * 4]).unwrap();
+        let trimmed = source.downsample_for_cover(16, 9).unwrap();
+        let layout = Layout::new(Arc::new(vec![]));
+        for fit in [ImageFit::Cover, ImageFit::Contain] {
+            let geometry = |image| {
+                let mut root = Element::<()>::image(Arc::new(image)).size(23., 17.);
+                root.style.image_fit = fit;
+                let scene = layout.build(&root, 23., 17., &Interaction::default(), 0.);
+                match &scene.paint[0] {
+                    Paint::Image { rect, uv, .. } => (*rect, *uv),
+                    _ => panic!("expected an image primitive"),
+                }
+            };
+            assert_eq!(geometry(source.clone()), geometry(trimmed.clone()));
+        }
+    }
     #[test]
     fn rounded_hit_test_leaves_corners_click_through() {
         let h: Hit<()> = Hit {

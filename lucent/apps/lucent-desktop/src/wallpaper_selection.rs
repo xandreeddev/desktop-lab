@@ -1,7 +1,7 @@
 //! Wallpaper transaction coordinator. Preparation is supersedable; a commit is
 //! accepted work and finishes before the latest queued choice starts preparing.
 //! No filesystem or decoder implementation belongs in this client state machine.
-use crate::ports::AssetPort;
+use crate::ports::{AssetPort, BackgroundTarget};
 use lucent_api::{Cancellation, Effects, ImageData};
 use lucent_domain::*;
 use std::sync::Arc;
@@ -19,6 +19,7 @@ pub struct Prepared {
     pub preview: Arc<ImageData>,
     pub seed: Option<(crate::palette_intent::Revision, Rgb)>,
     pub browser_generation: Option<u64>,
+    pub target: Option<BackgroundTarget>,
 }
 #[derive(Clone)]
 pub enum Message {
@@ -26,6 +27,8 @@ pub enum Message {
     Prepared(u64, Result<Prepared>),
     Committed(u64, Prepared, Result<()>),
     Discarded(Result<()>),
+    Refitted(u64, Result<Arc<ImageData>>),
+    RetryPresentation,
 }
 pub enum Outcome {
     Applied(Prepared),
@@ -39,6 +42,16 @@ enum Phase {
     Idle,
     Preparing(u64),
     Committing(u64),
+}
+struct Refit {
+    revision: u64,
+    path: String,
+    target: BackgroundTarget,
+}
+struct FitFailure {
+    path: String,
+    target: BackgroundTarget,
+    reason: String,
 }
 
 pub struct Selection {
@@ -54,6 +67,11 @@ pub struct Selection {
     store: Arc<dyn WallpaperPort>,
     assets: Arc<dyn AssetPort>,
     palettes: Arc<dyn PaletteGenerationPort>,
+    target: Option<BackgroundTarget>,
+    rendered_target: Option<BackgroundTarget>,
+    fit_revision: u64,
+    refit: Option<Refit>,
+    fit_failure: Option<FitFailure>,
 }
 impl Selection {
     pub fn new(
@@ -74,6 +92,11 @@ impl Selection {
             store,
             assets,
             palettes,
+            target: None,
+            rendered_target: None,
+            fit_revision: 0,
+            refit: None,
+            fit_failure: None,
         }
     }
     pub fn source_path(&self) -> &str {
@@ -89,6 +112,65 @@ impl Selection {
     pub fn busy(&self) -> bool {
         self.phase != Phase::Idle || self.awaiting_download
     }
+    /// Display changes affect preparation only; they never choose, stage or
+    /// commit a wallpaper or change palette intent. One refit is accepted at a
+    /// time; target changes retain only the latest desired size.
+    pub fn resize(&mut self, target: BackgroundTarget, effects: &mut Effects<Message>) {
+        if self.target == Some(target) {
+            return;
+        }
+        self.target = Some(target);
+        self.fit_failure = None;
+        self.start_refit(effects);
+    }
+    fn start_refit(&mut self, effects: &mut Effects<Message>) {
+        if self.refit.is_some() || self.phase != Phase::Idle || self.background.is_none() {
+            return;
+        }
+        let (Some(asset), Some(target)) = (&self.current, self.target) else {
+            return;
+        };
+        if self.rendered_target == Some(target)
+            || self
+                .fit_failure
+                .as_ref()
+                .is_some_and(|f| f.path == asset.path && f.target == target)
+        {
+            return;
+        }
+        let Some(revision) = self.fit_revision.checked_add(1) else {
+            self.fit_failure = Some(FitFailure {
+                path: asset.path.clone(),
+                target,
+                reason: "Background preparation revision limit reached; restart before resizing"
+                    .into(),
+            });
+            return;
+        };
+        self.fit_revision = revision;
+        let path = asset.path.clone();
+        self.refit = Some(Refit {
+            revision,
+            path: path.clone(),
+            target,
+        });
+        let assets = self.assets.clone();
+        effects.task_on("appearance", move || {
+            Message::Refitted(revision, assets.background(&path, Some(target)))
+        });
+    }
+    pub fn presentation_error(&self) -> Option<&str> {
+        self.fit_failure
+            .as_ref()
+            .map(|failure| failure.reason.as_str())
+    }
+    pub fn inspect_presentation(&self) -> serde_json::Value {
+        serde_json::json!({"target_physical_pixels":self.target.map(BackgroundTarget::size),
+            "prepared_for_physical_pixels":self.rendered_target.map(BackgroundTarget::size),
+            "retained_pixels":self.background.as_ref().map(|image|(image.width(),image.height())),
+            "aspect_pixels":self.background.as_ref().map(|image|image.aspect_size()),
+            "busy":self.refit.is_some(),"error":self.presentation_error()})
+    }
 
     pub fn load(
         &mut self,
@@ -96,17 +178,21 @@ impl Selection {
         effects: &mut Effects<Message>,
     ) {
         let assets = self.assets.clone();
+        let target = self.target;
         effects.task_on("appearance", move || {
             Message::Initial(selected.and_then(|selected| {
                 selected
                     .map(|asset| {
-                        assets.background(&asset.path).map(|image| Prepared {
-                            asset,
-                            preview: assets.preview(&image),
-                            image,
-                            seed: None,
-                            browser_generation: None,
-                        })
+                        assets
+                            .background(&asset.path, target)
+                            .map(|image| Prepared {
+                                asset,
+                                preview: assets.preview(&image),
+                                image,
+                                seed: None,
+                                browser_generation: None,
+                                target,
+                            })
                     })
                     .transpose()
             }))
@@ -163,6 +249,7 @@ impl Selection {
         self.phase = Phase::Preparing(generation);
         self.preparing_origin = choice.browser_generation;
         self.error.clear();
+        let target = self.target;
         effects.task_on("appearance", move || {
             let prepare = || -> Result<Prepared> {
                 if cancel.cancelled() {
@@ -172,7 +259,7 @@ impl Selection {
                 }
                 let asset = store.stage(&choice.source)?;
                 let result = (|| {
-                    let image = assets.background(&asset.path)?;
+                    let image = assets.background(&asset.path, target)?;
                     let seed = if let Some(revision) = choice.colors {
                         Some((revision, palettes.seed(&asset.path)?))
                     } else {
@@ -189,6 +276,7 @@ impl Selection {
                         image,
                         seed,
                         browser_generation: choice.browser_generation,
+                        target,
                     })
                 })();
                 if result.is_err() {
@@ -211,6 +299,7 @@ impl Selection {
             Message::Initial(result) if self.current.is_none() => {
                 match result {
                     Ok(Some(prepared)) => {
+                        self.rendered_target = prepared.target;
                         self.current = Some(prepared.asset);
                         self.background = Some(prepared.image);
                     }
@@ -228,6 +317,7 @@ impl Selection {
                         self.discard(prepared.asset, effects);
                     }
                     self.start_pending(effects);
+                    self.start_refit(effects);
                     effects.redraw("dock");
                     return None;
                 }
@@ -259,6 +349,8 @@ impl Selection {
                 self.phase = Phase::Idle;
                 let outcome = match result {
                     Ok(()) => {
+                        self.rendered_target = prepared.target;
+                        self.fit_failure = None;
                         self.current = Some(prepared.asset.clone());
                         self.background = Some(prepared.image.clone());
                         self.error.clear();
@@ -281,8 +373,44 @@ impl Selection {
                 self.error = error.to_string();
                 None
             }
+            Message::Refitted(revision, result)
+                if self
+                    .refit
+                    .as_ref()
+                    .is_some_and(|request| request.revision == revision) =>
+            {
+                let request = self.refit.take().unwrap();
+                if self
+                    .current
+                    .as_ref()
+                    .is_some_and(|asset| asset.path == request.path)
+                    && self.target == Some(request.target)
+                {
+                    match result {
+                        Ok(image) => {
+                            self.background = Some(image);
+                            self.rendered_target = Some(request.target);
+                            self.fit_failure = None;
+                            effects.redraw("background");
+                        }
+                        Err(error) => {
+                            self.fit_failure = Some(FitFailure {
+                                path: request.path,
+                                target: request.target,
+                                reason: error.to_string(),
+                            })
+                        }
+                    }
+                }
+                None
+            }
+            Message::RetryPresentation => {
+                self.fit_failure = None;
+                None
+            }
             _ => None,
         };
+        self.start_refit(effects);
         effects.redraw("dock");
         outcome
     }
@@ -303,6 +431,7 @@ mod tests {
         calls: Vec<String>,
         fail_decode: bool,
         fail_commit: bool,
+        targets: Vec<Option<BackgroundTarget>>,
     }
     #[derive(Default)]
     struct Fake(Mutex<State>);
@@ -350,14 +479,19 @@ mod tests {
             vec![]
         }
         fn thumbnail(&self, path: &str) -> Result<Arc<ImageData>> {
-            self.background(path)
+            self.background(path, None)
         }
         fn preview(&self, image: &ImageData) -> Arc<ImageData> {
             Arc::new(image.downsample(1))
         }
-        fn background(&self, path: &str) -> Result<Arc<ImageData>> {
+        fn background(
+            &self,
+            path: &str,
+            target: Option<BackgroundTarget>,
+        ) -> Result<Arc<ImageData>> {
             let mut state = self.0.lock().unwrap();
             state.calls.push(format!("decode:{path}"));
+            state.targets.push(target);
             if state.fail_decode {
                 return Err(DomainError::Invalid("decode fixture".into()));
             }
@@ -702,6 +836,118 @@ mod tests {
         app.update(old_result, &mut effects);
         drain_desktop(&mut app, &mut effects);
         assert_eq!(app.settings.palette, Some(explicit));
+    }
+    #[test]
+    fn resize_bursts_prepare_only_first_and_latest_without_committing_selection() {
+        let mut h = Harness::new();
+        h.choose("current");
+        h.drain();
+        let original = h.selection.background.as_ref().unwrap().cache_id();
+        let first = BackgroundTarget::new(800, 600).unwrap();
+        h.selection.resize(first, &mut h.effects);
+        let accepted = h.effects.tasks.remove(0);
+        for width in 128..1128 {
+            h.selection
+                .resize(BackgroundTarget::new(width, 720).unwrap(), &mut h.effects);
+            assert!(h.effects.tasks.is_empty());
+        }
+        let latest = BackgroundTarget::new(1127, 720).unwrap();
+        h.selection.update(accepted.run(), &mut h.effects);
+        assert_eq!(
+            h.selection.background.as_ref().unwrap().cache_id(),
+            original
+        );
+        assert_eq!(h.effects.tasks.len(), 1);
+        h.drain();
+        assert_eq!(h.selection.rendered_target, Some(latest));
+        assert_eq!(
+            h.fake.0.lock().unwrap().targets,
+            [None, Some(first), Some(latest)]
+        );
+        assert_eq!(
+            h.fake
+                .0
+                .lock()
+                .unwrap()
+                .calls
+                .iter()
+                .filter(|call| call.starts_with("commit:"))
+                .count(),
+            1
+        );
+        assert_eq!(h.selection.source_path(), "/source/current");
+    }
+    #[test]
+    fn refit_failure_keeps_last_pixels_waits_for_retry_and_preserves_selection_error() {
+        let mut h = Harness::new();
+        h.choose("current");
+        h.drain();
+        h.selection.error = "independent selection failure".into();
+        let original = h.selection.background.as_ref().unwrap().cache_id();
+        h.fake.0.lock().unwrap().fail_decode = true;
+        let target = BackgroundTarget::new(1920, 1080).unwrap();
+        h.selection.resize(target, &mut h.effects);
+        h.drain();
+        assert_eq!(
+            h.selection.background.as_ref().unwrap().cache_id(),
+            original
+        );
+        assert!(h.selection.presentation_error().is_some());
+        for _ in 0..20 {
+            h.selection.resize(target, &mut h.effects);
+        }
+        assert!(h.effects.tasks.is_empty());
+        h.fake.0.lock().unwrap().fail_decode = false;
+        h.selection
+            .update(Message::RetryPresentation, &mut h.effects);
+        h.drain();
+        assert!(h.selection.presentation_error().is_none());
+        assert_eq!(h.selection.rendered_target, Some(target));
+        assert_eq!(h.selection.error, "independent selection failure");
+    }
+    #[test]
+    fn old_refit_cannot_replace_a_newly_committed_wallpaper() {
+        let mut h = Harness::new();
+        h.choose("old");
+        h.drain();
+        let target = BackgroundTarget::new(800, 600).unwrap();
+        h.selection.resize(target, &mut h.effects);
+        let old = h.effects.tasks.remove(0).run();
+        h.choose("new");
+        h.drain();
+        assert_eq!(h.selection.source_path(), "/source/new");
+        h.selection.update(old, &mut h.effects);
+        h.drain();
+        assert_eq!(h.selection.background.as_ref().unwrap().key, "/staged/new");
+        assert_eq!(h.selection.rendered_target, Some(target));
+        assert_eq!(
+            h.fake
+                .0
+                .lock()
+                .unwrap()
+                .calls
+                .iter()
+                .filter(|call| call.starts_with("commit:"))
+                .count(),
+            2
+        );
+    }
+    #[test]
+    fn resize_during_prepare_refits_latest_density_after_commit() {
+        let mut h = Harness::new();
+        let normal = BackgroundTarget::new(1920, 1080).unwrap();
+        let hidpi = BackgroundTarget::from_surface(1920., 1080., 2).unwrap();
+        h.selection.resize(normal, &mut h.effects);
+        h.choose("current");
+        h.selection.resize(hidpi, &mut h.effects);
+        assert_eq!(h.effects.tasks.len(), 1);
+        h.drain();
+        assert_eq!(
+            h.fake.0.lock().unwrap().targets,
+            [Some(normal), Some(hidpi)]
+        );
+        assert_eq!(h.selection.rendered_target, Some(hidpi));
+        assert!(h.selection.refit.is_none());
     }
     #[test]
     fn ambiguous_worker_failure_requests_supervised_reload() {

@@ -134,7 +134,7 @@ fn every_visible_launcher_row_fits_even_after_scrolling() {
         let layout = Layout::new(fonts(&app));
         for width in [640., 390.] {
             app.update(
-                Message::Resize("dock", width, 580.),
+                Message::Resize("dock", width, 580., 1),
                 &mut Effects::default(),
             );
             for index in [0, count - 1] {
@@ -177,7 +177,7 @@ fn launcher_size_preserves_selection_and_limits_at_every_preset() {
     let layout = Layout::new(fonts(&app));
     for viewport in [(1920., 1080.), (1366., 768.), (390., 580.), (320., 360.)] {
         app.update(
-            Message::Resize("dock", viewport.0, viewport.1),
+            Message::Resize("dock", viewport.0, viewport.1, 1),
             &mut Effects::default(),
         );
         for size in crate::shell_layout::LAUNCHER_PRESETS
@@ -268,7 +268,7 @@ fn launcher_size_preserves_selection_and_limits_at_every_preset() {
         }
     }
     app.update(
-        Message::Resize("dock", 1920., 1080.),
+        Message::Resize("dock", 1920., 1080., 1),
         &mut Effects::default(),
     );
     app.update(
@@ -958,7 +958,7 @@ fn visual_regressions() {
             };
             app.update(Message::LauncherSize(preference), &mut Effects::default());
             app.update(
-                Message::Resize("dock", width, height),
+                Message::Resize("dock", width, height, 1),
                 &mut Effects::default(),
             );
             app.update(
@@ -1481,7 +1481,7 @@ fn settled_shell_geometry_obeys_grid_and_contains_its_controls() {
         (1920., 1080.),
     ] {
         app.update(
-            Message::Resize("dock", width, height),
+            Message::Resize("dock", width, height, 1),
             &mut Effects::default(),
         );
         for mode in Mode::ALL {
@@ -1806,7 +1806,7 @@ fn online_browser_controls_and_selected_result_fit_at_small_and_large_sizes() {
     let layout = Layout::new(fonts(&app));
     for (width, height) in [(960., 768.), (390., 580.), (320., 360.)] {
         app.update(
-            Message::Resize("dock", width, height),
+            Message::Resize("dock", width, height, 1),
             &mut Effects::default(),
         );
         app.update(

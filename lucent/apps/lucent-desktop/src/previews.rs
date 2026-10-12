@@ -260,7 +260,11 @@ mod tests {
         fn preview(&self, image: &ImageData) -> Arc<ImageData> {
             Arc::new(image.clone())
         }
-        fn background(&self, path: &str) -> Result<Arc<ImageData>> {
+        fn background(
+            &self,
+            path: &str,
+            _: Option<crate::ports::BackgroundTarget>,
+        ) -> Result<Arc<ImageData>> {
             self.thumbnail(path)
         }
     }

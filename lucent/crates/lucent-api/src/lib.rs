@@ -517,8 +517,10 @@ pub enum Key {
 pub enum Event {
     Resize {
         surface: &'static str,
+        /// Logical dimensions; this event also fires when integer buffer scale changes.
         width: f32,
         height: f32,
+        scale: u32,
     },
     Key {
         surface: &'static str,
