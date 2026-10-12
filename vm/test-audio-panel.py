@@ -56,7 +56,7 @@ def main():
             module = a.pactl('load-module', 'module-null-sink', 'sink_name='+name)
             assert module.isdigit()
             modules.append(module)
-        v.eventually(lambda: all(any(d['key'] == name for d in devices()) for name in names), 'Owned devices not observed')
+        v.eventually(lambda: all(any(d['key'] == key for d in devices()) for name in names for key in (name, name+'.monitor')), 'Owned devices not observed')
         output = next(d for d in devices() if d['key'] == names[0])
         microphone = next(d for d in devices() if d['key'] == names[0]+'.monitor')
         v.cli('audio','open')
@@ -111,6 +111,19 @@ def main():
         v.cli('audio','close')
         v.eventually(lambda: not any(s['id']=='audio' for s in v.inspect()['surfaces']), 'Panel failed to unmount')
         checks += ['escape_close_unmount', 'bar_reopen', 'ipc_close_unmount']
+        v.session('omarchy-shell', 'shell', 'toggle', 'omarchy.audio')
+        v.eventually(lambda: a.audio()['open'], 'Compatibility toggle did not open panel')
+        v.session('omarchy-shell', 'shell', 'toggle', 'omarchy.audio')
+        v.eventually(lambda: not a.audio()['open'], 'Compatibility toggle did not close panel')
+        v.session('omarchy-shell', 'shell', 'summon', 'omarchy.audio')
+        v.eventually(lambda: a.audio()['open'], 'Compatibility summon did not open panel')
+        v.session('omarchy-shell', 'shell', 'hide')
+        v.eventually(lambda: not any(s['id']=='audio' for s in v.inspect()['surfaces']), 'Compatibility hide did not unmount panel')
+        v.session('python3', '/home/omarchy/.local/lib/lucent/controls.py', 'audio')
+        v.eventually(lambda: a.audio()['open'], 'Controls entrypoint did not open native panel')
+        v.cli('audio', 'close')
+        v.eventually(lambda: not any(s['id']=='audio' for s in v.inspect()['surfaces']), 'Controls entrypoint panel did not unmount')
+        checks += ['omarchy_audio_toggle_open_close', 'omarchy_audio_summon_hide_unmount', 'controls_audio_opens_native_panel']
     finally:
         cleanup_errors = []
         def attempt(label, operation):
