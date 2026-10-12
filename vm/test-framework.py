@@ -256,13 +256,16 @@ def main():
             subprocess.run(lab.ssh_args(PROFILE)+['mkdir -p ~/.local/state/lucent; cat > ~/.local/state/lucent/desktop.json.new && mv ~/.local/state/lucent/desktop.json.new ~/.local/state/lucent/desktop.json'],input=settings,text=True,check=True)
         else:
             remote('rm','-f','/home/omarchy/.local/state/lucent/desktop.json')
-        if wallpaper:
+        if wallpaper and not checkpoint:
             remote('ln','-sfn',wallpaper,'/home/omarchy/.local/state/lucent/wallpaper')
         session('systemctl','--user','start','lucent.service')
         eventually(lambda:inspect()['client']['applications']>0 and
                    inspect()['client']['background_ready'], 'Restored desktop did not render', timeout=40)
         if checkpoint:
             assert inspect()['client']['wallpaper']['source']==selected['source']
+            current=inspect()['client']['wallpaper']
+            resolved=remote('readlink','-f','/home/omarchy/.local/state/lucent/wallpaper').strip()
+            assert resolved==current['path'], 'Derived wallpaper link differs from the active selection'
             checkpoint.discard()
         if not awake:
             session('omarchy-toggle-idle','allow-idle')
