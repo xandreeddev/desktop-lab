@@ -216,19 +216,31 @@ entries, unsupported field codes and unsupported settings versions fail explicit
 ## Surfaces and input
 
 `Application::surfaces()` declares each surface's stable ID, layer, anchor, size,
-exclusive zone, keyboard interactivity, visibility and full-input-capture intent.
+logical edge margins, exclusive zone, keyboard interactivity, visibility,
+pointer policy and optional redraw group.
 The runtime reconciles these declarations and keeps native handles private.
 
-The desktop uses four persistent native surfaces plus on-demand notification and feedback surfaces:
+The desktop declares persistent background, bar and dock surfaces plus bounded
+widget groups and on-demand preview, notification and feedback surfaces:
 
 - A background painting the selected wallpaper.
 - A top bar reserving 48 logical pixels (the token-defined 16-pixel inset plus 32-pixel capsules).
-- A bottom-layer widget host with input regions matching interactive widgets.
+- Bottom-layer widget groups positioned with top-left margins. Overlapping
+  paint bounds share a buffer to preserve order; disjoint buffers retain whole
+  shadows. During drag, sources keep fixed geometry and input without paint,
+  while a temporary full-display, pointer-pass-through preview shows the grid.
 - A dock host switching from the top layer to an exclusive-keyboard overlay while
-  the launcher is open. Clicking outside closes it; otherwise transparent areas
+  the launcher is open. The settled closed dock shrinks to a short bottom buffer
+  after its final closing submission. Clicking outside closes it; transparent areas
   pass through to applications.
 
 Notification toasts/history use an overlay with bounded cards and action hit regions. The secure locker uses a different Wayland role: one `ext-session-lock` surface per output, including hotplugged displays.
+
+`PointerInput::None` submits an empty native region independently of painted
+hits; `Content` uses interactive regions and `All` captures the native extent.
+`Element::input_only` retains layout, focus and capture but suppresses all
+descendant paint. Redraw groups let one effect invalidate related native
+buffers. Client grid/crop/drag policy stays outside the engine.
 
 Dragging reports displacement from the original press in the stationary surface's
 coordinates. The use case clamps placement and saves only on release. A five-pixel

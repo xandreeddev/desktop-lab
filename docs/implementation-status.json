@@ -160,7 +160,8 @@
         "Static review confirms Desktop.images retains each distinct selected wallpaper preview with no eviction. The 64-item startup preload cap does not cap lifetime retention, and renderer GPU-cache eviction cannot release these CPU-owned images. RSS attribution and bounded demand-loading remain open.",
         "Local previews now have bounded lazy ownership and deduplicated prepared-byte counters. Native 73-file browsing/retry/close checks and sequential 120-second runs passed: RSS 588.26 to 389.93 MiB; CPU 0.700% to 0.825%. The 200 MiB target is still unmet; online page lifetime, output-aware background preparation and hardware behavior remain separate work.",
         "Output-aware retained desktop pixels verified with bounded last-good refits and explicit retry. Native integer-scale/size changes and bursts preserve source/preferences and restore the output. Sequential 120-second normal runs with matching metadata: mean RSS 406.92 to 293.25 MiB; prepared background 48 to 12 MiB; main CPU 0.550% to 0.583%; idle background/closed dock zero frames. See lucent-wallpaper-resolution.json. The 200 MiB target, fullscreen overlays, decoding peaks and hardware behavior remain open.",
-        "Compact dock keeps display-grid placement in a short bottom-anchored native buffer, with submission-gated open/close lifecycle. 216 Rust/62 Python checks, 16 paired pixel comparisons on each Vulkan driver, 212 unchanged visual baselines, native 1x/2x input/reopen/idle and existing desktop workflow pass. Fresh same-wallpaper/workload 120-second comparison: mean RSS 284.22 to 254.10 MiB; prepared assets match and closed dock/background submit zero idle frames. See lucent-dock-surface.json. The 200 MiB target, fullscreen widgets, hardware pacing and broader output support remain open."
+        "Compact dock keeps display-grid placement in a short bottom-anchored native buffer, with submission-gated open/close lifecycle. 216 Rust/62 Python checks, 16 paired pixel comparisons on each Vulkan driver, 212 unchanged visual baselines, native 1x/2x input/reopen/idle and existing desktop workflow pass. Fresh same-wallpaper/workload 120-second comparison: mean RSS 284.22 to 254.10 MiB; prepared assets match and closed dock/background submit zero idle frames. See lucent-dock-surface.json. The 200 MiB target, fullscreen widgets, hardware pacing and broader output support remain open.",
+        "Bounded widget groups preserve whole shadows and overlap order; stationary input-only sources support the native drag preview. 223 Rust/64 Python tests, 24 paired scenarios per Vulkan driver, 212 unchanged visuals, native scale/capture/release/restart and existing desktop workflow pass. Shared readiness prevents the old supervisor from stopping the new client after 30 seconds. Fresh matching 120-second software-Vulkan runs: mean RSS 252.18 to 224.93 MiB; prepared assets match, background/closed dock zero idle frames. See lucent-widget-surfaces.json. The 200 MiB target, hardware pacing, full-output overlays and broader feature groups remain open."
       ]
     },
     {
@@ -868,7 +869,7 @@
         "Clean-source sequential 120-second same-wallpaper/workload measurements: mean RSS 284.22 to 254.10 MiB, equal prepared assets and zero background/closed-dock idle frames; current release restored and verified after baseline"
       ],
       "pending": [
-        "Final-head CI, review and merge; no automatic merge",
+        "Review and merge; all six exact-head CI checks passed for PR #32; no automatic merge",
         "RSS below 200 MiB, fullscreen widgets/overlays, decoder peaks, driver/allocator retention and hardware/long-idle/fault evidence",
         "Per-monitor output targeting, fractional scaling, hotplug/suspend and text/input completeness",
         "Authentication build alignment, packaging and other acceptance groups"
@@ -876,19 +877,26 @@
     },
     {
       "milestone": "bounded-widget-surfaces",
-      "status": "offscreen_verified_native_pending",
+      "status": "locally_verified",
       "report": "reports/measurements/lucent-widget-surfaces.json",
       "checks": [
-        "223 Rust tests, 62 Python checks, formatting, Clippy and Astro check passed",
-        "24 paired bounded/full widget pixel scenarios pass on each of software/hardware Vulkan; existing golden tolerances unchanged"
+        "223 Rust/64 Python tests, fmt/Clippy, generated tokens/icons, Astro check/build and 13 pages/487 links passed",
+        "24 paired pixel scenarios on each Vulkan driver; all 212 existing visual comparisons unchanged",
+        "Native placement/capture/snapped release/restart/integer-scale cancellation and existing desktop workflow passed; preferences/output/idle restored",
+        "Shared supervisor/readiness deployed; both normal 120-second measurements survived beyond the startup deadline; active source/link/pixels verified",
+        "Fresh same-wallpaper/workload sequential samples: mean RSS 252.18 to 224.93 MiB; matching prepared assets; current release restored and running hash verified",
+        "All six CI checks passed on measured runtime checkpoint; final documentation/evidence-head checks tracked in PR"
       ],
       "pending": [
-        "Native placement/capture/release/restart/resize and existing desktop integration",
-        "Matched 120-second RSS/workload measurements; no widget RSS improvement claimed yet",
-        "Final existing visual suite, documentation build, final-head CI and review; no merge authorized",
-        "Sub-200 MiB target, decoder peaks, driver/allocator retention, long-idle/fault and hardware desktop pacing",
-        "Per-output targeting, fractional scaling, hotplug/suspend, secure auth build alignment and remaining feature acceptance groups"
-      ]
+        "Final documentation/evidence-head CI, review and merge; no automatic merge",
+        "224.93 MiB mean RSS remains above the 200 MiB target; decoder peaks, allocator/driver retention and total GPU memory remain unbounded by this crop",
+        "Active drag preview and open overlays retain full-output buffers; group redraws fan out to all widget buffers",
+        "Native transition scanout/flicker, hardware desktop pacing, long-idle and fault injection remain unverified",
+        "Output selection/per-monitor layouts, fractional scaling, hotplug and suspend/resume remain unfinished",
+        "Secure lock/login build alignment and retest, packaging/migration/rollback audit and remaining feature acceptance groups remain open"
+      ],
+      "source_commit": "78c4aa055f3a3bef6a63a3d0ffc8cbe195003572",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/33"
     }
   ]
 }
