@@ -221,7 +221,8 @@
         "182 workspace tests plus the new bounded-admission unit check, two isolated audio protocol tests, workspace Clippy, 60 Python checks, software-Vulkan desktop visual regressions (160.81 s), and Astro checks/link validation passed. No visual goldens or tolerances changed. Native guest validation also passes: actual default-output policy, external volume events, pointer mute/unmute and desktop restart; original audio settings restored. See reports/measurements/lucent-audio-service.json.",
         "Native audio child provides output/input/app tabs, framework sliders/scrolling, default/route selectors, token-based open/close motion and bounded/coalesced commands. Real deadline recovery exposed stale retry identities: available controls retain Retry; replaced controls expose Dismiss and require a fresh selection. 204 Rust tests, 62 Python checks, 212 software-Vulkan comparisons and native output/input/stream controls, playback/capture routing, compatibility entrypoints, sustained drag, device removal, service disconnect/reconnect, idle and restart checks pass. See reports/measurements/lucent-audio-panel.json. Physical audio/card profiles and other control-center services remain incomplete.",
         "Native network domain values/port and NetworkManager D-Bus adapter implemented with bounded signal-driven observation/commands, explicit acceptance versus completion and safe credential/error handling. 232 Rust tests, six private D-Bus protocol tests and 68 Python checks pass. Guest NetworkManager with owned simulated radios passes real WPA2/hidden association and DHCP, targeted disconnect/reactivation/forget, radio changes, removal/stale IDs and original-profile/route/desktop cleanup. See reports/measurements/lucent-network-service.json. The independent consumer is tested; desktop injection, native network panel and masked input remain unfinished.",
-        "Native network child, framework masked edit/submit controls, generation-bound secret forms, native operation selectors, ownership/motion/error behavior and compatibility routes now implemented. 245 Rust tests, 70 Python checks, 248 software-Vulkan comparisons with 36 new baselines and real pointer/keyboard WPA2/hidden joins, DHCP, saved operations, radio changes and complete owned-fixture cleanup pass. Two-minute warm idle is 225.33 MiB mean RSS and 0.567% of one core; the 200 MiB memory target remains unmet. See reports/measurements/lucent-network-panel.json. Secret-agent, enterprise, physical networking and other control-center services remain unfinished."
+        "Native network child, framework masked edit/submit controls, generation-bound secret forms, native operation selectors, ownership/motion/error behavior and compatibility routes now implemented. 245 Rust tests, 70 Python checks, 248 software-Vulkan comparisons with 36 new baselines and real pointer/keyboard WPA2/hidden joins, DHCP, saved operations, radio changes and complete owned-fixture cleanup pass. Two-minute warm idle is 225.33 MiB mean RSS and 0.567% of one core; the 200 MiB memory target remains unmet. See reports/measurements/lucent-network-panel.json. Secret-agent, enterprise, physical networking and other control-center services remain unfinished.",
+        "BluetoothPort, validated transient handles/addresses, pure command policy and a native BlueZ adapter now have an independent consumer. Five private D-Bus regressions cover discovery ownership, paired controls, retirement/reconnect, signal pressure, timeout/privacy and connection cleanup. A release consumer observes the real guest daemon with zero controllers and cancels in 0.114 seconds; owned daemon/module state is restored. Native pairing, desktop injection and hardware acceptance remain pending."
       ]
     },
     {
@@ -983,7 +984,7 @@
         "All six core CI checks pass on commit 3412d44a6080692391734fde8f608266f086cd02."
       ],
       "pending": [
-        "Review and merging the PR stack; CI status is tracked on PR #36.",
+        "PR #36 is merged into the PR #35 branch; review/merge of the parent stack remains pending.",
         "207.70 MiB remains above the 200 MiB target; active overlays/decoder peaks and actual GPU memory still need work.",
         "Hardware frame pacing, long idle, faults, per-output/fractional scaling and remaining desktop acceptance groups."
       ]
@@ -1009,6 +1010,28 @@
         "General IPC-enabled clients and all other consumers need a rebuilt release to inherit the new runtime teardown; this deployment covers only the three authentication clients.",
         "RSS below 200 MiB, active-overlay and image-decoding peaks, actual GPU allocations, hardware pacing, long idle and fault recovery remain open. No new performance measurements are claimed.",
         "Remaining OS controls/tray, physical audio/networking and secret-agent/enterprise provisioning, per-output/fractional geometry, shaping/IME/accessibility, richer application/dock/widget/notification/settings behavior, packaging/migrations and rollback acceptance remain in docs/implementation-status.json."
+      ]
+    },
+    {
+      "milestone": "native-bluetooth-service-foundation",
+      "status": "locally_verified",
+      "source_commit": "048f3deb94a8b5732c76035565f1a4cbed26f4d8",
+      "report": "reports/measurements/lucent-bluetooth-service.json",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/38",
+      "checks": [
+        "256 Rust workspace tests, five isolated D-Bus protocol cases, 70 Python checks, strict Clippy/formatting, 491 tokens and 58 icons pass.",
+        "Discovery ownership and unique-owner connection cleanup, paired controls, target retirement, optional metadata, service replacement, signal pressure, transport timeout, safe errors and absent/empty/disconnected service states pass.",
+        "Final release hash is verified in the guest. Regular-user actual BlueZ 5.87 observation is ready with zero controllers; EOF cancellation takes 0.114 seconds. No controls or pairing agents are sent/registered.",
+        "Temporary daemon startup and Bluetooth/BNEP module loading are restored to the original inactive/absent state; the temporary binary is removed and all lab VMs are shut down.",
+        "All six source-commit CI checks pass, including 248 software visual comparisons. Final evidence-head CI remains tracked on PR #38.",
+        "Library/domain/system guides and repository framework instructions describe implemented ownership and pending pairing/UI. Existing LAN docs serve the current guide with HTTP 200."
+      ],
+      "pending": [
+        "Native pairing agent and PIN/passkey/confirmation/incoming authorization with cancellation and owner lifecycle; native desktop child, adapter injection and compatibility entrypoints.",
+        "Actual controllers, device/profile interoperability, permissions, suspend/hotplug and fault acceptance; the native empty-catalog query and protocol fixtures do not establish hardware results.",
+        "Battery, brightness/power profiles and tray lifecycle; remaining network credential flows and audio/network hardware acceptance.",
+        "Desktop memory/pacing/fault targets, per-output/fractional scaling, text/IME/accessibility, richer desktop features, secure-client production audit and packaging/migrations remain in the requirement ledger.",
+        "Review and merge of PR #38 and its parent stack; final evidence-head CI is tracked on the PR."
       ]
     }
   ]

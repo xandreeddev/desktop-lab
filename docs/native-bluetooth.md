@@ -139,3 +139,28 @@ Native pairing and the desktop panel, physical devices and profiles,
 suspend/resume, incoming authorization and hotplug acceptance remain open. The
 larger control-center requirement remains in progress in
 [the implementation ledger](implementation-status.json).
+
+## Native guest observation
+
+`vm/test-bluetooth-service.py` copies a built release consumer into an owned
+temporary guest directory, verifies its hash, queries the real system-bus BlueZ
+daemon as the regular user, and tests EOF cancellation. It sends no controls and
+publishes counts only. The normal check expects BlueZ to be active already.
+
+The prepared VM has no Bluetooth controller or loaded Bluetooth module. The
+explicit fixture options can load that absent prerequisite and start the
+inactive daemon; cleanup restores the service, removes only new module holders
+(BlueZ can auto-load BNEP), and removes the temporary binary. Existing modules
+and arriving controllers are not forcibly removed. No policy/configuration or
+installed desktop binary is changed.
+
+```sh
+cargo build --manifest-path lucent/Cargo.toml --locked --release -p bluetooth-service
+python3 vm/test-bluetooth-service.py
+# For the prepared controller-free guest, using its private existing login file:
+python3 vm/test-bluetooth-service.py --start-service --load-module --login-file /path/to/private/LOGIN.txt
+```
+
+The [recorded service evidence](../reports/measurements/lucent-bluetooth-service.json)
+distinguishes the real daemon's empty ready catalog from protocol-fixture device
+controls. Neither establishes physical pairing or a native desktop panel.
