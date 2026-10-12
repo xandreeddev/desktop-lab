@@ -373,14 +373,33 @@ impl Audio {
             .id("audio-scroll");
         let mut children = vec![header, tabs, viewport];
         if let Some(error) = self.commands.error() {
+            let can_retry = self.commands.can_retry(self.snapshot());
+            let mut status = vec![
+                self.text(error, theme)
+                    .color(theme.error)
+                    .font(font::CAPTION),
+            ];
+            if !can_retry {
+                status.push(
+                    self.text("The control changed. Select it again.", theme)
+                        .font(font::CAPTION),
+                );
+            }
             children.push(
                 Element::row(vec![
-                    self.text(error, theme)
-                        .color(theme.error)
-                        .font(font::CAPTION),
-                    theme
-                        .button("Retry", Message::Control(commands::Message::Retry))
-                        .id("audio-retry"),
+                    Element::column(status).width(Length::Fill).gap(space::XS),
+                    if can_retry {
+                        theme
+                            .button("Retry", Message::Control(commands::Message::Retry))
+                            .id("audio-retry")
+                    } else {
+                        theme
+                            .button(
+                                "Dismiss",
+                                Message::Control(commands::Message::DismissFailure),
+                            )
+                            .id("audio-dismiss-error")
+                    },
                 ])
                 .width(Length::Fill)
                 .gap(space::SM),

@@ -14,6 +14,7 @@ pub enum Message {
     Finished(Revision, Result<()>),
     WorkerFailed(String),
     Retry,
+    DismissFailure,
 }
 
 struct Request {
@@ -92,6 +93,11 @@ impl Commands {
     }
     pub fn error(&self) -> Option<&str> {
         self.failure.as_ref().map(|f| f.reason.as_str())
+    }
+    pub fn can_retry(&self, snapshot: Option<&AudioSnapshot>) -> bool {
+        self.failure
+            .as_ref()
+            .is_some_and(|failure| valid(&failure.command, snapshot))
     }
     pub fn busy(&self) -> bool {
         self.active.is_some() || !self.pending.is_empty()
@@ -242,6 +248,7 @@ impl Commands {
                     self.request(command, snapshot, effects);
                 }
             }
+            Message::DismissFailure => self.failure = None,
         }
     }
 }
@@ -421,5 +428,68 @@ mod tests {
         commands.update(Message::Retry, Some(&super::super::fixture()), &mut work);
         finish(&mut commands, work);
         assert!(commands.error().is_none());
+    }
+    #[test]
+    fn reconnected_device_is_not_an_implicit_retry_target_and_failure_can_be_dismissed() {
+        let adapter = Arc::new(Adapter::default());
+        let mut commands = Commands::new(adapter.clone());
+        drop(request(&mut commands, volume(0.1)));
+        commands.update(
+            Message::WorkerFailed("connection reset".into()),
+            Some(&super::super::fixture()),
+            &mut Effects::default(),
+        );
+        assert!(commands.can_retry(Some(&super::super::fixture())));
+        assert!(!commands.can_retry(None));
+        let mut reconnected = super::super::fixture();
+        let id = AudioObjectId::new(2).unwrap();
+        reconnected.devices[0].id = id;
+        reconnected.default_output = Some(id);
+        assert!(!commands.can_retry(Some(&reconnected)));
+        let mut effects = Effects::default();
+        commands.update(Message::Retry, Some(&reconnected), &mut effects);
+        assert!(effects.tasks.is_empty());
+        assert!(adapter.calls.lock().unwrap().is_empty());
+        commands.update(Message::DismissFailure, Some(&reconnected), &mut effects);
+        assert!(commands.error().is_none());
+        commands.request(
+            AudioCommand::SetVolume(id, AudioVolume::new(0.4).unwrap()),
+            Some(&reconnected),
+            &mut effects,
+        );
+        let result = effects.tasks.pop().unwrap().run();
+        commands.update(result, Some(&reconnected), &mut effects);
+        assert!(!commands.busy());
+        assert_eq!(
+            *adapter.calls.lock().unwrap(),
+            [AudioCommand::SetVolume(id, AudioVolume::new(0.4).unwrap())]
+        );
+    }
+    #[test]
+    fn dismissing_failure_does_not_cancel_accepted_or_pending_commands() {
+        let adapter = Arc::new(Adapter::default());
+        let mut commands = Commands::new(adapter.clone());
+        drop(request(&mut commands, volume(0.1)));
+        commands.update(
+            Message::WorkerFailed("deadline".into()),
+            Some(&super::super::fixture()),
+            &mut Effects::default(),
+        );
+        let first = request(&mut commands, volume(0.5));
+        request(&mut commands, AudioCommand::ToggleMute);
+        commands.update(
+            Message::DismissFailure,
+            Some(&super::super::fixture()),
+            &mut Effects::default(),
+        );
+        assert!(commands.error().is_none());
+        assert!(commands.busy());
+        assert_eq!(commands.pending_count(), 1);
+        let second = finish(&mut commands, first);
+        finish(&mut commands, second);
+        assert_eq!(
+            *adapter.calls.lock().unwrap(),
+            [volume(0.5), AudioCommand::ToggleMute]
+        );
     }
 }

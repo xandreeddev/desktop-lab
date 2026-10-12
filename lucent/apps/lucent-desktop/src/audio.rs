@@ -177,6 +177,7 @@ impl Audio {
             Observation::Unavailable(error) => ("unavailable", Some(error)),
         };
         serde_json::json!({"status":status,"error":error,"control_error":self.commands.error(),
+            "control_retry_available":self.commands.can_retry(self.snapshot()),
             "open":self.panel.open,"visible":self.panel.mounted,"tab":self.panel.tab.name(),"scroll":self.panel.scroll,
             "routing_stream":self.panel.route.map(|id|id.value()),
             "device_details":self.snapshot().map(|s|s.devices.iter().map(|d|serde_json::json!({"id":d.id.value(),"key":d.key.as_str(),"name":d.name,"direction":if d.direction==AudioDirection::Playback {"output"} else {"input"},"volume":d.volume.ratio(),"muted":d.muted})).collect::<Vec<_>>()),

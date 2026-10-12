@@ -927,6 +927,7 @@ fn visual_regressions() {
             ("audio-apps", Mode::Apps, 0, 0, "", 1., 640.),
             ("audio-route", Mode::Apps, 0, 0, "", 1., 390.),
             ("audio-error", Mode::Apps, 0, 0, "", 1., 390.),
+            ("audio-stale", Mode::Apps, 0, 0, "", 1., 390.),
             ("audio-opening", Mode::Apps, 0, 0, "", 0.12, 640.),
             ("audio-last", Mode::Apps, 0, 0, "", 1., 390.),
         ] {
@@ -1239,6 +1240,9 @@ fn visual_regressions() {
                         &mut Effects::default(),
                     );
                     app.update(Message::Audio(AudioMessage::Control(crate::audio::commands::Message::WorkerFailed("The requested audio change failed; the observed device state is preserved".into()))), &mut Effects::default());
+                }
+                if name == "audio-stale" {
+                    audio_stale_failure(&mut app);
                 }
                 let cx = ViewContext {
                     surface: "audio",
@@ -2210,6 +2214,76 @@ fn audio_fixture_snapshot() -> lucent_domain::AudioSnapshot {
         });
     }
     snapshot
+}
+fn audio_stale_failure(app: &mut Desktop) {
+    use crate::audio::{Message as AudioMessage, commands};
+    use lucent_domain::{AudioCommand, AudioObjectId, AudioVolume};
+    app.update(
+        Message::Audio(AudioMessage::Request(AudioCommand::SetVolume(
+            AudioObjectId::new(1).unwrap(),
+            AudioVolume::new(0.5).unwrap(),
+        ))),
+        &mut Effects::default(),
+    );
+    app.update(
+        Message::Audio(AudioMessage::Control(commands::Message::WorkerFailed(
+            "The audio connection changed before the command completed".into(),
+        ))),
+        &mut Effects::default(),
+    );
+    let mut reconnected = audio_fixture_snapshot();
+    let id = AudioObjectId::new(999).unwrap();
+    reconnected.devices[0].id = id;
+    reconnected.default_output = Some(id);
+    app.update(
+        Message::Audio(AudioMessage::Observed(Ok(reconnected))),
+        &mut Effects::default(),
+    );
+}
+#[test]
+fn audio_stale_failure_exposes_dismiss_and_keyboard_reaches_it_at_narrow_sizes() {
+    use crate::audio::Message as AudioMessage;
+    for (width, height) in [(390., 700.), (640., 580.), (1920., 1080.)] {
+        let mut app = fixture(0, false);
+        app.update(
+            Message::Audio(AudioMessage::Observed(Ok(audio_fixture_snapshot()))),
+            &mut Effects::default(),
+        );
+        app.update(Message::Audio(AudioMessage::Open), &mut Effects::default());
+        audio_stale_failure(&mut app);
+        let layout = Layout::new(fonts(&app));
+        let cx = ViewContext {
+            surface: "audio",
+            width,
+            height,
+            now: 1.,
+        };
+        let mut input = Interaction::default();
+        let scene = layout.build(&app.view(&cx), width, height, &input, 1.);
+        assert!(!scene.hits.iter().any(|h| h.id == "audio-retry"));
+        let dismiss = scene
+            .hits
+            .iter()
+            .find(|h| h.id == "audio-dismiss-error")
+            .unwrap();
+        assert!(fully_visible(dismiss.rect, dismiss.clip.bounds));
+        for _ in 0..scene.hits.len() {
+            let scene = layout.build(&app.view(&cx), width, height, &input, 1.);
+            input.synchronize(&scene);
+            for message in input.key(&scene, &Key::Tab) {
+                app.update(message, &mut Effects::default());
+            }
+            if input.focus.as_deref() == Some("audio-dismiss-error") {
+                break;
+            }
+        }
+        assert_eq!(input.focus.as_deref(), Some("audio-dismiss-error"));
+        let scene = layout.build(&app.view(&cx), width, height, &input, 1.);
+        for message in input.key(&scene, &Key::Enter) {
+            app.update(message, &mut Effects::default());
+        }
+        assert!(app.audio.inspect()["control_error"].is_null());
+    }
 }
 #[test]
 fn audio_panel_closes_competing_launcher_and_keyboard_reveals_controls_at_narrow_sizes() {
