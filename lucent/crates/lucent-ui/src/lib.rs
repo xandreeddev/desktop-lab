@@ -61,9 +61,9 @@ pub struct Hit<M> {
     pub value: String,
     pub drag: Option<DragCallback<M>>,
     pub slider: Option<SliderHit<M>>,
-    pub scroll: Option<ScrollHit<M>>,
-    pub scroll_ancestors: Vec<ScrollHit<M>>,
-    pub focus_clips: Vec<FocusClip>,
+    pub scroll: Option<Arc<ScrollHit<M>>>,
+    pub scroll_ancestors: Arc<[Arc<ScrollHit<M>>]>,
+    pub focus_clips: Arc<[FocusClip]>,
     pub autofocus: bool,
     pub hover_transition: Transition,
     pub tab_stop: bool,
@@ -243,11 +243,12 @@ impl Layout {
             &mut scene,
             interaction,
             now,
-            &[],
-            &[FocusClip {
+            &Arc::default(),
+            &Arc::from([FocusClip {
                 rect,
+                radius: 0.,
                 scroll_depth: 0,
-            }],
+            }]),
             "root",
         );
         scene
@@ -262,8 +263,8 @@ impl Layout {
         scene: &mut Scene<M>,
         interaction: &Interaction<M>,
         now: f64,
-        scrolls: &[ScrollHit<M>],
-        focus_clips: &[FocusClip],
+        scrolls: &Arc<[Arc<ScrollHit<M>>]>,
+        focus_clips: &Arc<[FocusClip]>,
         path: &str,
     ) {
         let id = if e.id.is_empty() {
@@ -295,24 +296,27 @@ impl Layout {
                     .first()
                     .map(|child| self.measure(child, (width, inner.h)).1)
                     .unwrap_or(0.);
-                ScrollHit::new(
+                Arc::new(ScrollHit::new(
                     id.clone(),
                     inner,
                     height,
                     spec,
                     e.style.scroll,
                     callback.clone(),
-                )
+                ))
             })
         } else {
             None
         };
-        let mut child_focus_clips = focus_clips.to_vec();
+        let mut child_focus_clips = focus_clips.clone();
         if e.style.clip {
-            child_focus_clips.push(FocusClip {
+            let mut clips = focus_clips.to_vec();
+            clips.push(FocusClip {
                 rect,
+                radius: e.style.radius,
                 scroll_depth: scrolls.len(),
             });
+            child_focus_clips = clips.into();
         }
         let interactive = e.click.is_some()
             || e.input.is_some()
@@ -384,7 +388,7 @@ impl Layout {
                     None
                 },
                 scroll: scroll_hit.clone(),
-                scroll_ancestors: scrolls.to_vec(),
+                scroll_ancestors: scrolls.clone(),
                 focus_clips: child_focus_clips.clone(),
                 autofocus: e.autofocus,
                 hover_transition: e.style.hover_transition,
@@ -485,10 +489,13 @@ impl Layout {
                 let height = self.measure(child, (width, inner.h)).1.max(inner.h);
                 let mut ancestors = scrolls.to_vec();
                 ancestors.push(scroll.clone());
-                child_focus_clips.push(FocusClip {
-                    rect: inner,
+                let mut clips = child_focus_clips.to_vec();
+                clips.push(FocusClip {
+                    rect: Rect::new(inner.x, inner.y, width, inner.h),
+                    radius: 0.,
                     scroll_depth: scrolls.len(),
                 });
+                child_focus_clips = clips.into();
                 self.place(
                     child,
                     Rect::new(inner.x, inner.y - scroll.offset, width, height),
@@ -497,7 +504,7 @@ impl Layout {
                     scene,
                     interaction,
                     now,
-                    &ancestors,
+                    &ancestors.into(),
                     &child_focus_clips,
                     &format!("{path}/0"),
                 );
@@ -706,18 +713,25 @@ impl<M> Default for Interaction<M> {
 }
 impl<M: Clone> Interaction<M> {
     pub fn synchronize(&mut self, scene: &Scene<M>) {
-        if self.press.as_ref().is_some_and(|p| {
-            p.scroll_grab.is_some()
-                && !scene.hits.iter().any(|h| {
-                    h.id == p.hit.id
-                        && h.scroll.as_ref().is_some_and(|current| {
-                            p.hit.scroll.as_ref().is_some_and(|old| {
-                                current.maximum == old.maximum && current.track == old.track
-                            })
-                        })
+        if let Some(press) = &mut self.press
+            && press.scroll_grab.is_some()
+        {
+            let current = scene.hits.iter().find(|h| h.id == press.hit.id);
+            let compatible = current.is_some_and(|h| {
+                h.scroll.as_ref().is_some_and(|new| {
+                    press.hit.scroll.as_ref().is_some_and(|old| {
+                        old.maximum == new.maximum
+                            && old.track == new.track
+                            && old.thumb.h == new.thumb.h
+                            && h.clip == press.hit.clip
+                    })
                 })
-        }) {
-            self.press = None;
+            });
+            if compatible {
+                press.hit = current.unwrap().clone();
+            } else {
+                self.press = None;
+            }
         }
         self.scroll_buffer = scene
             .hits
@@ -919,9 +933,10 @@ impl<M: Clone> Interaction<M> {
     /// A wheel event is consumed by the deepest scroll viewport under the
     /// pointer, chaining outward at its limits. Some(empty) still consumes it.
     pub fn scroll(&mut self, scene: &Scene<M>, x: f32, y: f32, lines: f64) -> Option<Vec<M>> {
+        let hit = scene.hits.iter().rev().find(|h| h.contains(x, y))?;
+        // Follow this hit's ancestry, never an unrelated viewport underneath it.
         let mut handled = false;
-        for hit in scene.hits.iter().rev().filter(|h| h.contains(x, y)) {
-            let Some(scroll) = &hit.scroll else { continue };
+        for scroll in hit.scroll.iter().chain(hit.scroll_ancestors.iter().rev()) {
             handled = true;
             if !lines.is_finite() {
                 return Some(vec![]);
@@ -973,24 +988,33 @@ impl<M: Clone> Interaction<M> {
         self.control_key(scene, key).into_iter().collect()
     }
     fn traverse(&mut self, scene: &Scene<M>, key: &Key) -> Vec<M> {
-        let stops: Vec<_> = scene
-            .hits
-            .iter()
-            .filter(|h| h.tab_stop && scroll::reveal(h, &self.scroll_buffer).is_some())
-            .collect();
-        if stops.is_empty() {
+        let count = scene.hits.len();
+        if count == 0 {
             return vec![];
         }
-        let current = stops
+        let reverse = matches!(key, Key::BackTab);
+        let current = scene
+            .hits
             .iter()
             .position(|h| Some(&h.id) == self.focus.as_ref());
-        let next = match (current, key) {
-            (Some(i), Key::BackTab) => (i + stops.len() - 1) % stops.len(),
-            (Some(i), _) => (i + 1) % stops.len(),
-            (None, Key::BackTab) => stops.len() - 1,
-            _ => 0,
+        let start = current.unwrap_or(if reverse { 0 } else { count - 1 });
+        // Inspect only candidates up to the next reachable stop; do not build
+        // reveal plans for every item in a long list on each key press.
+        let next = (1..=count).find_map(|step| {
+            let index = if reverse {
+                (start + count - step) % count
+            } else {
+                (start + step) % count
+            };
+            let hit = &scene.hits[index];
+            hit.tab_stop
+                .then(|| scroll::reveal(hit, &self.scroll_buffer))
+                .flatten()
+                .map(|plan| (hit, plan))
+        });
+        let Some((hit, plan)) = next else {
+            return vec![];
         };
-        let hit = stops[next];
         self.focus = Some(hit.id.clone());
         self.slider_buffer = None;
         self.select_all = false;
@@ -999,7 +1023,7 @@ impl<M: Clone> Interaction<M> {
             .as_ref()
             .map(|_| (hit.id.clone(), hit.value.clone()));
         let mut messages = vec![];
-        for (scroll, value) in scroll::reveal(hit, &self.scroll_buffer).unwrap_or_default() {
+        for (scroll, value) in plan {
             self.scroll_buffer.insert(scroll.id.clone(), value);
             messages.push(scroll.event(value));
         }
@@ -1095,8 +1119,8 @@ mod tests {
             drag: None,
             slider: None,
             scroll: None,
-            scroll_ancestors: vec![],
-            focus_clips: vec![],
+            scroll_ancestors: Arc::default(),
+            focus_clips: Arc::default(),
             autofocus: false,
             hover_transition: Transition::default(),
             tab_stop: true,
@@ -1118,8 +1142,8 @@ mod tests {
             drag: None,
             slider: None,
             scroll: None,
-            scroll_ancestors: vec![],
-            focus_clips: vec![],
+            scroll_ancestors: Arc::default(),
+            focus_clips: Arc::default(),
             autofocus: true,
             hover_transition: Transition::default(),
             tab_stop: true,
@@ -1169,8 +1193,8 @@ mod tests {
             drag: Some(Arc::new(|d: DragEvent| if d.finished { 3 } else { 2 })),
             slider: None,
             scroll: None,
-            scroll_ancestors: vec![],
-            focus_clips: vec![],
+            scroll_ancestors: Arc::default(),
+            focus_clips: Arc::default(),
             autofocus: false,
             hover_transition: Transition::default(),
             tab_stop: true,

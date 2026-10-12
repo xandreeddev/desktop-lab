@@ -6,6 +6,10 @@ pub struct ScrollSpec {
     line_step: f32,
 }
 impl ScrollSpec {
+    /// Logical-pixel offset (finite and nonnegative) and positive wheel/arrow step.
+    /// Layout clamps the presented offset to the measured content. It does not
+    /// mutate client state when content shrinks; accept the next event or reset
+    /// the offset when replacing a data set.
     pub fn new(offset: f32, line_step: f32) -> Option<Self> {
         (offset.is_finite() && offset >= 0. && line_step.is_finite() && line_step > 0.)
             .then_some(Self { offset, line_step })
@@ -19,13 +23,16 @@ impl ScrollSpec {
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScrollEvent {
+    /// Clamped logical-pixel offset. Store it and request the surface's redraw.
     pub offset: f32,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct ScrollStyle {
     pub thumb: Color,
     pub width: f32,
-    /// Reserved inline space, including the thumb; content never paints under it.
+    /// Reserved inline space, including the thumb. Layout reserves at least
+    /// `width`, even when the requested gutter is smaller. Nonfinite style
+    /// dimensions become zero; negative dimensions clamp to zero.
     pub gutter: f32,
     pub minimum_thumb: f32,
 }

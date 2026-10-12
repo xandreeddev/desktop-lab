@@ -393,6 +393,15 @@
   --component-slider-padding-inline: var(--space-sm);
   --component-example-width: 448px;
   --component-example-height: 384px;
+  --component-scroll-thumb-width: var(--space-xs);
+  --component-scroll-gutter: var(--space-md);
+  --component-scroll-minimum-thumb: var(--space-xl);
+  --component-scroll-line-step: var(--space-wide);
+  --component-scroll-padding: var(--space-md);
+  --component-scroll-example-width: 448px;
+  --component-scroll-example-height: 512px;
+  --component-scroll-example-compact-height: 384px;
+  --component-scroll-example-row-height: var(--space-wide);
   --icon-tiny: 16px;
   --icon-small: 17px;
   --icon-compact: 18px;

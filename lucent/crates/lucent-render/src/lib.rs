@@ -1338,6 +1338,94 @@ mod clipping_tests {
 
     #[test]
     #[ignore = "requires a Vulkan driver"]
+    fn scroll_viewport_thumb_and_focus_match_input_at_both_densities() {
+        use lucent_api::{Key, Length, ScrollSpec, ScrollStyle};
+        let fonts = Arc::new(vec![]);
+        let gpu = Gpu::headless(fonts.clone()).unwrap();
+        let layout = Layout::new(fonts);
+        let mut canvas = Canvas::new(gpu);
+        for offset in [0., 28., 56.] {
+            let content = Element::column(
+                [0xff0000, 0x00ff00, 0x0000ff]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(n, color)| {
+                        Element::empty()
+                            .width(Length::Fill)
+                            .height(Length::Fixed(40.))
+                            .background(Color::hex(color))
+                            .on_click(())
+                            .id(format!("row-{n}"))
+                    })
+                    .collect(),
+            )
+            .width(Length::Fill)
+            .gap(8.);
+            let root = Element::stack(vec![
+                Element::scroll(ScrollSpec::new(offset, 40.).unwrap(), content, |_| ())
+                    .size(112., 96.)
+                    .at(8., 8.)
+                    .padding(8.)
+                    .radius(40.)
+                    .id("scroll")
+                    .scroll_style(ScrollStyle {
+                        thumb: Color::hex(0xffffff),
+                        width: 4.,
+                        gutter: 12.,
+                        minimum_thumb: 16.,
+                    }),
+            ]);
+            let mut input = Interaction::default();
+            let scene = layout.build(&root, 128., 112., &input, 0.);
+            let scroll = scene.hits[0].scroll.as_ref().unwrap();
+            assert_eq!(scroll.maximum, 56.);
+            for scale in [1, 2] {
+                let pixels = canvas.snapshot(128, 112, scale, &scene.paint).unwrap();
+                let pixel = |x: u32, y: u32| {
+                    let p = ((y * scale * 128 * scale + x * scale) * 4) as usize;
+                    &pixels[p..p + 4]
+                };
+                for (x, y) in [(1, 1), (16, 16), (16, 95), (64, 12), (64, 100), (104, 48)] {
+                    assert_eq!(
+                        pixel(x, y),
+                        &[0, 0, 0, 0],
+                        "clip/gutter at {x},{y}, offset {offset}, scale {scale}"
+                    );
+                    assert!(
+                        !scene
+                            .hits
+                            .iter()
+                            .skip(1)
+                            .any(|h| h.contains(x as f32 + 0.5, y as f32 + 0.5))
+                    );
+                }
+                assert_eq!(
+                    pixel(110, (scroll.thumb.y + scroll.thumb.h / 2.) as u32),
+                    &[255, 255, 255, 255]
+                );
+                for row in 0..3 {
+                    let y = 36. + row as f32 * 48. - offset;
+                    if !(18. ..94.).contains(&y) {
+                        continue;
+                    }
+                    let mut expected = [0, 0, 0, 255];
+                    expected[row] = 255;
+                    assert_eq!(pixel(64, y as u32), &expected);
+                    assert!(scene.hits[row + 1].contains(64., y));
+                }
+            }
+            input.key(&scene, &Key::Tab);
+            let focused = layout.build(&root, 128., 112., &input, 0.);
+            for scale in [1, 2] {
+                let pixels = canvas.snapshot(128, 112, scale, &focused.paint).unwrap();
+                let p = ((8 * scale * 128 * scale + 64 * scale) * 4 + 3) as usize;
+                assert!(pixels[p] > 0, "scroll viewport keyboard focus is visible");
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
     fn rounded_cover_and_nested_clips_match_pixels_and_input_at_both_densities() {
         let fonts = Arc::new(vec![]);
         let gpu = Gpu::headless(fonts.clone()).unwrap();

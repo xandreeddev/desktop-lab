@@ -177,6 +177,26 @@ impl Theme {
                 thumb_diameter: token::THUMB_DIAMETER,
             })
     }
+    /// A rounded, padded viewport; the caller chooses its bounded height.
+    pub fn scroll<M>(
+        self,
+        spec: lucent_api::ScrollSpec,
+        content: Element<M>,
+        on_change: impl Fn(lucent_api::ScrollEvent) -> M + Send + Sync + 'static,
+    ) -> Element<M> {
+        use component::scroll as token;
+        Element::scroll(spec, content, on_change)
+            .fill()
+            .padding(token::PADDING)
+            .radius(radius::CONTROL)
+            .background(self.surface_container)
+            .scroll_style(lucent_api::ScrollStyle {
+                thumb: self.primary,
+                width: token::THUMB_WIDTH,
+                gutter: token::GUTTER,
+                minimum_thumb: token::MINIMUM_THUMB,
+            })
+    }
     pub fn button<M>(self, label: impl Into<String>, message: M) -> Element<M> {
         Element::button(label, message)
             .padding_xy(

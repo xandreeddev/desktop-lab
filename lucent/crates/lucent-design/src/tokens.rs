@@ -495,6 +495,19 @@ pub mod component {
         pub const WIDTH: f32 = 448.0;
         pub const HEIGHT: f32 = 384.0;
     }
+    pub mod scroll {
+        pub const THUMB_WIDTH: f32 = 4.0;
+        pub const GUTTER: f32 = 12.0;
+        pub const MINIMUM_THUMB: f32 = 20.0;
+        pub const LINE_STEP: f32 = 40.0;
+        pub const PADDING: f32 = 12.0;
+    }
+    pub mod scroll_example {
+        pub const WIDTH: f32 = 448.0;
+        pub const HEIGHT: f32 = 512.0;
+        pub const COMPACT_HEIGHT: f32 = 384.0;
+        pub const ROW_HEIGHT: f32 = 40.0;
+    }
 }
 pub mod icon {
     pub const TINY: f32 = 16.0;

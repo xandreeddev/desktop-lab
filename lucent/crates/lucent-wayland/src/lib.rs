@@ -343,11 +343,16 @@ impl<A: Application> State<A> {
         serde_json::json!({"profile_memory":profile_memory,"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id,"width":s.width,"height":s.height,"scale":s.scale,"buffer_width":s.width*s.scale,"buffer_height":s.height*s.scale,"frames":s.renderer.frames,"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"frame_profiles":s.profiles.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)}).to_string()
     }
     fn message(&mut self, message: A::Message, qh: &QueueHandle<Self>) {
+        self.messages([message], qh);
+    }
+    fn messages(&mut self, messages: impl IntoIterator<Item = A::Message>, qh: &QueueHandle<Self>) {
         let mut effects = Effects {
             now: self.epoch.elapsed().as_secs_f64(),
             ..Default::default()
         };
-        self.app.update(message, &mut effects);
+        for message in messages {
+            self.app.update(message, &mut effects);
+        }
         self.effects(effects, qh);
     }
     fn runtime_failure(&mut self, failure: api::RuntimeFailure, qh: &QueueHandle<Self>) {
@@ -653,10 +658,11 @@ impl<A: Application> State<A> {
             if before != s.interaction.focus {
                 s.demand.invalidate();
             }
-            for message in messages {
-                self.message(message, qh);
+            if messages.is_empty() {
+                self.draw_all(qh);
+            } else {
+                self.messages(messages, qh);
             }
-            self.draw_all(qh);
         }
     }
 }
