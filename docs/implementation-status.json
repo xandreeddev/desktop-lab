@@ -158,7 +158,8 @@
         "Five focused offscreen renderer tests passed on Radeon hardware Vulkan. Visual comparison against software baselines passed 80/148 cases; 68 small coverage differences require follow-up. This is not a hardware desktop performance measurement.",
         "Cross-driver coverage follow-up: all 148 existing comparisons and six focused renderer tests pass on both Radeon hardware Vulkan and llvmpipe after selecting fine derivatives. Baselines/tolerances unchanged; hardware desktop performance remains unmeasured.",
         "Static review confirms Desktop.images retains each distinct selected wallpaper preview with no eviction. The 64-item startup preload cap does not cap lifetime retention, and renderer GPU-cache eviction cannot release these CPU-owned images. RSS attribution and bounded demand-loading remain open.",
-        "Local previews now have bounded lazy ownership and deduplicated prepared-byte counters. Native 73-file browsing/retry/close checks and sequential 120-second runs passed: RSS 588.26 to 389.93 MiB; CPU 0.700% to 0.825%. The 200 MiB target is still unmet; online page lifetime, output-aware background preparation and hardware behavior remain separate work."
+        "Local previews now have bounded lazy ownership and deduplicated prepared-byte counters. Native 73-file browsing/retry/close checks and sequential 120-second runs passed: RSS 588.26 to 389.93 MiB; CPU 0.700% to 0.825%. The 200 MiB target is still unmet; online page lifetime, output-aware background preparation and hardware behavior remain separate work.",
+        "Output-aware retained desktop pixels verified with bounded last-good refits and explicit retry. Native integer-scale/size changes and bursts preserve source/preferences and restore the output. Sequential 120-second normal runs with matching metadata: mean RSS 406.92 to 293.25 MiB; prepared background 48 to 12 MiB; main CPU 0.550% to 0.583%; idle background/closed dock zero frames. See lucent-wallpaper-resolution.json. The 200 MiB target, fullscreen overlays, decoding peaks and hardware behavior remain open."
       ]
     },
     {
@@ -830,6 +831,26 @@
         "Physical audio behavior, device card profiles/ports and preferred-device persistence",
         "Native scaling/accessibility/touch and measured memory/hardware frame pacing",
         "Remaining control-center services and other acceptance groups"
+      ]
+    },
+    {
+      "milestone": "output-aware-wallpaper",
+      "status": "locally_verified",
+      "source_commit": "4adec662701421dbf404330b2662d784c4c9d31e",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/31",
+      "report": "reports/measurements/lucent-wallpaper-resolution.json",
+      "checks": [
+        "212 Rust tests, 62 Python checks, formatting, Clippy and generated assets passed",
+        "Four focused 1x/2x Vulkan checks passed on software and hardware; 212 existing desktop comparisons passed without baseline/tolerance changes",
+        "Release deployed reversibly; running executable hash matched; only 3 GiB/four-vCPU guest running",
+        "Native resolution/integer-scale changes, latest-size burst and launcher open/close passed; desktop process, source and preferences preserved; output/idle restored",
+        "Matching sequential unprofiled 120-second VM runs measured mean RSS 406.92 to 293.25 MiB and retained background pixels 48 to 12 MiB; closed dock/background did not repaint"
+      ],
+      "pending": [
+        "Exact-head CI, review and merge; no automatic merge",
+        "Process RSS below 200 MiB, fullscreen overlay buffers, decoder peaks and hardware/long-idle/fault evidence",
+        "Per-monitor background/output targeting, fractional scaling and hotplug/suspend",
+        "Authentication build alignment and other acceptance groups"
       ]
     }
   ]
