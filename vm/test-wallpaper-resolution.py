@@ -58,7 +58,7 @@ def main():
     monitor = monitors[0]
     assert (monitor['width'], monitor['height'], monitor['scale']) == (1920, 1080, 1)
     assert vm.session('omarchy-shell', 'lock', 'isLocked').strip() == 'false'
-    assert any(mode.startswith('1280x720@') for mode in monitor['availableModes'])
+    assert any(mode.startswith('1024x768@') for mode in monitor['availableModes'])
     original = fingerprint()
     pid = vm.remote('pgrep', '-x', 'lucent-desktop').strip()
     report = {'checks': [], 'scope': 'Prepared single-output VM; software Vulkan; integer scales only'}
@@ -66,7 +66,7 @@ def main():
         try:
             initial = wait_for_target(1920, 1080, 1)
             original_aspect = initial['client']['wallpaper_presentation']['aspect_pixels']
-            for width, height, scale in [(1920, 1080, 2), (1280, 720, 1), (1920, 1080, 1)]:
+            for width, height, scale in [(1920, 1080, 2), (1024, 768, 1), (1920, 1080, 1)]:
                 output_mode(monitor, width, height, scale)
                 state = wait_for_target(width, height, scale)
                 presentation = state['client']['wallpaper_presentation']
@@ -78,7 +78,7 @@ def main():
                     'retained_pixels': presentation['retained_pixels'],
                     'retained_bytes': state['client']['prepared_assets']['background']['bytes']})
             # Rapid output changes must finish on the latest physical target.
-            for width, height in [(1280, 720), (1920, 1080), (1280, 720), (1920, 1080)]:
+            for width, height in [(1024, 768), (1920, 1080), (1024, 768), (1920, 1080)]:
                 output_mode(monitor, width, height, 1)
             wait_for_target(1920, 1080, 1)
             assert fingerprint() == original
