@@ -112,6 +112,18 @@ struct State<A: Application> {
     subscriptions: subscriptions::Workers,
     connection: Connection,
 }
+impl<A: Application> Drop for State<A> {
+    fn drop(&mut self) {
+        // Drop GPU surfaces before their protocol roles, then send the queued
+        // destroy requests while the connection is still alive. A caller such
+        // as a permission agent can outlive this individual runtime invocation.
+        // Teardown never authorizes a secure-session unlock.
+        self.surfaces.clear();
+        if let Err(error) = self.connection.flush() {
+            eprintln!("{} surface cleanup failed: {error}", self.app.name());
+        }
+    }
+}
 /// Run any framework application, with no desktop-specific types in the backend.
 pub fn run<A: Application>(app: A) -> Result<(), Error> {
     run_inner(app, None, true)
