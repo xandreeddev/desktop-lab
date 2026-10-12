@@ -1,0 +1,174 @@
+{
+  "milestone": "compact-dock-surface",
+  "scope": "Settled dock buffer extent and client lifecycle; single-output native integer scaling; sequential normal-mode software-Vulkan VM measurements",
+  "source_commit": "4c41876854d77f27925897ee530c3f9f945f63bd",
+  "binary": {
+    "name": "lucent-desktop",
+    "profile": "release",
+    "sha256": "71c64953e7fe753f525e010624c20ed4944a0b2fac1db2314e08e5c4226d5c65",
+    "implementation_commit": "78eefaf1ddac75357668313a9fba11f8d8298885"
+  },
+  "source_commit_scope": "The measured clean checkpoint changes only native idle-test timing after the implementation commit. Both have identical desktop/framework runtime code.",
+  "architecture": [
+    "The background owns display geometry; a compact native dock resize cannot overwrite the viewport",
+    "Client shell_layout retains display-grid position and translates it into bottom-anchored surface-local coordinates, including finite shadow support",
+    "The generic framework reports successful buffer submissions after scene bookkeeping; it does not know about dock policy and does not report GPU completion or scanout",
+    "The launcher child waits for full-size submission before starting opening motion, retains early app-search text and shrinks only after a settled closing submission; reopened lifetimes reject stale closing identities",
+    "Renderer and client share the public shadow-support contract; existing design and motion tokens are unchanged; no OS I/O is added to domain/views/rendering",
+    "Native tests translate local hits using independently queried compositor placement"
+  ],
+  "validation": {
+    "rust_workspace_tests_passed": 216,
+    "python_tests_passed": 62,
+    "formatting": "passed",
+    "clippy": "passed",
+    "generated_design_tokens": 482,
+    "generated_app_icons": 58,
+    "focused_gpu": {
+      "checks_per_driver": 6,
+      "drivers": [
+        "Mesa 26.2.3 llvmpipe",
+        "Mesa 26.2.3 RADV"
+      ],
+      "scales": [
+        1,
+        2
+      ],
+      "compact_full_comparisons_per_driver": 16,
+      "display_geometries": [
+        [
+          1920,
+          1080
+        ],
+        [
+          1280,
+          720
+        ],
+        [
+          960,
+          540
+        ],
+        [
+          390,
+          700
+        ]
+      ],
+      "palettes": [
+        "dark",
+        "light"
+      ],
+      "maximum_rgba_quantization_step": 1,
+      "global_hit_rectangles_unchanged": true,
+      "shadow_fully_retained": true,
+      "rounding_scope": "Native extent changes vertex interpolation. New paired comparison permits one 8-bit rounding step; existing baseline tolerances remain unchanged."
+    },
+    "visual": {
+      "comparisons": 212,
+      "driver": "Mesa 26.2.3 llvmpipe",
+      "elapsed_seconds": 171.27,
+      "existing_baselines_changed": false,
+      "tolerances_changed": false
+    },
+    "native": {
+      "scope": "Single-output VM; software Vulkan; integer scales 1 and 2",
+      "checks": [
+        {
+          "scale": 2,
+          "logical_height": 540,
+          "compact_logical_height": 124,
+          "physical_buffer_height": 248
+        },
+        {
+          "scale": 1,
+          "logical_height": 1080,
+          "compact_logical_height": 120,
+          "physical_buffer_height": 120
+        }
+      ],
+      "real_pointer_open_keyboard_search_tab_and_outside_close": true,
+      "reopen_during_close_keeps_full_buffer": true,
+      "real_terminal_launch": true,
+      "closed_dock_idle_frames": 0,
+      "source_preferences_pid_output_and_idle_marker_preserved": true
+    },
+    "existing_desktop_workflow": {
+      "vulkan": true,
+      "native_surfaces": 4,
+      "animated_dock_launcher": true,
+      "keyboard_search": true,
+      "real_application_launch": true,
+      "terminal_rounding": 20.0,
+      "workspace_switch": true,
+      "widget_drag": true,
+      "position_restored": true,
+      "token_grid_snap": true,
+      "timer_start_pause_reset": true,
+      "notes_input": true,
+      "wallpaper_selector_and_apply": true,
+      "native_only_restart": true,
+      "restart": true,
+      "application_count": 57
+    },
+    "harness_sha256": {
+      "vm/test-dock-surface.py": "c31c65464ffaab2748583f4bad14c5866bce9301f6410f7a1c02dca4b997c620",
+      "vm/test-framework.py": "1ff70ce4c894d7bb2c05983ca8d86cf3a1e687890660c7f9a61633df59ac4c8b",
+      "vm/measure-framework.py": "ab20961cf1359ed719de4f19953ccc300e2dd9b3090f5200f68249ba1de854ec"
+    },
+    "site": {
+      "errors": 0,
+      "warnings": 0,
+      "pages": 13,
+      "links_and_assets": 487,
+      "project_base": "/desktop-lab"
+    }
+  },
+  "comparison": {
+    "before": "reports/measurements/lucent-dock-surface-before-120.json",
+    "after": "reports/measurements/lucent-dock-surface-after-120.json",
+    "matching_detected_metadata": [
+      "displays",
+      "vcpus",
+      "guest_memory_mib",
+      "architecture",
+      "kernel",
+      "adapter",
+      "workload",
+      "frame_profiling"
+    ],
+    "prepared_assets_after_idle_match": true,
+    "duration_seconds_each": 120,
+    "run_order": [
+      "after",
+      "before"
+    ],
+    "rss_mib_mean_before": 284.22,
+    "rss_mib_mean_after": 254.1,
+    "rss_mib_mean_observed_reduction": 30.12,
+    "closed_dock_logical_extent_before": [
+      1920,
+      1080
+    ],
+    "closed_dock_logical_extent_after": [
+      1920,
+      120
+    ],
+    "one_color_buffer_payload_bytes_before": 8294400,
+    "one_color_buffer_payload_bytes_after": 921600,
+    "one_color_buffer_payload_scope": "Computed BGRA8 payload from verified native extent at scale 1. Actual buffer counts, allocation padding and total driver/GPU memory are unknown.",
+    "interpretation": "Sequential runs on a shared host; new release was sampled first, then the previous binary on the same wallpaper and workload. Display/software/guest/workload metadata and prepared-asset payloads match. This is observed process residency, not isolated allocation attribution or a physical-GPU measurement. No CPU, startup or animation improvement is claimed.",
+    "historical_sample_excluded": "The previous wallpaper milestone reported 293.25 MiB with a slightly different prepared background payload. A fresh 284.22 MiB baseline is used for this dock comparison."
+  },
+  "deployment": "Only the desktop release was replaced with verified upload, atomic rename and a private rollback copy. Running executable hash matched. The prior binary was temporarily used for the fresh baseline and the current release restored in finally, with its running hash verified. CLI, lock/login binaries and VM resources were unchanged.",
+  "restoration": "Native dock tests preserved selected source/settings/PID within the test and restored output/idle state. The broader workflow suite restores caller settings/wallpaper. Measurements restore the stay-awake marker. Only the 3 GiB/four-vCPU Lucent guest is running.",
+  "limitations": [
+    "254.10 MiB mean process RSS remains above the 200 MiB target",
+    "The open launcher retains a full-output buffer for outside-click capture; widgets and other overlays still use full-output buffers",
+    "The crop does not bound decoder scratch, transient assets, driver/allocator retention or total GPU memory; prepared-pixel counters and buffer payloads are different scopes",
+    "Opening needs native reconfiguration; observed submission gaps include up to 33.69 ms in this shared-host software-Vulkan run. No improved frame pacing, scanout latency or flicker-free hardware claim is made",
+    "One background/viewport and integer scales only; per-monitor targeting, fractional scale, hotplug and suspend/resume remain unfinished",
+    "Only app-search text is retained before the editor is mounted; full text-editing, IME and accessibility work remains open",
+    "Lock/login build alignment and secure retesting remain outside this desktop deployment",
+    "Long-idle/fault/hardware evidence, release packaging and the other acceptance groups remain incomplete; final-head CI and review are tracked by PR #32"
+  ],
+  "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/32"
+}
