@@ -112,8 +112,11 @@ subprocess.run([cli,'launcher','open'],check=True,stdout=subprocess.DEVNULL)''')
                 settled(True, logical_height)
                 vm.cli('launcher', 'close')
                 settled(False, compact_height)
-            frames = dock(vm.inspect())['frames']
             vm.move(950, 400)
+            # Leaving a hovered dock control legitimately submits its exit
+            # state. Measure idle only after that interaction has settled.
+            time.sleep(.5)
+            frames = dock(vm.inspect())['frames']
             time.sleep(2)
             assert dock(vm.inspect())['frames'] == frames, 'Settled dock repainted while idle'
             report['closed_dock_idle_frames'] = 0
