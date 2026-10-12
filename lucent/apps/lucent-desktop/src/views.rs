@@ -204,6 +204,8 @@ impl Desktop {
                     .on_click(Message::Action(Action::Mute))
                     .id("bar-mute"),
                 self.label(self.audio.label(), font::CAPTION)
+                    .on_click(Message::Audio(crate::audio::Message::Toggle))
+                    .id("bar-audio")
                     .width(Length::Fixed(component::bar::CONTROL_SIZE))
                     .align(Align::Center),
                 bar_icon("lock")

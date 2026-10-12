@@ -56,6 +56,21 @@ class Appearance(unittest.TestCase):
 
 
 class Compatibility(unittest.TestCase):
+    def test_audio_routes_to_native_desktop_without_a_picker_or_system_subprocess(self):
+        compat=load('audio_compat_test','lucent-compat.py')
+        with patch.object(compat,'cli',return_value='ok') as cli, patch.object(compat.subprocess,'Popen') as popen:
+            self.assertEqual(compat.panel('omarchy.audio',True),'ok')
+            cli.assert_called_once_with('audio','toggle')
+            cli.reset_mock()
+            self.assertEqual(compat.panel('audio'),'ok')
+            cli.assert_called_once_with('audio','open')
+            popen.assert_not_called()
+        controls=load('audio_controls_test','lucent-controls.py')
+        with patch.object(controls,'output') as output, patch.object(controls,'choose') as choose:
+            controls.audio()
+            output.assert_called_once_with(str(Path.home()/'.local/bin/lucent-cli'),'audio','open')
+            choose.assert_not_called()
+
     def test_migration_rejects_old_or_unrendered_clients(self):
         setup=load('readiness_test','lucent-setup.py')
         for state in [{}, {'client':{'theme_error':''},'surfaces':[{'id':'background','frames':0}]}]:

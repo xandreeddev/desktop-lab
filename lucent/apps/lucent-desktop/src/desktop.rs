@@ -23,8 +23,7 @@ pub enum Message {
     Compositor(domain::Result<CompositorSnapshot>),
     Clock(ClockSnapshot),
     System(domain::Result<SystemSnapshot>),
-    Audio(domain::Result<AudioSnapshot>),
-    AudioCompleted(domain::Result<()>),
+    Audio(crate::audio::Message),
     Media(domain::Result<MediaSnapshot>),
     Weather(domain::Result<WeatherSnapshot>),
     Launcher(launcher::Message),
@@ -107,7 +106,7 @@ impl Desktop {
             compositor: CompositorSnapshot::default(),
             clock: adapters.clock.now(),
             system: SystemSnapshot::default(),
-            audio: Default::default(),
+            audio: crate::audio::Audio::new(adapters.audio.clone()),
             media: MediaSnapshot::default(),
             weather: None,
             browser: Default::default(),
@@ -400,10 +399,13 @@ impl Desktop {
             _ => None,
         };
         if let Some(command) = command {
-            let adapter = self.adapters.audio.clone();
-            effects.task_on("audio", move || {
-                Message::AudioCompleted(adapter.control(command))
-            });
+            effects.delegate(
+                |child| {
+                    self.audio
+                        .update(crate::audio::Message::Request(command), child)
+                },
+                Message::Audio,
+            );
             return;
         }
         let adapters = self.adapters.clone();
@@ -429,6 +431,7 @@ impl Component for Desktop {
     type Message = Message;
     fn view(&self, cx: &ViewContext) -> Element<Message> {
         self.theme().apply(match cx.surface {
+            "audio" => self.audio.view(cx, self.theme()).map(Message::Audio),
             "osd" => self.osd.view(cx, self.theme()),
             "background" => self
                 .wallpaper
@@ -598,16 +601,13 @@ impl Component for Desktop {
                 self.system = value;
             }
             Message::System(Err(_)) => {}
-            Message::Audio(value) => {
-                if self.audio.observe(value) {
-                    effects.redraw("bar");
+            Message::Audio(message) => {
+                let opening = matches!(message, crate::audio::Message::Open)
+                    || matches!(message, crate::audio::Message::Toggle) && !self.audio.open();
+                if opening {
+                    self.update_launcher(launcher::Message::Close, effects);
                 }
-            }
-            Message::AudioCompleted(result) => {
-                if let Err(error) = &result {
-                    self.error = error.to_string();
-                }
-                self.audio.completed(result);
+                effects.delegate(|child| self.audio.update(message, child), Message::Audio);
             }
             Message::Media(result) => {
                 let value = result.unwrap_or_default();
@@ -622,7 +622,15 @@ impl Component for Desktop {
                 effects.redraw("bar");
                 effects.redraw("widgets");
             }
-            Message::Launcher(message) => self.update_launcher(message, effects),
+            Message::Launcher(message) => {
+                self.update_launcher(message, effects);
+                if self.launcher.open() {
+                    effects.delegate(
+                        |child| self.audio.update(crate::audio::Message::Close, child),
+                        Message::Audio,
+                    );
+                }
+            }
             Message::Launch(id, prefer) => {
                 self.launch(&id, prefer, effects);
                 self.update_launcher(launcher::Message::Close, effects);
@@ -817,6 +825,11 @@ impl Component for Desktop {
 }
 impl api::Application for Desktop {
     fn runtime_failure(&self, failure: api::RuntimeFailure) -> Option<Message> {
+        if failure.source == "effect queue audio" {
+            return Some(Message::Audio(crate::audio::Message::Control(
+                crate::audio::commands::Message::WorkerFailed(failure.to_string()),
+            )));
+        }
         if failure.source == "effect queue previews" {
             return Some(Message::Previews(crate::previews::Message::WorkerFailed(
                 failure.to_string(),
@@ -848,6 +861,21 @@ impl api::Application for Desktop {
     }
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         vec![
+            SurfaceSpec {
+                id: "audio",
+                layer: Layer::Overlay,
+                anchor: Anchor::Fill,
+                width: 0,
+                height: 0,
+                exclusive_zone: -1,
+                keyboard: if self.audio.open() {
+                    Keyboard::Exclusive
+                } else {
+                    Keyboard::None
+                },
+                visible: self.audio.visible(),
+                capture_all: self.audio.open(),
+            },
             SurfaceSpec {
                 id: "osd",
                 layer: Layer::Overlay,
@@ -947,7 +975,7 @@ impl api::Application for Desktop {
         let mut s = vec![
             Subscription::stream("audio", move |out, cancel| {
                 audio.watch(
-                    &mut |value| out.send(Message::Audio(value)),
+                    &mut |value| out.send(Message::Audio(crate::audio::Message::Observed(value))),
                     &WatchStop(cancel),
                 );
             }),
@@ -974,6 +1002,14 @@ impl api::Application for Desktop {
                 Message::Weather(weather.snapshot())
             }),
         ];
+        for subscription in self.audio.subscriptions() {
+            s.push(Subscription::stream(subscription.id, move |out, cancel| {
+                (subscription.run)(
+                    Emitter::new(move |message| out.send(Message::Audio(message))),
+                    cancel,
+                );
+            }));
+        }
         for subscription in self.browser.subscriptions(&self.adapters) {
             s.push(Subscription::stream(subscription.id, move |out, cancel| {
                 (subscription.run)(
@@ -1001,6 +1037,13 @@ impl api::Application for Desktop {
     }
     fn event(&self, event: Event) -> Option<Message> {
         match event {
+            Event::Key {
+                surface: "audio",
+                key: Key::Escape,
+            } => Some(Message::Audio(crate::audio::Message::Close)),
+            Event::Key {
+                surface: "audio", ..
+            } => None,
             Event::Resize {
                 surface,
                 width,
@@ -1110,6 +1153,9 @@ impl api::Application for Desktop {
             return Ok(Some(Message::LauncherSize(size)));
         }
         Ok(Some(match command {
+            "audio open" => Message::Audio(crate::audio::Message::Open),
+            "audio toggle" => Message::Audio(crate::audio::Message::Toggle),
+            "audio close" => Message::Audio(crate::audio::Message::Close),
             "bar show" => Message::Bar(true),
             "bar hide" => Message::Bar(false),
             "osd close" => Message::OsdClose,
@@ -1144,7 +1190,8 @@ impl api::Application for Desktop {
         }, "palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_history_open":self.notifications.history_open,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":self.widgets.grid_visible(),"notes":self.settings.notes,"timer_seconds":self.widgets.timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"settings_save_status":self.persistence.status(self.settings_writable).name(),"settings_save_error":self.persistence.error(),"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable}).to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
-        (surface == "osd" && self.osd.animating(now))
+        (surface == "audio" && self.audio.animating(now))
+            || (surface == "osd" && self.osd.animating(now))
             || (surface == "dock" && (self.launcher.animating(now) || self.carousel.active(now)))
     }
 }

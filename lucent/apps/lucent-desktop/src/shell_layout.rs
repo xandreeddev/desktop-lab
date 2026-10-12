@@ -25,6 +25,24 @@ pub fn panel_origin(viewport: (f32, f32), size: (f32, f32)) -> (f32, f32) {
         bottom(viewport.1) - size.1,
     )
 }
+pub fn audio_panel(viewport: (f32, f32)) -> Rect {
+    use lucent_design::component::audio;
+    let width = floor(
+        audio::WIDTH.min(viewport.0 - layout::SHELL_INSET * 2.),
+        layout::SHELL_STEP,
+    );
+    let top = panel::BAR_HEIGHT + layout::SHELL_INSET;
+    let height = floor(
+        audio::HEIGHT.min(viewport.1 - top - layout::SHELL_INSET),
+        layout::SHELL_STEP,
+    );
+    Rect::new(
+        floor(viewport.0 - layout::SHELL_INSET - width, layout::SHELL_STEP),
+        top,
+        width,
+        height,
+    )
+}
 pub fn dock_capacity(viewport: f32) -> usize {
     let available = floor(viewport - layout::SHELL_INSET * 2., layout::SHELL_STEP * 2.);
     ((available - dock::CONTENT_INSET * 2. + space::SM) / (dock_row::ITEM_SIZE + space::SM))

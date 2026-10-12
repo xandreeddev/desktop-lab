@@ -48,20 +48,7 @@ def information(title, text):
 
 
 def audio():
-    while True:
-        rows = [('Volume up', 'Output +5%', ('wpctl','set-volume','-l','1.0','@DEFAULT_AUDIO_SINK@','5%+')),
-                ('Volume down', 'Output −5%', ('wpctl','set-volume','@DEFAULT_AUDIO_SINK@','5%-')),
-                ('Mute output', 'Toggle speakers', ('wpctl','set-mute','@DEFAULT_AUDIO_SINK@','toggle')),
-                ('Mute microphone', 'Toggle recording', ('wpctl','set-mute','@DEFAULT_AUDIO_SOURCE@','toggle'))]
-        for plural, singular in [('sinks','sink'),('sources','source')]:
-            current = output('pactl',f'get-default-{singular}')
-            for device in json.loads(output('pactl','-f','json','list',plural)):
-                name = device['name']
-                rows.append((device.get('description',name), ('Current ' if name == current else '') + ('output' if singular == 'sink' else 'input'),
-                             ('pactl',f'set-default-{singular}',name)))
-        action = choose('Audio', rows)
-        if action is None: return
-        output(*action)
+    output(str(Path.home()/'.local/bin/lucent-cli'), 'audio', 'open')
 
 
 def nm_fields(line):

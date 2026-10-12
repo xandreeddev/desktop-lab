@@ -402,6 +402,16 @@
   --component-scroll-example-height: 512px;
   --component-scroll-example-compact-height: 384px;
   --component-scroll-example-row-height: var(--space-wide);
+  --component-audio-width: 480px;
+  --component-audio-height: 640px;
+  --component-audio-header-height: var(--space-wide);
+  --component-audio-tab-height: var(--space-wide);
+  --component-audio-card-padding: var(--space-lg);
+  --component-audio-card-gap: var(--space-sm);
+  --component-audio-slide-distance: var(--space-xl);
+  --component-audio-volume-step: 0.05;
+  --component-audio-title-lines: 2;
+  --component-audio-status-lines: 3;
   --icon-tiny: 16px;
   --icon-small: 17px;
   --icon-compact: 18px;

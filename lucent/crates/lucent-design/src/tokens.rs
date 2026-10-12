@@ -508,6 +508,18 @@ pub mod component {
         pub const COMPACT_HEIGHT: f32 = 384.0;
         pub const ROW_HEIGHT: f32 = 40.0;
     }
+    pub mod audio {
+        pub const WIDTH: f32 = 480.0;
+        pub const HEIGHT: f32 = 640.0;
+        pub const HEADER_HEIGHT: f32 = 40.0;
+        pub const TAB_HEIGHT: f32 = 40.0;
+        pub const CARD_PADDING: f32 = 16.0;
+        pub const CARD_GAP: f32 = 8.0;
+        pub const SLIDE_DISTANCE: f32 = 20.0;
+        pub const VOLUME_STEP: f32 = 0.05;
+        pub const TITLE_LINES: f32 = 2.0;
+        pub const STATUS_LINES: f32 = 3.0;
+    }
 }
 pub mod icon {
     pub const TINY: f32 = 16.0;

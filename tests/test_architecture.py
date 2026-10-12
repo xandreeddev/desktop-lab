@@ -141,3 +141,10 @@ class Boundaries(unittest.TestCase):
             ('crate::desktop', 'crate::adapters', 'crate::platform', 'crate::ports'))
         for path in paths:
             self.assertNotRegex(path.read_text(), r'\b(?:Desktop|DesktopAdapters)\b', str(path))
+
+    def test_audio_child_depends_on_ports_without_the_root_or_adapter_bundle(self):
+        root = ROOT / 'lucent/apps/lucent-desktop/src'
+        paths = sources(root / 'audio') + [root / 'audio.rs']
+        self.assert_no_platform_operations(paths, ('crate::desktop', 'crate::adapters', 'crate::platform', 'crate::ports'))
+        for path in paths:
+            self.assertNotRegex(path.read_text(), r'\b(?:Desktop|DesktopAdapters)\b', str(path))

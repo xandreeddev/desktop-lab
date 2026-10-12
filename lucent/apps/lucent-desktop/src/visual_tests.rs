@@ -838,6 +838,7 @@ fn visual_regressions() {
     std::fs::create_dir_all(&report).unwrap();
     std::fs::create_dir_all(&baselines).unwrap();
     let update = std::env::var("LUCENT_UPDATE_GOLDENS").as_deref() == Ok("1");
+    let filter = std::env::var("LUCENT_VISUAL_FILTER").ok();
     let mut failures = vec![];
     let mut html = String::from(
         "<!doctype html><meta charset=utf-8><title>Lucent native visual checks</title><style>body{background:#19191d;color:#eee;font:16px system-ui;margin:40px}section{margin-bottom:48px}img{max-width:45%;vertical-align:top;border:1px solid #555}code{color:#c8b6ff}</style><h1>Lucent native visual checks</h1><p>Production Rust layout → Vulkan shader → fixed PNG. Left: actual; right: amplified difference. Pink marks changed pixels.</p>",
@@ -919,7 +920,22 @@ fn visual_regressions() {
             ("notes-failed", Mode::Apps, 0, 0, "", 1., 390.),
             ("notes-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("menu-submenu", Mode::Apps, 0, 0, "", 1., 640.),
+            ("audio-loading", Mode::Apps, 0, 0, "", 1., 640.),
+            ("audio-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
+            ("audio-outputs", Mode::Apps, 0, 0, "", 1., 640.),
+            ("audio-inputs", Mode::Apps, 0, 0, "", 1., 390.),
+            ("audio-apps", Mode::Apps, 0, 0, "", 1., 640.),
+            ("audio-route", Mode::Apps, 0, 0, "", 1., 390.),
+            ("audio-error", Mode::Apps, 0, 0, "", 1., 390.),
+            ("audio-opening", Mode::Apps, 0, 0, "", 0.12, 640.),
+            ("audio-last", Mode::Apps, 0, 0, "", 1., 390.),
         ] {
+            if filter
+                .as_ref()
+                .is_some_and(|filter| !name.starts_with(filter))
+            {
+                continue;
+            }
             let height = if name.starts_with("launcher-size-") {
                 1080.
             } else if name.starts_with("notes-") {
@@ -1176,6 +1192,61 @@ fn visual_regressions() {
                 };
                 let tree = session.view(&cx).map(|_| Message::Quit);
                 layout.build(&tree, width, height, &Interaction::default(), now)
+            } else if name.starts_with("audio-") {
+                use crate::audio::{Message as AudioMessage, panel::Tab};
+                app.update(Message::Audio(AudioMessage::Open), &mut Effects::default());
+                if name != "audio-loading" {
+                    let state = if name == "audio-unavailable" {
+                        Err(lucent_domain::DomainError::Unavailable(
+                            "The audio service disconnected".into(),
+                        ))
+                    } else {
+                        Ok(audio_fixture_snapshot())
+                    };
+                    app.update(
+                        Message::Audio(AudioMessage::Observed(state)),
+                        &mut Effects::default(),
+                    );
+                }
+                let tab = if name == "audio-inputs" {
+                    Tab::Inputs
+                } else if matches!(name, "audio-apps" | "audio-route") {
+                    Tab::Applications
+                } else {
+                    Tab::Outputs
+                };
+                app.update(
+                    Message::Audio(AudioMessage::Tab(tab)),
+                    &mut Effects::default(),
+                );
+                if name == "audio-route" {
+                    app.update(
+                        Message::Audio(AudioMessage::ChooseRoute(
+                            lucent_domain::AudioObjectId::new(100).unwrap(),
+                        )),
+                        &mut Effects::default(),
+                    );
+                }
+                if name == "audio-last" {
+                    app.update(
+                        Message::Audio(AudioMessage::Scroll(ScrollEvent { offset: 10000. })),
+                        &mut Effects::default(),
+                    );
+                }
+                if name == "audio-error" {
+                    app.update(
+                        Message::Audio(AudioMessage::Request(lucent_domain::AudioCommand::Raise)),
+                        &mut Effects::default(),
+                    );
+                    app.update(Message::Audio(AudioMessage::Control(crate::audio::commands::Message::WorkerFailed("The requested audio change failed; the observed device state is preserved".into()))), &mut Effects::default());
+                }
+                let cx = ViewContext {
+                    surface: "audio",
+                    width,
+                    height,
+                    now,
+                };
+                layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
             } else if name.starts_with("notification") {
                 app.notifications.snapshot=lucent_domain::NotificationSnapshot {active:vec![lucent_domain::Notification {id:1,app:"Lucent fixture".into(),summary:"A notification rendered by our framework".into(),body:"Shared design tokens, measured text wrapping, native actions and keyboard focus.".into(),actions:vec![lucent_domain::NotificationAction {id:"default".into(),label:"Open fixture".into()}],critical:false,resident:false,transient:false,timeout_ms:0}],..Default::default()};
                 app.notifications.ready = true;
@@ -2099,4 +2170,124 @@ fn wallpaper_ranges_match_visible_cards_and_bound_large_libraries() {
         }
     }
     assert!(launcher::visible_wallpapers(100, f32::NAN).is_empty());
+}
+
+fn audio_fixture_snapshot() -> lucent_domain::AudioSnapshot {
+    use lucent_domain::*;
+    let mut snapshot = crate::audio::fixture();
+    for index in 2..=6 {
+        snapshot.devices.push(AudioDevice {
+            id: AudioObjectId::new(index).unwrap(),
+            key: AudioDeviceKey::new(format!("fixture.{index}")).unwrap(),
+            name: format!(
+                "Device {index}: a deliberately long label to check wrapping and rounded insets"
+            ),
+            direction: if index % 2 == 0 {
+                AudioDirection::Capture
+            } else {
+                AudioDirection::Playback
+            },
+            volume: AudioVolume::new(0.42).unwrap(),
+            muted: false,
+            monitor: index == 6,
+        });
+    }
+    snapshot.default_input = Some(AudioObjectId::new(2).unwrap());
+    for index in 0..4 {
+        snapshot.streams.push(AudioStream {
+            id: AudioObjectId::new(100 + index).unwrap(),
+            name: format!("Example stream {index}"),
+            application: format!("Example application {index}"),
+            direction: if index == 3 {
+                AudioDirection::Capture
+            } else {
+                AudioDirection::Playback
+            },
+            device: Some(AudioObjectId::new(if index == 3 { 2 } else { 1 }).unwrap()),
+            volume: Some(AudioVolume::new(0.65).unwrap()),
+            volume_writable: index != 2,
+            muted: false,
+        });
+    }
+    snapshot
+}
+#[test]
+fn audio_panel_closes_competing_launcher_and_keyboard_reveals_controls_at_narrow_sizes() {
+    use crate::audio::{Message as AudioMessage, panel::Tab};
+    for (width, height) in [(390., 700.), (640., 580.), (1920., 1080.)] {
+        let mut app = fixture(0, false);
+        app.update(
+            Message::Audio(AudioMessage::Observed(Ok(audio_fixture_snapshot()))),
+            &mut Effects::default(),
+        );
+        app.update(Message::Audio(AudioMessage::Open), &mut Effects::default());
+        assert!(!app.launcher.open());
+        assert!(app.audio.open());
+        let layout = Layout::new(fonts(&app));
+        let cx = ViewContext {
+            surface: "audio",
+            width,
+            height,
+            now: 1.,
+        };
+        for tab in [Tab::Outputs, Tab::Inputs, Tab::Applications] {
+            app.update(
+                Message::Audio(AudioMessage::Tab(tab)),
+                &mut Effects::default(),
+            );
+            let mut input = Interaction::default();
+            let count = layout
+                .build(&app.view(&cx), width, height, &input, 1.)
+                .hits
+                .iter()
+                .filter(|h| h.tab_stop)
+                .count();
+            let mut visited = std::collections::BTreeSet::new();
+            for _ in 0..count {
+                let scene = layout.build(&app.view(&cx), width, height, &input, 1.);
+                input.synchronize(&scene);
+                for message in input.key(&scene, &Key::Tab) {
+                    app.update(message, &mut Effects::default());
+                }
+                let rendered = layout.build(&app.view(&cx), width, height, &input, 1.);
+                let hit = rendered
+                    .hits
+                    .iter()
+                    .find(|h| Some(&h.id) == input.focus.as_ref())
+                    .unwrap();
+                assert!(
+                    fully_visible(hit.rect, hit.clip.bounds),
+                    "cropped {} at {width}x{height}: {:?} clip {:?}",
+                    hit.id,
+                    hit.rect,
+                    hit.clip.bounds
+                );
+                visited.insert(hit.id.clone());
+            }
+            assert_eq!(
+                visited.len(),
+                count,
+                "unreachable audio control at {width}x{height}"
+            );
+        }
+        assert!(matches!(
+            app.event(Event::Key {
+                surface: "audio",
+                key: Key::Escape
+            }),
+            Some(Message::Audio(AudioMessage::Close))
+        ));
+        assert!(
+            app.event(Event::Key {
+                surface: "audio",
+                key: Key::Tab
+            })
+            .is_none()
+        );
+        app.update(
+            Message::Launcher(launcher::Message::Mode(Mode::Apps)),
+            &mut Effects::default(),
+        );
+        assert!(!app.audio.open());
+    }
 }
