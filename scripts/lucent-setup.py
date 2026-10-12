@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+from lucent_readiness import desktop_rendered
 
 ROOT = Path(__file__).resolve().parent.parent
 HOME = Path.home()
@@ -48,6 +49,7 @@ def install(binary_dir):
     helper = HOME / '.local/lib/lucent/session.py'
     helper.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(ROOT / 'scripts/lucent-session.py', helper)
+    shutil.copy2(ROOT / 'scripts/lucent_readiness.py', helper.parent / 'lucent_readiness.py')
     unit = HOME / '.config/systemd/user/lucent.service'
     unit.parent.mkdir(parents=True, exist_ok=True)
     unit.write_text('''[Unit]
@@ -148,8 +150,7 @@ RestartSec=1
 def native_ready():
     result=subprocess.run([str(HOME/'.local/bin/lucent-cli'),'inspect'],check=True,capture_output=True,text=True,timeout=3)
     state=json.loads(result.stdout)
-    rendered={surface['id'] for surface in state.get('surfaces',[]) if surface.get('frames',0)>0}
-    if not {'background','dock','widgets'}<=rendered or 'theme_error' not in state.get('client',{}):
+    if not desktop_rendered(state, ('background', 'dock')):
         raise SystemExit('Run the current native desktop and wait for its first frames before activation')
 
 

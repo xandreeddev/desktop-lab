@@ -158,7 +158,7 @@ def main():
             assert wallpaper.fingerprint() == original
             vm.remote('rm', '-f', backup)
     report['source_preferences_output_and_idle_restored'] = True
-    report['restarts_explicit_only'] = vm.remote('pgrep', '-x', 'lucent-desktop').strip() != pid
+    report['explicit_service_restart_changed_desktop_pid'] = vm.remote('pgrep', '-x', 'lucent-desktop').strip() != pid
     (vm.REPORT / 'lucent-widget-surfaces-integration.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2))
 

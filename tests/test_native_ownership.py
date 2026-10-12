@@ -56,6 +56,29 @@ class Appearance(unittest.TestCase):
 
 
 class Compatibility(unittest.TestCase):
+    def test_readiness_requires_every_declared_group_and_supports_hidden_widgets(self):
+        from lucent_readiness import desktop_rendered
+        state={'client':{'theme_error':'','widget_surfaces':[{'id':'calendar'},{'id':'clock'}]},
+               'surfaces':[{'id':name,'frames':1} for name in ('background','bar','dock','calendar','clock')]}
+        self.assertTrue(desktop_rendered(state))
+        state['surfaces'][-1]['frames']=0
+        self.assertFalse(desktop_rendered(state))
+        state['client']['widget_surfaces']=[]
+        self.assertTrue(desktop_rendered(state))
+        state['client']['widget_surfaces']=[{'id':'calendar'},{'id':'calendar'}]
+        self.assertFalse(desktop_rendered(state))
+        state['client']['widget_surfaces']=[{}]
+        self.assertFalse(desktop_rendered(state))
+        self.assertFalse(desktop_rendered({'client':None,'surfaces':[]}))
+
+    def test_readiness_accepts_the_previous_fullscreen_native_client(self):
+        from lucent_readiness import desktop_rendered
+        state={'client':{'theme_error':''},
+               'surfaces':[{'id':name,'frames':1} for name in ('background','bar','dock','widgets')]}
+        self.assertTrue(desktop_rendered(state))
+        state['surfaces'].pop()
+        self.assertFalse(desktop_rendered(state))
+
     def test_audio_routes_to_native_desktop_without_a_picker_or_system_subprocess(self):
         compat=load('audio_compat_test','lucent-compat.py')
         with patch.object(compat,'cli',return_value='ok') as cli, patch.object(compat.subprocess,'Popen') as popen:
@@ -77,6 +100,9 @@ class Compatibility(unittest.TestCase):
             with patch.object(setup.subprocess,'run',return_value=SimpleNamespace(stdout=json.dumps(state))):
                 with self.assertRaises(SystemExit):setup.native_ready()
         state={'client':{'theme_error':''},'surfaces':[{'id':name,'frames':1} for name in ('background','dock','widgets')]}
+        with patch.object(setup.subprocess,'run',return_value=SimpleNamespace(stdout=json.dumps(state))):setup.native_ready()
+        state['client']['widget_surfaces']=[{'id':'calendar'}]
+        state['surfaces'][-1]={'id':'calendar','frames':1}
         with patch.object(setup.subprocess,'run',return_value=SimpleNamespace(stdout=json.dumps(state))):setup.native_ready()
 
     def test_process_matching_never_stops_other_quickshell_profiles(self):
