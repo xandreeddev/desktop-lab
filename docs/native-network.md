@@ -51,6 +51,9 @@ Adding a port does not establish a usable native network panel.
    removal notices before publishing IDs and suppresses unchanged snapshots.
    If an object disappears during a multi-call query, its handle is retired and
    the query retries within the same deadline; unrelated handles remain valid.
+   GDBus can return `UnknownMethod` for these removed objects. Only known reads
+   of dynamic objects treat that response as removal; unsupported control or
+   root methods still fail, and repeated query failures exhaust the deadline.
    The idle timer bounds cancellation; it does **not** poll network state.
 5. A caller on another effect/worker thread consumes `NetworkCommand` into
    `control`. A bounded channel wakes the owner. The owner resolves current IDs,

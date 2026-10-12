@@ -88,7 +88,9 @@ impl Transport {
                 body,
             )
             .await;
-        if matches!(&result, Err(zbus::Error::MethodError(name, _, _)) if name.as_str().ends_with("UnknownObject"))
+        if result
+            .as_ref()
+            .is_err_and(|error| removed_object(error, path, interface, member))
         {
             self.missing.borrow_mut().insert(path.to_owned());
         }
@@ -106,6 +108,26 @@ impl Transport {
         .deserialize()
         .map_err(|_| protocol())
     }
+}
+fn removed_object(error: &zbus::Error, path: &str, interface: &str, member: &str) -> bool {
+    let zbus::Error::MethodError(name, _, _) = error else {
+        return false;
+    };
+    if name.as_str().ends_with("UnknownObject") {
+        return true;
+    }
+    // GDBus returns UnknownMethod for GetAll on an object removed after its
+    // parent catalog was read. Only known reads of dynamic objects may retry;
+    // unsupported controls or root methods must retain their actual failure.
+    name.as_str() == "org.freedesktop.DBus.Error.UnknownMethod"
+        && path.starts_with("/org/freedesktop/NetworkManager/")
+        && path != SETTINGS
+        && matches!(
+            (interface, member),
+            ("org.freedesktop.DBus.Properties", "GetAll")
+                | (PROFILE, "GetSettings")
+                | (WIFI, "GetAllAccessPoints")
+        )
 }
 pub(super) async fn connect(
     address: Option<&str>,

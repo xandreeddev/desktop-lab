@@ -72,9 +72,10 @@ struct State {
     joins: Vec<RecordedJoin>,
     scan_delay: Duration,
     scan_denied: bool,
+    scan_unknown: bool,
     flood: usize,
     oversized: bool,
-    missing_reads: usize,
+    missing_read: Option<zbus::fdo::Error>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -92,9 +93,10 @@ impl Default for State {
             joins: vec![],
             scan_delay: Duration::ZERO,
             scan_denied: false,
+            scan_unknown: false,
             flood: 0,
             oversized: false,
-            missing_reads: 0,
+            missing_read: None,
         }
     }
 }
@@ -277,11 +279,21 @@ impl Wireless {
         _options: Properties,
         #[zbus(connection)] conn: &Connection,
     ) -> zbus::fdo::Result<()> {
-        let (delay, denied, flood) = {
+        let (delay, denied, unknown, flood) = {
             let mut state = self.0.lock().unwrap();
             state.scans += 1;
-            (state.scan_delay, state.scan_denied, state.flood)
+            (
+                state.scan_delay,
+                state.scan_denied,
+                state.scan_unknown,
+                state.flood,
+            )
         };
+        if unknown {
+            return Err(zbus::fdo::Error::UnknownMethod(
+                "Unsupported control".into(),
+            ));
+        }
         if denied {
             return Err(zbus::fdo::Error::AccessDenied(
                 "test-password must never reach client diagnostics".into(),
@@ -345,11 +357,8 @@ impl Profile {
         {
             let mut state = self.0.lock().unwrap();
             state.query_count += 1;
-            if state.missing_reads != 0 {
-                state.missing_reads -= 1;
-                return Err(zbus::fdo::Error::UnknownObject(
-                    "Removed during query".into(),
-                ));
+            if let Some(error) = state.missing_read.take() {
+                return Err(error);
             }
         }
         Ok(Settings::from([
@@ -735,6 +744,22 @@ fn signal_burst_is_drained_during_commands_and_errors_do_not_echo_credentials() 
         .to_string();
     assert_eq!(error, "Network permission denied");
     assert!(!error.contains("test-password"));
+    {
+        let mut state = service.state.lock().unwrap();
+        state.scan_denied = false;
+        state.scan_unknown = true;
+    }
+    let error = watch
+        .adapter
+        .control(NetworkCommand::Scan(ready.devices[0].id))
+        .unwrap_err();
+    assert!(matches!(error, DomainError::Failed(_)));
+    service.state.lock().unwrap().scan_unknown = false;
+    watch
+        .adapter
+        .control(NetworkCommand::Scan(ready.devices[0].id))
+        .unwrap();
+    assert_eq!(watch.errors.load(Ordering::Relaxed), 0);
     let mut errors = vec![];
     watch.adapter.watch(&mut |v| errors.push(v), &*watch.stop);
     assert!(matches!(
@@ -779,23 +804,28 @@ fn absolute_deadline_cancellation_and_catalog_bounds_are_observable() {
 }
 #[test]
 fn disappearing_query_objects_retire_only_affected_handles_and_settle_before_publication() {
-    let bus = Bus::new();
-    let service = Service::new(&bus);
-    let watch = Watch::new(&bus, Duration::from_secs(3));
-    let initial = watch.ready();
-    service.state.lock().unwrap().missing_reads = 1;
-    service.changed(SAVED, PROFILE);
-    let next = watch.until(|v| v.profiles[0].id != initial.profiles[0].id);
-    assert_eq!(next.devices[0].id, initial.devices[0].id);
-    assert_eq!(next.access_points[0].id, initial.access_points[0].id);
-    assert_eq!(watch.errors.load(Ordering::Relaxed), 0);
-    assert!(
-        watch
-            .adapter
-            .control(NetworkCommand::Forget(initial.profiles[0].id))
-            .is_err()
-    );
-    assert!(service.state.lock().unwrap().saved);
+    for error in [
+        zbus::fdo::Error::UnknownObject("Removed during query".into()),
+        zbus::fdo::Error::UnknownMethod("Removed during GDBus query".into()),
+    ] {
+        let bus = Bus::new();
+        let service = Service::new(&bus);
+        let watch = Watch::new(&bus, Duration::from_secs(3));
+        let initial = watch.ready();
+        service.state.lock().unwrap().missing_read = Some(error);
+        service.changed(SAVED, PROFILE);
+        let next = watch.until(|v| v.profiles[0].id != initial.profiles[0].id);
+        assert_eq!(next.devices[0].id, initial.devices[0].id);
+        assert_eq!(next.access_points[0].id, initial.access_points[0].id);
+        assert_eq!(watch.errors.load(Ordering::Relaxed), 0);
+        assert!(
+            watch
+                .adapter
+                .control(NetworkCommand::Forget(initial.profiles[0].id))
+                .is_err()
+        );
+        assert!(service.state.lock().unwrap().saved);
+    }
 }
 
 #[test]
