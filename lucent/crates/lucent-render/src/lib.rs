@@ -1,5 +1,5 @@
 //! Shared Vulkan device and cached text/image resources for arbitrary framework scenes.
-use lucent_api::{Align, Rect};
+use lucent_api::{Align, ImageFormat, Rect};
 use lucent_ui::Paint;
 use std::{
     cell::RefCell,
@@ -199,6 +199,7 @@ impl Gpu {
     fn texture(
         &self,
         levels: &[lucent_api::ImageLevel],
+        format: ImageFormat,
         profile: &mut ResourceProfile,
         enabled: bool,
     ) -> Rc<TextureResource> {
@@ -215,7 +216,10 @@ impl Gpu {
             mip_level_count: levels.len() as u32,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: TextureFormat::Rgba8Unorm,
+            format: match format {
+                ImageFormat::PremultipliedRgba8 => TextureFormat::Rgba8Unorm,
+                ImageFormat::Alpha8 => TextureFormat::R8Unorm,
+            },
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -227,10 +231,10 @@ impl Gpu {
                     origin: Origin3d::ZERO,
                     aspect: TextureAspect::All,
                 },
-                &pixels.rgba,
+                &pixels.pixels,
                 TexelCopyBufferLayout {
                     offset: 0,
-                    bytes_per_row: Some(pixels.width * 4),
+                    bytes_per_row: Some(pixels.width * format.bytes_per_pixel()),
                     rows_per_image: Some(pixels.height),
                 },
                 Extent3d {
@@ -260,7 +264,7 @@ impl Gpu {
             width: width as f32,
             height: height as f32,
             _texture: texture,
-            bytes: levels.iter().map(|level| level.rgba.len() as u64).sum(),
+            bytes: levels.iter().map(|level| level.pixels.len() as u64).sum(),
         });
         if enabled {
             profile.texture_upload += profiling::elapsed(started);
@@ -276,8 +280,9 @@ impl Gpu {
             &[lucent_api::ImageLevel {
                 width: 1,
                 height: 1,
-                rgba: vec![255; 4],
+                pixels: vec![255; 4],
             }],
+            ImageFormat::PremultipliedRgba8,
             profile,
             enabled,
         );
@@ -297,7 +302,7 @@ impl Gpu {
         if enabled {
             profile.image_misses += 1;
         }
-        let texture = self.texture(data.levels(), profile, enabled);
+        let texture = self.texture(data.levels(), data.format(), profile, enabled);
         self.cache
             .borrow_mut()
             .insert(key, texture.clone(), texture.bytes);
@@ -337,8 +342,9 @@ impl Gpu {
             &[lucent_api::ImageLevel {
                 width,
                 height,
-                rgba: pixels,
+                pixels,
             }],
+            ImageFormat::Alpha8,
             profile,
             enabled,
         );
@@ -539,7 +545,11 @@ impl Canvas {
                     tint.alpha(tint.3 * *opacity),
                     *radius,
                     1.,
-                    0.,
+                    if data.format() == ImageFormat::Alpha8 {
+                        1.
+                    } else {
+                        0.
+                    },
                     self.gpu.image(data, &mut profile.resources, self.profiling),
                 ),
                 Paint::Text {
@@ -586,7 +596,7 @@ impl Canvas {
                         *color,
                         0.,
                         1.,
-                        0.,
+                        1.,
                         texture,
                     )
                 }
@@ -868,6 +878,69 @@ impl Drop for Canvas {
 mod resource_tests {
     use super::*;
     use lucent_api::{Color, ImageData};
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn alpha_masks_match_rgba_coverage_and_cache_payloads() {
+        let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
+        let mut canvas = Canvas::new(gpu.clone());
+        let coverage: Vec<u8> = (0..65 * 37).map(|n| (n * 73) as u8).collect();
+        let rgba: Vec<u8> = coverage.iter().flat_map(|a| [255, 255, 255, *a]).collect();
+        let mask = Arc::new(ImageData::from_alpha("same name", 65, 37, coverage).unwrap());
+        let color = Arc::new(ImageData::from_rgba("same name", 65, 37, rgba).unwrap());
+        assert_eq!(mask.bytes() * 4, color.bytes());
+        let mut scenes = Vec::new();
+        for data in [mask.clone(), color.clone()] {
+            let mut paint = Vec::new();
+            for (x, size, opacity, tint) in [
+                (1.25, 6., 1., Color::hex(0xffffff)),
+                (14.5, 16., 0.7, Color::hex(0x427fa8)),
+                (38., 53., 0.9, Color::hex(0xf2718b).alpha(0.6)),
+            ] {
+                let rect = Rect::new(x, 3.25, size, size);
+                paint.push(Paint::Image {
+                    rect,
+                    clip: Rect::new(0.5, 1.25, 91., 65.).into(),
+                    data: data.clone(),
+                    uv: Rect::new(0.125, 0.1, 0.75, 0.8),
+                    radius: 2.5,
+                    opacity,
+                    tint,
+                });
+            }
+            scenes.push(paint);
+        }
+        canvas.profiling = true;
+        for scale in [1, 2] {
+            let mask_pixels = canvas.snapshot(93, 68, scale, &scenes[0]).unwrap();
+            let color_pixels = canvas.snapshot(93, 68, scale, &scenes[1]).unwrap();
+            assert_eq!(
+                mask_pixels, color_pixels,
+                "mask changed coverage at scale {scale}"
+            );
+            assert!(
+                mask_pixels
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .any(|p| p[3] > 0 && p[3] < 255)
+            );
+            assert_eq!(
+                canvas.last_profile.unwrap().resources.image_misses,
+                u64::from(scale == 1)
+            );
+        }
+        assert_eq!(
+            gpu.cache_stats().bytes,
+            (mask.bytes() + color.bytes()) as u64
+        );
+        assert_eq!(gpu.cache_stats().entries, 2);
+        canvas.snapshot(93, 68, 2, &scenes[0]).unwrap();
+        assert_eq!(
+            canvas.last_profile.unwrap().resources.texture_upload_bytes,
+            0
+        );
+    }
 
     #[test]
     #[ignore = "requires a Vulkan driver"]

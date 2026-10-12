@@ -76,8 +76,12 @@ fn fixture(count: usize, light: bool) -> Desktop {
         if let Some(asset) = lucent_design::app_icons::lookup(a.id.as_str()) {
             app.images.insert(
                 format!("app:{}", a.id.as_str()),
-                lucent_services::images::svg(asset.svg, 128, format!("lucent-app:{}", asset.id))
-                    .unwrap(),
+                lucent_services::images::svg_mask(
+                    asset.svg,
+                    128,
+                    format!("lucent-app:{}", asset.id),
+                )
+                .unwrap(),
             );
         }
     }
@@ -765,17 +769,9 @@ fn catalog_uses_desktop_identity_and_every_icon_rasterizes() {
     assert!(lookup("Foot").is_none());
     let mut pixels = std::collections::BTreeSet::new();
     for asset in ALL {
-        let image = lucent_services::images::svg(asset.svg, 64, asset.id.into()).unwrap();
-        assert!(image.pixels().as_chunks::<4>().0.iter().any(|p| p[3] > 0));
-        assert!(
-            image
-                .pixels()
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .all(|p| p[0] == p[1] && p[1] == p[2]),
-            "artwork remains monochrome before theme tinting"
-        );
+        let image = lucent_services::images::svg_mask(asset.svg, 64, asset.id.into()).unwrap();
+        assert_eq!(image.format(), ImageFormat::Alpha8);
+        assert!(image.pixels().iter().any(|a| *a > 0));
         assert!(
             pixels.insert(image.pixels().to_vec()),
             "each app pictogram is distinct"
@@ -1614,7 +1610,7 @@ fn visual_regressions() {
                 let icons = lucent_design::app_icons::ALL
                     .iter()
                     .map(|asset| {
-                        let image = lucent_services::images::svg(
+                        let image = lucent_services::images::svg_mask(
                             asset.svg,
                             128,
                             format!("catalog:{}", asset.id),
