@@ -51,7 +51,12 @@ fn round_distance(point:vec2<f32>,rect:vec4<f32>,requested_radius:f32)->f32 {
     let clip_aa=max(fwidthFine(clip_distance),0.3);
     coverage=min(coverage,1.0-smoothstep(-clip_aa,clip_aa,clip_distance));
     var pixel=vec4(1.0);
-    if v.params.y>0.5&&v.params.y<1.5 {pixel=textureSample(image,filtering,v.uv.xy+(v.local/v.rect.zw)*v.uv.zw);}
+    if v.params.y>0.5&&v.params.y<1.5 {
+        pixel=textureSample(image,filtering,v.uv.xy+(v.local/v.rect.zw)*v.uv.zw);
+        // Single-channel masks sample coverage from R8. Reconstruct the same
+        // premultiplied white RGBA that tint/opacity used before compression.
+        if v.params.z>0.5 {pixel=vec4(pixel.r);}
+    }
     // Keep clipped lanes through derivative evaluation and implicit-LOD sampling.
     // Early discard faded the last corner of odd-sized images on llvmpipe.
     if any(point<v.clip.xy)||any(point>=v.clip.xy+v.clip.zw){discard;}

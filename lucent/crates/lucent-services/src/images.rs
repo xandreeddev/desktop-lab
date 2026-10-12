@@ -141,15 +141,7 @@ pub fn icon(name: &str) -> Option<Arc<ImageData>> {
 }
 /// Rasterize bundled vector artwork on the effect worker. The view only references pixels.
 pub fn svg(source: &str, size: u32, key: String) -> Option<Arc<ImageData>> {
-    let tree = resvg::usvg::Tree::from_str(source, &Default::default()).ok()?;
-    let mut pixmap = resvg::tiny_skia::Pixmap::new(size, size)?;
-    let factor = size as f32 / tree.size().width().max(tree.size().height());
-    resvg::render(
-        &tree,
-        resvg::tiny_skia::Transform::from_scale(factor, factor),
-        &mut pixmap.as_mut(),
-    );
-    let mut rgba = pixmap.take();
+    let mut rgba = raster_svg(source, size)?;
     for p in rgba.as_chunks_mut::<4>().0.iter_mut() {
         if p[3] > 0 {
             for c in 0..3 {
@@ -158,6 +150,29 @@ pub fn svg(source: &str, size: u32, key: String) -> Option<Arc<ImageData>> {
         }
     }
     Some(Arc::new(ImageData::from_rgba(key, size, size, rgba).ok()?))
+}
+/// Explicitly prepare only SVG coverage. Use for artwork whose color is supplied
+/// by the client theme; arbitrary colored XDG icons continue through `svg/load`.
+pub fn svg_mask(source: &str, size: u32, key: String) -> Option<Arc<ImageData>> {
+    let rgba = raster_svg(source, size)?;
+    let coverage = rgba.as_chunks::<4>().0.iter().map(|p| p[3]).collect();
+    Some(Arc::new(
+        ImageData::from_alpha(key, size, size, coverage).ok()?,
+    ))
+}
+fn raster_svg(source: &str, size: u32) -> Option<Vec<u8>> {
+    if size == 0 || size > 4096 {
+        return None;
+    }
+    let tree = resvg::usvg::Tree::from_str(source, &Default::default()).ok()?;
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(size, size)?;
+    let factor = size as f32 / tree.size().width().max(tree.size().height());
+    resvg::render(
+        &tree,
+        resvg::tiny_skia::Transform::from_scale(factor, factor),
+        &mut pixmap.as_mut(),
+    );
+    Some(pixmap.take())
 }
 
 /// Official Material Symbols Rounded; pinned SVG sources and Apache-2.0 license
@@ -199,6 +214,18 @@ pub fn symbol(name: &str, color: &str) -> Arc<ImageData> {
         &mut pixmap.as_mut(),
     );
     let mut rgba = pixmap.take();
+    if color == "#ffffff" {
+        let coverage = rgba.as_chunks::<4>().0.iter().map(|p| p[3]).collect();
+        return Arc::new(
+            ImageData::from_alpha(
+                format!("material-rounded:{name}:{color}"),
+                SYMBOL_PIXELS,
+                SYMBOL_PIXELS,
+                coverage,
+            )
+            .expect("bundled symbol dimensions are bounded"),
+        );
+    }
     for p in rgba.as_chunks_mut::<4>().0.iter_mut() {
         if p[3] > 0 {
             for c in 0..3 {
@@ -215,4 +242,40 @@ pub fn symbol(name: &str, color: &str) -> Arc<ImageData> {
         )
         .expect("bundled symbol dimensions are bounded"),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lucent_api::ImageFormat;
+
+    #[test]
+    fn explicit_svg_masks_keep_coverage_and_colored_images_keep_color() {
+        let source = "<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><circle cx='12' cy='12' r='9.5' fill='white'/></svg>";
+        let mask = svg_mask(source, 65, "mask".into()).unwrap();
+        let image = svg(source, 65, "rgba".into()).unwrap();
+        assert_eq!(mask.format(), ImageFormat::Alpha8);
+        assert_eq!(image.format(), ImageFormat::PremultipliedRgba8);
+        assert_eq!(mask.bytes() * 4, image.bytes());
+        for (mask, image) in mask.levels().iter().zip(image.levels()) {
+            let expanded: Vec<u8> = mask.pixels.iter().flat_map(|a| [*a; 4]).collect();
+            assert_eq!(expanded, image.pixels);
+        }
+        let colored = svg(&source.replace("white", "#cc3322"), 65, "color".into()).unwrap();
+        assert!(
+            colored
+                .pixels()
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|p| p[0] != p[1])
+        );
+        assert!(svg_mask(source, 0, "bad".into()).is_none());
+        assert!(svg_mask(source, 4097, "bad".into()).is_none());
+        let white = symbol("sun", "#ffffff");
+        let colored = symbol("sun", "#cc3322");
+        assert_eq!(white.format(), ImageFormat::Alpha8);
+        assert_eq!(colored.format(), ImageFormat::PremultipliedRgba8);
+        assert_eq!(white.bytes() * 4, colored.bytes());
+    }
 }

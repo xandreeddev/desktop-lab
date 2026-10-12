@@ -8,7 +8,9 @@ pub use slider::{SliderEvent, SliderSpec, SliderStyle};
 mod clip;
 pub use clip::{Clip, RoundedRect};
 mod image;
-pub use image::{ImageData, ImageError, ImageLevel, reduce_premultiplied};
+pub use image::{
+    ImageData, ImageError, ImageFormat, ImageLevel, reduce_alpha, reduce_premultiplied,
+};
 use std::{
     collections::BTreeSet,
     sync::{Arc, Condvar, Mutex},

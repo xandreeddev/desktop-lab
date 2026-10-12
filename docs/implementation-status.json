@@ -84,7 +84,8 @@
         "ImageData validates immutable premultiplied mip storage on asset workers",
         "GPU tests passed for cross-surface residency, release and same-name asset replacement",
         "78 Rust tests, 48 Python tests and 148 visual comparisons passed",
-        "Native VM launcher, shell restart and secure lock/unlock passed"
+        "Native VM launcher, shell restart and secure lock/unlock passed",
+        "Format-aware immutable Alpha8 images/mips and R8 textures preserve RGBA coverage while storing one channel. Text keeps 2x supersampling. Six final resource/pixel checks pass on each driver, 248 Rust tests pass, and all 248 existing visual references pass on the final allocation checkpoint (hardware locally, software in CI). The memory preference is a hint, not a budget. See reports/measurements/lucent-icon-masks.json."
       ]
     },
     {
@@ -161,7 +162,8 @@
         "Local previews now have bounded lazy ownership and deduplicated prepared-byte counters. Native 73-file browsing/retry/close checks and sequential 120-second runs passed: RSS 588.26 to 389.93 MiB; CPU 0.700% to 0.825%. The 200 MiB target is still unmet; online page lifetime, output-aware background preparation and hardware behavior remain separate work.",
         "Output-aware retained desktop pixels verified with bounded last-good refits and explicit retry. Native integer-scale/size changes and bursts preserve source/preferences and restore the output. Sequential 120-second normal runs with matching metadata: mean RSS 406.92 to 293.25 MiB; prepared background 48 to 12 MiB; main CPU 0.550% to 0.583%; idle background/closed dock zero frames. See lucent-wallpaper-resolution.json. The 200 MiB target, fullscreen overlays, decoding peaks and hardware behavior remain open.",
         "Compact dock keeps display-grid placement in a short bottom-anchored native buffer, with submission-gated open/close lifecycle. 216 Rust/62 Python checks, 16 paired pixel comparisons on each Vulkan driver, 212 unchanged visual baselines, native 1x/2x input/reopen/idle and existing desktop workflow pass. Fresh same-wallpaper/workload 120-second comparison: mean RSS 284.22 to 254.10 MiB; prepared assets match and closed dock/background submit zero idle frames. See lucent-dock-surface.json. The 200 MiB target, fullscreen widgets, hardware pacing and broader output support remain open.",
-        "Bounded widget groups preserve whole shadows and overlap order; stationary input-only sources support the native drag preview. 223 Rust/64 Python tests, 24 paired scenarios per Vulkan driver, 212 unchanged visuals, native scale/capture/release/restart and existing desktop workflow pass. Shared readiness prevents the old supervisor from stopping the new client after 30 seconds. Fresh matching 120-second software-Vulkan runs: mean RSS 252.18 to 224.93 MiB; prepared assets match, background/closed dock zero idle frames. See lucent-widget-surfaces.json. The 200 MiB target, hardware pacing, full-output overlays and broader feature groups remain open."
+        "Bounded widget groups preserve whole shadows and overlap order; stationary input-only sources support the native drag preview. 223 Rust/64 Python tests, 24 paired scenarios per Vulkan driver, 212 unchanged visuals, native scale/capture/release/restart and existing desktop workflow pass. Shared readiness prevents the old supervisor from stopping the new client after 30 seconds. Fresh matching 120-second software-Vulkan runs: mean RSS 252.18 to 224.93 MiB; prepared assets match, background/closed dock zero idle frames. See lucent-widget-surfaces.json. The 200 MiB target, hardware pacing, full-output overlays and broader feature groups remain open.",
+        "Explicit Alpha8 icons/text plus the supported wgpu MemoryUsage allocation preference retain density and pass pixel/resource checks. Matched clean-source 120-second same-boot VM runs reduce mean RSS 226.78 to 207.70 MiB (19.08 MiB); the 200 MiB target remains unmet. Native framework and 1x/2x widget workflows restore caller state. Actual GPU allocations, active overlay/decode peaks, hardware pacing, long idle and faults remain open; see reports/measurements/lucent-icon-masks.json."
       ]
     },
     {
@@ -947,6 +949,24 @@
         "Text shaping/fallback, IME, grapheme/caret/selection/clipboard editing, accessibility, touch and richer scrolling/focus lifecycle.",
         "Existing greeter ClearInput only clears secret storage, not the username; failed retries can append identity text. Test login used bounded Backspace and short Enter holds. This client bug is not fixed in this milestone.",
         "Secure-client build alignment/revalidation and the remaining acceptance ledger in docs/implementation-status.json."
+      ]
+    },
+    {
+      "id": "monochrome-coverage-and-allocation",
+      "report": "reports/measurements/lucent-icon-masks.json",
+      "source_commit": "3412d44a6080692391734fde8f608266f086cd02",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/36",
+      "verified": [
+        "Explicit Alpha8 immutable storage/mips and R8 reconstruction preserve tint, opacity, density and sampling.",
+        "All 248 Rust tests, six resource checks per Vulkan driver and unchanged visual reference comparisons pass.",
+        "Native launcher/application/widgets/snapping/restart and integer-scale workflows preserve caller state.",
+        "Clean-source same-boot 120-second comparison: mean RSS 226.78 to 207.70 MiB; icon payload 11.83 to 2.96 MiB; background/closed dock stay idle.",
+        "All six core CI checks pass on commit 3412d44a6080692391734fde8f608266f086cd02."
+      ],
+      "pending": [
+        "Review and merging the PR stack; CI status is tracked on PR #36.",
+        "207.70 MiB remains above the 200 MiB target; active overlays/decoder peaks and actual GPU memory still need work.",
+        "Hardware frame pacing, long idle, faults, per-output/fractional scaling and remaining desktop acceptance groups."
       ]
     }
   ]

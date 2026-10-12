@@ -83,7 +83,7 @@ impl AssetPort for NativeAssets {
         }
         result.insert(
             "app:fallback".into(),
-            images::svg(
+            images::svg_mask(
                 lucent_design::app_icons::FALLBACK.svg,
                 images::ICON_PIXELS,
                 "lucent-app:application".into(),
@@ -97,7 +97,7 @@ impl AssetPort for NativeAssets {
         let mut seen = BTreeSet::new();
         for app in apps {
             if let Some(asset) = lucent_design::app_icons::lookup(app.id.as_str())
-                && let Some(image) = images::svg(
+                && let Some(image) = images::svg_mask(
                     asset.svg,
                     images::ICON_PIXELS,
                     format!("lucent-app:{}", asset.id),
