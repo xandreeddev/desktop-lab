@@ -1,5 +1,5 @@
 //! Widget presentation borrows snapshots and prepared artwork, never the desktop root.
-use super::{Host, Message, default_position, widget_size};
+use super::{Host, Message, surfaces, widget_size};
 use crate::{actions::Action, artwork::Artwork, persistence::Status};
 use lucent_api::*;
 use lucent_design::*;
@@ -85,38 +85,63 @@ impl View<'_> {
         }
         lines
     }
+    fn card(&self, id: &str, cx: &ViewContext, pos: (f32, f32)) -> Element<Message> {
+        let content = super::catalog::registry()
+            .view(id, self, cx)
+            .expect("catalog members have a registered view");
+        let size = widget_size(id);
+        let drag_id = id.to_owned();
+        Element::stack(vec![content])
+            .size(size.0, size.1)
+            .at(pos.0, pos.1)
+            .background(if id == "calendar" || id == "media" {
+                self.surface_color()
+            } else {
+                self.widget_color()
+            })
+            .radius(radius::WIDGET)
+            .clip()
+            .shadow()
+            .on_drag(move |drag| Message::Move(drag_id.clone(), drag))
+            .id(format!("widget-{id}"))
+    }
+    /// Full display preview while dragging; the same composition is used by
+    /// offscreen snapshots. Its native pointer policy is pass-through.
     pub fn render(&self, cx: &ViewContext) -> Element<Message> {
-        let registry = super::catalog::registry();
         let mut children = self.drag_grid(cx);
-        children.extend(self.input.settings.visible_widgets.iter().filter_map(|id| {
-            let content = registry.view(id, self, cx)?;
-            let pos = self
-                .host
-                .preview_position(id)
-                .or_else(|| self.input.settings.positions.get(id).copied())
-                .unwrap_or_else(|| default_position(id, (cx.width, cx.height)));
-            let size = widget_size(id);
-            let drag_id = id.clone();
-            Some(
-                Element::stack(vec![content])
-                    .size(size.0, size.1)
-                    .at(
-                        pos.x().clamp(0., (cx.width - size.0).max(0.)),
-                        pos.y().clamp(0., (cx.height - size.1).max(0.)),
-                    )
-                    .background(if id == "calendar" || id == "media" {
-                        self.surface_color()
-                    } else {
-                        self.widget_color()
-                    })
-                    .radius(radius::WIDGET)
-                    .clip()
-                    .shadow()
-                    .on_drag(move |drag| Message::Move(drag_id.clone(), drag))
-                    .id(format!("widget-{id}")),
-            )
+        children.extend(surfaces::visible(self.input.settings).iter().map(|id| {
+            let pos = self.host.preview_position(id).unwrap_or_else(|| {
+                surfaces::position(id, self.input.settings, (cx.width, cx.height))
+            });
+            self.card(id, cx, (pos.x(), pos.y()))
         }));
         Element::stack(children).fill()
+    }
+    /// Bounded source buffers use display positions translated into their own
+    /// local coordinates. During capture they retain hits but suppress paint.
+    pub fn render_native(&self, cx: &ViewContext, viewport: (f32, f32)) -> Element<Message> {
+        let Some(source) = self
+            .host
+            .surfaces(self.input.settings, viewport)
+            .into_iter()
+            .find(|source| source.id == cx.surface)
+        else {
+            return Element::empty();
+        };
+        let children = source
+            .members
+            .iter()
+            .map(|id| {
+                let pos = self.host.source_position(id, self.input.settings, viewport);
+                self.card(id, cx, (pos.x() - source.rect.x, pos.y() - source.rect.y))
+            })
+            .collect();
+        let tree = Element::stack(children).fill();
+        if self.host.grid_visible() {
+            tree.input_only()
+        } else {
+            tree
+        }
     }
 }
 pub(super) fn clock(d: &View<'_>, _: &ViewContext) -> Element<Message> {

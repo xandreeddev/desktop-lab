@@ -852,7 +852,176 @@ fn compact_dock_resize_cannot_replace_the_display_viewport() {
     let dock = app.surfaces().into_iter().find(|s| s.id == "dock").unwrap();
     assert_eq!(dock.anchor, Anchor::Bottom);
     assert_eq!(dock.height, 120);
-    assert!(!dock.capture_all);
+    assert_eq!(dock.pointer_input, PointerInput::Content);
+}
+
+#[test]
+fn bounded_widget_sources_preserve_capture_and_pass_through_preview() {
+    let mut app = fixture(9, false);
+    resize_fixture(&mut app, 1920., 1080.);
+    let initial = app.surfaces();
+    assert!(!initial.iter().find(|s| s.id == "widgets").unwrap().visible);
+    let group = app
+        .widgets
+        .surfaces(&app.settings, app.viewport)
+        .into_iter()
+        .find(|s| s.members.contains(&"calendar"))
+        .unwrap();
+    let layout = Layout::new(fonts(&app));
+    let cx = ViewContext {
+        surface: group.id,
+        width: group.rect.w,
+        height: group.rect.h,
+        now: 1.,
+    };
+    let mut input = Interaction::default();
+    let before = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
+    let hit = before
+        .hits
+        .iter()
+        .find(|h| h.id == "widget-calendar")
+        .unwrap();
+    let (x, y) = (hit.rect.x + 100., hit.rect.y + 20.);
+    input.press(&before, x, y);
+    for message in input.motion(&before, x + 400., y + 200., cx.now) {
+        app.update(message, &mut Effects::default());
+    }
+    assert!(app.settings.positions.is_empty());
+    assert!(app.widgets.grid_visible());
+    let during = app.surfaces();
+    let preview = during.iter().find(|s| s.id == "widgets").unwrap();
+    assert!(preview.visible);
+    assert_eq!(preview.pointer_input, PointerInput::None);
+    assert_eq!(preview.keyboard, Keyboard::None);
+    assert_eq!(
+        during.iter().find(|s| s.id == group.id),
+        initial.iter().find(|s| s.id == group.id)
+    );
+    let input_only = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
+    assert!(input_only.paint.is_empty());
+    assert_eq!(before.regions, input_only.regions);
+    input.synchronize(&input_only);
+    let message = input.release(x + 500., y + 220.).unwrap();
+    app.update(message, &mut Effects::default());
+    assert!(!app.widgets.grid_visible());
+    assert!(app.settings.positions.contains_key("calendar"));
+    assert!(
+        !app.surfaces()
+            .iter()
+            .find(|s| s.id == "widgets")
+            .unwrap()
+            .visible
+    );
+}
+
+#[test]
+#[ignore = "requires Vulkan; run explicitly with --ignored"]
+fn bounded_widget_pixels_match_the_full_surface() {
+    let base = fixture(9, false);
+    let fonts = fonts(&base);
+    let layout = Layout::new(fonts.clone());
+    let gpu = lucent_render::Gpu::headless(fonts).unwrap();
+    let mut canvas = lucent_render::Canvas::new(gpu);
+    for light in [false, true] {
+        for (width, height) in [(1920, 1080), (960, 540), (390, 700)] {
+            for overlap in [false, true] {
+                let mut app = fixture(9, light);
+                resize_fixture(&mut app, width as f32, height as f32);
+                app.settings.visible_widgets = crate::widgets::catalog::WIDGETS
+                    .iter()
+                    .map(|w| w.id.into())
+                    .collect();
+                if overlap {
+                    for (index, widget) in crate::widgets::catalog::WIDGETS.iter().enumerate() {
+                        app.settings.positions.insert(
+                            widget.id.into(),
+                            lucent_domain::Placement::new(
+                                32. + index as f32 * 48.,
+                                24. + index as f32 * 40.,
+                            )
+                            .unwrap(),
+                        );
+                    }
+                }
+                let full_cx = ViewContext {
+                    surface: "widgets",
+                    width: width as f32,
+                    height: height as f32,
+                    now: 1.,
+                };
+                let full = layout.build(
+                    &app.view(&full_cx),
+                    full_cx.width,
+                    full_cx.height,
+                    &Interaction::default(),
+                    full_cx.now,
+                );
+                for scale in [1, 2] {
+                    let expected = canvas.snapshot(width, height, scale, &full.paint).unwrap();
+                    let mut actual = vec![0; expected.len()];
+                    let mut native_hits = std::collections::BTreeMap::new();
+                    for source in app.widgets.surfaces(&app.settings, app.viewport) {
+                        let cx = ViewContext {
+                            surface: source.id,
+                            width: source.rect.w,
+                            height: source.rect.h,
+                            now: 1.,
+                        };
+                        let native = layout.build(
+                            &app.view(&cx),
+                            cx.width,
+                            cx.height,
+                            &Interaction::default(),
+                            cx.now,
+                        );
+                        for hit in &native.hits {
+                            native_hits.insert(
+                                hit.id.clone(),
+                                Rect::new(
+                                    hit.rect.x + source.rect.x,
+                                    hit.rect.y + source.rect.y,
+                                    hit.rect.w,
+                                    hit.rect.h,
+                                ),
+                            );
+                        }
+                        let pixels = canvas
+                            .snapshot(
+                                source.rect.w as u32,
+                                source.rect.h as u32,
+                                scale,
+                                &native.paint,
+                            )
+                            .unwrap();
+                        let row_bytes = source.rect.w as usize * scale as usize * 4;
+                        for row in 0..source.rect.h as usize * scale as usize {
+                            let start = ((source.rect.y as usize * scale as usize + row)
+                                * width as usize
+                                * scale as usize
+                                + source.rect.x as usize * scale as usize)
+                                * 4;
+                            actual[start..start + row_bytes]
+                                .copy_from_slice(&pixels[row * row_bytes..(row + 1) * row_bytes]);
+                        }
+                    }
+                    assert_eq!(native_hits.len(), full.hits.len());
+                    for hit in &full.hits {
+                        assert_eq!(native_hits[&hit.id], hit.rect);
+                    }
+                    let max_error = expected
+                        .iter()
+                        .zip(&actual)
+                        .map(|(a, b)| a.abs_diff(*b))
+                        .max()
+                        .unwrap();
+                    assert!(
+                        max_error <= 1,
+                        "widget crop {width}x{height}/{scale}x/light={light}/overlap={overlap}: {max_error}"
+                    );
+                }
+            }
+        }
+    }
 }
 
 #[test]
@@ -1844,7 +2013,7 @@ fn feedback_stops_scheduling_after_expiry_and_has_no_keyboard_grab() {
     );
     let spec = app.surfaces().into_iter().find(|s| s.id == "osd").unwrap();
     assert_eq!(spec.keyboard, Keyboard::None);
-    assert!(!spec.capture_all);
+    assert_eq!(spec.pointer_input, PointerInput::Content);
     app.update(
         Message::OsdTick,
         &mut Effects {

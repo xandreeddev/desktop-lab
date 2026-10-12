@@ -99,12 +99,14 @@ impl Application for Example {
             id: "example",
             layer: Layer::Overlay,
             anchor: Anchor::Center,
+            margins: Default::default(),
+            redraw_group: None,
             width: example::WIDTH as u32,
             height: example::HEIGHT as u32,
             exclusive_zone: 0,
             keyboard: Keyboard::OnDemand,
             visible: true,
-            capture_all: false,
+            pointer_input: lucent_api::PointerInput::Content,
         }]
     }
     fn animating(&self, _: &str, now: f64) -> bool {

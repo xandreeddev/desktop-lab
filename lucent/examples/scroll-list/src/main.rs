@@ -118,12 +118,14 @@ impl Application for Example {
             id: "list",
             layer: Layer::Overlay,
             anchor: Anchor::Center,
+            margins: Default::default(),
+            redraw_group: None,
             width: token::WIDTH as u32,
             height: self.height() as u32,
             exclusive_zone: 0,
             keyboard: Keyboard::OnDemand,
             visible: true,
-            capture_all: false,
+            pointer_input: lucent_api::PointerInput::Content,
         }]
     }
     fn inspect(&self) -> String {

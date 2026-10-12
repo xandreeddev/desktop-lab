@@ -873,6 +873,22 @@
         "Per-monitor output targeting, fractional scaling, hotplug/suspend and text/input completeness",
         "Authentication build alignment, packaging and other acceptance groups"
       ]
+    },
+    {
+      "milestone": "bounded-widget-surfaces",
+      "status": "offscreen_verified_native_pending",
+      "report": "reports/measurements/lucent-widget-surfaces.json",
+      "checks": [
+        "223 Rust tests, 62 Python checks, formatting, Clippy and Astro check passed",
+        "24 paired bounded/full widget pixel scenarios pass on each of software/hardware Vulkan; existing golden tolerances unchanged"
+      ],
+      "pending": [
+        "Native placement/capture/release/restart/resize and existing desktop integration",
+        "Matched 120-second RSS/workload measurements; no widget RSS improvement claimed yet",
+        "Final existing visual suite, documentation build, final-head CI and review; no merge authorized",
+        "Sub-200 MiB target, decoder peaks, driver/allocator retention, long-idle/fault and hardware desktop pacing",
+        "Per-output targeting, fractional scaling, hotplug/suspend, secure auth build alignment and remaining feature acceptance groups"
+      ]
     }
   ]
 }

@@ -334,6 +334,20 @@ impl Desktop {
             self.update(message, effects);
         }
     }
+    fn widget_view(&self) -> widgets::View<'_> {
+        widgets::View {
+            host: &self.widgets,
+            input: widgets::Input {
+                settings: &self.settings,
+                clock: &self.clock,
+                system: &self.system,
+                media: &self.media,
+                weather: self.weather.as_ref(),
+                save_status: self.persistence.status(self.settings_writable),
+            },
+            artwork: self.artwork(),
+        }
+    }
     fn update_widgets(&mut self, message: widgets::Message, effects: &mut Effects<Message>) {
         let mut intent = None;
         effects.delegate(
@@ -442,20 +456,11 @@ impl Component for Desktop {
                 .map(|image| Element::image(image.clone()).cover().fill())
                 .unwrap_or_else(|| Element::empty().fill().background(self.surface_color())),
             "bar" => self.bar(cx),
-            "widgets" => widgets::View {
-                host: &self.widgets,
-                input: widgets::Input {
-                    settings: &self.settings,
-                    clock: &self.clock,
-                    system: &self.system,
-                    media: &self.media,
-                    weather: self.weather.as_ref(),
-                    save_status: self.persistence.status(self.settings_writable),
-                },
-                artwork: self.artwork(),
-            }
-            .render(cx)
-            .map(Message::Widgets),
+            "widgets" => self.widget_view().render(cx).map(Message::Widgets),
+            name if widgets::catalog::find(name).is_some() => self
+                .widget_view()
+                .render_native(cx, self.viewport)
+                .map(Message::Widgets),
             "dock" => self.dock(cx),
             "notifications" => self
                 .notifications
@@ -472,6 +477,7 @@ impl Component for Desktop {
                 Message::Notifications,
             ),
             Message::Loaded(apps, settings, wallpapers, current_wallpaper) => {
+                self.update_widgets(widgets::Message::CancelDrags, effects);
                 self.apps = apps;
                 match settings {
                     Ok(settings) => {
@@ -811,13 +817,16 @@ impl Component for Desktop {
             Message::Resize(id, w, h, scale) => {
                 if id == "background" {
                     match crate::ports::BackgroundTarget::from_surface(w, h, scale) {
-                        Ok(target) => effects.delegate(
-                            |child| {
-                                self.viewport = (w, h);
-                                self.wallpaper.resize(target, child);
-                            },
-                            Message::WallpaperSelection,
-                        ),
+                        Ok(target) => {
+                            self.update_widgets(widgets::Message::CancelDrags, effects);
+                            effects.delegate(
+                                |child| {
+                                    self.viewport = (w, h);
+                                    self.wallpaper.resize(target, child);
+                                },
+                                Message::WallpaperSelection,
+                            );
+                        }
                         Err(error) => self.error = error.to_string(),
                     }
                 }
@@ -873,11 +882,13 @@ impl api::Application for Desktop {
         ]
     }
     fn surfaces(&self) -> Vec<SurfaceSpec> {
-        vec![
+        let mut surfaces = vec![
             SurfaceSpec {
                 id: "audio",
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
                 width: 0,
                 height: 0,
                 exclusive_zone: -1,
@@ -887,62 +898,76 @@ impl api::Application for Desktop {
                     Keyboard::None
                 },
                 visible: self.audio.visible(),
-                capture_all: self.audio.open(),
+                pointer_input: if self.audio.open() {
+                    PointerInput::All
+                } else {
+                    PointerInput::Content
+                },
             },
             SurfaceSpec {
                 id: "osd",
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
                 width: 0,
                 height: 0,
                 exclusive_zone: -1,
                 keyboard: Keyboard::None,
                 visible: self.osd.feedback.is_some(),
-                capture_all: false,
+                pointer_input: lucent_api::PointerInput::Content,
             },
             SurfaceSpec {
                 id: "background",
                 layer: Layer::Background,
                 anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
                 width: 0,
                 height: 0,
                 exclusive_zone: -1,
                 keyboard: Keyboard::None,
                 visible: true,
-                capture_all: false,
+                pointer_input: lucent_api::PointerInput::Content,
             },
             SurfaceSpec {
                 id: "notifications",
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
                 width: 0,
                 height: 0,
                 exclusive_zone: -1,
                 keyboard: Keyboard::OnDemand,
                 visible: self.notifications.visible(),
-                capture_all: false,
+                pointer_input: lucent_api::PointerInput::Content,
             },
             SurfaceSpec {
                 id: "bar",
                 layer: Layer::Top,
                 anchor: Anchor::Top,
+                margins: Default::default(),
+                redraw_group: None,
                 width: 0,
                 height: panel::BAR_HEIGHT as u32,
                 exclusive_zone: panel::BAR_HEIGHT as i32,
                 keyboard: Keyboard::None,
                 visible: self.bar_visible,
-                capture_all: false,
+                pointer_input: lucent_api::PointerInput::Content,
             },
             SurfaceSpec {
                 id: "widgets",
                 layer: Layer::Bottom,
                 anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: Some("widgets"),
                 width: 0,
                 height: 0,
                 exclusive_zone: -1,
-                keyboard: Keyboard::OnDemand,
-                visible: true,
-                capture_all: false,
+                keyboard: Keyboard::None,
+                visible: self.widgets.grid_visible(),
+                pointer_input: PointerInput::None,
             },
             SurfaceSpec {
                 id: "dock",
@@ -952,6 +977,8 @@ impl api::Application for Desktop {
                     Layer::Top
                 },
                 anchor: Anchor::Bottom,
+                margins: Default::default(),
+                redraw_group: None,
                 width: 0,
                 height: if self.launcher.expanded() {
                     self.viewport.1.max(1.) as u32
@@ -965,9 +992,36 @@ impl api::Application for Desktop {
                     Keyboard::None
                 },
                 visible: true,
-                capture_all: self.launcher.open(),
+                pointer_input: if self.launcher.open() {
+                    PointerInput::All
+                } else {
+                    PointerInput::Content
+                },
             },
-        ]
+        ];
+        surfaces.extend(
+            self.widgets
+                .surfaces(&self.settings, self.viewport)
+                .into_iter()
+                .map(|source| SurfaceSpec {
+                    id: source.id,
+                    layer: Layer::Bottom,
+                    anchor: Anchor::TopLeft,
+                    margins: SurfaceMargins {
+                        top: source.rect.y as i32,
+                        left: source.rect.x as i32,
+                        ..Default::default()
+                    },
+                    redraw_group: Some("widgets"),
+                    width: source.rect.w.ceil() as u32,
+                    height: source.rect.h.ceil() as u32,
+                    exclusive_zone: -1,
+                    keyboard: Keyboard::OnDemand,
+                    visible: true,
+                    pointer_input: PointerInput::Content,
+                }),
+        );
+        surfaces
     }
     fn init(&mut self, effects: &mut Effects<Message>) {
         let apps = self.adapters.apps.clone();
@@ -1210,7 +1264,7 @@ impl api::Application for Desktop {
             "online_previews": crate::previews::usage(self.browser.previews.values()),
             "background": crate::previews::usage(self.wallpaper.background.iter()),
             "total": crate::previews::usage(self.images.values().chain(self.previews.images()).chain(self.browser.previews.values()).chain(self.wallpaper.background.iter())),
-        }, "palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_history_open":self.notifications.history_open,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":self.widgets.grid_visible(),"notes":self.settings.notes,"timer_seconds":self.widgets.timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"settings_save_status":self.persistence.status(self.settings_writable).name(),"settings_save_error":self.persistence.error(),"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable}).to_string()
+        }, "palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_history_open":self.notifications.history_open,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":self.widgets.grid_visible(),"widget_surfaces":self.widgets.surfaces(&self.settings,self.viewport).iter().map(|s|serde_json::json!({"id":s.id,"members":s.members,"x":s.rect.x,"y":s.rect.y,"width":s.rect.w,"height":s.rect.h})).collect::<Vec<_>>(),"notes":self.settings.notes,"timer_seconds":self.widgets.timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"settings_save_status":self.persistence.status(self.settings_writable).name(),"settings_save_error":self.persistence.error(),"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable}).to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
         (surface == "audio" && self.audio.animating(now))

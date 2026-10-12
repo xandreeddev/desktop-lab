@@ -294,12 +294,14 @@ impl<A: Application> State<A> {
                 id: "lock",
                 layer: api::Layer::Overlay,
                 anchor: api::Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
                 width: 0,
                 height: 0,
                 exclusive_zone: -1,
                 keyboard: api::Keyboard::Exclusive,
                 visible: true,
-                capture_all: true,
+                pointer_input: lucent_api::PointerInput::All,
             };
             self.surfaces.insert(
                 format!("lock-{}", output.id().protocol_id()),
@@ -340,7 +342,7 @@ impl<A: Application> State<A> {
             "one_color_buffer_per_surface_bytes": self.surfaces.values().map(|s| s.renderer.single_surface_buffer_bytes()).sum::<u64>(),
             "scope":"Prepared image payloads referenced by current scenes only; app caches excluded. GPU buffer values are requested payloads, not driver allocations. Actual surface buffer counts and total GPU memory are unknown."
         }));
-        serde_json::json!({"profile_memory":profile_memory,"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id,"width":s.width,"height":s.height,"scale":s.scale,"buffer_width":s.width*s.scale,"buffer_height":s.height*s.scale,"frames":s.renderer.frames,"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"frame_profiles":s.profiles.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)}).to_string()
+        serde_json::json!({"profile_memory":profile_memory,"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id,"redraw_group":s.spec.redraw_group,"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"buffer_width":s.width*s.scale,"buffer_height":s.height*s.scale,"frames":s.renderer.frames,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"frame_profiles":s.profiles.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)}).to_string()
     }
     fn message(&mut self, message: A::Message, qh: &QueueHandle<Self>) {
         self.messages([message], qh);
@@ -389,7 +391,11 @@ impl<A: Application> State<A> {
             self.exit = true;
         }
         for id in effects.redraw {
-            for s in self.surfaces.values_mut().filter(|s| s.spec.id == id) {
+            for s in self
+                .surfaces
+                .values_mut()
+                .filter(|s| s.spec.matches_redraw(id))
+            {
                 s.demand.invalidate();
             }
         }
@@ -398,6 +404,13 @@ impl<A: Application> State<A> {
     fn reconcile(&mut self, qh: &QueueHandle<Self>) -> Result<(), Error> {
         if self.session_lock.is_none() {
             let specs = self.app.surfaces();
+            let mut ids = std::collections::BTreeSet::new();
+            for spec in &specs {
+                spec.validate()?;
+                if !ids.insert(spec.id) {
+                    return Err(format!("Duplicate native surface ID: {}", spec.id).into());
+                }
+            }
             self.surfaces
                 .retain(|id, _| specs.iter().any(|s| s.id == *id && s.visible));
             for spec in specs.into_iter().filter(|s| s.visible) {
@@ -522,16 +535,7 @@ impl<A: Application> State<A> {
             if focus != s.interaction.focus {
                 s.demand.invalidate();
             }
-            let regions = if s.spec.capture_all {
-                vec![api::Clip::from(api::Rect::new(
-                    0.,
-                    0.,
-                    s.width as f32,
-                    s.height as f32,
-                ))]
-            } else {
-                scene.regions.clone()
-            };
+            let regions = pointer_regions(s.spec.pointer_input, s.width, s.height, &scene);
             if regions != s.regions {
                 match Region::new(&self.compositor) {
                     Ok(region) => {
@@ -702,12 +706,53 @@ fn layer_kind(layer: api::Layer) -> Layer {
         api::Layer::Overlay => Layer::Overlay,
     }
 }
+fn pointer_regions<M>(
+    policy: api::PointerInput,
+    width: u32,
+    height: u32,
+    scene: &Scene<M>,
+) -> Vec<api::Clip> {
+    match policy {
+        api::PointerInput::None => vec![],
+        api::PointerInput::Content => scene.regions.clone(),
+        api::PointerInput::All => vec![api::Rect::new(0., 0., width as f32, height as f32).into()],
+    }
+}
+
+#[cfg(test)]
+mod surface_tests {
+    use super::*;
+    #[test]
+    fn pointer_policy_overrides_tree_coverage_independently_of_paint() {
+        let scene: Scene<()> = Scene {
+            regions: vec![api::Rect::new(12., 16., 80., 40.).into()],
+            ..Default::default()
+        };
+        assert!(pointer_regions(api::PointerInput::None, 320, 240, &scene).is_empty());
+        assert_eq!(
+            pointer_regions(api::PointerInput::Content, 320, 240, &scene),
+            scene.regions
+        );
+        assert_eq!(
+            pointer_regions(api::PointerInput::All, 320, 240, &scene),
+            [api::Clip::from(api::Rect::new(0., 0., 320., 240.))]
+        );
+    }
+}
+
 fn configure_layer(layer: &LayerSurface, spec: &api::SurfaceSpec) {
     layer.set_layer(layer_kind(spec.layer));
     layer.set_size(spec.width, spec.height);
     layer.set_exclusive_zone(spec.exclusive_zone);
+    layer.set_margin(
+        spec.margins.top,
+        spec.margins.right,
+        spec.margins.bottom,
+        spec.margins.left,
+    );
     layer.set_anchor(match spec.anchor {
         api::Anchor::Top => Anchor::TOP | Anchor::LEFT | Anchor::RIGHT,
+        api::Anchor::TopLeft => Anchor::TOP | Anchor::LEFT,
         api::Anchor::Bottom => Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
         api::Anchor::Fill => Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
         api::Anchor::Center => Anchor::empty(),

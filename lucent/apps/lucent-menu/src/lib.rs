@@ -326,12 +326,14 @@ impl Application for Menu {
             id: "menu",
             layer: Layer::Overlay,
             anchor: Anchor::Fill,
+            margins: Default::default(),
+            redraw_group: None,
             width: 0,
             height: 0,
             exclusive_zone: -1,
             keyboard: Keyboard::Exclusive,
             visible: true,
-            capture_all: true,
+            pointer_input: lucent_api::PointerInput::All,
         }]
     }
     fn init(&mut self, effects: &mut Effects<Message>) {

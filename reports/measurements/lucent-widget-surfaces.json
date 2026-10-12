@@ -1,0 +1,33 @@
+{
+  "milestone": "bounded-widget-surfaces",
+  "status": "offscreen_verified_native_pending",
+  "scope": "Client-owned bounded widget geometry and generic native surface/input contracts; software and hardware offscreen Vulkan parity",
+  "architecture": [
+    "Client groups overlapping paint/buffer bounds, preserving visible-widget paint order without relying on compositor ordering within a layer",
+    "Client translates display-grid card geometry into native local coordinates, including finite renderer shadow support",
+    "Framework exposes logical margins, explicit TopLeft anchoring, pointer coverage independent of keyboard mode, redraw groups and input-only trees",
+    "During dragging, source origins and extents remain fixed; a temporary full-display pointer-pass-through preview paints cards and grid",
+    "Only release commits snapped domain placement; reset/hide/resize/load cancel transient state without persisting preview coordinates",
+    "No widget identities, grid tokens or desktop policy enter the domain, runtime or renderer"
+  ],
+  "checks": {
+    "rust_workspace_tests": 223,
+    "python_checks": 62,
+    "formatting": "passed",
+    "clippy": "passed",
+    "astro_check": "passed; zero errors/warnings/hints",
+    "paired_widget_pixel_scenarios_per_driver": 24,
+    "vulkan_drivers": [
+      "Mesa llvmpipe 26.2.3 / LLVM 22.1.8",
+      "Mesa RADV 26.2.3 / Radeon integrated GPU"
+    ],
+    "pixel_scope": "Full aggregate versus composited bounded native buffers; three viewports, two palettes, disjoint/default and overlapping layouts, scales 1/2; maximum allowed difference one 8-bit quantization step. Existing golden tolerances unchanged."
+  },
+  "pending": [
+    "Native placement/capture/release/restart/resize and existing desktop integration",
+    "Matched 120-second RSS/workload measurements; no widget RSS improvement claimed yet",
+    "Final existing visual suite, documentation build, final-head CI and review; no merge authorized",
+    "Sub-200 MiB target, decoder peaks, driver/allocator retention, long-idle/fault and hardware desktop pacing",
+    "Per-output targeting, fractional scaling, hotplug/suspend, secure auth build alignment and remaining feature acceptance groups"
+  ]
+}

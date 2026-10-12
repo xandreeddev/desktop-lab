@@ -11,6 +11,7 @@ import shlex
 import subprocess
 import time
 import lab
+from wallpaper_checkpoint import GuestWallpaperCheckpoint
 
 PROFILE = 'lucent'
 NAME = lab.inventory()['vms'][PROFILE]['name']
@@ -85,7 +86,9 @@ def layer_geometry(surface_id):
 
 def hit(identifier):
     state = inspect()
-    surface, local = next((s, h) for s in state['surfaces'] for h in s['hits'] if h['id']==identifier)
+    surface, local = next((s, h) for s in state['surfaces']
+                          if s.get('pointer_input') != 'none'
+                          for h in s['hits'] if h['id']==identifier)
     origin = layer_geometry(surface['id'])
     result = dict(local)
     result['x'] += origin['x']
@@ -138,7 +141,10 @@ def eventually(predicate, description, timeout=10):
 def suite():
     assert session('omarchy-shell','lock','isLocked').strip()=='false', 'Unlock the VM first'
     assert 'Vulkan' in inspect()['adapter']
-    assert {'background','bar','widgets','dock'}<={s['id'] for s in inspect()['surfaces']}
+    initial = inspect()
+    assert {'background','bar','dock'} <= {s['id'] for s in initial['surfaces']}
+    for widget in initial['client']['widgets']:
+        hit('widget-' + widget)
     cli('launcher','close');time.sleep(0.7)
     move(950,400)
     # A noninteracting pointer move must not make the idle animation loop run forever.
@@ -216,7 +222,7 @@ def suite():
     eventually(lambda:inspect()['client']['applications']>0,'Lucent did not recover')
     assert not remote('sh','-c','pgrep -x quickshell || true').strip()
     screenshot('lucent-framework-desktop.png')
-    report={'vulkan':True,'native_surfaces':4,'animated_dock_launcher':True,'keyboard_search':True,
+    report={'vulkan':True,'native_surfaces':len(inspect()['surfaces']),'animated_dock_launcher':True,'keyboard_search':True,
             'real_application_launch':True,'terminal_rounding':rounding,'workspace_switch':True,'widget_drag':True,'position_restored':True,'token_grid_snap':True,
             'timer_start_pause_reset':True,'notes_input':True,'wallpaper_selector_and_apply':True,
             'native_only_restart':True,'restart':True,'application_count':inspect()['client']['applications']}
@@ -228,6 +234,8 @@ def main():
     # The test mutates widget settings and wallpaper; retain the caller's state.
     settings=remote('bash','-c','cat ~/.local/state/lucent/desktop.json 2>/dev/null || true')
     wallpaper=remote('readlink','/home/omarchy/.local/state/lucent/wallpaper').strip()
+    selected=inspect()['client']['wallpaper']
+    checkpoint=GuestWallpaperCheckpoint(remote, selected) if selected else None
     awake=json.loads(session('omarchy-toggle-idle','status'))['enabled']
     try:
         session('omarchy-toggle-idle','stay-awake')
@@ -237,6 +245,12 @@ def main():
         time.sleep(.5)
         suite()
     finally:
+        if checkpoint:
+            checkpoint.restore()
+            cli('wallpaper','set',selected['path'])
+            eventually(lambda:not inspect()['client']['wallpaper_busy'] and
+                       inspect()['client']['wallpaper']['source']==selected['source'],
+                       'Original wallpaper source was not restored', timeout=40)
         session('systemctl','--user','stop','lucent.service')
         if settings:
             subprocess.run(lab.ssh_args(PROFILE)+['mkdir -p ~/.local/state/lucent; cat > ~/.local/state/lucent/desktop.json.new && mv ~/.local/state/lucent/desktop.json.new ~/.local/state/lucent/desktop.json'],input=settings,text=True,check=True)
@@ -245,6 +259,11 @@ def main():
         if wallpaper:
             remote('ln','-sfn',wallpaper,'/home/omarchy/.local/state/lucent/wallpaper')
         session('systemctl','--user','start','lucent.service')
+        eventually(lambda:inspect()['client']['applications']>0 and
+                   inspect()['client']['background_ready'], 'Restored desktop did not render', timeout=40)
+        if checkpoint:
+            assert inspect()['client']['wallpaper']['source']==selected['source']
+            checkpoint.discard()
         if not awake:
             session('omarchy-toggle-idle','allow-idle')
 

@@ -276,6 +276,7 @@ impl Layout {
         if alpha <= 0.001 {
             return;
         }
+        let paint_start = scene.paint.len();
         let own_clip = if e.style.clip {
             clip.with_rounded(rect, e.style.radius)
         } else {
@@ -636,6 +637,9 @@ impl Layout {
                 color: e.style.focus_color.alpha(e.style.focus_color.3 * alpha),
                 width: e.style.focus_width,
             });
+        }
+        if !e.style.paint {
+            scene.paint.truncate(paint_start);
         }
     }
 }
@@ -1105,6 +1109,40 @@ impl<M: Clone> Interaction<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn input_only_retains_geometry_focus_and_drag_capture_without_paint() {
+        let tree = Element::stack(vec![
+            Element::empty()
+                .size(80., 40.)
+                .at(12., 10.)
+                .background(Color(1., 0., 0., 1.))
+                .on_click("click".to_string())
+                .on_drag(|event| format!("{}:{}:{}", event.dx, event.dy, event.finished))
+                .id("handle"),
+        ])
+        .fill();
+        let layout = Layout::new(Arc::new(vec![]));
+        let mut input = Interaction::default();
+        let painted = layout.build(&tree, 120., 80., &input, 0.);
+        assert!(!painted.paint.is_empty());
+        input.press(&painted, 30., 25.);
+        let only = tree.input_only().map(|message| format!("mapped-{message}"));
+        let scene = layout.build(&only, 120., 80., &input, 0.);
+        assert!(
+            scene.paint.is_empty(),
+            "focus decoration is suppressed as well"
+        );
+        assert_eq!(scene.regions, painted.regions);
+        assert_eq!(scene.hits[0].id, painted.hits[0].id);
+        assert_eq!(scene.hits[0].rect, painted.hits[0].rect);
+        input.synchronize(&scene);
+        assert_eq!(input.focus.as_deref(), Some("handle"));
+        assert_eq!(input.motion(&scene, 160., 110., 0.), ["130:85:false"]);
+        assert_eq!(input.release(170., 120.), Some("140:95:true".into()));
+        input.press(&scene, 30., 25.);
+        assert_eq!(input.release(30., 25.), Some("mapped-click".into()));
+        assert_eq!(input.release(170., 120.), None);
+    }
     #[test]
     fn trimmed_odd_image_keeps_cover_and_contain_geometry() {
         let source = ImageData::from_rgba("odd aspect", 65, 37, vec![255; 65 * 37 * 4]).unwrap();

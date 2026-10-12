@@ -148,6 +148,8 @@ pub struct Style {
     pub max_lines: Option<usize>,
     pub align: Align,
     pub opacity: f32,
+    /// Suppresses this subtree's paint without removing layout or input hits.
+    pub paint: bool,
     pub clip: bool,
     pub shadow: Option<Shadow>,
     /// Tint and strength of the hover state layer; transparent disables it.
@@ -184,6 +186,7 @@ impl Default for Style {
             max_lines: None,
             align: Align::Start,
             opacity: 1.,
+            paint: true,
             clip: false,
             shadow: None,
             hover_color: Color::TRANSPARENT,
@@ -432,6 +435,12 @@ impl<M> Element<M> {
         self.style.opacity = v;
         self
     }
+    /// Retain layout, focus and pointer capture while another surface presents
+    /// this content. Unlike zero opacity, input-only nodes keep their hit tree.
+    pub fn input_only(mut self) -> Self {
+        self.style.paint = false;
+        self
+    }
     pub fn clip(mut self) -> Self {
         self.style.clip = true;
         self
@@ -472,6 +481,8 @@ pub enum Layer {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Anchor {
     Top,
+    /// Explicit width/height, measured from the output's upper-left corner.
+    TopLeft,
     Bottom,
     Fill,
     Center,
@@ -482,17 +493,70 @@ pub enum Keyboard {
     OnDemand,
     Exclusive,
 }
+/// Pointer coverage is independent of the painted tree and keyboard policy.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PointerInput {
+    /// Empty native input region; pointer events pass to surfaces underneath.
+    None,
+    /// Only the tree's interactive hit regions capture input.
+    Content,
+    /// The entire native extent captures input, including outside-click areas.
+    All,
+}
+impl PointerInput {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Content => "content",
+            Self::All => "all",
+        }
+    }
+}
+/// Signed logical-pixel margins from anchored output edges. Negative margins
+/// are valid protocol requests; actual placement belongs to the compositor.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SurfaceMargins {
+    pub top: i32,
+    pub right: i32,
+    pub bottom: i32,
+    pub left: i32,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SurfaceSpec {
     pub id: &'static str,
     pub layer: Layer,
     pub anchor: Anchor,
+    pub margins: SurfaceMargins,
+    /// A client-selected redraw target shared by related native surfaces.
+    /// `Effects::redraw` matches either this group or the individual surface ID.
+    pub redraw_group: Option<&'static str>,
     pub width: u32,
     pub height: u32,
     pub exclusive_zone: i32,
     pub keyboard: Keyboard,
     pub visible: bool,
-    pub capture_all: bool,
+    pub pointer_input: PointerInput,
+}
+impl SurfaceSpec {
+    /// Check layer-shell invariants before making native protocol requests.
+    /// This is not a renderer extent check or a memory budget.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.id.is_empty() || self.id.contains('\0') {
+            return Err("A native surface ID must be nonempty and contain no NUL");
+        }
+        if self.redraw_group.is_some_and(|group| group.is_empty()) {
+            return Err("A redraw group must be nonempty");
+        }
+        let horizontal = matches!(self.anchor, Anchor::Top | Anchor::Bottom | Anchor::Fill);
+        let vertical = self.anchor == Anchor::Fill;
+        if (self.width == 0 && !horizontal) || (self.height == 0 && !vertical) {
+            return Err("An omitted surface dimension requires opposite anchors on that axis");
+        }
+        Ok(())
+    }
+    pub fn matches_redraw(&self, target: &str) -> bool {
+        self.id == target || self.redraw_group == Some(target)
+    }
 }
 #[derive(Clone, Debug)]
 pub struct ViewContext {
@@ -809,6 +873,45 @@ impl Motion {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn native_surface_requests_validate_anchor_dimensions_and_redraw_targets() {
+        let mut spec = SurfaceSpec {
+            id: "card",
+            layer: Layer::Bottom,
+            anchor: Anchor::TopLeft,
+            margins: SurfaceMargins {
+                top: 16,
+                left: -8,
+                ..Default::default()
+            },
+            redraw_group: Some("cards"),
+            width: 320,
+            height: 240,
+            exclusive_zone: -1,
+            keyboard: Keyboard::OnDemand,
+            visible: true,
+            pointer_input: PointerInput::Content,
+        };
+        assert!(spec.validate().is_ok());
+        assert!(spec.matches_redraw("card"));
+        assert!(spec.matches_redraw("cards"));
+        assert!(!spec.matches_redraw("other"));
+        spec.width = 0;
+        assert!(spec.validate().is_err());
+        spec.anchor = Anchor::Top;
+        assert!(spec.validate().is_ok());
+        spec.height = 0;
+        assert!(spec.validate().is_err());
+        spec.anchor = Anchor::Fill;
+        assert!(spec.validate().is_ok());
+        spec.id = "";
+        assert!(spec.validate().is_err());
+        spec.id = "bad\0id";
+        assert!(spec.validate().is_err());
+        spec.id = "card";
+        spec.redraw_group = Some("");
+        assert!(spec.validate().is_err());
+    }
     #[test]
     fn interrupted_motion_is_continuous_and_finishes() {
         let mut m = Motion::fixed(0.);

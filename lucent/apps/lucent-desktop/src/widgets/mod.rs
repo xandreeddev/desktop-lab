@@ -1,6 +1,7 @@
 //! Widget interaction belongs to this child; persistence and OS actions return
 //! as intents to the composition root. Views only borrow snapshots and artwork.
 pub mod catalog;
+pub mod surfaces;
 mod view;
 use crate::actions::Action;
 use lucent_api::{DragEvent, Effects};
@@ -21,6 +22,8 @@ pub enum Message {
     Tick(u64),
     Month(i32),
     ResetLayout,
+    /// Cancel capture before its output or loaded configuration changes.
+    CancelDrags,
     Action(Action),
 }
 pub enum Intent {
@@ -49,6 +52,7 @@ enum Drag {
 #[derive(Default)]
 pub struct Host {
     drags: BTreeMap<String, Drag>,
+    captured_surfaces: Option<Vec<surfaces::Surface>>,
     timer: FocusTimer,
     month_offset: i32,
 }
@@ -64,11 +68,39 @@ impl Host {
             _ => None,
         }
     }
+    pub fn surfaces(
+        &self,
+        settings: &DesktopSettings,
+        viewport: (f32, f32),
+    ) -> Vec<surfaces::Surface> {
+        if self.grid_visible()
+            && let Some(layout) = &self.captured_surfaces
+        {
+            surfaces::captured(layout, settings, viewport)
+        } else {
+            surfaces::layout(settings, viewport)
+        }
+    }
+    /// The input source stays at the visible press origin throughout capture.
+    pub fn source_position(
+        &self,
+        id: &str,
+        settings: &DesktopSettings,
+        viewport: (f32, f32),
+    ) -> Placement {
+        match self.drags.get(id) {
+            Some(Drag::Active { origin, .. }) => *origin,
+            _ => surfaces::position(id, settings, viewport),
+        }
+    }
     fn cancel_drag(&mut self, id: &str, finished: bool) {
         if finished {
             self.drags.remove(id);
         } else {
             self.drags.insert(id.into(), Drag::Cancelled);
+        }
+        if !self.grid_visible() {
+            self.captured_surfaces = None;
         }
     }
     pub fn timer_remaining(&self) -> u64 {
@@ -153,6 +185,10 @@ impl Host {
                             widget_size(&id),
                             input.viewport,
                         )?;
+                        if !self.grid_visible() {
+                            self.captured_surfaces =
+                                Some(surfaces::layout(settings, input.viewport));
+                        }
                         self.drags
                             .insert(id.clone(), Drag::Active { origin, preview });
                         Ok(())
@@ -203,8 +239,17 @@ impl Host {
                     *drag = Drag::Cancelled;
                 }
                 settings.positions.clear();
+                self.captured_surfaces = None;
                 effects.redraw("widgets");
                 Some(Intent::Save)
+            }
+            Message::CancelDrags => {
+                for drag in self.drags.values_mut() {
+                    *drag = Drag::Cancelled;
+                }
+                self.captured_surfaces = None;
+                effects.redraw("widgets");
+                None
             }
             Message::Action(action) => Some(Intent::Action(action)),
             Message::RetrySave => Some(Intent::RetrySave),
@@ -279,6 +324,28 @@ mod tests {
                 finished,
             },
         )
+    }
+    #[test]
+    fn native_sources_stay_fixed_during_drag_and_resize_cancels_without_saving() {
+        let mut host = Host::default();
+        let mut settings = DesktopSettings::default();
+        let sources = host.surfaces(&settings, (1920., 1080.));
+        send(&mut host, &mut settings, drag(false), 0);
+        assert_eq!(host.surfaces(&settings, (1920., 1080.)), sources);
+        assert_eq!(
+            host.source_position("calendar", &settings, (1920., 1080.)),
+            surfaces::position("calendar", &settings, (1920., 1080.))
+        );
+        assert!(settings.positions.is_empty());
+        let (intent, effects) = send(&mut host, &mut settings, Message::CancelDrags, 0);
+        assert!(intent.is_none());
+        assert!(effects.redraw.contains(&"widgets"));
+        assert!(!host.grid_visible());
+        assert!(send(&mut host, &mut settings, drag(true), 0).0.is_none());
+        assert!(
+            settings.positions.is_empty(),
+            "late release cannot persist after cancellation"
+        );
     }
     #[test]
     fn hidden_and_unknown_widgets_cannot_resume_a_drag_or_request_persistence() {
