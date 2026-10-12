@@ -4,6 +4,7 @@ pub mod audio;
 pub mod compositor;
 pub mod desktop_adapters;
 pub mod images;
+pub mod network;
 pub mod wallpapers;
 use chrono::{Datelike, Timelike};
 use lucent_domain::*;

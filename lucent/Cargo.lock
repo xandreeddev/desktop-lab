@@ -1314,7 +1314,10 @@ dependencies = [
 name = "lucent-services"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
+ "async-io",
  "chrono",
+ "futures-lite",
  "image",
  "jpeg-decoder",
  "libc",
@@ -1323,6 +1326,7 @@ dependencies = [
  "lucent-domain",
  "lucent-usecases",
  "resvg",
+ "serde",
  "serde_json",
  "zbus",
 ]
@@ -1479,6 +1483,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee6cda3051665f1fb8d9e08fc35c96d5a244fb1be711a03b71118828afc9a873"
 dependencies = [
  "jni-sys 0.3.1",
+]
+
+[[package]]
+name = "network-service"
+version = "0.1.0"
+dependencies = [
+ "lucent-domain",
+ "lucent-services",
+ "serde_json",
+ "zeroize",
 ]
 
 [[package]]

@@ -8,6 +8,9 @@ pub use ports::*;
 mod audio;
 pub use audio::*;
 
+mod network;
+pub use network::*;
+
 mod notifications;
 pub use notifications::*;
 mod authentication;

@@ -10,6 +10,7 @@ const ports = [
   ['ClockPort', 'Supply local date and time', 'LocalClock', 'System time through chrono'],
   ['SystemPort', 'Sample CPU, memory, volume and network state', 'LinuxSystem', 'Linux counters, wpctl and nmcli'],
   ['AudioPort', 'Observe devices/streams and issue controls', 'PulseAudio', 'Native libpulse connection, bounded command queue, reconnect; native panel, virtual playback/capture routing, command timeout, hotplug and reconnect verified; hardware validation remains open'],
+  ['NetworkPort', 'Observe network state and request operations', 'NetworkManager', 'Native system-bus adapter with bounded commands/events, temporary handles and signal-driven state. An independent consumer tests it before desktop injection; custom panel, secret-agent and physical Wi-Fi validation remain pending'],
   ['MediaPort', 'Read metadata and control playback', 'Playerctl', 'Bounded playerctl commands'],
   ['WeatherPort', 'Return configured location weather', 'OpenMeteo', 'Local configuration and bounded HTTP command'],
   ['WallpaperPort', 'List, stage, commit and discard backgrounds', 'LucentWallpaper / WallpaperStore', 'Bounded immutable snapshots and atomic selection'],

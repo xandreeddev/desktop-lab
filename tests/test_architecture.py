@@ -148,3 +148,8 @@ class Boundaries(unittest.TestCase):
         self.assert_no_platform_operations(paths, ('crate::desktop', 'crate::adapters', 'crate::platform', 'crate::ports'))
         for path in paths:
             self.assertNotRegex(path.read_text(), r'\b(?:Desktop|DesktopAdapters)\b', str(path))
+
+    def test_network_adapter_does_not_use_process_fallbacks_or_client_components(self):
+        paths = sources(ROOT / 'lucent/crates/lucent-services/src/network', ('tests.rs',))
+        self.assert_no_platform_operations(paths,
+            ('crate::command', 'command_with_timeout', 'std::process', 'lucent_desktop', 'lucent_design', 'lucent_wayland'))

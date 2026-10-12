@@ -530,11 +530,18 @@ Lucent's visual theme, service adapters or authentication adapters.
 This is a practical ports-and-adapters structure, not a claim of a finished framework.
 The launcher owns private interaction and motion state; `widgets::Host` owns
 drag origins, calendar navigation and timer behavior. Both borrow explicit inputs
-and return typed intents for shared root operations. Audio/media use CLI adapters and polling;
-layout has no general scroll container or complex-script shaping. OS operations
+and return typed intents for shared root operations. Audio uses a native libpulse
+adapter and its own control-center child; media still uses a polled CLI adapter.
+NetworkPort and the native NetworkManager adapter have an independent headless
+consumer; the desktop network panel is the next integration step. The framework
+has controlled vertical scrolling, while virtualization, touch/kinetic/horizontal
+scrolling and complex-script shaping remain unfinished. OS operations
 stay behind ports, while pure search, launch/focus, positioning and notification
 expiry policy live in `lucent-usecases`. Architecture dependency checks enforce
 these boundaries in CI.
+
+See [native networking](native-network.md) for the domain values, connection
+ownership, startup sequence, command acknowledgement and credential boundaries.
 
 ## Launcher composition
 
