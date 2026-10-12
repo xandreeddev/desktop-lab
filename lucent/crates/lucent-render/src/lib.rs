@@ -1162,6 +1162,35 @@ mod clipping_tests {
 
     #[test]
     #[ignore = "requires a Vulkan driver"]
+    fn trimmed_cover_preserves_pixels_at_both_physical_densities() {
+        let fonts = Arc::new(vec![]);
+        let gpu = Gpu::headless(fonts.clone()).unwrap();
+        let layout = Layout::new(fonts);
+        let mut canvas = Canvas::new(gpu);
+        let mut pixels = Vec::new();
+        for y in 0..36 {
+            for x in 0..64 {
+                pixels.extend_from_slice(&[(x * 4) as u8, (y * 7) as u8, 100, 255]);
+            }
+        }
+        let source = ImageData::from_rgba("density fixture", 64, 36, pixels).unwrap();
+        for scale in [1, 2] {
+            let trimmed = source.downsample_for_cover(16 * scale, 9 * scale).unwrap();
+            assert_eq!((trimmed.width(), trimmed.height()), (16 * scale, 9 * scale));
+            assert!(trimmed.bytes() < source.bytes());
+            let render = |canvas: &mut Canvas, image| {
+                let root = Element::<()>::image(Arc::new(image)).size(16., 9.).cover();
+                let scene = layout.build(&root, 16., 9., &Interaction::default(), 0.);
+                canvas.snapshot(16, 9, scale, &scene.paint).unwrap()
+            };
+            let original_pixels = render(&mut canvas, source.clone());
+            let retained_pixels = render(&mut canvas, trimmed);
+            assert_eq!(retained_pixels, original_pixels, "density {scale}");
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
     fn opaque_images_retain_coverage_on_odd_sized_targets_and_clips() {
         let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
         let mut canvas = Canvas::new(gpu);
