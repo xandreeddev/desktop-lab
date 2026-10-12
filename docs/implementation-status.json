@@ -368,6 +368,25 @@
         "162 Rust tests, eight focused Vulkan tests and 172 unchanged visual comparisons pass on both software/hardware drivers; native desktop launcher/restart/application-survival and existing secure lock/unlock pass. See reports/measurements/lucent-render-extents.json. Scene-resource validation remains open.",
         "Scene validation and fallible Canvas::paint pass 167 Rust tests, nine focused renderer checks and 172 unchanged visual comparisons on each of software/hardware Vulkan. Native launcher/restart/application-survival and existing secure lock/unlock pass. See reports/measurements/lucent-render-scenes.json; device-memory failure and upstream layout remain separate boundaries."
       ]
+    },
+    {
+      "id": "secure-session-clients",
+      "owner": "lucent-session clients, authentication adapters and lucent-wayland lifecycle",
+      "status": "in_progress",
+      "acceptance": [
+        "A rejected login can clear its retained username and retry without appending identity text",
+        "Responses remain outside framework scenes and authentication-client inspection sockets",
+        "Secure unlock requires actual authentication and protocol acknowledgement",
+        "Permission cancellation denies authority checks and removes surfaces while the agent survives",
+        "Coherent releases, rollback and denial/failure/restart/physical-session acceptance have evidence"
+      ],
+      "evidence": [
+        "251 workspace tests, including six session presentation checks; 70 Python checks, formatting and strict Clippy pass.",
+        "Real final-release greetd rejection, username clear, empty submit and successful clean retry pass; final native secure-lock masking/clear/PAM unlock and wallpaper retention pass.",
+        "Two real permission cancellation cycles deny checks, expose no command socket, remove native surfaces and retain the same agent with no automatic restart. The preceding checkpoint reproduced one empty surface after cancellation.",
+        "All three authentication clients share a clean release checkpoint, installed hashes and retained rollback copies are verified, and desktop preferences remain present. See reports/measurements/lucent-session-input.json.",
+        "Production authentication audit, native denied-lock recovery, authority/service faults and physical sessions remain open; other installed clients still need a rebuilt runtime."
+      ]
     }
   ],
   "evidence": [
@@ -967,6 +986,29 @@
         "Review and merging the PR stack; CI status is tracked on PR #36.",
         "207.70 MiB remains above the 200 MiB target; active overlays/decoder peaks and actual GPU memory still need work.",
         "Hardware frame pacing, long idle, faults, per-output/fractional scaling and remaining desktop acceptance groups."
+      ]
+    },
+    {
+      "milestone": "session-input-and-native-dialog-lifecycle",
+      "status": "locally_verified",
+      "source_commit": "047f10498c4da9b6c8ea9dae3653cd0afc47b42f",
+      "report": "reports/measurements/lucent-session-input.json",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/37",
+      "checks": [
+        "251 Rust/70 Python checks, strict Clippy and formatting pass; six shared authentication presentation checks cover active-field clearing and disabled pending input.",
+        "Twelve unchanged session visuals per available Vulkan driver pass at the field-routing checkpoint; all 248 software comparisons pass in final-source CI.",
+        "Real final-release greetd rejection/clear/empty-submit/clean retry, secure lock/response clearing/PAM unlock and unchanged wallpaper pass.",
+        "Two permission cancellation cycles deny actual policy checks, remove compositor surfaces, expose no command socket and preserve the agent process.",
+        "Coherent session-client release, atomic rollback copies, installed/source hashes and preserved owner/mode/preferences verified; VM remains capped at 3 GiB/four vCPUs and is shut down.",
+        "All six source-checkpoint checks passed; final evidence-head CI is tracked on PR #37.",
+        "Astro check/build and 13 pages/487 links/assets pass with zero diagnostics; the existing local guide returns HTTP 200."
+      ],
+      "pending": [
+        "Review and merge of PR #37 and its parent stack; final evidence-head CI is tracked on the PR.",
+        "Production authentication/PAM and authority-cancellation audit, native denied-lock/password recovery, agent/service failures, suspend/resume and physical lock/driver-fault acceptance remain unverified by this focused milestone.",
+        "General IPC-enabled clients and all other consumers need a rebuilt release to inherit the new runtime teardown; this deployment covers only the three authentication clients.",
+        "RSS below 200 MiB, active-overlay and image-decoding peaks, actual GPU allocations, hardware pacing, long idle and fault recovery remain open. No new performance measurements are claimed.",
+        "Remaining OS controls/tray, physical audio/networking and secret-agent/enterprise provisioning, per-output/fractional geometry, shaping/IME/accessibility, richer application/dock/widget/notification/settings behavior, packaging/migrations and rollback acceptance remain in docs/implementation-status.json."
       ]
     }
   ]
