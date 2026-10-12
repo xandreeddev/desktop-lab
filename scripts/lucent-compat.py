@@ -27,13 +27,13 @@ def launch(script,*args):
 
 def panel(name,toggle=False):
     if name.startswith('omarchy.'): name=name.removeprefix('omarchy.')
-    if name=='audio': return cli('audio','toggle' if toggle else 'open')
+    if name in ('audio','network'): return cli(name,'toggle' if toggle else 'open')
     if name in ('weather','clock'): return cli('widget','weather' if name=='weather' else 'calendar','show')
     if name in ('speedtest','disk-speedtest'):
         command='omarchy-network-speedtest' if name=='speedtest' else 'omarchy-disk-speedtest'
         subprocess.Popen(['xdg-terminal-exec','--app-id=org.lucent.utility','--title=System test','-e',command],start_new_session=True)
         return 'ok'
-    if name in ('network','bluetooth','monitor','power','clipboard','emojis','reminders'):
+    if name in ('bluetooth','monitor','power','clipboard','emojis','reminders'):
         import menu_routes
         current=menu_routes.picker_command('inspect')
         if current is not None:
@@ -69,6 +69,7 @@ def shell(args):
             raise ValueError('No Lucent panel at this position')
         if method=='hide':
             cli('audio','close')
+            cli('network','close')
             # Other compatibility panels still use the native picker.
             import menu_routes
             menu_routes.picker_command('close')

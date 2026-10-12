@@ -199,7 +199,9 @@ impl Desktop {
                         crate::notifications::Message::Toggle,
                     ))
                     .id("bar-notifications"),
-                bar_icon("network"),
+                bar_icon("network")
+                    .on_click(Message::Network(crate::network::Message::Toggle))
+                    .id("bar-network"),
                 bar_icon("volume")
                     .on_click(Message::Action(Action::Mute))
                     .id("bar-mute"),

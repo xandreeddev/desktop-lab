@@ -4,6 +4,7 @@ mod artwork;
 mod audio;
 mod desktop;
 mod launcher;
+mod network;
 mod notifications;
 mod osd;
 mod palette_intent;

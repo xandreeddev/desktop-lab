@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Compatibility adapter: system commands/data → typed native picker requests.
 
-All presentation belongs to lucent-menu. Returned values are opaque row IDs,
+Audio and network open desktop children; other presentation uses lucent-menu.
+Returned values are opaque row IDs,
 validated against the current snapshot. They never become shell expressions.
 """
 import calendar
@@ -51,36 +52,8 @@ def audio():
     output(str(Path.home()/'.local/bin/lucent-cli'), 'audio', 'open')
 
 
-def nm_fields(line):
-    """Decode nmcli --terse's escaped colons and backslashes."""
-    fields, value, escaped = [], '', False
-    for char in line:
-        if escaped: value += char; escaped = False
-        elif char == '\\': escaped = True
-        elif char == ':': fields.append(value); value = ''
-        else: value += char
-    fields.append(value)
-    return fields
-
-
 def network():
-    while True:
-        enabled = output('nmcli','radio','wifi') == 'enabled'
-        rows = [('Wi-Fi ' + ('on' if enabled else 'off'), 'Toggle radio', ('nmcli','radio','wifi','off' if enabled else 'on'))]
-        active = {nm_fields(line)[0] for line in output('nmcli','-t','-f','UUID','connection','show','--active').splitlines()}
-        for line in output('nmcli','-t','-f','UUID,NAME,TYPE','connection','show').splitlines():
-            uuid, name, kind = nm_fields(line)
-            rows.append((name, ('Connected · disconnect' if uuid in active else 'Connect')+' · '+kind,
-                         ('nmcli','connection','down' if uuid in active else 'up','uuid',uuid)))
-        rows.append(('Connect a new network', 'NetworkManager terminal wizard', ('xdg-terminal-exec','--app-id=org.lucent.utility','--title=Network','-e','nmtui')))
-        action = choose('Network', rows)
-        if action is None: return
-        # nmtui is a separate NetworkManager application with its own secret
-        # agent. Never send Wi-Fi passwords through CLI arguments or this picker.
-        if action[0]=='xdg-terminal-exec':
-            subprocess.Popen(action, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return
-        output(*action, timeout=40)
+    output(str(Path.home()/'.local/bin/lucent-cli'), 'network', 'open')
 
 
 def bluetooth():

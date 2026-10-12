@@ -153,3 +153,7 @@ class Boundaries(unittest.TestCase):
         paths = sources(ROOT / 'lucent/crates/lucent-services/src/network', ('tests.rs',))
         self.assert_no_platform_operations(paths,
             ('crate::command', 'command_with_timeout', 'std::process', 'lucent_desktop', 'lucent_design', 'lucent_wayland'))
+
+    def test_network_child_uses_the_domain_port_without_root_or_adapter_selection(self):
+        paths = sources(ROOT / 'lucent/apps/lucent-desktop/src/network')
+        self.assert_no_platform_operations(paths, ('crate::desktop', 'crate::adapters', 'crate::platform', 'crate::ports'))

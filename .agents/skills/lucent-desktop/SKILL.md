@@ -38,3 +38,5 @@ Use `python3 vm/measure-framework.py --seconds 120 --profile` for bounded CPU-st
 For docs, keep library explanations under the library guides and runtime preferences under the desktop guide. `cd site && npm run dev -- --host 0.0.0.0` serves on LAN when requested; verify the actual listening port and HTTP response. Do not terminate unrelated servers. Source/built links must respect `withBase` for GitHub Pages.
 
 Follow the existing protected-main PR workflow. Checks must pass before a merge. This skill does not itself authorize publishing, changing repository permissions or modifying the host desktop. Preserve the alias identity for commits and keep personal paths, location, credentials and unreviewed VM captures out of public artifacts.
+
+The Network child consumes its injected NetworkPort. Its private generation-bound form owns credentials; views borrow the bullet count. Keep one active command, distinguish acceptance from completion, revalidate transient IDs for retries, and drop forms on close/cancel/target retirement. Never retain passwords for Retry or start a terminal wizard.

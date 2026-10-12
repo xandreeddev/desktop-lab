@@ -1,5 +1,7 @@
 //! A small declarative shell API. Public types contain no Wayland or GPU handles.
+mod input;
 mod scroll;
+pub use input::InputEdit;
 pub use scroll::{ScrollEvent, ScrollSpec, ScrollStyle};
 mod slider;
 pub use slider::{SliderEvent, SliderSpec, SliderStyle};
@@ -214,6 +216,7 @@ pub enum Kind {
     Text(String),
     Image(Arc<ImageData>),
     Input { value: String, placeholder: String },
+    MaskedInput { length: usize, placeholder: String },
     Slider(SliderSpec),
     Scroll(ScrollSpec),
     Empty,
@@ -225,6 +228,7 @@ pub struct DragEvent {
     pub finished: bool,
 }
 pub type InputCallback<M> = Arc<dyn Fn(String) -> M + Send + Sync>;
+pub type EditCallback<M> = Arc<dyn Fn(InputEdit) -> M + Send + Sync>;
 pub type ScrollCallback<M> = Arc<dyn Fn(ScrollEvent) -> M + Send + Sync>;
 pub type SliderCallback<M> = Arc<dyn Fn(SliderEvent) -> M + Send + Sync>;
 pub type DragCallback<M> = Arc<dyn Fn(DragEvent) -> M + Send + Sync>;
@@ -235,8 +239,10 @@ pub struct Element<M> {
     pub style: Style,
     pub children: Vec<Element<M>>,
     pub click: Option<M>,
+    pub submit: Option<M>,
     pub hover: Option<M>,
     pub input: Option<InputCallback<M>>,
+    pub edit: Option<EditCallback<M>>,
     pub drag: Option<DragCallback<M>>,
     pub slider: Option<SliderCallback<M>>,
     pub scroll: Option<ScrollCallback<M>>,
@@ -250,8 +256,10 @@ impl<M> Element<M> {
             style: Style::default(),
             children: vec![],
             click: None,
+            submit: None,
             hover: None,
             input: None,
+            edit: None,
             drag: None,
             slider: None,
             scroll: None,
@@ -306,6 +314,26 @@ impl<M> Element<M> {
         });
         e.input = Some(Arc::new(on_change));
         e
+    }
+    /// Only the character count enters the element/scene. The component owns
+    /// the actual value and applies emitted edit intents, including burst input
+    /// before the next frame. This field supports end editing, not selection/IME.
+    pub fn masked_input(
+        length: usize,
+        placeholder: impl Into<String>,
+        on_edit: impl Fn(InputEdit) -> M + Send + Sync + 'static,
+    ) -> Self {
+        let mut e = Self::new(Kind::MaskedInput {
+            length: length.min(4096),
+            placeholder: placeholder.into(),
+        });
+        e.edit = Some(Arc::new(on_edit));
+        e
+    }
+    /// Submit a focused text/masked field with Enter; pointer focus never submits.
+    pub fn on_submit(mut self, message: M) -> Self {
+        self.submit = Some(message);
+        self
     }
     /// A controlled scalar input with pointer capture and keyboard adjustment.
     pub fn slider(
@@ -1021,6 +1049,10 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
             let map = mapper.clone();
             Arc::new(move |text| map(input(text))) as InputCallback<N>
         });
+        let edit = self.edit.map(|callback| {
+            let map = mapper.clone();
+            Arc::new(move |event| map(callback(event))) as EditCallback<N>
+        });
         let drag = self.drag.map(|drag| {
             let map = mapper.clone();
             Arc::new(move |event| map(drag(event))) as DragCallback<N>
@@ -1043,8 +1075,10 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
                 .map(|c| c.map_arc(mapper.clone()))
                 .collect(),
             click: self.click.map(|m| mapper(m)),
+            submit: self.submit.map(|m| mapper(m)),
             hover: self.hover.map(|m| mapper(m)),
             input,
+            edit,
             drag,
             slider,
             scroll,

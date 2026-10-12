@@ -94,6 +94,18 @@ class Compatibility(unittest.TestCase):
             output.assert_called_once_with(str(Path.home()/'.local/bin/lucent-cli'),'audio','open')
             choose.assert_not_called()
 
+    def test_network_routes_to_the_desktop_without_a_picker_or_terminal(self):
+        compat=load('network_compat_test','lucent-compat.py')
+        with patch.object(compat,'cli',return_value='ok') as cli, patch.object(compat.subprocess,'Popen') as popen:
+            self.assertEqual(compat.panel('omarchy.network',toggle=True),'ok')
+            cli.assert_called_once_with('network','toggle')
+            popen.assert_not_called()
+        controls=load('network_controls_test','lucent-controls.py')
+        with patch.object(controls,'output') as output, patch.object(controls,'choose') as choose:
+            controls.network()
+            output.assert_called_once_with(str(Path.home()/'.local/bin/lucent-cli'),'network','open')
+            choose.assert_not_called()
+
     def test_migration_rejects_old_or_unrendered_clients(self):
         setup=load('readiness_test','lucent-setup.py')
         for state in [{}, {'client':{'theme_error':''},'surfaces':[{'id':'background','frames':0}]}]:
@@ -128,7 +140,6 @@ class Compatibility(unittest.TestCase):
         for value in ['-1','100','$(command)','0; command']:
             with patch.object(controls.picker,'pick',return_value=SimpleNamespace(returncode=0,stdout=value)):
                 with self.assertRaises(ValueError): controls.choose('Fixture',[('Action','',('safe','argument'))])
-        self.assertEqual(controls.nm_fields(r'uuid:Name\: with\\slash:wifi'),['uuid','Name: with\\slash','wifi'])
 
     def test_idle_stay_awake_retains_sleep_and_logind_lock_handlers(self):
         idle=load('idle_test','lucent-idle.py')

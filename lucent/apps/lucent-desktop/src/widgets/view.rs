@@ -14,6 +14,7 @@ pub struct Input<'a> {
     pub save_status: Status,
     pub clock: &'a ClockSnapshot,
     pub system: &'a SystemSnapshot,
+    pub network_status: &'a str,
     pub media: &'a MediaSnapshot,
     pub weather: Option<&'a WeatherSnapshot>,
 }
@@ -518,7 +519,7 @@ pub(super) fn system(d: &View<'_>, _: &ViewContext) -> Element<Message> {
             )
             .radius(radius::INDICATOR)
             .background(d.accent()),
-        d.label(&mem.network, font::CAPTION)
+        d.label(d.input.network_status, font::CAPTION)
             .at(component::system::INSET, component::system::NETWORK_TOP)
             .size(
                 component::system::CONTENT_WIDTH,

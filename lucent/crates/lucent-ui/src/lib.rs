@@ -2,6 +2,8 @@
 use lucent_api::*;
 mod scroll;
 pub use scroll::{FocusClip, ScrollHit};
+#[cfg(test)]
+mod input_tests;
 mod slider;
 pub mod text;
 pub use slider::SliderHit;
@@ -56,8 +58,10 @@ pub struct Hit<M> {
     pub clip: Clip,
     pub radius: f32,
     pub click: Option<M>,
+    pub submit: Option<M>,
     pub hover: Option<M>,
     pub input: Option<InputCallback<M>>,
+    pub edit: Option<EditCallback<M>>,
     pub value: String,
     pub drag: Option<DragCallback<M>>,
     pub slider: Option<SliderHit<M>>,
@@ -100,6 +104,9 @@ impl Layout {
     }
 
     fn wrapped(&self, text: &str, size: f32, face: usize, width: f32, max_lines: usize) -> String {
+        // Subtracting padding from an intrinsic width can lose a few ulps.
+        // Preserve a measured single line without adding visible layout space.
+        let width = width + width.abs().max(1.) * f32::EPSILON * 4.;
         let mut lines = vec![String::new()];
         for word in text.split_inclusive([' ', '\n']) {
             let hard_break = word.ends_with('\n');
@@ -143,6 +150,39 @@ impl Layout {
         }
         lines.join("\n")
     }
+    /// Measure row children at the widths they receive during placement. This
+    /// keeps intrinsic height and wrapped text consistent inside clipped rows.
+    fn measure_children<M>(&self, e: &Element<M>, available: (f32, f32)) -> Vec<(f32, f32)> {
+        let mut sizes: Vec<_> = e
+            .children
+            .iter()
+            .map(|c| self.measure(c, available))
+            .collect();
+        if matches!(e.kind, Kind::Row) {
+            let fixed: f32 = e
+                .children
+                .iter()
+                .zip(&sizes)
+                .filter(|(c, _)| c.style.width != Length::Fill)
+                .map(|(_, s)| s.0)
+                .sum();
+            let count = e
+                .children
+                .iter()
+                .filter(|c| c.style.width == Length::Fill)
+                .count();
+            let width =
+                (available.0 - fixed - e.style.gap * e.children.len().saturating_sub(1) as f32)
+                    .max(0.)
+                    / count.max(1) as f32;
+            for (child, size) in e.children.iter().zip(&mut sizes) {
+                if child.style.width == Length::Fill {
+                    *size = self.measure(child, (width, available.1));
+                }
+            }
+        }
+        sizes
+    }
     fn measure<M>(&self, e: &Element<M>, available: (f32, f32)) -> (f32, f32) {
         let px = e.style.padding.horizontal * 2.;
         let py = e.style.padding.vertical * 2.;
@@ -154,11 +194,8 @@ impl Layout {
             },
             available.1,
         );
-        let children: Vec<_> = e
-            .children
-            .iter()
-            .map(|c| self.measure(c, ((available.0 - px).max(0.), (available.1 - py).max(0.))))
-            .collect();
+        let children =
+            self.measure_children(e, ((available.0 - px).max(0.), (available.1 - py).max(0.)));
         let n = children.len();
         let gaps = gap * n.saturating_sub(1) as f32;
         let content = match &e.kind {
@@ -183,7 +220,7 @@ impl Layout {
                         * t.lines().count().max(1) as f32,
                 )
             }
-            Kind::Input { .. } => (
+            Kind::Input { .. } | Kind::MaskedInput { .. } => (
                 160.,
                 text::line_metrics(
                     self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
@@ -321,13 +358,14 @@ impl Layout {
         }
         let interactive = e.click.is_some()
             || e.input.is_some()
+            || e.edit.is_some()
             || e.drag.is_some()
             || e.hover.is_some()
             || e.slider.is_some()
             || e.scroll.is_some();
         if e.style.background.3 > 0. && alpha > 0. {
             let mut color = e.style.background;
-            if e.click.is_some() || e.input.is_some() || e.slider.is_some() {
+            if e.click.is_some() || e.input.is_some() || e.edit.is_some() || e.slider.is_some() {
                 color = color.mix(
                     e.style.hover_color.alpha(color.3),
                     interaction.hover_amount(&id, now) * e.style.hover_color.3,
@@ -367,8 +405,10 @@ impl Layout {
                 clip: clip.clone(),
                 radius: e.style.radius,
                 click: e.click.clone(),
+                submit: e.submit.clone(),
                 hover: e.hover.clone(),
                 input: e.input.clone(),
+                edit: e.edit.clone(),
                 value: if let Kind::Input { value, .. } = &e.kind {
                     value.clone()
                 } else {
@@ -396,6 +436,7 @@ impl Layout {
                 tab_stop: e.style.tab_stop
                     && (e.click.is_some()
                         || e.input.is_some()
+                        || e.edit.is_some()
                         || e.slider.is_some()
                         || e.scroll.is_some()),
             });
@@ -418,11 +459,24 @@ impl Layout {
                 color: fg,
                 align: e.style.align,
             }),
-            Kind::Input { value, placeholder } => {
+            Kind::Input { .. } | Kind::MaskedInput { .. } => {
+                let (value, placeholder) = match &e.kind {
+                    Kind::Input { value, placeholder } => {
+                        (std::borrow::Cow::Borrowed(value.as_str()), placeholder)
+                    }
+                    Kind::MaskedInput {
+                        length,
+                        placeholder,
+                    } => (
+                        std::borrow::Cow::Owned("•".repeat((*length).min(4096))),
+                        placeholder,
+                    ),
+                    _ => unreachable!(),
+                };
                 let text = if value.is_empty() {
                     placeholder.clone()
                 } else {
-                    value.clone()
+                    value.to_string()
                 };
                 if value.is_empty() {
                     fg.3 *= 0.55;
@@ -440,7 +494,7 @@ impl Layout {
                     let font = self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]);
                     let line = text::line_metrics(font, e.style.font_size);
                     let top = inner.y + (inner.h - line.height).max(0.) / 2.;
-                    let advance = self.text_width(value, e.style.font_size, e.style.font_face);
+                    let advance = self.text_width(&value, e.style.font_size, e.style.font_face);
                     let scroll = (advance + e.style.caret_width - inner.w).max(0.);
                     // Keep the end-caret visible when a single-line value exceeds the field.
                     if let Some(Paint::Text { rect, .. }) = scene.paint.last_mut() {
@@ -519,48 +573,27 @@ impl Layout {
                 });
             }
         } else {
-            let is_row = matches!(e.kind, Kind::Row);
-            let is_column = matches!(e.kind, Kind::Column);
-            let mut measured: Vec<_> = e
-                .children
-                .iter()
-                .map(|c| self.measure(c, (inner.w, inner.h)))
-                .collect();
-            if is_row || is_column {
+            let mut measured = self.measure_children(e, (inner.w, inner.h));
+            if matches!(e.kind, Kind::Column) {
                 let fixed: f32 = e
                     .children
                     .iter()
                     .zip(&measured)
-                    .filter(|(c, _)| {
-                        if is_row {
-                            c.style.width != Length::Fill
-                        } else {
-                            c.style.height != Length::Fill
-                        }
-                    })
-                    .map(|(_, s)| if is_row { s.0 } else { s.1 })
+                    .filter(|(c, _)| c.style.height != Length::Fill)
+                    .map(|(_, s)| s.1)
                     .sum();
                 let count = e
                     .children
                     .iter()
-                    .filter(|c| {
-                        if is_row {
-                            c.style.width == Length::Fill
-                        } else {
-                            c.style.height == Length::Fill
-                        }
-                    })
+                    .filter(|c| c.style.height == Length::Fill)
                     .count();
-                let space = ((if is_row { inner.w } else { inner.h })
-                    - fixed
-                    - e.style.gap * e.children.len().saturating_sub(1) as f32)
-                    .max(0.);
-                for (c, s) in e.children.iter().zip(&mut measured) {
-                    if is_row && c.style.width == Length::Fill {
-                        s.0 = space / count.max(1) as f32;
-                    }
-                    if is_column && c.style.height == Length::Fill {
-                        s.1 = space / count.max(1) as f32;
+                let height =
+                    (inner.h - fixed - e.style.gap * e.children.len().saturating_sub(1) as f32)
+                        .max(0.)
+                        / count.max(1) as f32;
+                for (child, size) in e.children.iter().zip(&mut measured) {
+                    if child.style.height == Length::Fill {
+                        size.1 = height;
                     }
                 }
             }
@@ -1038,6 +1071,30 @@ impl<M: Clone> Interaction<M> {
             .hits
             .iter()
             .find(|h| Some(&h.id) == self.focus.as_ref())
+            && let Some(edit) = &hit.edit
+        {
+            let action = match key {
+                Key::Enter => return hit.submit.clone(),
+                Key::SelectAll => {
+                    self.select_all = true;
+                    return None;
+                }
+                Key::Backspace if self.select_all => InputEdit::Clear,
+                Key::Backspace => InputEdit::Backspace,
+                Key::ClearInput => InputEdit::Clear,
+                Key::Text(text) if self.select_all => {
+                    InputEdit::Replace(text.replace(['\n', '\r'], ""))
+                }
+                Key::Text(text) => InputEdit::Insert(text.replace(['\n', '\r'], "")),
+                _ => return None,
+            };
+            self.select_all = false;
+            return Some(edit(action));
+        }
+        if let Some(hit) = scene
+            .hits
+            .iter()
+            .find(|h| Some(&h.id) == self.focus.as_ref())
             && let Some(slider) = &hit.slider
         {
             let previous = self
@@ -1059,10 +1116,9 @@ impl<M: Clone> Interaction<M> {
             }));
         }
         if (matches!(key, Key::Enter) || matches!(key, Key::Text(s) if s == " "))
-            && let Some(hit) = scene
-                .hits
-                .iter()
-                .find(|h| Some(&h.id) == self.focus.as_ref() && h.input.is_none())
+            && let Some(hit) = scene.hits.iter().find(|h| {
+                Some(&h.id) == self.focus.as_ref() && h.input.is_none() && h.edit.is_none()
+            })
         {
             return hit.click.clone();
         }
@@ -1070,6 +1126,9 @@ impl<M: Clone> Interaction<M> {
             .hits
             .iter()
             .find(|h| Some(&h.id) == self.focus.as_ref() && h.input.is_some())?;
+        if matches!(key, Key::Enter) {
+            return hit.submit.clone();
+        }
         // Several key events can arrive before the next compositor frame. Keep
         // edits locally until the new scene reflects the updated client state.
         let mut value = self
@@ -1170,7 +1229,9 @@ mod tests {
             radius: 20.,
             click: None,
             hover: None,
+            submit: None,
             input: None,
+            edit: None,
             value: String::new(),
             drag: None,
             slider: None,
@@ -1193,7 +1254,9 @@ mod tests {
             radius: 0.,
             click: None,
             hover: None,
+            submit: None,
             input: Some(Arc::new(|s: String| s)),
+            edit: None,
             value: String::new(),
             drag: None,
             slider: None,
@@ -1244,7 +1307,9 @@ mod tests {
             radius: 0.,
             click: Some(1),
             hover: None,
+            submit: None,
             input: None,
+            edit: None,
             value: String::new(),
             drag: Some(Arc::new(|d: DragEvent| if d.finished { 3 } else { 2 })),
             slider: None,

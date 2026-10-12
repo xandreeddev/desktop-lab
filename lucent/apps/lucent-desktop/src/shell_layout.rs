@@ -43,13 +43,20 @@ pub fn dock_origin(viewport: (f32, f32), surface: (f32, f32), size: (f32, f32)) 
 }
 pub fn audio_panel(viewport: (f32, f32)) -> Rect {
     use lucent_design::component::audio;
+    control_panel(viewport, (audio::WIDTH, audio::HEIGHT))
+}
+pub fn network_panel(viewport: (f32, f32)) -> Rect {
+    use lucent_design::component::network;
+    control_panel(viewport, (network::WIDTH, network::HEIGHT))
+}
+fn control_panel(viewport: (f32, f32), size: (f32, f32)) -> Rect {
     let width = floor(
-        audio::WIDTH.min(viewport.0 - layout::SHELL_INSET * 2.),
+        size.0.min(viewport.0 - layout::SHELL_INSET * 2.),
         layout::SHELL_STEP,
     );
     let top = panel::BAR_HEIGHT + layout::SHELL_INSET;
     let height = floor(
-        audio::HEIGHT.min(viewport.1 - top - layout::SHELL_INSET),
+        size.1.min(viewport.1 - top - layout::SHELL_INSET),
         layout::SHELL_STEP,
     );
     Rect::new(

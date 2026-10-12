@@ -66,6 +66,15 @@ impl MediaPort for Fake {
         Ok(())
     }
 }
+impl NetworkPort for Fake {
+    fn watch(&self, emit: &mut dyn FnMut(Result<NetworkSnapshot>), _: &dyn StopSignal) {
+        emit(Err(DomainError::Unavailable("offline fixture".into())));
+    }
+    fn control(&self, _: NetworkCommand) -> Result<()> {
+        self.calls.lock().unwrap().push("network");
+        Ok(())
+    }
+}
 impl WeatherPort for Fake {
     fn snapshot(&self) -> Result<WeatherSnapshot> {
         Err(DomainError::Unavailable("offline fixture".into()))
@@ -112,6 +121,7 @@ pub fn with(fake: Arc<Fake>) -> DesktopAdapters {
         clock: fake.clone(),
         system: fake.clone(),
         audio: fake.clone(),
+        network: fake.clone(),
         media: fake.clone(),
         weather: fake.clone(),
         wallpaper: fake.clone(),

@@ -8,9 +8,9 @@ const ports = [
   ['CompositorPort', 'Read windows/workspaces, focus, switch and watch', 'Hyprland', 'Hyprland request/event sockets; reconnect policy in adapter'],
   ['SettingsPort', 'Load and save DesktopSettings', 'JsonSettings', 'Validated JSON and atomic replacement'],
   ['ClockPort', 'Supply local date and time', 'LocalClock', 'System time through chrono'],
-  ['SystemPort', 'Sample CPU, memory, volume and network state', 'LinuxSystem', 'Linux counters, wpctl and nmcli'],
+  ['SystemPort', 'Sample CPU and memory state', 'LinuxSystem', 'Linux counters; separate audio and network ports'],
   ['AudioPort', 'Observe devices/streams and issue controls', 'PulseAudio', 'Native libpulse connection, bounded command queue, reconnect; native panel, virtual playback/capture routing, command timeout, hotplug and reconnect verified; hardware validation remains open'],
-  ['NetworkPort', 'Observe network state and request operations', 'NetworkManager', 'Native system-bus adapter with bounded commands/events, temporary handles and signal-driven state. An independent consumer tests it before desktop injection; custom panel, secret-agent and physical Wi-Fi validation remain pending'],
+  ['NetworkPort', 'Observe network state and request operations', 'NetworkManager', 'Native system-bus adapter with bounded commands/events, temporary handles and signal-driven state. The root injects it into a native child with masked input; secret-agent and physical Wi-Fi validation remain pending'],
   ['MediaPort', 'Read metadata and control playback', 'Playerctl', 'Bounded playerctl commands'],
   ['WeatherPort', 'Return configured location weather', 'OpenMeteo', 'Local configuration and bounded HTTP command'],
   ['WallpaperPort', 'List, stage, commit and discard backgrounds', 'LucentWallpaper / WallpaperStore', 'Bounded immutable snapshots and atomic selection'],
@@ -48,7 +48,7 @@ const ports = [
     <div class="table-scroll"><table><thead><tr><th>Port</th><th>Contract</th><th>Adapter</th><th>Implementation</th></tr></thead><tbody>{ports.map(([port, contract, adapter, implementation]) => <tr><td>{port}</td><td>{contract}</td><td>{adapter}</td><td>{implementation}</td></tr>)}</tbody></table></div>
     <p><code>DesktopAdapters</code> holds injected implementations through <code>Arc&lt;dyn …Port&gt;</code> handles. <code>desktop_adapters()</code> chooses concrete adapters. A trait-object call is an ordinary synchronous Rust call; the effects/subscription machinery decides which thread invokes it.</p>
     <p>The <a href={sourceUrl('lucent/apps/lucent-desktop/src/platform.rs')}>desktop composition root</a> is the only desktop module selecting production service implementations. <a href={sourceUrl('lucent/apps/lucent-desktop/src/test_adapters.rs')}>In-memory adapters</a> let client tests exercise behavior without executing host commands. Lock and login have their own composition roots.</p>
-    <p>No dedicated NetworkPort, BluetoothPort, BatteryPort, BrightnessPort or tray port exists yet. A network label in SystemSnapshot is not an implementation of network management. See <a href={withBase('/docs/system/')}>the system map</a> for retained tools and services.</p>
+    <p>AudioPort and NetworkPort have native adapters and desktop children. BluetoothPort, BatteryPort, BrightnessPort and a tray port remain absent. See <a href={withBase('/docs/system/')}>the system map</a> for retained tools and services.</p>
   </section>
   <section id="findings"><span class="eyebrow">04 / CONCRETE REVIEW RESULTS</span><h2>Fix the boundary.<br />Check the behavior.</h2>
     <div class="table-scroll"><table><thead><tr><th>Finding</th><th>Action / current status</th><th>Evidence</th></tr></thead><tbody>
@@ -112,7 +112,7 @@ const ports = [
   </section>
   <section id="gaps"><span class="eyebrow">06 / IMPLEMENTATION COVERAGE</span><h2>A working shell.<br />An incomplete desktop platform.</h2>
     <div class="table-scroll"><table><thead><tr><th>Area</th><th>Current limit</th><th>Required boundary</th></tr></thead><tbody>
-      <tr><td>Control center and tray</td><td>Native network setup, Bluetooth pairing, device routing and StatusNotifier item/menu lifecycles remain absent. Summary labels and volume actions do not cover these use cases.</td><td>Typed domain snapshots and commands; explicit ports; platform adapters handling service lifecycle; usable client controls.</td></tr>
+      <tr><td>Control center and tray</td><td>Native audio routing and personal Wi-Fi setup have client controls. Enterprise credential flows, native Bluetooth pairing, hardware power/brightness and StatusNotifier lifecycles remain unfinished.</td><td>Typed domain snapshots and commands; explicit ports; platform adapters handling service lifecycle; usable client controls.</td></tr>
       <tr><td>Text and accessibility</td><td>General caret/selection editing, grapheme behavior, complex-script shaping, font fallback, IME and accessibility integration remain incomplete.</td><td>Reusable input/layout/rendering contracts and platform protocol integration, exercised by multiple clients.</td></tr>
       <tr><td>Displays and widgets</td><td>One shared viewport limits independent per-monitor layouts. Resizing, fractional scale and hotplug need a coherent output model and native validation.</td><td>Output identity in framework surface contracts; persisted per-output placement and grid policy in the desktop.</td></tr>
       <tr><td>Launcher and dock</td><td>Child ownership is improved, but app-install discovery updates, interactive pin/reorder and autohide remain separate work.</td><td>Application discovery/watch behind its port; launcher/dock behavior in the client; persistence through settings use cases.</td></tr>

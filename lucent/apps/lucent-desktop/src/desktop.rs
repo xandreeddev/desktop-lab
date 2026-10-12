@@ -24,6 +24,7 @@ pub enum Message {
     Clock(ClockSnapshot),
     System(domain::Result<SystemSnapshot>),
     Audio(crate::audio::Message),
+    Network(crate::network::Message),
     Media(domain::Result<MediaSnapshot>),
     Weather(domain::Result<WeatherSnapshot>),
     Launcher(launcher::Message),
@@ -69,6 +70,7 @@ pub struct Desktop {
     pub clock: ClockSnapshot,
     pub system: SystemSnapshot,
     pub audio: crate::audio::Audio,
+    pub network: crate::network::Network,
     pub media: MediaSnapshot,
     pub weather: Option<WeatherSnapshot>,
     pub browser: crate::wallpaper_browser::Browser,
@@ -107,6 +109,7 @@ impl Desktop {
             clock: adapters.clock.now(),
             system: SystemSnapshot::default(),
             audio: crate::audio::Audio::new(adapters.audio.clone()),
+            network: crate::network::Network::new(adapters.network.clone()),
             media: MediaSnapshot::default(),
             weather: None,
             browser: Default::default(),
@@ -193,6 +196,8 @@ impl Desktop {
             "notifications",
             "background",
             "osd",
+            "audio",
+            "network",
         ] {
             effects.redraw(id);
         }
@@ -318,6 +323,16 @@ impl Desktop {
             |child| intent = self.launcher.update(message, input, geometry, child),
             Message::Launcher,
         );
+        if self.launcher.open() {
+            effects.delegate(
+                |child| self.network.update(crate::network::Message::Close, child),
+                Message::Network,
+            );
+            effects.delegate(
+                |child| self.audio.update(crate::audio::Message::Close, child),
+                Message::Audio,
+            );
+        }
         if let Some(intent) = intent {
             use launcher::Intent;
             let message = match intent {
@@ -341,6 +356,7 @@ impl Desktop {
                 settings: &self.settings,
                 clock: &self.clock,
                 system: &self.system,
+                network_status: self.network.status(),
                 media: &self.media,
                 weather: self.weather.as_ref(),
                 save_status: self.persistence.status(self.settings_writable),
@@ -448,6 +464,7 @@ impl Component for Desktop {
     fn view(&self, cx: &ViewContext) -> Element<Message> {
         self.theme().apply(match cx.surface {
             "audio" => self.audio.view(cx, self.theme()).map(Message::Audio),
+            "network" => self.network.view(cx, self.theme()).map(Message::Network),
             "osd" => self.osd.view(cx, self.theme()),
             "background" => self
                 .wallpaper
@@ -600,9 +617,6 @@ impl Component for Desktop {
                 self.clock = clock;
             }
             Message::System(Ok(value)) => {
-                if self.system.network != value.network {
-                    effects.redraw("bar");
-                }
                 if self.settings.visible_widgets.iter().any(|w| w == "system") {
                     effects.redraw("widgets");
                 }
@@ -614,8 +628,27 @@ impl Component for Desktop {
                     || matches!(message, crate::audio::Message::Toggle) && !self.audio.open();
                 if opening {
                     self.update_launcher(launcher::Message::Close, effects);
+                    effects.delegate(
+                        |child| self.network.update(crate::network::Message::Close, child),
+                        Message::Network,
+                    );
                 }
                 effects.delegate(|child| self.audio.update(message, child), Message::Audio);
+            }
+            Message::Network(message) => {
+                let opening = matches!(message, crate::network::Message::Open)
+                    || matches!(message, crate::network::Message::Toggle) && !self.network.open();
+                if opening {
+                    self.update_launcher(launcher::Message::Close, effects);
+                    effects.delegate(
+                        |child| self.audio.update(crate::audio::Message::Close, child),
+                        Message::Audio,
+                    );
+                }
+                effects.delegate(
+                    |child| self.network.update(message, child),
+                    Message::Network,
+                );
             }
             Message::Media(result) => {
                 let value = result.unwrap_or_default();
@@ -632,12 +665,6 @@ impl Component for Desktop {
             }
             Message::Launcher(message) => {
                 self.update_launcher(message, effects);
-                if self.launcher.open() {
-                    effects.delegate(
-                        |child| self.audio.update(crate::audio::Message::Close, child),
-                        Message::Audio,
-                    );
-                }
             }
             Message::Launch(id, prefer) => {
                 self.launch(&id, prefer, effects);
@@ -847,6 +874,11 @@ impl Component for Desktop {
 }
 impl api::Application for Desktop {
     fn runtime_failure(&self, failure: api::RuntimeFailure) -> Option<Message> {
+        if failure.source == "effect queue network" {
+            return Some(Message::Network(crate::network::Message::WorkerFailed(
+                failure.to_string(),
+            )));
+        }
         if failure.source == "effect queue audio" {
             return Some(Message::Audio(crate::audio::Message::Control(
                 crate::audio::commands::Message::WorkerFailed(failure.to_string()),
@@ -883,6 +915,27 @@ impl api::Application for Desktop {
     }
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         let mut surfaces = vec![
+            SurfaceSpec {
+                id: "network",
+                layer: Layer::Overlay,
+                anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
+                width: 0,
+                height: 0,
+                exclusive_zone: -1,
+                keyboard: if self.network.open() {
+                    Keyboard::Exclusive
+                } else {
+                    Keyboard::None
+                },
+                visible: self.network.visible(),
+                pointer_input: if self.network.open() {
+                    PointerInput::All
+                } else {
+                    PointerInput::None
+                },
+            },
             SurfaceSpec {
                 id: "audio",
                 layer: Layer::Overlay,
@@ -1043,7 +1096,16 @@ impl api::Application for Desktop {
         let weather = self.adapters.weather.clone();
         let notifications = self.adapters.notifications.clone();
         let audio = self.adapters.audio.clone();
+        let network = self.adapters.network.clone();
         let mut s = vec![
+            Subscription::stream("network", move |out, cancel| {
+                network.watch(
+                    &mut |value| {
+                        out.send(Message::Network(crate::network::Message::Observed(value)))
+                    },
+                    &WatchStop(cancel),
+                );
+            }),
             Subscription::stream("audio", move |out, cancel| {
                 audio.watch(
                     &mut |value| out.send(Message::Audio(crate::audio::Message::Observed(value))),
@@ -1081,6 +1143,14 @@ impl api::Application for Desktop {
                 );
             }));
         }
+        for subscription in self.network.subscriptions() {
+            s.push(Subscription::stream(subscription.id, move |out, cancel| {
+                (subscription.run)(
+                    Emitter::new(move |message| out.send(Message::Network(message))),
+                    cancel,
+                );
+            }));
+        }
         for subscription in self.browser.subscriptions(&self.adapters) {
             s.push(Subscription::stream(subscription.id, move |out, cancel| {
                 (subscription.run)(
@@ -1108,6 +1178,13 @@ impl api::Application for Desktop {
     }
     fn event(&self, event: Event) -> Option<Message> {
         match event {
+            Event::Key {
+                surface: "network",
+                key: Key::Escape,
+            } => Some(Message::Network(self.network.escape())),
+            Event::Key {
+                surface: "network", ..
+            } => None,
             Event::Key {
                 surface: "audio",
                 key: Key::Escape,
@@ -1233,6 +1310,9 @@ impl api::Application for Desktop {
             "audio open" => Message::Audio(crate::audio::Message::Open),
             "audio toggle" => Message::Audio(crate::audio::Message::Toggle),
             "audio close" => Message::Audio(crate::audio::Message::Close),
+            "network open" => Message::Network(crate::network::Message::Open),
+            "network toggle" => Message::Network(crate::network::Message::Toggle),
+            "network close" => Message::Network(crate::network::Message::Close),
             "bar show" => Message::Bar(true),
             "bar hide" => Message::Bar(false),
             "osd close" => Message::OsdClose,
@@ -1258,16 +1338,19 @@ impl api::Application for Desktop {
         }))
     }
     fn inspect(&self) -> String {
-        serde_json::json!({"desktop_viewport":self.viewport,"dock_surface_expanded":self.launcher.expanded(),"launcher_opening":self.launcher.opening(),"audio":self.audio.inspect(),"wallpaper_presentation":self.wallpaper.inspect_presentation(),"wallpaper_index":self.wallpaper_index, "wallpaper_count":self.wallpapers.len(), "prepared_assets": {
+        let mut value = serde_json::json!({"desktop_viewport":self.viewport,"dock_surface_expanded":self.launcher.expanded(),"launcher_opening":self.launcher.opening(),"audio":self.audio.inspect(),"wallpaper_presentation":self.wallpaper.inspect_presentation(),"wallpaper_index":self.wallpaper_index, "wallpaper_count":self.wallpapers.len(), "prepared_assets": {
             "icons": crate::previews::usage(self.images.values()),
             "local_previews": self.previews.inspect(),
             "online_previews": crate::previews::usage(self.browser.previews.values()),
             "background": crate::previews::usage(self.wallpaper.background.iter()),
             "total": crate::previews::usage(self.images.values().chain(self.previews.images()).chain(self.browser.previews.values()).chain(self.wallpaper.background.iter())),
-        }, "palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_history_open":self.notifications.history_open,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":self.widgets.grid_visible(),"widget_surfaces":self.widgets.surfaces(&self.settings,self.viewport).iter().map(|s|serde_json::json!({"id":s.id,"members":s.members,"x":s.rect.x,"y":s.rect.y,"width":s.rect.w,"height":s.rect.h})).collect::<Vec<_>>(),"notes":self.settings.notes,"timer_seconds":self.widgets.timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"settings_save_status":self.persistence.status(self.settings_writable).name(),"settings_save_error":self.persistence.error(),"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable}).to_string()
+        }, "palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_history_open":self.notifications.history_open,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":self.widgets.grid_visible(),"widget_surfaces":self.widgets.surfaces(&self.settings,self.viewport).iter().map(|s|serde_json::json!({"id":s.id,"members":s.members,"x":s.rect.x,"y":s.rect.y,"width":s.rect.w,"height":s.rect.h})).collect::<Vec<_>>(),"notes":self.settings.notes,"timer_seconds":self.widgets.timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"settings_save_status":self.persistence.status(self.settings_writable).name(),"settings_save_error":self.persistence.error(),"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable});
+        value["network"] = self.network.inspect();
+        value.to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
         (surface == "audio" && self.audio.animating(now))
+            || (surface == "network" && self.network.animating(now))
             || (surface == "osd" && self.osd.animating(now))
             || (surface == "dock" && (self.launcher.animating(now) || self.carousel.active(now)))
     }

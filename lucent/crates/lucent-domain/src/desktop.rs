@@ -198,7 +198,6 @@ pub struct SystemSnapshot {
     pub cpu_percent: f32,
     pub memory_used_mib: u64,
     pub memory_total_mib: u64,
-    pub network: String,
 }
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct MediaSnapshot {

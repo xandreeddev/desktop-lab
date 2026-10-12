@@ -1206,6 +1206,15 @@ fn visual_regressions() {
             ("audio-stale", Mode::Apps, 0, 0, "", 1., 390.),
             ("audio-opening", Mode::Apps, 0, 0, "", 0.12, 640.),
             ("audio-last", Mode::Apps, 0, 0, "", 1., 390.),
+            ("network-loading", Mode::Apps, 0, 0, "", 1., 640.),
+            ("network-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
+            ("network-available", Mode::Apps, 0, 0, "", 1., 640.),
+            ("network-password", Mode::Apps, 0, 0, "", 1., 390.),
+            ("network-hidden", Mode::Apps, 0, 0, "", 1., 390.),
+            ("network-forget", Mode::Apps, 0, 0, "", 1., 390.),
+            ("network-error", Mode::Apps, 0, 0, "", 1., 390.),
+            ("network-opening", Mode::Apps, 0, 0, "", 0.12, 640.),
+            ("network-last", Mode::Apps, 0, 0, "", 1., 390.),
         ] {
             if filter
                 .as_ref()
@@ -1466,6 +1475,72 @@ fn visual_regressions() {
                 };
                 let tree = session.view(&cx).map(|_| Message::Quit);
                 layout.build(&tree, width, height, &Interaction::default(), now)
+            } else if name.starts_with("network-") {
+                use crate::network::{
+                    Message as N,
+                    tests::{fixture, id},
+                };
+                let mut effects = Effects::default();
+                app.update(Message::Network(N::Open), &mut effects);
+                if name != "network-loading" {
+                    let state = if name == "network-unavailable" {
+                        Err(lucent_domain::DomainError::Unavailable(
+                            "The network service disconnected".into(),
+                        ))
+                    } else {
+                        let mut snapshot = fixture();
+                        for index in 3..10 {
+                            let mut ap = snapshot.access_points[0].clone();
+                            ap.id = id(10 + index);
+                            ap.ssid = Some(
+                                lucent_domain::NetworkSsid::new(
+                                    format!("Example network {index}").into_bytes(),
+                                )
+                                .unwrap(),
+                            );
+                            snapshot.access_points.push(ap);
+                        }
+                        Ok(snapshot)
+                    };
+                    app.update(Message::Network(N::Observed(state)), &mut effects);
+                }
+                if name == "network-password" {
+                    app.update(Message::Network(N::Join(id(2))), &mut effects);
+                    app.update(
+                        Message::Network(N::Password(
+                            1,
+                            InputEdit::Insert("fixture-secret".into()),
+                        )),
+                        &mut effects,
+                    );
+                }
+                if name == "network-hidden" {
+                    app.update(Message::Network(N::Hidden), &mut effects);
+                }
+                if name == "network-forget" {
+                    app.update(Message::Network(N::AskForget(id(3))), &mut effects);
+                }
+                if name == "network-error" {
+                    app.update(
+                        Message::Network(N::Request(crate::network::Control::Scan(id(999)))),
+                        &mut effects,
+                    );
+                }
+                if name == "network-last" {
+                    app.update(
+                        Message::Network(N::Scroll(ScrollEvent { offset: 10000. })),
+                        &mut effects,
+                    );
+                }
+                let tree = app.view(&ViewContext {
+                    surface: "network",
+                    width,
+                    height,
+                    now,
+                });
+                let mut input = Interaction::default();
+                input.synchronize(&layout.build(&tree, width, height, &input, now));
+                layout.build(&tree, width, height, &input, now)
             } else if name.starts_with("audio-") {
                 use crate::audio::{Message as AudioMessage, panel::Tab};
                 app.update(Message::Audio(AudioMessage::Open), &mut Effects::default());
@@ -2631,4 +2706,84 @@ fn audio_panel_closes_competing_launcher_and_keyboard_reveals_controls_at_narrow
         );
         assert!(!app.audio.open());
     }
+}
+
+#[test]
+fn network_overlay_keeps_one_keyboard_owner_and_masks_the_form_in_all_public_state() {
+    use crate::network::{
+        Message as N,
+        tests::{fixture as network_fixture, id},
+    };
+    let mut app = fixture(0, false);
+    let mut effects = Effects::default();
+    app.update(
+        Message::Network(N::Observed(Ok(network_fixture()))),
+        &mut effects,
+    );
+    app.update(Message::Network(N::Open), &mut effects);
+    assert!(!app.launcher.open());
+    assert!(!app.audio.open());
+    app.update(Message::Network(N::Join(id(2))), &mut effects);
+    app.update(
+        Message::Network(N::Password(
+            1,
+            InputEdit::Insert("private-test-value".into()),
+        )),
+        &mut effects,
+    );
+    let layout = Layout::new(fonts(&app));
+    let cx = ViewContext {
+        surface: "network",
+        width: 390.,
+        height: 580.,
+        now: 1.,
+    };
+    let tree = app.view(&cx);
+    let mut input = Interaction::default();
+    input.synchronize(&layout.build(&tree, cx.width, cx.height, &input, cx.now));
+    let scene = layout.build(&tree, cx.width, cx.height, &input, cx.now);
+    assert_eq!(input.focus.as_deref(), Some("network-password-1"));
+    assert!(
+        scene
+            .hits
+            .iter()
+            .all(|hit| !hit.value.contains("private-test-value"))
+    );
+    assert!(!app.inspect().contains("private-test-value"));
+    assert!(
+        scene
+            .paint
+            .iter()
+            .any(|p| matches!(p,Paint::Text{text,..} if text=="••••••••••••••••••"))
+    );
+    assert!(
+        scene
+            .paint
+            .iter()
+            .all(|p| !matches!(p,Paint::Text{text,..} if text.contains("private-test-value")))
+    );
+    assert_eq!(
+        app.surfaces()
+            .iter()
+            .filter(|s| s.visible && s.keyboard == Keyboard::Exclusive)
+            .count(),
+        1
+    );
+    app.update(Message::Audio(crate::audio::Message::Open), &mut effects);
+    assert!(!app.network.open());
+    assert_eq!(app.network.inspect()["form"], serde_json::Value::Null);
+    let network = app
+        .surfaces()
+        .into_iter()
+        .find(|s| s.id == "network")
+        .unwrap();
+    assert_eq!(network.pointer_input, PointerInput::None);
+    assert_eq!(network.keyboard, Keyboard::None);
+    app.update(Message::Network(N::Open), &mut effects);
+    app.update(
+        Message::Launcher(launcher::Message::Mode(Mode::Themes)),
+        &mut effects,
+    );
+    assert!(!app.network.open());
+    assert!(app.launcher.open());
 }

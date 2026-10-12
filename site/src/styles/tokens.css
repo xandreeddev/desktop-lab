@@ -412,6 +412,15 @@
   --component-audio-volume-step: 0.05;
   --component-audio-title-lines: 2;
   --component-audio-status-lines: 3;
+  --component-network-width: var(--component-audio-width);
+  --component-network-height: var(--component-audio-height);
+  --component-network-header-height: var(--component-audio-header-height);
+  --component-network-tab-height: var(--component-audio-tab-height);
+  --component-network-card-padding: var(--component-audio-card-padding);
+  --component-network-card-gap: var(--component-audio-card-gap);
+  --component-network-slide-distance: var(--component-audio-slide-distance);
+  --component-network-title-lines: var(--component-audio-title-lines);
+  --component-network-status-lines: var(--component-audio-status-lines);
   --icon-tiny: 16px;
   --icon-small: 17px;
   --icon-compact: 18px;

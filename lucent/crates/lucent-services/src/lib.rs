@@ -280,13 +280,10 @@ impl SystemProbe {
         };
         let total = memory("MemTotal:");
         let available = memory("MemAvailable:");
-        let network = command("nmcli", &["-t", "-f", "STATE", "general"])
-            .unwrap_or_else(|_| "Unavailable".into());
         Ok(SystemSnapshot {
             cpu_percent: cpu,
             memory_used_mib: total.saturating_sub(available),
             memory_total_mib: total,
-            network,
         })
     }
 }

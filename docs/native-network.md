@@ -5,11 +5,35 @@ adapter in `lucent-services/src/network/`. The independent `network-service`
 example consumes that contract without the desktop component, renderer, Wayland
 event loop, Omarchy menu or `nmcli`.
 
-The adapter is not yet selected by `platform::desktop_adapters()`. The existing
-desktop network menu still uses its compatibility flow, including `nmtui` for new
-connections. The following milestone must replace that flow with a Lucent child
-component, framework controls, masked secret input and explicit error/focus state.
-Adding a port does not establish a usable native network panel.
+The composition root injects the same adapter into the native Network child.
+Click the network icon or run `lucent-cli network open`. Its Wi-Fi, Saved and
+Active tabs offer scanning, visible/hidden joins, saved activation, targeted
+disconnect and confirmed deletion. Omarchy network entrypoints open that child;
+no terminal wizard is launched. The view borrows snapshots and calls no OS APIs.
+One cancellable root subscription lifts observations into messages. An ordered
+effect queue moves owned commands to the port. Acceptance is separate from the
+observed connection or scan completion; no successful state is invented.
+
+## Masked input and client lifetime
+
+`Element::masked_input(count, placeholder, on_edit)` stores a character count,
+not a value. Layout paints bullets and emits Insert, Replace, Backspace or Clear
+InputEdit deltas. It never accumulates the full secret in a framework input
+buffer or hit value. `on_submit(message)` emits Enter separately from pointer
+focus. Tab/Shift+Tab use existing focus traversal and scroll reveal. The generic
+control contains no network concepts.
+
+The generation-bound private form owns a zeroizing Secret. Submit consumes it
+into non-cloneable credentials and a command. Close, cancel, changed security,
+retired targets and service loss clear or drop the form. Stale edits are rejected.
+Passwords are absent from elements, inspector state, preferences, argv and retry
+snapshots. Failed joins need fresh credentials. Individual event strings and
+native transport copies are not guaranteed to be zeroized.
+
+Closing releases keyboard/pointer input immediately; a token-timed exit motion
+precedes unmounting. Reopening rejects stale close timers and retargets current
+motion. The root coordinates launcher/audio/network keyboard ownership. Closed
+network observation continues without an idle redraw loop or nmcli polling.
 
 ## Values and ownership
 

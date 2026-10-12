@@ -15,6 +15,12 @@ const sections: [string, string][] = [['scope','01 · Library boundary'],['contr
     <CodeBlock code="cargo run --manifest-path lucent/Cargo.toml --locked -p hello-layer" label="Inside a Wayland session with layer-shell and Vulkan" />
     <p>This is an in-workspace library. The repository does not promise a stable published crates.io API. The example is a real independent client, not an Omarchy service.</p>
   </section>
+  <section id="masked-input"><span class="eyebrow">CONTROLLED SECRET INPUT</span><h2>Render a count.<br />Keep the value in the client.</h2>
+    <CodeBlock code={'Element::masked_input(secret.len(), "Password", Message::Edit)\n    .id("password")\n    .autofocus()\n    .on_submit(Message::Submit)'} label="Generic framework control" />
+    <p>The element stores a character count and placeholder. Layout paints bullets. Its callback receives InputEdit intents: Insert, Replace, Backspace or Clear. The framework never keeps the full secret in its input buffer or hit value; Debug output hides each edit's text.</p>
+    <p>The client owns validation and actual storage. Lucent's network form uses a zeroizing domain Secret and moves it into an owned command. Cancellation, stale-form generations and retries belong to the client. The control knows nothing about Wi-Fi.</p>
+    <p>on_submit works with ordinary and masked fields. Enter emits the supplied message, pointer input focuses, and Tab/Shift+Tab traverse controls and reveal scrolled fields. Transient event strings and external protocol copies are not guaranteed to be erased. Caret positioning, IME and accessibility remain separate framework work.</p>
+  </section>
   <section id="contract"><span class="eyebrow">02 / WHAT YOU IMPLEMENT</span><h2>State, messages and a view.</h2>
     <CodeBlock code={excerpt(api, 'pub trait Component:', 'pub type Task<M>')} lang="rust" label="Actual Component and Application contracts" />
     <p>A Rust struct holds state. A message enum names possible changes. <code>view(&amp;self)</code> constructs an <code>Element</code> tree; <code>update(&amp;mut self)</code> changes state and records effects. An application also declares native surfaces, startup work and subscriptions. These are ordinary Rust method calls, not automatically discovered classes or registered DOM nodes.</p>
