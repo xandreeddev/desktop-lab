@@ -116,6 +116,11 @@ struct State<A: Application> {
 pub fn run<A: Application>(app: A) -> Result<(), Error> {
     run_inner(app, None, true)
 }
+/// Run ordinary Wayland application surfaces without local debug/command IPC.
+/// Authentication dialogs use this entry point; secure session locking uses run_locked.
+pub fn run_without_ipc<A: Application>(app: A) -> Result<(), Error> {
+    run_inner(app, None, false)
+}
 /// Authentication must finish before authorizing unlock. Ordinary exit never unlocks.
 pub trait LockApplication: Application {
     fn authenticated(&self) -> bool;
@@ -126,7 +131,7 @@ pub fn run_locked<A: LockApplication>(app: A) -> Result<(), Error> {
 }
 /// Login greeters also disable the debugging/command socket.
 pub fn run_greeter<A: Application>(app: A) -> Result<(), Error> {
-    run_inner(app, None, false)
+    run_without_ipc(app)
 }
 fn run_inner<A: Application>(
     app: A,

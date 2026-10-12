@@ -51,6 +51,7 @@ const sections: [string, string][] = [['scope','01 · Library boundary'],['contr
     <p><code>Theme::scroll</code> supplies semantic colors, padding, corner radius and generated <code>component.scroll</code> tokens. It remains optional. Views share immutable ancestor metadata, and keyboard traversal stops at the next reachable candidate. All list items are still measured and placed: this is bounded viewport scrolling, not a virtualized list. Touch, kinetic scrolling, horizontal scrolling and arbitrary programmatic focus/reveal remain separate work.</p>
   </section>
   <section id="execute"><span class="eyebrow">04 / WHEN THINGS HAPPEN</span><h2>One event loop owns state.</h2>
+    <p>The executable selects the runtime entry point. <code>run</code> enables the local command and inspection server; <code>run_without_ipc</code> runs ordinary Wayland surfaces with that server disabled. Permission dialogs use this explicit mode, and <code>run_greeter</code> delegates to it for login. Secure lock clients use <code>run_locked</code>, which protects every output through the session-lock protocol and requires the client's authenticated result before unlocking.</p>
     <CodeBlock code={`run(application)
   connect to Wayland; create shared GPU and layout resources
   register event sources with calloop

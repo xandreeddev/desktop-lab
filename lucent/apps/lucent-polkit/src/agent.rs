@@ -214,7 +214,7 @@ mod implementation {
                 )
                 .with_theme(light)
                 .with_authorization(message);
-                let _ = lucent_wayland::run(screen);
+                let _ = lucent_wayland::run_without_ipc(screen);
                 let _ = replies.send_blocking(Reply::Closed);
             });
             session.initiate();
