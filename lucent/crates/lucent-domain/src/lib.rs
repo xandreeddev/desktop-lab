@@ -11,6 +11,9 @@ pub use audio::*;
 mod network;
 pub use network::*;
 
+mod bluetooth;
+pub use bluetooth::*;
+
 mod notifications;
 pub use notifications::*;
 mod authentication;

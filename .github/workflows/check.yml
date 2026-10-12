@@ -44,6 +44,7 @@ jobs:
       - run: cargo test --manifest-path lucent/Cargo.toml --locked --workspace
       - run: dbus-run-session -- cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-services notification_ -- --ignored
       - run: cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-services audio_protocol -- --ignored
+      - run: cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-services bluetooth_protocol -- --ignored
       - name: Native Vulkan visual regressions
         run: |
           export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name '*lvp*' -print -quit)"
