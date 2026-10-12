@@ -70,8 +70,13 @@ impl Gpu {
                 .map_err(|e| format!("A Vulkan driver is required: {e}"))?;
         let adapter_description = format!("{:?}", adapter.get_info());
         eprintln!("lucent GPU: {adapter_description}");
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&DeviceDescriptor::default()))?;
+        // A desktop UI has modest active resources and long idle periods. Ask
+        // the backend to favor smaller allocation pools over throughput. This
+        // is an allocation preference, not a hard memory/resource limit.
+        let (device, queue) = pollster::block_on(adapter.request_device(&DeviceDescriptor {
+            memory_hints: MemoryHints::MemoryUsage,
+            ..Default::default()
+        }))?;
         let device_failure = Arc::new(Mutex::new(None));
         let failure = device_failure.clone();
         device.set_device_lost_callback(move |reason, message| {
