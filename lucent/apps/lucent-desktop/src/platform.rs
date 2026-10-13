@@ -59,6 +59,7 @@ impl AssetPort for NativeAssets {
         for name in [
             "apps",
             "pin",
+            "resize",
             "search",
             "wallpaper",
             "widgets",

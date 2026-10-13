@@ -1,7 +1,7 @@
 //! Pure client geometry for bounded native widget buffers.
 //! Overlapping paint bounds share one buffer, preserving the original tree's
 //! order without relying on compositor ordering within a Wayland layer.
-use super::{default_position, widget_size};
+use super::default_position;
 use lucent_api::{Rect, Shadow};
 use lucent_design::{elevation, layout};
 use lucent_domain::{DesktopSettings, Placement};
@@ -13,13 +13,18 @@ pub struct Surface {
     pub rect: Rect,
 }
 
-pub fn position(id: &str, settings: &DesktopSettings, viewport: (f32, f32)) -> Placement {
+pub fn position(
+    id: &str,
+    settings: &DesktopSettings,
+    viewport: (f32, f32),
+    editing: bool,
+) -> Placement {
     let value = settings
         .positions
         .get(id)
         .copied()
         .unwrap_or_else(|| default_position(id, viewport));
-    let size = widget_size(id);
+    let size = super::sizing::visual_size(id, settings, viewport, editing);
     Placement::new(
         value.x().clamp(0., (viewport.0 - size.0).max(0.)),
         value.y().clamp(0., (viewport.1 - size.1).max(0.)),
@@ -27,9 +32,9 @@ pub fn position(id: &str, settings: &DesktopSettings, viewport: (f32, f32)) -> P
     .expect("validated placement, output and design tokens")
 }
 
-fn crop(id: &str, settings: &DesktopSettings, viewport: (f32, f32)) -> Rect {
-    let pos = position(id, settings, viewport);
-    let (width, height) = widget_size(id);
+fn crop(id: &str, settings: &DesktopSettings, viewport: (f32, f32), editing: bool) -> Rect {
+    let pos = position(id, settings, viewport, editing);
+    let (width, height) = super::sizing::visual_size(id, settings, viewport, editing);
     let pad = Shadow::blur_outset(elevation::BLUR);
     let floor = |value| crate::shell_layout::floor(value, layout::SHELL_STEP);
     let ceil = |value: f32| (value.max(0.) / layout::SHELL_STEP).ceil() * layout::SHELL_STEP;
@@ -66,14 +71,14 @@ fn union(a: Rect, b: Rect) -> Rect {
     )
 }
 
-pub fn layout(settings: &DesktopSettings, viewport: (f32, f32)) -> Vec<Surface> {
+pub fn layout(settings: &DesktopSettings, viewport: (f32, f32), editing: bool) -> Vec<Surface> {
     let order = visible(settings);
     let mut result: Vec<_> = order
         .iter()
         .map(|id| Surface {
             id,
             members: vec![id],
-            rect: crop(id, settings, viewport),
+            rect: crop(id, settings, viewport, editing),
         })
         .collect();
     // Merge until even the resulting buffer bounds are disjoint. This small
@@ -102,6 +107,7 @@ pub fn captured(
     layout: &[Surface],
     settings: &DesktopSettings,
     viewport: (f32, f32),
+    editing: bool,
 ) -> Vec<Surface> {
     let visible = visible(settings);
     let mut result: Vec<_> = layout
@@ -117,7 +123,7 @@ pub fn captured(
             result.push(Surface {
                 id,
                 members: vec![id],
-                rect: crop(id, settings, viewport),
+                rect: crop(id, settings, viewport, editing),
             });
         }
     }
@@ -150,7 +156,7 @@ mod tests {
         settings
             .positions
             .insert("system".into(), Placement::new(1400., 800.).unwrap());
-        let groups = layout(&settings, (1920., 1080.));
+        let groups = layout(&settings, (1920., 1080.), false);
         let group = groups
             .iter()
             .find(|s| s.members.contains(&"calendar"))
@@ -165,14 +171,14 @@ mod tests {
     #[test]
     fn captured_sources_keep_geometry_through_unrelated_visibility_changes() {
         let mut settings = DesktopSettings::default();
-        let initial = layout(&settings, (1920., 1080.));
+        let initial = layout(&settings, (1920., 1080.), false);
         let source = initial
             .iter()
             .find(|s| s.members.contains(&"weather"))
             .unwrap();
         settings.visible_widgets.retain(|id| id != "calendar");
         settings.visible_widgets.push("notes".into());
-        let current = captured(&initial, &settings, (1920., 1080.));
+        let current = captured(&initial, &settings, (1920., 1080.), false);
         let source_after = current.iter().find(|s| s.id == source.id).unwrap();
         assert_eq!(source.rect, source_after.rect);
         assert!(current.iter().any(|s| s.members.contains(&"notes")));

@@ -46,6 +46,53 @@ impl From<Placement> for PlacementRecord {
     }
 }
 
+/// A saved widget extent with finite, positive dimensions. Minimum sizes,
+/// output limits and snapping are supplied by the client and use cases.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "WidgetSizeRecord", into = "WidgetSizeRecord")]
+pub struct WidgetSize {
+    width: f32,
+    height: f32,
+}
+impl WidgetSize {
+    pub fn new(width: f32, height: f32) -> Result<Self> {
+        if !width.is_finite() || !height.is_finite() || width <= 0. || height <= 0. {
+            return Err(DomainError::Invalid(
+                "Widget dimensions must be finite and positive".into(),
+            ));
+        }
+        Ok(Self { width, height })
+    }
+    pub fn width(self) -> f32 {
+        self.width
+    }
+    pub fn height(self) -> f32 {
+        self.height
+    }
+    pub fn tuple(self) -> (f32, f32) {
+        (self.width, self.height)
+    }
+}
+#[derive(Serialize, Deserialize)]
+struct WidgetSizeRecord {
+    width: f32,
+    height: f32,
+}
+impl TryFrom<WidgetSizeRecord> for WidgetSize {
+    type Error = DomainError;
+    fn try_from(value: WidgetSizeRecord) -> Result<Self> {
+        Self::new(value.width, value.height)
+    }
+}
+impl From<WidgetSize> for WidgetSizeRecord {
+    fn from(value: WidgetSize) -> Self {
+        Self {
+            width: value.width,
+            height: value.height,
+        }
+    }
+}
+
 /// A valid date in the proleptic Gregorian calendar (including year zero).
 /// Weekdays are derived, so they cannot disagree with the date. The full i32 year
 /// range is supported; intermediate arithmetic uses i64 to avoid overflow.
@@ -112,6 +159,21 @@ impl Date {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn widget_size_requires_positive_finite_dimensions_including_deserialization() {
+        use serde::de::{
+            IntoDeserializer,
+            value::{Error, MapDeserializer},
+        };
+        for (width, height) in [(0., 1.), (-1., 1.), (1., f32::NAN), (f32::INFINITY, 1.)] {
+            assert!(WidgetSize::new(width, height).is_err());
+            let record = [("width", width), ("height", height)]
+                .into_iter()
+                .map(|(key, value)| (key.into_deserializer(), value.into_deserializer()));
+            assert!(WidgetSize::deserialize(MapDeserializer::<_, Error>::new(record)).is_err());
+        }
+        assert_eq!(WidgetSize::new(320., 240.).unwrap().tuple(), (320., 240.));
+    }
     #[test]
     fn placement_construction_and_deserialization_require_finite_coordinates() {
         use serde::de::{

@@ -1220,6 +1220,11 @@ fn visual_regressions() {
             ("menu-empty", Mode::Apps, 0, 0, "no such action", 1., 640.),
             ("menu-input", Mode::Apps, 0, 0, "A reminder", 1., 640.),
             ("widget-drag-grid", Mode::Apps, 0, 0, "", 1., 960.),
+            ("widget-resize-preview", Mode::Apps, 0, 0, "", 1., 960.),
+            ("widget-resize-saved", Mode::Apps, 0, 0, "", 1., 960.),
+            ("widget-resize-small", Mode::Apps, 0, 0, "", 1., 390.),
+            ("widget-edit-keyboard", Mode::Apps, 0, 0, "", 1., 640.),
+            ("widget-editor", Mode::Apps, 0, 0, "", 1., 960.),
             ("notes-saved", Mode::Apps, 0, 0, "", 1., 390.),
             ("notes-saving", Mode::Apps, 0, 0, "", 1., 390.),
             ("notes-retrying", Mode::Apps, 0, 0, "", 1., 390.),
@@ -1396,6 +1401,78 @@ fn visual_regressions() {
                     width,
                     height,
                     &Interaction::default(),
+                    now,
+                )
+            } else if name.starts_with("widget-resize-") || name.starts_with("widget-edit") {
+                app.settings_writable = true;
+                app.settings.visible_widgets = vec!["notes".into()];
+                app.settings.positions.insert(
+                    "notes".into(),
+                    lucent_domain::Placement::new(64., 96.).unwrap(),
+                );
+                app.settings.notes = "A thought to keep nearby".into();
+                if name == "widget-editor" {
+                    app.settings.visible_widgets.push("calendar".into());
+                    app.settings.positions.insert(
+                        "calendar".into(),
+                        lucent_domain::Placement::new(416., 96.).unwrap(),
+                    );
+                }
+                let mut effects = Effects::default();
+                app.update(
+                    Message::Widgets(crate::widgets::Message::Edit(true)),
+                    &mut effects,
+                );
+                app.update(
+                    Message::Widgets(crate::widgets::Message::Press),
+                    &mut effects,
+                );
+                if name == "widget-resize-small" {
+                    app.settings.widget_sizes.insert(
+                        "notes".into(),
+                        lucent_domain::WidgetSize::new(640., 320.).unwrap(),
+                    );
+                }
+                if name == "widget-resize-preview" || name == "widget-resize-saved" {
+                    app.update(
+                        Message::Widgets(crate::widgets::Message::Resize(
+                            "notes".into(),
+                            DragEvent {
+                                dx: 89.,
+                                dy: 65.,
+                                finished: false,
+                            },
+                        )),
+                        &mut effects,
+                    );
+                    if name == "widget-resize-saved" {
+                        app.update(
+                            Message::Widgets(crate::widgets::Message::Resize(
+                                "notes".into(),
+                                DragEvent {
+                                    dx: 89.,
+                                    dy: 65.,
+                                    finished: true,
+                                },
+                            )),
+                            &mut effects,
+                        );
+                    }
+                }
+                let mut interaction = Interaction::default();
+                interaction.focus =
+                    (name == "widget-edit-keyboard").then(|| "widget-size-notes-1".into());
+                interaction.focus_visible = name == "widget-edit-keyboard";
+                layout.build(
+                    &app.view(&ViewContext {
+                        surface: "widgets",
+                        width,
+                        height,
+                        now,
+                    }),
+                    width,
+                    height,
+                    &interaction,
                     now,
                 )
             } else if name == "widget-drag-grid" {
@@ -2224,6 +2301,7 @@ fn settled_shell_geometry_obeys_grid_and_contains_its_controls() {
                     || hit.id.starts_with("command-")
                     || hit.id.starts_with("toggle-")
                     || hit.id == "reset-layout"
+                    || hit.id == "edit-layout"
                     || hit.id == "apply-wallpaper"
                     || hit.id == "wallpaper-previous"
                     || hit.id == "wallpaper-next"
@@ -3312,4 +3390,174 @@ fn live_catalog_updates_keep_query_selected_identity_and_missing_saved_pins() {
     assert!(
         matches!(app.event(key),Some(Message::Dock(crate::dock::Message::Pin(id)))if id==selected)
     );
+}
+
+#[test]
+fn native_widget_resize_uses_the_grip_and_preserves_source_capture_until_release() {
+    use crate::widgets::Message as W;
+    let mut app = fixture(0, false);
+    resize_fixture(&mut app, 800., 600.);
+    app.settings_writable = true;
+    app.settings.visible_widgets = vec!["notes".into()];
+    app.settings.positions.insert(
+        "notes".into(),
+        lucent_domain::Placement::new(128., 160.).unwrap(),
+    );
+    let layout = Layout::new(fonts(&app));
+    let group = app.widgets.surfaces(&app.settings, app.viewport)[0].clone();
+    let cx = ViewContext {
+        surface: group.id,
+        width: group.rect.w,
+        height: group.rect.h,
+        now: 1.,
+    };
+    let mut input = Interaction::default();
+    let ordinary = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
+    assert!(
+        !ordinary
+            .hits
+            .iter()
+            .any(|hit| hit.id == "widget-resize-notes")
+    );
+    app.update(Message::Widgets(W::Edit(true)), &mut Effects::default());
+    let group = app.widgets.surfaces(&app.settings, app.viewport)[0].clone();
+    let cx = ViewContext {
+        surface: group.id,
+        width: group.rect.w,
+        height: group.rect.h,
+        now: 1.,
+    };
+    let before = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
+    let grip = before
+        .hits
+        .iter()
+        .find(|hit| hit.id == "widget-resize-notes")
+        .unwrap();
+    let (x, y) = (
+        grip.rect.x + grip.rect.w / 2.,
+        grip.rect.y + grip.rect.h / 2.,
+    );
+    assert!(grip.contains(x, y));
+    let card = before
+        .hits
+        .iter()
+        .find(|hit| hit.id == "widget-notes")
+        .unwrap();
+    for hit in before
+        .hits
+        .iter()
+        .filter(|hit| hit.id.starts_with("widget-size-") || hit.id.starts_with("widget-resize-"))
+    {
+        assert!(
+            hit.rect.y
+                >= card.rect.y
+                    + app
+                        .widgets
+                        .size("notes", &app.settings, app.viewport, true)
+                        .height()
+        );
+        assert!(fully_visible(hit.rect, card.rect));
+    }
+    let message = app
+        .event(Event::PointerButton {
+            surface: group.id,
+            button: MouseButton::Primary,
+            pressed: true,
+            x,
+            y,
+        })
+        .unwrap();
+    app.update(message, &mut Effects::default());
+    input.press(&before, x, y);
+    for message in input.motion(&before, x + 53., y + 47., cx.now) {
+        app.update(message, &mut Effects::default());
+    }
+    assert!(app.widgets.grid_visible());
+    assert!(app.settings.widget_sizes.is_empty());
+    let surfaces = app.surfaces();
+    let preview = surfaces.iter().find(|spec| spec.id == "widgets").unwrap();
+    assert!(preview.visible);
+    assert_eq!(preview.pointer_input, PointerInput::None);
+    assert_eq!(preview.keyboard, Keyboard::None);
+    let during = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
+    assert!(during.paint.is_empty());
+    assert_eq!(before.regions, during.regions);
+    input.synchronize(&during);
+    app.update(
+        input.release(x + 53., y + 47.).unwrap(),
+        &mut Effects::default(),
+    );
+    assert_eq!(app.settings.widget_sizes["notes"].tuple(), (320., 208.));
+    assert!(!app.widgets.grid_visible());
+    assert!(
+        app.surfaces()
+            .iter()
+            .find(|spec| spec.id == group.id)
+            .unwrap()
+            .width
+            > group.rect.w as u32
+    );
+}
+
+#[test]
+fn widget_editor_routes_launcher_keyboard_size_controls_escape_and_checked_ipc() {
+    use crate::widgets::Message as W;
+    let mut app = fixture(0, false);
+    resize_fixture(&mut app, 800., 600.);
+    app.settings_writable = true;
+    app.settings.visible_widgets = vec!["notes".into()];
+    app.update(
+        Message::Launcher(launcher::Message::Mode(Mode::Widgets)),
+        &mut Effects::default(),
+    );
+    app.update(
+        Message::Launcher(launcher::Message::Select(
+            crate::widgets::catalog::WIDGETS.len() + 1,
+        )),
+        &mut Effects::default(),
+    );
+    let mut effects = Effects::default();
+    app.update(Message::Launcher(launcher::Message::Activate), &mut effects);
+    assert!(app.widgets.editing());
+    assert!(!app.launcher.open());
+    assert!(effects.tasks.is_empty());
+    let group = app.widgets.surfaces(&app.settings, app.viewport)[0].clone();
+    let cx = ViewContext {
+        surface: group.id,
+        width: group.rect.w,
+        height: group.rect.h,
+        now: 1.,
+    };
+    let layout = Layout::new(fonts(&app));
+    let mut input = Interaction::default();
+    let scene = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
+    input.focus = Some("widget-size-notes-1".into());
+    let messages = input.key(&scene, &Key::Enter);
+    assert_eq!(messages.len(), 1);
+    for message in messages {
+        app.update(message, &mut Effects::default());
+    }
+    assert_eq!(app.settings.widget_sizes["notes"].tuple(), (288., 176.));
+    for command in [
+        "widgets size notes 0 300",
+        "widgets size unknown 320 240",
+        "widgets size notes NaN 300",
+        "widgets size notes 400",
+    ] {
+        assert!(app.command(command).is_err());
+    }
+    app.update(
+        app.command("widgets size notes 400 240").unwrap().unwrap(),
+        &mut Effects::default(),
+    );
+    assert_eq!(app.settings.widget_sizes["notes"].tuple(), (400., 240.));
+    let exit = app
+        .event(Event::Key {
+            surface: group.id,
+            key: Key::Escape,
+        })
+        .unwrap();
+    assert!(matches!(exit, Message::Widgets(W::Edit(false))));
+    app.update(exit, &mut Effects::default());
+    assert!(!app.widgets.editing());
 }

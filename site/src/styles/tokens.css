@@ -458,6 +458,9 @@
   --component-selection-indicator-stroke: var(--space-hairline);
   --component-selection-indicator-fill-size: var(--space-sm);
   --component-selection-indicator-radius: var(--space-xxs);
+  --component-widget-resize-handle-size: var(--space-section);
+  --component-widget-resize-inset: var(--space-sm);
+  --component-widget-resize-button-padding: var(--space-xxs);
   --icon-tiny: 16px;
   --icon-small: 17px;
   --icon-compact: 18px;
