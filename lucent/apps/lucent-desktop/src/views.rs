@@ -192,31 +192,40 @@ impl Desktop {
             ])
             .on_click(Message::Launcher(launcher::Message::Mode(Mode::Widgets)))
             .id("bar-clock");
-        let right = self
-            .pill(vec![
-                bar_icon("notifications")
-                    .on_click(Message::Notifications(
-                        crate::notifications::Message::Toggle,
-                    ))
-                    .id("bar-notifications"),
-                bar_icon("network")
-                    .on_click(Message::Network(crate::network::Message::Toggle))
-                    .id("bar-network"),
-                bar_icon("bluetooth")
-                    .on_click(Message::Bluetooth(crate::bluetooth::Message::Toggle))
-                    .id("bar-bluetooth"),
+        let mut controls = vec![
+            bar_icon("notifications")
+                .on_click(Message::Notifications(
+                    crate::notifications::Message::Toggle,
+                ))
+                .id("bar-notifications"),
+            bar_icon("network")
+                .on_click(Message::Network(crate::network::Message::Toggle))
+                .id("bar-network"),
+            bar_icon("bluetooth")
+                .on_click(Message::Bluetooth(crate::bluetooth::Message::Toggle))
+                .id("bar-bluetooth"),
+            bar_icon("power")
+                .on_click(Message::Power(crate::power::Message::Toggle))
+                .id("bar-power"),
+            self.label(self.audio.label(), font::CAPTION)
+                .on_click(Message::Audio(crate::audio::Message::Toggle))
+                .id("bar-audio")
+                .width(Length::Fixed(component::bar::CONTROL_SIZE))
+                .align(Align::Center),
+            bar_icon("lock")
+                .on_click(Message::Action(Action::Lock))
+                .id("bar-lock"),
+        ];
+        if geometry.show_mute {
+            controls.insert(
+                4,
                 bar_icon("volume")
                     .on_click(Message::Action(Action::Mute))
                     .id("bar-mute"),
-                self.label(self.audio.label(), font::CAPTION)
-                    .on_click(Message::Audio(crate::audio::Message::Toggle))
-                    .id("bar-audio")
-                    .width(Length::Fixed(component::bar::CONTROL_SIZE))
-                    .align(Align::Center),
-                bar_icon("lock")
-                    .on_click(Message::Action(Action::Lock))
-                    .id("bar-lock"),
-            ])
+            );
+        }
+        let right = self
+            .pill(controls)
             .size(geometry.system.w, geometry.system.h)
             .at(geometry.system.x, geometry.system.y);
         let mut groups = vec![right];

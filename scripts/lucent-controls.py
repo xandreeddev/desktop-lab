@@ -73,15 +73,7 @@ def monitor():
 
 
 def power():
-    while True:
-        current = output('powerprofilesctl','get')
-        profiles = output('omarchy-powerprofiles-list').splitlines()
-        rows = [(name, 'Current' if name == current else 'Power profile', ('omarchy-powerprofiles-set','autodetect',name)) for name in profiles]
-        rows += [('Lock','Secure Lucent lock',('omarchy-system-lock',)),
-                 ('Suspend','Lock before sleeping',('systemctl','suspend'))]
-        action = choose('Power',rows)
-        if action is None: return
-        output(*action)
+    output(str(Path.home()/'.local/bin/lucent-cli'), 'power', 'open')
 
 
 def paste(text=None, path=None):

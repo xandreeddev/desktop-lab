@@ -1218,6 +1218,13 @@ fn visual_regressions() {
             ("notes-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("menu-submenu", Mode::Apps, 0, 0, "", 1., 640.),
             ("audio-loading", Mode::Apps, 0, 0, "", 1., 640.),
+            ("power-loading", Mode::Apps, 0, 0, "", 1., 640.),
+            ("power-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
+            ("power-controls", Mode::Apps, 0, 0, "", 1., 390.),
+            ("power-confirmation", Mode::Apps, 0, 0, "", 1., 390.),
+            ("power-pending", Mode::Apps, 0, 0, "", 1., 390.),
+            ("power-failed", Mode::Apps, 0, 0, "", 1., 390.),
+            ("power-last", Mode::Apps, 0, 0, "", 1., 390.),
             ("audio-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("audio-outputs", Mode::Apps, 0, 0, "", 1., 640.),
             ("audio-inputs", Mode::Apps, 0, 0, "", 1., 390.),
@@ -1552,6 +1559,54 @@ fn visual_regressions() {
                 };
                 let tree = session.view(&cx).map(|_| Message::Quit);
                 layout.build(&tree, width, height, &Interaction::default(), now)
+            } else if name.starts_with("power-") {
+                use crate::power::{Message as P, tests::fixture};
+                use lucent_domain::{
+                    DomainError, PowerAction, PowerCommand, PowerObjectId, PowerOperation,
+                    PowerOperationId, PowerOperationPhase,
+                };
+                let mut effects = Effects::default();
+                app.update(Message::Power(P::Open), &mut effects);
+                if name != "power-loading" {
+                    let snapshot = if name == "power-unavailable" {
+                        Err(DomainError::Unavailable(
+                            "Power services disconnected".into(),
+                        ))
+                    } else {
+                        let mut state = fixture();
+                        if matches!(name, "power-pending" | "power-failed") {
+                            state.operation = Some(PowerOperation {
+                                id: PowerOperationId::new(10).unwrap(),
+                                command: PowerCommand::SetProfile(PowerObjectId::new(2).unwrap()),
+                                phase: if name == "power-pending" {
+                                    PowerOperationPhase::InProgress
+                                } else {
+                                    PowerOperationPhase::Failed("Power permission denied".into())
+                                },
+                            });
+                        }
+                        Ok(state)
+                    };
+                    app.update(Message::Power(P::Observed(snapshot)), &mut effects);
+                }
+                if name == "power-confirmation" {
+                    app.update(Message::Power(P::Ask(PowerAction::PowerOff)), &mut effects);
+                }
+                if name == "power-last" {
+                    app.update(
+                        Message::Power(P::Scroll(ScrollEvent { offset: 10000. })),
+                        &mut effects,
+                    );
+                }
+                let tree = app.view(&ViewContext {
+                    surface: "power",
+                    width,
+                    height,
+                    now,
+                });
+                let mut input = Interaction::default();
+                input.synchronize(&layout.build(&tree, width, height, &input, now));
+                layout.build(&tree, width, height, &input, now)
             } else if name.starts_with("bluetooth-") {
                 use crate::bluetooth::{
                     Message as B,

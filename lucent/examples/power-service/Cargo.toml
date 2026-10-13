@@ -1,0 +1,11 @@
+[package]
+name = "power-service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+lucent-domain = { path = "../../crates/lucent-domain" }
+lucent-services = { path = "../../crates/lucent-services" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

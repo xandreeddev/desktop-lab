@@ -229,7 +229,8 @@
         "BluetoothPort, validated transient handles/addresses, pure command policy and a native BlueZ adapter now have an independent consumer. Five private D-Bus regressions cover discovery ownership, paired controls, retirement/reconnect, signal pressure, timeout/privacy and connection cleanup. A release consumer observes the real guest daemon with zero controllers and cancels in 0.114 seconds; owned daemon/module state is restored. Native pairing, desktop injection and hardware acceptance remain pending.",
         "Native BluetoothPort pairing conversations now distinguish local attempt admission, explicit prompt answers and observed completion. Lazy KeyboardDisplay Agent1 registration, bounded proposals, zeroizing PIN/passkey input, exact unique-owner/current-target checks, cancellation/release and timeout retirement are implemented. Thirteen Bluetooth unit/protocol tests passed, including five new pairing protocol cases. Native desktop injection and actual-controller/profile acceptance remain open; this does not complete the control center.",
         "Native Bluetooth child and composition-root injection now use BluetoothPort for loading/unavailable/current controllers, discovery, device controls and explicit pairing cards. Masked input and token-based motion use the framework; generation-bound forms drop on retirement/close. Late pairing admission is cancelled after close, and only accepted discovery sessions owned by Lucent are released. Seventeen Bluetooth unit/private-D-Bus protocol tests and eight injected client/root input checks pass. All 292 software-Vulkan visual comparisons pass, including 44 new Bluetooth references and reviewed bar control changes at 1x/2x. Native guest/controller interaction and compatibility replacement remain pending; this does not complete the control center.",
-        "Radio visibility and permission for incoming pairs now use typed BluetoothCommand variants, pure target/power policy and native Adapter1 property writes. Observation, discovery ownership and incoming-agent authority remain distinct. A separate client Radio tab keeps device selection reachable. Fifteen private D-Bus protocol checks pass, including property observation/expiry and no automatic agent/trust/discovery authority; native guest/controller acceptance is still pending."
+        "Radio visibility and permission for incoming pairs now use typed BluetoothCommand variants, pure target/power policy and native Adapter1 property writes. Observation, discovery ownership and incoming-agent authority remain distinct. A separate client Radio tab keeps device selection reachable. Fifteen private D-Bus protocol checks pass, including property observation/expiry and no automatic agent/trust/discovery authority; native guest/controller acceptance is still pending.",
+        "Native PowerPort/PowerServices, validated percentages and current handles, independent power-service consumer and SDK power child now implement battery, built-in brightness, power profiles and explicit session confirmation. Four isolated D-Bus protocol cases verify writes, permission errors, live battery signals during pending authorization, owner/target retirement and absent-service shutdown. 287 Rust workspace tests, strict format/Clippy, 79 Python checks and all 348 software-Vulkan comparisons pass. Only 28 new power references and 12 intentional bar changes were accepted after review. Remote CI remains pending. VM/hardware acceptance is deferred under the user instruction; broader control-center gaps remain open."
       ]
     },
     {
@@ -309,6 +310,9 @@
         "Native VM validation with reversible deployment",
         "Protected-main CI and Pages deployment",
         "Requirement-by-requirement completion audit"
+      ],
+      "progress": [
+        "All 12 previously open PRs (27-35, 37-39) were integrated through PR 39 into main after all six exact-head checks passed. Verified main tree matches the tested integration and every contained PR is marked merged. Pages deployment from merge 6382a41de7e46fe021e2f90c841b9937e4bf15df succeeded. The user now authorizes merging passing PRs as work proceeds and deferring unavailable VM/hardware checks while the full implementation continues."
       ]
     },
     {
@@ -1091,6 +1095,25 @@
         "Native PIN/passkey, incoming/service authorization, physical devices/profiles, permissions, hotplug, suspend/resume and hardware faults.",
         "Current-release performance, GPU/decode peaks, pacing, multi-output/fractional scaling, text/IME/accessibility, tray/power, richer desktop features, secure-client audit and packaging/migrations remain in the full requirement ledger.",
         "Exact published-head CI/review and parent-stack merge; PR remains draft and no merge is authorized."
+      ]
+    },
+    {
+      "milestone": "native-power-controls",
+      "status": "implementation_and_local_checks_passed_vm_hardware_deferred",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/40",
+      "source_commit": "af83b810aca1acd130cc347213463b34f6070864",
+      "report": "reports/measurements/lucent-power.json",
+      "checks": [
+        "287 Rust workspace tests, strict formatting/Clippy, four private power D-Bus protocol cases, 79 Python checks and all 348 software-Vulkan comparisons pass. Only 28 new power references and 12 bar changes were accepted after 1x/2x review.",
+        "The native child and independent consumer use the same PowerPort; policy is pure, native ownership/IO stays in PowerServices, and confirmation/demand/observations remain client-owned.",
+        "Root and project-prefix Astro builds each verify 13 pages/488 links; diagnostics have zero errors/warnings/hints. Guides and repository skills describe the live implementation.",
+        "VM/hardware acceptance is deferred under the user instruction; no desktop deployment or new performance result is claimed."
+      ],
+      "pending": [
+        "Real logind/profile policy and native session authorization; built-in backlight updates/hotplug, suspend/resume, firmware and faults.",
+        "Kernel file reads are on the service worker but are not made cancellable by D-Bus deadlines; kernel notifier failure falls back to command-completion refresh without a hardware-validated external-update guarantee.",
+        "Current performance and the broader full requirement ledger remain open.",
+        "Final published-head CI and authorized merge."
       ]
     }
   ],

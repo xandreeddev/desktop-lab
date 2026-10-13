@@ -1,0 +1,47 @@
+{
+  "status": "implementation_and_local_checks_passed_vm_hardware_deferred",
+  "source_commit": "af83b810aca1acd130cc347213463b34f6070864",
+  "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/40",
+  "local_checks": {
+    "workspace_passed": 287,
+    "workspace_ignored": 46,
+    "private_power_protocol_passed": 4,
+    "python_passed": 79,
+    "software_visual_comparisons_passed": 348,
+    "new_reviewed_references": 28,
+    "reviewed_changed_bar_references": 12,
+    "fmt_clippy_workspace_all_targets": true,
+    "astro_errors": 0,
+    "astro_warnings": 0,
+    "astro_hints": 0,
+    "pages_each_prefix": 13,
+    "links_assets_each_prefix": 488
+  },
+  "implemented": [
+    "Independent capability observations for aggregate battery, built-in backlights, profiles and session actions.",
+    "Validated percentages/current handles, pure target/action policy and captured unique-owner native plans.",
+    "Modern/legacy power-profile endpoints, owned active Wayland session and native logind brightness/action methods.",
+    "Bounded asynchronous admission with operation IDs; observation remains live during interactive native authorization.",
+    "Native SDK panel, explicit session confirmation, latest brightness demand, controlled scrolling, semantic tokens and motion.",
+    "Compatibility routes and responsive bar preserve active workspaces, audio, native power and lock access.",
+    "Independent power-service example and CI protocol checks."
+  ],
+  "native_acceptance": {
+    "current_source_deployed_to_vm": false,
+    "physical_hardware_tested": false,
+    "deferred_by_user": true,
+    "host_power_services_or_hardware_mutated_by_protocol_tests": false
+  },
+  "scope": "Executed isolated D-Bus fixtures, temporary backlight data, injected client behavior and software-Vulkan rendering. VM/native policy, driver, firmware and physical-device acceptance are deferred; no fresh performance measurement is claimed.",
+  "remaining": [
+    "Real logind/profile policy and native session authorization; built-in backlight updates/hotplug, suspend/resume, firmware and faults.",
+    "Kernel file reads are on the service worker but are not made cancellable by D-Bus deadlines; kernel notifier failure falls back to command-completion refresh without a hardware-validated external-update guarantee.",
+    "Current performance and the broader full requirement ledger remain open.",
+    "Final published-head CI and authorized merge."
+  ],
+  "privacy": {
+    "private_paths_or_captures_published": false,
+    "credentials_or_device_metadata_published": false
+  },
+  "normal_desktop_rss_target_mib": 300
+}

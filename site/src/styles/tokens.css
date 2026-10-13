@@ -213,6 +213,7 @@
   --component-bar-media-text-width: 136px;
   --component-bar-control-size: 24px;
   --component-bar-max-workspaces: 8;
+  --component-bar-system-control-count: 7;
   --component-pill-height: 32px;
   --component-pill-padding-inline: var(--space-md);
   --component-pill-padding-block: var(--space-xs);
@@ -431,6 +432,15 @@
   --component-bluetooth-title-lines: var(--component-network-title-lines);
   --component-bluetooth-status-lines: var(--component-network-status-lines);
   --component-bluetooth-code-font: var(--font-title);
+  --component-power-width: var(--component-bluetooth-width);
+  --component-power-height: var(--component-bluetooth-height);
+  --component-power-header-height: var(--component-bluetooth-header-height);
+  --component-power-card-padding: var(--component-bluetooth-card-padding);
+  --component-power-card-gap: var(--component-bluetooth-card-gap);
+  --component-power-slide-distance: var(--component-bluetooth-slide-distance);
+  --component-power-title-lines: var(--component-bluetooth-title-lines);
+  --component-power-status-lines: var(--component-bluetooth-status-lines);
+  --component-power-brightness-step: var(--component-audio-volume-step);
   --icon-tiny: 16px;
   --icon-small: 17px;
   --icon-compact: 18px;
