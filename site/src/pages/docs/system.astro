@@ -46,7 +46,7 @@ Theme selection    → ThemePort → LucentTheme → app exports`} label="Active
   </section>
   <section id="ownership"><span class="eyebrow">02 / CURRENT RESPONSIBILITIES</span><h2>Rendering and behavior<br />have separate owners.</h2>
     <div class="table-scroll"><table><thead><tr><th>Capability</th><th>Owner</th><th>Implementation and limits</th></tr></thead><tbody>{ownership.map(([feature, owner, behavior]) => <tr><td>{feature}</td><td>{owner}</td><td>{behavior}</td></tr>)}</tbody></table></div>
-    <p>This is not a claim of full stock-plugin parity. Wi-Fi QR, custom stock plugins and system-tray hosting remain missing; the complete native control center is still future work. Hardware-specific Wi-Fi, Bluetooth, battery, brightness, sleep and physical display behavior need hardware validation. A VM cannot establish those results.</p>
+    <p>This is not a claim of full stock-plugin parity. Wi-Fi QR and custom stock plugins remain missing. Native tray hosting is implemented with VM/application acceptance pending; the complete native control center is still future work. Hardware-specific Wi-Fi, Bluetooth, battery, brightness, sleep and physical display behavior need hardware validation. A VM cannot establish those results.</p>
   </section>
   <section id="theming"><span class="eyebrow">03 / ONE SOURCE OF TRUTH</span><h2>The direction is outward.</h2>
     <CodeBlock code={`design/tokens.json

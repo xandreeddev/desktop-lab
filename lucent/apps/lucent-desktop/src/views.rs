@@ -216,6 +216,14 @@ impl Desktop {
                 .on_click(Message::Action(Action::Lock))
                 .id("bar-lock"),
         ];
+        if geometry.show_tray {
+            controls.insert(
+                0,
+                bar_icon("apps")
+                    .on_click(Message::Tray(crate::tray::Message::Toggle))
+                    .id("bar-tray"),
+            );
+        }
         if geometry.show_mute {
             controls.insert(
                 4,

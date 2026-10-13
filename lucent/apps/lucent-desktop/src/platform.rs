@@ -25,6 +25,7 @@ pub fn desktop_adapters() -> DesktopAdapters {
         network: Arc::new(lucent_services::network::NetworkManager::default()),
         bluetooth: Arc::new(lucent_services::bluetooth::BlueZ::default()),
         power: Arc::new(lucent_services::power::PowerServices::default()),
+        tray: Arc::new(lucent_services::tray::StatusNotifier::default()),
         media: Arc::new(Playerctl),
         weather: Arc::new(OpenMeteo),
         wallpaper: Arc::new(LucentWallpaper),
@@ -93,6 +94,45 @@ impl AssetPort for NativeAssets {
             )
             .expect("bundled fallback icon"),
         );
+        result
+    }
+    fn tray_icons(&self, items: &[TrayItem]) -> Images {
+        let mut result = vec![];
+        for item in items {
+            let attention = item.status == TrayStatus::NeedsAttention;
+            let base = if attention
+                && (!item.attention_icon.name.is_empty() || item.attention_icon.pixmap.is_some())
+            {
+                &item.attention_icon
+            } else {
+                &item.icon
+            };
+            for (role, content) in [("base", base), ("overlay", &item.overlay_icon)] {
+                let key = format!("tray:{}:{role}", item.id.value());
+                let named = (!content.name.is_empty()
+                    && content
+                        .name
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.')))
+                .then(|| images::icon(&content.name))
+                .flatten();
+                let image = named.or_else(|| {
+                    content.pixmap.as_ref().and_then(|pixmap| {
+                        ImageData::from_rgba(
+                            key.clone(),
+                            pixmap.width(),
+                            pixmap.height(),
+                            pixmap.rgba().to_vec(),
+                        )
+                        .ok()
+                        .map(Arc::new)
+                    })
+                });
+                if let Some(image) = image {
+                    result.push((key, Arc::new(image.downsample(images::ICON_PIXELS))));
+                }
+            }
+        }
         result
     }
     fn application_icons(&self, apps: &[Application]) -> Images {

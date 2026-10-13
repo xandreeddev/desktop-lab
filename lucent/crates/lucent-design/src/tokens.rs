@@ -250,7 +250,7 @@ pub mod component {
         pub const MEDIA_TEXT_WIDTH: f32 = 136.0;
         pub const CONTROL_SIZE: f32 = 24.0;
         pub const MAX_WORKSPACES: f32 = 8.0;
-        pub const SYSTEM_CONTROL_COUNT: f32 = 7.0;
+        pub const SYSTEM_CONTROL_COUNT: f32 = 8.0;
     }
     pub mod pill {
         pub const HEIGHT: f32 = 32.0;
@@ -554,6 +554,23 @@ pub mod component {
         pub const TITLE_LINES: f32 = 2.0;
         pub const STATUS_LINES: f32 = 3.0;
         pub const BRIGHTNESS_STEP: f32 = 0.05;
+    }
+    pub mod tray {
+        pub const WIDTH: f32 = 480.0;
+        pub const HEIGHT: f32 = 640.0;
+        pub const HEADER_HEIGHT: f32 = 40.0;
+        pub const CARD_PADDING: f32 = 16.0;
+        pub const CARD_GAP: f32 = 8.0;
+        pub const SLIDE_DISTANCE: f32 = 20.0;
+        pub const TITLE_LINES: f32 = 2.0;
+        pub const STATUS_LINES: f32 = 3.0;
+        pub const SEPARATOR_HEIGHT: f32 = 1.0;
+    }
+    pub mod selection_indicator {
+        pub const SIZE: f32 = 16.0;
+        pub const STROKE: f32 = 1.0;
+        pub const FILL_SIZE: f32 = 8.0;
+        pub const RADIUS: f32 = 2.0;
     }
 }
 pub mod icon {

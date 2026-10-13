@@ -36,12 +36,17 @@
   "remaining": [
     "Real logind/profile policy and native session authorization; built-in backlight updates/hotplug, suspend/resume, firmware and faults.",
     "Kernel file reads are on the service worker but are not made cancellable by D-Bus deadlines; kernel notifier failure falls back to command-completion refresh without a hardware-validated external-update guarantee.",
-    "Current performance and the broader full requirement ledger remain open.",
-    "Final published-head CI and authorized merge."
+    "Current performance and the broader full requirement ledger remain open."
   ],
   "privacy": {
     "private_paths_or_captures_published": false,
     "credentials_or_device_metadata_published": false
   },
-  "normal_desktop_rss_target_mib": 300
+  "normal_desktop_rss_target_mib": 300,
+  "delivery": {
+    "pull_request_state": "merged",
+    "merge_commit": "74c72a28229727e7fe738cb6fea100c47f5c6305",
+    "exact_head_ci_checks_passed": 6,
+    "pages_deployment_passed": true
+  }
 }

@@ -1218,6 +1218,13 @@ fn visual_regressions() {
             ("notes-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("menu-submenu", Mode::Apps, 0, 0, "", 1., 640.),
             ("audio-loading", Mode::Apps, 0, 0, "", 1., 640.),
+            ("tray-loading", Mode::Apps, 0, 0, "", 1., 640.),
+            ("tray-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
+            ("tray-empty", Mode::Apps, 0, 0, "", 1., 390.),
+            ("tray-items", Mode::Apps, 0, 0, "", 1., 390.),
+            ("tray-menu", Mode::Apps, 0, 0, "", 1., 390.),
+            ("tray-last", Mode::Apps, 0, 0, "", 1., 390.),
+            ("tray-opening", Mode::Apps, 0, 0, "", 0.12, 640.),
             ("power-loading", Mode::Apps, 0, 0, "", 1., 640.),
             ("power-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("power-controls", Mode::Apps, 0, 0, "", 1., 390.),
@@ -1559,6 +1566,46 @@ fn visual_regressions() {
                 };
                 let tree = session.view(&cx).map(|_| Message::Quit);
                 layout.build(&tree, width, height, &Interaction::default(), now)
+            } else if name.starts_with("tray-") {
+                use crate::tray::{
+                    Message as T,
+                    tests::{fixture, menu_fixture},
+                };
+                let mut effects = Effects::default();
+                app.update(Message::Tray(T::Open), &mut effects);
+                if name != "tray-loading" {
+                    let result = if name == "tray-unavailable" {
+                        Err(lucent_domain::DomainError::Unavailable(
+                            "Tray application service is unavailable".into(),
+                        ))
+                    } else if name == "tray-empty" {
+                        Ok(lucent_domain::TraySnapshot::default())
+                    } else {
+                        Ok(fixture())
+                    };
+                    app.update(Message::Tray(T::Observed(result)), &mut effects);
+                    for task in std::mem::take(&mut effects.tasks) {
+                        app.update(task.run(), &mut effects);
+                    }
+                }
+                if name == "tray-menu" {
+                    app.tray.load_fixture_menu(menu_fixture());
+                }
+                if name == "tray-last" {
+                    app.update(
+                        Message::Tray(T::Scroll(ScrollEvent { offset: 10000. })),
+                        &mut effects,
+                    );
+                }
+                let tree = app.view(&ViewContext {
+                    surface: "tray",
+                    width,
+                    height,
+                    now,
+                });
+                let mut input = Interaction::default();
+                input.synchronize(&layout.build(&tree, width, height, &input, now));
+                layout.build(&tree, width, height, &input, now)
             } else if name.starts_with("power-") {
                 use crate::power::{Message as P, tests::fixture};
                 use lucent_domain::{

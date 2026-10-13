@@ -212,7 +212,7 @@ Text measurement contributes its intrinsic size.`} label="Illustrative numbers Â
     <CodeBlock code={excerpt(runtimeSource, '    let completion = sender.clone();', '    let mut state = State {')} lang="rust" label="Live source Â· the worker executes tasks and returns messages" />
     <div class="table-scroll"><table><thead><tr><th>Execution context</th><th>Owns / performs</th><th>How data returns</th></tr></thead><tbody>
       <tr><td>Main event-loop thread</td><td>Desktop, native surface state, input, update, view, layout and rendering submission.</td><td>It is the receiver and state owner.</td></tr>
-      <tr><td>Named effect workers</td><td>One worker per queue, at most eight queues and 64 pending tasks each. Settings retain order; assets and theme exports cannot block session actions.</td><td>Each task returns one typed Message through the event channel.</td></tr>
+      <tr><td>Named effect workers</td><td>One worker per queue, at most nine queues and 64 pending tasks each. Settings retain order; assets and theme exports cannot block session actions.</td><td>Each task returns one typed Message through the event channel.</td></tr>
       <tr><td>Subscription workers</td><td>Ongoing snapshots or event streams, one registration per stable ID; at most 64 live bodies including streams still stopping.</td><td>Each producer emits through bounded delivery. Reusing an ID retains its captured inputs; completed streams are not automatically restarted.</td></tr>
       <tr><td>Driver / graphics execution</td><td>Drawing commands submitted by the renderer; the VM may execute Vulkan in software.</td><td>Presentation and compositor frame pacing are separate from app-data messages.</td></tr>
     </tbody></table></div>

@@ -63,7 +63,7 @@ impl<M: Send + 'static> Executor<M> {
             completion: Arc::new(completion),
             stopping: Cancellation::default(),
             capacity: 64,
-            max_workers: 8,
+            max_workers: 9,
         }
     }
     pub fn submit(&mut self, task: ScheduledTask<M>) -> Result<(), Rejected<M>> {

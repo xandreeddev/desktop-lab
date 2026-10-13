@@ -124,6 +124,7 @@ pub fn with(fake: Arc<Fake>) -> DesktopAdapters {
         network: fake.clone(),
         bluetooth: fake.clone(),
         power: fake.clone(),
+        tray: fake.clone(),
         media: fake.clone(),
         weather: fake.clone(),
         wallpaper: fake.clone(),
@@ -216,6 +217,23 @@ impl BluetoothPort for Fake {
     }
     fn set_incoming_pairing(&self, _: bool) -> Result<()> {
         self.calls.lock().unwrap().push("bluetooth incoming");
+        Ok(())
+    }
+}
+
+impl TrayPort for Fake {
+    fn watch(&self, emit: &mut dyn FnMut(Result<TraySnapshot>), _: &dyn StopSignal) {
+        emit(Ok(TraySnapshot::default()));
+    }
+    fn act(&self, _: TrayItemId, _: TrayAction) -> Result<()> {
+        self.calls.lock().unwrap().push("tray");
+        Ok(())
+    }
+    fn menu(&self, _: TrayItemId, _: i32) -> Result<TrayMenu> {
+        Err(DomainError::Unavailable("No fixture menu".into()))
+    }
+    fn invoke(&self, _: TrayItemId, _: u32, _: i32, _: u32) -> Result<()> {
+        self.calls.lock().unwrap().push("tray-menu");
         Ok(())
     }
 }

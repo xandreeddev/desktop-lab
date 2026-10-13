@@ -42,6 +42,10 @@ impl BackgroundTarget {
 pub trait AssetPort: Send + Sync {
     fn initial(&self) -> BTreeMap<String, Arc<ImageData>>;
     fn application_icons(&self, apps: &[Application]) -> Images;
+    /// Prepare tray image resources on an asset worker, never in a view.
+    fn tray_icons(&self, _items: &[lucent_domain::TrayItem]) -> Images {
+        vec![]
+    }
     /// Decode on a worker; both dimensions must be at most PREVIEW_DIMENSION.
     fn thumbnail(&self, path: &str) -> Result<Arc<ImageData>>;
     fn preview(&self, image: &ImageData) -> Arc<ImageData>;

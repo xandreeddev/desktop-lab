@@ -4,6 +4,7 @@ pub mod bluetooth;
 pub mod menu;
 pub mod notifications;
 pub mod power;
+pub mod tray;
 use lucent_domain::*;
 
 /// Stable fuzzy ranking: names outrank descriptions; no filesystem work on a keystroke.

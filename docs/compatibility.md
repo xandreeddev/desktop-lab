@@ -39,7 +39,9 @@ window bindings and backend commands. Theme authority belongs to Lucent tokens;
 headless Omarchy templates only propagate generated colors to applications.
 Wallpaper presentation, notifications, permission prompts, locking and login
 have native clients. swayidle and wl-paste supply headless session integration.
-Network setup and Bluetooth pairing use independent terminal applications;
-tray hosting and optional stock plugins remain unsupported. See the
+Audio, personal Wi-Fi, Bluetooth pairing/radio controls, power and tray panels
+use native clients and injected ports. Enterprise networking, broader device
+acceptance and full control-center coverage remain open. Native tray application
+acceptance is deferred; optional stock plugins remain unsupported. See the
 [current ownership map](https://xandreeddev.github.io/desktop-lab/docs/system/)
 and [Lucent README](../lucent/README.md) for exact scope and recovery.
