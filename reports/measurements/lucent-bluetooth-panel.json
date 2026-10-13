@@ -60,7 +60,7 @@
     "Complete Decline by retiring its owned Pair conversation; expose Disconnect for connected unpaired devices; native PIN/passkey entry, incoming/service authorization and profile operations.",
     "Physical hardware, permissions, hotplug and suspend/resume; pending-Connect cancellation UX.",
     "Installed Bluetooth compatibility routing remains unchanged until controller acceptance.",
-    "No new performance benchmark is claimed; current 300 MiB target, hardware animation pacing and peak/resource measurements need current-release evidence.",
+    "This sample meets 300 MiB normal RSS and main-process idle CPU targets; helpers total 1.024% of one core and animation submission hitches remain. Decode/GPU peaks, long idle, hardware pacing and complete resource acceptance remain open.",
     "Full remaining requirement ledger, final evidence-head CI, review and parent-stack merge."
   ],
   "implementation_commit_ci": {
@@ -207,7 +207,20 @@
       "original_kernel_module_state_restored": true,
       "owned_temporary_binary_removed": true
     },
-    "new_performance_measurement": "pending",
+    "new_performance_measurement": {
+      "report": "reports/measurements/lucent-bluetooth-current-120.json",
+      "binary_source_commit": "029fc73c89b918375f8e458e02b69acd4bc9b09c",
+      "seconds": 120.001,
+      "mean_rss_mib": 206.82,
+      "max_rss_mib": 208.18,
+      "main_cpu_percent_one_core": 0.7,
+      "service_cpu_percent_one_core": 1.024,
+      "final_snapshot_swap_kib": 0,
+      "cold_max_submission_gap_ms": 41.07,
+      "warm_max_submission_gap_ms": 38.38,
+      "normal_target_rss_mib": 300,
+      "scope": "Single-output shared-host software-Vulkan VM; submission intervals are not scanout. Peaks, total GPU memory and physical pacing remain open."
+    },
     "decline": {
       "prompt_retired": true,
       "not_paired_or_trusted": true,

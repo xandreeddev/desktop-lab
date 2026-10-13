@@ -1,0 +1,247 @@
+{
+  "source_commit": "f0d7350f8509180cce4c8437a0ef5d0571fb1bcc",
+  "source_working_tree_changed": false,
+  "binary_sha256": "57b50975da61364cf3ef563f9e58d49f243d3682faa79e5700217e46d7ee83b7",
+  "displays": [
+    {
+      "width": 1920,
+      "height": 1080,
+      "refreshRate": 60.0,
+      "scale": 1,
+      "transform": 0
+    }
+  ],
+  "vcpus": 4,
+  "guest_memory_mib": 2893.54,
+  "architecture": "x86_64",
+  "kernel": "7.2.5-3-omarchy",
+  "adapter": "AdapterInfo { name: \"llvmpipe (LLVM 22.1.8, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 26.2.2-arch1.1 (LLVM 22.1.8)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: Some(false), limit_bucket: None }",
+  "restart_to_background_ready_ms": 2683.35,
+  "animations": [
+    {
+      "action": "open",
+      "warmup": true,
+      "frames": 25,
+      "median_frame_interval_ms": 18.59,
+      "max_frame_interval_ms": 41.07,
+      "observed_frame_span_ms": 539.47,
+      "cache_misses": 30,
+      "cpu_profile": null
+    },
+    {
+      "action": "close",
+      "warmup": true,
+      "frames": 32,
+      "median_frame_interval_ms": 16.78,
+      "max_frame_interval_ms": 32.35,
+      "observed_frame_span_ms": 527.57,
+      "cache_misses": 0,
+      "cpu_profile": null
+    },
+    {
+      "action": "open",
+      "warmup": false,
+      "frames": 29,
+      "median_frame_interval_ms": 16.98,
+      "max_frame_interval_ms": 38.38,
+      "observed_frame_span_ms": 538.31,
+      "cache_misses": 0,
+      "cpu_profile": null
+    },
+    {
+      "action": "close",
+      "warmup": false,
+      "frames": 28,
+      "median_frame_interval_ms": 16.64,
+      "max_frame_interval_ms": 35.29,
+      "observed_frame_span_ms": 548.08,
+      "cache_misses": 0,
+      "cpu_profile": null
+    },
+    {
+      "action": "open",
+      "warmup": false,
+      "frames": 32,
+      "median_frame_interval_ms": 17.11,
+      "max_frame_interval_ms": 35.28,
+      "observed_frame_span_ms": 550.3,
+      "cache_misses": 2,
+      "cpu_profile": null
+    },
+    {
+      "action": "close",
+      "warmup": false,
+      "frames": 29,
+      "median_frame_interval_ms": 16.64,
+      "max_frame_interval_ms": 35.16,
+      "observed_frame_span_ms": 522.26,
+      "cache_misses": 0,
+      "cpu_profile": null
+    }
+  ],
+  "idle": {
+    "duration_seconds": 120.001,
+    "process": "lucent-desktop",
+    "cpu_percent_one_core": 0.7,
+    "rss_mib_mean": 206.82,
+    "rss_mib_max": 208.18,
+    "scope": "main process CPU and resident mappings; child processes excluded; mapped driver/software-GPU memory may contribute to RSS",
+    "gpu_memory": "not measured",
+    "virtualization": "kvm",
+    "service_cpu_percent_one_core": 1.024
+  },
+  "idle_extra_frames": {
+    "background": 0,
+    "bar": 2,
+    "calendar": 26,
+    "clock": 26,
+    "dock": 0,
+    "system": 26
+  },
+  "frame_profiling": false,
+  "startup_profiles": null,
+  "profile_memory_before_idle": null,
+  "profile_memory_after_idle": null,
+  "resident_kib_before_idle": {
+    "Rss": 189904,
+    "Pss": 154422,
+    "Pss_Anon": 62092,
+    "Pss_File": 58914,
+    "Pss_Shmem": 33416,
+    "Shared_Clean": 25000,
+    "Shared_Dirty": 34624,
+    "Private_Clean": 52084,
+    "Private_Dirty": 78196,
+    "Anonymous": 62092,
+    "Swap": 0
+  },
+  "resident_kib_after_idle": {
+    "Rss": 213180,
+    "Pss": 177698,
+    "Pss_Anon": 85320,
+    "Pss_File": 58914,
+    "Pss_Shmem": 33464,
+    "Shared_Clean": 25000,
+    "Shared_Dirty": 34624,
+    "Private_Clean": 52084,
+    "Private_Dirty": 101472,
+    "Anonymous": 85320,
+    "Swap": 0
+  },
+  "gpu_cache_before_idle": {
+    "active_payload_bytes": 13479724,
+    "entries": 105,
+    "evictions": 0,
+    "hits": 3663,
+    "misses": 105,
+    "payload_bytes": 14298257,
+    "reuse_budget_bytes": 67108864
+  },
+  "gpu_cache_after_idle": {
+    "active_payload_bytes": 13478607,
+    "entries": 117,
+    "evictions": 0,
+    "hits": 5419,
+    "misses": 117,
+    "payload_bytes": 14347582,
+    "reuse_budget_bytes": 67108864
+  },
+  "prepared_assets_before_idle": {
+    "background": {
+      "bytes": 12196652,
+      "unique_images": 1
+    },
+    "icons": {
+      "bytes": 3189392,
+      "unique_images": 80
+    },
+    "local_previews": {
+      "active": false,
+      "bytes": 0,
+      "closed_budget_bytes": 8388608,
+      "entries": 0,
+      "entry_limit": 16,
+      "failed": 0,
+      "pinned_bytes": 0,
+      "reuse_budget_bytes": 67108864,
+      "wanted": 0,
+      "wanted_ready": 0
+    },
+    "online_previews": {
+      "bytes": 0,
+      "unique_images": 0
+    },
+    "total": {
+      "bytes": 15386044,
+      "unique_images": 81
+    }
+  },
+  "prepared_assets_after_idle": {
+    "background": {
+      "bytes": 12196652,
+      "unique_images": 1
+    },
+    "icons": {
+      "bytes": 3189392,
+      "unique_images": 80
+    },
+    "local_previews": {
+      "active": false,
+      "bytes": 0,
+      "closed_budget_bytes": 8388608,
+      "entries": 0,
+      "entry_limit": 16,
+      "failed": 0,
+      "pinned_bytes": 0,
+      "reuse_budget_bytes": 67108864,
+      "wanted": 0,
+      "wanted_ready": 0
+    },
+    "online_previews": {
+      "bytes": 0,
+      "unique_images": 0
+    },
+    "total": {
+      "bytes": 15386044,
+      "unique_images": 81
+    }
+  },
+  "workload": {
+    "visible_widgets": [
+      "calendar",
+      "clock",
+      "weather",
+      "media",
+      "system"
+    ],
+    "launcher": "closed",
+    "applications": 57
+  },
+  "scope": {
+    "startup": "Service restart through wallpaper-ready IPC, including SSH/polling overhead",
+    "animation": "Render submission intervals, not scanout or isolated GPU execution time",
+    "resources": "Texture payload only; driver/framebuffer/CPU prepared-image memory excluded",
+    "prepared_assets": "Client-owned immutable pixel storage, deduplicated by allocation identity. Excludes in-flight work, scenes, decoder scratch, fonts, GPU and driver allocations; not RSS.",
+    "cache_misses": "Shared application cache, including other surfaces updated during the sample",
+    "service_cpu": "Lucent cgroup including helpers; compositor and separately launched apps excluded",
+    "cpu_profile": "Successful frame submissions only; CPU-side wall-clock stages include driver waits. Preparation breakdown is nested, not additive. Instrumentation and inspection can affect the workload.",
+    "resident_breakdown": "Two smaps_rollup snapshots in KiB; not interval averages or separate GPU-memory measurements"
+  },
+  "binary_source_commit": "029fc73c89b918375f8e458e02b69acd4bc9b09c",
+  "source_relationship": "Measurement head adds documentation and VM harness evidence; no Rust source changed from the clean compiled binary source.",
+  "targets": {
+    "normal_desktop_rss_mib": 300,
+    "idle_cpu_percent_one_core": 1
+  },
+  "assessment": {
+    "rss_mean_and_max_within_300_mib": true,
+    "main_process_idle_cpu_below_one_percent": true,
+    "service_including_helpers_idle_cpu_below_one_percent": false,
+    "animation_submission_hitches_remain": true,
+    "hardware_pacing_or_gpu_memory_verified": false
+  },
+  "privacy": {
+    "personal_paths_or_device_names": false,
+    "desktop_captures_published": false
+  }
+}
