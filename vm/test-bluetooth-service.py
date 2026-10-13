@@ -31,7 +31,8 @@ def remote(*args):
 
 def counts(state):
     return {'adapters': len(state['adapters']), 'devices': len(state['devices']),
-            'connected': sum(device['connected'] for device in state['devices'])}
+            'connected': sum(device['connected'] for device in state['devices']),
+            'pairing_requests': len(state['pairing_requests'])}
 
 
 def main():
@@ -107,7 +108,7 @@ def main():
             raise RuntimeError('Real BlueZ count observation failed')
         for event in events:
             value = event['value']
-            if set(value) != {'adapters', 'devices', 'connected'} or any(
+            if set(value) != {'adapters', 'devices', 'connected', 'pairing_requests'} or any(
                     not isinstance(number, int) or number < 0 for number in value.values()):
                 raise RuntimeError('Observation exposed metadata or invalid counts')
         result['observation'] = events[-1]['value']

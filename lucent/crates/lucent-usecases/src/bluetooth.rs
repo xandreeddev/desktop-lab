@@ -70,6 +70,16 @@ pub fn validate_bluetooth_command(
         BluetoothCommand::SetPowered { adapter: id, .. } => {
             adapter(id)?;
         }
+        BluetoothCommand::SetDiscoverable { adapter: id, .. } => {
+            if !adapter(id)?.powered {
+                return Err(DomainError::Invalid(
+                    "Power on the Bluetooth controller first".into(),
+                ));
+            }
+        }
+        BluetoothCommand::SetPairable { adapter: id, .. } => {
+            adapter(id)?;
+        }
         BluetoothCommand::SetDiscovery {
             adapter: id,
             active,
@@ -126,6 +136,7 @@ mod tests {
                 name: "Controller".into(),
                 powered: true,
                 discoverable: false,
+                pairable: true,
                 discovering: true,
                 discovery_owned: false,
             }],
@@ -145,6 +156,74 @@ mod tests {
                 battery_percent: None,
             }],
             ..BluetoothSnapshot::default()
+        }
+    }
+    #[test]
+    fn radio_visibility_and_incoming_permission_have_distinct_policy() {
+        let mut s = state();
+        let id = s.adapters[0].id;
+        for command in [
+            BluetoothCommand::SetDiscoverable {
+                adapter: id,
+                discoverable: true,
+            },
+            BluetoothCommand::SetPairable {
+                adapter: id,
+                pairable: false,
+            },
+        ] {
+            assert!(validate_bluetooth_command(&s, &command).is_ok());
+        }
+        s.adapters[0].pairable = false;
+        s.devices[0].paired = false;
+        assert!(
+            validate_pairing_target(&s, s.devices[0].id).is_ok(),
+            "Pairable limits incoming requests, not our explicit outgoing Pair"
+        );
+        s.adapters[0].powered = false;
+        for discoverable in [true, false] {
+            assert!(
+                validate_bluetooth_command(
+                    &s,
+                    &BluetoothCommand::SetDiscoverable {
+                        adapter: id,
+                        discoverable
+                    }
+                )
+                .is_err()
+            );
+        }
+        assert!(
+            validate_bluetooth_command(
+                &s,
+                &BluetoothCommand::SetPairable {
+                    adapter: id,
+                    pairable: false
+                }
+            )
+            .is_ok()
+        );
+        for adapter in [s.devices[0].id, BluetoothObjectId::new(999).unwrap()] {
+            assert!(
+                validate_bluetooth_command(
+                    &s,
+                    &BluetoothCommand::SetPairable {
+                        adapter,
+                        pairable: true
+                    }
+                )
+                .is_err()
+            );
+            assert!(
+                validate_bluetooth_command(
+                    &s,
+                    &BluetoothCommand::SetDiscoverable {
+                        adapter,
+                        discoverable: false
+                    }
+                )
+                .is_err()
+            );
         }
     }
     #[test]

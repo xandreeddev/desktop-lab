@@ -1240,6 +1240,8 @@ fn visual_regressions() {
             ("bluetooth-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("bluetooth-empty", Mode::Apps, 0, 0, "", 1., 640.),
             ("bluetooth-devices", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-radio", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-radio-last", Mode::Apps, 0, 0, "", 1., 390.),
             ("bluetooth-confirmation", Mode::Apps, 0, 0, "", 1., 390.),
             ("bluetooth-pin", Mode::Apps, 0, 0, "", 1., 390.),
             ("bluetooth-display", Mode::Apps, 0, 0, "", 1., 640.),
@@ -1513,6 +1515,12 @@ fn visual_regressions() {
                 use lucent_domain::{
                     BluetoothPairingCode as Code, BluetoothPairingPrompt as P, BluetoothServiceId,
                 };
+                if name.starts_with("bluetooth-radio") {
+                    app.update(
+                        Message::Bluetooth(B::Tab(crate::bluetooth::Tab::Radio)),
+                        &mut Effects::default(),
+                    );
+                }
                 let mut effects = Effects::default();
                 app.update(Message::Bluetooth(B::Open), &mut effects);
                 if name != "bluetooth-loading" {
@@ -1549,7 +1557,7 @@ fn visual_regressions() {
                 if name == "bluetooth-forget" {
                     app.update(Message::Bluetooth(B::AskForget(id(3))), &mut effects);
                 }
-                if name == "bluetooth-last" {
+                if matches!(name, "bluetooth-last" | "bluetooth-radio-last") {
                     app.update(
                         Message::Bluetooth(B::Scroll(ScrollEvent { offset: 10000. })),
                         &mut effects,

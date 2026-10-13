@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 use zbus::zvariant::OwnedObjectPath;
 
 pub(super) enum Plan {
-    Powered(OwnedObjectPath, bool),
+    ControllerProperty(OwnedObjectPath, &'static str, bool),
     Discovery(OwnedObjectPath, bool),
     Device(OwnedObjectPath, &'static str),
     Trusted(OwnedObjectPath, bool),
@@ -21,8 +21,21 @@ pub(super) fn plan(
     lucent_usecases::bluetooth::validate_bluetooth_command(state, &command)?;
     Ok(match command {
         BluetoothCommand::SetPowered { adapter, powered } => {
-            Plan::Powered(catalog.resolve(adapter, Kind::Adapter)?, powered)
+            Plan::ControllerProperty(catalog.resolve(adapter, Kind::Adapter)?, "Powered", powered)
         }
+        BluetoothCommand::SetDiscoverable {
+            adapter,
+            discoverable,
+        } => Plan::ControllerProperty(
+            catalog.resolve(adapter, Kind::Adapter)?,
+            "Discoverable",
+            discoverable,
+        ),
+        BluetoothCommand::SetPairable { adapter, pairable } => Plan::ControllerProperty(
+            catalog.resolve(adapter, Kind::Adapter)?,
+            "Pairable",
+            pairable,
+        ),
         BluetoothCommand::SetDiscovery { adapter, active } => {
             Plan::Discovery(catalog.resolve(adapter, Kind::Adapter)?, active)
         }
@@ -54,9 +67,9 @@ pub(super) async fn apply(
     owned: &mut BTreeSet<String>,
 ) -> Result<()> {
     match plan {
-        Plan::Powered(path, powered) => {
+        Plan::ControllerProperty(path, property, active) => {
             transport
-                .set(path.as_str(), ADAPTER, "Powered", powered)
+                .set(path.as_str(), ADAPTER, property, active)
                 .await?
         }
         Plan::Discovery(path, active) => {

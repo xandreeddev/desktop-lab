@@ -48,6 +48,8 @@ struct Input {
     adapter: Option<u64>,
     device: Option<u64>,
     powered: Option<bool>,
+    discoverable: Option<bool>,
+    pairable: Option<bool>,
     active: Option<bool>,
     trusted: Option<bool>,
     enabled: Option<bool>,
@@ -71,6 +73,14 @@ fn command(value: &Input) -> Result<BluetoothCommand> {
         "discovery" => BluetoothCommand::SetDiscovery {
             adapter: id(value.adapter)?,
             active: boolean(value.active)?,
+        },
+        "visibility" => BluetoothCommand::SetDiscoverable {
+            adapter: id(value.adapter)?,
+            discoverable: boolean(value.discoverable)?,
+        },
+        "pairable" => BluetoothCommand::SetPairable {
+            adapter: id(value.adapter)?,
+            pairable: boolean(value.pairable)?,
         },
         "connect" => BluetoothCommand::Connect(id(value.device)?),
         "disconnect" => BluetoothCommand::Disconnect(id(value.device)?),
@@ -146,7 +156,7 @@ fn state(value: &BluetoothSnapshot, detailed: bool) -> Value {
         "pairing_requests":value.pairing_requests.iter().map(prompt_json).collect::<Vec<_>>(),
         "adapters":value.adapters.iter().map(|a|json!({
             "id":a.id.value(),"address":a.address.to_string(),"name":a.name,"powered":a.powered,
-            "discoverable":a.discoverable,"discovering":a.discovering,"discovery_owned":a.discovery_owned,
+            "discoverable":a.discoverable,"pairable":a.pairable,"discovering":a.discovering,"discovery_owned":a.discovery_owned,
         })).collect::<Vec<_>>(),
         "devices":value.devices.iter().map(|d|json!({
             "id":d.id.value(),"adapter":d.adapter.value(),"address":d.address.to_string(),

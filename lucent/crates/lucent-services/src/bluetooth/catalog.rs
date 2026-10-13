@@ -90,6 +90,7 @@ impl Catalog {
                 name: name(props, &address)?,
                 powered,
                 discoverable: property(props, "Discoverable")?,
+                pairable: property(props, "Pairable")?,
                 discovering: property(props, "Discovering")?,
                 discovery_owned: owned.contains(path.as_str()),
             });

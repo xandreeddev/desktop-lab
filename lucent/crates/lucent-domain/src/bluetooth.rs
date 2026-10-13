@@ -55,6 +55,8 @@ pub struct BluetoothAdapter {
     pub name: String,
     pub powered: bool,
     pub discoverable: bool,
+    /// Global permission for incoming pairing, separate from agent authority.
+    pub pairable: bool,
     /// Global controller observation, which may belong to another client.
     pub discovering: bool,
     /// Whether this adapter instance acquired a discovery session.
@@ -94,6 +96,14 @@ pub enum BluetoothCommand {
     SetDiscovery {
         adapter: BluetoothObjectId,
         active: bool,
+    },
+    SetDiscoverable {
+        adapter: BluetoothObjectId,
+        discoverable: bool,
+    },
+    SetPairable {
+        adapter: BluetoothObjectId,
+        pairable: bool,
     },
     Connect(BluetoothObjectId),
     Disconnect(BluetoothObjectId),

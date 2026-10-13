@@ -30,6 +30,7 @@ fn raw() -> Managed {
                     ("Alias", value("Controller")),
                     ("Powered", value(true)),
                     ("Discoverable", value(false)),
+                    ("Pairable", value(true)),
                     ("Discovering", value(true)),
                 ]),
             )]),
@@ -181,6 +182,8 @@ impl Drop for Bus {
 }
 struct State {
     powered: bool,
+    discoverable: bool,
+    pairable: bool,
     other_discovery: bool,
     owners: BTreeSet<String>,
     starts: usize,
@@ -219,6 +222,8 @@ impl Default for State {
     fn default() -> Self {
         Self {
             powered: true,
+            discoverable: false,
+            pairable: true,
             other_discovery: true,
             owners: BTreeSet::new(),
             starts: 0,
@@ -292,7 +297,19 @@ impl Controller {
     }
     #[zbus(property)]
     fn discoverable(&self) -> bool {
-        false
+        self.0.lock().unwrap().discoverable
+    }
+    #[zbus(property)]
+    fn set_discoverable(&self, value: bool) {
+        self.0.lock().unwrap().discoverable = value;
+    }
+    #[zbus(property)]
+    fn pairable(&self) -> bool {
+        self.0.lock().unwrap().pairable
+    }
+    #[zbus(property)]
+    fn set_pairable(&self, value: bool) {
+        self.0.lock().unwrap().pairable = value;
     }
     #[zbus(property)]
     fn discovering(&self) -> bool {
@@ -817,6 +834,77 @@ fn bluetooth_protocol_controls_and_discovery_ownership() {
     watch.state(|s| s.devices.is_empty());
     drop(watch);
     drop(server);
+}
+
+#[test]
+#[ignore = "isolated BlueZ D-Bus protocol; no host radio"]
+fn bluetooth_protocol_radio_flags_are_observed_without_discovery_or_agent_authority() {
+    let bus = Bus::new();
+    let state = Arc::new(Mutex::new(State::default()));
+    let server = futures_lite::future::block_on(server(&bus, &state));
+    let watch = Observer::new(&bus, Duration::from_secs(2));
+    let first = watch.state(|s| s.adapters.len() == 1);
+    let adapter = first.adapters[0].id;
+    assert!(!first.adapters[0].discoverable && first.adapters[0].pairable);
+    watch
+        .adapter
+        .control(BluetoothCommand::SetDiscoverable {
+            adapter,
+            discoverable: true,
+        })
+        .unwrap();
+    watch.state(|s| s.adapters[0].discoverable);
+    watch
+        .adapter
+        .control(BluetoothCommand::SetPairable {
+            adapter,
+            pairable: false,
+        })
+        .unwrap();
+    let observed = watch.state(|s| !s.adapters[0].pairable);
+    assert!(observed.adapters[0].discovering && !observed.adapters[0].discovery_owned);
+    assert!(!observed.incoming_pairing_enabled);
+    assert_eq!(state.lock().unwrap().registrations, 0);
+    assert_eq!(state.lock().unwrap().defaults, 0);
+    assert!(!state.lock().unwrap().trusted);
+
+    // Native timeout or another settings client may hide the controller.
+    state.lock().unwrap().discoverable = false;
+    futures_lite::future::block_on(changed(
+        &server,
+        ADAPT,
+        ADAPTER,
+        "Discoverable",
+        value(false),
+    ));
+    let expired = watch.state(|s| !s.adapters[0].discoverable);
+    assert_eq!(expired.adapters[0].id, adapter);
+    watch
+        .adapter
+        .control(BluetoothCommand::SetPowered {
+            adapter,
+            powered: false,
+        })
+        .unwrap();
+    watch.state(|s| !s.adapters[0].powered);
+    assert!(
+        watch
+            .adapter
+            .control(BluetoothCommand::SetDiscoverable {
+                adapter,
+                discoverable: true
+            })
+            .is_err()
+    );
+    watch
+        .adapter
+        .control(BluetoothCommand::SetPairable {
+            adapter,
+            pairable: true,
+        })
+        .unwrap();
+    watch.state(|s| s.adapters[0].pairable);
+    assert_eq!(state.lock().unwrap().registrations, 0);
 }
 #[test]
 #[ignore = "isolated BlueZ D-Bus protocol"]

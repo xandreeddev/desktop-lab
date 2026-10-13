@@ -14,6 +14,7 @@ pub fn fixture() -> BluetoothSnapshot {
             name: "Lucent controller".into(),
             powered: true,
             discoverable: false,
+            pairable: true,
             discovering: false,
             discovery_owned: false,
         }],
@@ -137,6 +138,102 @@ fn observation_and_acknowledgement_never_change_radio_state_or_authority() {
     client.update(Message::Pair(id(3)), &mut effects);
     assert!(effects.tasks.is_empty());
     assert!(!client.error.is_empty());
+}
+#[test]
+fn device_actions_are_reachable_and_radio_authority_lives_on_its_own_tab() {
+    let (mut client, _, mut effects) = client();
+    let theme = lucent_design::Theme::from_palette(&lucent_design::palettes()[0]);
+    let cx = lucent_api::ViewContext {
+        surface: "bluetooth",
+        width: 390.,
+        height: 580.,
+        now: 1.,
+    };
+    let fonts = [
+        include_bytes!("../../assets/LucentSans.ttf").as_slice(),
+        include_bytes!("../../assets/LucentDisplay.ttf").as_slice(),
+        include_bytes!("../../assets/GoogleSansFlex.ttf").as_slice(),
+    ]
+    .into_iter()
+    .map(|bytes| fontdue::Font::from_bytes(bytes, Default::default()).unwrap())
+    .collect();
+    let layout = lucent_ui::Layout::new(Arc::new(fonts));
+    let scene = layout.build(
+        &client.view(&cx, theme),
+        cx.width,
+        cx.height,
+        &lucent_ui::Interaction::default(),
+        cx.now,
+    );
+    let pair = scene
+        .hits
+        .iter()
+        .find(|h| h.id == "bluetooth-pair-2")
+        .unwrap();
+    assert!(pair.clip.contains(
+        pair.rect.x + pair.rect.w / 2.,
+        pair.rect.y + pair.rect.h / 2.
+    ));
+    assert!(matches!(pair.click, Some(Message::Pair(device)) if device == id(2)));
+    assert!(
+        !scene
+            .hits
+            .iter()
+            .any(|h| h.id == "bluetooth-visibility" || h.id == "bluetooth-incoming")
+    );
+    client.update(Message::Tab(Tab::Radio), &mut effects);
+    let scene = layout.build(
+        &client.view(&cx, theme),
+        cx.width,
+        cx.height,
+        &lucent_ui::Interaction::default(),
+        cx.now,
+    );
+    let visibility = scene
+        .hits
+        .iter()
+        .find(|h| h.id == "bluetooth-visibility")
+        .unwrap();
+    assert!(
+        matches!(visibility.click, Some(Message::Control(BluetoothCommand::SetDiscoverable { adapter, discoverable: true })) if adapter == id(1))
+    );
+    assert!(scene.hits.iter().any(|h| h.id == "bluetooth-incoming"));
+    assert!(!scene.hits.iter().any(|h| h.id == "bluetooth-pair-2"));
+    assert!(
+        effects.tasks.is_empty(),
+        "Changing the presentation must not change radio or authority"
+    );
+}
+#[test]
+fn radio_controls_wait_for_observation_and_do_not_enable_incoming_authority() {
+    let (mut client, adapter, mut effects) = client();
+    for command in [
+        BluetoothCommand::SetDiscoverable {
+            adapter: id(1),
+            discoverable: true,
+        },
+        BluetoothCommand::SetPairable {
+            adapter: id(1),
+            pairable: false,
+        },
+    ] {
+        client.update(Message::Control(command.clone()), &mut effects);
+        let task = effects.tasks.remove(0);
+        assert_eq!(task.queue, crate::work::BLUETOOTH);
+        client.update(task.run(), &mut effects);
+        assert_eq!(adapter.commands.lock().unwrap().last(), Some(&command));
+        let current = client.snapshot().unwrap();
+        assert!(!current.adapters[0].discoverable && current.adapters[0].pairable);
+        assert!(!current.incoming_pairing_enabled);
+    }
+    let mut changed = fixture();
+    changed.adapters[0].discoverable = true;
+    changed.adapters[0].pairable = false;
+    client.update(Message::Observed(Ok(changed)), &mut effects);
+    let current = client.snapshot().unwrap();
+    assert!(current.adapters[0].discoverable && !current.adapters[0].pairable);
+    assert!(!current.incoming_pairing_enabled);
+    assert!(adapter.calls.lock().unwrap().is_empty());
 }
 #[test]
 fn pairing_answers_use_an_independent_lane_and_consume_input_once() {

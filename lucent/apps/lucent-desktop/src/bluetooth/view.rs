@@ -267,50 +267,85 @@ impl Bluetooth {
             .iter()
             .find(|a| Some(a.id) == self.controller)
         {
-            children.push(card(
-                vec![
-                    text(controller.address.to_string(), theme).font(font::CAPTION),
-                    row(vec![
-                        button(
-                            if controller.powered {
-                                "Power off"
-                            } else {
-                                "Power on"
-                            },
-                            "bluetooth-power",
-                            Message::Control(BluetoothCommand::SetPowered {
-                                adapter: controller.id,
-                                powered: !controller.powered,
-                            }),
-                            self.active.is_none(),
-                            theme,
-                        ),
-                        button(
-                            if controller.discovery_owned {
-                                "Stop our scan"
-                            } else {
-                                "Discover devices"
-                            },
-                            "bluetooth-discovery",
-                            Message::Control(BluetoothCommand::SetDiscovery {
-                                adapter: controller.id,
-                                active: !controller.discovery_owned,
-                            }),
-                            controller.powered && self.active.is_none(),
-                            theme,
-                        ),
-                    ]),
-                    text(
-                        if controller.discovery_owned {
-                            "Scanning for nearby devices"
-                        } else if controller.discovering {
-                            "Another application is scanning"
+            let mut controls = vec![
+                row(vec![
+                    button(
+                        if controller.powered {
+                            "Power off"
                         } else {
-                            "Discovery idle"
+                            "Power on"
                         },
+                        "bluetooth-power",
+                        Message::Control(BluetoothCommand::SetPowered {
+                            adapter: controller.id,
+                            powered: !controller.powered,
+                        }),
+                        self.active.is_none(),
                         theme,
-                    )
-                    .font(font::CAPTION),
+                    ),
+                    button(
+                        if controller.discovery_owned {
+                            "Stop scan"
+                        } else {
+                            "Scan"
+                        },
+                        "bluetooth-discovery",
+                        Message::Control(BluetoothCommand::SetDiscovery {
+                            adapter: controller.id,
+                            active: !controller.discovery_owned,
+                        }),
+                        controller.powered && self.active.is_none(),
+                        theme,
+                    ),
+                ]),
+                text(
+                    if controller.discovery_owned {
+                        "Scanning for nearby devices"
+                    } else if controller.discovering {
+                        "Another application is scanning"
+                    } else {
+                        "Discovery idle"
+                    },
+                    theme,
+                )
+                .font(font::CAPTION),
+            ];
+            if self.tab == Tab::Radio {
+                controls.insert(
+                    0,
+                    text(controller.address.to_string(), theme).font(font::CAPTION),
+                );
+                controls.push(row(vec![
+                    button(
+                        if controller.discoverable {
+                            "Hide"
+                        } else {
+                            "Show"
+                        },
+                        "bluetooth-visibility",
+                        Message::Control(BluetoothCommand::SetDiscoverable {
+                            adapter: controller.id,
+                            discoverable: !controller.discoverable,
+                        }),
+                        controller.powered && self.active.is_none(),
+                        theme,
+                    ),
+                    button(
+                        if controller.pairable {
+                            "Block pairs"
+                        } else {
+                            "Allow pairs"
+                        },
+                        "bluetooth-pairable",
+                        Message::Control(BluetoothCommand::SetPairable {
+                            adapter: controller.id,
+                            pairable: !controller.pairable,
+                        }),
+                        self.active.is_none(),
+                        theme,
+                    ),
+                ]));
+                controls.push(
                     text(
                         if controller.discoverable {
                             "Visible to nearby devices"
@@ -320,18 +355,31 @@ impl Bluetooth {
                         theme,
                     )
                     .font(font::CAPTION),
-                ],
-                theme,
-            ));
+                );
+                controls.push(
+                    text(
+                        "Only incoming pairs are affected. Visibility may expire automatically.",
+                        theme,
+                    )
+                    .font(font::CAPTION),
+                );
+            }
+            children.push(card(controls, theme));
         }
         let pairing = snapshot
             .pairing
             .as_ref()
             .is_some_and(|a| a.phase == BluetoothPairingPhase::Pairing);
-        children.push(card(vec![
-            button(if snapshot.incoming_pairing_enabled {"Incoming requests · on"}else{"Allow incoming requests"},"bluetooth-incoming",Message::Incoming(!snapshot.incoming_pairing_enabled),!pairing&&self.active.is_none(),theme),
-            text("Becoming the incoming pairing agent can require permission. It does not advertise the radio or accept any request automatically.",theme).font(font::CAPTION),
-        ],theme));
+        if self.tab == Tab::Radio {
+            children.push(card(vec![
+                button(if snapshot.incoming_pairing_enabled { "Handle requests · on" }
+                    else { "Handle incoming here" }, "bluetooth-incoming",
+                    Message::Incoming(!snapshot.incoming_pairing_enabled),
+                    !pairing && self.active.is_none(), theme),
+                text("Let Lucent handle incoming requests. Visibility and radio permission are separate. Each request needs your decision.",theme).font(font::CAPTION),
+            ], theme));
+            return children;
+        }
         let devices: Vec<_> = snapshot
             .devices
             .iter()
@@ -469,19 +517,19 @@ impl Bluetooth {
             .height(Length::Fixed(token::HEADER_HEIGHT))
             .align(Align::Center),
             text(self.status(), theme).font(font::CAPTION),
-            row([Tab::Available, Tab::Paired]
+            row([Tab::Available, Tab::Paired, Tab::Radio]
                 .into_iter()
                 .map(|tab| {
                     button(
-                        if tab == Tab::Available {
-                            "Devices"
-                        } else {
-                            "Paired"
+                        match tab {
+                            Tab::Available => "Devices",
+                            Tab::Paired => "Paired",
+                            Tab::Radio => "Radio",
                         },
-                        if tab == Tab::Available {
-                            "bluetooth-tab-devices"
-                        } else {
-                            "bluetooth-tab-paired"
+                        match tab {
+                            Tab::Available => "bluetooth-tab-devices",
+                            Tab::Paired => "bluetooth-tab-paired",
+                            Tab::Radio => "bluetooth-tab-radio",
                         },
                         Message::Tab(tab),
                         true,

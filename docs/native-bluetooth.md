@@ -95,7 +95,16 @@ those counts. The client must keep its callback responsive.
 
 ## Operations and authority
 
-`SetPowered` changes one controller. `SetDiscovery` acquires/releases this
+`SetPowered` changes one controller. `SetDiscoverable` changes its global radio
+visibility and requires power. Native timeout or another settings client may
+hide it again; observe that state rather than mirroring command acceptance.
+`SetPairable` changes permission for incoming pairing, including while powered
+off. It does not forbid an explicit outgoing Pair, register an agent or trust a
+device. The desktop presents these as separate visibility, incoming permission
+and request-handling decisions. Their native guest/controller acceptance is
+still pending.
+
+`SetDiscovery` acquires/releases this
 connection's discovery session idempotently; stopping our scan does not stop
 another client's session. Closing the connection releases its owner lifetime.
 BlueZ shares discovery across clients. See the
@@ -155,6 +164,8 @@ test bus; the default always uses the system bus.
 
 ```json
 {"command":"discovery","adapter":1,"active":true}
+{"command":"visibility","adapter":1,"discoverable":true}
+{"command":"pairable","adapter":1,"pairable":false}
 {"command":"connect","device":2}
 {"command":"trust","device":2,"trusted":true}
 {"command":"disconnect","device":2}
@@ -250,10 +261,12 @@ close is cancelled by its returned attempt ID without reopening the prompt.
 Stopping an accepted scan follows it on the same lane even if its owned-state
 snapshot has not arrived. Unrelated clients' discovery is preserved.
 
-The panel includes controller selection/power, discovery, device pair/connect/
-disconnect/trust, confirmed forgetting, explicit incoming-agent authority and
+The device tabs keep selection, power and scanning compact. A separate Radio
+tab provides visibility, permission for incoming pairs and Lucent request
+handling. The panel includes device pair/connect/disconnect/trust, confirmed
+forgetting, explicit incoming-agent authority and
 native confirmation/entry/display/service prompts. The top-bar button and
 `lucent-cli bluetooth open|toggle|close` use this child. Inspector output excludes
-entered input and displayed codes. Radio discoverable/pairable controls, pending
-Connect cancellation UX, real-device/profile acceptance and broader power/tray
-services still need work. The complete control-center requirement remains open.
+entered input and displayed codes. Radio controls are implemented; their native
+guest/controller acceptance, pending Connect cancellation UX, real-device/profile
+acceptance and broader power/tray services still need work. The complete control-center requirement remains open.

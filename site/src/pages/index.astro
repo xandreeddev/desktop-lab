@@ -1,6 +1,7 @@
 ---
 import { performanceTargets } from '../data/performance';
 import { withBase } from '../data/urls';
+import { sourceUrl } from '../data/source';
 import Base from '../layouts/Base.astro';
 import Gallery from '../components/Gallery.astro';
 import CodeBlock from '../components/CodeBlock.astro';
@@ -11,7 +12,7 @@ import lucent from '../../../reports/screenshots/lucent-framework-desktop.png';
 import metrics from '../../../reports/measurements/lucent-framework-idle-600.json';
 import { layers, componentCode } from '../data/framework';
 import { tokens } from '../data/tokens';
-const repo = 'https://github.com/xandreeddev/desktop-lab/blob/main/';
+const repo = sourceUrl('');
 const warmIntervals = metrics.animations.filter(a => !a.warmup).map(a => a.median_frame_interval_ms);
 const minInterval = Math.min(...warmIntervals);
 const maxInterval = Math.max(...warmIntervals);

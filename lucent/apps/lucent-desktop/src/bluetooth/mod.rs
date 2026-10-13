@@ -14,6 +14,7 @@ pub enum Tab {
     #[default]
     Available,
     Paired,
+    Radio,
 }
 #[derive(Clone)]
 pub enum Message {
@@ -556,6 +557,6 @@ impl Bluetooth {
         }
     }
     pub fn inspect(&self) -> serde_json::Value {
-        serde_json::json!({"status":match self.observation {Observation::Loading=>"loading",Observation::Ready(_)=>"ready",Observation::Unavailable(_)=>"unavailable"},"label":self.status(),"open":self.open,"visible":self.mounted,"scroll":self.scroll,"tab":if self.tab==Tab::Available{"available"}else{"paired"},"controller":self.controller.map(|id|id.value()),"busy":self.active.is_some(),"answering":self.answering.is_some(),"error":self.error,"notice":self.notice,"controllers":self.snapshot().map(|s|s.adapters.len()),"devices":self.snapshot().map(|s|s.devices.len()),"requests":self.snapshot().map(|s|s.pairing_requests.iter().map(|p|serde_json::json!({"id":p.id.value(),"device":p.device.value()})).collect::<Vec<_>>()),"incoming":self.snapshot().map(|s|s.incoming_pairing_enabled),"form":self.form.as_ref().map(|f|f.request.value())})
+        serde_json::json!({"status":match self.observation {Observation::Loading=>"loading",Observation::Ready(_)=>"ready",Observation::Unavailable(_)=>"unavailable"},"label":self.status(),"open":self.open,"visible":self.mounted,"scroll":self.scroll,"tab":match self.tab {Tab::Available=>"available",Tab::Paired=>"paired",Tab::Radio=>"radio"},"controller":self.controller.map(|id|id.value()),"busy":self.active.is_some(),"answering":self.answering.is_some(),"error":self.error,"notice":self.notice,"controllers":self.snapshot().map(|s|s.adapters.len()),"devices":self.snapshot().map(|s|s.devices.len()),"requests":self.snapshot().map(|s|s.pairing_requests.iter().map(|p|serde_json::json!({"id":p.id.value(),"device":p.device.value()})).collect::<Vec<_>>()),"incoming":self.snapshot().map(|s|s.incoming_pairing_enabled),"form":self.form.as_ref().map(|f|f.request.value())})
     }
 }
