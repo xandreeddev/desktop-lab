@@ -1,0 +1,156 @@
+{
+  "milestone": "session-input-and-native-dialog-lifecycle",
+  "status": "verified_for_recorded_scope",
+  "source_commit": "047f10498c4da9b6c8ea9dae3653cd0afc47b42f",
+  "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/37",
+  "binaries": {
+    "profile": "release",
+    "source_working_tree_changed": false,
+    "sha256": {
+      "lucent-lock": "59b365029d19327d019f5367f6879a4e1bc9891540ab09faf1f3d2436e9d43f7",
+      "lucent-greeter": "8927e4880535d101ce81a39c10cbfe15a80b8db957dc7c4ccc2e58568495ac1e",
+      "lucent-polkit": "dd6841241fa3b56fc0df6590c41676dbe03c6c50da69beaef7f84b7c6249491b"
+    }
+  },
+  "implementation": {
+    "client": "SessionScreen computes identity-editing state once for view/input. ClearInput and Escape clear the username only before a login attempt; prompted responses remain zeroizing Secret storage. Connecting/verifying disable editing; lock identities stay fixed.",
+    "framework": "run_without_ipc disables local command/inspection IPC for ordinary surfaces. Polkit selects it; the greeter compatibility entry point delegates to it. run_locked retains the authenticated session-lock gate.",
+    "lifecycle": "State teardown drops GPU surfaces before Wayland roles and flushes queued destruction while the connection remains live, including error returns. Cleanup never authorizes unlock.",
+    "adapters": "PAM, greetd and libpolkit-agent remain the trusted authentication authorities. Domain contracts and operating-system policy are unchanged."
+  },
+  "reproduced_before_fix": {
+    "retained_username": "Regression reproduced the previous ClearInput failure before the active-field fix.",
+    "authorization_source_commit": "7ae3234ac1647d3f95cb40c9234c4bce9c10263e",
+    "real_policy_check_exit_code": 1,
+    "dialog_visuals_removed_after_cancel": true,
+    "native_surfaces_remaining_after_runtime_return": 1,
+    "interpretation": "A visually closed dialog still retained an empty compositor surface in the long-lived agent. The final native regression requires zero surfaces before the next request."
+  },
+  "validation": {
+    "rust_workspace_tests_passed": 251,
+    "session_presentation_tests_passed": 6,
+    "clippy_warnings_denied": true,
+    "formatting": true,
+    "python_checks_passed": 70,
+    "design_tokens": 491,
+    "app_icons": 58,
+    "visual": {
+      "focused_session_comparisons_per_driver": 12,
+      "focused_source_commit": "76a9b78ae3faf13d418362a8d226a7687723f017",
+      "scope": "Existing lock/login/permission views at 1x/2x in both palettes pass on software and hardware Vulkan at the field-routing checkpoint. Later changes affect runtime entry/teardown; these views and rendering references are unchanged.",
+      "full_software_comparisons_in_core_ci": 248,
+      "core_ci_source_commit": "047f10498c4da9b6c8ea9dae3653cd0afc47b42f",
+      "reference_images_changed": 0,
+      "thresholds_changed": false
+    },
+    "native": {
+      "source_commit": "047f10498c4da9b6c8ea9dae3653cd0afc47b42f",
+      "greeter": {
+        "running_hash_verified": true,
+        "original_wallpaper_visible": true,
+        "command_socket_absent": true,
+        "nonexistent_account_rejected": true,
+        "clear_username_after_rejection": true,
+        "empty_username_does_not_begin_attempt": true,
+        "successful_clean_retry_to_user_desktop": true
+      },
+      "polkit_startup": {
+        "polkit_running_sha256": "dd6841241fa3b56fc0df6590c41676dbe03c6c50da69beaef7f84b7c6249491b",
+        "user_desktop_active": true
+      },
+      "lock": {
+        "running_hash_verified": true,
+        "secure_protocol_acknowledged": true,
+        "command_socket_absent": true,
+        "original_wallpaper_visible": true,
+        "response_masked": true,
+        "response_clear_preserves_identity_and_locked_state": true,
+        "authenticated_unlock": true,
+        "service_exit_normal": true,
+        "automatic_restarts": 0
+      },
+      "authorization": {
+        "native_check_authorization_cancel_cycles": 2,
+        "policy_check_exit_codes": [
+          1,
+          1
+        ],
+        "graphical_subject_matches_agent_session": true,
+        "command_socket_absent_during_and_after_prompt": true,
+        "native_surfaces_removed_between_cycles": true,
+        "same_agent_process_and_binary": true,
+        "agent_sha256": "dd6841241fa3b56fc0df6590c41676dbe03c6c50da69beaef7f84b7c6249491b",
+        "automatic_restarts_unchanged": true,
+        "credentials_supplied": false,
+        "privileged_operations_performed": false,
+        "running_hash_verified": true,
+        "native_cancel_source_commit": "047f10498c4da9b6c8ea9dae3653cd0afc47b42f",
+        "presentation_input_native_source_commit": "7ae3234ac1647d3f95cb40c9234c4bce9c10263e",
+        "response_masked": true,
+        "response_clear_preserves_prompt": true,
+        "original_wallpaper_visible": true,
+        "agent_stays_active": true,
+        "automatic_restarts": 0
+      },
+      "final_state": {
+        "lucent.service": {
+          "active": true,
+          "running": true,
+          "automatic_restarts": 0,
+          "sha256": "6285e3166e62d1a08525ef50d28dccfb00108f13f07e5919466e972d832d135e"
+        },
+        "lucent-polkit.service": {
+          "active": true,
+          "running": true,
+          "automatic_restarts": 0,
+          "sha256": "dd6841241fa3b56fc0df6590c41676dbe03c6c50da69beaef7f84b7c6249491b"
+        },
+        "lock_inactive": true,
+        "lock_automatic_restarts": 0,
+        "secure_lock_released": true,
+        "authorization_socket_absent": true,
+        "lock_socket_absent": true,
+        "authorization_surface_closed": true,
+        "presentation_preferences_match_after_login": true,
+        "background_ready": true,
+        "all_installed_hashes_verified": true,
+        "rollback_copies_hash_verified": true,
+        "target_owner_and_mode_preserved": true
+      }
+    },
+    "core_ci": {
+      "source_commit": "047f10498c4da9b6c8ea9dae3653cd0afc47b42f",
+      "successful_checks": 6,
+      "final_evidence_head": "Tracked on PR #37; the evidence commit requires its own checks."
+    },
+    "site": {
+      "errors": 0,
+      "warnings": 0,
+      "hints": 0,
+      "pages": 13,
+      "links_and_assets": 487,
+      "status": "passed"
+    }
+  },
+  "deployment": {
+    "coherent_session_clients": 3,
+    "unique_atomic_rollback_copies_retained": true,
+    "installed_and_backup_hashes_verified": true,
+    "target_owner_and_mode_preserved": true,
+    "login_manager_configuration_and_authentication_policy_changed": false,
+    "presentation_preferences_match_after_login": true,
+    "desktop_binary_changed": false,
+    "linked_runtime_scope": "Only authentication clients were rebuilt and installed. Other installed clients retain their existing linked runtime until rebuilt.",
+    "guest_memory_mib": 3072,
+    "guest_vcpus": 4,
+    "vm_shut_down_after_validation": true,
+    "private_captures_published": false
+  },
+  "pending": [
+    "Review and merge of PR #37 and its parent stack; final evidence-head CI is tracked on the PR.",
+    "Production authentication/PAM and authority-cancellation audit, native denied-lock/password recovery, agent/service failures, suspend/resume and physical lock/driver-fault acceptance remain unverified by this focused milestone.",
+    "General IPC-enabled clients and all other consumers need a rebuilt release to inherit the new runtime teardown; this deployment covers only the three authentication clients.",
+    "RSS below 200 MiB, active-overlay and image-decoding peaks, actual GPU allocations, hardware pacing, long idle and fault recovery remain open. No new performance measurements are claimed.",
+    "Remaining OS controls/tray, physical audio/networking and secret-agent/enterprise provisioning, per-output/fractional geometry, shaping/IME/accessibility, richer application/dock/widget/notification/settings behavior, packaging/migrations and rollback acceptance remain in docs/implementation-status.json."
+  ]
+}

@@ -1,5 +1,5 @@
 //! Bounded ordered workers. Client queue names express ordering, never OS policy.
-use lucent_api::{Cancellation, RuntimeFailure, ScheduledTask};
+use lucent_api::{Cancellation, RuntimeFailure, ScheduledTask, TaskFailure};
 use std::{
     collections::BTreeMap,
     panic::{AssertUnwindSafe, catch_unwind},
@@ -9,6 +9,41 @@ use std::{
 pub(super) enum Completion<M> {
     Message(M),
     Failure(RuntimeFailure),
+}
+pub(super) struct Rejected<M> {
+    pub failure: RuntimeFailure,
+    task: ScheduledTask<M>,
+}
+impl<M> std::fmt::Debug for Rejected<M> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.failure.fmt(f)
+    }
+}
+fn failure_completion<M>(
+    failure: RuntimeFailure,
+    handler: Option<TaskFailure<M>>,
+) -> Completion<M> {
+    let Some(handler) = handler else {
+        return Completion::Failure(failure);
+    };
+    match catch_unwind(AssertUnwindSafe(|| handler(failure.clone()))) {
+        Ok(message) => Completion::Message(message),
+        Err(_) => Completion::Failure(RuntimeFailure {
+            source: failure.source,
+            reason: "task failure mapper panicked".into(),
+        }),
+    }
+}
+impl<M> Rejected<M> {
+    pub fn complete(mut self) -> Option<Completion<M>> {
+        if self.task.cancellation.cancelled() {
+            return None;
+        }
+        Some(failure_completion(
+            self.failure,
+            self.task.take_failure_handler(),
+        ))
+    }
 }
 struct Worker<M> {
     sender: mpsc::SyncSender<ScheduledTask<M>>,
@@ -31,7 +66,10 @@ impl<M: Send + 'static> Executor<M> {
             max_workers: 8,
         }
     }
-    pub fn submit(&mut self, task: ScheduledTask<M>) -> Result<(), RuntimeFailure> {
+    pub fn submit(&mut self, task: ScheduledTask<M>) -> Result<(), Rejected<M>> {
+        if self.stopping.cancelled() || task.cancellation.cancelled() {
+            return Ok(());
+        }
         let queue = task.queue;
         let failure = |reason: &str| RuntimeFailure {
             source: format!("effect queue {queue}"),
@@ -39,21 +77,25 @@ impl<M: Send + 'static> Executor<M> {
         };
         if !self.workers.contains_key(queue) {
             if self.workers.len() == self.max_workers {
-                return Err(failure("worker limit reached"));
+                return Err(Rejected {
+                    task,
+                    failure: failure("worker limit reached"),
+                });
             }
             let (sender, receiver) = mpsc::sync_channel::<ScheduledTask<M>>(self.capacity);
             let active = Arc::new(Mutex::new(None));
             let current = active.clone();
             let completion = self.completion.clone();
             let stopping = self.stopping.clone();
-            std::thread::Builder::new()
+            let started = std::thread::Builder::new()
                 .name(format!("effect-{queue}"))
                 .spawn(move || {
-                    for task in receiver {
+                    for mut task in receiver {
                         if stopping.cancelled() || task.cancellation.cancelled() {
                             continue;
                         }
                         let cancellation = task.cancellation.clone();
+                        let on_failure = task.take_failure_handler();
                         *current.lock().unwrap_or_else(|e| e.into_inner()) =
                             Some(cancellation.clone());
                         // Close the race with Executor::drop after the first check.
@@ -71,24 +113,36 @@ impl<M: Send + 'static> Executor<M> {
                         }
                         match result {
                             Some(Ok(message)) => completion(Completion::Message(message)),
-                            Some(Err(_)) => completion(Completion::Failure(RuntimeFailure {
-                                source: format!("effect queue {queue}"),
-                                // A panic payload may contain private input. Do not expose it over IPC.
-                                reason: "worker task panicked".into(),
-                            })),
+                            Some(Err(_)) => completion(failure_completion(
+                                RuntimeFailure {
+                                    source: format!("effect queue {queue}"),
+                                    // A panic payload may contain private input. Do not expose it over IPC.
+                                    reason: "worker task panicked".into(),
+                                },
+                                on_failure,
+                            )),
                             None => {}
                         }
                     }
-                })
-                .map_err(|error| failure(&format!("cannot start worker: {error}")))?;
+                });
+            if let Err(error) = started {
+                return Err(Rejected {
+                    task,
+                    failure: failure(&format!("cannot start worker: {error}")),
+                });
+            }
             self.workers.insert(queue, Worker { sender, active });
         }
         match self.workers[queue].sender.try_send(task) {
             Ok(()) => Ok(()),
-            Err(mpsc::TrySendError::Full(_)) => {
-                Err(failure("queue is full; work was not accepted"))
-            }
-            Err(mpsc::TrySendError::Disconnected(_)) => Err(failure("worker disconnected")),
+            Err(mpsc::TrySendError::Full(task)) => Err(Rejected {
+                task,
+                failure: failure("queue is full; work was not accepted"),
+            }),
+            Err(mpsc::TrySendError::Disconnected(task)) => Err(Rejected {
+                task,
+                failure: failure("worker disconnected"),
+            }),
         }
     }
 }
@@ -165,12 +219,14 @@ mod tests {
             .unwrap();
         running.recv_timeout(Duration::from_secs(2)).unwrap();
         let cancelled = task("one", || panic!("cancelled work executed"));
-        cancelled.cancellation.cancel();
+        let cancellation = cancelled.cancellation.clone();
         executor.submit(cancelled).unwrap();
+        cancellation.cancel();
         assert!(
             executor
                 .submit(task("one", || 2))
                 .unwrap_err()
+                .failure
                 .reason
                 .contains("full")
         );
@@ -178,6 +234,7 @@ mod tests {
             executor
                 .submit(task("two", || 2))
                 .unwrap_err()
+                .failure
                 .reason
                 .contains("limit")
         );
@@ -216,5 +273,85 @@ mod tests {
         running.recv_timeout(Duration::from_secs(2)).unwrap();
         drop(executor);
         done.recv_timeout(Duration::from_secs(2)).unwrap();
+    }
+
+    #[test]
+    fn shared_queue_failures_reach_the_exact_task_and_unaccepted_work_does_not_run() {
+        let (tx, rx) = mpsc::channel();
+        let mut executor = Executor::new(move |v| {
+            let _ = tx.send(v);
+        });
+        executor.max_workers = 1;
+        let mut effects = Effects::default();
+        effects.task_on_with_failure(
+            "shared",
+            || panic!("private fixture payload"),
+            |failure| {
+                assert!(!failure.reason.contains("private fixture"));
+                41
+            },
+        );
+        executor.submit(effects.tasks.remove(0)).unwrap();
+        executor.submit(task("shared", || 7)).unwrap();
+        assert!(matches!(next(&rx), Completion::Message(41)));
+        assert!(matches!(next(&rx), Completion::Message(7)));
+        effects.task_on_with_failure("another", || panic!("unaccepted body ran"), |_| 42);
+        let rejected = executor.submit(effects.tasks.remove(0)).unwrap_err();
+        assert!(matches!(rejected.complete(), Some(Completion::Message(42))));
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn cancellation_before_admission_or_after_rejection_drops_work_and_failure_mapping() {
+        let mut executor = Executor::new(|_: Completion<u32>| panic!("cancelled work completed"));
+        executor.max_workers = 0;
+        let mut effects = Effects::default();
+        effects.task_on_with_failure(
+            "unused",
+            || panic!("cancelled body ran"),
+            |_| panic!("cancelled failure mapper ran"),
+        );
+        effects.tasks[0].cancellation.cancel();
+        executor.submit(effects.tasks.remove(0)).unwrap();
+        assert!(executor.workers.is_empty());
+
+        effects.task_on_with_failure(
+            "rejected",
+            || panic!("rejected body ran"),
+            |_| panic!("retired failure mapper ran"),
+        );
+        let cancellation = effects.tasks[0].cancellation.clone();
+        let rejected = executor.submit(effects.tasks.remove(0)).unwrap_err();
+        cancellation.cancel();
+        assert!(rejected.complete().is_none());
+    }
+
+    #[test]
+    fn cancellation_skips_failure_mapping_and_a_panicking_mapper_uses_safe_fallback() {
+        let (tx, rx) = mpsc::channel();
+        let mut executor = Executor::new(move |v| {
+            let _ = tx.send(v);
+        });
+        let mut effects = Effects::default();
+        effects.task_on_with_failure(
+            "shared",
+            || panic!("cancelled body"),
+            |_| panic!("cancelled mapper"),
+        );
+        effects.tasks[0].cancellation.cancel();
+        executor.submit(effects.tasks.remove(0)).unwrap();
+        effects.task_on_with_failure(
+            "shared",
+            || panic!("fixture body"),
+            |_| panic!("private mapper payload"),
+        );
+        executor.submit(effects.tasks.remove(0)).unwrap();
+        executor.submit(task("shared", || 7)).unwrap();
+        let Completion::Failure(failure) = next(&rx) else {
+            panic!("expected safe failure fallback");
+        };
+        assert_eq!(failure.reason, "task failure mapper panicked");
+        assert!(matches!(next(&rx), Completion::Message(7)));
+        assert!(rx.try_recv().is_err());
     }
 }

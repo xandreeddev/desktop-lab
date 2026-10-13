@@ -23,6 +23,9 @@ pub enum Message {
     Compositor(domain::Result<CompositorSnapshot>),
     Clock(ClockSnapshot),
     System(domain::Result<SystemSnapshot>),
+    Audio(crate::audio::Message),
+    Network(crate::network::Message),
+    Bluetooth(crate::bluetooth::Message),
     Media(domain::Result<MediaSnapshot>),
     Weather(domain::Result<WeatherSnapshot>),
     Launcher(launcher::Message),
@@ -45,7 +48,7 @@ pub enum Message {
     Bar(bool),
     SetWallpaper(String),
     LauncherSize(LauncherSize),
-    Resize(&'static str, f32, f32),
+    Resize(&'static str, f32, f32, u32),
     Completed(domain::Result<()>),
     Quit,
 }
@@ -67,6 +70,9 @@ pub struct Desktop {
     pub compositor: CompositorSnapshot,
     pub clock: ClockSnapshot,
     pub system: SystemSnapshot,
+    pub audio: crate::audio::Audio,
+    pub network: crate::network::Network,
+    pub bluetooth: crate::bluetooth::Bluetooth,
     pub media: MediaSnapshot,
     pub weather: Option<WeatherSnapshot>,
     pub browser: crate::wallpaper_browser::Browser,
@@ -104,6 +110,9 @@ impl Desktop {
             compositor: CompositorSnapshot::default(),
             clock: adapters.clock.now(),
             system: SystemSnapshot::default(),
+            audio: crate::audio::Audio::new(adapters.audio.clone()),
+            network: crate::network::Network::new(adapters.network.clone()),
+            bluetooth: crate::bluetooth::Bluetooth::new(adapters.bluetooth.clone()),
             media: MediaSnapshot::default(),
             weather: None,
             browser: Default::default(),
@@ -180,7 +189,7 @@ impl Desktop {
         self.settings.palette = Some(palette.clone());
         self.save(effects);
         let theme = self.adapters.theme.clone();
-        effects.task_on("theme", move || {
+        effects.task_on(crate::work::APPEARANCE, move || {
             Message::ThemeApplied(theme.apply(&palette))
         });
         for id in [
@@ -190,6 +199,9 @@ impl Desktop {
             "notifications",
             "background",
             "osd",
+            "audio",
+            "network",
+            "bluetooth",
         ] {
             effects.redraw(id);
         }
@@ -203,6 +215,8 @@ impl Desktop {
             self.persistence.error()
         } else if !self.wallpaper.error.is_empty() {
             &self.wallpaper.error
+        } else if let Some(error) = self.wallpaper.presentation_error() {
+            error
         } else {
             &self.error
         }
@@ -313,6 +327,23 @@ impl Desktop {
             |child| intent = self.launcher.update(message, input, geometry, child),
             Message::Launcher,
         );
+        if self.launcher.open() {
+            effects.delegate(
+                |child| {
+                    self.bluetooth
+                        .update(crate::bluetooth::Message::Close, child)
+                },
+                Message::Bluetooth,
+            );
+            effects.delegate(
+                |child| self.network.update(crate::network::Message::Close, child),
+                Message::Network,
+            );
+            effects.delegate(
+                |child| self.audio.update(crate::audio::Message::Close, child),
+                Message::Audio,
+            );
+        }
         if let Some(intent) = intent {
             use launcher::Intent;
             let message = match intent {
@@ -327,6 +358,21 @@ impl Desktop {
                 Intent::LauncherSize(size) => Message::LauncherSize(size),
             };
             self.update(message, effects);
+        }
+    }
+    fn widget_view(&self) -> widgets::View<'_> {
+        widgets::View {
+            host: &self.widgets,
+            input: widgets::Input {
+                settings: &self.settings,
+                clock: &self.clock,
+                system: &self.system,
+                network_status: self.network.status(),
+                media: &self.media,
+                weather: self.weather.as_ref(),
+                save_status: self.persistence.status(self.settings_writable),
+            },
+            artwork: self.artwork(),
         }
     }
     fn update_widgets(&mut self, message: widgets::Message, effects: &mut Effects<Message>) {
@@ -365,7 +411,7 @@ impl Desktop {
         };
         let apps = self.adapters.apps.clone();
         let hypr = self.adapters.compositor.clone();
-        effects.task_on("launch", move || {
+        effects.task_on(crate::work::CONTROLS, move || {
             Message::Completed(if let Some(hypr) = hypr {
                 lucent_usecases::activate_application(
                     apps.as_ref(),
@@ -389,19 +435,32 @@ impl Desktop {
             }
             return;
         }
+        let command = match action {
+            Action::VolumeUp => Some(AudioCommand::Raise),
+            Action::VolumeDown => Some(AudioCommand::Lower),
+            Action::Mute => Some(AudioCommand::ToggleMute),
+            _ => None,
+        };
+        if let Some(command) = command {
+            effects.delegate(
+                |child| {
+                    self.audio
+                        .update(crate::audio::Message::Request(command), child)
+                },
+                Message::Audio,
+            );
+            return;
+        }
         let adapters = self.adapters.clone();
         effects.task_on(
             if matches!(action, Action::Lock) {
-                "session"
+                crate::work::SESSION
             } else {
-                "controls"
+                crate::work::CONTROLS
             },
             move || {
                 Message::Completed(match action {
                     Action::Lock => adapters.session.lock(),
-                    Action::VolumeUp => adapters.audio.control(AudioCommand::Raise),
-                    Action::VolumeDown => adapters.audio.control(AudioCommand::Lower),
-                    Action::Mute => adapters.audio.control(AudioCommand::ToggleMute),
                     Action::PlayPause => adapters.media.control(MediaCommand::PlayPause),
                     Action::Next => adapters.media.control(MediaCommand::Next),
                     Action::Previous => adapters.media.control(MediaCommand::Previous),
@@ -415,6 +474,12 @@ impl Component for Desktop {
     type Message = Message;
     fn view(&self, cx: &ViewContext) -> Element<Message> {
         self.theme().apply(match cx.surface {
+            "audio" => self.audio.view(cx, self.theme()).map(Message::Audio),
+            "network" => self.network.view(cx, self.theme()).map(Message::Network),
+            "bluetooth" => self
+                .bluetooth
+                .view(cx, self.theme())
+                .map(Message::Bluetooth),
             "osd" => self.osd.view(cx, self.theme()),
             "background" => self
                 .wallpaper
@@ -423,20 +488,11 @@ impl Component for Desktop {
                 .map(|image| Element::image(image.clone()).cover().fill())
                 .unwrap_or_else(|| Element::empty().fill().background(self.surface_color())),
             "bar" => self.bar(cx),
-            "widgets" => widgets::View {
-                host: &self.widgets,
-                input: widgets::Input {
-                    settings: &self.settings,
-                    clock: &self.clock,
-                    system: &self.system,
-                    media: &self.media,
-                    weather: self.weather.as_ref(),
-                    save_status: self.persistence.status(self.settings_writable),
-                },
-                artwork: self.artwork(),
-            }
-            .render(cx)
-            .map(Message::Widgets),
+            "widgets" => self.widget_view().render(cx).map(Message::Widgets),
+            name if widgets::catalog::find(name).is_some() => self
+                .widget_view()
+                .render_native(cx, self.viewport)
+                .map(Message::Widgets),
             "dock" => self.dock(cx),
             "notifications" => self
                 .notifications
@@ -453,6 +509,7 @@ impl Component for Desktop {
                 Message::Notifications,
             ),
             Message::Loaded(apps, settings, wallpapers, current_wallpaper) => {
+                self.update_widgets(widgets::Message::CancelDrags, effects);
                 self.apps = apps;
                 match settings {
                     Ok(settings) => {
@@ -486,12 +543,12 @@ impl Component for Desktop {
                     .refresh(&self.apps, self.launcher_geometry(), now);
                 let assets = self.adapters.assets.clone();
                 let apps = self.apps.clone();
-                effects.task_on("assets", move || {
+                effects.task_on(crate::work::ASSETS, move || {
                     Message::Icons(assets.application_icons(&apps))
                 });
                 let theme = self.adapters.theme.clone();
                 let palette = lucent_design::selected_palette(&self.settings);
-                effects.task_on("theme", move || {
+                effects.task_on(crate::work::APPEARANCE, move || {
                     Message::ThemeApplied(theme.apply(&palette))
                 });
                 self.retarget_panel_transition(now);
@@ -575,18 +632,71 @@ impl Component for Desktop {
                 self.clock = clock;
             }
             Message::System(Ok(value)) => {
-                if self.system.volume != value.volume
-                    || self.system.muted != value.muted
-                    || self.system.network != value.network
-                {
-                    effects.redraw("bar");
-                }
                 if self.settings.visible_widgets.iter().any(|w| w == "system") {
                     effects.redraw("widgets");
                 }
                 self.system = value;
             }
             Message::System(Err(_)) => {}
+            Message::Audio(message) => {
+                let opening = matches!(message, crate::audio::Message::Open)
+                    || matches!(message, crate::audio::Message::Toggle) && !self.audio.open();
+                if opening {
+                    effects.delegate(
+                        |child| {
+                            self.bluetooth
+                                .update(crate::bluetooth::Message::Close, child)
+                        },
+                        Message::Bluetooth,
+                    );
+                    self.update_launcher(launcher::Message::Close, effects);
+                    effects.delegate(
+                        |child| self.network.update(crate::network::Message::Close, child),
+                        Message::Network,
+                    );
+                }
+                effects.delegate(|child| self.audio.update(message, child), Message::Audio);
+            }
+            Message::Network(message) => {
+                let opening = matches!(message, crate::network::Message::Open)
+                    || matches!(message, crate::network::Message::Toggle) && !self.network.open();
+                if opening {
+                    effects.delegate(
+                        |child| {
+                            self.bluetooth
+                                .update(crate::bluetooth::Message::Close, child)
+                        },
+                        Message::Bluetooth,
+                    );
+                    self.update_launcher(launcher::Message::Close, effects);
+                    effects.delegate(
+                        |child| self.audio.update(crate::audio::Message::Close, child),
+                        Message::Audio,
+                    );
+                }
+                effects.delegate(
+                    |child| self.network.update(message, child),
+                    Message::Network,
+                );
+            }
+            Message::Bluetooth(message) => {
+                let before = self.bluetooth.open();
+                effects.delegate(
+                    |child| self.bluetooth.update(message, child),
+                    Message::Bluetooth,
+                );
+                if self.bluetooth.open() && !before {
+                    self.update_launcher(launcher::Message::Close, effects);
+                    effects.delegate(
+                        |child| self.audio.update(crate::audio::Message::Close, child),
+                        Message::Audio,
+                    );
+                    effects.delegate(
+                        |child| self.network.update(crate::network::Message::Close, child),
+                        Message::Network,
+                    );
+                }
+            }
             Message::Media(result) => {
                 let value = result.unwrap_or_default();
                 if self.media != value {
@@ -600,14 +710,16 @@ impl Component for Desktop {
                 effects.redraw("bar");
                 effects.redraw("widgets");
             }
-            Message::Launcher(message) => self.update_launcher(message, effects),
+            Message::Launcher(message) => {
+                self.update_launcher(message, effects);
+            }
             Message::Launch(id, prefer) => {
                 self.launch(&id, prefer, effects);
                 self.update_launcher(launcher::Message::Close, effects);
             }
             Message::Workspace(id) => {
                 if let Some(hypr) = self.adapters.compositor.clone() {
-                    effects.task_on("controls", move || {
+                    effects.task_on(crate::work::CONTROLS, move || {
                         Message::Completed(hypr.switch_workspace(id))
                     });
                 }
@@ -687,7 +799,7 @@ impl Component for Desktop {
                     .palette_intent
                     .extraction(self.wallpaper.asset_path().to_owned());
                 let adapter = self.adapters.palette_generation.clone();
-                effects.task_on("assets", move || {
+                effects.task_on(crate::work::ASSETS, move || {
                     let result = adapter.seed(&extraction.path);
                     Message::ExtractedPalette(extraction, result)
                 });
@@ -776,9 +888,23 @@ impl Component for Desktop {
                 self.save(effects);
                 effects.redraw("dock");
             }
-            Message::Resize(id, w, h) => {
-                if matches!(id, "widgets" | "dock") {
-                    self.viewport = (w, h);
+            Message::Resize(id, w, h, scale) => {
+                if id == "background" {
+                    match crate::ports::BackgroundTarget::from_surface(w, h, scale) {
+                        Ok(target) => {
+                            self.update_widgets(widgets::Message::CancelDrags, effects);
+                            effects.delegate(
+                                |child| {
+                                    self.viewport = (w, h);
+                                    self.wallpaper.resize(target, child);
+                                },
+                                Message::WallpaperSelection,
+                            );
+                        }
+                        Err(error) => self.error = error.to_string(),
+                    }
+                }
+                if id == "background" {
                     effects.redraw("dock");
                 }
                 self.retarget_panel_transition(now);
@@ -795,9 +921,19 @@ impl Component for Desktop {
 }
 impl api::Application for Desktop {
     fn runtime_failure(&self, failure: api::RuntimeFailure) -> Option<Message> {
-        if failure.source == "effect queue previews" {
-            return Some(Message::Previews(crate::previews::Message::WorkerFailed(
+        if failure.source == "effect queue bluetooth" {
+            // A native write may have run before a panic/admission failure.
+            // Recreate its owner rather than guessing or replaying the outcome.
+            return None;
+        }
+        if failure.source == "effect queue network" {
+            return Some(Message::Network(crate::network::Message::WorkerFailed(
                 failure.to_string(),
+            )));
+        }
+        if failure.source == "effect queue audio" {
+            return Some(Message::Audio(crate::audio::Message::Control(
+                crate::audio::commands::Message::WorkerFailed(failure.to_string()),
             )));
         }
         if failure.source == "effect queue settings" {
@@ -808,7 +944,10 @@ impl api::Application for Desktop {
         // A panic/admission failure may leave commit completion ambiguous. Let
         // supervision restart the client and load the actual persisted selection
         // instead of leaving the coordinator busy or guessing whether it committed.
-        if failure.source == "effect queue appearance" {
+        if matches!(
+            failure.source.as_str(),
+            "effect queue appearance" | "effect queue assets"
+        ) {
             return None;
         }
         Some(Message::Completed(Err(DomainError::Failed(
@@ -825,61 +964,134 @@ impl api::Application for Desktop {
         ]
     }
     fn surfaces(&self) -> Vec<SurfaceSpec> {
-        vec![
+        let mut surfaces = vec![
+            SurfaceSpec {
+                id: "bluetooth",
+                layer: Layer::Overlay,
+                anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
+                width: 0,
+                height: 0,
+                exclusive_zone: -1,
+                keyboard: if self.bluetooth.open() {
+                    Keyboard::Exclusive
+                } else {
+                    Keyboard::None
+                },
+                visible: self.bluetooth.visible(),
+                pointer_input: if self.bluetooth.open() {
+                    PointerInput::All
+                } else {
+                    PointerInput::None
+                },
+            },
+            SurfaceSpec {
+                id: "network",
+                layer: Layer::Overlay,
+                anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
+                width: 0,
+                height: 0,
+                exclusive_zone: -1,
+                keyboard: if self.network.open() {
+                    Keyboard::Exclusive
+                } else {
+                    Keyboard::None
+                },
+                visible: self.network.visible(),
+                pointer_input: if self.network.open() {
+                    PointerInput::All
+                } else {
+                    PointerInput::None
+                },
+            },
+            SurfaceSpec {
+                id: "audio",
+                layer: Layer::Overlay,
+                anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
+                width: 0,
+                height: 0,
+                exclusive_zone: -1,
+                keyboard: if self.audio.open() {
+                    Keyboard::Exclusive
+                } else {
+                    Keyboard::None
+                },
+                visible: self.audio.visible(),
+                pointer_input: if self.audio.open() {
+                    PointerInput::All
+                } else {
+                    PointerInput::Content
+                },
+            },
             SurfaceSpec {
                 id: "osd",
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
                 width: 0,
                 height: 0,
                 exclusive_zone: -1,
                 keyboard: Keyboard::None,
                 visible: self.osd.feedback.is_some(),
-                capture_all: false,
+                pointer_input: lucent_api::PointerInput::Content,
             },
             SurfaceSpec {
                 id: "background",
                 layer: Layer::Background,
                 anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
                 width: 0,
                 height: 0,
                 exclusive_zone: -1,
                 keyboard: Keyboard::None,
                 visible: true,
-                capture_all: false,
+                pointer_input: lucent_api::PointerInput::Content,
             },
             SurfaceSpec {
                 id: "notifications",
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
                 width: 0,
                 height: 0,
                 exclusive_zone: -1,
                 keyboard: Keyboard::OnDemand,
                 visible: self.notifications.visible(),
-                capture_all: false,
+                pointer_input: lucent_api::PointerInput::Content,
             },
             SurfaceSpec {
                 id: "bar",
                 layer: Layer::Top,
                 anchor: Anchor::Top,
+                margins: Default::default(),
+                redraw_group: None,
                 width: 0,
                 height: panel::BAR_HEIGHT as u32,
                 exclusive_zone: panel::BAR_HEIGHT as i32,
                 keyboard: Keyboard::None,
                 visible: self.bar_visible,
-                capture_all: false,
+                pointer_input: lucent_api::PointerInput::Content,
             },
             SurfaceSpec {
                 id: "widgets",
                 layer: Layer::Bottom,
                 anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: Some("widgets"),
                 width: 0,
                 height: 0,
                 exclusive_zone: -1,
-                keyboard: Keyboard::OnDemand,
-                visible: true,
-                capture_all: false,
+                keyboard: Keyboard::None,
+                visible: self.widgets.grid_visible(),
+                pointer_input: PointerInput::None,
             },
             SurfaceSpec {
                 id: "dock",
@@ -888,9 +1100,15 @@ impl api::Application for Desktop {
                 } else {
                     Layer::Top
                 },
-                anchor: Anchor::Fill,
+                anchor: Anchor::Bottom,
+                margins: Default::default(),
+                redraw_group: None,
                 width: 0,
-                height: 0,
+                height: if self.launcher.expanded() {
+                    self.viewport.1.max(1.) as u32
+                } else {
+                    crate::shell_layout::dock_surface_height(self.viewport.1)
+                },
                 exclusive_zone: -1,
                 keyboard: if self.launcher.open() {
                     Keyboard::Exclusive
@@ -898,15 +1116,42 @@ impl api::Application for Desktop {
                     Keyboard::None
                 },
                 visible: true,
-                capture_all: self.launcher.open(),
+                pointer_input: if self.launcher.open() {
+                    PointerInput::All
+                } else {
+                    PointerInput::Content
+                },
             },
-        ]
+        ];
+        surfaces.extend(
+            self.widgets
+                .surfaces(&self.settings, self.viewport)
+                .into_iter()
+                .map(|source| SurfaceSpec {
+                    id: source.id,
+                    layer: Layer::Bottom,
+                    anchor: Anchor::TopLeft,
+                    margins: SurfaceMargins {
+                        top: source.rect.y as i32,
+                        left: source.rect.x as i32,
+                        ..Default::default()
+                    },
+                    redraw_group: Some("widgets"),
+                    width: source.rect.w.ceil() as u32,
+                    height: source.rect.h.ceil() as u32,
+                    exclusive_zone: -1,
+                    keyboard: Keyboard::OnDemand,
+                    visible: true,
+                    pointer_input: PointerInput::Content,
+                }),
+        );
+        surfaces
     }
     fn init(&mut self, effects: &mut Effects<Message>) {
         let apps = self.adapters.apps.clone();
         let store = self.adapters.settings.clone();
         let wallpaper = self.adapters.wallpaper.clone();
-        effects.task(move || {
+        effects.task_on(crate::work::ASSETS, move || {
             Message::Loaded(
                 apps.discover().unwrap_or_default(),
                 store.load(),
@@ -921,7 +1166,34 @@ impl api::Application for Desktop {
         let media = self.adapters.media.clone();
         let weather = self.adapters.weather.clone();
         let notifications = self.adapters.notifications.clone();
+        let audio = self.adapters.audio.clone();
+        let network = self.adapters.network.clone();
+        let bluetooth = self.adapters.bluetooth.clone();
         let mut s = vec![
+            Subscription::stream("bluetooth", move |out, cancel| {
+                bluetooth.watch(
+                    &mut |value| {
+                        out.send(Message::Bluetooth(crate::bluetooth::Message::Observed(
+                            value,
+                        )))
+                    },
+                    &WatchStop(cancel),
+                );
+            }),
+            Subscription::stream("network", move |out, cancel| {
+                network.watch(
+                    &mut |value| {
+                        out.send(Message::Network(crate::network::Message::Observed(value)))
+                    },
+                    &WatchStop(cancel),
+                );
+            }),
+            Subscription::stream("audio", move |out, cancel| {
+                audio.watch(
+                    &mut |value| out.send(Message::Audio(crate::audio::Message::Observed(value))),
+                    &WatchStop(cancel),
+                );
+            }),
             Subscription::stream("notifications", move |out, cancel| {
                 notifications.watch(
                     &mut |value| {
@@ -945,6 +1217,30 @@ impl api::Application for Desktop {
                 Message::Weather(weather.snapshot())
             }),
         ];
+        for subscription in self.audio.subscriptions() {
+            s.push(Subscription::stream(subscription.id, move |out, cancel| {
+                (subscription.run)(
+                    Emitter::new(move |message| out.send(Message::Audio(message))),
+                    cancel,
+                );
+            }));
+        }
+        for subscription in self.network.subscriptions() {
+            s.push(Subscription::stream(subscription.id, move |out, cancel| {
+                (subscription.run)(
+                    Emitter::new(move |message| out.send(Message::Network(message))),
+                    cancel,
+                );
+            }));
+        }
+        for subscription in self.bluetooth.subscriptions() {
+            s.push(Subscription::stream(subscription.id, move |out, cancel| {
+                (subscription.run)(
+                    Emitter::new(move |message| out.send(Message::Bluetooth(message))),
+                    cancel,
+                );
+            }));
+        }
         for subscription in self.browser.subscriptions(&self.adapters) {
             s.push(Subscription::stream(subscription.id, move |out, cancel| {
                 (subscription.run)(
@@ -972,11 +1268,34 @@ impl api::Application for Desktop {
     }
     fn event(&self, event: Event) -> Option<Message> {
         match event {
+            Event::Key {
+                surface: "bluetooth",
+                key: Key::Escape,
+            } => Some(Message::Bluetooth(self.bluetooth.escape())),
+            Event::Key {
+                surface: "bluetooth",
+                ..
+            } => None,
+            Event::Key {
+                surface: "network",
+                key: Key::Escape,
+            } => Some(Message::Network(self.network.escape())),
+            Event::Key {
+                surface: "network", ..
+            } => None,
+            Event::Key {
+                surface: "audio",
+                key: Key::Escape,
+            } => Some(Message::Audio(crate::audio::Message::Close)),
+            Event::Key {
+                surface: "audio", ..
+            } => None,
             Event::Resize {
                 surface,
                 width,
                 height,
-            } => Some(Message::Resize(surface, width, height)),
+                scale,
+            } => Some(Message::Resize(surface, width, height, scale)),
             event => self
                 .launcher
                 .event(event, self.browser.source.is_some())
@@ -984,6 +1303,11 @@ impl api::Application for Desktop {
         }
     }
     fn command(&self, command: &str) -> std::result::Result<Option<Message>, String> {
+        if command == "wallpaper retry" {
+            return Ok(Some(Message::WallpaperSelection(
+                crate::wallpaper_selection::Message::RetryPresentation,
+            )));
+        }
         if command == "wallpapers retry" {
             return Ok(Some(Message::Previews(crate::previews::Message::Retry)));
         }
@@ -1081,6 +1405,15 @@ impl api::Application for Desktop {
             return Ok(Some(Message::LauncherSize(size)));
         }
         Ok(Some(match command {
+            "bluetooth open"=>Message::Bluetooth(crate::bluetooth::Message::Open),
+            "bluetooth toggle"=>Message::Bluetooth(crate::bluetooth::Message::Toggle),
+            "bluetooth close"=>Message::Bluetooth(crate::bluetooth::Message::Close),
+            "audio open" => Message::Audio(crate::audio::Message::Open),
+            "audio toggle" => Message::Audio(crate::audio::Message::Toggle),
+            "audio close" => Message::Audio(crate::audio::Message::Close),
+            "network open" => Message::Network(crate::network::Message::Open),
+            "network toggle" => Message::Network(crate::network::Message::Toggle),
+            "network close" => Message::Network(crate::network::Message::Close),
             "bar show" => Message::Bar(true),
             "bar hide" => Message::Bar(false),
             "osd close" => Message::OsdClose,
@@ -1106,16 +1439,22 @@ impl api::Application for Desktop {
         }))
     }
     fn inspect(&self) -> String {
-        serde_json::json!({"wallpaper_index":self.wallpaper_index, "wallpaper_count":self.wallpapers.len(), "prepared_assets": {
+        let mut value = serde_json::json!({"desktop_viewport":self.viewport,"dock_surface_expanded":self.launcher.expanded(),"launcher_opening":self.launcher.opening(),"audio":self.audio.inspect(),"wallpaper_presentation":self.wallpaper.inspect_presentation(),"wallpaper_index":self.wallpaper_index, "wallpaper_count":self.wallpapers.len(), "prepared_assets": {
             "icons": crate::previews::usage(self.images.values()),
             "local_previews": self.previews.inspect(),
             "online_previews": crate::previews::usage(self.browser.previews.values()),
             "background": crate::previews::usage(self.wallpaper.background.iter()),
             "total": crate::previews::usage(self.images.values().chain(self.previews.images()).chain(self.browser.previews.values()).chain(self.wallpaper.background.iter())),
-        }, "palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_history_open":self.notifications.history_open,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":self.widgets.grid_visible(),"notes":self.settings.notes,"timer_seconds":self.widgets.timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"settings_save_status":self.persistence.status(self.settings_writable).name(),"settings_save_error":self.persistence.error(),"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable}).to_string()
+        }, "palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_history_open":self.notifications.history_open,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":self.widgets.grid_visible(),"widget_surfaces":self.widgets.surfaces(&self.settings,self.viewport).iter().map(|s|serde_json::json!({"id":s.id,"members":s.members,"x":s.rect.x,"y":s.rect.y,"width":s.rect.w,"height":s.rect.h})).collect::<Vec<_>>(),"notes":self.settings.notes,"timer_seconds":self.widgets.timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"settings_save_status":self.persistence.status(self.settings_writable).name(),"settings_save_error":self.persistence.error(),"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable});
+        value["network"] = self.network.inspect();
+        value["bluetooth"] = self.bluetooth.inspect();
+        value.to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
-        (surface == "osd" && self.osd.animating(now))
+        (surface == "audio" && self.audio.animating(now))
+            || (surface == "bluetooth" && self.bluetooth.animating(now))
+            || (surface == "network" && self.network.animating(now))
+            || (surface == "osd" && self.osd.animating(now))
             || (surface == "dock" && (self.launcher.animating(now) || self.carousel.active(now)))
     }
 }

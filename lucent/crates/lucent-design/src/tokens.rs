@@ -485,6 +485,64 @@ pub mod component {
         pub const SWATCH: f32 = 24.0;
         pub const PALETTE_ROW: f32 = 56.0;
     }
+    pub mod slider {
+        pub const HEIGHT: f32 = 40.0;
+        pub const TRACK_HEIGHT: f32 = 4.0;
+        pub const THUMB_DIAMETER: f32 = 16.0;
+        pub const PADDING_INLINE: f32 = 8.0;
+    }
+    pub mod example {
+        pub const WIDTH: f32 = 448.0;
+        pub const HEIGHT: f32 = 384.0;
+    }
+    pub mod scroll {
+        pub const THUMB_WIDTH: f32 = 4.0;
+        pub const GUTTER: f32 = 12.0;
+        pub const MINIMUM_THUMB: f32 = 20.0;
+        pub const LINE_STEP: f32 = 40.0;
+        pub const PADDING: f32 = 12.0;
+    }
+    pub mod scroll_example {
+        pub const WIDTH: f32 = 448.0;
+        pub const HEIGHT: f32 = 512.0;
+        pub const COMPACT_HEIGHT: f32 = 384.0;
+        pub const ROW_HEIGHT: f32 = 40.0;
+    }
+    pub mod audio {
+        pub const WIDTH: f32 = 480.0;
+        pub const HEIGHT: f32 = 640.0;
+        pub const HEADER_HEIGHT: f32 = 40.0;
+        pub const TAB_HEIGHT: f32 = 40.0;
+        pub const CARD_PADDING: f32 = 16.0;
+        pub const CARD_GAP: f32 = 8.0;
+        pub const SLIDE_DISTANCE: f32 = 20.0;
+        pub const VOLUME_STEP: f32 = 0.05;
+        pub const TITLE_LINES: f32 = 2.0;
+        pub const STATUS_LINES: f32 = 3.0;
+    }
+    pub mod network {
+        pub const WIDTH: f32 = 480.0;
+        pub const HEIGHT: f32 = 640.0;
+        pub const HEADER_HEIGHT: f32 = 40.0;
+        pub const TAB_HEIGHT: f32 = 40.0;
+        pub const CARD_PADDING: f32 = 16.0;
+        pub const CARD_GAP: f32 = 8.0;
+        pub const SLIDE_DISTANCE: f32 = 20.0;
+        pub const TITLE_LINES: f32 = 2.0;
+        pub const STATUS_LINES: f32 = 3.0;
+    }
+    pub mod bluetooth {
+        pub const WIDTH: f32 = 480.0;
+        pub const HEIGHT: f32 = 640.0;
+        pub const HEADER_HEIGHT: f32 = 40.0;
+        pub const TAB_HEIGHT: f32 = 40.0;
+        pub const CARD_PADDING: f32 = 16.0;
+        pub const CARD_GAP: f32 = 8.0;
+        pub const SLIDE_DISTANCE: f32 = 20.0;
+        pub const TITLE_LINES: f32 = 2.0;
+        pub const STATUS_LINES: f32 = 3.0;
+        pub const CODE_FONT: f32 = 23.0;
+    }
 }
 pub mod icon {
     pub const TINY: f32 = 16.0;

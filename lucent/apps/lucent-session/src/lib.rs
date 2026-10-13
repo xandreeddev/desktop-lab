@@ -99,11 +99,14 @@ impl SessionScreen {
             receive: Arc::new(Mutex::new(receive)),
         });
     }
+    fn editing_identity(&self) -> bool {
+        self.mode == Mode::Login && self.attempt.is_none()
+    }
     fn input_enabled(&self) -> bool {
         self.prompt
             .as_ref()
             .is_some_and(|p| matches!(p.kind, PromptKind::Secret | PromptKind::Visible))
-            || (self.mode == Mode::Login && self.attempt.is_none())
+            || self.editing_identity()
     }
 }
 impl Component for SessionScreen {
@@ -121,7 +124,7 @@ impl Component for SessionScreen {
         } else {
             "Welcome to Lucent"
         };
-        let username_step = self.mode == Mode::Login && self.attempt.is_none();
+        let username_step = self.editing_identity();
         let value = if username_step {
             self.identity.clone()
         } else if self
@@ -281,7 +284,7 @@ impl Component for SessionScreen {
             }
             Message::Retry if self.attempt.is_none() => self.begin(),
             Message::Submit => {
-                if self.mode == Mode::Login && self.attempt.is_none() {
+                if self.editing_identity() {
                     if !self.identity.trim().is_empty() {
                         self.identity = self.identity.trim().into();
                         self.begin();
@@ -311,7 +314,7 @@ impl Component for SessionScreen {
                 } else if self.input_enabled() {
                     match key {
                         Key::Text(mut text) => {
-                            if self.mode == Mode::Login && self.attempt.is_none() {
+                            if self.editing_identity() {
                                 if self.identity.len() + text.len() <= 128 {
                                     self.identity.push_str(&text);
                                 }
@@ -321,13 +324,19 @@ impl Component for SessionScreen {
                             text.zeroize();
                         }
                         Key::Backspace => {
-                            if self.mode == Mode::Login && self.attempt.is_none() {
+                            if self.editing_identity() {
                                 self.identity.pop();
                             } else {
                                 self.secret.pop();
                             }
                         }
-                        Key::Escape | Key::ClearInput => self.secret.clear(),
+                        Key::Escape | Key::ClearInput => {
+                            if self.editing_identity() {
+                                self.identity.clear();
+                            } else {
+                                self.secret.clear();
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -388,12 +397,14 @@ impl api::Application for SessionScreen {
             id: self.surface_id(),
             layer: Layer::Overlay,
             anchor: Anchor::Fill,
+            margins: Default::default(),
+            redraw_group: None,
             width: 0,
             height: 0,
             exclusive_zone: -1,
             keyboard: Keyboard::Exclusive,
             visible: true,
-            capture_all: true,
+            pointer_input: lucent_api::PointerInput::All,
         }]
     }
     fn init(&mut self, effects: &mut Effects<Message>) {
@@ -463,6 +474,141 @@ mod tests {
     impl AuthenticationPort for Deny {
         fn authenticate(&self, _: &str, _: &mut dyn AuthConversation) -> domain::Result<()> {
             Err(DomainError::Failed("denied".into()))
+        }
+    }
+    fn displayed_input(app: &SessionScreen) -> String {
+        fn find(element: &Element<Message>) -> Option<&str> {
+            if element.id == "authentication-input"
+                && let Kind::Text(value) = &element.kind
+            {
+                return Some(value);
+            }
+            element.children.iter().find_map(find)
+        }
+        let tree = app.view(&ViewContext {
+            surface: app.surface_id(),
+            width: 1920.,
+            height: 1080.,
+            now: 0.,
+        });
+        find(&tree)
+            .expect("authentication field must be visible")
+            .into()
+    }
+    #[test]
+    fn failed_login_can_clear_username_and_begin_a_fresh_attempt() {
+        use lucent_wayland::LockApplication;
+        for clear in [Key::ClearInput, Key::Escape] {
+            let mut app = SessionScreen::new(Mode::Login, "old-fixture".into(), Arc::new(Deny));
+            let mut effects = Effects::default();
+            app.update(Message::Submit, &mut effects);
+            app.update(
+                Message::Prompt(AuthPrompt {
+                    kind: PromptKind::Secret,
+                    text: "Password".into(),
+                }),
+                &mut effects,
+            );
+            app.update(
+                Message::Key(Key::Text("wrong-fixture".into())),
+                &mut effects,
+            );
+            app.update(
+                Message::Finished(Err(DomainError::Failed("denied".into()))),
+                &mut effects,
+            );
+            assert_eq!(displayed_input(&app), "old-fixture");
+            assert!(app.secret.is_empty());
+            app.update(Message::Key(clear), &mut effects);
+            assert_eq!(displayed_input(&app), " ");
+            app.update(Message::Submit, &mut effects);
+            assert!(
+                app.attempt.is_none(),
+                "empty usernames cannot start an attempt"
+            );
+            app.update(
+                Message::Key(Key::Text(" new-fixture ".into())),
+                &mut effects,
+            );
+            app.update(Message::Submit, &mut effects);
+            assert_eq!(app.identity, "new-fixture");
+            assert!(app.attempt.is_some());
+            assert!(app.secret.is_empty());
+            assert!(!app.authenticated());
+            assert!(!effects.exit);
+        }
+    }
+    #[test]
+    fn clear_edits_only_the_current_authentication_response() {
+        use lucent_wayland::LockApplication;
+        for mode in [Mode::Login, Mode::Lock, Mode::Authorization] {
+            for kind in [PromptKind::Secret, PromptKind::Visible] {
+                let mut app = SessionScreen::new(mode, "identity-fixture".into(), Arc::new(Deny));
+                let mut effects = Effects::default();
+                app.begin();
+                app.update(
+                    Message::Prompt(AuthPrompt {
+                        kind,
+                        text: "Response".into(),
+                    }),
+                    &mut effects,
+                );
+                app.update(
+                    Message::Key(Key::Text("response-fixture".into())),
+                    &mut effects,
+                );
+                assert_eq!(
+                    displayed_input(&app),
+                    if kind == PromptKind::Secret {
+                        "•".repeat("response-fixture".len())
+                    } else {
+                        "response-fixture".into()
+                    }
+                );
+                app.update(Message::Key(Key::ClearInput), &mut effects);
+                assert_eq!(displayed_input(&app), " ");
+                assert!(app.secret.is_empty());
+                assert_eq!(app.identity, "identity-fixture");
+                assert!(app.attempt.is_some());
+                assert_eq!(app.prompt.as_ref().unwrap().kind, kind);
+                assert!(!app.authenticated());
+                assert!(!effects.exit);
+            }
+        }
+    }
+    #[test]
+    fn connecting_and_verifying_login_ignore_field_edits() {
+        let mut app = SessionScreen::new(Mode::Login, "identity-fixture".into(), Arc::new(Deny));
+        let mut effects = Effects::default();
+        app.update(Message::Submit, &mut effects);
+        for phase in 0..2 {
+            if phase == 1 {
+                app.update(
+                    Message::Prompt(AuthPrompt {
+                        kind: PromptKind::Secret,
+                        text: "Password".into(),
+                    }),
+                    &mut effects,
+                );
+                app.update(
+                    Message::Key(Key::Text("response-fixture".into())),
+                    &mut effects,
+                );
+                app.update(Message::Submit, &mut effects);
+            }
+            assert!(!app.input_enabled());
+            for key in [
+                Key::ClearInput,
+                Key::Backspace,
+                Key::Escape,
+                Key::Text("ignored".into()),
+            ] {
+                app.update(Message::Key(key), &mut effects);
+            }
+            assert_eq!(app.identity, "identity-fixture");
+            assert!(app.secret.is_empty());
+            assert!(app.attempt.is_some());
+            assert!(!effects.exit);
         }
     }
     #[test]

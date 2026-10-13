@@ -76,16 +76,64 @@ fn fixture(count: usize, light: bool) -> Desktop {
         if let Some(asset) = lucent_design::app_icons::lookup(a.id.as_str()) {
             app.images.insert(
                 format!("app:{}", a.id.as_str()),
-                lucent_services::images::svg(asset.svg, 128, format!("lucent-app:{}", asset.id))
-                    .unwrap(),
+                lucent_services::images::svg_mask(
+                    asset.svg,
+                    128,
+                    format!("lucent-app:{}", asset.id),
+                )
+                .unwrap(),
             );
         }
     }
+    app.update(
+        Message::Launcher(launcher::Message::Submitted {
+            height: 580.,
+            now: 0.,
+        }),
+        &mut Effects::default(),
+    );
     app.update(
         Message::Launcher(launcher::Message::Mode(Mode::Apps)),
         &mut Effects::default(),
     );
     app
+}
+
+struct UnavailablePreviews(Arc<dyn crate::ports::AssetPort>);
+impl crate::ports::AssetPort for UnavailablePreviews {
+    fn initial(&self) -> std::collections::BTreeMap<String, Arc<ImageData>> {
+        self.0.initial()
+    }
+    fn application_icons(&self, apps: &[lucent_domain::Application]) -> crate::ports::Images {
+        self.0.application_icons(apps)
+    }
+    fn thumbnail(&self, _: &str) -> lucent_domain::Result<Arc<ImageData>> {
+        Err(lucent_domain::DomainError::Failed(
+            "Unavailable fixture".into(),
+        ))
+    }
+    fn preview(&self, image: &ImageData) -> Arc<ImageData> {
+        self.0.preview(image)
+    }
+    fn background(
+        &self,
+        path: &str,
+        target: Option<crate::ports::BackgroundTarget>,
+    ) -> lucent_domain::Result<Arc<ImageData>> {
+        self.0.background(path, target)
+    }
+}
+/// The offscreen canvas is immediately available at the requested full size.
+/// Native tests separately exercise the asynchronous configure/submission path.
+fn resize_fixture(app: &mut Desktop, width: f32, height: f32) {
+    app.update(
+        Message::Resize("background", width, height, 1),
+        &mut Effects::default(),
+    );
+    app.update(
+        Message::Launcher(launcher::Message::Submitted { height, now: 0. }),
+        &mut Effects::default(),
+    );
 }
 fn fonts(app: &Desktop) -> Arc<Vec<fontdue::Font>> {
     Arc::new(
@@ -133,10 +181,7 @@ fn every_visible_launcher_row_fits_even_after_scrolling() {
         let mut app = fixture(count, false);
         let layout = Layout::new(fonts(&app));
         for width in [640., 390.] {
-            app.update(
-                Message::Resize("dock", width, 580.),
-                &mut Effects::default(),
-            );
+            resize_fixture(&mut app, width, 580.);
             for index in [0, count - 1] {
                 app.update(
                     Message::Launcher(launcher::Message::Select(index)),
@@ -176,10 +221,7 @@ fn launcher_size_preserves_selection_and_limits_at_every_preset() {
     let mut app = fixture(50, false);
     let layout = Layout::new(fonts(&app));
     for viewport in [(1920., 1080.), (1366., 768.), (390., 580.), (320., 360.)] {
-        app.update(
-            Message::Resize("dock", viewport.0, viewport.1),
-            &mut Effects::default(),
-        );
+        resize_fixture(&mut app, viewport.0, viewport.1);
         for size in crate::shell_layout::LAUNCHER_PRESETS
             .map(|(_, size)| size)
             .into_iter()
@@ -267,10 +309,7 @@ fn launcher_size_preserves_selection_and_limits_at_every_preset() {
             }
         }
     }
-    app.update(
-        Message::Resize("dock", 1920., 1080.),
-        &mut Effects::default(),
-    );
+    resize_fixture(&mut app, 1920., 1080.);
     app.update(
         Message::LauncherSize(LauncherSize::default()),
         &mut Effects::default(),
@@ -446,9 +485,9 @@ fn framework_buttons_support_keyboard_focus_and_activation_without_hover() {
     let scene = layout.build(&root, 220., 50., &interaction, 0.);
     interaction.key(&scene, &Key::Tab);
     assert_eq!(interaction.focus.as_deref(), Some("one"));
-    assert_eq!(interaction.key(&scene, &Key::Enter), Some(1));
+    assert_eq!(interaction.key(&scene, &Key::Enter), vec![1]);
     interaction.key(&scene, &Key::Tab);
-    assert_eq!(interaction.key(&scene, &Key::Text(" ".into())), Some(2));
+    assert_eq!(interaction.key(&scene, &Key::Text(" ".into())), vec![2]);
     interaction.key(&scene, &Key::BackTab);
     let focused = layout.build(&root, 220., 50., &interaction, 0.);
     assert!(
@@ -755,17 +794,9 @@ fn catalog_uses_desktop_identity_and_every_icon_rasterizes() {
     assert!(lookup("Foot").is_none());
     let mut pixels = std::collections::BTreeSet::new();
     for asset in ALL {
-        let image = lucent_services::images::svg(asset.svg, 64, asset.id.into()).unwrap();
-        assert!(image.pixels().as_chunks::<4>().0.iter().any(|p| p[3] > 0));
-        assert!(
-            image
-                .pixels()
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .all(|p| p[0] == p[1] && p[1] == p[2]),
-            "artwork remains monochrome before theme tinting"
-        );
+        let image = lucent_services::images::svg_mask(asset.svg, 64, asset.id.into()).unwrap();
+        assert_eq!(image.format(), ImageFormat::Alpha8);
+        assert!(image.pixels().iter().any(|a| *a > 0));
         assert!(
             pixels.insert(image.pixels().to_vec()),
             "each app pictogram is distinct"
@@ -823,6 +854,272 @@ fn image_comparison_detects_a_clipped_row() {
 }
 
 #[test]
+fn compact_dock_resize_cannot_replace_the_display_viewport() {
+    let mut app = Desktop::new(crate::test_adapters::adapters());
+    app.update(
+        Message::Resize("background", 1920., 1080., 1),
+        &mut Effects::default(),
+    );
+    app.update(
+        Message::Resize("dock", 1920., 120., 1),
+        &mut Effects::default(),
+    );
+    assert_eq!(app.viewport, (1920., 1080.));
+    app.update(
+        Message::Resize("background", f32::NAN, 20., 1),
+        &mut Effects::default(),
+    );
+    assert_eq!(app.viewport, (1920., 1080.));
+    let dock = app.surfaces().into_iter().find(|s| s.id == "dock").unwrap();
+    assert_eq!(dock.anchor, Anchor::Bottom);
+    assert_eq!(dock.height, 120);
+    assert_eq!(dock.pointer_input, PointerInput::Content);
+}
+
+#[test]
+fn bounded_widget_sources_preserve_capture_and_pass_through_preview() {
+    let mut app = fixture(9, false);
+    resize_fixture(&mut app, 1920., 1080.);
+    let initial = app.surfaces();
+    assert!(!initial.iter().find(|s| s.id == "widgets").unwrap().visible);
+    let group = app
+        .widgets
+        .surfaces(&app.settings, app.viewport)
+        .into_iter()
+        .find(|s| s.members.contains(&"calendar"))
+        .unwrap();
+    let layout = Layout::new(fonts(&app));
+    let cx = ViewContext {
+        surface: group.id,
+        width: group.rect.w,
+        height: group.rect.h,
+        now: 1.,
+    };
+    let mut input = Interaction::default();
+    let before = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
+    let hit = before
+        .hits
+        .iter()
+        .find(|h| h.id == "widget-calendar")
+        .unwrap();
+    let (x, y) = (hit.rect.x + 100., hit.rect.y + 20.);
+    input.press(&before, x, y);
+    for message in input.motion(&before, x + 400., y + 200., cx.now) {
+        app.update(message, &mut Effects::default());
+    }
+    assert!(app.settings.positions.is_empty());
+    assert!(app.widgets.grid_visible());
+    let during = app.surfaces();
+    let preview = during.iter().find(|s| s.id == "widgets").unwrap();
+    assert!(preview.visible);
+    assert_eq!(preview.pointer_input, PointerInput::None);
+    assert_eq!(preview.keyboard, Keyboard::None);
+    assert_eq!(
+        during.iter().find(|s| s.id == group.id),
+        initial.iter().find(|s| s.id == group.id)
+    );
+    let input_only = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
+    assert!(input_only.paint.is_empty());
+    assert_eq!(before.regions, input_only.regions);
+    input.synchronize(&input_only);
+    let message = input.release(x + 500., y + 220.).unwrap();
+    app.update(message, &mut Effects::default());
+    assert!(!app.widgets.grid_visible());
+    assert!(app.settings.positions.contains_key("calendar"));
+    assert!(
+        !app.surfaces()
+            .iter()
+            .find(|s| s.id == "widgets")
+            .unwrap()
+            .visible
+    );
+}
+
+#[test]
+#[ignore = "requires Vulkan; run explicitly with --ignored"]
+fn bounded_widget_pixels_match_the_full_surface() {
+    let base = fixture(9, false);
+    let fonts = fonts(&base);
+    let layout = Layout::new(fonts.clone());
+    let gpu = lucent_render::Gpu::headless(fonts).unwrap();
+    let mut canvas = lucent_render::Canvas::new(gpu);
+    for light in [false, true] {
+        for (width, height) in [(1920, 1080), (960, 540), (390, 700)] {
+            for overlap in [false, true] {
+                let mut app = fixture(9, light);
+                resize_fixture(&mut app, width as f32, height as f32);
+                app.settings.visible_widgets = crate::widgets::catalog::WIDGETS
+                    .iter()
+                    .map(|w| w.id.into())
+                    .collect();
+                if overlap {
+                    for (index, widget) in crate::widgets::catalog::WIDGETS.iter().enumerate() {
+                        app.settings.positions.insert(
+                            widget.id.into(),
+                            lucent_domain::Placement::new(
+                                32. + index as f32 * 48.,
+                                24. + index as f32 * 40.,
+                            )
+                            .unwrap(),
+                        );
+                    }
+                }
+                let full_cx = ViewContext {
+                    surface: "widgets",
+                    width: width as f32,
+                    height: height as f32,
+                    now: 1.,
+                };
+                let full = layout.build(
+                    &app.view(&full_cx),
+                    full_cx.width,
+                    full_cx.height,
+                    &Interaction::default(),
+                    full_cx.now,
+                );
+                for scale in [1, 2] {
+                    let expected = canvas.snapshot(width, height, scale, &full.paint).unwrap();
+                    let mut actual = vec![0; expected.len()];
+                    let mut native_hits = std::collections::BTreeMap::new();
+                    for source in app.widgets.surfaces(&app.settings, app.viewport) {
+                        let cx = ViewContext {
+                            surface: source.id,
+                            width: source.rect.w,
+                            height: source.rect.h,
+                            now: 1.,
+                        };
+                        let native = layout.build(
+                            &app.view(&cx),
+                            cx.width,
+                            cx.height,
+                            &Interaction::default(),
+                            cx.now,
+                        );
+                        for hit in &native.hits {
+                            native_hits.insert(
+                                hit.id.clone(),
+                                Rect::new(
+                                    hit.rect.x + source.rect.x,
+                                    hit.rect.y + source.rect.y,
+                                    hit.rect.w,
+                                    hit.rect.h,
+                                ),
+                            );
+                        }
+                        let pixels = canvas
+                            .snapshot(
+                                source.rect.w as u32,
+                                source.rect.h as u32,
+                                scale,
+                                &native.paint,
+                            )
+                            .unwrap();
+                        let row_bytes = source.rect.w as usize * scale as usize * 4;
+                        for row in 0..source.rect.h as usize * scale as usize {
+                            let start = ((source.rect.y as usize * scale as usize + row)
+                                * width as usize
+                                * scale as usize
+                                + source.rect.x as usize * scale as usize)
+                                * 4;
+                            actual[start..start + row_bytes]
+                                .copy_from_slice(&pixels[row * row_bytes..(row + 1) * row_bytes]);
+                        }
+                    }
+                    assert_eq!(native_hits.len(), full.hits.len());
+                    for hit in &full.hits {
+                        assert_eq!(native_hits[&hit.id], hit.rect);
+                    }
+                    let max_error = expected
+                        .iter()
+                        .zip(&actual)
+                        .map(|(a, b)| a.abs_diff(*b))
+                        .max()
+                        .unwrap();
+                    assert!(
+                        max_error <= 1,
+                        "widget crop {width}x{height}/{scale}x/light={light}/overlap={overlap}: {max_error}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires Vulkan; run explicitly with --ignored"]
+fn compact_dock_pixels_match_the_full_surface() {
+    let base = fixture(9, false);
+    let fonts = fonts(&base);
+    let layout = Layout::new(fonts.clone());
+    let gpu = lucent_render::Gpu::headless(fonts).unwrap();
+    let mut canvas = lucent_render::Canvas::new(gpu);
+    for light in [false, true] {
+        for (width, height) in [(1920, 1080), (1280, 720), (960, 540), (390, 700)] {
+            let mut app = fixture(9, light);
+            resize_fixture(&mut app, width as f32, height as f32);
+            app.update(
+                Message::Launcher(launcher::Message::Close),
+                &mut Effects::default(),
+            );
+            let compact_height = crate::shell_layout::dock_surface_height(height as f32);
+            let build = |native_height: u32| {
+                let cx = ViewContext {
+                    surface: "dock",
+                    width: width as f32,
+                    height: native_height as f32,
+                    now: 1.,
+                };
+                layout.build(
+                    &app.view(&cx),
+                    cx.width,
+                    cx.height,
+                    &Interaction::default(),
+                    cx.now,
+                )
+            };
+            let full = build(height);
+            let compact = build(compact_height);
+            let offset = (height - compact_height) as f32;
+            assert_eq!(full.hits.len(), compact.hits.len());
+            for (a, b) in full.hits.iter().zip(&compact.hits) {
+                assert_eq!(a.id, b.id);
+                assert_eq!(
+                    a.rect,
+                    Rect::new(b.rect.x, b.rect.y + offset, b.rect.w, b.rect.h)
+                );
+                assert!(fully_visible(b.rect, b.clip.bounds));
+            }
+            for scale in [1, 2] {
+                let expected = canvas.snapshot(width, height, scale, &full.paint).unwrap();
+                let pixels = canvas
+                    .snapshot(width, compact_height, scale, &compact.paint)
+                    .unwrap();
+                let mut actual = vec![0; expected.len()];
+                let start = ((height - compact_height) * scale * width * scale * 4) as usize;
+                assert!(
+                    expected[..start].iter().all(|byte| *byte == 0),
+                    "crop must retain the entire shadow"
+                );
+                actual[start..].copy_from_slice(&pixels);
+                // Changing the native extent changes floating-point vertex
+                // interpolation. Permit only one 8-bit quantization step;
+                // existing whole-desktop snapshot tolerances stay unchanged.
+                let max_error = expected
+                    .iter()
+                    .zip(&actual)
+                    .map(|(a, b)| a.abs_diff(*b))
+                    .max()
+                    .unwrap();
+                assert!(
+                    max_error <= 1,
+                    "cropping changed {width}x{height}/{scale}x/light={light} pixels by {max_error}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 #[ignore = "requires Vulkan; run explicitly with --ignored"]
 fn visual_regressions() {
     let base = fixture(9, false);
@@ -838,6 +1135,7 @@ fn visual_regressions() {
     std::fs::create_dir_all(&report).unwrap();
     std::fs::create_dir_all(&baselines).unwrap();
     let update = std::env::var("LUCENT_UPDATE_GOLDENS").as_deref() == Ok("1");
+    let filter = std::env::var("LUCENT_VISUAL_FILTER").ok();
     let mut failures = vec![];
     let mut html = String::from(
         "<!doctype html><meta charset=utf-8><title>Lucent native visual checks</title><style>body{background:#19191d;color:#eee;font:16px system-ui;margin:40px}section{margin-bottom:48px}img{max-width:45%;vertical-align:top;border:1px solid #555}code{color:#c8b6ff}</style><h1>Lucent native visual checks</h1><p>Production Rust layout → Vulkan shader → fixed PNG. Left: actual; right: amplified difference. Pink marks changed pixels.</p>",
@@ -919,7 +1217,90 @@ fn visual_regressions() {
             ("notes-failed", Mode::Apps, 0, 0, "", 1., 390.),
             ("notes-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("menu-submenu", Mode::Apps, 0, 0, "", 1., 640.),
+            ("audio-loading", Mode::Apps, 0, 0, "", 1., 640.),
+            ("audio-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
+            ("audio-outputs", Mode::Apps, 0, 0, "", 1., 640.),
+            ("audio-inputs", Mode::Apps, 0, 0, "", 1., 390.),
+            ("audio-apps", Mode::Apps, 0, 0, "", 1., 640.),
+            ("audio-route", Mode::Apps, 0, 0, "", 1., 390.),
+            ("audio-error", Mode::Apps, 0, 0, "", 1., 390.),
+            ("audio-stale", Mode::Apps, 0, 0, "", 1., 390.),
+            ("audio-opening", Mode::Apps, 0, 0, "", 0.12, 640.),
+            ("audio-last", Mode::Apps, 0, 0, "", 1., 390.),
+            ("network-loading", Mode::Apps, 0, 0, "", 1., 640.),
+            ("network-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
+            ("network-available", Mode::Apps, 0, 0, "", 1., 640.),
+            ("network-password", Mode::Apps, 0, 0, "", 1., 390.),
+            ("network-hidden", Mode::Apps, 0, 0, "", 1., 390.),
+            ("network-forget", Mode::Apps, 0, 0, "", 1., 390.),
+            ("network-error", Mode::Apps, 0, 0, "", 1., 390.),
+            ("network-opening", Mode::Apps, 0, 0, "", 0.12, 640.),
+            ("network-last", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-loading", Mode::Apps, 0, 0, "", 1., 640.),
+            ("bluetooth-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-empty", Mode::Apps, 0, 0, "", 1., 640.),
+            ("bluetooth-devices", Mode::Apps, 0, 0, "", 1., 390.),
+            (
+                "bluetooth-connection-admission",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            (
+                "bluetooth-connection-pending",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            (
+                "bluetooth-connection-cancelled",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            (
+                "bluetooth-connection-failed",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            (
+                "bluetooth-unpaired-connected",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            ("bluetooth-radio", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-radio-last", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-confirmation", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-pin", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-display", Mode::Apps, 0, 0, "", 1., 640.),
+            ("bluetooth-service", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-forget", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-last", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-opening", Mode::Apps, 0, 0, "", 0.12, 640.),
         ] {
+            if filter
+                .as_ref()
+                .is_some_and(|filter| !name.starts_with(filter))
+            {
+                continue;
+            }
             let height = if name.starts_with("launcher-size-") {
                 1080.
             } else if name.starts_with("notes-") {
@@ -940,10 +1321,7 @@ fn visual_regressions() {
                 _ => lucent_domain::LauncherSize::default(),
             };
             app.update(Message::LauncherSize(preference), &mut Effects::default());
-            app.update(
-                Message::Resize("dock", width, height),
-                &mut Effects::default(),
-            );
+            resize_fixture(&mut app, width, height);
             app.update(
                 Message::Launcher(launcher::Message::Mode(mode)),
                 &mut Effects::default(),
@@ -957,15 +1335,13 @@ fn visual_regressions() {
                 app.wallpapers = wallpaper_fixtures();
             }
             if name == "wallpapers-unavailable" {
+                app.previews = crate::previews::Previews::new(Arc::new(UnavailablePreviews(
+                    app.adapters.assets.clone(),
+                )));
                 let mut effects = Effects::default();
                 app.update(Message::Clock(app.clock.clone()), &mut effects);
-                while effects.tasks.pop().is_some() {
-                    app.update(
-                        Message::Previews(crate::previews::Message::WorkerFailed(
-                            "Unavailable fixture".into(),
-                        )),
-                        &mut effects,
-                    );
+                while let Some(task) = effects.tasks.pop() {
+                    app.update(task.run(), &mut effects);
                 }
             }
             if name.starts_with("wallpapers-online") {
@@ -1176,6 +1552,220 @@ fn visual_regressions() {
                 };
                 let tree = session.view(&cx).map(|_| Message::Quit);
                 layout.build(&tree, width, height, &Interaction::default(), now)
+            } else if name.starts_with("bluetooth-") {
+                use crate::bluetooth::{
+                    Message as B,
+                    tests::{connecting_fixture, fixture, id, pairing_fixture, pairing_id},
+                };
+                use lucent_domain::{
+                    BluetoothPairingCode as Code, BluetoothPairingPrompt as P, BluetoothServiceId,
+                };
+                if name.starts_with("bluetooth-radio") {
+                    app.update(
+                        Message::Bluetooth(B::Tab(crate::bluetooth::Tab::Radio)),
+                        &mut Effects::default(),
+                    );
+                }
+                let mut effects = Effects::default();
+                app.update(Message::Bluetooth(B::Open), &mut effects);
+                if name != "bluetooth-loading" {
+                    let snapshot = match name {
+                        "bluetooth-unavailable" => Err(lucent_domain::DomainError::Unavailable(
+                            "Bluetooth service disconnected".into(),
+                        )),
+                        "bluetooth-empty" => Ok(lucent_domain::BluetoothSnapshot::default()),
+                        "bluetooth-connection-pending"
+                        | "bluetooth-connection-cancelled"
+                        | "bluetooth-connection-failed" => {
+                            let mut snapshot = connecting_fixture();
+                            snapshot.connection.as_mut().unwrap().phase = match name {
+                                "bluetooth-connection-cancelled" => {
+                                    lucent_domain::BluetoothConnectionPhase::Cancelled
+                                }
+                                "bluetooth-connection-failed" => {
+                                    lucent_domain::BluetoothConnectionPhase::Failed(
+                                        "Bluetooth permission denied".into(),
+                                    )
+                                }
+                                _ => lucent_domain::BluetoothConnectionPhase::Connecting,
+                            };
+                            Ok(snapshot)
+                        }
+                        "bluetooth-unpaired-connected" => {
+                            let mut snapshot = fixture();
+                            snapshot.devices[0].connected = true;
+                            Ok(snapshot)
+                        }
+                        "bluetooth-confirmation" => {
+                            Ok(pairing_fixture(P::ConfirmPasskey(Code::new(17).unwrap())))
+                        }
+                        "bluetooth-pin" => Ok(pairing_fixture(P::PinCode)),
+                        "bluetooth-display" => Ok(pairing_fixture(P::DisplayPasskey {
+                            code: Code::new(17).unwrap(),
+                            entered: 3,
+                        })),
+                        "bluetooth-service" => Ok(pairing_fixture(P::AuthorizeService(
+                            BluetoothServiceId::new("0000110b-0000-1000-8000-00805f9b34fb")
+                                .unwrap(),
+                        ))),
+                        _ => Ok(fixture()),
+                    };
+                    app.update(Message::Bluetooth(B::Observed(snapshot)), &mut effects);
+                }
+                if name == "bluetooth-connection-admission" {
+                    app.update(Message::Bluetooth(B::Connect(id(3))), &mut effects);
+                }
+                if name == "bluetooth-pin" {
+                    app.update(
+                        Message::Bluetooth(B::Edit(
+                            pairing_id(41),
+                            InputEdit::Insert("fixturePin1".into()),
+                        )),
+                        &mut effects,
+                    );
+                }
+                if name == "bluetooth-forget" {
+                    app.update(Message::Bluetooth(B::AskForget(id(3))), &mut effects);
+                }
+                if matches!(name, "bluetooth-last" | "bluetooth-radio-last") {
+                    app.update(
+                        Message::Bluetooth(B::Scroll(ScrollEvent { offset: 10000. })),
+                        &mut effects,
+                    );
+                }
+                let tree = app.view(&ViewContext {
+                    surface: "bluetooth",
+                    width,
+                    height,
+                    now,
+                });
+                let mut input = Interaction::default();
+                input.synchronize(&layout.build(&tree, width, height, &input, now));
+                layout.build(&tree, width, height, &input, now)
+            } else if name.starts_with("network-") {
+                use crate::network::{
+                    Message as N,
+                    tests::{fixture, id},
+                };
+                let mut effects = Effects::default();
+                app.update(Message::Network(N::Open), &mut effects);
+                if name != "network-loading" {
+                    let state = if name == "network-unavailable" {
+                        Err(lucent_domain::DomainError::Unavailable(
+                            "The network service disconnected".into(),
+                        ))
+                    } else {
+                        let mut snapshot = fixture();
+                        for index in 3..10 {
+                            let mut ap = snapshot.access_points[0].clone();
+                            ap.id = id(10 + index);
+                            ap.ssid = Some(
+                                lucent_domain::NetworkSsid::new(
+                                    format!("Example network {index}").into_bytes(),
+                                )
+                                .unwrap(),
+                            );
+                            snapshot.access_points.push(ap);
+                        }
+                        Ok(snapshot)
+                    };
+                    app.update(Message::Network(N::Observed(state)), &mut effects);
+                }
+                if name == "network-password" {
+                    app.update(Message::Network(N::Join(id(2))), &mut effects);
+                    app.update(
+                        Message::Network(N::Password(
+                            1,
+                            InputEdit::Insert("fixture-secret".into()),
+                        )),
+                        &mut effects,
+                    );
+                }
+                if name == "network-hidden" {
+                    app.update(Message::Network(N::Hidden), &mut effects);
+                }
+                if name == "network-forget" {
+                    app.update(Message::Network(N::AskForget(id(3))), &mut effects);
+                }
+                if name == "network-error" {
+                    app.update(
+                        Message::Network(N::Request(crate::network::Control::Scan(id(999)))),
+                        &mut effects,
+                    );
+                }
+                if name == "network-last" {
+                    app.update(
+                        Message::Network(N::Scroll(ScrollEvent { offset: 10000. })),
+                        &mut effects,
+                    );
+                }
+                let tree = app.view(&ViewContext {
+                    surface: "network",
+                    width,
+                    height,
+                    now,
+                });
+                let mut input = Interaction::default();
+                input.synchronize(&layout.build(&tree, width, height, &input, now));
+                layout.build(&tree, width, height, &input, now)
+            } else if name.starts_with("audio-") {
+                use crate::audio::{Message as AudioMessage, panel::Tab};
+                app.update(Message::Audio(AudioMessage::Open), &mut Effects::default());
+                if name != "audio-loading" {
+                    let state = if name == "audio-unavailable" {
+                        Err(lucent_domain::DomainError::Unavailable(
+                            "The audio service disconnected".into(),
+                        ))
+                    } else {
+                        Ok(audio_fixture_snapshot())
+                    };
+                    app.update(
+                        Message::Audio(AudioMessage::Observed(state)),
+                        &mut Effects::default(),
+                    );
+                }
+                let tab = if name == "audio-inputs" {
+                    Tab::Inputs
+                } else if matches!(name, "audio-apps" | "audio-route") {
+                    Tab::Applications
+                } else {
+                    Tab::Outputs
+                };
+                app.update(
+                    Message::Audio(AudioMessage::Tab(tab)),
+                    &mut Effects::default(),
+                );
+                if name == "audio-route" {
+                    app.update(
+                        Message::Audio(AudioMessage::ChooseRoute(
+                            lucent_domain::AudioObjectId::new(100).unwrap(),
+                        )),
+                        &mut Effects::default(),
+                    );
+                }
+                if name == "audio-last" {
+                    app.update(
+                        Message::Audio(AudioMessage::Scroll(ScrollEvent { offset: 10000. })),
+                        &mut Effects::default(),
+                    );
+                }
+                if name == "audio-error" {
+                    app.update(
+                        Message::Audio(AudioMessage::Request(lucent_domain::AudioCommand::Raise)),
+                        &mut Effects::default(),
+                    );
+                    app.update(Message::Audio(AudioMessage::Control(crate::audio::commands::Message::WorkerFailed("The requested audio change failed; the observed device state is preserved".into()))), &mut Effects::default());
+                }
+                if name == "audio-stale" {
+                    audio_stale_failure(&mut app);
+                }
+                let cx = ViewContext {
+                    surface: "audio",
+                    width,
+                    height,
+                    now,
+                };
+                layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
             } else if name.starts_with("notification") {
                 app.notifications.snapshot=lucent_domain::NotificationSnapshot {active:vec![lucent_domain::Notification {id:1,app:"Lucent fixture".into(),summary:"A notification rendered by our framework".into(),body:"Shared design tokens, measured text wrapping, native actions and keyboard focus.".into(),actions:vec![lucent_domain::NotificationAction {id:"default".into(),label:"Open fixture".into()}],critical:false,resident:false,transient:false,timeout_ms:0}],..Default::default()};
                 app.notifications.ready = true;
@@ -1191,7 +1781,7 @@ fn visual_regressions() {
                 let icons = lucent_design::app_icons::ALL
                     .iter()
                     .map(|asset| {
-                        let image = lucent_services::images::svg(
+                        let image = lucent_services::images::svg_mask(
                             asset.svg,
                             128,
                             format!("catalog:{}", asset.id),
@@ -1209,7 +1799,7 @@ fn visual_regressions() {
                 layout.build(&root, width, height, &Interaction::default(), now)
             } else if name.starts_with("bar") {
                 app.media.title = "A long media title that must stay inside its own capsule".into();
-                app.system.volume = Some(100);
+                app.audio.observe(Ok(crate::audio::fixture()));
                 app.compositor.workspaces = (1..=8)
                     .map(|id| lucent_domain::Workspace {
                         id,
@@ -1405,10 +1995,7 @@ fn settled_shell_geometry_obeys_grid_and_contains_its_controls() {
         (1366., 768.),
         (1920., 1080.),
     ] {
-        app.update(
-            Message::Resize("dock", width, height),
-            &mut Effects::default(),
-        );
+        resize_fixture(&mut app, width, height);
         for mode in Mode::ALL {
             app.update(
                 Message::Launcher(launcher::Message::Mode(mode)),
@@ -1668,7 +2255,7 @@ fn feedback_stops_scheduling_after_expiry_and_has_no_keyboard_grab() {
     );
     let spec = app.surfaces().into_iter().find(|s| s.id == "osd").unwrap();
     assert_eq!(spec.keyboard, Keyboard::None);
-    assert!(!spec.capture_all);
+    assert_eq!(spec.pointer_input, PointerInput::Content);
     app.update(
         Message::OsdTick,
         &mut Effects {
@@ -1730,10 +2317,7 @@ fn online_browser_controls_and_selected_result_fit_at_small_and_large_sizes() {
     let mut app = fixture(0, false);
     let layout = Layout::new(fonts(&app));
     for (width, height) in [(960., 768.), (390., 580.), (320., 360.)] {
-        app.update(
-            Message::Resize("dock", width, height),
-            &mut Effects::default(),
-        );
+        resize_fixture(&mut app, width, height);
         app.update(
             Message::Launcher(launcher::Message::Mode(Mode::Wallpapers)),
             &mut Effects::default(),
@@ -2099,4 +2683,355 @@ fn wallpaper_ranges_match_visible_cards_and_bound_large_libraries() {
         }
     }
     assert!(launcher::visible_wallpapers(100, f32::NAN).is_empty());
+}
+
+fn audio_fixture_snapshot() -> lucent_domain::AudioSnapshot {
+    use lucent_domain::*;
+    let mut snapshot = crate::audio::fixture();
+    for index in 2..=6 {
+        snapshot.devices.push(AudioDevice {
+            id: AudioObjectId::new(index).unwrap(),
+            key: AudioDeviceKey::new(format!("fixture.{index}")).unwrap(),
+            name: format!(
+                "Device {index}: a deliberately long label to check wrapping and rounded insets"
+            ),
+            direction: if index % 2 == 0 {
+                AudioDirection::Capture
+            } else {
+                AudioDirection::Playback
+            },
+            volume: AudioVolume::new(0.42).unwrap(),
+            muted: false,
+            monitor: index == 6,
+        });
+    }
+    snapshot.default_input = Some(AudioObjectId::new(2).unwrap());
+    for index in 0..4 {
+        snapshot.streams.push(AudioStream {
+            id: AudioObjectId::new(100 + index).unwrap(),
+            name: format!("Example stream {index}"),
+            application: format!("Example application {index}"),
+            direction: if index == 3 {
+                AudioDirection::Capture
+            } else {
+                AudioDirection::Playback
+            },
+            device: Some(AudioObjectId::new(if index == 3 { 2 } else { 1 }).unwrap()),
+            volume: Some(AudioVolume::new(0.65).unwrap()),
+            volume_writable: index != 2,
+            muted: false,
+        });
+    }
+    snapshot
+}
+fn audio_stale_failure(app: &mut Desktop) {
+    use crate::audio::{Message as AudioMessage, commands};
+    use lucent_domain::{AudioCommand, AudioObjectId, AudioVolume};
+    app.update(
+        Message::Audio(AudioMessage::Request(AudioCommand::SetVolume(
+            AudioObjectId::new(1).unwrap(),
+            AudioVolume::new(0.5).unwrap(),
+        ))),
+        &mut Effects::default(),
+    );
+    app.update(
+        Message::Audio(AudioMessage::Control(commands::Message::WorkerFailed(
+            "The audio connection changed before the command completed".into(),
+        ))),
+        &mut Effects::default(),
+    );
+    let mut reconnected = audio_fixture_snapshot();
+    let id = AudioObjectId::new(999).unwrap();
+    reconnected.devices[0].id = id;
+    reconnected.default_output = Some(id);
+    app.update(
+        Message::Audio(AudioMessage::Observed(Ok(reconnected))),
+        &mut Effects::default(),
+    );
+}
+#[test]
+fn audio_stale_failure_exposes_dismiss_and_keyboard_reaches_it_at_narrow_sizes() {
+    use crate::audio::Message as AudioMessage;
+    for (width, height) in [(390., 700.), (640., 580.), (1920., 1080.)] {
+        let mut app = fixture(0, false);
+        app.update(
+            Message::Audio(AudioMessage::Observed(Ok(audio_fixture_snapshot()))),
+            &mut Effects::default(),
+        );
+        app.update(Message::Audio(AudioMessage::Open), &mut Effects::default());
+        audio_stale_failure(&mut app);
+        let layout = Layout::new(fonts(&app));
+        let cx = ViewContext {
+            surface: "audio",
+            width,
+            height,
+            now: 1.,
+        };
+        let mut input = Interaction::default();
+        let scene = layout.build(&app.view(&cx), width, height, &input, 1.);
+        assert!(!scene.hits.iter().any(|h| h.id == "audio-retry"));
+        let dismiss = scene
+            .hits
+            .iter()
+            .find(|h| h.id == "audio-dismiss-error")
+            .unwrap();
+        assert!(fully_visible(dismiss.rect, dismiss.clip.bounds));
+        for _ in 0..scene.hits.len() {
+            let scene = layout.build(&app.view(&cx), width, height, &input, 1.);
+            input.synchronize(&scene);
+            for message in input.key(&scene, &Key::Tab) {
+                app.update(message, &mut Effects::default());
+            }
+            if input.focus.as_deref() == Some("audio-dismiss-error") {
+                break;
+            }
+        }
+        assert_eq!(input.focus.as_deref(), Some("audio-dismiss-error"));
+        let scene = layout.build(&app.view(&cx), width, height, &input, 1.);
+        for message in input.key(&scene, &Key::Enter) {
+            app.update(message, &mut Effects::default());
+        }
+        assert!(app.audio.inspect()["control_error"].is_null());
+    }
+}
+#[test]
+fn audio_panel_closes_competing_launcher_and_keyboard_reveals_controls_at_narrow_sizes() {
+    use crate::audio::{Message as AudioMessage, panel::Tab};
+    for (width, height) in [(390., 700.), (640., 580.), (1920., 1080.)] {
+        let mut app = fixture(0, false);
+        app.update(
+            Message::Audio(AudioMessage::Observed(Ok(audio_fixture_snapshot()))),
+            &mut Effects::default(),
+        );
+        app.update(Message::Audio(AudioMessage::Open), &mut Effects::default());
+        assert!(!app.launcher.open());
+        assert!(app.audio.open());
+        let layout = Layout::new(fonts(&app));
+        let cx = ViewContext {
+            surface: "audio",
+            width,
+            height,
+            now: 1.,
+        };
+        for tab in [Tab::Outputs, Tab::Inputs, Tab::Applications] {
+            app.update(
+                Message::Audio(AudioMessage::Tab(tab)),
+                &mut Effects::default(),
+            );
+            let mut input = Interaction::default();
+            let count = layout
+                .build(&app.view(&cx), width, height, &input, 1.)
+                .hits
+                .iter()
+                .filter(|h| h.tab_stop)
+                .count();
+            let mut visited = std::collections::BTreeSet::new();
+            for _ in 0..count {
+                let scene = layout.build(&app.view(&cx), width, height, &input, 1.);
+                input.synchronize(&scene);
+                for message in input.key(&scene, &Key::Tab) {
+                    app.update(message, &mut Effects::default());
+                }
+                let rendered = layout.build(&app.view(&cx), width, height, &input, 1.);
+                let hit = rendered
+                    .hits
+                    .iter()
+                    .find(|h| Some(&h.id) == input.focus.as_ref())
+                    .unwrap();
+                assert!(
+                    fully_visible(hit.rect, hit.clip.bounds),
+                    "cropped {} at {width}x{height}: {:?} clip {:?}",
+                    hit.id,
+                    hit.rect,
+                    hit.clip.bounds
+                );
+                visited.insert(hit.id.clone());
+            }
+            assert_eq!(
+                visited.len(),
+                count,
+                "unreachable audio control at {width}x{height}"
+            );
+        }
+        assert!(matches!(
+            app.event(Event::Key {
+                surface: "audio",
+                key: Key::Escape
+            }),
+            Some(Message::Audio(AudioMessage::Close))
+        ));
+        assert!(
+            app.event(Event::Key {
+                surface: "audio",
+                key: Key::Tab
+            })
+            .is_none()
+        );
+        app.update(
+            Message::Launcher(launcher::Message::Mode(Mode::Apps)),
+            &mut Effects::default(),
+        );
+        assert!(!app.audio.open());
+    }
+}
+
+#[test]
+fn network_overlay_keeps_one_keyboard_owner_and_masks_the_form_in_all_public_state() {
+    use crate::network::{
+        Message as N,
+        tests::{fixture as network_fixture, id},
+    };
+    let mut app = fixture(0, false);
+    let mut effects = Effects::default();
+    app.update(
+        Message::Network(N::Observed(Ok(network_fixture()))),
+        &mut effects,
+    );
+    app.update(Message::Network(N::Open), &mut effects);
+    assert!(!app.launcher.open());
+    assert!(!app.audio.open());
+    app.update(Message::Network(N::Join(id(2))), &mut effects);
+    app.update(
+        Message::Network(N::Password(
+            1,
+            InputEdit::Insert("private-test-value".into()),
+        )),
+        &mut effects,
+    );
+    let layout = Layout::new(fonts(&app));
+    let cx = ViewContext {
+        surface: "network",
+        width: 390.,
+        height: 580.,
+        now: 1.,
+    };
+    let tree = app.view(&cx);
+    let mut input = Interaction::default();
+    input.synchronize(&layout.build(&tree, cx.width, cx.height, &input, cx.now));
+    let scene = layout.build(&tree, cx.width, cx.height, &input, cx.now);
+    assert_eq!(input.focus.as_deref(), Some("network-password-1"));
+    assert!(
+        scene
+            .hits
+            .iter()
+            .all(|hit| !hit.value.contains("private-test-value"))
+    );
+    assert!(!app.inspect().contains("private-test-value"));
+    assert!(
+        scene
+            .paint
+            .iter()
+            .any(|p| matches!(p,Paint::Text{text,..} if text=="••••••••••••••••••"))
+    );
+    assert!(
+        scene
+            .paint
+            .iter()
+            .all(|p| !matches!(p,Paint::Text{text,..} if text.contains("private-test-value")))
+    );
+    assert_eq!(
+        app.surfaces()
+            .iter()
+            .filter(|s| s.visible && s.keyboard == Keyboard::Exclusive)
+            .count(),
+        1
+    );
+    app.update(Message::Audio(crate::audio::Message::Open), &mut effects);
+    assert!(!app.network.open());
+    assert_eq!(app.network.inspect()["form"], serde_json::Value::Null);
+    let network = app
+        .surfaces()
+        .into_iter()
+        .find(|s| s.id == "network")
+        .unwrap();
+    assert_eq!(network.pointer_input, PointerInput::None);
+    assert_eq!(network.keyboard, Keyboard::None);
+    app.update(Message::Network(N::Open), &mut effects);
+    app.update(
+        Message::Launcher(launcher::Message::Mode(Mode::Themes)),
+        &mut effects,
+    );
+    assert!(!app.network.open());
+    assert!(app.launcher.open());
+}
+
+#[test]
+fn bluetooth_overlay_routes_keyboard_submission_without_exposing_input_or_competing_focus() {
+    use crate::bluetooth::{
+        Message as B,
+        tests::{pairing_fixture, pairing_id},
+    };
+    use lucent_domain::BluetoothPairingPrompt;
+    let mut app = fixture(0, false);
+    let mut effects = Effects::default();
+    app.update(
+        Message::Network(crate::network::Message::Open),
+        &mut effects,
+    );
+    app.update(
+        Message::Bluetooth(B::Observed(Ok(pairing_fixture(
+            BluetoothPairingPrompt::PinCode,
+        )))),
+        &mut effects,
+    );
+    assert!(app.bluetooth.open());
+    assert!(!app.network.open());
+    assert!(!app.audio.open());
+    assert!(!app.launcher.open());
+    assert_eq!(
+        app.surfaces()
+            .iter()
+            .filter(|s| s.visible && s.keyboard == Keyboard::Exclusive)
+            .count(),
+        1
+    );
+    let layout = Layout::new(fonts(&app));
+    let cx = ViewContext {
+        surface: "bluetooth",
+        width: 390.,
+        height: 580.,
+        now: 1.,
+    };
+    let mut input = Interaction::default();
+    let scene = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
+    input.synchronize(&scene);
+    assert_eq!(input.focus.as_deref(), Some("bluetooth-input-41"));
+    for message in input.key(&scene, &Key::Text("fixturePin1".into())) {
+        app.update(message, &mut effects);
+    }
+    let scene = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
+    assert!(
+        scene
+            .paint
+            .iter()
+            .all(|p| !matches!(p,Paint::Text{text,..}if text.contains("fixturePin1")))
+    );
+    assert!(scene.hits.iter().all(|h| !h.value.contains("fixturePin1")));
+    assert!(!app.inspect().contains("fixturePin1"));
+    let submitted = input.key(&scene, &Key::Enter);
+    assert!(
+        matches!(submitted.as_slice(),[Message::Bluetooth(B::Submit(id))] if *id==pairing_id(41))
+    );
+    for message in submitted {
+        app.update(message, &mut effects);
+    }
+    assert_eq!(effects.tasks.last().unwrap().queue, crate::work::CONTROLS);
+    app.update(Message::Bluetooth(B::Close), &mut effects);
+    assert!(!app.bluetooth.open());
+    assert_eq!(app.bluetooth.inspect()["form"], serde_json::Value::Null);
+    let surface = app
+        .surfaces()
+        .into_iter()
+        .find(|s| s.id == "bluetooth")
+        .unwrap();
+    assert_eq!(surface.keyboard, Keyboard::None);
+    assert_eq!(surface.pointer_input, PointerInput::None);
+    assert!(app.command("bluetooth open").is_ok());
+    assert!(
+        app.runtime_failure(RuntimeFailure {
+            source: "effect queue bluetooth".into(),
+            reason: "fixture panic".into()
+        })
+        .is_none()
+    );
 }

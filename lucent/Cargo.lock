@@ -272,6 +272,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bluetooth-service"
+version = "0.1.0"
+dependencies = [
+ "lucent-domain",
+ "lucent-services",
+ "serde",
+ "serde_json",
+ "zeroize",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1174,6 +1185,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
+name = "libpulse-sys"
+version = "1.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d74371848b22e989f829cc1621d2ebd74960711557d8b45cfe740f60d0a05e61"
+dependencies = [
+ "libc",
+ "num-derive",
+ "num-traits",
+ "pkg-config",
+ "winapi",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1247,6 +1271,7 @@ dependencies = [
  "lucent-wayland",
  "serde",
  "serde_json",
+ "zeroize",
 ]
 
 [[package]]
@@ -1301,14 +1326,20 @@ dependencies = [
 name = "lucent-services"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
+ "async-executor",
+ "async-io",
  "chrono",
+ "futures-lite",
  "image",
  "jpeg-decoder",
  "libc",
+ "libpulse-sys",
  "lucent-api",
  "lucent-domain",
  "lucent-usecases",
  "resvg",
+ "serde",
  "serde_json",
  "zbus",
 ]
@@ -1468,6 +1499,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "network-service"
+version = "0.1.0"
+dependencies = [
+ "lucent-domain",
+ "lucent-services",
+ "serde_json",
+ "zeroize",
+]
+
+[[package]]
 name = "nom"
 version = "7.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1475,6 +1516,17 @@ checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
 dependencies = [
  "memchr",
  "minimal-lexical",
+]
+
+[[package]]
+name = "num-derive"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -2025,6 +2077,15 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "scroll-list"
+version = "0.1.0"
+dependencies = [
+ "lucent-api",
+ "lucent-design",
+ "lucent-wayland",
+]
 
 [[package]]
 name = "serde"

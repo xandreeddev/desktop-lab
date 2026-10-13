@@ -49,6 +49,9 @@ impl SystemPort for Fake {
     }
 }
 impl AudioPort for Fake {
+    fn watch(&self, emit: &mut dyn FnMut(Result<AudioSnapshot>), _: &dyn StopSignal) {
+        emit(Ok(AudioSnapshot::default()));
+    }
     fn control(&self, _: AudioCommand) -> Result<()> {
         self.calls.lock().unwrap().push("audio");
         Ok(())
@@ -60,6 +63,15 @@ impl MediaPort for Fake {
     }
     fn control(&self, _: MediaCommand) -> Result<()> {
         self.calls.lock().unwrap().push("media");
+        Ok(())
+    }
+}
+impl NetworkPort for Fake {
+    fn watch(&self, emit: &mut dyn FnMut(Result<NetworkSnapshot>), _: &dyn StopSignal) {
+        emit(Err(DomainError::Unavailable("offline fixture".into())));
+    }
+    fn control(&self, _: NetworkCommand) -> Result<()> {
+        self.calls.lock().unwrap().push("network");
         Ok(())
     }
 }
@@ -109,6 +121,8 @@ pub fn with(fake: Arc<Fake>) -> DesktopAdapters {
         clock: fake.clone(),
         system: fake.clone(),
         audio: fake.clone(),
+        network: fake.clone(),
+        bluetooth: fake.clone(),
         media: fake.clone(),
         weather: fake.clone(),
         wallpaper: fake.clone(),
@@ -162,5 +176,36 @@ impl WallpaperCatalogPort for Fake {
     }
     fn download(&self, _: &RemoteWallpaper) -> Result<Wallpaper> {
         Err(DomainError::Unavailable("offline fixture".into()))
+    }
+}
+
+impl BluetoothPort for Fake {
+    fn watch(&self, emit: &mut dyn FnMut(Result<BluetoothSnapshot>), _: &dyn StopSignal) {
+        emit(Ok(BluetoothSnapshot::default()));
+    }
+    fn control(&self, _: BluetoothCommand) -> Result<()> {
+        self.calls.lock().unwrap().push("bluetooth");
+        Ok(())
+    }
+    fn start_connection(&self, _: BluetoothObjectId) -> Result<BluetoothConnectionId> {
+        Err(DomainError::Unavailable(
+            "No fixture connection target".into(),
+        ))
+    }
+    fn cancel_connection(&self, _: BluetoothConnectionId) -> Result<()> {
+        Err(DomainError::Invalid("No fixture connection attempt".into()))
+    }
+    fn start_pairing(&self, _: BluetoothObjectId) -> Result<BluetoothPairingId> {
+        Err(DomainError::Unavailable("No fixture pairing target".into()))
+    }
+    fn answer_pairing(&self, _: BluetoothPairingId, _: BluetoothPairingAnswer) -> Result<()> {
+        Err(DomainError::Invalid("No fixture pairing prompt".into()))
+    }
+    fn cancel_pairing(&self, _: BluetoothPairingId) -> Result<()> {
+        Err(DomainError::Invalid("No fixture pairing attempt".into()))
+    }
+    fn set_incoming_pairing(&self, _: bool) -> Result<()> {
+        self.calls.lock().unwrap().push("bluetooth incoming");
+        Ok(())
     }
 }

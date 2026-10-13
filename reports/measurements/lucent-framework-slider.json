@@ -1,0 +1,56 @@
+{
+  "scope": "Controlled framework slider and independent hello-layer client; not native audio integration",
+  "source_commit": "a01fd2c18deed180380da8508779ec149943effe",
+  "binary": {
+    "name": "hello-layer",
+    "profile": "dev",
+    "sha256": "694c270332245f81ca2a2f4080d6152ccb097b177cd0d9afe6de384168c17c79"
+  },
+  "validation": {
+    "rust_unit_tests": 176,
+    "python_checks": 60,
+    "formatting": "passed",
+    "clippy": "passed before the final example inspection-only change; exact-head CI pending",
+    "generated_tokens": 463,
+    "astro_pages": 13,
+    "astro_links": 487,
+    "slider_vulkan_pixels": "passed on software Vulkan at scales 1 and 2",
+    "existing_desktop_visual_regressions": "passed on software Vulkan; no baselines or tolerances changed",
+    "native": [
+      "pointer_press_updates",
+      "captured_drag_outside_both_ends",
+      "outside_release",
+      "keyboard_steps",
+      "keyboard_home_end",
+      "keyboard_focus_visible",
+      "tab_backtab",
+      "existing_button_and_animation",
+      "no_idle_redraw_over_one_second",
+      "clean_close"
+    ]
+  },
+  "native_environment": {
+    "allocated_memory_mib": 3072,
+    "vcpus": 4,
+    "output_pixels": [
+      1920,
+      1080
+    ],
+    "scale": 1,
+    "render_backend": "Vulkan software renderer"
+  },
+  "deployment": "Only a temporary hello-layer executable and a temporary user unit were used; both were removed after the test. Existing shell and authentication binaries were not replaced.",
+  "session_login": {
+    "result": "Signed in through the existing root-installed Lucent greeter and reached the user desktop with its background ready",
+    "installed_greeter_sha256": "859ad0b596a3c9ea97373a841b79158a7418b60b8649478ccf0507f80cccd265",
+    "desktop_sha256": "ec1287a5c531801e81713b38f1855d35ec6a14cadf66ecef8436746fcb3bb9be",
+    "scope": "Existing installed greeter only; not deployment or verification of a newly rebuilt greeter. Private screenshots and credentials are excluded."
+  },
+  "limitations": [
+    "No audio adapter or control-center integration in this change",
+    "Native test is a single scale-1 virtual output; physical-device and fractional-scale behavior are not established",
+    "The one-second idle frame-count check is not a CPU/RSS or frame-pacing benchmark",
+    "No new memory-performance result; historical larger-VM results are unchanged",
+    "Exact-head CI and protected-main merge/Pages verification pending"
+  ]
+}

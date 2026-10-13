@@ -1,0 +1,78 @@
+{
+  "milestone": "native-network-service",
+  "status": "locally_verified",
+  "scope": "Pure network domain port, native NetworkManager adapter and independent headless consumer. The desktop still uses its compatibility network flow; no native panel is claimed.",
+  "source_commit": "edc37bdf22e7ae762d8f812ab1ec2153032917b1",
+  "source_commit_scope": "Clean query-recovery implementation checkpoint used by the tested release consumer; subsequent changes add documentation and sanitized evidence only.",
+  "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/34",
+  "binary": {
+    "name": "network-service",
+    "profile": "release",
+    "sha256": "309900829147bd1776fd5d1522904eff3bd01704b5ce47653069e95aa6845d89"
+  },
+  "architecture": [
+    "Pure validated values and a NetworkPort contract; native D-Bus paths, owner and identity map stay in the NetworkManager adapter",
+    "One subscription worker owns the system-bus connection; a bounded command queue wakes that owner and includes queue time in absolute deadlines",
+    "Signals trigger bounded catalog refresh; unchanged snapshots are suppressed; no idle network-state polling",
+    "Removal, path reuse and unique-owner replacement retire handles; known dynamic-object query races retry without retiring unrelated IDs",
+    "UnknownMethod is a disappearance hint only for supported dynamic-object reads; unsupported controls and root queries still fail",
+    "Credentials are consumed, cannot be cloned/debug-printed, are absent from snapshots/reports and never appear in subprocess arguments",
+    "Control success is acceptance; independent observed state establishes scan/association/address completion"
+  ],
+  "checks": {
+    "rust_workspace_tests": 232,
+    "python_checks": 68,
+    "formatting": "passed",
+    "clippy": "passed; warnings denied",
+    "private_dbus_protocol_tests": 6,
+    "private_dbus_scope": "Raw/hidden SSIDs; acceptance versus completion; join/activate/scan/radio/disconnect/forget; removal/reuse and owner replacement; idle, 512-signal burst, queue/catalog bounds, timeout/cancellation, unknown-object and GDBus unknown-method query recovery; safe errors and unsupported controls. No host NetworkManager access.",
+    "site": {
+      "errors": 0,
+      "warnings": 0,
+      "hints": 0,
+      "pages": 13,
+      "links_and_assets": 487,
+      "project_base": "/desktop-lab"
+    },
+    "rendering": "No renderer/client rendering code, tokens, visual baselines or tolerances changed. Existing GPU checks remain part of PR CI.",
+    "native": [
+      "system_bus_initial_state_and_virtual_wifi_hotplug",
+      "scan_completion_and_real_wpa2_discovery",
+      "regular_user_wpa2_join_and_independent_association_dhcp",
+      "targeted_disconnect_saved_reactivation_and_forget",
+      "hidden_wpa2_join_and_volatile_profile",
+      "wifi_radio_toggle_without_global_network_disable",
+      "device_removal_and_stale_handle_rejection",
+      "original_profiles_routes_desktop_and_fixture_cleanup_verified"
+    ],
+    "harness_sha256": {
+      "vm/network_fixture.py": "48d39f67bab291cde7127bb9c9c586c7ded0ea4bdc8b46ef432585ba50508944",
+      "vm/test-network-service.py": "c0c704957910819077ae0f97839d02048d3231cad54451085c82fa5dfe9dbac7"
+    },
+    "exact_head_ci": "Final documentation/evidence-head checks are tracked on PR #34; this report records local implementation and native evidence"
+  },
+  "native_environment": {
+    "allocated_memory_mib": 3072,
+    "vcpus": 4,
+    "network_backend": "Guest NetworkManager and wpa_supplicant over the real system bus; mac80211_hwsim/nl80211 radios with hostapd and isolated-namespace DHCP",
+    "consumer_context": "Temporary regular-user systemd unit, matching desktop polkit permissions; MemoryMax=256M, TasksMax=64. Root used only for the owned VM fixture."
+  },
+  "deployment": "Only a temporary headless release consumer was uploaded. Existing desktop, CLI and authentication binaries were not replaced. The desktop binary hash remained 8015609aa0d34a9a086f0a1c634d28da01f8a5c0f8f6ef7948420b60e4641b3c, with NRestarts=0 after native tests. No permissive polkit rule or global service changes.",
+  "restoration": "Original profiles and default routes matched; desktop PID unchanged. Generated profiles, radios/module, AP namespace, child processes, test unit, credentials and temporary files removed. Original Wi-Fi radio state restored. Guest hostapd/dnsmasq fixture packages remain installed.",
+  "discoveries": [
+    "SSH-scoped permission denial differs from the user service manager context; authorization remains owned by NetworkManager/polkit",
+    "Supplicant interface release is asynchronous; AP startup verifies readiness",
+    "AP DHCP needs a separate fixture namespace for actual association/address setup",
+    "Failed activations can leave saved profiles; cleanup owns only registered keys or new exact-fixture SSIDs",
+    "GDBus reports removed dynamic objects as UnknownMethod; bounded query recovery preserves unrelated device/profile handles"
+  ],
+  "performance": "Builds ran with the VM off and CARGO_BUILD_JOBS=1. No fresh service RSS/CPU or desktop performance improvement is claimed. The adapter is not injected into the desktop. Last desktop checkpoint mean RSS is 224.93 MiB; the 200 MiB target remains unmet.",
+  "pending": [
+    "Review and merge; verify final evidence-head CI on PR #34; stacked on PR #33; no automatic merge",
+    "Desktop composition-root injection, native network child/panel, masked secret input/focus, loading/error/selector/stale-target behavior and compatibility entrypoint/keybinding replacement",
+    "Proper secret-agent/retry design for saved profiles needing new credentials; enterprise/WEP provisioning, VPN editing and captive-portal UX",
+    "Physical Wi-Fi, hardware radio switches, SAE/OWE interoperability, dense catalog/signal pressure and suspend/reconnect",
+    "Incremental per-object state caching; current refresh reads a bounded whole catalog; bounds do not cap transport/daemon incoming allocations",
+    "Remaining framework, OS-service, desktop, secure-authentication and delivery acceptance groups in docs/implementation-status.json"
+  ]
+}

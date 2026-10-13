@@ -48,7 +48,8 @@
       "evidence": [
         "Bounded queue ordering, independent work, overload, cancellation, panic and shutdown tests passed",
         "Native launcher and secure lock/unlock passed",
-        "Subscription ingress now shares a bounded 64-value runtime queue; producer cancellation, stale-generation filtering, calloop dispatch bounds and live worker limits are tested. Native launcher, restart, secure lock and live wallpaper subscription checks passed."
+        "Subscription ingress now shares a bounded 64-value runtime queue; producer cancellation, stale-generation filtering, calloop dispatch bounds and live worker limits are tested. Native launcher, restart, secure lock and live wallpaper subscription checks passed.",
+        "The desktop now defines eight ordered effect lanes to fit the existing eight-worker bound. Task-local failure mapping preserves child operation identity on shared lanes, including delegated messages; cancellation suppresses retired tasks and failure mapping. Default or mapper failures still reach runtime supervision. Private protocol tests verify Bluetooth replies and urgent cancellation progress during pending ordinary native calls. This checkpoint is locally tested; native guest acceptance is pending."
       ]
     },
     {
@@ -84,7 +85,8 @@
         "ImageData validates immutable premultiplied mip storage on asset workers",
         "GPU tests passed for cross-surface residency, release and same-name asset replacement",
         "78 Rust tests, 48 Python tests and 148 visual comparisons passed",
-        "Native VM launcher, shell restart and secure lock/unlock passed"
+        "Native VM launcher, shell restart and secure lock/unlock passed",
+        "Format-aware immutable Alpha8 images/mips and R8 textures preserve RGBA coverage while storing one channel. Text keeps 2x supersampling. Six final resource/pixel checks pass on each driver, 248 Rust tests pass, and all 248 existing visual references pass on the final allocation checkpoint (hardware locally, software in CI). The memory preference is a hint, not a budget. See reports/measurements/lucent-icon-masks.json."
       ]
     },
     {
@@ -143,7 +145,9 @@
         "Source hardware and workload metadata are detected",
         "Current startup idle interaction and memory results are recorded",
         "CPU preparation layout upload and presentation measurements have explicit scope",
-        "Application-owned prepared previews have byte accounting and bounded lifetime without losing density quality"
+        "Application-owned prepared previews have byte accounting and bounded lifetime without losing density quality",
+        "Normal desktop process RSS stays within the current 300 MiB target without reducing rendering density or design quality",
+        "Cold and warm animations are measured against the actual output refresh interval; idle surfaces do not continuously repaint"
       ],
       "evidence": [
         "Harness now detects guest metadata and records binary hash and cache counters",
@@ -154,11 +158,16 @@
         "Cold launcher opening included a 246.42 ms maximum frame interval; warmed samples were near 16.5 ms median with up to 19.56 ms observed maximum. Detailed stage profiling, hardware GPU, scaling/hotplug and sleep/resume remain open.",
         "Opt-in bounded CPU-stage profiling verified natively, including default-off behavior and runtime-override restoration after intentional failure; 113 Rust tests, 52 Python checks and focused GPU cold/warm test passed.",
         "Profiled 120-second run: 0.600% main-process CPU, 588.68 MiB mean RSS, zero background/closed-dock idle frames. Cold launcher gap 101.35 ms while maximum measured dock frame work was 10.63 ms; the gap is not explained by its view/layout/text work alone.",
-        "Same-binary normal-mode 120-second comparison: 0.592% main-process CPU, 589.60 MiB mean RSS, zero background/closed-dock idle frames. First-open maximum interval 24.25 ms; warm maxima 18.26\u201321.18 ms. This is not a controlled overhead estimate or proof the earlier hitch is fixed.",
+        "Same-binary normal-mode 120-second comparison: 0.592% main-process CPU, 589.60 MiB mean RSS, zero background/closed-dock idle frames. First-open maximum interval 24.25 ms; warm maxima 18.26–21.18 ms. This is not a controlled overhead estimate or proof the earlier hitch is fixed.",
         "Five focused offscreen renderer tests passed on Radeon hardware Vulkan. Visual comparison against software baselines passed 80/148 cases; 68 small coverage differences require follow-up. This is not a hardware desktop performance measurement.",
         "Cross-driver coverage follow-up: all 148 existing comparisons and six focused renderer tests pass on both Radeon hardware Vulkan and llvmpipe after selecting fine derivatives. Baselines/tolerances unchanged; hardware desktop performance remains unmeasured.",
         "Static review confirms Desktop.images retains each distinct selected wallpaper preview with no eviction. The 64-item startup preload cap does not cap lifetime retention, and renderer GPU-cache eviction cannot release these CPU-owned images. RSS attribution and bounded demand-loading remain open.",
-        "Local previews now have bounded lazy ownership and deduplicated prepared-byte counters. Native 73-file browsing/retry/close checks and sequential 120-second runs passed: RSS 588.26 to 389.93 MiB; CPU 0.700% to 0.825%. The 200 MiB target is still unmet; online page lifetime, output-aware background preparation and hardware behavior remain separate work."
+        "Local previews now have bounded lazy ownership and deduplicated prepared-byte counters. Native 73-file browsing/retry/close checks and sequential 120-second runs passed: RSS 588.26 to 389.93 MiB; CPU 0.700% to 0.825%. The 200 MiB target is still unmet; online page lifetime, output-aware background preparation and hardware behavior remain separate work.",
+        "Output-aware retained desktop pixels verified with bounded last-good refits and explicit retry. Native integer-scale/size changes and bursts preserve source/preferences and restore the output. Sequential 120-second normal runs with matching metadata: mean RSS 406.92 to 293.25 MiB; prepared background 48 to 12 MiB; main CPU 0.550% to 0.583%; idle background/closed dock zero frames. See lucent-wallpaper-resolution.json. The 200 MiB target, fullscreen overlays, decoding peaks and hardware behavior remain open.",
+        "Compact dock keeps display-grid placement in a short bottom-anchored native buffer, with submission-gated open/close lifecycle. 216 Rust/62 Python checks, 16 paired pixel comparisons on each Vulkan driver, 212 unchanged visual baselines, native 1x/2x input/reopen/idle and existing desktop workflow pass. Fresh same-wallpaper/workload 120-second comparison: mean RSS 284.22 to 254.10 MiB; prepared assets match and closed dock/background submit zero idle frames. See lucent-dock-surface.json. The 200 MiB target, fullscreen widgets, hardware pacing and broader output support remain open.",
+        "Bounded widget groups preserve whole shadows and overlap order; stationary input-only sources support the native drag preview. 223 Rust/64 Python tests, 24 paired scenarios per Vulkan driver, 212 unchanged visuals, native scale/capture/release/restart and existing desktop workflow pass. Shared readiness prevents the old supervisor from stopping the new client after 30 seconds. Fresh matching 120-second software-Vulkan runs: mean RSS 252.18 to 224.93 MiB; prepared assets match, background/closed dock zero idle frames. See lucent-widget-surfaces.json. The 200 MiB target, hardware pacing, full-output overlays and broader feature groups remain open.",
+        "Explicit Alpha8 icons/text plus the supported wgpu MemoryUsage allocation preference retain density and pass pixel/resource checks. Matched clean-source 120-second same-boot VM runs reduce mean RSS 226.78 to 207.70 MiB (19.08 MiB); the 200 MiB target remains unmet. Native framework and 1x/2x widget workflows restore caller state. Actual GPU allocations, active overlay/decode peaks, hardware pacing, long idle and faults remain open; see reports/measurements/lucent-icon-masks.json.",
+        "The current user-approved normal desktop RSS target is 300 MiB, superseding the initial 200 MiB target. Rendering quality and smooth animations remain priorities. The latest prior 207.70 MiB sample is within this budget, but does not measure the Bluetooth panel release or prove hardware pacing, peaks or complete performance acceptance."
       ]
     },
     {
@@ -202,13 +211,25 @@
     {
       "id": "control-center",
       "owner": "domain service ports adapters and desktop client",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "Native network connection and Wi-Fi setup",
         "Native Bluetooth discovery pairing and controls",
         "Audio device volume microphone and routing controls",
         "Battery power profile brightness and session controls",
         "Service loading unavailable error and reconnect states"
+      ],
+      "progress": [
+        "Native audio domain values/port, adapter-owned libpulse event loop, bounded commands, reconnect and explicit client observation state implemented; top bar no longer polls wpctl.",
+        "Pure control policy, identity/bounds/balance tests and private PipeWire protocol/cancellation tests pass. Full audio panel, live stream-routing, physical hardware and remaining hardware validation remain open.",
+        "182 workspace tests plus the new bounded-admission unit check, two isolated audio protocol tests, workspace Clippy, 60 Python checks, software-Vulkan desktop visual regressions (160.81 s), and Astro checks/link validation passed. No visual goldens or tolerances changed. Native guest validation also passes: actual default-output policy, external volume events, pointer mute/unmute and desktop restart; original audio settings restored. See reports/measurements/lucent-audio-service.json.",
+        "Native audio child provides output/input/app tabs, framework sliders/scrolling, default/route selectors, token-based open/close motion and bounded/coalesced commands. Real deadline recovery exposed stale retry identities: available controls retain Retry; replaced controls expose Dismiss and require a fresh selection. 204 Rust tests, 62 Python checks, 212 software-Vulkan comparisons and native output/input/stream controls, playback/capture routing, compatibility entrypoints, sustained drag, device removal, service disconnect/reconnect, idle and restart checks pass. See reports/measurements/lucent-audio-panel.json. Physical audio/card profiles and other control-center services remain incomplete.",
+        "Native network domain values/port and NetworkManager D-Bus adapter implemented with bounded signal-driven observation/commands, explicit acceptance versus completion and safe credential/error handling. 232 Rust tests, six private D-Bus protocol tests and 68 Python checks pass. Guest NetworkManager with owned simulated radios passes real WPA2/hidden association and DHCP, targeted disconnect/reactivation/forget, radio changes, removal/stale IDs and original-profile/route/desktop cleanup. See reports/measurements/lucent-network-service.json. The independent consumer is tested; desktop injection, native network panel and masked input remain unfinished.",
+        "Native network child, framework masked edit/submit controls, generation-bound secret forms, native operation selectors, ownership/motion/error behavior and compatibility routes now implemented. 245 Rust tests, 70 Python checks, 248 software-Vulkan comparisons with 36 new baselines and real pointer/keyboard WPA2/hidden joins, DHCP, saved operations, radio changes and complete owned-fixture cleanup pass. Two-minute warm idle is 225.33 MiB mean RSS and 0.567% of one core; the 200 MiB memory target remains unmet. See reports/measurements/lucent-network-panel.json. Secret-agent, enterprise, physical networking and other control-center services remain unfinished.",
+        "BluetoothPort, validated transient handles/addresses, pure command policy and a native BlueZ adapter now have an independent consumer. Five private D-Bus regressions cover discovery ownership, paired controls, retirement/reconnect, signal pressure, timeout/privacy and connection cleanup. A release consumer observes the real guest daemon with zero controllers and cancels in 0.114 seconds; owned daemon/module state is restored. Native pairing, desktop injection and hardware acceptance remain pending.",
+        "Native BluetoothPort pairing conversations now distinguish local attempt admission, explicit prompt answers and observed completion. Lazy KeyboardDisplay Agent1 registration, bounded proposals, zeroizing PIN/passkey input, exact unique-owner/current-target checks, cancellation/release and timeout retirement are implemented. Thirteen Bluetooth unit/protocol tests passed, including five new pairing protocol cases. Native desktop injection and actual-controller/profile acceptance remain open; this does not complete the control center.",
+        "Native Bluetooth child and composition-root injection now use BluetoothPort for loading/unavailable/current controllers, discovery, device controls and explicit pairing cards. Masked input and token-based motion use the framework; generation-bound forms drop on retirement/close. Late pairing admission is cancelled after close, and only accepted discovery sessions owned by Lucent are released. Seventeen Bluetooth unit/private-D-Bus protocol tests and eight injected client/root input checks pass. All 292 software-Vulkan visual comparisons pass, including 44 new Bluetooth references and reviewed bar control changes at 1x/2x. Native guest/controller interaction and compatibility replacement remain pending; this does not complete the control center.",
+        "Radio visibility and permission for incoming pairs now use typed BluetoothCommand variants, pure target/power policy and native Adapter1 property writes. Observation, discovery ownership and incoming-agent authority remain distinct. A separate client Radio tab keeps device selection reachable. Fifteen private D-Bus protocol checks pass, including property observation/expiry and no automatic agent/trust/discovery authority; native guest/controller acceptance is still pending."
       ]
     },
     {
@@ -265,12 +286,17 @@
     {
       "id": "framework-controls",
       "owner": "lucent-api lucent-ui and lucent-wayland",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "Reusable scrolling and sliders",
         "Tooltips popup and focus lifecycle",
         "Controls demonstrated by real clients",
         "Behavior and visual regression coverage"
+      ],
+      "progress": [
+        "Controlled normalized slider API, pointer capture, keyboard adjustment, shared paint/hit geometry and semantic token recipe implemented with an independent hello-layer client example. Audio integration, general scrolling, popup/tooltip lifecycle and accessibility remain incomplete.",
+        "176 Rust unit tests, 60 Python checks, focused Vulkan pixels at 1x/2x and existing software-Vulkan visual regressions pass. Independent native hello-layer checks pass for pointer capture, keyboard/focus, existing buttons, idle frame demand and shutdown on the 3 GiB/four-vCPU guest. See reports/measurements/lucent-framework-slider.json. All six exact-head CI checks pass for PR #27; review and merge remain pending. Native audio observation is implemented in PR #28; the audio panel remains separate.",
+        "Controlled vertical scrolling now has topmost-hit ancestor routing, keyboard reveal, rounded clipping, capture invalidation and shared immutable ancestry. Independent token-based scroll-list client, 193 Rust tests, 60 Python checks, focused 1x/2x Vulkan pixels on software/hardware, unchanged desktop visual baselines and native wheel/drag/32-row keyboard/resize/shrink/hide/idle/close checks pass. See reports/measurements/lucent-framework-scroll.json. No virtualization, touch or complete audio-panel claim."
       ]
     },
     {
@@ -349,6 +375,25 @@
         "Output validation implemented in renderer-owned extent.rs; scene-resource validation remains open",
         "162 Rust tests, eight focused Vulkan tests and 172 unchanged visual comparisons pass on both software/hardware drivers; native desktop launcher/restart/application-survival and existing secure lock/unlock pass. See reports/measurements/lucent-render-extents.json. Scene-resource validation remains open.",
         "Scene validation and fallible Canvas::paint pass 167 Rust tests, nine focused renderer checks and 172 unchanged visual comparisons on each of software/hardware Vulkan. Native launcher/restart/application-survival and existing secure lock/unlock pass. See reports/measurements/lucent-render-scenes.json; device-memory failure and upstream layout remain separate boundaries."
+      ]
+    },
+    {
+      "id": "secure-session-clients",
+      "owner": "lucent-session clients, authentication adapters and lucent-wayland lifecycle",
+      "status": "in_progress",
+      "acceptance": [
+        "A rejected login can clear its retained username and retry without appending identity text",
+        "Responses remain outside framework scenes and authentication-client inspection sockets",
+        "Secure unlock requires actual authentication and protocol acknowledgement",
+        "Permission cancellation denies authority checks and removes surfaces while the agent survives",
+        "Coherent releases, rollback and denial/failure/restart/physical-session acceptance have evidence"
+      ],
+      "evidence": [
+        "251 workspace tests, including six session presentation checks; 70 Python checks, formatting and strict Clippy pass.",
+        "Real final-release greetd rejection, username clear, empty submit and successful clean retry pass; final native secure-lock masking/clear/PAM unlock and wallpaper retention pass.",
+        "Two real permission cancellation cycles deny checks, expose no command socket, remove native surfaces and retain the same agent with no automatic restart. The preceding checkpoint reproduced one empty surface after cancellation.",
+        "All three authentication clients share a clean release checkpoint, installed hashes and retained rollback copies are verified, and desktop preferences remain present. See reports/measurements/lucent-session-input.json.",
+        "Production authentication audit, native denied-lock recovery, authority/service faults and physical sessions remain open; other installed clients still need a rebuilt runtime."
       ]
     }
   ],
@@ -739,6 +784,321 @@
         "Persistent/rich/grouped notifications and other requirement groups"
       ],
       "merge_commit": "45215700860c44b849e1239c3530bb8c72beb931"
+    },
+    {
+      "milestone": "framework-slider",
+      "status": "locally_verified",
+      "source_commit": "a01fd2c18deed180380da8508779ec149943effe",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/27",
+      "checks": [
+        "Validated normalized slider contract and semantic token recipe",
+        "Software Vulkan pixels at 1x/2x and existing desktop visual regressions passed",
+        "Native example pointer/keyboard/focus/idle/close checks passed; temporary unit and binary removed",
+        "Existing installed greeter sign-in reached the normal user desktop; authentication binaries unchanged",
+        "All six exact-head CI checks pass for PR #27 at 2919e1bd08c90b5dcca2e11625b8918f9a4f9843; remains unmerged"
+      ],
+      "pending": [
+        "PR review, protected-main merge and Pages",
+        "Audio integration and remaining framework controls",
+        "Other requirement groups"
+      ]
+    },
+    {
+      "milestone": "native-audio-service",
+      "status": "locally_verified",
+      "checks": [
+        "Validated pure audio values, default-output keyboard policy, and client loading/ready/unavailable state",
+        "Device identity, channel balance, route validation, bounds and bounded command admission unit tests",
+        "Isolated PipeWire tests: output/input controls, default preference requests with explicit policy fixture, external events, removal/reconnect, idle observation, shutdown and cancelled callback storage",
+        "Workspace Rust tests, Clippy, Python checks, unchanged software-Vulkan visual baselines and Astro build/link checks",
+        "Release deployment to 3 GiB/four-vCPU VM; real default-output policy, external volume events, native bar clicks and desktop restart passed; temporary output removed and original audio restored",
+        "All six exact-head CI checks pass for PR #28 at 4a90b23779cdc3f87c8b20603aa058379253bd75; remains unmerged"
+      ],
+      "pending": [
+        "Live application stream-routing validation",
+        "Control-center child, sliders and bounded/coalesced drag commands",
+        "Physical audio devices, card profiles/ports and hardware behavior",
+        "PR review and merge",
+        "Other requirement groups"
+      ],
+      "source_commit": "b8107121c8103257b27ffe57989106a9a49bb201",
+      "report": "reports/measurements/lucent-audio-service.json",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/28"
+    },
+    {
+      "milestone": "framework-scroll",
+      "status": "locally_verified",
+      "source_commit": "97d460c03b91bce30bea09adb11773a2e61fead1",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/29",
+      "report": "reports/measurements/lucent-framework-scroll.json",
+      "checks": [
+        "193 Rust tests, 60 Python checks, formatting, Clippy and generated tokens passed",
+        "Focused 1x/2x GPU pixel tests passed on software and hardware Vulkan; existing desktop visual regressions passed unchanged",
+        "Library guide and skill updated; Astro check/build and 13-page/487-link validation passed",
+        "Independent native example verified wheel, captured thumb drag, all 32 keyboard rows, resize/shrink/hide/show, idle and close; owned resources removed",
+        "All six exact-head CI checks pass at af55ea45196a57903dbe468686a614673ceaacdd; PR #29 is ready for review and unmerged"
+      ],
+      "pending": [
+        "Review and merge; no automatic merge requested",
+        "Audio-panel integration and remaining framework controls",
+        "Other requirement groups"
+      ]
+    },
+    {
+      "milestone": "native-audio-panel",
+      "status": "locally_verified",
+      "source_commit": "a2a46c89ff92245d2dde6688cae5c1813ad8b029",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/30",
+      "report": "reports/measurements/lucent-audio-panel.json",
+      "checks": [
+        "204 Rust tests, 62 Python checks, formatting, Clippy and generated tokens passed",
+        "212 software-Vulkan comparisons at 1x/2x passed; four new stale-error goldens reviewed; prior baselines/tolerances unchanged",
+        "Release deployed with verified binary identity and rollback copies; only Lucent guest running at 3 GiB/four vCPUs",
+        "Native output/input controls, playback/capture stream volume and both routing directions independently confirmed through backend state",
+        "Native sustained drag, real command deadline, stale identity dismissal/fresh selection, held-device removal and audio-service disconnect/reconnect passed",
+        "Compatibility entrypoints, surface unmount, one-second audio idle demand and existing bar/restart behavior passed; original audio and owned fixtures restored",
+        "Desktop/domain/execution/ownership guides updated; Astro check/build and 13-page/487-link verification passed"
+      ],
+      "pending": [
+        "Latest-head CI, review and merge; no automatic merge",
+        "Physical audio behavior, device card profiles/ports and preferred-device persistence",
+        "Native scaling/accessibility/touch and measured memory/hardware frame pacing",
+        "Remaining control-center services and other acceptance groups"
+      ]
+    },
+    {
+      "milestone": "output-aware-wallpaper",
+      "status": "locally_verified",
+      "source_commit": "4adec662701421dbf404330b2662d784c4c9d31e",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/31",
+      "report": "reports/measurements/lucent-wallpaper-resolution.json",
+      "checks": [
+        "212 Rust tests, 62 Python checks, formatting, Clippy and generated assets passed",
+        "Four focused 1x/2x Vulkan checks passed on software and hardware; 212 existing desktop comparisons passed without baseline/tolerance changes",
+        "Release deployed reversibly; running executable hash matched; only 3 GiB/four-vCPU guest running",
+        "Native resolution/integer-scale changes, latest-size burst and launcher open/close passed; desktop process, source and preferences preserved; output/idle restored",
+        "Matching sequential unprofiled 120-second VM runs measured mean RSS 406.92 to 293.25 MiB and retained background pixels 48 to 12 MiB; closed dock/background did not repaint"
+      ],
+      "pending": [
+        "Review and merge; all six exact-head CI checks passed for PR #31; no automatic merge",
+        "Current normal desktop RSS target of 300 MiB, fullscreen overlay buffers, decoder peaks and hardware/long-idle/fault evidence",
+        "Per-monitor background/output targeting, fractional scaling and hotplug/suspend",
+        "Authentication build alignment and other acceptance groups"
+      ]
+    },
+    {
+      "milestone": "compact-dock-surface",
+      "status": "locally_verified",
+      "source_commit": "4c41876854d77f27925897ee530c3f9f945f63bd",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/32",
+      "report": "reports/measurements/lucent-dock-surface.json",
+      "checks": [
+        "216 Rust tests, 62 Python checks, formatting, Clippy and generated assets passed",
+        "Six focused GPU checks on each driver, including 16 paired compact/full 1x/2x comparisons per driver; all 212 existing desktop snapshots unchanged",
+        "Release deployed reversibly; running hash verified; native placement, input, mode cycling, outside close, reopen, terminal launch, integer scaling and idle passed",
+        "Existing workspace/widget/notes/timer/wallpaper/restart workflow passed and restores caller state",
+        "Clean-source sequential 120-second same-wallpaper/workload measurements: mean RSS 284.22 to 254.10 MiB, equal prepared assets and zero background/closed-dock idle frames; current release restored and verified after baseline"
+      ],
+      "pending": [
+        "Review and merge; all six exact-head CI checks passed for PR #32; no automatic merge",
+        "Current normal desktop RSS target of 300 MiB, fullscreen widgets/overlays, decoder peaks, driver/allocator retention and hardware/long-idle/fault evidence",
+        "Per-monitor output targeting, fractional scaling, hotplug/suspend and text/input completeness",
+        "Authentication build alignment, packaging and other acceptance groups"
+      ]
+    },
+    {
+      "milestone": "bounded-widget-surfaces",
+      "status": "locally_verified",
+      "report": "reports/measurements/lucent-widget-surfaces.json",
+      "checks": [
+        "223 Rust/64 Python tests, fmt/Clippy, generated tokens/icons, Astro check/build and 13 pages/487 links passed",
+        "24 paired pixel scenarios on each Vulkan driver; all 212 existing visual comparisons unchanged",
+        "Native placement/capture/snapped release/restart/integer-scale cancellation and existing desktop workflow passed; preferences/output/idle restored",
+        "Shared supervisor/readiness deployed; both normal 120-second measurements survived beyond the startup deadline; active source/link/pixels verified",
+        "Fresh same-wallpaper/workload sequential samples: mean RSS 252.18 to 224.93 MiB; matching prepared assets; current release restored and running hash verified",
+        "All six final CI checks passed on PR #33 head 6563dbbb14f78807c125ab94304d908ff6187d73; review and merge remain pending"
+      ],
+      "pending": [
+        "Review and merge; no automatic merge",
+        "224.93 MiB mean RSS is within the current 300 MiB target; decoder peaks, allocator/driver retention and total GPU memory remain unbounded by this crop",
+        "Active drag preview and open overlays retain full-output buffers; group redraws fan out to all widget buffers",
+        "Native transition scanout/flicker, hardware desktop pacing, long-idle and fault injection remain unverified",
+        "Output selection/per-monitor layouts, fractional scaling, hotplug and suspend/resume remain unfinished",
+        "Secure lock/login build alignment and retest, packaging/migration/rollback audit and remaining feature acceptance groups remain open"
+      ],
+      "source_commit": "78c4aa055f3a3bef6a63a3d0ffc8cbe195003572",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/33"
+    },
+    {
+      "milestone": "native-network-service",
+      "status": "locally_verified",
+      "report": "reports/measurements/lucent-network-service.json",
+      "checks": [
+        "232 Rust workspace tests, fmt/Clippy and 68 Python checks passed; six private D-Bus protocol fixtures avoid the host service",
+        "Known dynamic-object UnknownObject/UnknownMethod reads recover within an absolute deadline and preserve unrelated IDs; unsupported controls still fail",
+        "Real guest NetworkManager: regular-user scan, WPA2/hidden joins and DHCP, disconnect/reactivate/forget, Wi-Fi radio, device removal/stale handles and complete owned fixture cleanup passed",
+        "Existing desktop binary/PID unchanged; active service with NRestarts=0; original profiles/default routes restored; no permissive polkit rule or root adapter",
+        "Astro check/build and 13 pages/487 links passed with zero errors/warnings/hints; final evidence-head CI tracked on PR #34"
+      ],
+      "pending": [
+        "Review and merge; verify final evidence-head CI on PR #34; stacked on PR #33; no automatic merge",
+        "Desktop composition-root injection, native network child/panel, masked secret input/focus, loading/error/selector/stale-target behavior and compatibility entrypoint/keybinding replacement",
+        "Proper secret-agent/retry design for saved profiles needing new credentials; enterprise/WEP provisioning, VPN editing and captive-portal UX",
+        "Physical Wi-Fi, hardware radio switches, SAE/OWE interoperability, dense catalog/signal pressure and suspend/reconnect",
+        "Incremental per-object state caching; current refresh reads a bounded whole catalog; bounds do not cap transport/daemon incoming allocations",
+        "Remaining framework, OS-service, desktop, secure-authentication and delivery acceptance groups in docs/implementation-status.json"
+      ],
+      "source_commit": "edc37bdf22e7ae762d8f812ab1ec2153032917b1",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/34"
+    },
+    {
+      "milestone": "native-network-panel",
+      "source_commit": "c068ca4fca902d2cdba9bd157bb113d43ab8888c",
+      "report": "reports/measurements/lucent-network-panel.json",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/35",
+      "verified": [
+        "bar_opens_native_panel",
+        "scan_and_real_ap_discovery",
+        "masked_input_tab_backtab_enter_no_secret_in_inspect",
+        "regular_user_wpa2_association_and_dhcp",
+        "targeted_disconnect_saved_activation_confirmed_forget",
+        "native_hidden_join_and_temporary_profile_cleanup",
+        "wifi_radio_changes",
+        "compatibility_and_escape_release_surface",
+        "virtual_device_removal_observed",
+        "original_profiles_routes_wallpaper_desktop_and_fixture_cleanup"
+      ],
+      "pending": [
+        "Network secret-agent prompts; enterprise/WEP/VPN provisioning; physical Wi-Fi, SAE/OWE, captive portals and suspend/hotplug reliability.",
+        "Native Bluetooth, brightness, battery/power profiles and tray lifecycle; physical audio/card profiles.",
+        "Current normal desktop RSS target of 300 MiB, active overlay/decode peaks, GPU allocations, hardware pacing and longer idle/fault checks.",
+        "Per-output/fractional scale and hotplug; richer dock/widget/notification/settings behavior and packaging/migrations.",
+        "Text shaping/fallback, IME, grapheme/caret/selection/clipboard editing, accessibility, touch and richer scrolling/focus lifecycle.",
+        "Existing greeter ClearInput only clears secret storage, not the username; failed retries can append identity text. Test login used bounded Backspace and short Enter holds. This client bug is not fixed in this milestone.",
+        "Secure-client build alignment/revalidation and the remaining acceptance ledger in docs/implementation-status.json."
+      ]
+    },
+    {
+      "id": "monochrome-coverage-and-allocation",
+      "report": "reports/measurements/lucent-icon-masks.json",
+      "source_commit": "3412d44a6080692391734fde8f608266f086cd02",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/36",
+      "verified": [
+        "Explicit Alpha8 immutable storage/mips and R8 reconstruction preserve tint, opacity, density and sampling.",
+        "All 248 Rust tests, six resource checks per Vulkan driver and unchanged visual reference comparisons pass.",
+        "Native launcher/application/widgets/snapping/restart and integer-scale workflows preserve caller state.",
+        "Clean-source same-boot 120-second comparison: mean RSS 226.78 to 207.70 MiB; icon payload 11.83 to 2.96 MiB; background/closed dock stay idle.",
+        "All six core CI checks pass on commit 3412d44a6080692391734fde8f608266f086cd02."
+      ],
+      "pending": [
+        "PR #36 is merged into the PR #35 branch; review/merge of the parent stack remains pending.",
+        "207.70 MiB is within the current 300 MiB target; active overlays/decoder peaks and actual GPU memory still need work.",
+        "Hardware frame pacing, long idle, faults, per-output/fractional scaling and remaining desktop acceptance groups."
+      ]
+    },
+    {
+      "milestone": "session-input-and-native-dialog-lifecycle",
+      "status": "locally_verified",
+      "source_commit": "047f10498c4da9b6c8ea9dae3653cd0afc47b42f",
+      "report": "reports/measurements/lucent-session-input.json",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/37",
+      "checks": [
+        "251 Rust/70 Python checks, strict Clippy and formatting pass; six shared authentication presentation checks cover active-field clearing and disabled pending input.",
+        "Twelve unchanged session visuals per available Vulkan driver pass at the field-routing checkpoint; all 248 software comparisons pass in final-source CI.",
+        "Real final-release greetd rejection/clear/empty-submit/clean retry, secure lock/response clearing/PAM unlock and unchanged wallpaper pass.",
+        "Two permission cancellation cycles deny actual policy checks, remove compositor surfaces, expose no command socket and preserve the agent process.",
+        "Coherent session-client release, atomic rollback copies, installed/source hashes and preserved owner/mode/preferences verified; VM remains capped at 3 GiB/four vCPUs and is shut down.",
+        "All six source-checkpoint checks passed; final evidence-head CI is tracked on PR #37.",
+        "Astro check/build and 13 pages/487 links/assets pass with zero diagnostics; the existing local guide returns HTTP 200."
+      ],
+      "pending": [
+        "Review and merge of PR #37 and its parent stack; final evidence-head CI is tracked on the PR.",
+        "Production authentication/PAM and authority-cancellation audit, native denied-lock/password recovery, agent/service failures, suspend/resume and physical lock/driver-fault acceptance remain unverified by this focused milestone.",
+        "General IPC-enabled clients and all other consumers need a rebuilt release to inherit the new runtime teardown; this deployment covers only the three authentication clients.",
+        "Current normal desktop RSS target of 300 MiB, active-overlay and image-decoding peaks, actual GPU allocations, hardware pacing, long idle and fault recovery remain open. No new performance measurements are claimed.",
+        "Remaining OS controls/tray, physical audio/networking and secret-agent/enterprise provisioning, per-output/fractional geometry, shaping/IME/accessibility, richer application/dock/widget/notification/settings behavior, packaging/migrations and rollback acceptance remain in docs/implementation-status.json."
+      ]
+    },
+    {
+      "milestone": "native-bluetooth-service-foundation",
+      "status": "locally_verified",
+      "source_commit": "048f3deb94a8b5732c76035565f1a4cbed26f4d8",
+      "report": "reports/measurements/lucent-bluetooth-service.json",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/38",
+      "checks": [
+        "256 Rust workspace tests, five isolated D-Bus protocol cases, 70 Python checks, strict Clippy/formatting, 491 tokens and 58 icons pass.",
+        "Discovery ownership and unique-owner connection cleanup, paired controls, target retirement, optional metadata, service replacement, signal pressure, transport timeout, safe errors and absent/empty/disconnected service states pass.",
+        "Final release hash is verified in the guest. Regular-user actual BlueZ 5.87 observation is ready with zero controllers; EOF cancellation takes 0.114 seconds. No controls or pairing agents are sent/registered.",
+        "Temporary daemon startup and Bluetooth/BNEP module loading are restored to the original inactive/absent state; the temporary binary is removed and all lab VMs are shut down.",
+        "All six source-commit CI checks pass, including 248 software visual comparisons. Final evidence-head CI remains tracked on PR #38.",
+        "Library/domain/system guides and repository framework instructions describe implemented ownership and pending pairing/UI. Existing LAN docs serve the current guide with HTTP 200."
+      ],
+      "pending": [
+        "Native pairing agent and PIN/passkey/confirmation/incoming authorization with cancellation and owner lifecycle; native desktop child, adapter injection and compatibility entrypoints.",
+        "Actual controllers, device/profile interoperability, permissions, suspend/hotplug and fault acceptance; the native empty-catalog query and protocol fixtures do not establish hardware results.",
+        "Battery, brightness/power profiles and tray lifecycle; remaining network credential flows and audio/network hardware acceptance.",
+        "Desktop memory/pacing/fault targets, per-output/fractional scaling, text/IME/accessibility, richer desktop features, secure-client production audit and packaging/migrations remain in the requirement ledger.",
+        "Review and merge of PR #38 and its parent stack; final evidence-head CI is tracked on the PR."
+      ]
+    },
+    {
+      "milestone": "native-bluetooth-panel",
+      "status": "native_panel_partial_acceptance",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/39",
+      "checks": [
+        "Native BlueZ pairing conversations, lazy/default agent authority, current sender/target checks and zeroizing entered answers are implemented behind BluetoothPort.",
+        "Seventeen Bluetooth unit/private-D-Bus protocol checks pass, including service authorization during Connect, agent Release, incoming display rejection and urgent pairing cancellation during an ordinary pending method.",
+        "Eight injected child/root checks pass for keyboard/masked input, answer ownership, stale requests, close/admission races and release of accepted discovery before its snapshot arrives.",
+        "All 292 software-Vulkan visual comparisons pass without tolerance changes; new Bluetooth and changed bar references were reviewed at 1x/2x.",
+        "The desktop uses eight named effect lanes and task-local failure routing; protocol fixtures and image comparisons do not establish actual controller or native desktop acceptance.",
+        "Final local checkpoint: 269 Rust workspace tests, 72 Python checks, strict Clippy/formatting, 501 generated design tokens, 58 app icons, Astro diagnostics with zero errors/warnings/hints, and 13 built pages with 487 links/assets pass. Native guest/controller acceptance and final published-head CI remain pending.",
+        "CI exposed a Release reply versus connection-close race. The native adapter now rejects/invalidates released authority immediately but waits for zbus response dispatch before retirement; repeated pending-Pair Release protocol calls receive actual replies and retire stale handles. Final CI remains pending.",
+        "Visibility and Pairable commands, powered-controller policy and native property observation have private protocol evidence. Existing discovery/agent/trust authority remains unchanged. The client separates Radio settings from device selection; final visual review and native acceptance remain pending.",
+        "Radio-tab checkpoint: 272 Rust workspace tests, 72 Python checks, strict formatting/Clippy and all 300 software-Vulkan visual comparisons pass. Nine injected Bluetooth child checks include a real SDK layout proving the first Pair action is clickable in a narrow viewport, radio authority controls live on their own tab, and tab changes perform no OS operation. Eight new Radio/start/end references and the changed Bluetooth header/device references were reviewed at 1x/2x. Astro check/build plus 13 pages/488 links pass at root and project Pages prefixes. Native guest/controller acceptance remains pending.",
+        "Clean release deployed atomically with a retained rollback copy. Actual bar clicks, native layer/input, Tab focus, Escape and IPC open/close pass. The desktop observes real BlueZ ready with zero controllers and unavailable after cleanup. New consumer counts-only/stdio observation and 0.114-second EOF cancellation pass as the ordinary guest user. Daemon/BNEP/Bluetooth modules, owned runtime cleanup mask and temporary binary are restored/removed. Test allocation is 2 GiB; saved 3 GiB preference is restored. No controller/pairing/profile or new performance acceptance is claimed.",
+        "All six CI checks pass on implementation/source commit 854040136928cbba6753e66c7343a6946d0d1929. Evidence-head CI remains pending; the draft stays open for actual controller acceptance.",
+        "Two owned guest-kernel virtual HCI controllers pass actual native pointer power/visibility/pairable controls, discovery, visually compared confirmation-code pairing, observed BlueZ Paired/Bonded, no automatic trust, explicit trust/removal and prompt retirement. Original inactive service, absent Bluetooth modules, owned controller storage/processes/runtime mask/directory and healthy desktop were verified after cleanup. External power signals exposed a root path_namespace filter bug; the platform fix still needs rebuilt native acceptance. This is software-controller evidence, not physical device/profile interoperability.",
+        "Clean source 029fc73c89b918375f8e458e02b69acd4bc9b09c is rebuilt, atomically deployed and verified by hash. All six exact-source CI checks pass; local fmt/Clippy, three Bluetooth unit/fifteen protocol and 77 Python checks pass. Native radio harness verifies power/visibility/Pairable and foreign property changes/recovery without restart or client polling, restoring flags/tab/controller/openness. Fresh native input, comparison-code pairing/bonding/no automatic trust, trust/removal, Back/confirmed Forget and Escape prompt-close/no late reopen pass. Original owned fixture state is restored and removed; preferred 3 GiB is restored live and in saved configuration. Decline delivers rejection but can leave Pair pending, so compatibility handover and complete controller acceptance remain open.",
+        "Fresh 120-second normal-mode sample of the exact rebuilt binary: 206.82 MiB mean / 208.18 MiB max process RSS, 0.7% main-process CPU and 1.024% including helpers, no final-snapshot swap, zero idle background/closed-dock frames. Cold/warm submission gaps reach 41.07/38.38 ms. This meets the current 300 MiB normal RSS target; service CPU, animation hitches, peaks and hardware/GPU acceptance remain open. See reports/measurements/lucent-bluetooth-current-120.json.",
+        "The next client checkpoint implements explicit cancellation after rejection of a matching owned reply-bearing attempt, without cancelling unrelated incoming attempts or duplicating display-callback cancellation. Captured IDs, retirement and native failure handling have effect tests; phase-only inspection does not expose codes. Unpaired connected devices now have a reachable Disconnect beside Pair without Trust. 276 Rust workspace tests, 15 private Bluetooth protocol cases, 77 Python checks and all 304 software-Vulkan comparisons pass; only four reviewed synthetic references are added. Rebuilt native acceptance is pending; no compatibility handover or complete-rejection claim yet.",
+        "Clean source 3ff2aa3aeabe4c44eb56defa34ac161dd75c4493 is rebuilt/deployed by verified hash with rollback copies; all six exact-source CI checks pass. Native Decline and Escape reach observed Cancelled, while unpaired Disconnect reaches Failed, with the reference agent still running; no pair/trust/link remains and prompts retire. Comparison-code acceptance still produces Succeeded/Paired/Bonded without auto-trust. Omarchy toggle/panel-position and controls entrypoints now use the native layer and create no terminal/application windows. The new public pairing harness records safe phases, and all owned virtual-controller/process/module/storage/runtime-mask state is restored. This used a temporary 1.5 GiB functional test allocation, preserving the saved 3 GiB preference and full rendering configuration. See reports/measurements/lucent-bluetooth-rejection.json."
+      ],
+      "pending": [
+        "Native pending-Connect/profile cancellation acceptance, PIN/passkey and incoming/service authorization, physical/profile acceptance.",
+        "Physical device/profile interoperability, permissions, suspend/resume, hotplug and hardware faults; software HCI does not establish these.",
+        "Physical hardware acceptance; a private D-Bus fixture or future virtual HCI result does not prove radio/profile interoperability.",
+        "Current normal desktop RSS target of 300 MiB, decode/GPU peaks, hardware pacing, per-output/fractional scaling, text/IME/accessibility, tray, richer desktop features, secure-client audit and packaging/migrations remain in the full requirement ledger.",
+        "Final-head CI, review and merge of PR #39 and its parent stack; this milestone does not merge or complete the full objective."
+      ],
+      "source_commit": "3ff2aa3aeabe4c44eb56defa34ac161dd75c4493",
+      "report": "reports/measurements/lucent-bluetooth-rejection.json"
+    },
+    {
+      "milestone": "cancellable-bluetooth-connections",
+      "status": "protocol_client_verified_native_profile_acceptance_pending",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/39",
+      "source_commit": "0d6fc9667d5844db22615ce599cdefa026d42406",
+      "report": "reports/measurements/lucent-bluetooth-connection.json",
+      "checks": [
+        "BluetoothPort admits typed connection attempts and cancels only the exact owned live ID through an urgent native lane. Pure policy validates current paired/powered/unblocked targets; snapshots own completion and separate link/service state.",
+        "Adapter joins Connect and cancellation replies in either order without turning denied cancellation into Cancelled or erasing a successful Connect. Client cancellation before admission, close/late-prompt races, unavailable/recovered/removed observations, stale IDs and keyboard/click reachability are checked.",
+        "282 Rust workspace tests, 17 private Bluetooth protocol cases, 17 filtered native client cases, 78 Python checks and strict format/Clippy pass. All 320 software-Vulkan comparisons pass without tolerance changes; only 16 reviewed 1x/2x connection references are new.",
+        "Astro diagnostics report zero errors/warnings/hints. Root and project-prefix builds each verify 13 pages and 488 links/assets; the live library/domain/user guides and repository skills document admission, authority, adapters and completion.",
+        "Clean source release desktop/consumer binaries are built under the resource limits and identified by hash in the report. They are prepared but not deployed; all lab VMs remain stopped under host memory pressure."
+      ],
+      "pending": [
+        "Memory-safe VM deployment and real-daemon pending-profile cancellation acceptance.",
+        "Native PIN/passkey, incoming/service authorization, physical devices/profiles, permissions, hotplug, suspend/resume and hardware faults.",
+        "Current-release performance, GPU/decode peaks, pacing, multi-output/fractional scaling, text/IME/accessibility, tray/power, richer desktop features, secure-client audit and packaging/migrations remain in the full requirement ledger.",
+        "Exact published-head CI/review and parent-stack merge; PR remains draft and no merge is authorized."
+      ]
     }
-  ]
+  ],
+  "performance_targets": {
+    "normal_desktop_rss_mib": 300,
+    "idle_cpu_percent_one_core": 1,
+    "rendering_quality": "Preserve logical spacing, physical-pixel density, antialiasing and visual effects while measuring their cost.",
+    "animation": "Pace dirty surfaces with compositor frame callbacks; target the actual refresh interval and report cold/warm hitches separately.",
+    "measurement_scope": "Measure the current binary and workload; historical reports retain their original targets. RSS is distinct from prepared payloads, peak decoding and total GPU allocation."
+  }
 }

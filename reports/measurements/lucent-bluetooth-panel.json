@@ -1,0 +1,239 @@
+{
+  "status": "native_panel_partial_acceptance",
+  "source_commit": "029fc73c89b918375f8e458e02b69acd4bc9b09c",
+  "desktop_binary_sha256": "57b50975da61364cf3ef563f9e58d49f243d3682faa79e5700217e46d7ee83b7",
+  "consumer_binary_sha256": "7714c3a3c4692e28d77e93b81b73b9b97467e21e2a1fdf016ec29e6cc41c8f8d",
+  "test_guest_memory_mib": 2048,
+  "saved_guest_memory_mib": 3072,
+  "saved_memory_preference_restored": true,
+  "local_checks": {
+    "rust_workspace_passed": 272,
+    "python_passed": 72,
+    "private_bluetooth_protocol_passed": 15,
+    "software_visual_comparisons_passed": 300,
+    "clippy_fmt_passed": true,
+    "site_pages": 13,
+    "site_links_assets": 488,
+    "root_and_project_prefix_checked": true,
+    "source_commit": "854040136928cbba6753e66c7343a6946d0d1929"
+  },
+  "native_checks": {
+    "desktop_hash_verified": true,
+    "atomic_install_and_rollback_copy": true,
+    "service_active_without_automatic_restart": true,
+    "bar_pointer_open": true,
+    "native_layer_namespace": true,
+    "keyboard_focus": true,
+    "escape_releases_surface": true,
+    "ipc_open_close": true,
+    "original_panel_state_restored": true,
+    "unavailable_daemon_state": true,
+    "real_daemon_ready_empty_observed": true,
+    "consumer_regular_user_system_bus": true,
+    "consumer_counts": {
+      "adapters": 0,
+      "connected": 0,
+      "devices": 0,
+      "pairing_requests": 0
+    },
+    "consumer_eof_exit_seconds": 0.114,
+    "bluez_package": "bluez 5.87-2",
+    "owned_modules_removed": [
+      "bnep",
+      "bluetooth"
+    ],
+    "original_service_state_restored": true,
+    "original_module_state_restored": true,
+    "owned_runtime_cleanup_mask_removed": true,
+    "owned_temporary_binary_removed": true,
+    "source_commit": "854040136928cbba6753e66c7343a6946d0d1929",
+    "desktop_binary_sha256": "bb84bbd9127eca1f642059ee90e13dc0a92d16ab2ba43ea29c364225f8698171",
+    "consumer_binary_sha256": "415147f98453765008c996c6c5416395d210d2675b6c19bd69935f139b233b19"
+  },
+  "privacy": {
+    "entered_credentials_published": false,
+    "device_names_addresses_published": false,
+    "private_desktop_captures_published": false
+  },
+  "scope": "Rebuilt native input, signal-driven radio changes and recovery, software-HCI discovery/explicit code pairing/bonding, trust/removal and confirmed Forget. Escape closes an active prompt without reopening. Decline delivery does not establish Pair termination. Software controllers do not establish physical/profile interoperability.",
+  "pending": [
+    "Pending-Connect cancellation, native PIN/passkey entry, incoming/service authorization and physical/profile operations.",
+    "Physical hardware, permissions, hotplug and suspend/resume; pending-Connect cancellation UX.",
+    "Native Bluetooth compatibility entrypoints now use the Rust child; no terminal wizard remains in those routes.",
+    "This sample meets 300 MiB normal RSS and main-process idle CPU targets; helpers total 1.024% of one core and animation submission hitches remain. Decode/GPU peaks, long idle, hardware pacing and complete resource acceptance remain open.",
+    "Full remaining requirement ledger, final evidence-head CI, review and parent-stack merge."
+  ],
+  "implementation_commit_ci": {
+    "source_commit": "029fc73c89b918375f8e458e02b69acd4bc9b09c",
+    "checks_passed": 6,
+    "evidence_commit_ci": "pending for the new evidence/harness commit"
+  },
+  "virtual_controller_checks": {
+    "source_commit": "854040136928cbba6753e66c7343a6946d0d1929",
+    "tool": "BlueZ btvirt 5.87",
+    "tool_source_commit": "65d11edee469c24dcc8d075b8be9c040cebaaf98",
+    "controller_count": 2,
+    "kernel_virtual_hci": true,
+    "host_bluetooth_accessed": false,
+    "native_pointer_power": true,
+    "native_pointer_visibility": true,
+    "native_pointer_pairable_toggle": true,
+    "native_discovery": true,
+    "native_comparison_prompt": true,
+    "reference_code_visually_compared": true,
+    "bluez_paired_observed": true,
+    "bluez_bonded_observed": true,
+    "automatic_trust": false,
+    "native_explicit_trust_and_removal": true,
+    "prompt_retirement": true,
+    "original_fixture_state_restored": true,
+    "owned_controller_storage_removed": true,
+    "owned_processes_and_directory_removed": true,
+    "desktop_active_without_restarts_after_cleanup": true,
+    "external_property_signal_updates_passed": false,
+    "discovered_defect": "A root path_namespace signal rule suppresses nested property signals on the guest system bus. BlueZ-owner-only monitoring receives the same changes; native command completion refreshes a snapshot and can conceal the stale state.",
+    "adapter_fix_native_revalidation": "pending",
+    "physical_device_or_profile_interoperability_verified": false
+  },
+  "signal_fix_local_checks": {
+    "rust_fmt_clippy": true,
+    "bluetooth_unit_passed": 3,
+    "bluetooth_private_protocol_passed": 15,
+    "python_passed": 77,
+    "astro_diagnostics_errors": 0,
+    "astro_diagnostics_warnings": 0,
+    "astro_diagnostics_hints": 0,
+    "native_rebuild_acceptance": "passed for external property updates, native controls, pairing/bonding and confirmed Forget; rejection workflow remains partial"
+  },
+  "rebuilt_native_checks": {
+    "source_commit": "029fc73c89b918375f8e458e02b69acd4bc9b09c",
+    "desktop_binary_sha256": "57b50975da61364cf3ef563f9e58d49f243d3682faa79e5700217e46d7ee83b7",
+    "input": {
+      "bar_pointer_open": true,
+      "actual_native_layer": true,
+      "pointer_region": true,
+      "observed_state": "unavailable",
+      "controllers": null,
+      "keyboard_focus": true,
+      "escape_releases_surface": true,
+      "ipc_open_close": true,
+      "controls_sent": 0,
+      "controller_pairing_verified": false,
+      "original_panel_state_restored": true
+    },
+    "radio": {
+      "native_discoverable_toggle": true,
+      "native_pairable_toggle": true,
+      "native_power": true,
+      "external_property_signals": true,
+      "no_restart": true,
+      "incoming_agent_authority_unchanged": true,
+      "controllers": 2,
+      "physical_hardware": false,
+      "original_radio_flags_restored": true,
+      "original_panel_state_restored": true
+    },
+    "pairing": {
+      "controllers": 2,
+      "native_discovery": true,
+      "native_confirmation": true,
+      "visual_code_comparison": true,
+      "bluez_paired": true,
+      "bluez_bonded": true,
+      "automatic_trust": false,
+      "prompts_retired": true,
+      "physical_hardware": false,
+      "profile_interoperability_verified": false
+    },
+    "paired_controls": {
+      "native_trust": true,
+      "native_remove_trust": true,
+      "forget_requires_confirmation": true,
+      "back_preserves_pair": true,
+      "confirmed_forget_retires_exact_device": true,
+      "physical_hardware": false
+    },
+    "escape_pairing_lifecycle": {
+      "native_close": true,
+      "prompt_retired": true,
+      "not_paired": true,
+      "not_trusted": true,
+      "link_connected": false,
+      "device_retired": false,
+      "physical_hardware": false
+    },
+    "fixture_cleanup": {
+      "restored": true,
+      "controllers": 0,
+      "bluetooth_module_absent": true,
+      "hci_vhci_module_absent": true,
+      "runtime_override_absent": true,
+      "original_service_inactive": true,
+      "owned_controller_storage_removed": true,
+      "owned_processes_stopped": true
+    },
+    "live_guest_preferred_memory_mib": 3072,
+    "consumer_current_release_observation": {
+      "observation": {
+        "adapters": 0,
+        "connected": 0,
+        "devices": 0,
+        "pairing_requests": 0
+      },
+      "stdio_observation": {
+        "adapters": 0,
+        "devices": 0,
+        "connected": 0,
+        "pairing_requests": 0
+      },
+      "eof_exit_seconds": 0.114,
+      "binary_sha256": "7714c3a3c4692e28d77e93b81b73b9b97467e21e2a1fdf016ec29e6cc41c8f8d",
+      "bluez_package": "bluez 5.87-2",
+      "binary_transfer_verified": true,
+      "regular_user_system_bus": true,
+      "controls_sent": 0,
+      "policy_changed": false,
+      "service_temporarily_started": true,
+      "kernel_module_temporarily_loaded": true,
+      "pairing_agents_registered": false,
+      "metadata_published": false,
+      "scope": "Read-only actual BlueZ observation and executable cancellation; no device/profile/pairing acceptance",
+      "owned_bluetooth_modules_removed": [
+        "bnep",
+        "bluetooth"
+      ],
+      "owned_runtime_cleanup_mask_removed": true,
+      "original_service_state_restored": true,
+      "original_kernel_module_state_restored": true,
+      "owned_temporary_binary_removed": true
+    },
+    "new_performance_measurement": {
+      "report": "reports/measurements/lucent-bluetooth-current-120.json",
+      "binary_source_commit": "029fc73c89b918375f8e458e02b69acd4bc9b09c",
+      "seconds": 120.001,
+      "mean_rss_mib": 206.82,
+      "max_rss_mib": 208.18,
+      "main_cpu_percent_one_core": 0.7,
+      "service_cpu_percent_one_core": 1.024,
+      "final_snapshot_swap_kib": 0,
+      "cold_max_submission_gap_ms": 41.07,
+      "warm_max_submission_gap_ms": 38.38,
+      "normal_target_rss_mib": 300,
+      "scope": "Single-output shared-host software-Vulkan VM; submission intervals are not scanout. Peaks, total GPU memory and physical pacing remain open."
+    },
+    "decline": {
+      "prompt_retired": true,
+      "not_paired_or_trusted": true,
+      "owned_pair_conversation_completion_verified": false,
+      "observed_gap": "The card disappears but the Pair conversation and unpaired connection can remain pending while the peer waits. An explicit unpaired Disconnect action is also missing from the child."
+    }
+  },
+  "subsequent_rejection_and_handover_checkpoint": {
+    "source_commit": "3ff2aa3aeabe4c44eb56defa34ac161dd75c4493",
+    "report": "reports/measurements/lucent-bluetooth-rejection.json",
+    "decline_owned_pair_termination": true,
+    "unpaired_disconnect": true,
+    "native_compatibility_handover": true,
+    "physical_profiles_verified": false
+  }
+}

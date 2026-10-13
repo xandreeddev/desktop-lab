@@ -41,15 +41,9 @@ fn validate_glyph(glyph: &fontdue::Metrics) -> Result<(), Error> {
     Ok(())
 }
 
-/// Area reduction on premultiplied RGBA, including odd-sized edge texels.
-/// Used for texture mip levels and 2× text coverage supersampling.
-pub fn reduce(bytes: &[u8], width: u32, height: u32) -> (Vec<u8>, u32, u32) {
-    lucent_api::reduce_premultiplied(bytes, width, height)
-        .expect("bounded text raster has valid RGBA dimensions")
-}
-
 /// Rasterize coverage at twice the physical pixel density, then area-resolve once.
 /// Glyph advances are computed in logical coordinates, so scale does not reflow text.
+/// Returns one alpha byte per pixel; the renderer supplies premultiplied white.
 pub fn text(
     font: &fontdue::Font,
     text: &str,
@@ -118,8 +112,8 @@ pub fn text(
         }
     }
     let mut pixels = Vec::new();
-    pixels.try_reserve_exact((w * h * 4) as usize)?;
-    pixels.resize((w * h * 4) as usize, 0);
+    pixels.try_reserve_exact((w * h) as usize)?;
+    pixels.resize((w * h) as usize, 0);
     for (c, glyph, left, top) in glyphs {
         let (_, bitmap) = font.rasterize(c, size * density);
         let x0 = left.max(0);
@@ -129,15 +123,13 @@ pub fn text(
         for py in y0..y1 {
             for px in x0..x1 {
                 let a = bitmap[(py - top) as usize * glyph.width + (px - left) as usize];
-                let at = ((py as u32 * w + px as u32) * 4) as usize;
-                for channel in &mut pixels[at..at + 4] {
-                    *channel =
-                        a.saturating_add((u16::from(*channel) * (255 - u16::from(a)) / 255) as u8);
-                }
+                let at = (py as u32 * w + px as u32) as usize;
+                pixels[at] =
+                    a.saturating_add((u16::from(pixels[at]) * (255 - u16::from(a)) / 255) as u8);
             }
         }
     }
-    Ok(reduce(&pixels, w, h))
+    Ok(lucent_api::reduce_alpha(&pixels, w, h)?)
 }
 
 #[cfg(test)]
@@ -145,10 +137,10 @@ mod tests {
     use super::*;
     #[test]
     fn mip_reduction_preserves_alpha_and_odd_edges() {
-        let pixels = [255, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0];
-        let (mip, w, h) = reduce(&pixels, 3, 1);
+        let pixels = [255, 0, 0];
+        let (mip, w, h) = lucent_api::reduce_alpha(&pixels, 3, 1).unwrap();
         assert_eq!((w, h), (1, 1));
-        assert_eq!(mip, [85, 0, 0, 85]);
+        assert_eq!(mip, [85]);
     }
     #[test]
     fn density_changes_resolution_without_reflow_or_losing_coverage() {
@@ -160,23 +152,12 @@ mod tests {
         let (a, w, h) = text(&font, "AV — Lucent", 14., 1, 8192).unwrap();
         let (b, w2, h2) = text(&font, "AV — Lucent", 14., 2, 8192).unwrap();
         assert_eq!((w2, h2), (w * 2, h * 2));
-        let coverage = |pixels: &[u8]| {
-            pixels
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .map(|p| f64::from(p[3]) / 255.)
-                .sum::<f64>()
-        };
+        let coverage = |pixels: &[u8]| pixels.iter().map(|p| f64::from(*p) / 255.).sum::<f64>();
         let ratio = coverage(&b) / (coverage(&a) * 4.);
         assert!((0.9..1.1).contains(&ratio), "coverage ratio {ratio}");
-        assert!(a.as_chunks::<4>().0.iter().any(|p| p[3] > 0 && p[3] < 255));
-        assert!(
-            b.as_chunks::<4>()
-                .0
-                .iter()
-                .all(|p| p[0] == p[3] && p[1] == p[3] && p[2] == p[3])
-        );
+        assert_eq!(a.len(), (w * h) as usize);
+        assert_eq!(b.len(), (w2 * h2) as usize);
+        assert!(a.iter().any(|a| *a > 0 && *a < 255));
     }
 
     #[test]

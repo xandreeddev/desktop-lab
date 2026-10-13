@@ -1,8 +1,11 @@
 mod actions;
 mod adapters;
 mod artwork;
+mod audio;
+mod bluetooth;
 mod desktop;
 mod launcher;
+mod network;
 mod notifications;
 mod osd;
 mod palette_intent;
@@ -15,6 +18,7 @@ mod views;
 mod wallpaper_browser;
 mod wallpaper_selection;
 mod widgets;
+mod work;
 mod workspaces;
 use desktop::Desktop;
 fn main() -> Result<(), Box<dyn std::error::Error>> {

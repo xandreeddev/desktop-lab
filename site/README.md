@@ -39,6 +39,11 @@ npm run stop
 npm run preview
 ```
 
+Source links follow the working Git branch during development and the checked-out
+commit in detached builds. To document a specific published revision, set
+`SITE_SOURCE_REF=<branch-or-commit>` when starting or building the site. Source
+archives without Git metadata default to `main`.
+
 The static output is in `dist/`. CI checks both root hosting and the project
 Pages prefix, including links, image sources and fragment targets in the built HTML.
 

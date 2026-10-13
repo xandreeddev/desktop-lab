@@ -192,11 +192,6 @@ impl Desktop {
             ])
             .on_click(Message::Launcher(launcher::Message::Mode(Mode::Widgets)))
             .id("bar-clock");
-        let volume = self
-            .system
-            .volume
-            .map(|v| v.to_string())
-            .unwrap_or_else(|| "—".into());
         let right = self
             .pill(vec![
                 bar_icon("notifications")
@@ -204,20 +199,20 @@ impl Desktop {
                         crate::notifications::Message::Toggle,
                     ))
                     .id("bar-notifications"),
-                bar_icon("network"),
+                bar_icon("network")
+                    .on_click(Message::Network(crate::network::Message::Toggle))
+                    .id("bar-network"),
+                bar_icon("bluetooth")
+                    .on_click(Message::Bluetooth(crate::bluetooth::Message::Toggle))
+                    .id("bar-bluetooth"),
                 bar_icon("volume")
                     .on_click(Message::Action(Action::Mute))
                     .id("bar-mute"),
-                self.label(
-                    if self.system.muted {
-                        "×".into()
-                    } else {
-                        volume
-                    },
-                    font::CAPTION,
-                )
-                .width(Length::Fixed(component::bar::CONTROL_SIZE))
-                .align(Align::Center),
+                self.label(self.audio.label(), font::CAPTION)
+                    .on_click(Message::Audio(crate::audio::Message::Toggle))
+                    .id("bar-audio")
+                    .width(Length::Fixed(component::bar::CONTROL_SIZE))
+                    .align(Align::Center),
                 bar_icon("lock")
                     .on_click(Message::Action(Action::Lock))
                     .id("bar-lock"),
@@ -248,7 +243,8 @@ impl Desktop {
             .value(cx.now)
             .max(component::dock::MINIMUM_HEIGHT);
         let reveal = self.launcher.reveal().value(cx.now).clamp(0., 1.);
-        let (x, y) = shell_layout::panel_origin((cx.width, cx.height), (width, height));
+        let (x, y) =
+            shell_layout::dock_origin(self.viewport, (cx.width, cx.height), (width, height));
         let mut children = vec![];
         if reveal < 0.999 {
             children.push(self.dock_row().opacity((1. - reveal * 2.).max(0.)).at(

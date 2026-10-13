@@ -1,5 +1,5 @@
 //! Shared Vulkan device and cached text/image resources for arbitrary framework scenes.
-use lucent_api::{Align, Rect};
+use lucent_api::{Align, ImageFormat, Rect};
 use lucent_ui::Paint;
 use std::{
     cell::RefCell,
@@ -70,8 +70,13 @@ impl Gpu {
                 .map_err(|e| format!("A Vulkan driver is required: {e}"))?;
         let adapter_description = format!("{:?}", adapter.get_info());
         eprintln!("lucent GPU: {adapter_description}");
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&DeviceDescriptor::default()))?;
+        // A desktop UI has modest active resources and long idle periods. Ask
+        // the backend to favor smaller allocation pools over throughput. This
+        // is an allocation preference, not a hard memory/resource limit.
+        let (device, queue) = pollster::block_on(adapter.request_device(&DeviceDescriptor {
+            memory_hints: MemoryHints::MemoryUsage,
+            ..Default::default()
+        }))?;
         let device_failure = Arc::new(Mutex::new(None));
         let failure = device_failure.clone();
         device.set_device_lost_callback(move |reason, message| {
@@ -137,13 +142,20 @@ impl Gpu {
             immediate_size: 0,
         });
         let attributes = vertex_attr_array![0=>Float32x4,1=>Float32x4,2=>Float32x4,3=>Float32x4,4=>Float32x4,5=>Float32x4];
+        let constants = [(
+            "SHADOW_OUTSET",
+            f64::from(lucent_api::Shadow::blur_outset(1.)),
+        )];
         let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("framework primitives"),
             layout: Some(&layout),
             vertex: VertexState {
                 module: &module,
                 entry_point: Some("vs"),
-                compilation_options: Default::default(),
+                compilation_options: PipelineCompilationOptions {
+                    constants: &constants,
+                    ..Default::default()
+                },
                 buffers: &[Some(VertexBufferLayout {
                     array_stride: scene::INSTANCE_BYTES,
                     step_mode: VertexStepMode::Instance,
@@ -156,7 +168,10 @@ impl Gpu {
             fragment: Some(FragmentState {
                 module: &module,
                 entry_point: Some("fs"),
-                compilation_options: Default::default(),
+                compilation_options: PipelineCompilationOptions {
+                    constants: &constants,
+                    ..Default::default()
+                },
                 targets: &[Some(ColorTargetState {
                     format: TextureFormat::Bgra8Unorm,
                     blend: Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING),
@@ -189,6 +204,7 @@ impl Gpu {
     fn texture(
         &self,
         levels: &[lucent_api::ImageLevel],
+        format: ImageFormat,
         profile: &mut ResourceProfile,
         enabled: bool,
     ) -> Rc<TextureResource> {
@@ -205,7 +221,10 @@ impl Gpu {
             mip_level_count: levels.len() as u32,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: TextureFormat::Rgba8Unorm,
+            format: match format {
+                ImageFormat::PremultipliedRgba8 => TextureFormat::Rgba8Unorm,
+                ImageFormat::Alpha8 => TextureFormat::R8Unorm,
+            },
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -217,10 +236,10 @@ impl Gpu {
                     origin: Origin3d::ZERO,
                     aspect: TextureAspect::All,
                 },
-                &pixels.rgba,
+                &pixels.pixels,
                 TexelCopyBufferLayout {
                     offset: 0,
-                    bytes_per_row: Some(pixels.width * 4),
+                    bytes_per_row: Some(pixels.width * format.bytes_per_pixel()),
                     rows_per_image: Some(pixels.height),
                 },
                 Extent3d {
@@ -250,7 +269,7 @@ impl Gpu {
             width: width as f32,
             height: height as f32,
             _texture: texture,
-            bytes: levels.iter().map(|level| level.rgba.len() as u64).sum(),
+            bytes: levels.iter().map(|level| level.pixels.len() as u64).sum(),
         });
         if enabled {
             profile.texture_upload += profiling::elapsed(started);
@@ -266,8 +285,9 @@ impl Gpu {
             &[lucent_api::ImageLevel {
                 width: 1,
                 height: 1,
-                rgba: vec![255; 4],
+                pixels: vec![255; 4],
             }],
+            ImageFormat::PremultipliedRgba8,
             profile,
             enabled,
         );
@@ -287,7 +307,7 @@ impl Gpu {
         if enabled {
             profile.image_misses += 1;
         }
-        let texture = self.texture(data.levels(), profile, enabled);
+        let texture = self.texture(data.levels(), data.format(), profile, enabled);
         self.cache
             .borrow_mut()
             .insert(key, texture.clone(), texture.bytes);
@@ -327,8 +347,9 @@ impl Gpu {
             &[lucent_api::ImageLevel {
                 width,
                 height,
-                rgba: pixels,
+                pixels,
             }],
+            ImageFormat::Alpha8,
             profile,
             enabled,
         );
@@ -529,7 +550,11 @@ impl Canvas {
                     tint.alpha(tint.3 * *opacity),
                     *radius,
                     1.,
-                    0.,
+                    if data.format() == ImageFormat::Alpha8 {
+                        1.
+                    } else {
+                        0.
+                    },
                     self.gpu.image(data, &mut profile.resources, self.profiling),
                 ),
                 Paint::Text {
@@ -576,7 +601,7 @@ impl Canvas {
                         *color,
                         0.,
                         1.,
-                        0.,
+                        1.,
                         texture,
                     )
                 }
@@ -858,6 +883,69 @@ impl Drop for Canvas {
 mod resource_tests {
     use super::*;
     use lucent_api::{Color, ImageData};
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn alpha_masks_match_rgba_coverage_and_cache_payloads() {
+        let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
+        let mut canvas = Canvas::new(gpu.clone());
+        let coverage: Vec<u8> = (0..65 * 37).map(|n| (n * 73) as u8).collect();
+        let rgba: Vec<u8> = coverage.iter().flat_map(|a| [255, 255, 255, *a]).collect();
+        let mask = Arc::new(ImageData::from_alpha("same name", 65, 37, coverage).unwrap());
+        let color = Arc::new(ImageData::from_rgba("same name", 65, 37, rgba).unwrap());
+        assert_eq!(mask.bytes() * 4, color.bytes());
+        let mut scenes = Vec::new();
+        for data in [mask.clone(), color.clone()] {
+            let mut paint = Vec::new();
+            for (x, size, opacity, tint) in [
+                (1.25, 6., 1., Color::hex(0xffffff)),
+                (14.5, 16., 0.7, Color::hex(0x427fa8)),
+                (38., 53., 0.9, Color::hex(0xf2718b).alpha(0.6)),
+            ] {
+                let rect = Rect::new(x, 3.25, size, size);
+                paint.push(Paint::Image {
+                    rect,
+                    clip: Rect::new(0.5, 1.25, 91., 65.).into(),
+                    data: data.clone(),
+                    uv: Rect::new(0.125, 0.1, 0.75, 0.8),
+                    radius: 2.5,
+                    opacity,
+                    tint,
+                });
+            }
+            scenes.push(paint);
+        }
+        canvas.profiling = true;
+        for scale in [1, 2] {
+            let mask_pixels = canvas.snapshot(93, 68, scale, &scenes[0]).unwrap();
+            let color_pixels = canvas.snapshot(93, 68, scale, &scenes[1]).unwrap();
+            assert_eq!(
+                mask_pixels, color_pixels,
+                "mask changed coverage at scale {scale}"
+            );
+            assert!(
+                mask_pixels
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .any(|p| p[3] > 0 && p[3] < 255)
+            );
+            assert_eq!(
+                canvas.last_profile.unwrap().resources.image_misses,
+                u64::from(scale == 1)
+            );
+        }
+        assert_eq!(
+            gpu.cache_stats().bytes,
+            (mask.bytes() + color.bytes()) as u64
+        );
+        assert_eq!(gpu.cache_stats().entries, 2);
+        canvas.snapshot(93, 68, 2, &scenes[0]).unwrap();
+        assert_eq!(
+            canvas.last_profile.unwrap().resources.texture_upload_bytes,
+            0
+        );
+    }
 
     #[test]
     #[ignore = "requires a Vulkan driver"]
@@ -1162,6 +1250,35 @@ mod clipping_tests {
 
     #[test]
     #[ignore = "requires a Vulkan driver"]
+    fn trimmed_cover_preserves_pixels_at_both_physical_densities() {
+        let fonts = Arc::new(vec![]);
+        let gpu = Gpu::headless(fonts.clone()).unwrap();
+        let layout = Layout::new(fonts);
+        let mut canvas = Canvas::new(gpu);
+        let mut pixels = Vec::new();
+        for y in 0..36 {
+            for x in 0..64 {
+                pixels.extend_from_slice(&[(x * 4) as u8, (y * 7) as u8, 100, 255]);
+            }
+        }
+        let source = ImageData::from_rgba("density fixture", 64, 36, pixels).unwrap();
+        for scale in [1, 2] {
+            let trimmed = source.downsample_for_cover(16 * scale, 9 * scale).unwrap();
+            assert_eq!((trimmed.width(), trimmed.height()), (16 * scale, 9 * scale));
+            assert!(trimmed.bytes() < source.bytes());
+            let render = |canvas: &mut Canvas, image| {
+                let root = Element::<()>::image(Arc::new(image)).size(16., 9.).cover();
+                let scene = layout.build(&root, 16., 9., &Interaction::default(), 0.);
+                canvas.snapshot(16, 9, scale, &scene.paint).unwrap()
+            };
+            let original_pixels = render(&mut canvas, source.clone());
+            let retained_pixels = render(&mut canvas, trimmed);
+            assert_eq!(retained_pixels, original_pixels, "density {scale}");
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
     fn opaque_images_retain_coverage_on_odd_sized_targets_and_clips() {
         let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
         let mut canvas = Canvas::new(gpu);
@@ -1283,6 +1400,144 @@ mod clipping_tests {
                 samples[1] > samples[0].saturating_add(60),
                 "blur was ignored: {samples:?}"
             );
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn slider_track_thumb_and_focus_render_at_both_densities() {
+        use lucent_api::{Key, SliderSpec, SliderStyle};
+        let fonts = Arc::new(vec![]);
+        let gpu = Gpu::headless(fonts.clone()).unwrap();
+        let layout = Layout::new(fonts);
+        let mut canvas = Canvas::new(gpu);
+        for value in [0., 0.5, 1.] {
+            let root = Element::stack(vec![
+                Element::slider(SliderSpec::new(value, 0.1).unwrap(), |event| event)
+                    .id("level")
+                    .size(112., 40.)
+                    .at(8., 12.)
+                    .padding_xy(8., 0.)
+                    .radius(8.)
+                    .slider_style(SliderStyle {
+                        track: Color::hex(0x0000ff),
+                        fill: Color::hex(0xff0000),
+                        thumb: Color::hex(0xffffff),
+                        track_height: 4.,
+                        thumb_diameter: 16.,
+                    }),
+            ]);
+            let mut interaction = Interaction::default();
+            let scene = layout.build(&root, 128., 64., &interaction, 0.);
+            interaction.key(&scene, &Key::Tab);
+            let scene = layout.build(&root, 128., 64., &interaction, 0.);
+            for scale in [1, 2] {
+                let pixels = canvas.snapshot(128, 64, scale, &scene.paint).unwrap();
+                let pixel = |x: u32, y: u32| {
+                    let offset = ((y * scale * 128 * scale + x * scale) * 4) as usize;
+                    &pixels[offset..offset + 4]
+                };
+                assert_eq!(pixel((24. + 80. * value) as u32, 32), &[255, 255, 255, 255]);
+                assert_eq!(pixel(1, 1), &[0, 0, 0, 0]);
+                assert!(pixel(64, 12)[3] > 0, "keyboard focus outline missing");
+                let track = pixel(if value < 0.5 { 64 } else { 40 }, 32);
+                assert_eq!(
+                    track,
+                    if value < 0.5 {
+                        &[0, 0, 255, 255]
+                    } else {
+                        &[255, 0, 0, 255]
+                    }
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn scroll_viewport_thumb_and_focus_match_input_at_both_densities() {
+        use lucent_api::{Key, Length, ScrollSpec, ScrollStyle};
+        let fonts = Arc::new(vec![]);
+        let gpu = Gpu::headless(fonts.clone()).unwrap();
+        let layout = Layout::new(fonts);
+        let mut canvas = Canvas::new(gpu);
+        for offset in [0., 28., 56.] {
+            let content = Element::column(
+                [0xff0000, 0x00ff00, 0x0000ff]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(n, color)| {
+                        Element::empty()
+                            .width(Length::Fill)
+                            .height(Length::Fixed(40.))
+                            .background(Color::hex(color))
+                            .on_click(())
+                            .id(format!("row-{n}"))
+                    })
+                    .collect(),
+            )
+            .width(Length::Fill)
+            .gap(8.);
+            let root = Element::stack(vec![
+                Element::scroll(ScrollSpec::new(offset, 40.).unwrap(), content, |_| ())
+                    .size(112., 96.)
+                    .at(8., 8.)
+                    .padding(8.)
+                    .radius(40.)
+                    .id("scroll")
+                    .scroll_style(ScrollStyle {
+                        thumb: Color::hex(0xffffff),
+                        width: 4.,
+                        gutter: 12.,
+                        minimum_thumb: 16.,
+                    }),
+            ]);
+            let mut input = Interaction::default();
+            let scene = layout.build(&root, 128., 112., &input, 0.);
+            let scroll = scene.hits[0].scroll.as_ref().unwrap();
+            assert_eq!(scroll.maximum, 56.);
+            for scale in [1, 2] {
+                let pixels = canvas.snapshot(128, 112, scale, &scene.paint).unwrap();
+                let pixel = |x: u32, y: u32| {
+                    let p = ((y * scale * 128 * scale + x * scale) * 4) as usize;
+                    &pixels[p..p + 4]
+                };
+                for (x, y) in [(1, 1), (16, 16), (16, 95), (64, 12), (64, 100), (104, 48)] {
+                    assert_eq!(
+                        pixel(x, y),
+                        &[0, 0, 0, 0],
+                        "clip/gutter at {x},{y}, offset {offset}, scale {scale}"
+                    );
+                    assert!(
+                        !scene
+                            .hits
+                            .iter()
+                            .skip(1)
+                            .any(|h| h.contains(x as f32 + 0.5, y as f32 + 0.5))
+                    );
+                }
+                assert_eq!(
+                    pixel(110, (scroll.thumb.y + scroll.thumb.h / 2.) as u32),
+                    &[255, 255, 255, 255]
+                );
+                for row in 0..3 {
+                    let y = 36. + row as f32 * 48. - offset;
+                    if !(18. ..94.).contains(&y) {
+                        continue;
+                    }
+                    let mut expected = [0, 0, 0, 255];
+                    expected[row] = 255;
+                    assert_eq!(pixel(64, y as u32), &expected);
+                    assert!(scene.hits[row + 1].contains(64., y));
+                }
+            }
+            input.key(&scene, &Key::Tab);
+            let focused = layout.build(&root, 128., 112., &input, 0.);
+            for scale in [1, 2] {
+                let pixels = canvas.snapshot(128, 112, scale, &focused.paint).unwrap();
+                let p = ((8 * scale * 128 * scale + 64 * scale) * 4 + 3) as usize;
+                assert!(pixels[p] > 0, "scroll viewport keyboard focus is visible");
+            }
         }
     }
 

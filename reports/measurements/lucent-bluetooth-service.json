@@ -1,0 +1,100 @@
+{
+  "milestone": "native-bluetooth-service-foundation",
+  "status": "verified_for_recorded_scope",
+  "source_commit": "048f3deb94a8b5732c76035565f1a4cbed26f4d8",
+  "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/38",
+  "scope": "Domain port, native BlueZ adapter and independent consumer. Paired-device controls use an isolated protocol fixture. Actual guest BlueZ observation has no controllers. Pairing and desktop injection are pending.",
+  "binary": {
+    "name": "bluetooth-service",
+    "profile": "release",
+    "source_working_tree_changed_at_build": false,
+    "sha256": "0461e6a2a0ad78ae5da48d0a4b13ddf25ccfde84277c63814ec22c75f3a21a6a",
+    "guest_transfer_hash_verified": true
+  },
+  "architecture": {
+    "domain": "Validated nonzero transient handles and six-octet addresses; snapshots and commands contain no D-Bus, renderer or desktop types. Snapshot records retain public fields.",
+    "use_case": "Pure current-identity, parent, power, blocked and paired-device command policy.",
+    "adapter": "One watching worker owns the system-bus connection, unique BlueZ owner, transient catalog and bounded command queue. Signals are pumped during native replies. Observed removals retire dependent handles; reconnect allocates fresh IDs.",
+    "discovery": "Global discovering is separate from discovery acquired by this connection. Start/stop is idempotent for our ownership. Explicit connection close on cancellation/timeouts ends the unique owner even while streams hold references.",
+    "consumer": "Independent headless executable consumes the port without a desktop, Wayland, renderer, terminal Bluetooth wizard or permissive agent.",
+    "desktop": "No injection or UI replacement in this milestone. Existing Bluetooth entrypoints remain until native pairing and the client are implemented and verified."
+  },
+  "bounds": {
+    "waiting_commands": 32,
+    "bluez_signals": 128,
+    "owner_signals": 8,
+    "controllers": 32,
+    "devices": 512,
+    "raw_objects": 4096,
+    "operation_deadline_seconds": 5,
+    "reconnect_delay_seconds": 2,
+    "scope": "Admission and catalog bounds, not a total byte budget. Incoming deserialization, simultaneous copies and daemon memory remain outside these counts."
+  },
+  "validation": {
+    "rust_workspace_passed": 256,
+    "private_dbus_protocol_passed": 5,
+    "python_checks_passed": 70,
+    "clippy_warnings_denied": true,
+    "formatting": true,
+    "design_tokens": 491,
+    "app_icons": 58,
+    "protocol": [
+      "Power, owned/shared discovery, idempotent starts, paired connect/disconnect, trust and targeted forget",
+      "Battery-interface removal preserves device identity; device/controller removal, path reuse and owner replacement retire handles",
+      "A 512-signal burst does not starve a method reply; timeout recovery rejects retired targets; daemon error bodies remain private",
+      "Unrelated property/interface signals do not refresh the catalog; duplicate observer fails without disrupting the first; cancellation closes the unique connection",
+      "Absent service, ready empty catalog and disconnected bus remain distinct; cancellation is bounded"
+    ],
+    "reproduced_before_fix": {
+      "unrelated_signal_idle_regression": "Controller catalog reads rose from 2 to 9 after unrelated property signals. The idle path now ignores those signals; the final regression also covers unrelated interface additions/removals."
+    },
+    "native": {
+      "bluez_package": "bluez 5.87-2",
+      "regular_user_system_bus": true,
+      "observation": { "adapters": 0, "devices": 0, "connected": 0 },
+      "stdio_observation": { "adapters": 0, "devices": 0, "connected": 0 },
+      "eof_exit_seconds": 0.114,
+      "controls_sent": 0,
+      "scope": "Actual daemon query and executable cancellation. No Bluetooth controller, device/profile, pairing or desktop-panel acceptance."
+    },
+    "core_ci": {
+      "source_commit": "048f3deb94a8b5732c76035565f1a4cbed26f4d8",
+      "successful_checks": 6,
+      "software_visual_comparisons": 248,
+      "final_evidence_head": "Tracked on PR #38; the evidence commit requires its own checks."
+    },
+    "site": {
+      "errors": 0,
+      "warnings": 0,
+      "hints": 0,
+      "pages": 13,
+      "links_and_assets": 487,
+      "base_path": "/desktop-lab",
+      "existing_local_server_http_status": 200,
+      "current_bluetooth_guide_served": true
+    }
+  },
+  "fixture_cleanup": {
+    "policy_changed": false,
+    "pairing_agents_registered": false,
+    "packages_installed_or_removed": false,
+    "installed_desktop_binaries_changed": false,
+    "daemon_temporarily_started": true,
+    "original_inactive_service_state_restored": true,
+    "kernel_prerequisite_temporarily_loaded": true,
+    "owned_modules_removed": [ "bnep", "bluetooth" ],
+    "original_bluetooth_module_state_restored": true,
+    "temporary_binary_removed": true,
+    "metadata_or_private_captures_published": false,
+    "all_lab_vms_shut_down": true
+  },
+  "pending": [
+    "Native pairing agent, explicit PIN/passkey/confirmation and incoming authorization; cancellation, timeout and service-owner lifecycle acceptance.",
+    "Native Bluetooth child, desktop adapter injection, token-based controls and compatibility entrypoints; current pairing entrypoint is unchanged.",
+    "Real controllers/devices and profiles, suspend/resume, hotplug and permission/fault recovery; protocol fixtures are not hardware interoperability evidence.",
+    "Battery, brightness/power profiles and tray lifecycle; remaining network credential flows and audio/network hardware acceptance.",
+    "Desktop RSS below 200 MiB, overlay/decoder peaks, actual GPU allocations, hardware frame pacing and long-idle/fault acceptance. This milestone measures none of these.",
+    "Per-output/fractional scaling, text shaping/IME/accessibility, richer launcher/dock/widgets/notification/settings behavior, secure-client production audit, packaging/migrations and the remaining implementation ledger.",
+    "Review/merge of PR #38 and its parent stack; final evidence-head CI is tracked on the PR."
+  ]
+}

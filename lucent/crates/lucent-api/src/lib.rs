@@ -1,8 +1,16 @@
 //! A small declarative shell API. Public types contain no Wayland or GPU handles.
+mod input;
+mod scroll;
+pub use input::InputEdit;
+pub use scroll::{ScrollEvent, ScrollSpec, ScrollStyle};
+mod slider;
+pub use slider::{SliderEvent, SliderSpec, SliderStyle};
 mod clip;
 pub use clip::{Clip, RoundedRect};
 mod image;
-pub use image::{ImageData, ImageError, ImageLevel, reduce_premultiplied};
+pub use image::{
+    ImageData, ImageError, ImageFormat, ImageLevel, reduce_alpha, reduce_premultiplied,
+};
 use std::{
     collections::BTreeSet,
     sync::{Arc, Condvar, Mutex},
@@ -112,6 +120,14 @@ pub struct Shadow {
     pub offset: (f32, f32),
     pub blur: f32,
 }
+impl Shadow {
+    /// Outward support of the renderer's truncated shadow falloff. Layout
+    /// policies can retain this space without copying a backend constant.
+    /// Call with the validated non-negative blur used for painting.
+    pub fn blur_outset(blur: f32) -> f32 {
+        blur * 3.
+    }
+}
 impl Default for Shadow {
     fn default() -> Self {
         Self {
@@ -136,6 +152,8 @@ pub struct Style {
     pub max_lines: Option<usize>,
     pub align: Align,
     pub opacity: f32,
+    /// Suppresses this subtree's paint without removing layout or input hits.
+    pub paint: bool,
     pub clip: bool,
     pub shadow: Option<Shadow>,
     /// Tint and strength of the hover state layer; transparent disables it.
@@ -153,6 +171,8 @@ pub struct Style {
     pub selected: bool,
     pub tab_stop: bool,
     pub caret_width: f32,
+    pub slider: SliderStyle,
+    pub scroll: ScrollStyle,
 }
 impl Default for Style {
     fn default() -> Self {
@@ -170,6 +190,7 @@ impl Default for Style {
             max_lines: None,
             align: Align::Start,
             opacity: 1.,
+            paint: true,
             clip: false,
             shadow: None,
             hover_color: Color::TRANSPARENT,
@@ -183,6 +204,8 @@ impl Default for Style {
             selected: false,
             tab_stop: true,
             caret_width: 1.,
+            slider: SliderStyle::default(),
+            scroll: ScrollStyle::default(),
         }
     }
 }
@@ -195,6 +218,9 @@ pub enum Kind {
     Text(String),
     Image(Arc<ImageData>),
     Input { value: String, placeholder: String },
+    MaskedInput { length: usize, placeholder: String },
+    Slider(SliderSpec),
+    Scroll(ScrollSpec),
     Empty,
 }
 #[derive(Clone, Copy, Debug)]
@@ -204,6 +230,9 @@ pub struct DragEvent {
     pub finished: bool,
 }
 pub type InputCallback<M> = Arc<dyn Fn(String) -> M + Send + Sync>;
+pub type EditCallback<M> = Arc<dyn Fn(InputEdit) -> M + Send + Sync>;
+pub type ScrollCallback<M> = Arc<dyn Fn(ScrollEvent) -> M + Send + Sync>;
+pub type SliderCallback<M> = Arc<dyn Fn(SliderEvent) -> M + Send + Sync>;
 pub type DragCallback<M> = Arc<dyn Fn(DragEvent) -> M + Send + Sync>;
 #[derive(Clone)]
 pub struct Element<M> {
@@ -212,9 +241,13 @@ pub struct Element<M> {
     pub style: Style,
     pub children: Vec<Element<M>>,
     pub click: Option<M>,
+    pub submit: Option<M>,
     pub hover: Option<M>,
     pub input: Option<InputCallback<M>>,
+    pub edit: Option<EditCallback<M>>,
     pub drag: Option<DragCallback<M>>,
+    pub slider: Option<SliderCallback<M>>,
+    pub scroll: Option<ScrollCallback<M>>,
     pub autofocus: bool,
 }
 impl<M> Element<M> {
@@ -225,9 +258,13 @@ impl<M> Element<M> {
             style: Style::default(),
             children: vec![],
             click: None,
+            submit: None,
             hover: None,
             input: None,
+            edit: None,
             drag: None,
+            slider: None,
+            scroll: None,
             autofocus: false,
         }
     }
@@ -279,6 +316,58 @@ impl<M> Element<M> {
         });
         e.input = Some(Arc::new(on_change));
         e
+    }
+    /// Only the character count enters the element/scene. The component owns
+    /// the actual value and applies emitted edit intents, including burst input
+    /// before the next frame. This field supports end editing, not selection/IME.
+    pub fn masked_input(
+        length: usize,
+        placeholder: impl Into<String>,
+        on_edit: impl Fn(InputEdit) -> M + Send + Sync + 'static,
+    ) -> Self {
+        let mut e = Self::new(Kind::MaskedInput {
+            length: length.min(4096),
+            placeholder: placeholder.into(),
+        });
+        e.edit = Some(Arc::new(on_edit));
+        e
+    }
+    /// Submit a focused text/masked field with Enter; pointer focus never submits.
+    pub fn on_submit(mut self, message: M) -> Self {
+        self.submit = Some(message);
+        self
+    }
+    /// A controlled scalar input with pointer capture and keyboard adjustment.
+    pub fn slider(
+        spec: SliderSpec,
+        on_change: impl Fn(SliderEvent) -> M + Send + Sync + 'static,
+    ) -> Self {
+        let mut e = Self::new(Kind::Slider(spec));
+        e.slider = Some(Arc::new(on_change));
+        e
+    }
+    /// A single content tree in a bounded vertical viewport. The controlled
+    /// offset is clamped by layout; wheel, scrollbar and keyboard reveal emit
+    /// ScrollEvent. Give the viewport a fixed/fill height and content an
+    /// intrinsic/fixed height. Children keep their own stable focus identities.
+    pub fn scroll(
+        spec: ScrollSpec,
+        content: Self,
+        on_change: impl Fn(ScrollEvent) -> M + Send + Sync + 'static,
+    ) -> Self {
+        let mut e = Self::new(Kind::Scroll(spec));
+        e.children = vec![content];
+        e.scroll = Some(Arc::new(on_change));
+        e.style.clip = true;
+        e
+    }
+    pub fn scroll_style(mut self, style: ScrollStyle) -> Self {
+        self.style.scroll = style;
+        self
+    }
+    pub fn slider_style(mut self, style: SliderStyle) -> Self {
+        self.style.slider = style;
+        self
     }
     pub fn id(mut self, id: impl Into<String>) -> Self {
         self.id = id.into();
@@ -376,6 +465,12 @@ impl<M> Element<M> {
         self.style.opacity = v;
         self
     }
+    /// Retain layout, focus and pointer capture while another surface presents
+    /// this content. Unlike zero opacity, input-only nodes keep their hit tree.
+    pub fn input_only(mut self) -> Self {
+        self.style.paint = false;
+        self
+    }
     pub fn clip(mut self) -> Self {
         self.style.clip = true;
         self
@@ -416,6 +511,8 @@ pub enum Layer {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Anchor {
     Top,
+    /// Explicit width/height, measured from the output's upper-left corner.
+    TopLeft,
     Bottom,
     Fill,
     Center,
@@ -426,17 +523,70 @@ pub enum Keyboard {
     OnDemand,
     Exclusive,
 }
+/// Pointer coverage is independent of the painted tree and keyboard policy.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PointerInput {
+    /// Empty native input region; pointer events pass to surfaces underneath.
+    None,
+    /// Only the tree's interactive hit regions capture input.
+    Content,
+    /// The entire native extent captures input, including outside-click areas.
+    All,
+}
+impl PointerInput {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Content => "content",
+            Self::All => "all",
+        }
+    }
+}
+/// Signed logical-pixel margins from anchored output edges. Negative margins
+/// are valid protocol requests; actual placement belongs to the compositor.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SurfaceMargins {
+    pub top: i32,
+    pub right: i32,
+    pub bottom: i32,
+    pub left: i32,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SurfaceSpec {
     pub id: &'static str,
     pub layer: Layer,
     pub anchor: Anchor,
+    pub margins: SurfaceMargins,
+    /// A client-selected redraw target shared by related native surfaces.
+    /// `Effects::redraw` matches either this group or the individual surface ID.
+    pub redraw_group: Option<&'static str>,
     pub width: u32,
     pub height: u32,
     pub exclusive_zone: i32,
     pub keyboard: Keyboard,
     pub visible: bool,
-    pub capture_all: bool,
+    pub pointer_input: PointerInput,
+}
+impl SurfaceSpec {
+    /// Check layer-shell invariants before making native protocol requests.
+    /// This is not a renderer extent check or a memory budget.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.id.is_empty() || self.id.contains('\0') {
+            return Err("A native surface ID must be nonempty and contain no NUL");
+        }
+        if self.redraw_group.is_some_and(|group| group.is_empty()) {
+            return Err("A redraw group must be nonempty");
+        }
+        let horizontal = matches!(self.anchor, Anchor::Top | Anchor::Bottom | Anchor::Fill);
+        let vertical = self.anchor == Anchor::Fill;
+        if (self.width == 0 && !horizontal) || (self.height == 0 && !vertical) {
+            return Err("An omitted surface dimension requires opposite anchors on that axis");
+        }
+        Ok(())
+    }
+    pub fn matches_redraw(&self, target: &str) -> bool {
+        self.id == target || self.redraw_group == Some(target)
+    }
 }
 #[derive(Clone, Debug)]
 pub struct ViewContext {
@@ -460,15 +610,28 @@ pub enum Key {
     BackTab,
     Home,
     End,
+    PageUp,
+    PageDown,
     SelectAll,
     ClearInput,
 }
 #[derive(Clone, Debug)]
 pub enum Event {
-    Resize {
+    /// A successful buffer submission, after view/layout/render. This is not
+    /// scanout or a compositor display acknowledgement. `now` is the view's
+    /// animation time; dimensions are the submitted logical buffer extent.
+    FrameSubmitted {
         surface: &'static str,
         width: f32,
         height: f32,
+        now: f64,
+    },
+    Resize {
+        surface: &'static str,
+        /// Logical dimensions; this event also fires when integer buffer scale changes.
+        width: f32,
+        height: f32,
+        scale: u32,
     },
     Key {
         surface: &'static str,
@@ -521,14 +684,21 @@ pub trait Application: Component {
 }
 
 pub type Task<M> = Box<dyn FnOnce() -> M + Send>;
+pub type TaskFailure<M> = Box<dyn FnOnce(RuntimeFailure) -> M + Send>;
 /// Each named queue executes in submission order on an independent worker.
 /// Queue names belong to the client; the engine knows no desktop service names.
 pub struct ScheduledTask<M> {
     pub queue: &'static str,
     pub cancellation: Cancellation,
     task: Task<M>,
+    on_failure: Option<TaskFailure<M>>,
 }
 impl<M> ScheduledTask<M> {
+    /// Runtime engines take this before consuming the task body. The mapper
+    /// must only construct a message; rejection may invoke it on the UI thread.
+    pub fn take_failure_handler(&mut self) -> Option<TaskFailure<M>> {
+        self.on_failure.take()
+    }
     /// Execute after admission/cancellation checks; useful for deterministic client tests.
     pub fn run(self) -> M {
         (self.task)()
@@ -567,6 +737,21 @@ impl<M> Effects<M> {
     pub fn task_on(&mut self, queue: &'static str, task: impl FnOnce() -> M + Send + 'static) {
         self.task_cancellable_on(queue, Cancellation::default(), task);
     }
+    /// Correlate rejection/panic with this operation even on a shared queue.
+    /// Without a mapper, Application::runtime_failure remains the fallback.
+    pub fn task_on_with_failure(
+        &mut self,
+        queue: &'static str,
+        task: impl FnOnce() -> M + Send + 'static,
+        on_failure: impl FnOnce(RuntimeFailure) -> M + Send + 'static,
+    ) {
+        self.tasks.push(ScheduledTask {
+            queue,
+            cancellation: Cancellation::default(),
+            task: Box::new(task),
+            on_failure: Some(Box::new(on_failure)),
+        });
+    }
     /// Cancellation skips queued work and checks again before result delivery.
     /// Running operations cooperate by checking this token at safe points. Once
     /// delivery starts, cancellation does not retract the result or undo effects;
@@ -581,6 +766,7 @@ impl<M> Effects<M> {
             queue,
             cancellation,
             task: Box::new(task),
+            on_failure: None,
         });
     }
     pub fn redraw(&mut self, surface: &'static str) {
@@ -604,8 +790,15 @@ impl<M> Effects<M> {
         let map = Arc::new(map);
         for task in child.tasks {
             let map = map.clone();
-            self.task_cancellable_on(task.queue, task.cancellation.clone(), move || {
-                map(task.run())
+            let failure_map = map.clone();
+            let on_failure = task.on_failure.map(|failure| {
+                Box::new(move |error| failure_map(failure(error))) as TaskFailure<M>
+            });
+            self.tasks.push(ScheduledTask {
+                queue: task.queue,
+                cancellation: task.cancellation,
+                task: Box::new(move || map((task.task)())),
+                on_failure,
             });
         }
     }
@@ -741,6 +934,45 @@ impl Motion {
 mod tests {
     use super::*;
     #[test]
+    fn native_surface_requests_validate_anchor_dimensions_and_redraw_targets() {
+        let mut spec = SurfaceSpec {
+            id: "card",
+            layer: Layer::Bottom,
+            anchor: Anchor::TopLeft,
+            margins: SurfaceMargins {
+                top: 16,
+                left: -8,
+                ..Default::default()
+            },
+            redraw_group: Some("cards"),
+            width: 320,
+            height: 240,
+            exclusive_zone: -1,
+            keyboard: Keyboard::OnDemand,
+            visible: true,
+            pointer_input: PointerInput::Content,
+        };
+        assert!(spec.validate().is_ok());
+        assert!(spec.matches_redraw("card"));
+        assert!(spec.matches_redraw("cards"));
+        assert!(!spec.matches_redraw("other"));
+        spec.width = 0;
+        assert!(spec.validate().is_err());
+        spec.anchor = Anchor::Top;
+        assert!(spec.validate().is_ok());
+        spec.height = 0;
+        assert!(spec.validate().is_err());
+        spec.anchor = Anchor::Fill;
+        assert!(spec.validate().is_ok());
+        spec.id = "";
+        assert!(spec.validate().is_err());
+        spec.id = "bad\0id";
+        assert!(spec.validate().is_err());
+        spec.id = "card";
+        spec.redraw_group = Some("");
+        assert!(spec.validate().is_err());
+    }
+    #[test]
     fn interrupted_motion_is_continuous_and_finishes() {
         let mut m = Motion::fixed(0.);
         m.target(1., 0., 0.5, [0.38, 1.21, 0.22, 1.]);
@@ -849,9 +1081,21 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
             let map = mapper.clone();
             Arc::new(move |text| map(input(text))) as InputCallback<N>
         });
+        let edit = self.edit.map(|callback| {
+            let map = mapper.clone();
+            Arc::new(move |event| map(callback(event))) as EditCallback<N>
+        });
         let drag = self.drag.map(|drag| {
             let map = mapper.clone();
             Arc::new(move |event| map(drag(event))) as DragCallback<N>
+        });
+        let slider = self.slider.map(|callback| {
+            let map = mapper.clone();
+            Arc::new(move |event| map(callback(event))) as SliderCallback<N>
+        });
+        let scroll = self.scroll.map(|f| {
+            let map = mapper.clone();
+            Arc::new(move |event| map(f(event))) as ScrollCallback<N>
         });
         Element {
             id: self.id,
@@ -863,9 +1107,13 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
                 .map(|c| c.map_arc(mapper.clone()))
                 .collect(),
             click: self.click.map(|m| mapper(m)),
+            submit: self.submit.map(|m| mapper(m)),
             hover: self.hover.map(|m| mapper(m)),
             input,
+            edit,
             drag,
+            slider,
+            scroll,
             autofocus: self.autofocus,
         }
     }
@@ -979,5 +1227,26 @@ mod composition_tests {
         };
         assert!(matches!(registry.view("clock",&(),&cx).unwrap().kind,Kind::Text(s) if s=="one"));
         assert!(registry.view("missing", &(), &cx).is_none());
+    }
+
+    #[test]
+    fn child_task_failure_is_lifted_without_losing_cancellation_or_operation_identity() {
+        let mut parent = Effects::<String>::default();
+        parent.delegate(
+            |child| child.task_on_with_failure("shared", || 41, |_| 42),
+            |id| format!("operation:{id}"),
+        );
+        let mut task = parent.tasks.pop().unwrap();
+        let cancel = task.cancellation.clone();
+        let handler = task.take_failure_handler().unwrap();
+        assert_eq!(
+            handler(RuntimeFailure {
+                source: "effect queue shared".into(),
+                reason: "not admitted".into()
+            }),
+            "operation:42"
+        );
+        cancel.cancel();
+        assert!(task.cancellation.cancelled());
     }
 }

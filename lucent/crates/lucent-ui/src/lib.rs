@@ -1,6 +1,12 @@
 //! Layout, hit testing and retained interaction state for declarative components.
 use lucent_api::*;
+mod scroll;
+pub use scroll::{FocusClip, ScrollHit};
+#[cfg(test)]
+mod input_tests;
+mod slider;
 pub mod text;
+pub use slider::SliderHit;
 use std::{collections::BTreeMap, sync::Arc};
 
 #[derive(Clone, Debug)]
@@ -52,10 +58,16 @@ pub struct Hit<M> {
     pub clip: Clip,
     pub radius: f32,
     pub click: Option<M>,
+    pub submit: Option<M>,
     pub hover: Option<M>,
     pub input: Option<InputCallback<M>>,
+    pub edit: Option<EditCallback<M>>,
     pub value: String,
     pub drag: Option<DragCallback<M>>,
+    pub slider: Option<SliderHit<M>>,
+    pub scroll: Option<Arc<ScrollHit<M>>>,
+    pub scroll_ancestors: Arc<[Arc<ScrollHit<M>>]>,
+    pub focus_clips: Arc<[FocusClip]>,
     pub autofocus: bool,
     pub hover_transition: Transition,
     pub tab_stop: bool,
@@ -92,6 +104,9 @@ impl Layout {
     }
 
     fn wrapped(&self, text: &str, size: f32, face: usize, width: f32, max_lines: usize) -> String {
+        // Subtracting padding from an intrinsic width can lose a few ulps.
+        // Preserve a measured single line without adding visible layout space.
+        let width = width + width.abs().max(1.) * f32::EPSILON * 4.;
         let mut lines = vec![String::new()];
         for word in text.split_inclusive([' ', '\n']) {
             let hard_break = word.ends_with('\n');
@@ -135,6 +150,39 @@ impl Layout {
         }
         lines.join("\n")
     }
+    /// Measure row children at the widths they receive during placement. This
+    /// keeps intrinsic height and wrapped text consistent inside clipped rows.
+    fn measure_children<M>(&self, e: &Element<M>, available: (f32, f32)) -> Vec<(f32, f32)> {
+        let mut sizes: Vec<_> = e
+            .children
+            .iter()
+            .map(|c| self.measure(c, available))
+            .collect();
+        if matches!(e.kind, Kind::Row) {
+            let fixed: f32 = e
+                .children
+                .iter()
+                .zip(&sizes)
+                .filter(|(c, _)| c.style.width != Length::Fill)
+                .map(|(_, s)| s.0)
+                .sum();
+            let count = e
+                .children
+                .iter()
+                .filter(|c| c.style.width == Length::Fill)
+                .count();
+            let width =
+                (available.0 - fixed - e.style.gap * e.children.len().saturating_sub(1) as f32)
+                    .max(0.)
+                    / count.max(1) as f32;
+            for (child, size) in e.children.iter().zip(&mut sizes) {
+                if child.style.width == Length::Fill {
+                    *size = self.measure(child, (width, available.1));
+                }
+            }
+        }
+        sizes
+    }
     fn measure<M>(&self, e: &Element<M>, available: (f32, f32)) -> (f32, f32) {
         let px = e.style.padding.horizontal * 2.;
         let py = e.style.padding.vertical * 2.;
@@ -146,11 +194,8 @@ impl Layout {
             },
             available.1,
         );
-        let children: Vec<_> = e
-            .children
-            .iter()
-            .map(|c| self.measure(c, ((available.0 - px).max(0.), (available.1 - py).max(0.))))
-            .collect();
+        let children =
+            self.measure_children(e, ((available.0 - px).max(0.), (available.1 - py).max(0.)));
         let n = children.len();
         let gaps = gap * n.saturating_sub(1) as f32;
         let content = match &e.kind {
@@ -175,7 +220,7 @@ impl Layout {
                         * t.lines().count().max(1) as f32,
                 )
             }
-            Kind::Input { .. } => (
+            Kind::Input { .. } | Kind::MaskedInput { .. } => (
                 160.,
                 text::line_metrics(
                     self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
@@ -184,6 +229,7 @@ impl Layout {
                 .height,
             ),
             Kind::Image(_) => (32., 32.),
+            Kind::Slider(_) => (160., e.style.slider.thumb_diameter),
             Kind::Row => (
                 children.iter().map(|c| c.0).sum::<f32>() + gaps,
                 children.iter().map(|c| c.1).fold(0., f32::max),
@@ -200,7 +246,7 @@ impl Layout {
                         + gap * rows.saturating_sub(1) as f32,
                 )
             }
-            Kind::Stack => (
+            Kind::Scroll(_) | Kind::Stack => (
                 children.iter().map(|c| c.0).fold(0., f32::max),
                 children.iter().map(|c| c.1).fold(0., f32::max),
             ),
@@ -234,6 +280,12 @@ impl Layout {
             &mut scene,
             interaction,
             now,
+            &Arc::default(),
+            &Arc::from([FocusClip {
+                rect,
+                radius: 0.,
+                scroll_depth: 0,
+            }]),
             "root",
         );
         scene
@@ -248,6 +300,8 @@ impl Layout {
         scene: &mut Scene<M>,
         interaction: &Interaction<M>,
         now: f64,
+        scrolls: &Arc<[Arc<ScrollHit<M>>]>,
+        focus_clips: &Arc<[FocusClip]>,
         path: &str,
     ) {
         let id = if e.id.is_empty() {
@@ -259,16 +313,59 @@ impl Layout {
         if alpha <= 0.001 {
             return;
         }
+        let paint_start = scene.paint.len();
         let own_clip = if e.style.clip {
             clip.with_rounded(rect, e.style.radius)
         } else {
             clip.clone()
         };
-        let interactive =
-            e.click.is_some() || e.input.is_some() || e.drag.is_some() || e.hover.is_some();
+        let p = e.style.padding;
+        let inner = Rect::new(
+            rect.x + p.horizontal,
+            rect.y + p.vertical,
+            (rect.w - 2. * p.horizontal).max(0.),
+            (rect.h - 2. * p.vertical).max(0.),
+        );
+        let scroll_hit = if let Kind::Scroll(spec) = e.kind {
+            e.scroll.as_ref().map(|callback| {
+                let width = (inner.w - scroll::gutter(e.style.scroll, inner.w)).max(0.);
+                let height = e
+                    .children
+                    .first()
+                    .map(|child| self.measure(child, (width, inner.h)).1)
+                    .unwrap_or(0.);
+                Arc::new(ScrollHit::new(
+                    id.clone(),
+                    inner,
+                    height,
+                    spec,
+                    e.style.scroll,
+                    callback.clone(),
+                ))
+            })
+        } else {
+            None
+        };
+        let mut child_focus_clips = focus_clips.clone();
+        if e.style.clip {
+            let mut clips = focus_clips.to_vec();
+            clips.push(FocusClip {
+                rect,
+                radius: e.style.radius,
+                scroll_depth: scrolls.len(),
+            });
+            child_focus_clips = clips.into();
+        }
+        let interactive = e.click.is_some()
+            || e.input.is_some()
+            || e.edit.is_some()
+            || e.drag.is_some()
+            || e.hover.is_some()
+            || e.slider.is_some()
+            || e.scroll.is_some();
         if e.style.background.3 > 0. && alpha > 0. {
             let mut color = e.style.background;
-            if e.click.is_some() || e.input.is_some() {
+            if e.click.is_some() || e.input.is_some() || e.edit.is_some() || e.slider.is_some() {
                 color = color.mix(
                     e.style.hover_color.alpha(color.3),
                     interaction.hover_amount(&id, now) * e.style.hover_color.3,
@@ -308,26 +405,42 @@ impl Layout {
                 clip: clip.clone(),
                 radius: e.style.radius,
                 click: e.click.clone(),
+                submit: e.submit.clone(),
                 hover: e.hover.clone(),
                 input: e.input.clone(),
+                edit: e.edit.clone(),
                 value: if let Kind::Input { value, .. } = &e.kind {
                     value.clone()
                 } else {
                     String::new()
                 },
                 drag: e.drag.clone(),
+                slider: if let Kind::Slider(spec) = e.kind {
+                    e.slider.as_ref().map(|callback| {
+                        let (track, _) = slider::geometry(rect, e.style.padding, e.style.slider);
+                        SliderHit {
+                            spec,
+                            start: track.x,
+                            width: track.w,
+                            callback: callback.clone(),
+                        }
+                    })
+                } else {
+                    None
+                },
+                scroll: scroll_hit.clone(),
+                scroll_ancestors: scrolls.clone(),
+                focus_clips: child_focus_clips.clone(),
                 autofocus: e.autofocus,
                 hover_transition: e.style.hover_transition,
-                tab_stop: e.style.tab_stop && (e.click.is_some() || e.input.is_some()),
+                tab_stop: e.style.tab_stop
+                    && (e.click.is_some()
+                        || e.input.is_some()
+                        || e.edit.is_some()
+                        || e.slider.is_some()
+                        || e.scroll.is_some()),
             });
         }
-        let p = e.style.padding;
-        let inner = Rect::new(
-            rect.x + p.horizontal,
-            rect.y + p.vertical,
-            (rect.w - 2. * p.horizontal).max(0.),
-            (rect.h - 2. * p.vertical).max(0.),
-        );
         let mut fg = e.style.foreground;
         fg.3 *= alpha;
         match &e.kind {
@@ -346,11 +459,24 @@ impl Layout {
                 color: fg,
                 align: e.style.align,
             }),
-            Kind::Input { value, placeholder } => {
+            Kind::Input { .. } | Kind::MaskedInput { .. } => {
+                let (value, placeholder) = match &e.kind {
+                    Kind::Input { value, placeholder } => {
+                        (std::borrow::Cow::Borrowed(value.as_str()), placeholder)
+                    }
+                    Kind::MaskedInput {
+                        length,
+                        placeholder,
+                    } => (
+                        std::borrow::Cow::Owned("•".repeat((*length).min(4096))),
+                        placeholder,
+                    ),
+                    _ => unreachable!(),
+                };
                 let text = if value.is_empty() {
                     placeholder.clone()
                 } else {
-                    value.clone()
+                    value.to_string()
                 };
                 if value.is_empty() {
                     fg.3 *= 0.55;
@@ -368,7 +494,7 @@ impl Layout {
                     let font = self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]);
                     let line = text::line_metrics(font, e.style.font_size);
                     let top = inner.y + (inner.h - line.height).max(0.) / 2.;
-                    let advance = self.text_width(value, e.style.font_size, e.style.font_face);
+                    let advance = self.text_width(&value, e.style.font_size, e.style.font_face);
                     let scroll = (advance + e.style.caret_width - inner.w).max(0.);
                     // Keep the end-caret visible when a single-line value exceeds the field.
                     if let Some(Paint::Text { rect, .. }) = scene.paint.last_mut() {
@@ -389,9 +515,17 @@ impl Layout {
                     });
                 }
             }
+            Kind::Slider(spec) => slider::paint(
+                scene,
+                rect,
+                own_clip.intersect(rect),
+                *spec,
+                &e.style,
+                alpha,
+            ),
             Kind::Image(data) => {
-                let (rect, uv) =
-                    image_geometry(inner, data.width(), data.height(), e.style.image_fit);
+                let (width, height) = data.aspect_size();
+                let (rect, uv) = image_geometry(inner, width, height, e.style.image_fit);
                 scene.paint.push(Paint::Image {
                     rect,
                     uv,
@@ -404,99 +538,117 @@ impl Layout {
             }
             _ => {}
         }
-        let is_row = matches!(e.kind, Kind::Row);
-        let is_column = matches!(e.kind, Kind::Column);
-        let mut measured: Vec<_> = e
-            .children
-            .iter()
-            .map(|c| self.measure(c, (inner.w, inner.h)))
-            .collect();
-        if is_row || is_column {
-            let fixed: f32 = e
-                .children
-                .iter()
-                .zip(&measured)
-                .filter(|(c, _)| {
-                    if is_row {
-                        c.style.width != Length::Fill
-                    } else {
-                        c.style.height != Length::Fill
+        if let Some(scroll) = scroll_hit {
+            if let Some(child) = e.children.first() {
+                let width = (inner.w - scroll::gutter(e.style.scroll, inner.w)).max(0.);
+                let height = self.measure(child, (width, inner.h)).1.max(inner.h);
+                let mut ancestors = scrolls.to_vec();
+                ancestors.push(scroll.clone());
+                let mut clips = child_focus_clips.to_vec();
+                clips.push(FocusClip {
+                    rect: Rect::new(inner.x, inner.y, width, inner.h),
+                    radius: 0.,
+                    scroll_depth: scrolls.len(),
+                });
+                child_focus_clips = clips.into();
+                self.place(
+                    child,
+                    Rect::new(inner.x, inner.y - scroll.offset, width, height),
+                    own_clip.intersect(Rect::new(inner.x, inner.y, width, inner.h)),
+                    alpha,
+                    scene,
+                    interaction,
+                    now,
+                    &ancestors.into(),
+                    &child_focus_clips,
+                    &format!("{path}/0"),
+                );
+            }
+            if scroll.maximum > 0. && scroll.thumb.w > 0. {
+                scene.paint.push(Paint::Shape {
+                    rect: scroll.thumb,
+                    clip: own_clip.clone(),
+                    color: e.style.scroll.thumb.alpha(e.style.scroll.thumb.3 * alpha),
+                    radius: scroll.thumb.w / 2.,
+                });
+            }
+        } else {
+            let mut measured = self.measure_children(e, (inner.w, inner.h));
+            if matches!(e.kind, Kind::Column) {
+                let fixed: f32 = e
+                    .children
+                    .iter()
+                    .zip(&measured)
+                    .filter(|(c, _)| c.style.height != Length::Fill)
+                    .map(|(_, s)| s.1)
+                    .sum();
+                let count = e
+                    .children
+                    .iter()
+                    .filter(|c| c.style.height == Length::Fill)
+                    .count();
+                let height =
+                    (inner.h - fixed - e.style.gap * e.children.len().saturating_sub(1) as f32)
+                        .max(0.)
+                        / count.max(1) as f32;
+                for (child, size) in e.children.iter().zip(&mut measured) {
+                    if child.style.height == Length::Fill {
+                        size.1 = height;
                     }
-                })
-                .map(|(_, s)| if is_row { s.0 } else { s.1 })
-                .sum();
-            let count = e
-                .children
-                .iter()
-                .filter(|c| {
-                    if is_row {
-                        c.style.width == Length::Fill
-                    } else {
-                        c.style.height == Length::Fill
-                    }
-                })
-                .count();
-            let space = ((if is_row { inner.w } else { inner.h })
-                - fixed
-                - e.style.gap * e.children.len().saturating_sub(1) as f32)
-                .max(0.);
-            for (c, s) in e.children.iter().zip(&mut measured) {
-                if is_row && c.style.width == Length::Fill {
-                    s.0 = space / count.max(1) as f32;
-                }
-                if is_column && c.style.height == Length::Fill {
-                    s.1 = space / count.max(1) as f32;
                 }
             }
-        }
-        let mut cursor = 0.;
-        let grid_h = measured.iter().map(|v| v.1).fold(0., f32::max);
-        for (i, (child, (w, h))) in e.children.iter().zip(measured).enumerate() {
-            let (x, y, w, h) = match e.kind {
-                Kind::Row => {
-                    let r = (
-                        inner.x + cursor,
-                        inner.y + align_offset(e.style.align, inner.h - h),
-                        w,
-                        h,
-                    );
-                    cursor += w + e.style.gap;
-                    r
-                }
-                Kind::Column => {
-                    let r = (
-                        inner.x + align_offset(e.style.align, inner.w - w),
-                        inner.y + cursor,
-                        w,
-                        h,
-                    );
-                    cursor += h + e.style.gap;
-                    r
-                }
-                Kind::Grid(cols) => {
-                    let cw = ((inner.w - e.style.gap * (cols - 1) as f32) / cols as f32).max(0.);
-                    (
-                        inner.x + (i % cols) as f32 * (cw + e.style.gap),
-                        inner.y + (i / cols) as f32 * (grid_h + e.style.gap),
-                        cw,
-                        h,
-                    )
-                }
-                _ => {
-                    let (x, y) = child.style.position.unwrap_or((0., 0.));
-                    (inner.x + x, inner.y + y, w, h)
-                }
-            };
-            self.place(
-                child,
-                Rect::new(x, y, w, h),
-                own_clip.clone(),
-                alpha,
-                scene,
-                interaction,
-                now,
-                &format!("{path}/{i}"),
-            );
+            let mut cursor = 0.;
+            let grid_h = measured.iter().map(|v| v.1).fold(0., f32::max);
+            for (i, (child, (w, h))) in e.children.iter().zip(measured).enumerate() {
+                let (x, y, w, h) = match e.kind {
+                    Kind::Row => {
+                        let r = (
+                            inner.x + cursor,
+                            inner.y + align_offset(e.style.align, inner.h - h),
+                            w,
+                            h,
+                        );
+                        cursor += w + e.style.gap;
+                        r
+                    }
+                    Kind::Column => {
+                        let r = (
+                            inner.x + align_offset(e.style.align, inner.w - w),
+                            inner.y + cursor,
+                            w,
+                            h,
+                        );
+                        cursor += h + e.style.gap;
+                        r
+                    }
+                    Kind::Grid(cols) => {
+                        let cw =
+                            ((inner.w - e.style.gap * (cols - 1) as f32) / cols as f32).max(0.);
+                        (
+                            inner.x + (i % cols) as f32 * (cw + e.style.gap),
+                            inner.y + (i / cols) as f32 * (grid_h + e.style.gap),
+                            cw,
+                            h,
+                        )
+                    }
+                    _ => {
+                        let (x, y) = child.style.position.unwrap_or((0., 0.));
+                        (inner.x + x, inner.y + y, w, h)
+                    }
+                };
+                self.place(
+                    child,
+                    Rect::new(x, y, w, h),
+                    own_clip.clone(),
+                    alpha,
+                    scene,
+                    interaction,
+                    now,
+                    scrolls,
+                    &child_focus_clips,
+                    &format!("{path}/{i}"),
+                );
+            }
         }
         fn contains_focus<M>(e: &Element<M>, focus: &str, path: &str) -> bool {
             let id = if e.id.is_empty() { path } else { &e.id };
@@ -518,6 +670,9 @@ impl Layout {
                 color: e.style.focus_color.alpha(e.style.focus_color.3 * alpha),
                 width: e.style.focus_width,
             });
+        }
+        if !e.style.paint {
+            scene.paint.truncate(paint_start);
         }
     }
 }
@@ -563,6 +718,7 @@ struct Press<M> {
     x: f32,
     y: f32,
     moved: bool,
+    scroll_grab: Option<f32>,
 }
 pub struct Interaction<M> {
     pub focus: Option<String>,
@@ -573,6 +729,8 @@ pub struct Interaction<M> {
     motions: BTreeMap<String, Motion>,
     select_all: bool,
     input_buffer: Option<(String, String)>,
+    slider_buffer: Option<(String, f32)>,
+    scroll_buffer: BTreeMap<String, f32>,
 }
 impl<M> Default for Interaction<M> {
     fn default() -> Self {
@@ -585,11 +743,55 @@ impl<M> Default for Interaction<M> {
             motions: BTreeMap::new(),
             select_all: false,
             input_buffer: None,
+            slider_buffer: None,
+            scroll_buffer: BTreeMap::new(),
         }
     }
 }
 impl<M: Clone> Interaction<M> {
     pub fn synchronize(&mut self, scene: &Scene<M>) {
+        if let Some(press) = &mut self.press
+            && press.scroll_grab.is_some()
+        {
+            let current = scene.hits.iter().find(|h| h.id == press.hit.id);
+            let compatible = current.is_some_and(|h| {
+                h.scroll.as_ref().is_some_and(|new| {
+                    press.hit.scroll.as_ref().is_some_and(|old| {
+                        old.maximum == new.maximum
+                            && old.track == new.track
+                            && old.thumb.h == new.thumb.h
+                            && h.clip == press.hit.clip
+                    })
+                })
+            });
+            if compatible {
+                press.hit = current.unwrap().clone();
+            } else {
+                self.press = None;
+            }
+        }
+        self.scroll_buffer = scene
+            .hits
+            .iter()
+            .filter_map(|h| h.scroll.as_ref().map(|s| (s.id.clone(), s.offset)))
+            .collect();
+        if self.press.as_ref().is_some_and(|p| {
+            p.hit.slider.is_some()
+                && !scene
+                    .hits
+                    .iter()
+                    .any(|h| h.id == p.hit.id && h.slider.is_some())
+        }) {
+            self.press = None;
+        }
+        self.slider_buffer = self.focus.as_ref().and_then(|id| {
+            scene
+                .hits
+                .iter()
+                .find(|h| &h.id == id)
+                .and_then(|h| h.slider.as_ref())
+                .map(|s| (id.clone(), s.spec.value()))
+        });
         if self
             .focus
             .as_ref()
@@ -668,7 +870,16 @@ impl<M: Clone> Interaction<M> {
         if let Some(press) = &mut self.press {
             let (dx, dy) = (x - press.x, y - press.y);
             press.moved |= dx.hypot(dy) >= 5.;
-            if press.moved
+            if let (Some(scroll), Some(grab)) = (&press.hit.scroll, press.scroll_grab) {
+                if let Some(offset) = scroll.at(y, grab) {
+                    self.scroll_buffer.insert(scroll.id.clone(), offset);
+                    out.push(scroll.event(offset));
+                }
+            } else if let Some(slider) = &press.hit.slider {
+                if let Some(message) = slider.event(x, false) {
+                    out.push(message);
+                }
+            } else if press.moved
                 && let Some(f) = &press.hit.drag
             {
                 out.push(f(DragEvent {
@@ -682,8 +893,9 @@ impl<M: Clone> Interaction<M> {
             .retain(|id, m| m.active(now) || self.hovered.as_ref() == Some(id));
         out
     }
-    pub fn press(&mut self, scene: &Scene<M>, x: f32, y: f32) {
+    pub fn press(&mut self, scene: &Scene<M>, x: f32, y: f32) -> Option<M> {
         self.focus_visible = false;
+        self.slider_buffer = None;
         self.press = scene
             .hits
             .iter()
@@ -699,16 +911,47 @@ impl<M: Clone> Interaction<M> {
                         .as_ref()
                         .map(|_| (hit.id.clone(), hit.value.clone()));
                 }
+                let scroll_grab = hit
+                    .scroll
+                    .as_ref()
+                    .filter(|s| s.maximum > 0. && s.track.contains(x, y))
+                    .map(|s| {
+                        if s.thumb.contains(x, y) {
+                            y - s.thumb.y
+                        } else {
+                            s.thumb.h / 2.
+                        }
+                    });
                 Press {
                     hit,
+                    scroll_grab,
                     x,
                     y,
                     moved: false,
                 }
             });
+        if let Some(p) = &self.press
+            && let (Some(scroll), Some(grab)) = (&p.hit.scroll, p.scroll_grab)
+            && let Some(offset) = scroll.at(y, grab)
+        {
+            self.scroll_buffer.insert(scroll.id.clone(), offset);
+            return Some(scroll.event(offset));
+        }
+        self.press
+            .as_ref()
+            .and_then(|p| p.hit.slider.as_ref())
+            .and_then(|s| s.event(x, false))
     }
     pub fn release(&mut self, x: f32, y: f32) -> Option<M> {
         let p = self.press.take()?;
+        if let (Some(scroll), Some(grab)) = (&p.hit.scroll, p.scroll_grab) {
+            let offset = scroll.at(y, grab)?;
+            self.scroll_buffer.insert(scroll.id.clone(), offset);
+            return Some(scroll.event(offset));
+        }
+        if let Some(slider) = &p.hit.slider {
+            return slider.event(x, true);
+        }
         if p.moved {
             return p.hit.drag.map(|f| {
                 f(DragEvent {
@@ -724,43 +967,158 @@ impl<M: Clone> Interaction<M> {
             None
         }
     }
-    pub fn key(&mut self, scene: &Scene<M>, key: &Key) -> Option<M> {
+    /// A wheel event is consumed by the deepest scroll viewport under the
+    /// pointer, chaining outward at its limits. Some(empty) still consumes it.
+    pub fn scroll(&mut self, scene: &Scene<M>, x: f32, y: f32, lines: f64) -> Option<Vec<M>> {
+        let hit = scene.hits.iter().rev().find(|h| h.contains(x, y))?;
+        // Follow this hit's ancestry, never an unrelated viewport underneath it.
+        let mut handled = false;
+        for scroll in hit.scroll.iter().chain(hit.scroll_ancestors.iter().rev()) {
+            handled = true;
+            if !lines.is_finite() {
+                return Some(vec![]);
+            }
+            let previous = *self.scroll_buffer.get(&scroll.id).unwrap_or(&scroll.offset);
+            let value = (f64::from(previous) + lines * f64::from(scroll.line_step))
+                .clamp(0., f64::from(scroll.maximum)) as f32;
+            if value != previous {
+                self.scroll_buffer.insert(scroll.id.clone(), value);
+                return Some(vec![scroll.event(value)]);
+            }
+        }
+        handled.then(Vec::new)
+    }
+    pub fn key(&mut self, scene: &Scene<M>, key: &Key) -> Vec<M> {
         self.focus_visible = true;
         if matches!(key, Key::Tab | Key::BackTab) {
-            let stops: Vec<_> = scene
-                .hits
-                .iter()
-                .filter(|h| {
-                    h.tab_stop
-                        && h.rect.intersect(h.clip.bounds).w > 0.
-                        && h.rect.intersect(h.clip.bounds).h > 0.
-                })
-                .collect();
-            if !stops.is_empty() {
-                let current = stops
-                    .iter()
-                    .position(|h| Some(&h.id) == self.focus.as_ref());
-                let next = match (current, key) {
-                    (Some(i), Key::BackTab) => (i + stops.len() - 1) % stops.len(),
-                    (Some(i), _) => (i + 1) % stops.len(),
-                    (None, Key::BackTab) => stops.len() - 1,
-                    (None, _) => 0,
+            return self.traverse(scene, key);
+        }
+        if let Some(hit) = scene
+            .hits
+            .iter()
+            .find(|h| Some(&h.id) == self.focus.as_ref())
+        {
+            let scroll = hit.scroll.as_ref().or_else(|| {
+                matches!(key, Key::PageUp | Key::PageDown)
+                    .then(|| hit.scroll_ancestors.last())
+                    .flatten()
+            });
+            if let Some(scroll) = scroll {
+                let previous = *self.scroll_buffer.get(&scroll.id).unwrap_or(&scroll.offset);
+                let page = (scroll.viewport.h - scroll.line_step).max(scroll.line_step);
+                let value = match key {
+                    Key::Down => Some(previous + scroll.line_step),
+                    Key::Up => Some(previous - scroll.line_step),
+                    Key::PageDown => Some(previous + page),
+                    Key::PageUp => Some(previous - page),
+                    Key::Home => Some(0.),
+                    Key::End => Some(scroll.maximum),
+                    _ => None,
                 };
-                let hit = stops[next];
-                self.focus = Some(hit.id.clone());
-                self.select_all = false;
-                self.input_buffer = hit
-                    .input
-                    .as_ref()
-                    .map(|_| (hit.id.clone(), hit.value.clone()));
+                if let Some(value) = value {
+                    let value = value.clamp(0., scroll.maximum);
+                    self.scroll_buffer.insert(scroll.id.clone(), value);
+                    return vec![scroll.event(value)];
+                }
             }
-            return None;
+        }
+        self.control_key(scene, key).into_iter().collect()
+    }
+    fn traverse(&mut self, scene: &Scene<M>, key: &Key) -> Vec<M> {
+        let count = scene.hits.len();
+        if count == 0 {
+            return vec![];
+        }
+        let reverse = matches!(key, Key::BackTab);
+        let current = scene
+            .hits
+            .iter()
+            .position(|h| Some(&h.id) == self.focus.as_ref());
+        let start = current.unwrap_or(if reverse { 0 } else { count - 1 });
+        // Inspect only candidates up to the next reachable stop; do not build
+        // reveal plans for every item in a long list on each key press.
+        let next = (1..=count).find_map(|step| {
+            let index = if reverse {
+                (start + count - step) % count
+            } else {
+                (start + step) % count
+            };
+            let hit = &scene.hits[index];
+            hit.tab_stop
+                .then(|| scroll::reveal(hit, &self.scroll_buffer))
+                .flatten()
+                .map(|plan| (hit, plan))
+        });
+        let Some((hit, plan)) = next else {
+            return vec![];
+        };
+        self.focus = Some(hit.id.clone());
+        self.slider_buffer = None;
+        self.select_all = false;
+        self.input_buffer = hit
+            .input
+            .as_ref()
+            .map(|_| (hit.id.clone(), hit.value.clone()));
+        let mut messages = vec![];
+        for (scroll, value) in plan {
+            self.scroll_buffer.insert(scroll.id.clone(), value);
+            messages.push(scroll.event(value));
+        }
+        messages
+    }
+    fn control_key(&mut self, scene: &Scene<M>, key: &Key) -> Option<M> {
+        if let Some(hit) = scene
+            .hits
+            .iter()
+            .find(|h| Some(&h.id) == self.focus.as_ref())
+            && let Some(edit) = &hit.edit
+        {
+            let action = match key {
+                Key::Enter => return hit.submit.clone(),
+                Key::SelectAll => {
+                    self.select_all = true;
+                    return None;
+                }
+                Key::Backspace if self.select_all => InputEdit::Clear,
+                Key::Backspace => InputEdit::Backspace,
+                Key::ClearInput => InputEdit::Clear,
+                Key::Text(text) if self.select_all => {
+                    InputEdit::Replace(text.replace(['\n', '\r'], ""))
+                }
+                Key::Text(text) => InputEdit::Insert(text.replace(['\n', '\r'], "")),
+                _ => return None,
+            };
+            self.select_all = false;
+            return Some(edit(action));
+        }
+        if let Some(hit) = scene
+            .hits
+            .iter()
+            .find(|h| Some(&h.id) == self.focus.as_ref())
+            && let Some(slider) = &hit.slider
+        {
+            let previous = self
+                .slider_buffer
+                .as_ref()
+                .filter(|(id, _)| id == &hit.id)
+                .map_or(slider.spec.value(), |(_, value)| *value);
+            let value = match key {
+                Key::Left | Key::Down => (previous - slider.spec.step()).max(0.),
+                Key::Right | Key::Up => (previous + slider.spec.step()).min(1.),
+                Key::Home => 0.,
+                Key::End => 1.,
+                _ => return None,
+            };
+            self.slider_buffer = Some((hit.id.clone(), value));
+            return Some((slider.callback)(SliderEvent {
+                value,
+                finished: true,
+            }));
         }
         if (matches!(key, Key::Enter) || matches!(key, Key::Text(s) if s == " "))
-            && let Some(hit) = scene
-                .hits
-                .iter()
-                .find(|h| Some(&h.id) == self.focus.as_ref() && h.input.is_none())
+            && let Some(hit) = scene.hits.iter().find(|h| {
+                Some(&h.id) == self.focus.as_ref() && h.input.is_none() && h.edit.is_none()
+            })
         {
             return hit.click.clone();
         }
@@ -768,6 +1126,9 @@ impl<M: Clone> Interaction<M> {
             .hits
             .iter()
             .find(|h| Some(&h.id) == self.focus.as_ref() && h.input.is_some())?;
+        if matches!(key, Key::Enter) {
+            return hit.submit.clone();
+        }
         // Several key events can arrive before the next compositor frame. Keep
         // edits locally until the new scene reflects the updated client state.
         let mut value = self
@@ -808,6 +1169,58 @@ impl<M: Clone> Interaction<M> {
 mod tests {
     use super::*;
     #[test]
+    fn input_only_retains_geometry_focus_and_drag_capture_without_paint() {
+        let tree = Element::stack(vec![
+            Element::empty()
+                .size(80., 40.)
+                .at(12., 10.)
+                .background(Color(1., 0., 0., 1.))
+                .on_click("click".to_string())
+                .on_drag(|event| format!("{}:{}:{}", event.dx, event.dy, event.finished))
+                .id("handle"),
+        ])
+        .fill();
+        let layout = Layout::new(Arc::new(vec![]));
+        let mut input = Interaction::default();
+        let painted = layout.build(&tree, 120., 80., &input, 0.);
+        assert!(!painted.paint.is_empty());
+        input.press(&painted, 30., 25.);
+        let only = tree.input_only().map(|message| format!("mapped-{message}"));
+        let scene = layout.build(&only, 120., 80., &input, 0.);
+        assert!(
+            scene.paint.is_empty(),
+            "focus decoration is suppressed as well"
+        );
+        assert_eq!(scene.regions, painted.regions);
+        assert_eq!(scene.hits[0].id, painted.hits[0].id);
+        assert_eq!(scene.hits[0].rect, painted.hits[0].rect);
+        input.synchronize(&scene);
+        assert_eq!(input.focus.as_deref(), Some("handle"));
+        assert_eq!(input.motion(&scene, 160., 110., 0.), ["130:85:false"]);
+        assert_eq!(input.release(170., 120.), Some("140:95:true".into()));
+        input.press(&scene, 30., 25.);
+        assert_eq!(input.release(30., 25.), Some("mapped-click".into()));
+        assert_eq!(input.release(170., 120.), None);
+    }
+    #[test]
+    fn trimmed_odd_image_keeps_cover_and_contain_geometry() {
+        let source = ImageData::from_rgba("odd aspect", 65, 37, vec![255; 65 * 37 * 4]).unwrap();
+        let trimmed = source.downsample_for_cover(16, 9).unwrap();
+        let layout = Layout::new(Arc::new(vec![]));
+        for fit in [ImageFit::Cover, ImageFit::Contain] {
+            let geometry = |image| {
+                let mut root = Element::<()>::image(Arc::new(image)).size(23., 17.);
+                root.style.image_fit = fit;
+                let scene = layout.build(&root, 23., 17., &Interaction::default(), 0.);
+                match &scene.paint[0] {
+                    Paint::Image { rect, uv, .. } => (*rect, *uv),
+                    _ => panic!("expected an image primitive"),
+                }
+            };
+            assert_eq!(geometry(source.clone()), geometry(trimmed.clone()));
+        }
+    }
+    #[test]
     fn rounded_hit_test_leaves_corners_click_through() {
         let h: Hit<()> = Hit {
             id: "a".into(),
@@ -816,9 +1229,15 @@ mod tests {
             radius: 20.,
             click: None,
             hover: None,
+            submit: None,
             input: None,
+            edit: None,
             value: String::new(),
             drag: None,
+            slider: None,
+            scroll: None,
+            scroll_ancestors: Arc::default(),
+            focus_clips: Arc::default(),
             autofocus: false,
             hover_transition: Transition::default(),
             tab_stop: true,
@@ -835,9 +1254,15 @@ mod tests {
             radius: 0.,
             click: None,
             hover: None,
+            submit: None,
             input: Some(Arc::new(|s: String| s)),
+            edit: None,
             value: String::new(),
             drag: None,
+            slider: None,
+            scroll: None,
+            scroll_ancestors: Arc::default(),
+            focus_clips: Arc::default(),
             autofocus: true,
             hover_transition: Transition::default(),
             tab_stop: true,
@@ -848,18 +1273,30 @@ mod tests {
         };
         let mut input = Interaction::default();
         input.synchronize(&scene);
-        assert_eq!(input.key(&scene, &Key::Text("f".into())), Some("f".into()));
         assert_eq!(
-            input.key(&scene, &Key::Text("oo".into())),
+            input.key(&scene, &Key::Text("f".into())).into_iter().next(),
+            Some("f".into())
+        );
+        assert_eq!(
+            input
+                .key(&scene, &Key::Text("oo".into()))
+                .into_iter()
+                .next(),
             Some("foo".into())
         );
         assert_eq!(
-            input.key(&scene, &Key::Text("t".into())),
+            input.key(&scene, &Key::Text("t".into())).into_iter().next(),
             Some("foot".into())
         );
         input.key(&scene, &Key::SelectAll);
-        assert_eq!(input.key(&scene, &Key::Text("é".into())), Some("é".into()));
-        assert_eq!(input.key(&scene, &Key::Backspace), Some(String::new()));
+        assert_eq!(
+            input.key(&scene, &Key::Text("é".into())).into_iter().next(),
+            Some("é".into())
+        );
+        assert_eq!(
+            input.key(&scene, &Key::Backspace).into_iter().next(),
+            Some(String::new())
+        );
     }
     #[test]
     fn drag_threshold_prevents_accidental_click() {
@@ -870,9 +1307,15 @@ mod tests {
             radius: 0.,
             click: Some(1),
             hover: None,
+            submit: None,
             input: None,
+            edit: None,
             value: String::new(),
             drag: Some(Arc::new(|d: DragEvent| if d.finished { 3 } else { 2 })),
+            slider: None,
+            scroll: None,
+            scroll_ancestors: Arc::default(),
+            focus_clips: Arc::default(),
             autofocus: false,
             hover_transition: Transition::default(),
             tab_stop: true,
@@ -882,7 +1325,7 @@ mod tests {
             ..Scene::default()
         };
         let mut i = Interaction::default();
-        i.press(&scene, 20., 20.);
+        assert_eq!(i.press(&scene, 20., 20.), None);
         assert_eq!(i.motion(&scene, 40., 20., 0.), vec![2]);
         assert_eq!(i.release(40., 20.), Some(3));
     }

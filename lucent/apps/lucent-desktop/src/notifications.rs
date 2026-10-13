@@ -253,15 +253,21 @@ impl Component for Center {
                 let index = self.action_pages.entry(id).or_default();
                 *index = (*index as i32 + delta).max(0) as usize;
             }
-            Message::Dismiss(id) => e.task(move || Message::Done(adapter.dismiss(id))),
-            Message::Invoke(id, action) => {
-                e.task(move || Message::Done(adapter.invoke(id, &action)))
-            }
+            Message::Dismiss(id) => e.task_on(crate::work::CONTROLS, move || {
+                Message::Done(adapter.dismiss(id))
+            }),
+            Message::Invoke(id, action) => e.task_on(crate::work::CONTROLS, move || {
+                Message::Done(adapter.invoke(id, &action))
+            }),
             Message::Dnd => {
                 let enabled = !self.snapshot.do_not_disturb;
-                e.task(move || Message::Done(adapter.set_do_not_disturb(enabled)));
+                e.task_on(crate::work::CONTROLS, move || {
+                    Message::Done(adapter.set_do_not_disturb(enabled))
+                });
             }
-            Message::Clear => e.task(move || Message::Done(adapter.clear_history())),
+            Message::Clear => e.task_on(crate::work::CONTROLS, move || {
+                Message::Done(adapter.clear_history())
+            }),
             Message::Done(result) => self.error = result.is_err(),
         }
         e.redraw("notifications");

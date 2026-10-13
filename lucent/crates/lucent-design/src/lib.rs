@@ -157,6 +157,46 @@ impl Theme {
             self.surface_container
         })
     }
+    /// The design-system recipe for a framework scalar control.
+    pub fn slider<M>(
+        self,
+        spec: lucent_api::SliderSpec,
+        on_change: impl Fn(lucent_api::SliderEvent) -> M + Send + Sync + 'static,
+    ) -> Element<M> {
+        use component::slider as token;
+        Element::slider(spec, on_change)
+            .width(lucent_api::Length::Fill)
+            .height(lucent_api::Length::Fixed(token::HEIGHT))
+            .padding_xy(token::PADDING_INLINE, 0.)
+            .radius(radius::CONTROL)
+            .slider_style(lucent_api::SliderStyle {
+                track: self.surface_container,
+                fill: self.primary,
+                thumb: self.primary,
+                track_height: token::TRACK_HEIGHT,
+                thumb_diameter: token::THUMB_DIAMETER,
+            })
+    }
+    /// A rounded, padded viewport; the caller chooses its bounded height.
+    pub fn scroll<M>(
+        self,
+        spec: lucent_api::ScrollSpec,
+        content: Element<M>,
+        on_change: impl Fn(lucent_api::ScrollEvent) -> M + Send + Sync + 'static,
+    ) -> Element<M> {
+        use component::scroll as token;
+        Element::scroll(spec, content, on_change)
+            .fill()
+            .padding(token::PADDING)
+            .radius(radius::CONTROL)
+            .background(self.surface_container)
+            .scroll_style(lucent_api::ScrollStyle {
+                thumb: self.primary,
+                width: token::THUMB_WIDTH,
+                gutter: token::GUTTER,
+                minimum_thumb: token::MINIMUM_THUMB,
+            })
+    }
     pub fn button<M>(self, label: impl Into<String>, message: M) -> Element<M> {
         Element::button(label, message)
             .padding_xy(

@@ -130,16 +130,45 @@ impl Component for Counter {
 ```
 
 A parent can render `child.view(cx).map(ParentMessage::Child)` and delegate updates
-to the child using `effects.delegate(|child_fx| child.update(message, child_fx), ParentMessage::Child)`. Delegation preserves time, redraw requests and typed async results. Mapping also lifts input and drag callbacks. Stable element IDs
+to the child using `effects.delegate(|child_fx| child.update(message, child_fx), ParentMessage::Child)`. Delegation preserves time, redraw requests and typed async results. Mapping also lifts input, drag and slider callbacks. Stable element IDs
 preserve hover and keyboard focus between views. The client owns state; the
 runtime delivers messages on one UI thread. It never mutates a view tree in place.
 
-Supported primitives: text, image, button, single-line input, row, column, stack,
+Supported primitives: text, image, button, single-line input, slider, row, column, stack,
 grid and empty shape. `Length::{Fixed, Fill, Shrink}`, padding, gaps, alignment,
 absolute positioning within a stack, clipping, opacity, rounded corners and
 shadows cover the implemented clients. Rich text, selection/caret editing and
 IME protocols are not yet implemented. Registered font faces are chosen by index;
 layout and rendering use the same font metrics.
+
+`SliderSpec::new(value, step)` validates a normalized value in `0..=1` and a
+positive finite step no greater than one; invalid input returns `None`.
+`Element::slider(spec, callback)` produces a controlled input. Pointer press and
+motion emit `SliderEvent { value, finished: false }`; release emits `finished:
+true`, including outside the control. Arrow keys adjust by one step, Home/End
+select the endpoints, and Tab moves keyboard focus. Pointer positions are
+quantized to steps; the two endpoints remain reachable. Repeated keys accumulate
+even before the next frame. Removing the control cancels its captured gesture.
+
+The client stores the value in `update` and requests a redraw. It decides whether
+to apply a service command continuously or on release; the slider performs no OS
+operations and starts no timer or animation. `SliderStyle` supplies track, fill
+and thumb geometry/colors. `lucent-design::Theme::slider` uses semantic colors
+and generated component tokens. The `hello-layer` example demonstrates a demo
+level independent of any audio service. It does not change system volume.
+
+`lucent-ui` turns the track and thumb into ordinary shape paint commands, using
+the same padded track geometry for pointer mapping. The existing Vulkan renderer
+draws those shapes and the focus outline. Touch, accessibility announcements,
+vertical sliders and a general scroll container remain unfinished.
+
+`vm/test-slider.py --binary lucent/target/debug/hello-layer` verifies the
+independent example with real guest pointer/keyboard input. Build with the guest
+shut down, then run the harness in an unlocked single-monitor scale-1 guest. It
+uses a temporary executable and unit and removes both afterward. The example
+exposes its level/count through the framework inspection socket. See the
+[sanitized slider evidence](../reports/measurements/lucent-framework-slider.json)
+for the tested binary and the limits of this native check.
 
 ## Effects, subscriptions and services
 
@@ -187,19 +216,31 @@ entries, unsupported field codes and unsupported settings versions fail explicit
 ## Surfaces and input
 
 `Application::surfaces()` declares each surface's stable ID, layer, anchor, size,
-exclusive zone, keyboard interactivity, visibility and full-input-capture intent.
+logical edge margins, exclusive zone, keyboard interactivity, visibility,
+pointer policy and optional redraw group.
 The runtime reconciles these declarations and keeps native handles private.
 
-The desktop uses four persistent native surfaces plus on-demand notification and feedback surfaces:
+The desktop declares persistent background, bar and dock surfaces plus bounded
+widget groups and on-demand preview, notification and feedback surfaces:
 
 - A background painting the selected wallpaper.
 - A top bar reserving 48 logical pixels (the token-defined 16-pixel inset plus 32-pixel capsules).
-- A bottom-layer widget host with input regions matching interactive widgets.
+- Bottom-layer widget groups positioned with top-left margins. Overlapping
+  paint bounds share a buffer to preserve order; disjoint buffers retain whole
+  shadows. During drag, sources keep fixed geometry and input without paint,
+  while a temporary full-display, pointer-pass-through preview shows the grid.
 - A dock host switching from the top layer to an exclusive-keyboard overlay while
-  the launcher is open. Clicking outside closes it; otherwise transparent areas
+  the launcher is open. The settled closed dock shrinks to a short bottom buffer
+  after its final closing submission. Clicking outside closes it; transparent areas
   pass through to applications.
 
 Notification toasts/history use an overlay with bounded cards and action hit regions. The secure locker uses a different Wayland role: one `ext-session-lock` surface per output, including hotplugged displays.
+
+`PointerInput::None` submits an empty native region independently of painted
+hits; `Content` uses interactive regions and `All` captures the native extent.
+`Element::input_only` retains layout, focus and capture but suppresses all
+descendant paint. Redraw groups let one effect invalidate related native
+buffers. Client grid/crop/drag policy stays outside the engine.
 
 Dragging reports displacement from the original press in the stationary surface's
 coordinates. The use case clamps placement and saves only on release. A five-pixel
@@ -489,11 +530,18 @@ Lucent's visual theme, service adapters or authentication adapters.
 This is a practical ports-and-adapters structure, not a claim of a finished framework.
 The launcher owns private interaction and motion state; `widgets::Host` owns
 drag origins, calendar navigation and timer behavior. Both borrow explicit inputs
-and return typed intents for shared root operations. Audio/media use CLI adapters and polling;
-layout has no general scroll container or complex-script shaping. OS operations
+and return typed intents for shared root operations. Audio uses a native libpulse
+adapter and its own control-center child; media still uses a polled CLI adapter.
+NetworkPort and the native NetworkManager adapter have an independent headless
+consumer; the desktop network panel is the next integration step. The framework
+has controlled vertical scrolling, while virtualization, touch/kinetic/horizontal
+scrolling and complex-script shaping remain unfinished. OS operations
 stay behind ports, while pure search, launch/focus, positioning and notification
 expiry policy live in `lucent-usecases`. Architecture dependency checks enforce
 these boundaries in CI.
+
+See [native networking](native-network.md) for the domain values, connection
+ownership, startup sequence, command acknowledgement and credential boundaries.
 
 ## Launcher composition
 

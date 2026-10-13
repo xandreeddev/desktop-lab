@@ -1,0 +1,125 @@
+{
+  "milestone": "monochrome-coverage-and-renderer-allocation",
+  "status": "verified_for_recorded_scope",
+  "source_commit": "3412d44a6080692391734fde8f608266f086cd02",
+  "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/36",
+  "binary": {
+    "name": "lucent-desktop",
+    "profile": "release",
+    "sha256": "6285e3166e62d1a08525ef50d28dccfb00108f13f07e5919466e972d832d135e"
+  },
+  "implementation": {
+    "framework": "Explicit validated Alpha8 storage and format-aware mip reduction; R8 textures reconstruct premultiplied white before tint/opacity; text retains 2x supersampling with one coverage channel.",
+    "client": "NativeAssets prepares bundled theme-tinted artwork as masks; colored XDG icons and wallpapers remain RGBA. Domain/port responsibilities unchanged.",
+    "allocation": "The shared Vulkan device requests wgpu MemoryHints::MemoryUsage; a supported allocation preference, not a cap or a guaranteed backend behavior.",
+    "compatibility": "Pre-release ImageLevel.rgba field renamed pixels; consult ImageData.format() for packed storage."
+  },
+  "validation": {
+    "rust_workspace_tests_passed": 248,
+    "clippy_warnings_denied": true,
+    "formatting": true,
+    "python_checks_passed": 70,
+    "design_tokens": 491,
+    "app_icons": 58,
+    "full_visual_comparisons_per_driver": 248,
+    "full_visual_driver_scope": "All 248 comparisons on the final allocation checkpoint pass on hardware locally and software in GitHub CI. The mask checkpoint also passed both drivers locally.",
+    "reference_images_changed": 0,
+    "thresholds_changed": false,
+    "final_allocation_gpu_checks_per_driver": 6,
+    "gpu_scope": "Exact mask/RGBA pixels at 1x/2x with tint/opacity/fractional geometry/mips; warm upload accounting, cross-surface resource lifecycle and invalid scene/extent rejection on both drivers.",
+    "site": {
+      "errors": 0,
+      "warnings": 0,
+      "hints": 0,
+      "pages": 13,
+      "links_and_assets": 487
+    },
+    "native_framework": {
+      "vulkan": true,
+      "native_surfaces": 5,
+      "animated_dock_launcher": true,
+      "keyboard_search": true,
+      "real_application_launch": true,
+      "terminal_rounding": 20.0,
+      "workspace_switch": true,
+      "widget_drag": true,
+      "position_restored": true,
+      "token_grid_snap": true,
+      "timer_start_pause_reset": true,
+      "notes_input": true,
+      "wallpaper_selector_and_apply": true,
+      "native_only_restart": true,
+      "restart": true,
+      "application_count": 57
+    },
+    "native_widgets": {
+      "bounded_positions_and_frozen_capture": true,
+      "pass_through_preview_and_snapped_release": true,
+      "position_restored_after_restart": true,
+      "integer_scale_and_cancelled_resize": true,
+      "no_competing_shell": true,
+      "source_preferences_output_and_idle_restored": true,
+      "explicit_service_restart_changed_desktop_pid": true
+    },
+    "core_ci": "All six checks passed for source commit 3412d44a6080692391734fde8f608266f086cd02; final evidence-head CI tracked on PR #36.",
+    "native_service": {
+      "active": true,
+      "running": true,
+      "automatic_restarts": 0,
+      "binary_sha256": "6285e3166e62d1a08525ef50d28dccfb00108f13f07e5919466e972d832d135e"
+    }
+  },
+  "comparison": {
+    "before": "reports/measurements/lucent-icon-masks-before-120.json",
+    "after": "reports/measurements/lucent-icon-masks-after-120.json",
+    "run_order": [
+      "before",
+      "after"
+    ],
+    "same_guest_boot": true,
+    "matching_metadata": [
+      "displays",
+      "vcpus",
+      "guest_memory_mib",
+      "architecture",
+      "kernel",
+      "adapter",
+      "workload",
+      "frame_profiling"
+    ],
+    "same_prepared_background": true,
+    "rss_mib_mean_before": 226.78,
+    "rss_mib_mean_after": 207.7,
+    "rss_mib_mean_observed_reduction": 19.08,
+    "rss_mib_max_before": 229.29,
+    "rss_mib_max_after": 211.08,
+    "prepared_icon_bytes_before": 12408044,
+    "prepared_icon_bytes_after": 3102011,
+    "prepared_icon_reduction_percent": 75,
+    "warm_idle_mean_below_200_mib": false,
+    "warm_idle_max_below_200_mib": false,
+    "scope": "Sequential 120-second warm single-output software-Vulkan VM samples on a shared host; current release restored and its running hash verified after the baseline. No CPU or hardware frame-pacing improvement is claimed. RSS includes mapped driver/software-GPU pages; total GPU memory was not measured."
+  },
+  "earlier_observations": {
+    "separate_boots_masks_only": {
+      "rss_mib_mean_before": 213.67,
+      "rss_mib_mean_after": 218.35,
+      "rss_reduction_established": false
+    },
+    "same_boot_masks_only": {
+      "rss_mib_mean_before": 227.09,
+      "rss_mib_mean_after": 219.12,
+      "observed_reduction_mib": 7.97
+    },
+    "interpretation": "Payload savings alone did not prove lower average RSS in the first pair. A same-boot comparison then showed a modest reduction; the final record includes the supported allocation preference as a second change."
+  },
+  "deployment": "Atomic desktop-only install with verified hashes and preserved rollback copies; CLI, integration scripts and secure lock/login binaries unchanged. Native tests restore preferences, wallpaper, output and idle state.",
+  "pending": [
+    "Review and merging the stacked PRs; CI status is tracked on PR #36. No automatic merge.",
+    "RSS below 200 MiB is not established for all workloads; active overlay/decode peaks, allocator/driver retention, actual GPU allocations, hardware frame pacing, long idle and fault recovery remain open.",
+    "Physical networking, secret-agent/enterprise/WEP/VPN, captive portals, suspend/hotplug and native Bluetooth/battery/brightness/power/audio-card/tray acceptance remain unfinished.",
+    "Per-output selection/layout, fractional scale, text shaping/fallback/IME/grapheme/caret/selection/clipboard/accessibility/touch and virtualized/kinetic/horizontal scrolling remain open.",
+    "Live application discovery, dock persistence/reorder/auto-hide, widget resize/output/z-order/data, rich/grouped/persistent notifications and full settings/packaging/migration/rollback remain open.",
+    "Secure lock/login build alignment and retest, including the recorded username ClearInput bug, remain separate work."
+  ]
+}

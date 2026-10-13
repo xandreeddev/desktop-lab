@@ -1,0 +1,104 @@
+{
+  "milestone": "native-audio-panel",
+  "scope": "Native desktop output/input/application audio controls and virtual-device reliability; physical hardware remains unverified",
+  "source_commit": "a2a46c89ff92245d2dde6688cae5c1813ad8b029",
+  "binary": {
+    "name": "lucent-desktop",
+    "profile": "release",
+    "sha256": "9d87495aee058014781875653b61a1b093f276f966634ddb59055df22de8868f"
+  },
+  "cli_sha256": "380de5f6eef466cefea337850ca24a13b9366f2777b427ac7d179806529c7de4",
+  "architecture": [
+    "Audio child receives the AudioPort adapter; domain values and rendering views perform no operating-system operations",
+    "One active client request, at most 32 pending intents; adjacent absolute volume samples coalesce without crossing ordering barriers",
+    "Failed transient identities remain unchanged: retry only while the original control exists; otherwise dismiss and select the current control",
+    "Observed snapshots remain authoritative; closing unmounts the native surface after its token-based exit motion"
+  ],
+  "validation": {
+    "rust_workspace_tests_passed": 204,
+    "python_tests_passed": 62,
+    "formatting": "passed",
+    "clippy": "passed",
+    "generated_design_tokens": 482,
+    "visual": {
+      "comparisons": 212,
+      "new_stale_error_baselines": 4,
+      "existing_baselines_changed": false,
+      "tolerances_changed": false,
+      "driver": "Mesa 26.2.3 llvmpipe",
+      "elapsed_seconds": 174.69,
+      "scales": [
+        1,
+        2
+      ]
+    },
+    "site": {
+      "diagnostic_files": 30,
+      "errors": 0,
+      "warnings": 0,
+      "pages": 13,
+      "links_and_assets": 487
+    },
+    "native_panel": [
+      "native_output_default_volume_mute",
+      "native_input_default_volume_mute",
+      "native_playback_stream_volume",
+      "native_playback_routing_and_backend_confirmation",
+      "native_record_stream_volume",
+      "native_record_routing_and_backend_confirmation",
+      "escape_close_unmount",
+      "bar_reopen",
+      "ipc_close_unmount",
+      "omarchy_audio_toggle_open_close",
+      "omarchy_audio_summon_hide_unmount",
+      "controls_audio_opens_native_panel",
+      "owned_streams_and_devices_removed",
+      "original_default_devices_restored"
+    ],
+    "native_reliability": [
+      "sustained_120_move_drag_latest_endpoint_and_bounded_pending",
+      "real_command_deadline_stale_identity_dismiss_and_fresh_control_recovery",
+      "device_removal_cancels_held_slider_without_changing_other_device",
+      "service_disconnect_clears_stale_controls_and_reconnects_without_desktop_restart",
+      "new_control_and_default_selection_after_reconnect",
+      "no_panel_idle_redraw_over_one_second",
+      "original_audio_services_defaults_channels_mute_and_panel_restored"
+    ],
+    "native_bar_and_restart": [
+      "native_default_policy_and_external_volume_event",
+      "real_pointer_mute_and_unmute",
+      "desktop_restart_restores_audio_observation",
+      "owned_fixture_removed_and_original_audio_restored"
+    ],
+    "sampled_pending_during_120_move_native_drag": 0,
+    "native_pending_measurement_scope": "Intermittent inspection samples, not peak instrumentation; unit tests separately hold adapter completion and verify 1,000-sample coalescing",
+    "native_screenshots": "Failure, unavailable, stale-control guidance and recovered default-device selection reviewed privately; no desktop captures published",
+    "harness_sha256": {
+      "vm/test-audio-panel.py": "297be2d2e5470b1670e2b1f86bea48af08dea4fc7f1e61ebc512453f6be85c51",
+      "vm/test-audio-recovery.py": "c4114ac39bb3dfaefe20b6a74eab974b7482f8d506320c6042ff6a57d4cbc88b",
+      "vm/test-audio.py": "4e75d541d4ba26bb3eb6c558d6812c3c704a6ab6a612bcbbaf23d0a0bc2c6a42"
+    }
+  },
+  "native_environment": {
+    "allocated_memory_mib": 3072,
+    "vcpus": 4,
+    "output_pixels": [
+      1920,
+      1080
+    ],
+    "scale": 1,
+    "render_backend": "software Vulkan"
+  },
+  "deployment": "Desktop and CLI binaries plus compatibility scripts installed through verified temporary files and atomic rename with private rollback copies. Running desktop executable hash matched. Existing native greeter sign-in reached the desktop; login and lock binaries were not changed. Rust builds and GPU suites ran with the guest off and one Cargo job.",
+  "restoration": "Owned silent output/monitor fixtures and transient playback/capture units removed. Original default output/input, channel volumes and mute restored; suspended audio process resumed, audio service/socket active, stay-awake preference restored and panel surface removed.",
+  "limitations": [
+    "Physical playback/microphone, card profiles/ports and preferred-device persistence remain unverified or unimplemented",
+    "Native fractional scaling, touch, accessibility, virtualization and hardware frame pacing remain separate work",
+    "The native drag measurement is not queue-peak or byte-bound instrumentation; protocol acceptance cannot guarantee physical sound or atomicity with hotplug",
+    "No new comparative RSS/CPU result; the earlier approximately 390 MiB result remains above the 200 MiB target",
+    "Other control-center services and broader acceptance groups remain incomplete",
+    "Latest-head CI and review/merge are tracked by PR #30; no automatic merge"
+  ],
+  "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/30",
+  "source_commit_scope": "Desktop/CLI implementation source; validation harness revisions are identified by their hashes below and versioned with this report"
+}

@@ -3,6 +3,7 @@
 @group(1) @binding(0) var<uniform> viewport: vec4<f32>;
 struct ClipShape { rect: vec4<f32>, params: vec4<f32> };
 @group(1) @binding(1) var<storage,read> clips: array<ClipShape>;
+override SHADOW_OUTSET: f32;
 struct Vertex {
     @builtin(position) position: vec4<f32>,
     @location(0) local: vec2<f32>,
@@ -15,7 +16,7 @@ struct Vertex {
 };
 @vertex fn vs(@builtin(vertex_index) index:u32,@location(0) rect:vec4<f32>,@location(1) color:vec4<f32>,@location(2) params:vec4<f32>,@location(3) clip:vec4<f32>,@location(4) uv:vec4<f32>,@location(5) clip_range:vec4<f32>)->Vertex {
     let corners=array<vec2<f32>,6>(vec2(0.0,0.0),vec2(1.0,0.0),vec2(0.0,1.0),vec2(0.0,1.0),vec2(1.0,0.0),vec2(1.0,1.0));
-    let pad=select(0.0,params.z*3.0,params.y>1.5&&params.y<2.5);
+    let pad=select(0.0,params.z*SHADOW_OUTSET,params.y>1.5&&params.y<2.5);
     let local=corners[index]*(rect.zw+vec2(pad*2.0))-vec2(pad);
     let point=rect.xy+local;
     var out:Vertex;
@@ -50,7 +51,12 @@ fn round_distance(point:vec2<f32>,rect:vec4<f32>,requested_radius:f32)->f32 {
     let clip_aa=max(fwidthFine(clip_distance),0.3);
     coverage=min(coverage,1.0-smoothstep(-clip_aa,clip_aa,clip_distance));
     var pixel=vec4(1.0);
-    if v.params.y>0.5&&v.params.y<1.5 {pixel=textureSample(image,filtering,v.uv.xy+(v.local/v.rect.zw)*v.uv.zw);}
+    if v.params.y>0.5&&v.params.y<1.5 {
+        pixel=textureSample(image,filtering,v.uv.xy+(v.local/v.rect.zw)*v.uv.zw);
+        // Single-channel masks sample coverage from R8. Reconstruct the same
+        // premultiplied white RGBA that tint/opacity used before compression.
+        if v.params.z>0.5 {pixel=vec4(pixel.r);}
+    }
     // Keep clipped lanes through derivative evaluation and implicit-LOD sampling.
     // Early discard faded the last corner of odd-sized images on llvmpipe.
     if any(point<v.clip.xy)||any(point>=v.clip.xy+v.clip.zw){discard;}

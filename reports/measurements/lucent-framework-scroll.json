@@ -1,0 +1,95 @@
+{
+  "milestone": "framework-scroll",
+  "source_commit": "97d460c03b91bce30bea09adb11773a2e61fead1",
+  "binary_sha256": "5f48616a43dbdfded23f1c5457a66ecd2494da950d66bba192bfe188e102dceb",
+  "validation": {
+    "workspace_rust_tests_passed": 193,
+    "python_tests_passed": 60,
+    "formatting": "passed",
+    "clippy": "passed",
+    "design_tokens_verified": 472,
+    "focused_vulkan_pixels": {
+      "scales": [
+        1,
+        2
+      ],
+      "drivers": [
+        "Mesa 26.2.3 RADV",
+        "Mesa 26.2.3 llvmpipe"
+      ],
+      "checks": [
+        "rounded viewport/content clips",
+        "reserved scrollbar gutter",
+        "thumb positions",
+        "paint and pointer agreement",
+        "keyboard focus"
+      ]
+    },
+    "existing_desktop_visual_regressions": {
+      "driver": "Mesa 26.2.3 RADV",
+      "elapsed_seconds": 161.67,
+      "result": "passed",
+      "baselines_changed": false,
+      "tolerances_changed": false
+    },
+    "site": {
+      "diagnostic_files": 30,
+      "errors": 0,
+      "warnings": 0,
+      "built_pages": 13,
+      "checked_links_and_assets": 487
+    },
+    "native": {
+      "guest_memory_mib": 3072,
+      "vcpus": 4,
+      "display": "1920x1080, integer scale 1, software Vulkan",
+      "checks": [
+        "native_wheel_down_up",
+        "scrollbar_capture_outside",
+        "last_item_reachable",
+        "home_page_keys",
+        "tab_reveals_all_32_rows",
+        "backtab",
+        "keyboard_activation_and_focus",
+        "surface_resize_reveal",
+        "content_shrink",
+        "hide_show",
+        "no_idle_redraw_over_one_second",
+        "clean_close"
+      ],
+      "cleanup": "owned transient unit, example process and temporary binary directory removed; idle preference restored; installed desktop remains active and unchanged"
+    }
+  },
+  "cpu_microbenchmark": {
+    "host_cpu": "AMD Ryzen 5 7430U with Radeon Graphics",
+    "profile": "development build, debug symbols disabled; no text or GPU work",
+    "workload": "20 repeated layouts of fixed-height empty clickable rows; 500 Tab inputs against one scene; identical client tree reused; no frame rendering",
+    "results": [
+      {
+        "rows": 100,
+        "layout_mean_ms": 0.0987,
+        "tab_mean_us": 1.6344,
+        "hits": 101
+      },
+      {
+        "rows": 1000,
+        "layout_mean_ms": 0.9468,
+        "tab_mean_us": 4.9675,
+        "hits": 1001
+      },
+      {
+        "rows": 10000,
+        "layout_mean_ms": 8.728,
+        "tab_mean_us": 3.808,
+        "hits": 10001
+      }
+    ],
+    "interpretation": "Synthetic CPU means only; not release latency, complete frame time, RSS, GPU memory or a controlled before/after comparison. All items are still measured and placed."
+  },
+  "limitations": [
+    "Production audio panel and bounded/coalesced drag commands not implemented",
+    "No native fractional-scaling, touch/kinetic/horizontal scrolling or accessibility claim",
+    "No list virtualization, process-memory reduction or physical GPU frame-pacing measurement",
+    "Library API remains experimental; broader project acceptance ledger remains incomplete"
+  ]
+}

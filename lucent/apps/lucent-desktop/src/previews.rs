@@ -23,7 +23,6 @@ pub struct Ticket(u64);
 #[derive(Clone)]
 pub enum Message {
     Finished(Ticket, Result<Arc<ImageData>>),
-    WorkerFailed(String),
     Retry,
 }
 struct Active {
@@ -165,9 +164,11 @@ impl Previews {
             request: request.clone(),
         });
         let adapter = self.adapter.clone();
-        effects.task_on("previews", move || {
-            Message::Finished(ticket, adapter.thumbnail(&request.path))
-        });
+        effects.task_on_with_failure(
+            crate::work::ASSETS,
+            move || Message::Finished(ticket, adapter.thumbnail(&request.path)),
+            move |failure| Message::Finished(ticket, Err(DomainError::Failed(failure.to_string()))),
+        );
     }
     pub fn update(&mut self, message: Message, effects: &mut Effects<Message>) {
         match message {
@@ -187,15 +188,6 @@ impl Previews {
                     }
                     effects.redraw("dock");
                 }
-            }
-            Message::WorkerFailed(reason) => {
-                if let Some(active) = &self.active {
-                    self.update(
-                        Message::Finished(active.ticket, Err(DomainError::Failed(reason))),
-                        effects,
-                    );
-                }
-                return;
             }
             Message::Retry => self.failures.clear(),
         }
@@ -260,7 +252,11 @@ mod tests {
         fn preview(&self, image: &ImageData) -> Arc<ImageData> {
             Arc::new(image.clone())
         }
-        fn background(&self, path: &str) -> Result<Arc<ImageData>> {
+        fn background(
+            &self,
+            path: &str,
+            _: Option<crate::ports::BackgroundTarget>,
+        ) -> Result<Arc<ImageData>> {
             self.thumbnail(path)
         }
     }
@@ -304,9 +300,13 @@ mod tests {
         assert!(effects.tasks.is_empty());
         previews.update(Message::Retry, &mut effects);
         assert_eq!(effects.tasks.len(), 1);
-        effects.tasks.clear(); // admission rejected before executing
-        previews.update(Message::WorkerFailed("rejected".into()), &mut effects);
-        assert_eq!(previews.view().error("bad"), Some("rejected"));
+        let ticket = previews.active.as_ref().unwrap().ticket;
+        effects.tasks.clear();
+        previews.update(
+            Message::Finished(ticket, Err(DomainError::Failed("decode failed".into()))),
+            &mut effects,
+        );
+        assert_eq!(previews.view().error("bad"), Some("decode failed"));
         assert!(effects.tasks.is_empty());
         previews.demand([], &mut effects);
         previews.demand([request("bad")], &mut effects);

@@ -1,0 +1,151 @@
+{
+  "milestone": "output-aware-wallpaper",
+  "scope": "Retained desktop wallpaper pixels; native single-output integer scaling and sequential unprofiled VM measurements",
+  "source_commit": "4adec662701421dbf404330b2662d784c4c9d31e",
+  "binary": {
+    "name": "lucent-desktop",
+    "profile": "release",
+    "sha256": "581277abac24377a7bf387e9d4f61d249829a8af8aa4221b135c06ca5c2231a3",
+    "implementation_commit": "1e6b7e511016d09c86ff38809016dbe3d7b4cd1d"
+  },
+  "source_commit_scope": "Measurement ran from this clean source checkpoint. The implementation commit has identical desktop/framework runtime code; the later commit corrects only the native harness display mode.",
+  "architecture": [
+    "Framework Resize events report logical dimensions and integer buffer scale; immutable ImageData retains a sufficient cover mip chain and preserves natural aspect independently of odd retained sizes",
+    "BackgroundTarget and AssetPort belong to client presentation outside the pure domain; NativeAssets prepares pixels on the appearance worker",
+    "Wallpaper selection owns one accepted refit plus the latest desired physical target; stale source/size results are rejected; resize never commits selection or colors",
+    "Last-good pixels remain visible and failed refits require explicit retry; decoding remains outside view/layout/paint"
+  ],
+  "validation": {
+    "rust_workspace_tests_passed": 212,
+    "python_tests_passed": 62,
+    "formatting": "passed",
+    "clippy": "passed",
+    "generated_design_tokens": 482,
+    "generated_app_icons": 58,
+    "focused_gpu": {
+      "checks_per_driver": 4,
+      "drivers": [
+        "Mesa 26.2.3 llvmpipe",
+        "Mesa 26.2.3 RADV"
+      ],
+      "scales": [
+        1,
+        2
+      ],
+      "retained_cover_pixels_equal_full_source_fixture": true
+    },
+    "visual": {
+      "comparisons": 212,
+      "driver": "Mesa 26.2.3 llvmpipe",
+      "elapsed_seconds": 178.02,
+      "existing_baselines_changed": false,
+      "tolerances_changed": false
+    },
+    "native": {
+      "checks": [
+        {
+          "physical_pixels": [
+            1920,
+            1080
+          ],
+          "scale": 2,
+          "logical_pixels": [
+            960.0,
+            540.0
+          ],
+          "retained_pixels": [
+            2048,
+            1152
+          ],
+          "retained_bytes": 12582892
+        },
+        {
+          "physical_pixels": [
+            1024,
+            768
+          ],
+          "scale": 1,
+          "logical_pixels": [
+            1024.0,
+            768.0
+          ],
+          "retained_pixels": [
+            2048,
+            1152
+          ],
+          "retained_bytes": 12582892
+        },
+        {
+          "physical_pixels": [
+            1920,
+            1080
+          ],
+          "scale": 1,
+          "logical_pixels": [
+            1920.0,
+            1080.0
+          ],
+          "retained_pixels": [
+            2048,
+            1152
+          ],
+          "retained_bytes": 12582892
+        }
+      ],
+      "scope": "Prepared single-output VM; software Vulkan; integer scales only",
+      "latest_target_after_burst": true,
+      "launcher_open_close": true,
+      "source_and_preferences_unchanged": true,
+      "original_output_and_idle_marker_restored": true,
+      "desktop_process_preserved": true
+    },
+    "harness_sha256": {
+      "vm/test-wallpaper-resolution.py": "b65c721f8b634c22c791e5dcc33750ad6e3585dffa9a5321fe7db2b0406fbb81",
+      "vm/measure-framework.py": "ab20961cf1359ed719de4f19953ccc300e2dd9b3090f5200f68249ba1de854ec"
+    },
+    "site": {
+      "diagnostic_files": 30,
+      "errors": 0,
+      "warnings": 0,
+      "pages": 13,
+      "links_and_assets": 487,
+      "project_base": "/desktop-lab"
+    }
+  },
+  "comparison": {
+    "before": "reports/measurements/lucent-wallpaper-resolution-before-120.json",
+    "after": "reports/measurements/lucent-wallpaper-resolution-after-120.json",
+    "matching_detected_metadata": [
+      "displays",
+      "vcpus",
+      "guest_memory_mib",
+      "architecture",
+      "kernel",
+      "adapter",
+      "workload",
+      "frame_profiling"
+    ],
+    "duration_seconds_each": 120,
+    "rss_mib_mean_before": 406.92,
+    "rss_mib_mean_after": 293.25,
+    "rss_mib_mean_observed_reduction": 113.67,
+    "prepared_background_bytes_before": 50331628,
+    "prepared_background_bytes_after": 12582892,
+    "prepared_background_bytes_reduction": 37748736,
+    "prepared_background_reduction_percent": 75.0,
+    "interpretation": "Sequential runs on a shared host with matching detected display/workload/software-Vulkan metadata. Observed RSS includes mapped driver allocations; this is not isolated allocation attribution or a physical-GPU memory measurement. No CPU, startup or animation improvement is claimed."
+  },
+  "deployment": "Only the release desktop binary installed using verified upload, atomic rename and a private rollback copy. Actual running executable hash matched. Existing native greeter login reached the desktop; CLI, lock and login binaries were not changed. Builds and host GPU suites ran with the guest off and one Cargo job.",
+  "restoration": "Native tests restored the original output and idle marker; immutable selected wallpaper and saved preferences were unchanged. The measurement restored the prior stay-awake marker. Only the Lucent guest is running at 3 GiB/four vCPUs.",
+  "limitations": [
+    "293.25 MiB mean process RSS remains above the 200 MiB target; fullscreen dock/widget buffers remain a separate cost",
+    "Source decoding and mip creation still use the configured 4096-pixel source envelope; transient old/new images, decoder scratch and allocator retention are not bounded by retained-pixel counters",
+    "Unused GPU textures remain eligible for the 64 MiB reuse cache; active textures, framebuffers and driver allocations are different scopes",
+    "One background surface, integer scaling only; independent per-monitor wallpapers, fractional scaling, hotplug and suspend/resume remain open",
+    "Native test exercises 1920x1080 physical pixels at scales 1 and 2, plus 1024x768 at scale 1; it does not establish larger-output or physical-GPU desktop behavior",
+    "Appearance worker panic/admission failure retains existing fatal supervised-reload policy; ordinary decode failures retain last-good pixels",
+    "Lock/login image preparation is unchanged; authentication build alignment and secure lock retesting remain open",
+    "Long-idle/fault/hardware frame-pacing evidence and the other acceptance groups remain incomplete; exact-head CI and review are tracked by PR #31"
+  ],
+  "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/31"
+}

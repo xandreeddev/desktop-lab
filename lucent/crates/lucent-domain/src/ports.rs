@@ -14,15 +14,6 @@ pub trait SystemPort: Send + Sync {
     fn sample(&self) -> Result<SystemSnapshot>;
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum AudioCommand {
-    Raise,
-    Lower,
-    ToggleMute,
-}
-pub trait AudioPort: Send + Sync {
-    fn control(&self, command: AudioCommand) -> Result<()>;
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MediaCommand {
     PlayPause,
     Next,

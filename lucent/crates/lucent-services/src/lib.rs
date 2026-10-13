@@ -1,8 +1,11 @@
 //! OS adapters. All blocking operations are called from effects/subscription workers.
 pub mod applications;
+pub mod audio;
+pub mod bluetooth;
 pub mod compositor;
 pub mod desktop_adapters;
 pub mod images;
+pub mod network;
 pub mod wallpapers;
 use chrono::{Datelike, Timelike};
 use lucent_domain::*;
@@ -278,20 +281,10 @@ impl SystemProbe {
         };
         let total = memory("MemTotal:");
         let available = memory("MemAvailable:");
-        let volume = command("wpctl", &["get-volume", "@DEFAULT_AUDIO_SINK@"]).ok();
-        let network = command("nmcli", &["-t", "-f", "STATE", "general"])
-            .unwrap_or_else(|_| "Unavailable".into());
         Ok(SystemSnapshot {
             cpu_percent: cpu,
             memory_used_mib: total.saturating_sub(available),
             memory_total_mib: total,
-            volume: volume
-                .as_ref()
-                .and_then(|s| s.split_whitespace().nth(1))
-                .and_then(|n| n.parse::<f32>().ok())
-                .map(|v| (v * 100.).round() as u32),
-            muted: volume.is_some_and(|s| s.contains("MUTED")),
-            network,
         })
     }
 }

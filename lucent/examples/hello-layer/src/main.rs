@@ -1,6 +1,6 @@
 //! An independent client composing a child component and lifting its typed effects.
 use lucent_api::*;
-use lucent_design::{Theme, font, motion, radius, space};
+use lucent_design::{Theme, component::example, font, motion, radius, space};
 #[derive(Clone)]
 enum CounterMessage {
     Increment,
@@ -41,28 +41,40 @@ impl Component for Counter {
 #[derive(Clone)]
 enum Message {
     Counter(CounterMessage),
+    Level(SliderEvent),
     Quit,
 }
 #[derive(Default)]
 struct Example {
     counter: Counter,
+    level: f32,
 }
 impl Component for Example {
     type Message = Message;
     fn view(&self, cx: &ViewContext) -> Element<Message> {
-        Element::column(vec![
-            Element::text("Hello, native Wayland").font(font::TITLE),
-            self.counter.view(cx).map(Message::Counter),
-            Theme::new(false)
-                .button("Close", Message::Quit)
-                .id("close")
-                .background(Theme::new(false).surface_container),
-        ])
-        .padding(space::XXL)
-        .gap(space::MD)
-        .size(420., 270.)
-        .background(Theme::new(false).surface)
-        .radius(radius::PANEL)
+        let theme = Theme::new(false);
+        theme.apply(
+            Element::column(vec![
+                Element::text("Hello, native Wayland").font(font::TITLE),
+                self.counter.view(cx).map(Message::Counter),
+                Element::text(format!("Demo level: {:.0}%", self.level * 100.)).font(font::BODY),
+                theme
+                    .slider(
+                        SliderSpec::new(self.level, 0.05).expect("controlled normalized value"),
+                        Message::Level,
+                    )
+                    .id("demo-level"),
+                Theme::new(false)
+                    .button("Close", Message::Quit)
+                    .id("close")
+                    .background(Theme::new(false).surface_container),
+            ])
+            .padding(space::XXL)
+            .gap(space::MD)
+            .size(example::WIDTH, example::HEIGHT)
+            .background(Theme::new(false).surface)
+            .radius(radius::PANEL),
+        )
     }
     fn update(&mut self, message: Message, effects: &mut Effects<Message>) {
         match message {
@@ -70,6 +82,10 @@ impl Component for Example {
                 |child| self.counter.update(message, child),
                 Message::Counter,
             ),
+            Message::Level(event) => {
+                self.level = event.value;
+                effects.redraw("example");
+            }
             Message::Quit => effects.quit(),
         }
     }
@@ -83,16 +99,24 @@ impl Application for Example {
             id: "example",
             layer: Layer::Overlay,
             anchor: Anchor::Center,
-            width: 420,
-            height: 270,
+            margins: Default::default(),
+            redraw_group: None,
+            width: example::WIDTH as u32,
+            height: example::HEIGHT as u32,
             exclusive_zone: 0,
             keyboard: Keyboard::OnDemand,
             visible: true,
-            capture_all: false,
+            pointer_input: lucent_api::PointerInput::Content,
         }]
     }
     fn animating(&self, _: &str, now: f64) -> bool {
         self.counter.motion.is_some_and(|m| m.active(now))
+    }
+    fn inspect(&self) -> String {
+        format!(
+            "{{\"level\":{},\"count\":{}}}",
+            self.level, self.counter.count
+        )
     }
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {

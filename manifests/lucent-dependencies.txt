@@ -4,6 +4,7 @@ pkgconf
 wayland
 libxkbcommon
 fontconfig
+libpulse
 vulkan-icd-loader
 # Optional typed desktop adapters; missing service data is shown as unavailable.
 playerctl

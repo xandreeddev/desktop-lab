@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Compatibility adapter: system commands/data → typed native picker requests.
 
-All presentation belongs to lucent-menu. Returned values are opaque row IDs,
+Audio, network and Bluetooth open desktop children; other presentation uses lucent-menu.
+Returned values are opaque row IDs,
 validated against the current snapshot. They never become shell expressions.
 """
 import calendar
@@ -48,82 +49,15 @@ def information(title, text):
 
 
 def audio():
-    while True:
-        rows = [('Volume up', 'Output +5%', ('wpctl','set-volume','-l','1.0','@DEFAULT_AUDIO_SINK@','5%+')),
-                ('Volume down', 'Output −5%', ('wpctl','set-volume','@DEFAULT_AUDIO_SINK@','5%-')),
-                ('Mute output', 'Toggle speakers', ('wpctl','set-mute','@DEFAULT_AUDIO_SINK@','toggle')),
-                ('Mute microphone', 'Toggle recording', ('wpctl','set-mute','@DEFAULT_AUDIO_SOURCE@','toggle'))]
-        for plural, singular in [('sinks','sink'),('sources','source')]:
-            current = output('pactl',f'get-default-{singular}')
-            for device in json.loads(output('pactl','-f','json','list',plural)):
-                name = device['name']
-                rows.append((device.get('description',name), ('Current ' if name == current else '') + ('output' if singular == 'sink' else 'input'),
-                             ('pactl',f'set-default-{singular}',name)))
-        action = choose('Audio', rows)
-        if action is None: return
-        output(*action)
-
-
-def nm_fields(line):
-    """Decode nmcli --terse's escaped colons and backslashes."""
-    fields, value, escaped = [], '', False
-    for char in line:
-        if escaped: value += char; escaped = False
-        elif char == '\\': escaped = True
-        elif char == ':': fields.append(value); value = ''
-        else: value += char
-    fields.append(value)
-    return fields
+    output(str(Path.home()/'.local/bin/lucent-cli'), 'audio', 'open')
 
 
 def network():
-    while True:
-        enabled = output('nmcli','radio','wifi') == 'enabled'
-        rows = [('Wi-Fi ' + ('on' if enabled else 'off'), 'Toggle radio', ('nmcli','radio','wifi','off' if enabled else 'on'))]
-        active = {nm_fields(line)[0] for line in output('nmcli','-t','-f','UUID','connection','show','--active').splitlines()}
-        for line in output('nmcli','-t','-f','UUID,NAME,TYPE','connection','show').splitlines():
-            uuid, name, kind = nm_fields(line)
-            rows.append((name, ('Connected · disconnect' if uuid in active else 'Connect')+' · '+kind,
-                         ('nmcli','connection','down' if uuid in active else 'up','uuid',uuid)))
-        rows.append(('Connect a new network', 'NetworkManager terminal wizard', ('xdg-terminal-exec','--app-id=org.lucent.utility','--title=Network','-e','nmtui')))
-        action = choose('Network', rows)
-        if action is None: return
-        # nmtui is a separate NetworkManager application with its own secret
-        # agent. Never send Wi-Fi passwords through CLI arguments or this picker.
-        if action[0]=='xdg-terminal-exec':
-            subprocess.Popen(action, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return
-        output(*action, timeout=40)
+    output(str(Path.home()/'.local/bin/lucent-cli'), 'network', 'open')
 
 
 def bluetooth():
-    while True:
-        show = output('bluetoothctl','show')
-        powered = 'Powered: yes' in show
-        rows = [('Bluetooth '+('on' if powered else 'off'), 'Toggle adapter', ('power','off' if powered else 'on')),
-                ('Discover devices', 'Scan for 5 seconds', ('scan',))]
-        for line in output('bluetoothctl','devices').splitlines():
-            match = re.fullmatch(r'Device ([0-9A-Fa-f:]{17}) (.*)',line)
-            if not match: continue
-            address, label = match.groups()
-            info = output('bluetoothctl','info',address)
-            connected = 'Connected: yes' in info
-            paired = 'Paired: yes' in info
-            rows.append((label, 'Disconnect' if connected else 'Connect' if paired else 'Pair in Bluetooth manager',
-                         ('disconnect' if connected else 'connect' if paired else 'pair',address)))
-        action = choose('Bluetooth', rows)
-        if action is None: return
-        if action == ('scan',):
-            output('bluetoothctl','--timeout','5','scan','on', timeout=8)
-        elif action[0] == 'pair':
-            # Pairing may require PIN/confirmation. Delegate to BlueZ's existing
-            # terminal agent, never pretend a connection menu is such an agent.
-            subprocess.Popen(['xdg-terminal-exec','--app-id=org.lucent.utility','--title=Bluetooth','-e','bluetoothctl'], start_new_session=True,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return
-        else:
-            result = output('bluetoothctl','--timeout','15',*action,timeout=20)
-            if 'Failed' in result: raise RuntimeError('Bluetooth could not complete the request')
+    output(str(Path.home()/'.local/bin/lucent-cli'), 'bluetooth', 'open')
 
 
 def monitor():

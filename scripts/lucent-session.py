@@ -8,6 +8,7 @@ import socket
 import subprocess
 import sys
 import time
+from lucent_readiness import desktop_rendered
 
 HOME=Path.home()
 RUNTIME=Path(os.environ['XDG_RUNTIME_DIR'])
@@ -29,7 +30,7 @@ def ready(child):
     while child.poll() is None and time.monotonic()<deadline:
         try:
             state=inspect()
-            if {'background','bar','dock','widgets'} <= {s['id'] for s in state['surfaces'] if s['frames']>0}:
+            if desktop_rendered(state):
                 return
         except (OSError,ValueError): pass
         time.sleep(.1)

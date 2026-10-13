@@ -56,12 +56,81 @@ class Appearance(unittest.TestCase):
 
 
 class Compatibility(unittest.TestCase):
+    def test_readiness_requires_every_declared_group_and_supports_hidden_widgets(self):
+        from lucent_readiness import desktop_rendered
+        state={'client':{'theme_error':'','widget_surfaces':[{'id':'calendar'},{'id':'clock'}]},
+               'surfaces':[{'id':name,'frames':1} for name in ('background','bar','dock','calendar','clock')]}
+        self.assertTrue(desktop_rendered(state))
+        state['surfaces'][-1]['frames']=0
+        self.assertFalse(desktop_rendered(state))
+        state['client']['widget_surfaces']=[]
+        self.assertTrue(desktop_rendered(state))
+        state['client']['widget_surfaces']=[{'id':'calendar'},{'id':'calendar'}]
+        self.assertFalse(desktop_rendered(state))
+        state['client']['widget_surfaces']=[{}]
+        self.assertFalse(desktop_rendered(state))
+        self.assertFalse(desktop_rendered({'client':None,'surfaces':[]}))
+
+    def test_readiness_accepts_the_previous_fullscreen_native_client(self):
+        from lucent_readiness import desktop_rendered
+        state={'client':{'theme_error':''},
+               'surfaces':[{'id':name,'frames':1} for name in ('background','bar','dock','widgets')]}
+        self.assertTrue(desktop_rendered(state))
+        state['surfaces'].pop()
+        self.assertFalse(desktop_rendered(state))
+
+    def test_audio_routes_to_native_desktop_without_a_picker_or_system_subprocess(self):
+        compat=load('audio_compat_test','lucent-compat.py')
+        with patch.object(compat,'cli',return_value='ok') as cli, patch.object(compat.subprocess,'Popen') as popen:
+            self.assertEqual(compat.panel('omarchy.audio',True),'ok')
+            cli.assert_called_once_with('audio','toggle')
+            cli.reset_mock()
+            self.assertEqual(compat.panel('audio'),'ok')
+            cli.assert_called_once_with('audio','open')
+            popen.assert_not_called()
+        controls=load('audio_controls_test','lucent-controls.py')
+        with patch.object(controls,'output') as output, patch.object(controls,'choose') as choose:
+            controls.audio()
+            output.assert_called_once_with(str(Path.home()/'.local/bin/lucent-cli'),'audio','open')
+            choose.assert_not_called()
+
+    def test_network_routes_to_the_desktop_without_a_picker_or_terminal(self):
+        compat=load('network_compat_test','lucent-compat.py')
+        with patch.object(compat,'cli',return_value='ok') as cli, patch.object(compat.subprocess,'Popen') as popen:
+            self.assertEqual(compat.panel('omarchy.network',toggle=True),'ok')
+            cli.assert_called_once_with('network','toggle')
+            popen.assert_not_called()
+        controls=load('network_controls_test','lucent-controls.py')
+        with patch.object(controls,'output') as output, patch.object(controls,'choose') as choose:
+            controls.network()
+            output.assert_called_once_with(str(Path.home()/'.local/bin/lucent-cli'),'network','open')
+            choose.assert_not_called()
+
+    def test_bluetooth_entrypoints_use_native_controls_without_a_picker_or_terminal(self):
+        compat=load('bluetooth_compat_test','lucent-compat.py')
+        with patch.object(compat,'cli',return_value='ok') as cli, patch.object(compat.subprocess,'Popen') as popen:
+            self.assertEqual(compat.panel('omarchy.bluetooth',toggle=True),'ok')
+            cli.assert_called_once_with('bluetooth','toggle')
+            cli.reset_mock()
+            self.assertEqual(compat.panel('bluetooth'),'ok')
+            cli.assert_called_once_with('bluetooth','open')
+            popen.assert_not_called()
+        controls=load('bluetooth_controls_test','lucent-controls.py')
+        with patch.object(controls,'output') as output, patch.object(controls,'choose') as choose, patch.object(controls.subprocess,'Popen') as popen:
+            controls.bluetooth()
+            output.assert_called_once_with(str(Path.home()/'.local/bin/lucent-cli'),'bluetooth','open')
+            choose.assert_not_called()
+            popen.assert_not_called()
+
     def test_migration_rejects_old_or_unrendered_clients(self):
         setup=load('readiness_test','lucent-setup.py')
         for state in [{}, {'client':{'theme_error':''},'surfaces':[{'id':'background','frames':0}]}]:
             with patch.object(setup.subprocess,'run',return_value=SimpleNamespace(stdout=json.dumps(state))):
                 with self.assertRaises(SystemExit):setup.native_ready()
         state={'client':{'theme_error':''},'surfaces':[{'id':name,'frames':1} for name in ('background','dock','widgets')]}
+        with patch.object(setup.subprocess,'run',return_value=SimpleNamespace(stdout=json.dumps(state))):setup.native_ready()
+        state['client']['widget_surfaces']=[{'id':'calendar'}]
+        state['surfaces'][-1]={'id':'calendar','frames':1}
         with patch.object(setup.subprocess,'run',return_value=SimpleNamespace(stdout=json.dumps(state))):setup.native_ready()
 
     def test_process_matching_never_stops_other_quickshell_profiles(self):
@@ -87,7 +156,6 @@ class Compatibility(unittest.TestCase):
         for value in ['-1','100','$(command)','0; command']:
             with patch.object(controls.picker,'pick',return_value=SimpleNamespace(returncode=0,stdout=value)):
                 with self.assertRaises(ValueError): controls.choose('Fixture',[('Action','',('safe','argument'))])
-        self.assertEqual(controls.nm_fields(r'uuid:Name\: with\\slash:wifi'),['uuid','Name: with\\slash','wifi'])
 
     def test_idle_stay_awake_retains_sleep_and_logind_lock_handlers(self):
         idle=load('idle_test','lucent-idle.py')

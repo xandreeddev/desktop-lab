@@ -1,0 +1,170 @@
+{
+  "milestone": "bounded-widget-surfaces",
+  "status": "locally_verified",
+  "scope": "Client-owned bounded widget geometry and generic native surface/input contracts; software and hardware offscreen Vulkan parity",
+  "architecture": [
+    "Client groups overlapping paint/buffer bounds, preserving visible-widget paint order without relying on compositor ordering within a layer",
+    "Client translates display-grid card geometry into native local coordinates, including finite renderer shadow support",
+    "Framework exposes logical margins, explicit TopLeft anchoring, pointer coverage independent of keyboard mode, redraw groups and input-only trees",
+    "During dragging, source origins and extents remain fixed; a temporary full-display pointer-pass-through preview paints cards and grid",
+    "Only release commits snapped domain placement; reset/hide/resize/load cancel transient state without persisting preview coordinates",
+    "No widget identities, grid tokens or desktop policy enter the domain, runtime or renderer"
+  ],
+  "checks": {
+    "rust_workspace_tests": 223,
+    "python_checks": 64,
+    "formatting": "passed",
+    "clippy": "passed",
+    "astro_check": "passed; zero errors/warnings/hints",
+    "paired_widget_pixel_scenarios_per_driver": 24,
+    "vulkan_drivers": [
+      "Mesa llvmpipe 26.2.3 / LLVM 22.1.8",
+      "Mesa RADV 26.2.3 / Radeon integrated GPU"
+    ],
+    "pixel_scope": "Full aggregate versus composited bounded native buffers; three viewports, two palettes, disjoint/default and overlapping layouts, scales 1/2; maximum allowed difference one 8-bit quantization step. Existing golden tolerances unchanged.",
+    "visual_comparisons": 212,
+    "visual_elapsed_seconds": 318.24,
+    "visual_baselines_changed": false,
+    "visual_tolerances_changed": false,
+    "site": {
+      "errors": 0,
+      "warnings": 0,
+      "pages": 13,
+      "links_and_assets": 487,
+      "project_base": "/desktop-lab"
+    },
+    "native": {
+      "scope": "Single-output VM; software Vulkan; integer scale 1 and 2",
+      "bounded_positions_and_frozen_capture": true,
+      "pass_through_preview_and_snapped_release": true,
+      "position_restored_after_restart": true,
+      "integer_scale_and_cancelled_resize": true,
+      "no_competing_shell": true,
+      "source_preferences_output_and_idle_restored": true,
+      "explicit_service_restart_changed_desktop_pid": true
+    },
+    "existing_desktop_workflow": {
+      "vulkan": true,
+      "native_surfaces": 5,
+      "animated_dock_launcher": true,
+      "keyboard_search": true,
+      "real_application_launch": true,
+      "terminal_rounding": 20.0,
+      "workspace_switch": true,
+      "widget_drag": true,
+      "position_restored": true,
+      "token_grid_snap": true,
+      "timer_start_pause_reset": true,
+      "notes_input": true,
+      "wallpaper_selector_and_apply": true,
+      "native_only_restart": true,
+      "restart": true,
+      "application_count": 57
+    },
+    "runtime_checkpoint_ci": "All six GitHub checks passed for measured checkpoint 78c4aa055f3a3bef6a63a3d0ffc8cbe195003572; final documentation/evidence head is tracked on PR #33.",
+    "harness_sha256": {
+      "vm/test-widget-surfaces.py": "9e45037f4bd84e6570e71dce265bfc382650cd448aaad47c8fc15fe81cc452b9",
+      "vm/test-framework.py": "945bc000f00e61dfc29bf29f8261dca00a28afc74a708366a079879af8a37158",
+      "vm/measure-framework.py": "ab20961cf1359ed719de4f19953ccc300e2dd9b3090f5200f68249ba1de854ec",
+      "scripts/lucent_readiness.py": "801872f3f0c6fbb37f93ff06ee4c17c5cc1472ae2e190bce348fb4f5517bef22",
+      "scripts/lucent-session.py": "99f9cc97f3ff6f3bf85ba162d0ee7c349a5364a9e1799926e18bd631eab83f9c"
+    }
+  },
+  "pending": [
+    "Final documentation/evidence-head CI, review and merge; no automatic merge",
+    "224.93 MiB mean RSS remains above the 200 MiB target; decoder peaks, allocator/driver retention and total GPU memory remain unbounded by this crop",
+    "Active drag preview and open overlays retain full-output buffers; group redraws fan out to all widget buffers",
+    "Native transition scanout/flicker, hardware desktop pacing, long-idle and fault injection remain unverified",
+    "Output selection/per-monitor layouts, fractional scaling, hotplug and suspend/resume remain unfinished",
+    "Secure lock/login build alignment and retest, packaging/migration/rollback audit and remaining feature acceptance groups remain open"
+  ],
+  "source_commit": "78c4aa055f3a3bef6a63a3d0ffc8cbe195003572",
+  "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/33",
+  "binary": {
+    "name": "lucent-desktop",
+    "profile": "release",
+    "sha256": "8015609aa0d34a9a086f0a1c634d28da01f8a5c0f8f6ef7948420b60e4641b3c",
+    "implementation_commit": "9b4869bc1e89a3e4240914dd80593e2380b8c732"
+  },
+  "source_commit_scope": "Measured clean checkpoint includes readiness and native test cleanup changes after the desktop implementation commit. Desktop Rust code is identical. The same new, legacy-compatible supervisor runs both measured binaries.",
+  "comparison": {
+    "before": "reports/measurements/lucent-widget-surfaces-before-120.json",
+    "after": "reports/measurements/lucent-widget-surfaces-after-120.json",
+    "matching_detected_metadata": [
+      "displays",
+      "vcpus",
+      "guest_memory_mib",
+      "architecture",
+      "kernel",
+      "adapter",
+      "workload",
+      "frame_profiling"
+    ],
+    "prepared_assets_after_idle_match": true,
+    "duration_seconds_each": 120,
+    "run_order": [
+      "after",
+      "before"
+    ],
+    "rss_mib_mean_before": 252.18,
+    "rss_mib_mean_after": 224.93,
+    "rss_mib_mean_observed_reduction": 27.25,
+    "settled_widget_buffers_before": 1,
+    "settled_widget_buffers_after": 3,
+    "native_widget_groups": [
+      {
+        "height": 336.0,
+        "id": "calendar",
+        "members": [
+          "calendar",
+          "weather"
+        ],
+        "width": 608.0,
+        "x": 0.0,
+        "y": 32.0
+      },
+      {
+        "height": 752.0,
+        "id": "clock",
+        "members": [
+          "clock",
+          "media"
+        ],
+        "width": 304.0,
+        "x": 1616.0,
+        "y": 176.0
+      },
+      {
+        "height": 240.0,
+        "id": "system",
+        "members": [
+          "system"
+        ],
+        "width": 320.0,
+        "x": 0.0,
+        "y": 368.0
+      }
+    ],
+    "one_color_buffer_payload_bytes_before": 8294400,
+    "one_color_buffer_payload_bytes_after": 2038784,
+    "payload_scope": "Computed BGRA8 payload at scale 1; actual buffer counts, padding and driver/GPU allocations are unknown. This is not RSS.",
+    "interpretation": "Sequential software-Vulkan runs on a shared host, with the new release sampled first. This records observed process residency, not isolated allocation attribution. No CPU, startup, animation or hardware frame-pacing improvement is claimed."
+  },
+  "deployment": "Verified atomic replacement of desktop only, plus matching supervisor/readiness module; private rollback copies preserved. Running desktop hash verified. Baseline temporarily used prior binary; new release restored in finally and its running hash verified. CLI and secure lock/login binaries unchanged.",
+  "supervisor": {
+    "installed_files": [
+      {
+        "name": "lucent_readiness.py",
+        "sha256": "801872f3f0c6fbb37f93ff06ee4c17c5cc1472ae2e190bce348fb4f5517bef22",
+        "previously_present": false
+      },
+      {
+        "name": "session.py",
+        "sha256": "99f9cc97f3ff6f3bf85ba162d0ee7c349a5364a9e1799926e18bd631eab83f9c",
+        "previously_present": true
+      }
+    ],
+    "readiness": "Shared pure contract requires first submissions from every declared widget group; supports all-hidden widgets and legacy fullscreen clients. The former fixed widgets requirement stopped the new client after 30 seconds. Both 120-second samples stayed alive with the corrected supervisor."
+  },
+  "restoration": "Native tests restore caller preferences, output and idle state. The existing workflow checkpoints selected owned snapshots before temporary wallpaper selections, restores through IPC and verifies the active derived link. Initial stale legacy link was repaired through IPC: source pathname and image bytes preserved; selection became an owned snapshot and its legacy display label normalized. Both fresh measurements use that same selection. Only the capped 3 GiB/four-vCPU guest is running."
+}
