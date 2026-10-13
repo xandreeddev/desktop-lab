@@ -51,9 +51,9 @@
     "device_names_addresses_published": false,
     "private_desktop_captures_published": false
   },
-  "scope": "Actual native panel input/lifecycle and regular-user BlueZ observation with no controllers; private protocol fixtures do not establish pairing/profile/radio interoperability.",
+  "scope": "Native input/lifecycle, regular-user BlueZ observation and two owned software HCI controllers. Radio controls, discovery and explicit comparison-code pairing/bonding/trust pass; external property-signal refresh exposed a native adapter bug and needs rebuilt validation. No physical/profile interoperability claim.",
   "pending": [
-    "Actual controller pairing, PIN/passkey/confirmation UI, incoming/service authorization and cancellation acceptance; radio visibility/pairable and profiles.",
+    "Rebuilt native acceptance of the property-signal filter fix; rejection/cancellation, PIN/passkey entry, incoming/service authorization and profile operations.",
     "Physical hardware, permissions, hotplug and suspend/resume; pending-Connect cancellation UX.",
     "Installed Bluetooth compatibility routing remains unchanged until controller acceptance.",
     "No new performance benchmark is claimed; current 300 MiB target, hardware animation pacing and peak/resource measurements need current-release evidence.",
@@ -62,6 +62,47 @@
   "implementation_commit_ci": {
     "source_commit": "854040136928cbba6753e66c7343a6946d0d1929",
     "checks_passed": 6,
-    "evidence_commit_ci": "pending"
+    "evidence_commit_ci": {
+      "source_commit": "a1fefc236439316ee1fc2a76a24a973efd0c380c",
+      "checks_passed": 6,
+      "scope": "Previous evidence head; the new signal fix still needs its own CI."
+    }
+  },
+  "virtual_controller_checks": {
+    "source_commit": "854040136928cbba6753e66c7343a6946d0d1929",
+    "tool": "BlueZ btvirt 5.87",
+    "tool_source_commit": "65d11edee469c24dcc8d075b8be9c040cebaaf98",
+    "controller_count": 2,
+    "kernel_virtual_hci": true,
+    "host_bluetooth_accessed": false,
+    "native_pointer_power": true,
+    "native_pointer_visibility": true,
+    "native_pointer_pairable_toggle": true,
+    "native_discovery": true,
+    "native_comparison_prompt": true,
+    "reference_code_visually_compared": true,
+    "bluez_paired_observed": true,
+    "bluez_bonded_observed": true,
+    "automatic_trust": false,
+    "native_explicit_trust_and_removal": true,
+    "prompt_retirement": true,
+    "original_fixture_state_restored": true,
+    "owned_controller_storage_removed": true,
+    "owned_processes_and_directory_removed": true,
+    "desktop_active_without_restarts_after_cleanup": true,
+    "external_property_signal_updates_passed": false,
+    "discovered_defect": "A root path_namespace signal rule suppresses nested property signals on the guest system bus. BlueZ-owner-only monitoring receives the same changes; native command completion refreshes a snapshot and can conceal the stale state.",
+    "adapter_fix_native_revalidation": "pending",
+    "physical_device_or_profile_interoperability_verified": false
+  },
+  "signal_fix_local_checks": {
+    "rust_fmt_clippy": true,
+    "bluetooth_unit_passed": 3,
+    "bluetooth_private_protocol_passed": 15,
+    "python_passed": 77,
+    "astro_diagnostics_errors": 0,
+    "astro_diagnostics_warnings": 0,
+    "astro_diagnostics_hints": 0,
+    "native_rebuild_acceptance": "pending"
   }
 }

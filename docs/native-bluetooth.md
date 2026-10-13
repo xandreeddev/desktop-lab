@@ -8,8 +8,12 @@ the desktop, Wayland runtime, renderer, Omarchy picker or `bluetoothctl`.
 The desktop composition root injects this adapter into a native Rust Bluetooth
 child. Pairing conversations and token-based views are implemented. Native
 bar/keyboard/IPC surface checks and actual ready-empty/unavailable daemon
-observations pass; controller/pairing/profile acceptance is still pending. Installed compatibility
-entrypoints remain unchanged until that acceptance is established.
+observations pass. Two owned virtual HCI controllers also pass native radio
+controls, discovery, explicit comparison-code pairing, bonding and trust removal.
+That run exposed a signal-filter bug: external controller/device property changes
+were not refreshing the panel. Its native-adapter fix still needs a rebuilt-guest
+check. Installed compatibility entrypoints remain unchanged until that acceptance
+is established; physical device/profile interoperability remains unverified.
 
 ## Values, identity and policy
 
@@ -200,8 +204,9 @@ and rejection, stable display progress, exact sender/current-target checks,
 default-agent lifecycle, late answers, device removal and uncertain timeout
 connection cleanup. These are protocol fixtures, not radio interoperability.
 
-Actual controller pairing and profiles, native guest interaction, incoming-controller
-authorization, suspend/resume and hotplug acceptance remain open. The
+Physical controller/profile interoperability, native incoming-controller
+authorization, PIN/passkey entry, cancellation, suspend/resume and hotplug
+acceptance remain open. The
 larger control-center requirement remains in progress in
 [the implementation ledger](implementation-status.json).
 
@@ -288,3 +293,40 @@ fixture-owned service while unloading new Bluetooth/BNEP modules, then removes
 its own runtime mask. Existing overrides/controllers are refused; no force
 unload or permanent service policy is introduced. The repeated native run
 restores the original inactive daemon and absent modules.
+
+## Owned virtual-controller checkpoint
+
+`vm/bluetooth_fixture.py` runs as root only inside the prepared Arch/KVM guest.
+It accepts an explicitly supplied, SHA-256-verified `btvirt` executable, refuses
+existing controllers, Bluetooth modules and runtime service overrides, and
+journals process birth identities, modules and storage before changing them.
+The tested tool comes from BlueZ 5.87, revision
+`65d11edee469c24dcc8d075b8be9c040cebaaf98` (LGPL-2.1-or-later);
+it creates two software controllers through the guest kernel's virtual HCI
+driver. It neither forwards USB devices nor accesses host Bluetooth.
+
+One controller belongs to the native Lucent panel. A separate `bluetoothctl`
+process acts as the reference peer's agent, without opening a terminal window.
+The test compares the native six-digit card with the peer's actual prompt
+before clicking Accept. It checks BlueZ's `Paired`, `Bonded` and `Trusted`
+properties rather than treating command admission as successful pairing.
+Native discovery, comparison-code pairing/bonding and explicit trust/removal
+pass; no device is automatically trusted. Captures and peer output stay private.
+
+The same run caught an observation defect: a `path_namespace='/'` D-Bus rule
+received no nested property signals on this guest's system bus, while a rule
+limited to BlueZ's unique sender received the power changes. Native control
+completion forced a fresh snapshot and hid this problem in ordinary button
+tests. The fix removes the redundant path filter in the platform adapter;
+interface/member filtering remains in `Notices`. A rebuilt native test is
+pending. Polling in the client would bypass the service boundary and would not
+repair signal ownership.
+
+Cleanup stops the owned reference/emulator processes, temporarily masks only
+the fixture's BlueZ service while unloading new module holders, deletes only
+new storage for the two owned controller addresses and removes its runtime
+mask. Process identity checks tolerate exit races and refuse recycled PIDs or
+missing birth identities. The original inactive service, absent Bluetooth
+modules and healthy native desktop were verified after cleanup. Software HCI
+pairing does not establish physical radio, A2DP/HID profile or secure hardware
+interoperability.

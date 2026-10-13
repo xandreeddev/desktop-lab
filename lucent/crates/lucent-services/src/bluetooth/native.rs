@@ -186,9 +186,11 @@ pub(super) async fn connect(
                 .msg_type(Type::Signal)
                 .sender(owner.as_str())
                 .map_err(bus_error)?
-                .path_namespace("/")
-                .map_err(bus_error)?
                 .build();
+            // BlueZ emits ObjectManager signals at / and property signals
+            // below /org/bluez. A root path_namespace filter suppresses the
+            // latter on the guest's system bus. Restrict the unique sender
+            // here; Notices filters the relevant interfaces and members.
             let events = MessageStream::for_match_rule(rule, &connection, Some(SIGNAL_LIMIT))
                 .await
                 .map_err(bus_error)?;
