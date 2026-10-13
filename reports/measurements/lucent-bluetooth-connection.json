@@ -1,0 +1,80 @@
+{
+  "status": "protocol_and_client_verified_native_profile_acceptance_pending",
+  "source_commit": "0d6fc9667d5844db22615ce599cdefa026d42406",
+  "local_checks": {
+    "workspace_passed": 282,
+    "workspace_ignored": 42,
+    "private_bluetooth_protocol_passed": 17,
+    "native_client_filtered_passed": 17,
+    "python_passed": 78,
+    "software_visual_comparisons_passed": 320,
+    "new_reviewed_synthetic_references": 16,
+    "strict_fmt_clippy_workspace_all_targets": true,
+    "astro_errors": 0,
+    "astro_warnings": 0,
+    "astro_hints": 0,
+    "site_pages": 13,
+    "site_links_assets_each_prefix": 488
+  },
+  "architecture": {
+    "connection_attempt_id_distinct_from_device_and_pairing": true,
+    "pure_target_policy": true,
+    "transport_paths_private_to_adapter": true,
+    "views_emit_messages_without_os_calls": true,
+    "urgent_cancellation_independent_of_pending_connect": true,
+    "completion_waits_for_native_replies_in_either_order": true,
+    "denied_cancellation_cannot_manufacture_cancelled": true,
+    "successful_connect_not_erased_by_cancellation": true,
+    "late_admission_close_and_retirement_checked": true,
+    "no_automatic_accept_trust_or_replay": true
+  },
+  "release_build": {
+    "clean_source": true,
+    "elapsed_seconds": 173.23,
+    "binaries": {
+      "lucent-desktop": {
+        "sha256": "75b9aceacccceb6ff74156dda31d9eaef238e37c46061e800be05922dc91c476",
+        "bytes": 16830584
+      },
+      "bluetooth-service": {
+        "sha256": "ea11fcbaa3017bea8acd02de684e216a092c4b15caf6fd640f46749c32f8e098",
+        "bytes": 3487656
+      }
+    }
+  },
+  "native_acceptance": {
+    "current_source_deployed": false,
+    "pending_profile_cancellation_verified": false,
+    "physical_hardware_verified": false,
+    "previous_deployed_source_commit": "3ff2aa3aeabe4c44eb56defa34ac161dd75c4493",
+    "previous_native_report": "reports/measurements/lucent-bluetooth-rejection.json"
+  },
+  "validation_environment": {
+    "gpu_backend": "software Vulkan",
+    "driver": "Mesa 26.2.3 llvmpipe / LLVM 22.1.8",
+    "build_jobs": 1,
+    "scope_memory_high_mib": 768,
+    "scope_memory_max_mib": 1024,
+    "scope_swap_max_mib": 2048,
+    "scope_cpu_quota_percent": 100,
+    "lab_guests_running_during_build_and_visual_checks": 0
+  },
+  "performance": {
+    "normal_desktop_rss_target_mib": 300,
+    "current_binary_measurements_collected": false,
+    "rendering_density_or_effects_reduced": false,
+    "previous_measurement_report": "reports/measurements/lucent-bluetooth-current-120.json"
+  },
+  "scope": "Real isolated D-Bus transport against an owned protocol fixture, injected native client behavior and software-Vulkan output. These checks do not establish real BlueZ profile or physical-device interoperability. Release binaries are prepared but not installed in the stopped VM.",
+  "pending": [
+    "Memory-safe VM deployment and real-daemon pending-profile cancellation acceptance.",
+    "Native PIN/passkey, incoming/service authorization, physical devices/profiles, permissions, hotplug, suspend/resume and hardware faults.",
+    "Current-release performance, GPU/decode peaks, pacing, multi-output/fractional scaling, text/IME/accessibility, tray/power, richer desktop features, secure-client audit and packaging/migrations remain in the full requirement ledger.",
+    "Exact published-head CI/review and parent-stack merge; PR remains draft and no merge is authorized."
+  ],
+  "privacy": {
+    "credentials_or_codes_published": false,
+    "device_metadata_published": false,
+    "private_captures_published": false
+  }
+}
