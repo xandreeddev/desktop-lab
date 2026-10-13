@@ -51,6 +51,7 @@ def main():
     result = {}
     service_started = False
     module_loaded = False
+    cleanup_mask = False
     original_module = None
     original_modules = set()
 
@@ -164,6 +165,15 @@ def main():
             reader.join(timeout=2)
         try:
             if service_started:
+                if module_loaded:
+                    # A logged-in PipeWire/BlueZ client may reactivate the
+                    # daemon immediately after stop, retaining BNEP references.
+                    existing = remote('python3', '-c',
+                        'from pathlib import Path; p=Path("/run/systemd/system/bluetooth.service"); print(int(p.exists() or p.is_symlink()))').strip()
+                    if existing != '0':
+                        raise RuntimeError('Existing runtime Bluetooth override is not ours')
+                    cleanup_mask = True
+                    privileged('systemctl', 'mask', '--runtime', 'bluetooth.service')
                 service('stop')
         finally:
             try:
@@ -187,7 +197,16 @@ def main():
                     unload('bluetooth')
                     result['owned_bluetooth_modules_removed'] = removed
             finally:
-                remote('rm', '-rf', '--', directory)
+                try:
+                    remote('rm', '-rf', '--', directory)
+                finally:
+                    if cleanup_mask:
+                        owned = remote('python3', '-c',
+                            'from pathlib import Path; p=Path("/run/systemd/system/bluetooth.service"); print(int(p.is_symlink() and p.readlink()==Path("/dev/null")))').strip()
+                        if owned != '1':
+                            raise RuntimeError('Runtime Bluetooth override changed; refusing to remove it')
+                        privileged('systemctl', 'unmask', '--runtime', 'bluetooth.service')
+                        result['owned_runtime_cleanup_mask_removed'] = True
     restored = subprocess.run(lab.ssh_args(PROFILE) + [
         shlex.join(['systemctl', 'is-active', 'bluetooth.service'])
     ], capture_output=True, text=True, timeout=15).stdout.strip()

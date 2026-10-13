@@ -1043,7 +1043,7 @@
     },
     {
       "milestone": "native-bluetooth-panel",
-      "status": "implemented_native_acceptance_pending",
+      "status": "native_panel_partial_acceptance",
       "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/39",
       "checks": [
         "Native BlueZ pairing conversations, lazy/default agent authority, current sender/target checks and zeroizing entered answers are implemented behind BluetoothPort.",
@@ -1054,15 +1054,19 @@
         "Final local checkpoint: 269 Rust workspace tests, 72 Python checks, strict Clippy/formatting, 501 generated design tokens, 58 app icons, Astro diagnostics with zero errors/warnings/hints, and 13 built pages with 487 links/assets pass. Native guest/controller acceptance and final published-head CI remain pending.",
         "CI exposed a Release reply versus connection-close race. The native adapter now rejects/invalidates released authority immediately but waits for zbus response dispatch before retirement; repeated pending-Pair Release protocol calls receive actual replies and retire stale handles. Final CI remains pending.",
         "Visibility and Pairable commands, powered-controller policy and native property observation have private protocol evidence. Existing discovery/agent/trust authority remains unchanged. The client separates Radio settings from device selection; final visual review and native acceptance remain pending.",
-        "Radio-tab checkpoint: 272 Rust workspace tests, 72 Python checks, strict formatting/Clippy and all 300 software-Vulkan visual comparisons pass. Nine injected Bluetooth child checks include a real SDK layout proving the first Pair action is clickable in a narrow viewport, radio authority controls live on their own tab, and tab changes perform no OS operation. Eight new Radio/start/end references and the changed Bluetooth header/device references were reviewed at 1x/2x. Astro check/build plus 13 pages/488 links pass at root and project Pages prefixes. Native guest/controller acceptance remains pending."
+        "Radio-tab checkpoint: 272 Rust workspace tests, 72 Python checks, strict formatting/Clippy and all 300 software-Vulkan visual comparisons pass. Nine injected Bluetooth child checks include a real SDK layout proving the first Pair action is clickable in a narrow viewport, radio authority controls live on their own tab, and tab changes perform no OS operation. Eight new Radio/start/end references and the changed Bluetooth header/device references were reviewed at 1x/2x. Astro check/build plus 13 pages/488 links pass at root and project Pages prefixes. Native guest/controller acceptance remains pending.",
+        "Clean release deployed atomically with a retained rollback copy. Actual bar clicks, native layer/input, Tab focus, Escape and IPC open/close pass. The desktop observes real BlueZ ready with zero controllers and unavailable after cleanup. New consumer counts-only/stdio observation and 0.114-second EOF cancellation pass as the ordinary guest user. Daemon/BNEP/Bluetooth modules, owned runtime cleanup mask and temporary binary are restored/removed. Test allocation is 2 GiB; saved 3 GiB preference is restored. No controller/pairing/profile or new performance acceptance is claimed.",
+        "All six CI checks pass on implementation/source commit 854040136928cbba6753e66c7343a6946d0d1929. Evidence-head CI remains pending; the draft stays open for actual controller acceptance."
       ],
       "pending": [
-        "Clean release build, reversible guest deployment and native panel/controller pairing acceptance; compatibility entrypoints still use the existing Bluetooth path until acceptance.",
+        "Actual controller/pairing/profile and radio-control acceptance; compatibility entrypoints still use the existing Bluetooth path until that acceptance.",
         "Native acceptance of radio visibility/pairable controls and pending-Connect cancellation UX; device/profile interoperability, incoming native pairing, permissions, suspend/resume, hotplug and hardware fault coverage.",
         "Physical hardware acceptance; a private D-Bus fixture or future virtual HCI result does not prove radio/profile interoperability.",
         "Current normal desktop RSS target of 300 MiB, decode/GPU peaks, hardware pacing, per-output/fractional scaling, text/IME/accessibility, tray, richer desktop features, secure-client audit and packaging/migrations remain in the full requirement ledger.",
         "Final-head CI, review and merge of PR #39 and its parent stack; this milestone does not merge or complete the full objective."
-      ]
+      ],
+      "source_commit": "854040136928cbba6753e66c7343a6946d0d1929",
+      "report": "reports/measurements/lucent-bluetooth-panel.json"
     }
   ],
   "performance_targets": {

@@ -6,8 +6,9 @@
 the desktop, Wayland runtime, renderer, Omarchy picker or `bluetoothctl`.
 
 The desktop composition root injects this adapter into a native Rust Bluetooth
-child. Pairing conversations and token-based views are implemented; native guest
-controller/interaction acceptance is still pending. Installed compatibility
+child. Pairing conversations and token-based views are implemented. Native
+bar/keyboard/IPC surface checks and actual ready-empty/unavailable daemon
+observations pass; controller/pairing/profile acceptance is still pending. Installed compatibility
 entrypoints remain unchanged until that acceptance is established.
 
 ## Values, identity and policy
@@ -270,3 +271,20 @@ native confirmation/entry/display/service prompts. The top-bar button and
 entered input and displayed codes. Radio controls are implemented; their native
 guest/controller acceptance, pending Connect cancellation UX, real-device/profile
 acceptance and broader power/tray services still need work. The complete control-center requirement remains open.
+
+## Native panel checkpoint
+
+`python3 vm/test-bluetooth-panel.py` checks an already unlocked guest through
+real bar clicks, Tab focus, Escape and IPC open/close. It restores the original
+panel state and keeps captures private. It performs no radio control or pairing.
+The [partial native report](../reports/measurements/lucent-bluetooth-panel.json)
+identifies the actual installed binary and distinguishes these checks from
+controller acceptance.
+
+The read-only consumer fixture temporarily starts an inactive daemon and loads
+its absent prerequisite only with explicit flags. In a logged-in desktop, other
+clients can reactivate BlueZ after stop. Cleanup temporarily masks only the
+fixture-owned service while unloading new Bluetooth/BNEP modules, then removes
+its own runtime mask. Existing overrides/controllers are refused; no force
+unload or permanent service policy is introduced. The repeated native run
+restores the original inactive daemon and absent modules.
