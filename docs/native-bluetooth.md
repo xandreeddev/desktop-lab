@@ -24,7 +24,9 @@ device preferences. Controller/device snapshots are public records, not sealed
 value objects. The adapter validates required metadata, optional types and
 battery percentages before publishing them.
 
-`BluetoothAdapter` separates global `discovering` from `discovery_owned`: another
+`BluetoothAdapter` names the physical radio-controller domain record. It differs
+from the architectural adapter: `BlueZ` implements `BluetoothPort`. The radio
+record separates global `discovering` from `discovery_owned`: another
 client can be scanning while Lucent owns no discovery session. Device metadata
 separates paired, optionally bonded, trusted, blocked, connected and
 services-resolved state. Absent battery/RSSI/icon metadata stays `None`; RSSI
@@ -120,7 +122,11 @@ observed unique BlueZ owner may call it, and every proposal resolves against a
 fresh, current device catalog. Display progress retains one card identity.
 Nothing automatically accepts or trusts a device. Epochs retire pending answers
 on native Cancel/Release; removal, owner changes and uncertain timeouts retire
-the connection. The PIN reply owns zeroizing storage through serialization;
+the connection. Release rejects new callbacks and invalidates pending requests
+immediately. A zbus response-dispatch notifier gates connection retirement until
+the Release reply is dispatched; completion of the interrupted operation cannot
+erase that retirement intent. This is local response dispatch, not proof of
+receipt by BlueZ. The PIN reply owns zeroizing storage through serialization;
 this does not promise zeroization of D-Bus, kernel or remote copies. See the
 [agent API](https://bluez.readthedocs.io/en/latest/agent-api/).
 

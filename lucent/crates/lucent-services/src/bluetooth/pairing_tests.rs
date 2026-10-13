@@ -374,17 +374,23 @@ fn bluetooth_protocol_release_clears_default_authority_and_allows_fresh_registra
     watch.state(|s| s.incoming_pairing_enabled);
     assert_eq!(state.lock().unwrap().registrations, 2);
     assert_eq!(state.lock().unwrap().defaults, 2);
-    let attempt = watch.adapter.start_pairing(initial.devices[0].id).unwrap();
-    let request = prompt(&watch);
-    futures_lite::future::block_on(agent_call(&server, &state, "Release", &())).unwrap();
-    watch.state(|s| s.devices[0].id != initial.devices[0].id);
-    assert!(
-        watch
-            .adapter
-            .answer_pairing(request.id, BluetoothPairingAnswer::Accept)
-            .is_err()
-    );
-    assert!(watch.adapter.cancel_pairing(attempt).is_err());
+    let mut device = initial.devices[0].id;
+    // Repeated real method replies exercise release versus pending Pair
+    // completion. No sleeps or accepted NoReply errors hide the ordering race.
+    for _ in 0..3 {
+        let attempt = watch.adapter.start_pairing(device).unwrap();
+        let request = prompt(&watch);
+        futures_lite::future::block_on(agent_call(&server, &state, "Release", &())).unwrap();
+        let reconnected = watch.state(|s| s.devices.len() == 1 && s.devices[0].id != device);
+        assert!(
+            watch
+                .adapter
+                .answer_pairing(request.id, BluetoothPairingAnswer::Accept)
+                .is_err()
+        );
+        assert!(watch.adapter.cancel_pairing(attempt).is_err());
+        device = reconnected.devices[0].id;
+    }
 }
 
 #[test]

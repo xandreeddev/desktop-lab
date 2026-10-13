@@ -22,6 +22,7 @@ pub(super) struct Pairing {
     pub proposed: Vec<agent::Proposal>,
     epoch: u64,
     cancel_requested: bool,
+    release_requires_retirement: bool,
 }
 impl Pairing {
     pub fn new(peer: String) -> Self {
@@ -34,6 +35,7 @@ impl Pairing {
             proposed: vec![],
             epoch: 0,
             cancel_requested: false,
+            release_requires_retirement: false,
         }
     }
     fn cancel_requests(&mut self) {
@@ -53,6 +55,7 @@ impl Pairing {
         catalog: &Catalog,
         allocate: &mut dyn FnMut() -> Result<BluetoothPairingId>,
     ) -> Result<()> {
+        self.remember_release();
         let epoch = self.host.shared.epoch();
         if epoch != self.epoch {
             self.cancel_requests();
@@ -61,7 +64,7 @@ impl Pairing {
         if self.host.released() {
             self.host.registered = false;
             self.host.incoming = false;
-            if self.active_path.is_some() {
+            if self.release_requires_retirement && self.host.release_reply_dispatched() {
                 return Err(unavailable("Bluetooth pairing agent was released"));
             }
         }
@@ -212,6 +215,7 @@ impl Pairing {
         Ok(path)
     }
     pub fn finished(&mut self, id: BluetoothPairingId, result: Result<()>) {
+        self.remember_release();
         if let Some(attempt) = self.attempt.as_mut().filter(|a| a.id == id) {
             attempt.phase = match result {
                 Ok(()) => BluetoothPairingPhase::Succeeded,
@@ -221,6 +225,14 @@ impl Pairing {
             self.active_path = None;
             self.cancel_requests();
         }
+    }
+    fn remember_release(&mut self) {
+        self.release_requires_retirement |=
+            self.host.released() && (self.active_path.is_some() || self.control_path.is_some());
+    }
+    pub fn control_finished(&mut self) {
+        self.remember_release();
+        self.control_path = None;
     }
 }
 impl Drop for Pairing {

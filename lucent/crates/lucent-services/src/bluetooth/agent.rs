@@ -4,6 +4,7 @@ use super::{native::*, *};
 use std::sync::atomic::AtomicU64;
 use zbus::{
     message::Header,
+    object_server::ResponseDispatchNotifier,
     zvariant::{OwnedObjectPath, Signature, Type},
 };
 
@@ -61,6 +62,7 @@ pub(super) struct Shared {
     events: async_channel::Sender<Event>,
     epoch: AtomicU64,
     released: AtomicBool,
+    release_reply_dispatched: AtomicBool,
 }
 impl Shared {
     pub fn epoch(&self) -> u64 {
@@ -145,10 +147,31 @@ impl Agent {
     async fn release(
         &self,
         #[zbus(header)] header: Header<'_>,
-    ) -> std::result::Result<(), AgentError> {
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> std::result::Result<ResponseDispatchNotifier<()>, AgentError> {
         self.0.authorize(&header)?;
+        self.0
+            .release_reply_dispatched
+            .store(false, Ordering::Release);
         self.0.end_requests(true);
-        Ok(())
+        let (response, dispatched) = ResponseDispatchNotifier::new(());
+        let shared = self.0.clone();
+        // Reject callbacks and retire requests immediately, but let the native
+        // object server dispatch this reply before the owner closes its bus.
+        connection
+            .executor()
+            .spawn(
+                async move {
+                    dispatched.await;
+                    shared
+                        .release_reply_dispatched
+                        .store(true, Ordering::Release);
+                    let _ = shared.events.try_send(Event::Changed);
+                },
+                "bluetooth-agent-release-reply",
+            )
+            .detach();
+        Ok(response)
     }
     async fn cancel(
         &self,
@@ -290,6 +313,7 @@ impl Host {
                 events: send,
                 epoch: AtomicU64::new(0),
                 released: AtomicBool::new(false),
+                release_reply_dispatched: AtomicBool::new(true),
             }),
             events,
             registered: false,
@@ -297,6 +321,11 @@ impl Host {
         }
     }
     pub async fn register(&mut self, transport: &Transport) -> Result<()> {
+        if self.released() && !self.release_reply_dispatched() {
+            return Err(DomainError::Invalid(
+                "Bluetooth agent release is still finishing".into(),
+            ));
+        }
         if self.registered && !self.shared.released.load(Ordering::Acquire) {
             return Ok(());
         }
@@ -323,6 +352,9 @@ impl Host {
     }
     pub fn released(&self) -> bool {
         self.shared.released.load(Ordering::Acquire)
+    }
+    pub fn release_reply_dispatched(&self) -> bool {
+        self.shared.release_reply_dispatched.load(Ordering::Acquire)
     }
     pub async fn set_incoming(&mut self, transport: &Transport, enabled: bool) -> Result<()> {
         if enabled {

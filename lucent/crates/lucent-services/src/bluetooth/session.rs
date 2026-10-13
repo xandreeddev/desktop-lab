@@ -184,7 +184,7 @@ async fn observe(
                 discovery,
             }) => {
                 control_pending = false;
-                pairing.control_path = None;
+                pairing.control_finished();
                 let failed = matches!(result, Err(DomainError::Unavailable(_)));
                 if result.is_ok()
                     && let Some((path, active)) = discovery

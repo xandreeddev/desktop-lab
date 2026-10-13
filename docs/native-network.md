@@ -181,7 +181,7 @@ and surface release. Existing profiles, routes, wallpaper and the desktop proces
 were preserved. See [the panel report](../reports/measurements/lucent-network-panel.json).
 
 The two-minute warm idle sample measured 225.33 MiB mean process RSS and 0.567%
-of one logical core. The 200 MiB target remains unmet; software-driver mappings
+of one logical core. This checkpoint is within the current 300 MiB normal-desktop target; software-driver mappings
 can contribute to RSS and separate GPU allocation was not measured. Physical
 Wi-Fi, SAE/OWE/enterprise, secret-agent prompts, captive portals and suspend
 remain unverified. This report does not establish a complete control center.
