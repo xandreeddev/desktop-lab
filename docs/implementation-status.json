@@ -1096,6 +1096,25 @@
         "Current-release performance, GPU/decode peaks, pacing, multi-output/fractional scaling, text/IME/accessibility, tray/power, richer desktop features, secure-client audit and packaging/migrations remain in the full requirement ledger.",
         "Exact published-head CI/review and parent-stack merge; PR remains draft and no merge is authorized."
       ]
+    },
+    {
+      "milestone": "native-power-controls",
+      "status": "implementation_and_local_checks_passed_vm_hardware_deferred",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/40",
+      "source_commit": "af83b810aca1acd130cc347213463b34f6070864",
+      "report": "reports/measurements/lucent-power.json",
+      "checks": [
+        "287 Rust workspace tests, strict formatting/Clippy, four private power D-Bus protocol cases, 79 Python checks and all 348 software-Vulkan comparisons pass. Only 28 new power references and 12 bar changes were accepted after 1x/2x review.",
+        "The native child and independent consumer use the same PowerPort; policy is pure, native ownership/IO stays in PowerServices, and confirmation/demand/observations remain client-owned.",
+        "Root and project-prefix Astro builds each verify 13 pages/488 links; diagnostics have zero errors/warnings/hints. Guides and repository skills describe the live implementation.",
+        "VM/hardware acceptance is deferred under the user instruction; no desktop deployment or new performance result is claimed."
+      ],
+      "pending": [
+        "Real logind/profile policy and native session authorization; built-in backlight updates/hotplug, suspend/resume, firmware and faults.",
+        "Kernel file reads are on the service worker but are not made cancellable by D-Bus deadlines; kernel notifier failure falls back to command-completion refresh without a hardware-validated external-update guarantee.",
+        "Current performance and the broader full requirement ledger remain open.",
+        "Final published-head CI and authorized merge."
+      ]
     }
   ],
   "performance_targets": {
