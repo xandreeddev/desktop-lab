@@ -157,6 +157,46 @@ impl Theme {
             self.surface_container
         })
     }
+    /// Checkbox/radio state without depending on a font's symbol coverage.
+    /// The enclosing control owns input and the application's checked value.
+    pub fn selection_indicator<M>(self, checked: bool, radio: bool) -> Element<M> {
+        use component::selection_indicator as token;
+        let radius = if radio {
+            token::SIZE / 2.
+        } else {
+            token::RADIUS
+        };
+        let mut layers = vec![
+            Element::empty()
+                .size(
+                    token::SIZE - token::STROKE * 2.,
+                    token::SIZE - token::STROKE * 2.,
+                )
+                .at(token::STROKE, token::STROKE)
+                .radius((radius - token::STROKE).max(0.))
+                .background(self.surface_container),
+        ];
+        if checked {
+            layers.push(
+                Element::empty()
+                    .size(token::FILL_SIZE, token::FILL_SIZE)
+                    .at(
+                        (token::SIZE - token::FILL_SIZE) / 2.,
+                        (token::SIZE - token::FILL_SIZE) / 2.,
+                    )
+                    .radius(if radio {
+                        token::FILL_SIZE / 2.
+                    } else {
+                        token::RADIUS
+                    })
+                    .background(self.primary),
+            );
+        }
+        Element::stack(layers)
+            .size(token::SIZE, token::SIZE)
+            .radius(radius)
+            .background(self.on_surface)
+    }
     /// The design-system recipe for a framework scalar control.
     pub fn slider<M>(
         self,

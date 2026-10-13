@@ -213,7 +213,7 @@
   --component-bar-media-text-width: 136px;
   --component-bar-control-size: 24px;
   --component-bar-max-workspaces: 8;
-  --component-bar-system-control-count: 7;
+  --component-bar-system-control-count: 8;
   --component-pill-height: 32px;
   --component-pill-padding-inline: var(--space-md);
   --component-pill-padding-block: var(--space-xs);
@@ -441,6 +441,19 @@
   --component-power-title-lines: var(--component-bluetooth-title-lines);
   --component-power-status-lines: var(--component-bluetooth-status-lines);
   --component-power-brightness-step: var(--component-audio-volume-step);
+  --component-tray-width: var(--component-power-width);
+  --component-tray-height: var(--component-power-height);
+  --component-tray-header-height: var(--component-power-header-height);
+  --component-tray-card-padding: var(--component-power-card-padding);
+  --component-tray-card-gap: var(--component-power-card-gap);
+  --component-tray-slide-distance: var(--component-power-slide-distance);
+  --component-tray-title-lines: var(--component-power-title-lines);
+  --component-tray-status-lines: var(--component-power-status-lines);
+  --component-tray-separator-height: var(--space-hairline);
+  --component-selection-indicator-size: var(--icon-tiny);
+  --component-selection-indicator-stroke: var(--space-hairline);
+  --component-selection-indicator-fill-size: var(--space-sm);
+  --component-selection-indicator-radius: var(--space-xxs);
   --icon-tiny: 16px;
   --icon-small: 17px;
   --icon-compact: 18px;

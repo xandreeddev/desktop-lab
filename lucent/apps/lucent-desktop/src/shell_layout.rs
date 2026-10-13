@@ -57,6 +57,10 @@ pub fn power_panel(viewport: (f32, f32)) -> Rect {
     use lucent_design::component::power;
     control_panel(viewport, (power::WIDTH, power::HEIGHT))
 }
+pub fn tray_panel(viewport: (f32, f32)) -> Rect {
+    use lucent_design::component::tray;
+    control_panel(viewport, (tray::WIDTH, tray::HEIGHT))
+}
 fn control_panel(viewport: (f32, f32), size: (f32, f32)) -> Rect {
     let width = floor(
         size.0.min(viewport.0 - layout::SHELL_INSET * 2.),
@@ -212,6 +216,7 @@ pub struct BarLayout {
     pub clock: Option<Rect>,
     pub system: Rect,
     pub show_mute: bool,
+    pub show_tray: bool,
 }
 impl BarLayout {
     pub fn new(width: f32, workspace_count: usize) -> Self {
@@ -226,7 +231,10 @@ impl BarLayout {
                 + minimum_workspace
                 + gap
                 + system_size(bar::SYSTEM_CONTROL_COUNT);
-        let system_width = system_size(bar::SYSTEM_CONTROL_COUNT - if show_mute { 0. } else { 1. });
+        let without_mute = bar::SYSTEM_CONTROL_COUNT - if show_mute { 0. } else { 1. };
+        let show_tray =
+            width >= layout::SHELL_INSET * 2. + minimum_workspace + gap + system_size(without_mute);
+        let system_width = system_size(without_mute - if show_tray { 0. } else { 1. });
         let system = rect(
             floor(
                 width - layout::SHELL_INSET - system_width,
@@ -277,6 +285,7 @@ impl BarLayout {
             clock,
             system,
             show_mute,
+            show_tray,
         }
     }
 }

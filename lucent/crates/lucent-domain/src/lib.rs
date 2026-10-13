@@ -9,6 +9,8 @@ mod audio;
 pub use audio::*;
 mod power;
 pub use power::*;
+mod tray;
+pub use tray::*;
 
 mod network;
 pub use network::*;

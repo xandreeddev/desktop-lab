@@ -2525,6 +2525,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tray-service"
+version = "0.1.0"
+dependencies = [
+ "lucent-domain",
+ "lucent-services",
+ "serde_json",
+]
+
+[[package]]
 name = "ttf-parser"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
