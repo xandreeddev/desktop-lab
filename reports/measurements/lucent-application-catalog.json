@@ -21,7 +21,7 @@
     "pages_each_prefix": 13,
     "links_assets_each_prefix": 488
   },
-  "validation_scope": "The 396-case software-Vulkan suite passed without update mode. Subsequent nonblocking catalog policy and a test-only ready/no-match fixture correction passed the final strict workspace suite and kernel cases; all four changed no-match references were reviewed and passed without update mode. Exact published-head CI will rerun the complete rendering suite.",
+  "validation_scope": "The complete final-head 396-case software-Vulkan suite and native protocol checks passed in CI before the authorized merge, alongside the documented local full/focused checks.",
   "implemented": [
     "ApplicationPort discovery/observation/launch with injected immutable catalog source settings.",
     "Linux directory events, missing/replaced root recovery, XDG ID precedence and masking, bounded discovery and nonblocking rejection of non-regular entries.",
@@ -55,5 +55,11 @@
   "privacy": {
     "private_paths_or_captures_published": false,
     "credentials_or_host_application_metadata_published": false
+  },
+  "delivery": {
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/42",
+    "state": "merged",
+    "merge_commit": "376bac17dc13db37b5c85986a84406c122ba4e06",
+    "exact_head_ci_checks_passed": 6
   }
 }
