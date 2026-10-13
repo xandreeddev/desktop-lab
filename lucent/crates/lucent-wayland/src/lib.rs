@@ -660,6 +660,23 @@ impl<A: Application> State<A> {
         let Some(id) = self.keyboard_surface.clone() else {
             return;
         };
+        let shortcut = if self.modifiers.ctrl || self.modifiers.alt {
+            event
+                .keysym
+                .key_char()
+                .filter(|c| !c.is_control())
+                .map(|character| api::Key::Shortcut {
+                    character,
+                    modifiers: api::KeyModifiers {
+                        control: self.modifiers.ctrl,
+                        alt: self.modifiers.alt,
+                        shift: self.modifiers.shift,
+                        logo: self.modifiers.logo,
+                    },
+                })
+        } else {
+            None
+        };
         let key = match event.keysym {
             Keysym::Escape => api::Key::Escape,
             Keysym::Return | Keysym::KP_Enter => api::Key::Enter,
@@ -677,6 +694,7 @@ impl<A: Application> State<A> {
             Keysym::End => api::Key::End,
             Keysym::a if self.modifiers.ctrl => api::Key::SelectAll,
             Keysym::u if self.modifiers.ctrl => api::Key::ClearInput,
+            _ if shortcut.is_some() => shortcut.unwrap(),
             _ => {
                 let Some(text) = event
                     .utf8
@@ -684,10 +702,11 @@ impl<A: Application> State<A> {
                 else {
                     return;
                 };
-                if self.modifiers.ctrl || self.modifiers.alt {
-                    return;
+                if let Some(shortcut) = shortcut {
+                    shortcut
+                } else {
+                    api::Key::Text(text)
                 }
-                api::Key::Text(text)
             }
         };
         if let Some(s) = self.surfaces.get_mut(&id) {
@@ -1029,6 +1048,42 @@ impl<A: Application> PointerHandler for State<A> {
                 s.demand.invalidate();
             }
             let logical_id = self.surfaces[&id].spec.id;
+            let boundary = match event.kind {
+                PointerEventKind::Enter { .. } => Some(true),
+                PointerEventKind::Leave { .. } => Some(false),
+                _ => None,
+            };
+            if let Some(inside) = boundary
+                && let Some(message) = self.app.event(api::Event::PointerInside {
+                    surface: logical_id,
+                    inside,
+                })
+            {
+                messages.push(message);
+            }
+            let button = match event.kind {
+                PointerEventKind::Press { button, .. } => Some((button, true)),
+                PointerEventKind::Release { button, .. } => Some((button, false)),
+                _ => None,
+            };
+            if let Some((button, pressed)) = button {
+                let button = match button {
+                    0x110 => api::MouseButton::Primary,
+                    0x111 => api::MouseButton::Secondary,
+                    0x112 => api::MouseButton::Middle,
+                    other => api::MouseButton::Other(other),
+                };
+                if let Some(message) = self.app.event(api::Event::PointerButton {
+                    surface: logical_id,
+                    button,
+                    pressed,
+                    x,
+                    y,
+                }) {
+                    messages.push(message);
+                }
+            }
+
             if outside
                 && let Some(m) = self.app.event(api::Event::Outside {
                     surface: logical_id,

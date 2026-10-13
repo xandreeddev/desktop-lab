@@ -111,6 +111,7 @@ impl View<'_> {
         let visible_rows = (body_h / component::launcher::ROW_HEIGHT).floor().max(1.) as usize;
         match self.launcher.mode {
             Mode::Apps => {
+                let pinned = crate::dock::Dock::pins(self.input.settings, self.input.apps);
                 let rows: Vec<_> = self
                     .launcher
                     .results
@@ -123,15 +124,25 @@ impl View<'_> {
                         Element::row(vec![
                             self.app_icon(app, component::launcher::ICON_WIDTH),
                             self.label(&app.name, font::BODY).width(Length::Fill),
-                            self.label(
-                                if rank == self.launcher.selected {
-                                    "Open"
+                            self.icon("pin", icon::SMALL)
+                                .padding(space::XS)
+                                .size(
+                                    component::launcher::TAB_HEIGHT,
+                                    component::launcher::TAB_HEIGHT,
+                                )
+                                .tint(if pinned.contains(&app.id) {
+                                    self.accent()
                                 } else {
-                                    ""
-                                },
-                                font::MICRO,
-                            )
-                            .width(Length::Fixed(component::launcher::TAB_HEIGHT)),
+                                    self.ink()
+                                })
+                                .opacity(if pinned.contains(&app.id) {
+                                    1.
+                                } else {
+                                    component::launcher::PIN_UNSELECTED_OPACITY
+                                })
+                                .radius(radius::CONTROL)
+                                .on_click(Message::Request(Intent::Pin(app.id.clone())))
+                                .id(format!("pin-{}", app.id.as_str())),
                         ])
                         .align(Align::Center)
                         .gap(space::LG)
@@ -154,10 +165,13 @@ impl View<'_> {
                     .collect();
                 let list = if rows.is_empty() {
                     self.label(
-                        if self.input.apps.is_empty() {
-                            "Loading applications…"
-                        } else {
-                            "No matching applications"
+                        match self.input.application_status {
+                            crate::catalog::Status::Loading if self.input.apps.is_empty() => {
+                                "Loading applications…"
+                            }
+                            crate::catalog::Status::Unavailable => "Unable to load applications",
+                            _ if self.input.apps.is_empty() => "No installed applications",
+                            _ => "No matching applications",
                         },
                         font::LABEL,
                     )

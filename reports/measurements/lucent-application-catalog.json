@@ -1,0 +1,59 @@
+{
+  "status": "implementation_and_local_checks_passed_vm_hardware_deferred",
+  "source_commit": "2f5c9dcbee0eecd773d829c83ee65eab694c071b",
+  "local_checks": {
+    "workspace_passed": 307,
+    "workspace_ignored": 51,
+    "owned_catalog_tests_passed": 4,
+    "kernel_catalog_protocol_cases_passed": 2,
+    "python_passed": 81,
+    "software_visual_comparisons_passed": 396,
+    "final_ready_catalog_focused_comparisons_passed": 4,
+    "new_reviewed_references": 20,
+    "reviewed_changed_references": 44,
+    "fmt_clippy_workspace_all_targets": true,
+    "independent_consumer_isolated_smoke_passed": true,
+    "design_tokens_verified": 528,
+    "app_icons_verified": 58,
+    "astro_errors": 0,
+    "astro_warnings": 0,
+    "astro_hints": 0,
+    "pages_each_prefix": 13,
+    "links_assets_each_prefix": 488
+  },
+  "validation_scope": "The 396-case software-Vulkan suite passed without update mode. Subsequent nonblocking catalog policy and a test-only ready/no-match fixture correction passed the final strict workspace suite and kernel cases; all four changed no-match references were reviewed and passed without update mode. Exact published-head CI will rerun the complete rendering suite.",
+  "implemented": [
+    "ApplicationPort discovery/observation/launch with injected immutable catalog source settings.",
+    "Linux directory events, missing/replaced root recovery, XDG ID precedence and masking, bounded discovery and nonblocking rejection of non-regular entries.",
+    "Typed catalog state, retained last-good data, application-identity selection and bounded latest-demand icon preparation.",
+    "Pure saved pin/order policy, explicit empty preferences, transient drag previews and current-identity validation.",
+    "Native pin controls, Ctrl+P, persistent dock ordering and auto-hide with generation-bound timing and token motion.",
+    "Generic SDK pointer boundary/button and character-shortcut events; independent domain/service consumer.",
+    "Current library/user guides, repository skills and recursive boundary checks."
+  ],
+  "native_acceptance": {
+    "current_source_deployed_to_vm": false,
+    "physical_input_tested": false,
+    "hotplug_sleep_resume_tested": false,
+    "deferred_by_user": true,
+    "host_application_catalog_mutated_by_tests": false,
+    "application_launched_by_consumer_smoke": false
+  },
+  "performance": {
+    "normal_desktop_rss_target_mib": 300,
+    "current_desktop_rss_measured": false,
+    "current_animation_pacing_measured": false,
+    "rendering_density_or_effects_reduced": false
+  },
+  "remaining": [
+    "D-Bus activation and broader desktop-entry conformance, including complete locale modifier matching.",
+    "External icon-theme invalidation and custom TryExec executables outside the captured PATH directories.",
+    "Native dock dragging/hover/shortcut, saved settings, output-change and sleep/resume acceptance.",
+    "Animated neighbor reorder/settling and current cold/warm visibility pacing; current RSS/GPU/decode peaks.",
+    "Full project ledger: text/IME/accessibility, per-output/fractional scaling, richer widgets/notifications, popup/tooltip/focus, OS interoperability, secure-client audit and release/migrations."
+  ],
+  "privacy": {
+    "private_paths_or_captures_published": false,
+    "credentials_or_host_application_metadata_published": false
+  }
+}

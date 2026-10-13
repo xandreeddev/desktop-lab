@@ -7,6 +7,9 @@ pub struct Fake {
     pub calls: Mutex<Vec<&'static str>>,
 }
 impl ApplicationPort for Fake {
+    fn watch(&self, emit: &mut dyn FnMut(Result<Vec<Application>>), _: &dyn StopSignal) {
+        emit(self.discover());
+    }
     fn discover(&self) -> Result<Vec<Application>> {
         Ok(vec![])
     }

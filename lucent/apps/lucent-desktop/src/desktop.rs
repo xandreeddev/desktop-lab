@@ -12,12 +12,12 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 pub enum Message {
     Notifications(crate::notifications::Message),
     Loaded(
-        Vec<domain::Application>,
         domain::Result<DesktopSettings>,
         Vec<Wallpaper>,
         domain::Result<Option<WallpaperAsset>>,
     ),
-    Icons(Vec<(String, Arc<ImageData>)>),
+    Catalog(crate::catalog::Message),
+    Dock(crate::dock::Message),
     Previews(crate::previews::Message),
     WallpaperSelection(crate::wallpaper_selection::Message),
     Compositor(domain::Result<CompositorSnapshot>),
@@ -62,6 +62,8 @@ pub struct Desktop {
     pub theme_error: String,
     pub widgets: widgets::Host,
     pub apps: Vec<domain::Application>,
+    pub catalog: crate::catalog::Catalog,
+    pub dock: crate::dock::Dock,
     pub settings: DesktopSettings,
     pub persistence: crate::persistence::Persistence,
     pub settings_writable: bool,
@@ -100,6 +102,8 @@ impl Desktop {
             notifications: crate::notifications::Center::new(adapters.notifications.clone()),
             widgets: widgets::Host::default(),
             apps: vec![],
+            catalog: crate::catalog::Catalog::new(adapters.assets.clone()),
+            dock: Default::default(),
             settings: DesktopSettings::default(),
             persistence: crate::persistence::Persistence::new(adapters.settings.clone()),
             settings_writable: false,
@@ -222,6 +226,8 @@ impl Desktop {
             self.persistence.error()
         } else if !self.wallpaper.error.is_empty() {
             &self.wallpaper.error
+        } else if let Some(error) = self.catalog.error() {
+            error
         } else if let Some(error) = self.wallpaper.presentation_error() {
             error
         } else {
@@ -251,46 +257,38 @@ impl Desktop {
         }
     }
     pub fn dock_apps(&self) -> Vec<&domain::Application> {
-        let mut apps: Vec<_> = self
-            .settings
-            .pinned
+        self.dock.apps(
+            crate::dock::Input {
+                apps: &self.apps,
+                compositor: &self.compositor,
+                settings: &self.settings,
+            },
+            crate::shell_layout::dock_capacity(self.viewport.0).saturating_sub(1),
+        )
+    }
+    fn update_dock(&mut self, message: crate::dock::Message, effects: &mut Effects<Message>) {
+        let visible = self
+            .dock_apps()
             .iter()
-            .filter_map(|id| self.apps.iter().find(|a| &a.id == id))
-            .collect();
-        if apps.is_empty() {
-            for query in [
-                "foot", "firefox", "chromium", "nautilus", "spotify", "aether",
-            ] {
-                if let Some(app) = self
-                    .apps
-                    .iter()
-                    .find(|a| {
-                        a.id.as_str()
-                            .eq_ignore_ascii_case(&format!("{query}.desktop"))
-                    })
-                    .or_else(|| {
-                        self.apps
-                            .iter()
-                            .find(|a| a.id.as_str().to_lowercase().contains(query))
-                    })
-                    && !apps.iter().any(|a| a.id == app.id)
-                {
-                    apps.push(app);
-                }
+            .map(|app| app.id.clone())
+            .collect::<Vec<_>>();
+        let mut intent = None;
+        effects.delegate(
+            |child| {
+                intent = self
+                    .dock
+                    .update(message, &mut self.settings, &self.apps, &visible, child)
+            },
+            Message::Dock,
+        );
+        match intent {
+            Some(crate::dock::Intent::Save) => {
+                self.save(effects);
+                self.retarget_panel_transition(effects.now);
             }
+            Some(crate::dock::Intent::Error(error)) => self.error = error,
+            None => (),
         }
-        for window in &self.compositor.windows {
-            if let Some(app) = self
-                .apps
-                .iter()
-                .find(|a| a.matches_window_class(&window.app_class))
-                && !apps.iter().any(|a| a.id == app.id)
-            {
-                apps.push(app);
-            }
-        }
-        apps.truncate(8.min(crate::shell_layout::dock_capacity(self.viewport.0).saturating_sub(1)));
-        apps
     }
     pub fn dock_width(&self) -> f32 {
         crate::shell_layout::dock_width(self.dock_apps().len() + 1)
@@ -323,6 +321,7 @@ impl Desktop {
         geometry.palettes = palettes.len();
         let input = launcher::Input {
             apps: &self.apps,
+            application_status: self.catalog.status(),
             settings: &self.settings,
             palettes: &palettes,
             wallpapers: &self.wallpapers,
@@ -334,6 +333,7 @@ impl Desktop {
             |child| intent = self.launcher.update(message, input, geometry, child),
             Message::Launcher,
         );
+        self.update_dock(crate::dock::Message::Forced(self.launcher.open()), effects);
         if self.launcher.open() {
             effects.delegate(
                 |child| self.power.update(crate::power::Message::Close, child),
@@ -359,6 +359,7 @@ impl Desktop {
             use launcher::Intent;
             let message = match intent {
                 Intent::Launch(id, prefer) => Message::Launch(id, prefer),
+                Intent::Pin(id) => Message::Dock(crate::dock::Message::Pin(id)),
                 Intent::Action(action) => Message::Action(action),
                 Intent::Wallpaper(index, apply) => Message::Wallpaper(index, apply),
                 Intent::Browser(message) => Message::Browser(message),
@@ -436,6 +437,13 @@ impl Desktop {
         });
     }
     fn perform(&mut self, action: Action, effects: &mut Effects<Message>) {
+        if matches!(action, Action::DockAutoHide) {
+            self.update_dock(
+                crate::dock::Message::AutoHide(!self.settings.dock.auto_hide),
+                effects,
+            );
+            return;
+        }
         if matches!(action, Action::Quit) {
             effects.quit();
             return;
@@ -540,9 +548,8 @@ impl Component for Desktop {
                 |e| self.notifications.update(message, e),
                 Message::Notifications,
             ),
-            Message::Loaded(apps, settings, wallpapers, current_wallpaper) => {
+            Message::Loaded(settings, wallpapers, current_wallpaper) => {
                 self.update_widgets(widgets::Message::CancelDrags, effects);
-                self.apps = apps;
                 match settings {
                     Ok(settings) => {
                         self.settings = settings;
@@ -554,6 +561,7 @@ impl Component for Desktop {
                         self.settings_error = e.to_string();
                     }
                 }
+                self.update_dock(crate::dock::Message::Cancel, effects);
                 self.wallpapers = wallpapers;
                 self.wallpaper_index = self
                     .wallpapers
@@ -573,11 +581,6 @@ impl Component for Desktop {
                 );
                 self.launcher
                     .refresh(&self.apps, self.launcher_geometry(), now);
-                let assets = self.adapters.assets.clone();
-                let apps = self.apps.clone();
-                effects.task_on(crate::work::ASSETS, move || {
-                    Message::Icons(assets.application_icons(&apps))
-                });
                 let theme = self.adapters.theme.clone();
                 let palette = lucent_design::selected_palette(&self.settings);
                 effects.task_on(crate::work::APPEARANCE, move || {
@@ -595,10 +598,28 @@ impl Component for Desktop {
                     effects.redraw(id);
                 }
             }
-            Message::Icons(images) => {
-                self.images.extend(images);
-                effects.redraw("dock");
-                effects.redraw("widgets");
+            Message::Dock(message) => self.update_dock(message, effects),
+            Message::Catalog(message) => {
+                let selected = self.launcher.selected_application(&self.apps).cloned();
+                let mut changed = false;
+                effects.delegate(
+                    |child| {
+                        changed =
+                            self.catalog
+                                .update(message, &mut self.apps, &mut self.images, child)
+                    },
+                    Message::Catalog,
+                );
+                if changed {
+                    self.update_dock(crate::dock::Message::Cancel, effects);
+                    self.launcher.refresh_preserving(
+                        &self.apps,
+                        selected.as_ref(),
+                        self.launcher_geometry(),
+                        now,
+                    );
+                    effects.redraw("dock");
+                }
             }
             Message::Previews(message) => effects.delegate(
                 |child| self.previews.update(message, child),
@@ -647,6 +668,7 @@ impl Component for Desktop {
             Message::Compositor(result) => match result {
                 Ok(value) => {
                     if self.compositor != value {
+                        self.update_dock(crate::dock::Message::Cancel, effects);
                         self.compositor = value;
                         self.retarget_panel_transition(now);
                         effects.redraw("bar");
@@ -983,6 +1005,7 @@ impl Component for Desktop {
                 effects.redraw("dock");
             }
             Message::Resize(id, w, h, scale) => {
+                self.update_dock(crate::dock::Message::Cancel, effects);
                 if id == "background" {
                     match crate::ports::BackgroundTarget::from_surface(w, h, scale) {
                         Ok(target) => {
@@ -1284,19 +1307,14 @@ impl api::Application for Desktop {
         surfaces
     }
     fn init(&mut self, effects: &mut Effects<Message>) {
-        let apps = self.adapters.apps.clone();
         let store = self.adapters.settings.clone();
         let wallpaper = self.adapters.wallpaper.clone();
         effects.task_on(crate::work::ASSETS, move || {
-            Message::Loaded(
-                apps.discover().unwrap_or_default(),
-                store.load(),
-                wallpaper.list(),
-                wallpaper.current(),
-            )
+            Message::Loaded(store.load(), wallpaper.list(), wallpaper.current())
         });
     }
     fn subscriptions(&self) -> Vec<Subscription<Message>> {
+        let apps = self.adapters.apps.clone();
         let clock = self.adapters.clock.clone();
         let system = self.adapters.system.clone();
         let media = self.adapters.media.clone();
@@ -1308,6 +1326,16 @@ impl api::Application for Desktop {
         let power = self.adapters.power.clone();
         let tray = self.adapters.tray.clone();
         let mut s = vec![
+            Subscription::stream("applications", move |out, cancel| {
+                apps.watch(
+                    &mut |snapshot| {
+                        out.send(Message::Catalog(crate::catalog::Message::Observed(
+                            snapshot,
+                        )))
+                    },
+                    &WatchStop(cancel),
+                )
+            }),
             Subscription::stream("tray", move |out, cancel| {
                 tray.watch(
                     &mut |value| out.send(Message::Tray(crate::tray::Message::Observed(value))),
@@ -1391,6 +1419,14 @@ impl api::Application for Desktop {
                 );
             }));
         }
+        for subscription in self.dock.subscriptions() {
+            s.push(Subscription::stream(subscription.id, move |out, cancel| {
+                (subscription.run)(
+                    Emitter::new(move |message| out.send(Message::Dock(message))),
+                    cancel,
+                )
+            }));
+        }
         for subscription in self.tray.subscriptions() {
             s.push(Subscription::stream(subscription.id, move |out, cancel| {
                 (subscription.run)(
@@ -1434,6 +1470,33 @@ impl api::Application for Desktop {
     }
     fn event(&self, event: Event) -> Option<Message> {
         match event {
+            Event::Key {
+                surface: "dock",
+                key:
+                    Key::Shortcut {
+                        character: 'p' | 'P',
+                        modifiers,
+                    },
+            } if modifiers.control
+                && !modifiers.alt
+                && self.launcher.open()
+                && self.launcher.mode() == Mode::Apps =>
+            {
+                self.launcher
+                    .selected_application(&self.apps)
+                    .cloned()
+                    .map(|id| Message::Dock(crate::dock::Message::Pin(id)))
+            }
+            Event::PointerInside {
+                surface: "dock",
+                inside,
+            } => Some(Message::Dock(crate::dock::Message::Pointer(inside))),
+            Event::PointerButton {
+                surface: "dock",
+                button: MouseButton::Primary,
+                pressed: true,
+                ..
+            } => Some(Message::Dock(crate::dock::Message::Press)),
             Event::Key {
                 surface: "tray",
                 key: Key::Escape,
@@ -1483,6 +1546,32 @@ impl api::Application for Desktop {
         }
     }
     fn command(&self, command: &str) -> std::result::Result<Option<Message>, String> {
+        if let Some(value) = command.strip_prefix("dock auto-hide ") {
+            return match value {
+                "on" => Ok(Some(Message::Dock(crate::dock::Message::AutoHide(true)))),
+                "off" => Ok(Some(Message::Dock(crate::dock::Message::AutoHide(false)))),
+                _ => Err("Use dock auto-hide on|off".into()),
+            };
+        }
+        for (prefix, pinned) in [("dock pin ", true), ("dock unpin ", false)] {
+            if let Some(id) = command.strip_prefix(prefix) {
+                return AppId::new(id)
+                    .map(|id| Some(Message::Dock(crate::dock::Message::SetPin(id, pinned))))
+                    .map_err(|e| e.to_string());
+            }
+        }
+        if let Some(value) = command.strip_prefix("dock move ") {
+            let (id, before) = value
+                .split_once(" before ")
+                .map_or((value, None), |(id, before)| (id, Some(before)));
+            let id = AppId::new(id).map_err(|e| e.to_string())?;
+            let before = before
+                .map(AppId::new)
+                .transpose()
+                .map_err(|e| e.to_string())?;
+            return Ok(Some(Message::Dock(crate::dock::Message::Move(id, before))));
+        }
+
         if command == "wallpaper retry" {
             return Ok(Some(Message::WallpaperSelection(
                 crate::wallpaper_selection::Message::RetryPresentation,
@@ -1636,6 +1725,8 @@ impl api::Application for Desktop {
         value["bluetooth"] = self.bluetooth.inspect();
         value["power"] = self.power.inspect();
         value["tray"] = self.tray.inspect();
+        value["catalog"] = self.catalog.inspect();
+        value["dock"] = self.dock.inspect();
         value.to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
@@ -1645,6 +1736,9 @@ impl api::Application for Desktop {
             || (surface == "bluetooth" && self.bluetooth.animating(now))
             || (surface == "network" && self.network.animating(now))
             || (surface == "osd" && self.osd.animating(now))
-            || (surface == "dock" && (self.launcher.animating(now) || self.carousel.active(now)))
+            || (surface == "dock"
+                && (self.launcher.animating(now)
+                    || self.carousel.active(now)
+                    || self.dock.animating(now)))
     }
 }

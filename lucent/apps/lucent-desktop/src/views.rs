@@ -46,6 +46,7 @@ impl Desktop {
             launcher: &self.launcher,
             input: crate::launcher::Input {
                 apps: &self.apps,
+                application_status: self.catalog.status(),
                 settings: &self.settings,
                 palettes: &palettes,
                 wallpapers: &self.wallpapers,
@@ -260,8 +261,14 @@ impl Desktop {
             .value(cx.now)
             .max(component::dock::MINIMUM_HEIGHT);
         let reveal = self.launcher.reveal().value(cx.now).clamp(0., 1.);
-        let (x, y) =
+        let (x, mut y) =
             shell_layout::dock_origin(self.viewport, (cx.width, cx.height), (width, height));
+        let visibility = if self.launcher.expanded() {
+            1.
+        } else {
+            self.dock.progress(cx.now)
+        };
+        y += (1. - visibility) * crate::shell_layout::dock_surface_height(self.viewport.1) as f32;
         let mut children = vec![];
         if reveal < 0.999 {
             children.push(self.dock_row().opacity((1. - reveal * 2.).max(0.)).at(
@@ -299,7 +306,30 @@ impl Desktop {
                 self.launcher.selected(),
             )))
             .id("dock-panel");
-        Element::stack(vec![panel]).fill()
+        let mut layers = vec![];
+        if visibility > 0. {
+            layers.push(
+                panel
+                    .opacity(visibility)
+                    .on_hover(Message::Dock(crate::dock::Message::Pointer(true))),
+            );
+        }
+        if self.settings.dock.auto_hide && !self.launcher.expanded() {
+            layers.push(
+                Element::empty()
+                    .size(self.dock_width(), component::dock::HOTSPOT_HEIGHT)
+                    .at(
+                        (cx.width - self.dock_width()) / 2.,
+                        cx.height - component::dock::HOTSPOT_HEIGHT,
+                    )
+                    .on_hover(Message::Dock(crate::dock::Message::Pointer(true)))
+                    .on_click(Message::Launcher(launcher::Message::Toggle))
+                    .id("dock-hotspot")
+                    .tab_stop(false)
+                    .input_only(),
+            );
+        }
+        Element::stack(layers).fill()
     }
     fn dock_row(&self) -> Element<Message> {
         let mut items = vec![
@@ -314,7 +344,8 @@ impl Desktop {
                 .on_click(Message::Launcher(launcher::Message::Toggle))
                 .id("dock-launcher"),
         ];
-        for app in self.dock_apps() {
+        let mut previews = vec![];
+        for (index, app) in self.dock_apps().into_iter().enumerate() {
             let running = self
                 .compositor
                 .windows
@@ -339,20 +370,42 @@ impl Desktop {
                         .background(self.accent()),
                 );
             }
-            items.push(
-                Element::stack(content)
-                    .size(
-                        component::dock_row::ITEM_SIZE,
-                        component::dock_row::ITEM_SIZE,
-                    )
-                    .radius(radius::CONTROL)
-                    .background(self.surface_color())
-                    .on_click(Message::Launch(app.id.clone(), true))
-                    .id(format!("dock-{}", app.id.as_str())),
-            );
+            let element = Element::stack(content)
+                .size(
+                    component::dock_row::ITEM_SIZE,
+                    component::dock_row::ITEM_SIZE,
+                )
+                .radius(radius::CONTROL)
+                .background(self.surface_color());
+            let id = app.id.clone();
+            let source = element
+                .clone()
+                .on_click(Message::Launch(app.id.clone(), true))
+                .on_drag(move |event| Message::Dock(crate::dock::Message::Drag(id.clone(), event)))
+                .id(format!("dock-{}", app.id.as_str()));
+            if self.dock.dragging() {
+                items.push(source.input_only());
+                previews.push(element.at(
+                    (index + 1) as f32 * (component::dock_row::ITEM_SIZE + space::SM)
+                        + self.dock.offset(&app.id, index),
+                    0.,
+                ));
+            } else {
+                items.push(source);
+            }
         }
-        Element::row(items)
+        let row = Element::row(items)
             .gap(space::SM)
-            .height(Length::Fixed(component::dock_row::HEIGHT))
+            .height(Length::Fixed(component::dock_row::HEIGHT));
+        if self.dock.dragging() {
+            let mut layers = vec![row];
+            layers.extend(previews);
+            Element::stack(layers).size(
+                shell_layout::dock_content_width(self.dock_apps().len() + 1),
+                component::dock_row::HEIGHT,
+            )
+        } else {
+            row
+        }
     }
 }

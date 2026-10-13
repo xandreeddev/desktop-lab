@@ -72,6 +72,7 @@ pub enum Message {
 #[derive(Clone)]
 pub enum Intent {
     Launch(AppId, bool),
+    Pin(AppId),
     Action(Action),
     Wallpaper(usize, bool),
     Browser(wallpaper_browser::Message),
@@ -86,6 +87,7 @@ pub enum Intent {
 #[derive(Clone, Copy)]
 pub struct Input<'a> {
     pub apps: &'a [Application],
+    pub application_status: crate::catalog::Status,
     pub settings: &'a DesktopSettings,
     pub palettes: &'a [ThemePalette],
     pub wallpapers: &'a [Wallpaper],
@@ -191,6 +193,27 @@ impl Launcher {
     }
 
     /// Discovery refreshes the active query, then clamps selection before paint.
+    pub fn selected_application<'a>(&self, apps: &'a [Application]) -> Option<&'a AppId> {
+        self.results
+            .get(self.selected)
+            .and_then(|index| apps.get(*index))
+            .map(|app| &app.id)
+    }
+    pub fn refresh_preserving(
+        &mut self,
+        apps: &[Application],
+        selected: Option<&AppId>,
+        geometry: Geometry,
+        now: f64,
+    ) {
+        self.results = lucent_usecases::search_applications(apps, &self.query);
+        if let Some(position) =
+            selected.and_then(|id| self.results.iter().position(|index| &apps[*index].id == id))
+        {
+            self.selected = position;
+        }
+        self.reconcile(geometry, now);
+    }
     pub fn refresh(&mut self, apps: &[Application], geometry: Geometry, now: f64) {
         self.results = lucent_usecases::search_applications(apps, &self.query);
         self.reconcile(geometry, now);
@@ -524,6 +547,7 @@ mod tests {
         fn input(&self) -> Input<'_> {
             Input {
                 apps: &self.apps,
+                application_status: crate::catalog::Status::Ready,
                 settings: &self.settings,
                 palettes: lucent_design::palettes(),
                 wallpapers: &[],

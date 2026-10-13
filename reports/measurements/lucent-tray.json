@@ -17,7 +17,7 @@
     "pages_each_prefix": 13,
     "links_assets_each_prefix": 488
   },
-  "validation_scope": "Full final rendering-source suite passed without golden update mode. The subsequent adapter-only fair-deadline change reran strict workspace and all five private protocol cases. Published-head CI remains pending.",
+  "validation_scope": "Full final rendering-source suite passed without golden update mode. The subsequent adapter-only fair-deadline change reran strict workspace and all five private protocol cases. All six exact-head CI checks passed before the authorized merge.",
   "implemented": [
     "Domain TrayPort, current TrayItemId handles, validated icon content and pure current-menu action policy.",
     "Sender-owned KDE/freedesktop watcher registrations, unique-owner retirement, bounded metadata refresh and native item actions.",
@@ -36,12 +36,17 @@
     "Real application/VM interoperability, daemon restart and broader fault acceptance.",
     "Individual bar icons, pointer middle/right/wheel gestures, ordering/pinning and legacy XEmbed.",
     "Additional menu icon/shortcut metadata, indeterminate toggles, deeper lazy menus and animated icons.",
-    "Current RSS/CPU/GPU/decode peaks and animation pacing; full remaining requirement ledger.",
-    "Final published-head CI and authorized merge."
+    "Current RSS/CPU/GPU/decode peaks and animation pacing; full remaining requirement ledger."
   ],
   "privacy": {
     "private_paths_or_captures_published": false,
     "credentials_or_application_metadata_published": false
   },
-  "normal_desktop_rss_target_mib": 300
+  "normal_desktop_rss_target_mib": 300,
+  "delivery": {
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/41",
+    "state": "merged",
+    "merge_commit": "ade6970f4d4e1683d17684052eed9777271e9584",
+    "exact_head_ci_checks_passed": 6
+  }
 }

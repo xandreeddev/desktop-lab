@@ -224,6 +224,7 @@ pub mod component {
         pub const LARGE_WIDTH: f32 = 800.0;
         pub const LARGE_MAX_HEIGHT: f32 = 800.0;
         pub const SIZE_BUTTON_HEIGHT: f32 = 32.0;
+        pub const PIN_UNSELECTED_OPACITY: f32 = 0.75;
     }
     pub mod dock_row {
         pub const INDICATOR_HEIGHT: f32 = 2.0;
@@ -238,6 +239,9 @@ pub mod component {
         pub const CONTENT_INSET: f32 = 16.0;
         pub const MINIMUM_HEIGHT: f32 = 40.0;
         pub const MINIMUM_WIDTH: f32 = 60.0;
+        pub const MAX_APPS: f32 = 8.0;
+        pub const HIDE_DELAY: f32 = 0.25;
+        pub const HOTSPOT_HEIGHT: f32 = 4.0;
     }
     pub mod bar {
         pub const DOT_SIZE: f32 = 4.0;

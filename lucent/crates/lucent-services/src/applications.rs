@@ -1,79 +1,88 @@
 //! XDG desktop entry discovery and isolated argument-array launching.
+mod catalog;
 mod launch;
+mod watch;
 use lucent_domain::*;
 use std::{
     collections::BTreeMap,
     fs,
+    io::Read,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
 };
 
-#[derive(Default)]
-pub struct XdgApplications;
-impl ApplicationPort for XdgApplications {
-    fn discover(&self) -> Result<Vec<Application>> {
+pub struct XdgApplications {
+    data_roots: Vec<PathBuf>,
+    desktop: String,
+    locale: String,
+    program_dirs: Vec<PathBuf>,
+}
+impl Default for XdgApplications {
+    fn default() -> Self {
         let home = std::env::var_os("HOME")
             .map(PathBuf::from)
-            .unwrap_or_default();
+            .filter(|p| p.is_absolute());
         let data = std::env::var_os("XDG_DATA_HOME")
             .map(PathBuf::from)
             .filter(|p| p.is_absolute())
-            .unwrap_or_else(|| home.join(".local/share"));
-        let mut roots = vec![data];
+            .or_else(|| home.map(|p| p.join(".local/share")));
+        let mut roots = data.into_iter().collect::<Vec<_>>();
         roots.extend(
             std::env::var("XDG_DATA_DIRS")
-                .unwrap_or_else(|_| "/usr/local/share:/usr/share".into())
+                .ok()
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "/usr/local/share:/usr/share".into())
                 .split(':')
                 .filter(|s| s.starts_with('/'))
                 .map(PathBuf::from),
         );
-        let desktops = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_else(|_| "Hyprland".into());
-        let locale = std::env::var("LC_MESSAGES")
-            .or_else(|_| std::env::var("LANG"))
-            .unwrap_or_default();
-        let mut entries = BTreeMap::new();
-        for root in roots {
-            let root = root.join("applications");
-            let mut files = vec![];
-            walk(&root, 0, &mut files);
-            files.sort();
-            for path in files {
-                let id = path
-                    .strip_prefix(&root)
-                    .unwrap()
-                    .to_string_lossy()
-                    .replace('/', "-");
-                if entries.contains_key(&id) {
-                    continue;
-                }
-                // Hidden and invalid entries still mask lower-priority entries with the same ID.
-                let entry = fs::read_to_string(&path).ok().and_then(|text| {
-                    parse_entry(&id, &path.to_string_lossy(), &text, &desktops, &locale)
-                        .ok()
-                        .flatten()
-                });
-                entries.insert(id, entry);
-            }
+        Self {
+            data_roots: roots,
+            desktop: std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_else(|_| "Hyprland".into()),
+            locale: std::env::var("LC_ALL")
+                .ok()
+                .filter(|s| !s.is_empty())
+                .or_else(|| std::env::var("LC_MESSAGES").ok().filter(|s| !s.is_empty()))
+                .or_else(|| std::env::var("LANG").ok())
+                .unwrap_or_default(),
+            program_dirs: std::env::var_os("PATH")
+                .map(|p| {
+                    std::env::split_paths(&p)
+                        .filter(|p| p.is_absolute())
+                        .collect()
+                })
+                .unwrap_or_default(),
         }
-        Ok(entries.into_values().flatten().collect())
+    }
+}
+impl XdgApplications {
+    /// Explicit isolated catalog; no mutation of global process environment.
+    pub fn with_source(data_roots: Vec<PathBuf>, desktop: String, locale: String) -> Result<Self> {
+        if data_roots.is_empty()
+            || data_roots.len() > 64
+            || data_roots.iter().any(|p| !p.is_absolute())
+        {
+            return Err(DomainError::Invalid(
+                "Absolute application catalog roots required".into(),
+            ));
+        }
+        Ok(Self {
+            data_roots,
+            desktop,
+            locale,
+            program_dirs: vec![],
+        })
+    }
+}
+impl ApplicationPort for XdgApplications {
+    fn discover(&self) -> Result<Vec<Application>> {
+        catalog::discover(self)
+    }
+    fn watch(&self, emit: &mut dyn FnMut(Result<Vec<Application>>), stop: &dyn StopSignal) {
+        watch::observe(self, emit, stop);
     }
     fn launch(&self, app: &Application) -> Result<()> {
         launch::application(app)
-    }
-}
-fn walk(path: &Path, depth: u8, out: &mut Vec<PathBuf>) {
-    if depth > 8 {
-        return;
-    }
-    if let Ok(dir) = fs::read_dir(path) {
-        for entry in dir.flatten() {
-            let p = entry.path();
-            if p.is_dir() && !entry.file_type().is_ok_and(|t| t.is_symlink()) {
-                walk(&p, depth + 1, out);
-            } else if p.extension().is_some_and(|s| s == "desktop") {
-                out.push(p);
-            }
-        }
     }
 }
 fn executable(program: &str) -> bool {

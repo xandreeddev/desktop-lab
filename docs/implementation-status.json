@@ -250,12 +250,15 @@
     {
       "id": "launcher-and-dock",
       "owner": "application domain adapters and desktop components",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "Installed application changes update discovery",
         "Launch activation and supported desktop integration",
         "Pinning reordering and persistence",
         "Autohide and interaction coverage"
+      ],
+      "evidence": [
+        "Catalog observation, last-good data, selection identity, bounded icon preparation, saved pin/order policy, transient native drag previews and auto-hide are implemented at 2f5c9dcbee0eecd773d829c83ee65eab694c071b. Final strict workspace checks pass: 307 Rust/51 ignored, four owned catalog cases including two kernel protocol cases, 81 Python checks and an isolated independent consumer. The full 396 software-Vulkan comparisons pass, followed by four reviewed corrected no-match references. Both Astro prefixes pass 13 pages/488 links with zero diagnostics. See reports/measurements/lucent-application-catalog.json. VM/hardware acceptance is deferred; D-Bus activation, broader desktop-entry support and measured pacing remain open."
       ]
     },
     {
@@ -319,7 +322,9 @@
         "All 12 previously open PRs (27-35, 37-39) were integrated through PR 39 into main after all six exact-head checks passed. Verified main tree matches the tested integration and every contained PR is marked merged. Pages deployment from merge 6382a41de7e46fe021e2f90c841b9937e4bf15df succeeded. The user now authorizes merging passing PRs as work proceeds and deferring unavailable VM/hardware checks while the full implementation continues."
       ],
       "evidence": [
-        "PR #40 native power controls passed all six exact-head CI checks and merged into main as 74c72a28229727e7fe738cb6fea100c47f5c6305. Pages deployment on that merge completed successfully."
+        "PR #40 native power controls passed all six exact-head CI checks and merged into main as 74c72a28229727e7fe738cb6fea100c47f5c6305. Pages deployment on that merge completed successfully.",
+        "Native tray PR #41 passed all six CI checks and merged into main as ade6970f4d4e1683d17684052eed9777271e9584. Application catalog/dock work is based on that merge; unavailable VM tests remain deferred under user instruction.",
+        "Astro Pages deployment from tray merge ade6970f4d4e1683d17684052eed9777271e9584 succeeded. Pages now selects workflow publishing instead of the obsolete competing Jekyll branch build; the public site and existing local LAN server respond with HTTP 200."
       ]
     },
     {
@@ -1139,6 +1144,25 @@
         "Additional menu icon/shortcut metadata, indeterminate toggles, deeper lazy menus and animated icons.",
         "Current RSS/CPU/GPU/decode peaks and animation pacing; full remaining requirement ledger.",
         "Final published-head CI and authorized merge."
+      ]
+    },
+    {
+      "milestone": "event-driven-application-catalog-and-native-dock",
+      "source_commit": "2f5c9dcbee0eecd773d829c83ee65eab694c071b",
+      "report": "reports/measurements/lucent-application-catalog.json",
+      "status": "implementation_and_local_checks_passed_vm_hardware_deferred",
+      "checks": [
+        "307 Rust workspace tests, 81 Python checks, strict formatting/Clippy, owned kernel catalog lifecycle/nonblocking tests and independent consumer pass.",
+        "396 software-Vulkan cases pass, then the final four corrected no-match cases pass after review; 20 new and 44 changed references are intentional.",
+        "Library/user guides and skills document source registration, message routing, assets, pure policy and settings. Docs builds pass at root and project Pages prefixes."
+      ],
+      "pending": [
+        "D-Bus activation and broader desktop-entry conformance, including complete locale modifier matching.",
+        "External icon-theme invalidation and custom TryExec executables outside the captured PATH directories.",
+        "Native dock dragging/hover/shortcut, saved settings, output-change and sleep/resume acceptance.",
+        "Animated neighbor reorder/settling and current cold/warm visibility pacing; current RSS/GPU/decode peaks.",
+        "Full project ledger: text/IME/accessibility, per-output/fractional scaling, richer widgets/notifications, popup/tooltip/focus, OS interoperability, secure-client audit and release/migrations.",
+        "Exact published-head CI and authorized merge."
       ]
     }
   ],

@@ -133,6 +133,8 @@ pub type Result<T> = std::result::Result<T, DomainError>;
 /// Implementations launch argument arrays directly, never through a shell.
 pub trait ApplicationPort: Send + Sync {
     fn discover(&self) -> Result<Vec<Application>>;
+    /// Adapters own catalog updates and observation failure/recovery.
+    fn watch(&self, emit: &mut dyn FnMut(Result<Vec<Application>>), stop: &dyn crate::StopSignal);
     fn launch(&self, app: &Application) -> Result<()>;
 }
 pub trait CompositorPort: Send + Sync {
@@ -155,6 +157,21 @@ pub struct LauncherSize {
     pub width: Option<u32>,
     pub max_height: Option<u32>,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DockSettings {
+    pub auto_hide: bool,
+    /// An explicit empty pin list differs from the initial default suggestions.
+    pub default_pins: bool,
+}
+impl Default for DockSettings {
+    fn default() -> Self {
+        Self {
+            auto_hide: false,
+            default_pins: true,
+        }
+    }
+}
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DesktopSettings {
@@ -163,6 +180,7 @@ pub struct DesktopSettings {
     pub visible_widgets: Vec<String>,
     pub notes: String,
     pub pinned: Vec<AppId>,
+    pub dock: DockSettings,
     /// Legacy preference, used only when no palette has been selected.
     pub light: bool,
     pub palette: Option<crate::ThemePalette>,
@@ -179,6 +197,7 @@ impl Default for DesktopSettings {
                 .into(),
             notes: String::new(),
             pinned: Vec::new(),
+            dock: DockSettings::default(),
             light: false,
             palette: None,
             saved_palettes: Vec::new(),
