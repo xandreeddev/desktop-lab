@@ -5,13 +5,10 @@ use lucent_domain::*;
 use lucent_services::{
     JsonSettings, applications::XdgApplications, compositor::Hyprland, desktop_adapters::*, images,
 };
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 pub fn desktop_adapters() -> DesktopAdapters {
     DesktopAdapters {
-        apps: Arc::new(XdgApplications),
+        apps: Arc::new(XdgApplications::default()),
         compositor: Hyprland::from_env()
             .ok()
             .map(|h| Arc::new(h) as Arc<dyn CompositorPort>),
@@ -61,6 +58,7 @@ impl AssetPort for NativeAssets {
         let mut result = BTreeMap::new();
         for name in [
             "apps",
+            "pin",
             "search",
             "wallpaper",
             "widgets",
@@ -137,7 +135,7 @@ impl AssetPort for NativeAssets {
     }
     fn application_icons(&self, apps: &[Application]) -> Images {
         let mut result = vec![];
-        let mut seen = BTreeSet::new();
+        let mut decoded = BTreeMap::<String, Option<Arc<ImageData>>>::new();
         for app in apps {
             if let Some(asset) = lucent_design::app_icons::lookup(app.id.as_str())
                 && let Some(image) = images::svg_mask(
@@ -147,10 +145,12 @@ impl AssetPort for NativeAssets {
                 )
             {
                 result.push((format!("app:{}", app.id.as_str()), image));
-            } else if seen.insert(app.icon.clone())
-                && let Some(image) = images::icon(&app.icon)
+            } else if let Some(image) = decoded
+                .entry(app.icon.clone())
+                .or_insert_with(|| images::icon(&app.icon))
+                .clone()
             {
-                result.push((app.icon.clone(), image));
+                result.push((format!("app:{}", app.id.as_str()), image));
             }
         }
         result

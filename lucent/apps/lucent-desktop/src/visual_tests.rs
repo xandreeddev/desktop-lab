@@ -72,6 +72,10 @@ fn fixture(count: usize, light: bool) -> Desktop {
             },
         })
         .collect();
+    app.update(
+        Message::Catalog(crate::catalog::Message::Observed(Ok(app.apps.clone()))),
+        &mut Effects::default(),
+    );
     for a in &app.apps {
         if let Some(asset) = lucent_design::app_icons::lookup(a.id.as_str()) {
             app.images.insert(
@@ -511,7 +515,7 @@ fn command_rows_center_icons_and_labels_inside_rounded_endcaps() {
         .iter()
         .filter(|h| h.id.starts_with("command-"))
         .collect();
-    assert_eq!(rows.len(), 6);
+    assert_eq!(rows.len(), crate::actions::COMMANDS.len());
     for row in rows {
         let center = row.rect.y + row.rect.h / 2.;
         let paints: Vec<_> = command_scene
@@ -1147,9 +1151,14 @@ fn visual_regressions() {
             ("launcher-size-large", Mode::Apps, 30, 29, "", 1., 1024.),
             ("launcher-size-custom", Mode::Apps, 30, 29, "", 1., 1024.),
             ("themes-small-screen", Mode::Themes, 9, 4, "", 1., 320.),
+            ("catalog-empty", Mode::Apps, 0, 0, "", 1., 640.),
+            ("catalog-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
+            ("catalog-pinned", Mode::Apps, 9, 0, "", 1., 640.),
+            ("dock-hidden", Mode::Apps, 6, 0, "", 1., 640.),
+            ("dock-dragging", Mode::Apps, 6, 0, "", 1., 640.),
             ("apps-first", Mode::Apps, 9, 0, "", 1., 640.),
             ("apps-last", Mode::Apps, 9, 8, "", 1., 640.),
-            ("apps-empty", Mode::Apps, 0, 0, "no results", 1., 640.),
+            ("apps-empty", Mode::Apps, 9, 0, "no results", 1., 640.),
             (
                 "apps-long-input",
                 Mode::Apps,
@@ -1344,7 +1353,14 @@ fn visual_regressions() {
                 Message::Launcher(launcher::Message::Select(selected)),
                 &mut Effects::default(),
             );
-            app.launcher.fixture_query(query.into());
+            if name == "apps-empty" {
+                app.update(
+                    Message::Launcher(launcher::Message::Query(query.into())),
+                    &mut Effects::default(),
+                );
+            } else {
+                app.launcher.fixture_query(query.into());
+            }
             if matches!(name, "wallpapers" | "wallpapers-unavailable") {
                 app.wallpapers = wallpaper_fixtures();
             }
@@ -1565,6 +1581,79 @@ fn visual_regressions() {
                     now,
                 };
                 let tree = session.view(&cx).map(|_| Message::Quit);
+                layout.build(&tree, width, height, &Interaction::default(), now)
+            } else if name.starts_with("catalog-") || name.starts_with("dock-") {
+                let mut effects = Effects::default();
+                if name.starts_with("catalog-") {
+                    app.update(
+                        Message::Launcher(launcher::Message::Mode(Mode::Apps)),
+                        &mut effects,
+                    );
+                    if name == "catalog-empty" {
+                        app.update(
+                            Message::Catalog(crate::catalog::Message::Observed(Ok(vec![]))),
+                            &mut effects,
+                        );
+                    }
+                    if name == "catalog-unavailable" {
+                        app.update(
+                            Message::Catalog(crate::catalog::Message::Observed(Err(
+                                lucent_domain::DomainError::Unavailable(
+                                    "Application catalog observation is unavailable".into(),
+                                ),
+                            ))),
+                            &mut effects,
+                        );
+                    }
+                    if name == "catalog-pinned" {
+                        let id = app.apps[4].id.clone();
+                        app.update(
+                            Message::Dock(crate::dock::Message::SetPin(id, true)),
+                            &mut effects,
+                        );
+                    }
+                } else {
+                    if app.launcher.open() {
+                        app.update(Message::Launcher(launcher::Message::Close), &mut effects);
+                        if let Some(message) = app.event(Event::FrameSubmitted {
+                            surface: "dock",
+                            width,
+                            height,
+                            now: 10.,
+                        }) {
+                            let mut settled = Effects {
+                                now: 10.,
+                                ..Default::default()
+                            };
+                            app.update(message, &mut settled);
+                        }
+                    }
+                    if name == "dock-hidden" {
+                        app.settings.dock.auto_hide = true;
+                        app.dock.fixture_hidden();
+                    } else {
+                        let id = app.dock_apps()[0].id.clone();
+                        app.update(Message::Dock(crate::dock::Message::Press), &mut effects);
+                        app.update(
+                            Message::Dock(crate::dock::Message::Drag(
+                                id,
+                                DragEvent {
+                                    dx: lucent_design::component::dock_row::ITEM_SIZE
+                                        + lucent_design::space::SM,
+                                    dy: 0.,
+                                    finished: false,
+                                },
+                            )),
+                            &mut effects,
+                        );
+                    }
+                }
+                let tree = app.view(&ViewContext {
+                    surface: "dock",
+                    width,
+                    height,
+                    now,
+                });
                 layout.build(&tree, width, height, &Interaction::default(), now)
             } else if name.starts_with("tray-") {
                 use crate::tray::{
@@ -2699,7 +2788,6 @@ fn invalid_settings_remain_visible_after_unrelated_successful_effects() {
     let mut effects = Effects::default();
     app.update(
         Message::Loaded(
-            vec![],
             Err(lucent_domain::DomainError::Invalid(
                 "invalid saved position".into(),
             )),
@@ -3135,5 +3223,93 @@ fn bluetooth_overlay_routes_keyboard_submission_without_exposing_input_or_compet
             reason: "fixture panic".into()
         })
         .is_none()
+    );
+}
+#[test]
+fn launcher_pins_are_native_actions_and_hidden_dock_keeps_only_its_hotspot() {
+    let mut app = fixture(6, false);
+    app.settings_writable = true;
+    let mut effects = Effects::default();
+    app.update(
+        Message::Launcher(launcher::Message::Mode(Mode::Apps)),
+        &mut effects,
+    );
+    effects.tasks.clear();
+    let layout = Layout::new(fonts(&app));
+    let rendered = scene(&app, &layout, &mut Interaction::default(), 1.);
+    let id = app.apps[4].id.clone();
+    let hit = rendered
+        .hits
+        .iter()
+        .find(|h| h.id == format!("pin-{}", id.as_str()))
+        .unwrap();
+    let message = hit.click.clone().unwrap();
+    app.update(message, &mut effects);
+    assert!(app.settings.pinned.contains(&id));
+    assert!(
+        effects
+            .tasks
+            .iter()
+            .all(|t| t.queue != crate::work::CONTROLS)
+    );
+    assert!(app.launcher.open());
+    let mut hidden_app = fixture(6, false);
+    hidden_app.launcher = Default::default();
+    hidden_app.settings.dock.auto_hide = true;
+    hidden_app.dock.fixture_hidden();
+    let tree = hidden_app.view(&ViewContext {
+        surface: "dock",
+        width: 640.,
+        height: 100.,
+        now: 10.,
+    });
+    let hidden = layout.build(&tree, 640., 100., &Interaction::default(), 10.);
+    assert!(hidden.paint.is_empty());
+    assert_eq!(hidden.hits.len(), 1);
+    assert_eq!(hidden.hits[0].id, "dock-hotspot");
+}
+#[test]
+fn live_catalog_updates_keep_query_selected_identity_and_missing_saved_pins() {
+    let mut app = fixture(6, false);
+    let mut effects = Effects::default();
+    app.update(
+        Message::Launcher(launcher::Message::Mode(Mode::Apps)),
+        &mut effects,
+    );
+    app.update(
+        Message::Launcher(launcher::Message::Query("r".into())),
+        &mut effects,
+    );
+    let selected = app
+        .launcher
+        .selected_application(&app.apps)
+        .unwrap()
+        .clone();
+    let missing = AppId::new("missing.desktop").unwrap();
+    app.settings.pinned = vec![missing.clone()];
+    let mut next = app.apps.clone();
+    next.reverse();
+    app.update(
+        Message::Catalog(crate::catalog::Message::Observed(Ok(next))),
+        &mut effects,
+    );
+    assert_eq!(app.launcher.query(), "r");
+    assert_eq!(
+        app.launcher.selected_application(&app.apps),
+        Some(&selected)
+    );
+    assert_eq!(app.settings.pinned, vec![missing]);
+    let key = Event::Key {
+        surface: "dock",
+        key: Key::Shortcut {
+            character: 'p',
+            modifiers: KeyModifiers {
+                control: true,
+                ..Default::default()
+            },
+        },
+    };
+    assert!(
+        matches!(app.event(key),Some(Message::Dock(crate::dock::Message::Pin(id)))if id==selected)
     );
 }

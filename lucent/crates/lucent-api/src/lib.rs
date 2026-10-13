@@ -595,8 +595,19 @@ pub struct ViewContext {
     pub height: f32,
     pub now: f64,
 }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct KeyModifiers {
+    pub control: bool,
+    pub alt: bool,
+    pub shift: bool,
+    pub logo: bool,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Key {
+    Shortcut {
+        character: char,
+        modifiers: KeyModifiers,
+    },
     Text(String),
     Backspace,
     Delete,
@@ -615,8 +626,28 @@ pub enum Key {
     SelectAll,
     ClearInput,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MouseButton {
+    Primary,
+    Secondary,
+    Middle,
+    Other(u32),
+}
 #[derive(Clone, Debug)]
 pub enum Event {
+    /// Pointer boundary for this native surface, independent of component hover.
+    PointerInside {
+        surface: &'static str,
+        inside: bool,
+    },
+    /// Logical surface-local coordinates. Physical presses distinguish new gestures.
+    PointerButton {
+        surface: &'static str,
+        button: MouseButton,
+        pressed: bool,
+        x: f32,
+        y: f32,
+    },
     /// A successful buffer submission, after view/layout/render. This is not
     /// scanout or a compositor display acknowledgement. `now` is the view's
     /// animation time; dimensions are the submitted logical buffer extent.

@@ -187,6 +187,12 @@ class Boundaries(unittest.TestCase):
         self.assertNotIn('lucent-wayland', reachable(self.graph, 'tray-service'))
         self.assertNotIn('lucent-render', reachable(self.graph, 'tray-service'))
 
+    def test_application_catalog_and_dock_preserve_boundaries(self):
+        self.assert_no_platform_operations([ROOT / 'lucent/apps/lucent-desktop/src/catalog.rs', ROOT / 'lucent/apps/lucent-desktop/src/dock.rs'],
+                                           ('crate::desktop', 'crate::adapters', 'crate::platform'))
+        self.assertNotIn('lucent-wayland', reachable(self.graph, 'application-service'))
+        self.assertNotIn('lucent-render', reachable(self.graph, 'application-service'))
+
     def test_all_desktop_effects_fit_the_runtime_worker_budget(self):
         root=ROOT / 'lucent/apps/lucent-desktop/src'
         lanes=re.findall(r'pub const \w+: &str = "([^"]+)";', (root/'work.rs').read_text())

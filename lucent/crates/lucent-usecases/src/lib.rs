@@ -1,6 +1,7 @@
 //! Desktop application policy, expressed against domain ports.
 pub mod audio;
 pub mod bluetooth;
+pub mod dock;
 pub mod menu;
 pub mod notifications;
 pub mod power;
@@ -179,6 +180,9 @@ mod tests {
         calls: Mutex<Vec<String>>,
     }
     impl ApplicationPort for Fake {
+        fn watch(&self, emit: &mut dyn FnMut(Result<Vec<Application>>), _: &dyn StopSignal) {
+            emit(self.discover());
+        }
         fn discover(&self) -> Result<Vec<Application>> {
             Ok(vec![app("foot")])
         }

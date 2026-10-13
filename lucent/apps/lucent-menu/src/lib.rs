@@ -343,6 +343,7 @@ impl Application for Menu {
     }
     fn event(&self, event: Event) -> Option<Message> {
         match event {
+            Event::PointerInside { .. } | Event::PointerButton { .. } => None,
             Event::FrameSubmitted { .. } => None,
             Event::Outside { .. } => Some(Message::Cancel),
             Event::Resize { width, height, .. } => Some(Message::Resize(width, height)),

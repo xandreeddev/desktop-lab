@@ -179,6 +179,7 @@ fn raster_svg(source: &str, size: u32) -> Option<Vec<u8>> {
 /// are vendored in assets/material. Monochrome tint is supplied by the UI theme.
 pub fn symbol(name: &str, color: &str) -> Arc<ImageData> {
     let source = match name {
+        "pin" => include_str!("../assets/material/pin.svg"),
         "apps" => include_str!("../assets/material/apps.svg"),
         "search" => include_str!("../assets/material/search.svg"),
         "wallpaper" => include_str!("../assets/material/wallpaper.svg"),

@@ -193,6 +193,7 @@
   --component-launcher-large-width: 800px;
   --component-launcher-large-max-height: 800px;
   --component-launcher-size-button-height: 32px;
+  --component-launcher-pin-unselected-opacity: var(--opacity-muted);
   --component-dock-row-indicator-height: 2px;
   --component-dock-row-indicator-width: 16px;
   --component-dock-row-indicator-left: 16px;
@@ -203,6 +204,9 @@
   --component-dock-content-inset: var(--layout-shell-inset);
   --component-dock-minimum-height: 40px;
   --component-dock-minimum-width: 60px;
+  --component-dock-max-apps: 8;
+  --component-dock-hide-delay: 0.25;
+  --component-dock-hotspot-height: var(--space-xs);
   --component-bar-dot-size: 4px;
   --component-bar-top: var(--layout-shell-inset);
   --component-bar-left: var(--layout-shell-inset);
