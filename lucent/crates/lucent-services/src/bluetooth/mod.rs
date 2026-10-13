@@ -2,6 +2,7 @@
 //! Commands use that worker; no subprocess, toolkit or network UI is involved.
 mod agent;
 mod catalog;
+mod connection;
 mod control;
 mod native;
 mod pairing;
@@ -23,6 +24,8 @@ const RECONNECT_DELAY: Duration = Duration::from_secs(2);
 enum Intent {
     Control(BluetoothCommand),
     Pair(BluetoothObjectId),
+    Connect(BluetoothObjectId),
+    CancelConnection(BluetoothConnectionId),
     Answer(BluetoothPairingId, BluetoothPairingAnswer),
     Cancel(BluetoothPairingId),
     Incoming(bool),
@@ -30,6 +33,7 @@ enum Intent {
 enum Reply {
     Done,
     Pairing(BluetoothPairingId),
+    Connection(BluetoothConnectionId),
 }
 struct Request {
     command: Intent,
@@ -103,6 +107,10 @@ impl BlueZ {
         self.allocate()
             .and_then(|id| BluetoothPairingId::new(id.value()))
     }
+    fn allocate_connection(&self) -> Result<BluetoothConnectionId> {
+        self.allocate()
+            .and_then(|id| BluetoothConnectionId::new(id.value()))
+    }
     async fn observe(
         &self,
         transport: &native::Transport,
@@ -113,10 +121,7 @@ impl BlueZ {
         session::run(self, transport, signals, emit, stop).await
     }
     fn request(&self, command: Intent) -> Result<Reply> {
-        let duration = if matches!(
-            command,
-            Intent::Incoming(true) | Intent::Control(BluetoothCommand::Connect(_))
-        ) {
+        let duration = if matches!(command, Intent::Incoming(true)) {
             self.interactive_timeout
         } else {
             self.timeout
@@ -149,7 +154,9 @@ impl BlueZ {
     fn request_done(&self, intent: Intent) -> Result<()> {
         match self.request(intent)? {
             Reply::Done => Ok(()),
-            Reply::Pairing(_) => Err(unavailable("Unexpected Bluetooth acknowledgement")),
+            Reply::Pairing(_) | Reply::Connection(_) => {
+                Err(unavailable("Unexpected Bluetooth acknowledgement"))
+            }
         }
     }
 }
@@ -187,10 +194,21 @@ impl BluetoothPort for BlueZ {
     fn control(&self, command: BluetoothCommand) -> Result<()> {
         self.request_done(Intent::Control(command))
     }
+    fn start_connection(&self, device: BluetoothObjectId) -> Result<BluetoothConnectionId> {
+        match self.request(Intent::Connect(device))? {
+            Reply::Connection(id) => Ok(id),
+            _ => Err(unavailable("Unexpected Bluetooth acknowledgement")),
+        }
+    }
+    fn cancel_connection(&self, attempt: BluetoothConnectionId) -> Result<()> {
+        self.request_done(Intent::CancelConnection(attempt))
+    }
     fn start_pairing(&self, device: BluetoothObjectId) -> Result<BluetoothPairingId> {
         match self.request(Intent::Pair(device))? {
             Reply::Pairing(id) => Ok(id),
-            Reply::Done => Err(unavailable("Unexpected Bluetooth acknowledgement")),
+            Reply::Done | Reply::Connection(_) => {
+                Err(unavailable("Unexpected Bluetooth acknowledgement"))
+            }
         }
     }
     fn answer_pairing(&self, id: BluetoothPairingId, answer: BluetoothPairingAnswer) -> Result<()> {

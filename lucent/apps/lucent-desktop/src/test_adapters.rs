@@ -187,6 +187,14 @@ impl BluetoothPort for Fake {
         self.calls.lock().unwrap().push("bluetooth");
         Ok(())
     }
+    fn start_connection(&self, _: BluetoothObjectId) -> Result<BluetoothConnectionId> {
+        Err(DomainError::Unavailable(
+            "No fixture connection target".into(),
+        ))
+    }
+    fn cancel_connection(&self, _: BluetoothConnectionId) -> Result<()> {
+        Err(DomainError::Invalid("No fixture connection attempt".into()))
+    }
     fn start_pairing(&self, _: BluetoothObjectId) -> Result<BluetoothPairingId> {
         Err(DomainError::Unavailable("No fixture pairing target".into()))
     }

@@ -39,9 +39,6 @@ pub(super) fn plan(
         BluetoothCommand::SetDiscovery { adapter, active } => {
             Plan::Discovery(catalog.resolve(adapter, Kind::Adapter)?, active)
         }
-        BluetoothCommand::Connect(id) => {
-            Plan::Device(catalog.resolve(id, Kind::Device)?, "Connect")
-        }
         BluetoothCommand::Disconnect(id) => {
             Plan::Device(catalog.resolve(id, Kind::Device)?, "Disconnect")
         }

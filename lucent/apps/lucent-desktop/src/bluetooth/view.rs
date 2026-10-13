@@ -186,6 +186,54 @@ impl Bluetooth {
         for request in &snapshot.pairing_requests {
             children.push(self.pairing_view(request, snapshot, theme));
         }
+        if let Some(admission) = &self.pending_connection {
+            children.push(card(
+                vec![
+                    text(
+                        if admission.cancelled {
+                            "Cancelling the submitted connection…"
+                        } else {
+                            "Submitting a connection request…"
+                        },
+                        theme,
+                    ),
+                    button(
+                        "Cancel connection",
+                        "bluetooth-cancel-connection-admission",
+                        Message::CancelConnectionAdmission,
+                        !admission.cancelled && self.answering.is_none(),
+                        theme,
+                    ),
+                ],
+                theme,
+            ));
+        }
+        if let Some(attempt) = &snapshot.connection {
+            let mut status = vec![text(
+                match &attempt.phase {
+                    BluetoothConnectionPhase::Connecting => "Connecting to the device…".into(),
+                    BluetoothConnectionPhase::Succeeded => {
+                        "Connection method completed. Observe the device and its resolved services."
+                            .into()
+                    }
+                    BluetoothConnectionPhase::Cancelled => "Connection cancelled.".into(),
+                    BluetoothConnectionPhase::Failed(error) => {
+                        format!("Connection failed: {error}")
+                    }
+                },
+                theme,
+            )];
+            if attempt.phase == BluetoothConnectionPhase::Connecting {
+                status.push(button(
+                    "Cancel connection",
+                    "bluetooth-cancel-connection",
+                    Message::CancelConnection(attempt.id),
+                    self.answering.is_none(),
+                    theme,
+                ));
+            }
+            children.push(card(status, theme));
+        }
         if let Some(attempt) = &snapshot.pairing {
             let mut status = vec![text(
                 match &attempt.phase {
@@ -224,7 +272,7 @@ impl Bluetooth {
                                 "Forget device",
                                 "bluetooth-forget-confirm",
                                 Message::ConfirmForget,
-                                self.active.is_none(),
+                                !self.ordinary_busy(),
                                 theme,
                             )
                             .background(theme.surface_container)
@@ -280,7 +328,7 @@ impl Bluetooth {
                             adapter: controller.id,
                             powered: !controller.powered,
                         }),
-                        self.active.is_none(),
+                        !self.ordinary_busy(),
                         theme,
                     ),
                     button(
@@ -294,7 +342,7 @@ impl Bluetooth {
                             adapter: controller.id,
                             active: !controller.discovery_owned,
                         }),
-                        controller.powered && self.active.is_none(),
+                        controller.powered && !self.ordinary_busy(),
                         theme,
                     ),
                 ]),
@@ -327,7 +375,7 @@ impl Bluetooth {
                             adapter: controller.id,
                             discoverable: !controller.discoverable,
                         }),
-                        controller.powered && self.active.is_none(),
+                        controller.powered && !self.ordinary_busy(),
                         theme,
                     ),
                     button(
@@ -341,7 +389,7 @@ impl Bluetooth {
                             adapter: controller.id,
                             pairable: !controller.pairable,
                         }),
-                        self.active.is_none(),
+                        !self.ordinary_busy(),
                         theme,
                     ),
                 ]));
@@ -375,7 +423,7 @@ impl Bluetooth {
                 button(if snapshot.incoming_pairing_enabled { "Handle requests · on" }
                     else { "Handle incoming here" }, "bluetooth-incoming",
                     Message::Incoming(!snapshot.incoming_pairing_enabled),
-                    !pairing && self.active.is_none(), theme),
+                    !pairing && !self.ordinary_busy(), theme),
                 text("Let Lucent handle incoming requests. Visibility and radio permission are separate. Each request needs your decision.",theme).font(font::CAPTION),
             ], theme));
             return children;
@@ -425,14 +473,20 @@ impl Bluetooth {
             }
             let mut actions = vec![];
             if device.connected || device.paired {
-                let command = if device.connected {
-                    BluetoothCommand::Disconnect(device.id)
+                let action = if device.connected {
+                    Message::Control(BluetoothCommand::Disconnect(device.id))
                 } else {
-                    BluetoothCommand::Connect(device.id)
+                    Message::Connect(device.id)
                 };
-                let valid =
-                    lucent_usecases::bluetooth::validate_bluetooth_command(snapshot, &command)
-                        .is_ok();
+                let valid = if device.connected {
+                    lucent_usecases::bluetooth::validate_bluetooth_command(
+                        snapshot,
+                        &BluetoothCommand::Disconnect(device.id),
+                    )
+                } else {
+                    lucent_usecases::bluetooth::validate_connection_target(snapshot, device.id)
+                }
+                .is_ok();
                 actions.push(button(
                     if device.connected {
                         "Disconnect"
@@ -440,8 +494,8 @@ impl Bluetooth {
                         "Connect"
                     },
                     format!("bluetooth-connect-{}", device.id.value()),
-                    Message::Control(command),
-                    valid && self.active.is_none(),
+                    action,
+                    valid && !self.ordinary_busy(),
                     theme,
                 ));
             }
@@ -457,7 +511,7 @@ impl Bluetooth {
                         device: device.id,
                         trusted: !device.trusted,
                     }),
-                    self.active.is_none(),
+                    !self.ordinary_busy(),
                     theme,
                 ));
             } else {
@@ -465,7 +519,7 @@ impl Bluetooth {
                     "Pair device",
                     format!("bluetooth-pair-{}", device.id.value()),
                     Message::Pair(device.id),
-                    self.active.is_none()
+                    !self.ordinary_busy()
                         && !pairing
                         && snapshot.pairing_requests.is_empty()
                         && lucent_usecases::bluetooth::validate_pairing_target(snapshot, device.id)
@@ -482,7 +536,7 @@ impl Bluetooth {
                 "Forget device",
                 format!("bluetooth-forget-{}", device.id.value()),
                 Message::AskForget(device.id),
-                self.active.is_none() && !pairing,
+                !self.ordinary_busy() && !pairing,
                 theme,
             ));
             children.push(card(content, theme));

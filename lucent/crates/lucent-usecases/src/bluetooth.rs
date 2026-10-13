@@ -19,6 +19,24 @@ pub fn validate_pairing_target(state: &BluetoothSnapshot, id: BluetoothObjectId)
     }
     Ok(())
 }
+pub fn validate_connection_target(state: &BluetoothSnapshot, id: BluetoothObjectId) -> Result<()> {
+    let device = state
+        .devices
+        .iter()
+        .find(|d| d.id == id)
+        .ok_or_else(|| DomainError::Invalid("Choose a current Bluetooth device".into()))?;
+    let controller = state
+        .adapters
+        .iter()
+        .find(|a| a.id == device.adapter)
+        .ok_or_else(|| DomainError::Invalid("Bluetooth controller disappeared".into()))?;
+    if !controller.powered || device.blocked || !device.paired {
+        return Err(DomainError::Invalid(
+            "Choose a paired, available Bluetooth device".into(),
+        ));
+    }
+    Ok(())
+}
 pub fn validate_pairing_answer(
     prompt: &BluetoothPairingPrompt,
     answer: &BluetoothPairingAnswer,
@@ -111,21 +129,6 @@ pub fn validate_bluetooth_command(
                 ));
             }
             adapter(id)?;
-        }
-        BluetoothCommand::Connect(id) => {
-            let d = device(id)?;
-            if !adapter(d.adapter)?.powered || d.blocked {
-                return Err(DomainError::Invalid(
-                    "Bluetooth device is unavailable or blocked".into(),
-                ));
-            }
-            // Connecting an unpaired device could invoke another application's
-            // default pairing agent. Keep that separate from explicit native pairing.
-            if !d.paired {
-                return Err(DomainError::Invalid(
-                    "Pair the Bluetooth device before connecting".into(),
-                ));
-            }
         }
         BluetoothCommand::Disconnect(id) | BluetoothCommand::Forget(id) => {
             adapter(device(id)?.adapter)?;
@@ -286,12 +289,10 @@ mod tests {
     fn controls_revalidate_identity_power_and_pairing_without_mutating_observations() {
         let mut s = state();
         let id = s.devices[0].id;
-        assert!(validate_bluetooth_command(&s, &BluetoothCommand::Connect(id)).is_ok());
-        assert!(
-            validate_bluetooth_command(&s, &BluetoothCommand::Connect(s.adapters[0].id)).is_err()
-        );
+        assert!(validate_connection_target(&s, id).is_ok());
+        assert!(validate_connection_target(&s, s.adapters[0].id).is_err());
         s.devices[0].paired = false;
-        assert!(validate_bluetooth_command(&s, &BluetoothCommand::Connect(id)).is_err());
+        assert!(validate_connection_target(&s, id).is_err());
         assert!(
             validate_bluetooth_command(
                 &s,
@@ -314,7 +315,7 @@ mod tests {
         );
         s.devices[0].paired = true;
         s.devices[0].blocked = true;
-        assert!(validate_bluetooth_command(&s, &BluetoothCommand::Connect(id)).is_err());
+        assert!(validate_connection_target(&s, id).is_err());
         assert!(validate_bluetooth_command(&s, &BluetoothCommand::Disconnect(id)).is_ok());
         s.adapters[0].powered = false;
         assert!(

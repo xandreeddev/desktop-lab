@@ -28,6 +28,9 @@ pub enum Message {
     Scroll(ScrollEvent),
     Control(BluetoothCommand),
     Pair(BluetoothObjectId),
+    Connect(BluetoothObjectId),
+    CancelConnection(BluetoothConnectionId),
+    CancelConnectionAdmission,
     Incoming(bool),
     Edit(BluetoothPairingId, InputEdit),
     Submit(BluetoothPairingId),
@@ -44,6 +47,7 @@ pub enum Message {
 pub enum Outcome {
     Done,
     Started(BluetoothPairingId),
+    ConnectionStarted(BluetoothConnectionId),
 }
 #[derive(Default, PartialEq)]
 enum Observation {
@@ -52,9 +56,16 @@ enum Observation {
     Ready(BluetoothSnapshot),
     Unavailable(String),
 }
+struct ConnectionAdmission {
+    device: BluetoothObjectId,
+    observation_epoch: u64,
+    cancelled: bool,
+    attempt: Option<BluetoothConnectionId>,
+}
 pub struct Bluetooth {
     adapter: Arc<dyn BluetoothPort>,
     observation: Observation,
+    observation_epoch: u64,
     open: bool,
     mounted: bool,
     motion: Motion,
@@ -66,6 +77,8 @@ pub struct Bluetooth {
     active: Option<u64>,
     answering: Option<u64>,
     pending_pair: Option<BluetoothObjectId>,
+    pending_connection: Option<ConnectionAdmission>,
+    closing_connection_device: Option<BluetoothObjectId>,
     pending_scan: Option<BluetoothObjectId>,
     closing_device: Option<BluetoothObjectId>,
     scan_stops: BTreeSet<BluetoothObjectId>,
@@ -79,6 +92,7 @@ impl Bluetooth {
         Self {
             adapter,
             observation: Observation::Loading,
+            observation_epoch: 0,
             open: false,
             mounted: false,
             motion: Motion::fixed(0.),
@@ -90,6 +104,8 @@ impl Bluetooth {
             active: None,
             answering: None,
             pending_pair: None,
+            pending_connection: None,
+            closing_connection_device: None,
             pending_scan: None,
             closing_device: None,
             scan_stops: BTreeSet::new(),
@@ -123,6 +139,33 @@ impl Bluetooth {
             Observation::Ready(s) if s.devices.iter().any(|d| d.connected) => "Bluetooth connected",
             Observation::Ready(_) => "Bluetooth ready",
         }
+    }
+    fn ordinary_busy(&self) -> bool {
+        self.active.is_some()
+            || self.pending_connection.is_some()
+            || self.snapshot().is_some_and(|s| {
+                s.connection
+                    .as_ref()
+                    .is_some_and(|a| a.phase == BluetoothConnectionPhase::Connecting)
+            })
+    }
+    fn admission_retired(&self, admission: &ConnectionAdmission) -> bool {
+        admission.observation_epoch != self.observation_epoch
+            || self
+                .snapshot()
+                .is_none_or(|s| !s.devices.iter().any(|d| d.id == admission.device))
+    }
+    fn cancel_connection_task(
+        &mut self,
+        id: BluetoothConnectionId,
+        effects: &mut Effects<Message>,
+    ) {
+        self.submit_task(true, effects, move |adapter| {
+            match adapter.cancel_connection(id) {
+                Ok(()) | Err(DomainError::Invalid(_)) => Ok(Outcome::Done),
+                Err(error) => Err(error),
+            }
+        });
     }
     fn set_open(&mut self, open: bool, now: f64) {
         if self.open == open {
@@ -159,7 +202,7 @@ impl Bluetooth {
         effects: &mut Effects<Message>,
         operation: impl FnOnce(Arc<dyn BluetoothPort>) -> Result<Outcome> + Send + 'static,
     ) {
-        if !reply && self.active.is_some() || reply && self.answering.is_some() {
+        if !reply && self.ordinary_busy() || reply && self.answering.is_some() {
             self.error = "A Bluetooth request is already being submitted".into();
             return;
         }
@@ -252,6 +295,20 @@ impl Bluetooth {
             .filter(|a| a.phase == BluetoothPairingPhase::Pairing)
             .map(|a| a.device)
             .or(self.pending_pair);
+        let connection = self
+            .snapshot()
+            .and_then(|s| s.connection.as_ref())
+            .filter(|a| a.phase == BluetoothConnectionPhase::Connecting)
+            .map(|a| a.id);
+        self.closing_connection_device = self
+            .snapshot()
+            .and_then(|s| s.connection.as_ref())
+            .filter(|a| a.phase == BluetoothConnectionPhase::Connecting)
+            .map(|a| a.device)
+            .or(self.pending_connection.as_ref().map(|a| a.device));
+        if let Some(admission) = self.pending_connection.as_mut() {
+            admission.cancelled = true;
+        }
         let scans: Vec<_> = self
             .snapshot()
             .map(|s| {
@@ -265,7 +322,7 @@ impl Bluetooth {
         self.scan_stops.extend(scans);
         self.scan_stops.extend(self.pending_scan);
         self.set_open(false, effects.now);
-        if !requests.is_empty() || attempt.is_some() {
+        if !requests.is_empty() || attempt.is_some() || connection.is_some() {
             // A close follows an already accepted answer on the same ordered
             // short lane. Old completions cannot clear this newer operation.
             self.answering = None;
@@ -287,12 +344,20 @@ impl Bluetooth {
                         }
                     }
                 }
+                if let Some(id) = connection {
+                    match adapter.cancel_connection(id) {
+                        Ok(()) | Err(DomainError::Invalid(_)) => (),
+                        Err(error) => {
+                            failure.get_or_insert(error);
+                        }
+                    }
+                }
                 failure.map_or(Ok(Outcome::Done), Err)
             });
         }
     }
     fn stop_scans(&mut self, effects: &mut Effects<Message>) {
-        if self.active.is_some() || self.scan_stops.is_empty() {
+        if self.ordinary_busy() || self.scan_stops.is_empty() {
             return;
         }
         let targets = std::mem::take(&mut self.scan_stops);
@@ -327,7 +392,20 @@ impl Bluetooth {
                 if next == self.observation {
                     return;
                 }
+                if matches!(next, Observation::Unavailable(_)) {
+                    self.observation_epoch = self.observation_epoch.wrapping_add(1);
+                }
                 self.observation = next;
+                if self.pending_connection.as_ref().is_some_and(|admission| {
+                    admission.attempt.is_some_and(|id| {
+                        self.admission_retired(admission)
+                            || self
+                                .snapshot()
+                                .is_some_and(|s| s.connection.as_ref().is_some_and(|a| a.id == id))
+                    })
+                }) {
+                    self.pending_connection = None;
+                }
                 if self.closing_device.is_some_and(|id| {
                     self.snapshot().is_none_or(|s| {
                         !s.devices.iter().any(|d| d.id == id)
@@ -347,6 +425,17 @@ impl Bluetooth {
                         .and_then(|s| s.adapters.first())
                         .map(|a| a.id);
                 }
+                if self.pending_connection.is_none()
+                    && self.closing_connection_device.is_some_and(|id| {
+                        self.snapshot().is_none_or(|s| {
+                            s.connection.as_ref().is_none_or(|a| {
+                                a.device != id || a.phase != BluetoothConnectionPhase::Connecting
+                            })
+                        })
+                    })
+                {
+                    self.closing_connection_device = None;
+                }
                 if self.forget.is_some_and(|id| {
                     !self
                         .snapshot()
@@ -355,9 +444,15 @@ impl Bluetooth {
                     self.forget = None;
                 }
                 if self.snapshot().is_some_and(|s| {
-                    s.pairing_requests
-                        .iter()
-                        .any(|p| !old.contains(&p.id) && Some(p.device) != self.closing_device)
+                    s.pairing_requests.iter().any(|p| {
+                        !old.contains(&p.id)
+                            && Some(p.device) != self.closing_device
+                            && Some(p.device) != self.closing_connection_device
+                            && !self
+                                .pending_connection
+                                .as_ref()
+                                .is_some_and(|a| a.cancelled && a.device == p.device)
+                    })
                 }) {
                     self.set_open(true, effects.now);
                     self.scroll = 0.;
@@ -428,6 +523,45 @@ impl Bluetooth {
                     }
                 }
             }
+            Message::Connect(device) => {
+                let valid = self
+                    .snapshot()
+                    .ok_or_else(|| DomainError::Unavailable("Bluetooth is not ready".into()))
+                    .and_then(|s| {
+                        lucent_usecases::bluetooth::validate_connection_target(s, device)
+                    });
+                if let Err(error) = valid {
+                    self.error = error.to_string();
+                } else if self.ordinary_busy() {
+                    self.error = "A Bluetooth operation is already pending".into();
+                } else {
+                    let before = self.revision;
+                    self.submit_task(false, effects, move |adapter| {
+                        adapter
+                            .start_connection(device)
+                            .map(Outcome::ConnectionStarted)
+                    });
+                    if self.revision != before {
+                        self.pending_connection = Some(ConnectionAdmission {
+                            device,
+                            observation_epoch: self.observation_epoch,
+                            cancelled: false,
+                            attempt: None,
+                        });
+                    }
+                }
+            }
+            Message::CancelConnection(id) => self.cancel_connection_task(id, effects),
+            Message::CancelConnectionAdmission => {
+                if let Some(admission) = self.pending_connection.as_mut() {
+                    admission.cancelled = true;
+                    self.closing_connection_device = Some(admission.device);
+                    let attempt = admission.attempt;
+                    if let Some(id) = attempt {
+                        self.cancel_connection_task(id, effects);
+                    }
+                }
+            }
             Message::Pair(id) => {
                 let valid = self
                     .snapshot()
@@ -494,6 +628,11 @@ impl Bluetooth {
                     return;
                 }
                 *active = None;
+                let connection_admission = if !reply {
+                    self.pending_connection.take()
+                } else {
+                    None
+                };
                 let target = if !reply {
                     self.pending_scan = None;
                     self.pending_pair.take()
@@ -503,6 +642,29 @@ impl Bluetooth {
                 match result {
                     Ok(Outcome::Done) => {
                         self.notice = "Request accepted; waiting for observed state.".into()
+                    }
+                    Ok(Outcome::ConnectionStarted(id)) => {
+                        if let Some(mut admission) = connection_admission {
+                            admission.attempt = Some(id);
+                            let cancelled = admission.cancelled;
+                            let retired = self.admission_retired(&admission);
+                            if !retired
+                                && !self.snapshot().is_some_and(|s| {
+                                    s.connection.as_ref().is_some_and(|a| a.id == id)
+                                })
+                            {
+                                self.pending_connection = Some(admission);
+                            }
+                            if cancelled {
+                                self.answering = None;
+                                self.cancel_connection_task(id, effects);
+                            } else if retired {
+                                self.notice = "Connection admission expired with its observation; choose the current device.".into();
+                            } else {
+                                self.notice =
+                                    "Connection admitted; waiting for observed state.".into();
+                            }
+                        }
                     }
                     Ok(Outcome::Started(id))
                         if target.is_some() && target == self.closing_device =>
@@ -588,6 +750,9 @@ impl Bluetooth {
                 BluetoothPairingPhase::Failed(_) => "failed",
             }})
         });
-        serde_json::json!({"status":match self.observation {Observation::Loading=>"loading",Observation::Ready(_)=>"ready",Observation::Unavailable(_)=>"unavailable"},"label":self.status(),"open":self.open,"visible":self.mounted,"scroll":self.scroll,"tab":match self.tab {Tab::Available=>"available",Tab::Paired=>"paired",Tab::Radio=>"radio"},"controller":self.controller.map(|id|id.value()),"busy":self.active.is_some(),"answering":self.answering.is_some(),"error":self.error,"notice":self.notice,"controllers":self.snapshot().map(|s|s.adapters.len()),"devices":self.snapshot().map(|s|s.devices.len()),"requests":self.snapshot().map(|s|s.pairing_requests.iter().map(|p|serde_json::json!({"id":p.id.value(),"device":p.device.value()})).collect::<Vec<_>>()),"pairing":pairing,"incoming":self.snapshot().map(|s|s.incoming_pairing_enabled),"form":self.form.as_ref().map(|f|f.request.value())})
+        let connection=self.snapshot().and_then(|s|s.connection.as_ref()).map(|a|serde_json::json!({"id":a.id.value(),"device":a.device.value(),"phase":match a.phase {
+            BluetoothConnectionPhase::Connecting => "connecting", BluetoothConnectionPhase::Succeeded => "succeeded", BluetoothConnectionPhase::Cancelled => "cancelled", BluetoothConnectionPhase::Failed(_) => "failed",
+        }}));
+        serde_json::json!({"status":match self.observation {Observation::Loading=>"loading",Observation::Ready(_)=>"ready",Observation::Unavailable(_)=>"unavailable"},"label":self.status(),"open":self.open,"visible":self.mounted,"scroll":self.scroll,"tab":match self.tab {Tab::Available=>"available",Tab::Paired=>"paired",Tab::Radio=>"radio"},"controller":self.controller.map(|id|id.value()),"busy":self.ordinary_busy(),"answering":self.answering.is_some(),"error":self.error,"notice":self.notice,"controllers":self.snapshot().map(|s|s.adapters.len()),"devices":self.snapshot().map(|s|s.devices.len()),"requests":self.snapshot().map(|s|s.pairing_requests.iter().map(|p|serde_json::json!({"id":p.id.value(),"device":p.device.value()})).collect::<Vec<_>>()),"pairing":pairing,"connection":connection,"incoming":self.snapshot().map(|s|s.incoming_pairing_enabled),"form":self.form.as_ref().map(|f|f.request.value())})
     }
 }

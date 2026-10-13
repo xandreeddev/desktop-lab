@@ -84,6 +84,7 @@ pub struct BluetoothSnapshot {
     pub adapters: Vec<BluetoothAdapter>,
     pub devices: Vec<BluetoothDevice>,
     pub pairing: Option<crate::BluetoothPairingAttempt>,
+    pub connection: Option<crate::BluetoothConnectionAttempt>,
     pub pairing_requests: Vec<crate::BluetoothPairingRequest>,
     pub incoming_pairing_enabled: bool,
 }
@@ -105,7 +106,6 @@ pub enum BluetoothCommand {
         adapter: BluetoothObjectId,
         pairable: bool,
     },
-    Connect(BluetoothObjectId),
     Disconnect(BluetoothObjectId),
     SetTrusted {
         device: BluetoothObjectId,
@@ -120,6 +120,12 @@ pub trait BluetoothPort: Send + Sync {
     /// Acknowledges a backend request, not completed discovery or all profiles.
     /// Observe the resulting snapshot; never blindly replay an uncertain command.
     fn control(&self, command: BluetoothCommand) -> Result<()>;
+    /// Admit an asynchronous connection attempt; observe its phase and link.
+    /// Its transient ID belongs to this adapter instance, not a device address.
+    fn start_connection(&self, device: BluetoothObjectId) -> Result<crate::BluetoothConnectionId>;
+    /// Cancel that exact owned attempt through native disconnection. Admission
+    /// does not establish termination, and cancellation does not undo a bond.
+    fn cancel_connection(&self, attempt: crate::BluetoothConnectionId) -> Result<()>;
     /// Starts an asynchronous attempt. The ID acknowledges local admission,
     /// not successful pairing; watch the attempt and actual device observations.
     fn start_pairing(&self, device: BluetoothObjectId) -> Result<crate::BluetoothPairingId>;
@@ -158,6 +164,8 @@ mod tests {
             assert!(BluetoothAddress::parse(text).is_err());
         }
         assert!(BluetoothObjectId::new(0).is_err());
+        assert!(crate::BluetoothConnectionId::new(0).is_err());
+        assert_eq!(crate::BluetoothConnectionId::new(1).unwrap().value(), 1);
         assert_eq!(BluetoothObjectId::new(1).unwrap().value(), 1);
     }
 }

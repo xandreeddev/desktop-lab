@@ -55,6 +55,7 @@ struct Input {
     enabled: Option<bool>,
     request: Option<u64>,
     attempt: Option<u64>,
+    connection: Option<u64>,
     answer: Option<String>,
     #[serde(default, deserialize_with = "secret_input")]
     input: Option<Secret>,
@@ -82,7 +83,6 @@ fn command(value: &Input) -> Result<BluetoothCommand> {
             adapter: id(value.adapter)?,
             pairable: boolean(value.pairable)?,
         },
-        "connect" => BluetoothCommand::Connect(id(value.device)?),
         "disconnect" => BluetoothCommand::Disconnect(id(value.device)?),
         "trust" => BluetoothCommand::SetTrusted {
             device: id(value.device)?,
@@ -158,6 +158,9 @@ fn state(value: &BluetoothSnapshot, detailed: bool) -> Value {
             "id":a.id.value(),"address":a.address.to_string(),"name":a.name,"powered":a.powered,
             "discoverable":a.discoverable,"pairable":a.pairable,"discovering":a.discovering,"discovery_owned":a.discovery_owned,
         })).collect::<Vec<_>>(),
+        "connection":value.connection.as_ref().map(|a|json!({"id":a.id.value(),"device":a.device.value(),"phase":match &a.phase {
+            BluetoothConnectionPhase::Connecting => "connecting", BluetoothConnectionPhase::Succeeded => "succeeded", BluetoothConnectionPhase::Cancelled => "cancelled", BluetoothConnectionPhase::Failed(_) => "failed",
+        }})),
         "devices":value.devices.iter().map(|d|json!({
             "id":d.id.value(),"adapter":d.adapter.value(),"address":d.address.to_string(),
             "name":d.name,"icon":d.icon,"paired":d.paired,"bonded":d.bonded,"trusted":d.trusted,
@@ -224,7 +227,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     }
                 };
                 // One ordinary worker leaves stdin free to answer/cancel a
-                // callback while Connect is awaiting that decision.
+                // callback or cancel an owned connection independently of ordinary writes.
                 if worker.as_ref().is_some_and(|w| w.is_finished())
                     && worker.take().unwrap().join().is_err()
                 {
@@ -233,6 +236,22 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     )));
                 }
                 match input.command.as_str() {
+                    "connect" => match id(input.device).and_then(|id| adapter.start_connection(id))
+                    {
+                        Ok(id) => {
+                            send(json!({"kind":"connection-started","connection":id.value()}))
+                        }
+                        Err(error) => report(Err(error)),
+                    },
+                    "cancel-connect" => report(
+                        input
+                            .connection
+                            .ok_or_else(|| {
+                                DomainError::Invalid("Expected a connection attempt".into())
+                            })
+                            .and_then(BluetoothConnectionId::new)
+                            .and_then(|id| adapter.cancel_connection(id)),
+                    ),
                     "pair" => match id(input.device).and_then(|id| adapter.start_pairing(id)) {
                         Ok(id) => send(json!({"kind":"pairing-started","attempt":id.value()})),
                         Err(error) => report(Err(error)),

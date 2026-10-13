@@ -792,11 +792,13 @@ fn bluetooth_protocol_controls_and_discovery_ownership() {
     let stopped = watch.state(|s| !s.adapters[0].discovery_owned);
     assert!(stopped.adapters[0].discovering);
     assert_eq!(state.lock().unwrap().stops, 1);
-    watch
-        .adapter
-        .control(BluetoothCommand::Connect(device))
-        .unwrap();
-    let connected = watch.state(|s| s.devices[0].connected);
+    watch.adapter.start_connection(device).unwrap();
+    let connected = watch.state(|s| {
+        s.devices[0].connected
+            && s.connection
+                .as_ref()
+                .is_some_and(|a| a.phase == BluetoothConnectionPhase::Succeeded)
+    });
     assert!(!connected.devices[0].services_resolved);
     watch
         .adapter
@@ -919,12 +921,7 @@ fn bluetooth_protocol_interface_removal_and_owner_reconnect_retire_handles() {
     assert_eq!(first.devices[0].id, next.devices[0].id);
     futures_lite::future::block_on(server.object_server().remove::<Remote, _>(DEV)).unwrap();
     watch.state(|s| s.devices.is_empty());
-    assert!(
-        watch
-            .adapter
-            .control(BluetoothCommand::Connect(first.devices[0].id))
-            .is_err()
-    );
+    assert!(watch.adapter.start_connection(first.devices[0].id).is_err());
     futures_lite::future::block_on(server.object_server().at(DEV, Remote(state.clone()))).unwrap();
     let next = watch.state(|s| s.devices.len() == 1);
     assert_ne!(first.devices[0].id, next.devices[0].id);

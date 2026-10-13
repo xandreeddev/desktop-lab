@@ -24,6 +24,15 @@ pub(super) enum Completion {
         id: BluetoothPairingId,
         result: Result<()>,
     },
+    Connection {
+        id: BluetoothConnectionId,
+        result: Result<()>,
+    },
+    ConnectionCancellation {
+        id: BluetoothConnectionId,
+        reply: mpsc::SyncSender<Result<Reply>>,
+        result: Result<()>,
+    },
 }
 pub(super) enum Wake {
     Request(Request),
@@ -73,6 +82,7 @@ async fn observe(
     let mut objects = Catalog::default();
     let mut owned = BTreeSet::new();
     let mut pairing = Pairing::new(transport.owner.clone());
+    let mut connection = super::connection::Connection::default();
     let mut notices = Notices::default();
     let mut snapshot = BluetoothSnapshot::default();
     let mut previous = None;
@@ -116,8 +126,10 @@ async fn observe(
                 break;
             }
         }
+        connection.synchronize(&objects)?;
         pairing.synchronize(&objects, &mut || adapter.allocate_pairing())?;
         pairing.publish(&mut snapshot);
+        connection.publish(&mut snapshot);
         if previous.as_ref() != Some(&snapshot) {
             previous = Some(snapshot.clone());
             emit(Ok(snapshot.clone()));
@@ -142,6 +154,18 @@ async fn observe(
                 .await?
         };
         match wake {
+            Wake::Completed(Completion::ConnectionCancellation { id, reply, result }) => {
+                urgent_pending = false;
+                let failed = matches!(result, Err(DomainError::Unavailable(_)));
+                connection.cancellation_finished(id, result.is_ok());
+                let _ = reply.try_send(result.map(|()| Reply::Done));
+                dirty = true;
+                if failed {
+                    return Err(unavailable(
+                        "Bluetooth cancellation outcome is uncertain; observe before retrying",
+                    ));
+                }
+            }
             Wake::Completed(Completion::Urgent { reply, result }) => {
                 urgent_pending = false;
                 let failed = matches!(result, Err(DomainError::Unavailable(_)));
@@ -168,6 +192,18 @@ async fn observe(
                     dirty = true;
                 }
             }
+            Wake::Completed(Completion::Connection { id, result }) => {
+                let failed = matches!(result, Err(DomainError::Unavailable(_)));
+                connection.finished(id, result);
+                control_pending = false;
+                pairing.control_finished();
+                dirty = true;
+                if failed {
+                    return Err(unavailable(
+                        "Bluetooth connection outcome is uncertain; observe before retrying",
+                    ));
+                }
+            }
             Wake::Completed(Completion::Pair { id, result }) => {
                 let failed = matches!(result, Err(DomainError::Unavailable(_)));
                 pairing.finished(id, result);
@@ -184,7 +220,6 @@ async fn observe(
                 discovery,
             }) => {
                 control_pending = false;
-                pairing.control_finished();
                 let failed = matches!(result, Err(DomainError::Unavailable(_)));
                 if result.is_ok()
                     && let Some((path, active)) = discovery
@@ -206,6 +241,7 @@ async fn observe(
             Wake::Request(request) => {
                 signals.drain(&mut notices).await?;
                 objects.invalidate(&notices.removed);
+                connection.synchronize(&objects)?;
                 pairing.synchronize(&objects, &mut || adapter.allocate_pairing())?;
                 if request.cancelled.load(Ordering::Acquire) || Instant::now() >= request.deadline {
                     let _ = request.reply.try_send(Err(unavailable(
@@ -244,6 +280,99 @@ async fn observe(
                                         }
                                     });
                                 }
+                            }
+                        }
+                    }
+                    Intent::Connect(device) => {
+                        let result = async {
+                            if control_pending || connection.path.is_some() {
+                                return Err(DomainError::Failed(
+                                    "Bluetooth operation is already in progress".into(),
+                                ));
+                            }
+                            lucent_usecases::bluetooth::validate_connection_target(
+                                &snapshot, device,
+                            )?;
+                            signals
+                                .pump(
+                                    pairing.host.register(transport),
+                                    Some(request.deadline),
+                                    stop,
+                                    &mut notices,
+                                )
+                                .await?;
+                            signals.drain(&mut notices).await?;
+                            objects.invalidate(&notices.removed);
+                            connection.synchronize(&objects)?;
+                            pairing.synchronize(&objects, &mut || adapter.allocate_pairing())?;
+                            if request.cancelled.load(Ordering::Acquire)
+                                || Instant::now() >= request.deadline
+                            {
+                                return Err(unavailable(
+                                    "Bluetooth connection admission expired before execution",
+                                ));
+                            }
+                            let path = objects.resolve(device, Kind::Device)?;
+                            let id = adapter.allocate_connection()?;
+                            connection.start(id, device, path.clone());
+                            pairing.control_path = Some(path.clone());
+                            control_pending = true;
+                            let transport = transport.clone();
+                            let deadline = Instant::now() + adapter.interactive_timeout;
+                            submit(executor, completed.clone(), async move {
+                                let result = bounded(
+                                    async {
+                                        transport
+                                            .call(path.as_str(), DEVICE, "Connect", &())
+                                            .await?;
+                                        Ok(())
+                                    },
+                                    deadline,
+                                )
+                                .await;
+                                Completion::Connection { id, result }
+                            });
+                            Ok(Reply::Connection(id))
+                        }
+                        .await;
+                        let failed = matches!(result, Err(DomainError::Unavailable(_)));
+                        let admitted = result.is_ok();
+                        let delivered = request.reply.try_send(result).is_ok();
+                        dirty = true;
+                        if failed || admitted && !delivered {
+                            return Err(unavailable("Bluetooth connection admission is uncertain"));
+                        }
+                    }
+                    Intent::CancelConnection(id) => {
+                        if urgent_pending {
+                            let _ = request.reply.try_send(Err(DomainError::Failed(
+                                "Bluetooth cancellation is already in progress".into(),
+                            )));
+                            continue;
+                        }
+                        match connection.cancel(id, &objects) {
+                            Err(error) => {
+                                let _ = request.reply.try_send(Err(error));
+                            }
+                            Ok(path) => {
+                                urgent_pending = true;
+                                let transport = transport.clone();
+                                submit(executor, completed.clone(), async move {
+                                    let result = bounded(
+                                        control::apply(
+                                            &transport,
+                                            control::Plan::Device(path, "Disconnect"),
+                                            &mut BTreeSet::new(),
+                                        ),
+                                        request.deadline,
+                                    )
+                                    .await;
+                                    Completion::ConnectionCancellation {
+                                        id,
+                                        reply: request.reply,
+                                        result,
+                                    }
+                                });
                             }
                         }
                     }
@@ -291,7 +420,7 @@ async fn observe(
                         }
                     }
                     Intent::Incoming(enabled) => {
-                        if pairing.active_path.is_some() {
+                        if pairing.active_path.is_some() || connection.path.is_some() {
                             let _ = request.reply.try_send(Err(DomainError::Invalid(
                                 "Finish pairing before changing its agent".into(),
                             )));
@@ -346,7 +475,7 @@ async fn observe(
                         }
                     }
                     intent => {
-                        if control_pending {
+                        if control_pending || connection.path.is_some() {
                             let _ = request.reply.try_send(Err(DomainError::Failed(
                                 "Bluetooth operation is already in progress".into(),
                             )));
@@ -361,44 +490,6 @@ async fn observe(
                                 let _ = request.reply.try_send(Err(error));
                             }
                             Ok(plan) => {
-                                if let control::Plan::Device(path, "Connect") = &plan {
-                                    let registered = signals
-                                        .pump(
-                                            pairing.host.register(transport),
-                                            Some(Instant::now() + adapter.timeout),
-                                            stop,
-                                            &mut notices,
-                                        )
-                                        .await;
-                                    signals.drain(&mut notices).await?;
-                                    objects.invalidate(&notices.removed);
-                                    pairing.synchronize(&objects, &mut || {
-                                        adapter.allocate_pairing()
-                                    })?;
-                                    if let Err(error) = registered {
-                                        let failed = matches!(error, DomainError::Unavailable(_));
-                                        let _ = request.reply.try_send(Err(error));
-                                        if failed {
-                                            return Err(unavailable(
-                                                "Bluetooth agent could not be established",
-                                            ));
-                                        }
-                                        dirty |= notices.dirty;
-                                        continue;
-                                    }
-                                    // Registration can pump removal signals; never reuse an old handle.
-                                    if objects.device_at(path.as_str()).is_none_or(|id| {
-                                        !snapshot.devices.iter().any(|d| d.id == id)
-                                    }) {
-                                        let _ = request.reply.try_send(Err(DomainError::Invalid(
-                                            "Bluetooth device disappeared; choose a current device"
-                                                .into(),
-                                        )));
-                                        dirty |= notices.dirty;
-                                        continue;
-                                    }
-                                    pairing.control_path = Some(path.clone());
-                                }
                                 let discovery = match &plan {
                                     control::Plan::Discovery(p, active) => {
                                         Some((p.to_string(), *active))

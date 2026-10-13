@@ -85,6 +85,15 @@ impl BluetoothPort for Adapter {
         self.commands.lock().unwrap().push(command);
         Ok(())
     }
+    fn start_connection(&self, _: BluetoothObjectId) -> Result<BluetoothConnectionId> {
+        self.calls.lock().unwrap().push("connect");
+        Ok(BluetoothConnectionId::new(60).unwrap())
+    }
+    fn cancel_connection(&self, id: BluetoothConnectionId) -> Result<()> {
+        assert_eq!(id.value(), 60);
+        self.calls.lock().unwrap().push("cancel-connection");
+        Ok(())
+    }
     fn start_pairing(&self, _: BluetoothObjectId) -> Result<BluetoothPairingId> {
         self.calls.lock().unwrap().push("pair");
         Ok(pairing_id(40))
@@ -267,10 +276,7 @@ fn radio_controls_wait_for_observation_and_do_not_enable_incoming_authority() {
 #[test]
 fn pairing_answers_use_an_independent_lane_and_consume_input_once() {
     let (mut client, adapter, mut effects) = client();
-    client.update(
-        Message::Control(BluetoothCommand::Connect(id(3))),
-        &mut effects,
-    );
+    client.update(Message::Connect(id(3)), &mut effects);
     let ordinary = effects.tasks.remove(0);
     client.update(
         Message::Observed(Ok(pairing_fixture(BluetoothPairingPrompt::PinCode))),
@@ -494,6 +500,170 @@ fn closing_during_pair_admission_cancels_the_returned_attempt_without_reopening(
     client.update(cancel.run(), &mut effects);
     assert_eq!(*adapter.calls.lock().unwrap(), vec!["pair", "cancel"]);
     assert!(!client.open());
+}
+
+pub fn connecting_fixture() -> BluetoothSnapshot {
+    BluetoothSnapshot {
+        connection: Some(BluetoothConnectionAttempt {
+            id: BluetoothConnectionId::new(60).unwrap(),
+            device: id(3),
+            phase: BluetoothConnectionPhase::Connecting,
+        }),
+        ..fixture()
+    }
+}
+
+#[test]
+fn pending_connection_cancel_is_reachable_while_ordinary_controls_are_disabled() {
+    let (mut client, _, mut effects) = client();
+    let theme = lucent_design::Theme::from_palette(&lucent_design::palettes()[0]);
+    let fonts = [
+        include_bytes!("../../assets/LucentSans.ttf").as_slice(),
+        include_bytes!("../../assets/LucentDisplay.ttf").as_slice(),
+        include_bytes!("../../assets/GoogleSansFlex.ttf").as_slice(),
+    ]
+    .into_iter()
+    .map(|bytes| fontdue::Font::from_bytes(bytes, Default::default()).unwrap())
+    .collect();
+    let layout = lucent_ui::Layout::new(Arc::new(fonts));
+    for width in [320., 640.] {
+        let cx = lucent_api::ViewContext {
+            surface: "bluetooth",
+            width,
+            height: 580.,
+            now: 1.,
+        };
+        client.update(Message::Observed(Ok(connecting_fixture())), &mut effects);
+        let scene = layout.build(
+            &client.view(&cx, theme),
+            width,
+            cx.height,
+            &lucent_ui::Interaction::default(),
+            cx.now,
+        );
+        let cancel = scene
+            .hits
+            .iter()
+            .find(|h| h.id == "bluetooth-cancel-connection")
+            .unwrap();
+        assert!(matches!(cancel.click, Some(Message::CancelConnection(id)) if id.value() == 60));
+        assert!(
+            cancel.tab_stop,
+            "Keyboard users must be able to reach cancellation"
+        );
+        assert!(cancel.clip.contains(
+            cancel.rect.x + cancel.rect.w / 2.,
+            cancel.rect.y + cancel.rect.h / 2.
+        ));
+        let power = scene
+            .hits
+            .iter()
+            .find(|h| h.id == "bluetooth-power")
+            .unwrap();
+        assert!(matches!(power.click, Some(Message::Ignore)));
+        assert!(
+            !power.tab_stop,
+            "Busy ordinary controls must not capture keyboard focus"
+        );
+        assert!(client.ordinary_busy());
+    }
+}
+#[test]
+fn connection_admission_and_cancellation_wait_for_observed_termination() {
+    let (mut client, adapter, mut effects) = client();
+    client.update(Message::Connect(id(3)), &mut effects);
+    let admission = effects.tasks.remove(0);
+    client.update(admission.run(), &mut effects);
+    assert!(
+        client.ordinary_busy(),
+        "Remain busy between admission and its snapshot"
+    );
+    client.update(Message::Observed(Ok(connecting_fixture())), &mut effects);
+    client.update(
+        Message::CancelConnection(BluetoothConnectionId::new(60).unwrap()),
+        &mut effects,
+    );
+    let cancellation = effects.tasks.remove(0);
+    assert_eq!(cancellation.queue, crate::work::CONTROLS);
+    client.update(cancellation.run(), &mut effects);
+    assert!(
+        client.ordinary_busy(),
+        "Cancellation acknowledgement is not terminal state"
+    );
+    assert_eq!(client.inspect()["connection"]["phase"], "connecting");
+    let mut terminal = connecting_fixture();
+    terminal.connection.as_mut().unwrap().phase = BluetoothConnectionPhase::Cancelled;
+    client.update(Message::Observed(Ok(terminal)), &mut effects);
+    assert!(!client.ordinary_busy());
+    assert_eq!(
+        *adapter.calls.lock().unwrap(),
+        vec!["connect", "cancel-connection"]
+    );
+}
+#[test]
+fn cancellation_before_connection_admission_and_close_do_not_reopen_a_late_prompt() {
+    for close in [false, true] {
+        let (mut client, adapter, mut effects) = client();
+        client.update(Message::Connect(id(3)), &mut effects);
+        let admission = effects.tasks.remove(0);
+        client.update(
+            if close {
+                Message::Close
+            } else {
+                Message::CancelConnectionAdmission
+            },
+            &mut effects,
+        );
+        let mut snapshot = connecting_fixture();
+        snapshot.pairing_requests.push(BluetoothPairingRequest {
+            id: pairing_id(41),
+            device: id(3),
+            prompt: BluetoothPairingPrompt::AuthorizePairing,
+        });
+        client.update(Message::Observed(Ok(snapshot)), &mut effects);
+        assert_eq!(client.open(), !close);
+        client.update(admission.run(), &mut effects);
+        let cancellation = effects.tasks.remove(0);
+        client.update(cancellation.run(), &mut effects);
+        assert_eq!(
+            *adapter.calls.lock().unwrap(),
+            vec!["connect", "cancel-connection"]
+        );
+        assert_eq!(client.open(), !close);
+    }
+}
+
+#[test]
+fn late_connection_admission_cannot_keep_a_retired_observation_busy() {
+    for mode in ["unavailable", "recovered", "removed"] {
+        let (mut client, _, mut effects) = client();
+        client.update(Message::Connect(id(3)), &mut effects);
+        let admission = effects.tasks.remove(0);
+        if mode == "removed" {
+            let mut state = fixture();
+            state.devices.retain(|d| d.id != id(3));
+            client.update(Message::Observed(Ok(state)), &mut effects);
+        } else {
+            client.update(
+                Message::Observed(Err(DomainError::Unavailable("Service restarted".into()))),
+                &mut effects,
+            );
+            if mode == "recovered" {
+                client.update(Message::Observed(Ok(fixture())), &mut effects);
+            }
+        }
+        client.update(admission.run(), &mut effects);
+        assert!(
+            !client.ordinary_busy(),
+            "Late admission must not stick after {mode}"
+        );
+        assert!(client.pending_connection.is_none());
+        assert!(
+            effects.tasks.is_empty(),
+            "Never replay a retired connection"
+        );
+        assert!(client.inspect()["connection"].is_null());
+    }
 }
 
 #[test]

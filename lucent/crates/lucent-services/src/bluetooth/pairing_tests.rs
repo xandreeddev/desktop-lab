@@ -325,7 +325,7 @@ fn bluetooth_protocol_connect_authorization_does_not_block_its_answer_or_auto_tr
     let first = watch.state(|s| s.devices.len() == 1);
     let adapter = watch.adapter.clone();
     let device = first.devices[0].id;
-    let call = thread::spawn(move || adapter.control(BluetoothCommand::Connect(device)));
+    let attempt = adapter.start_connection(device).unwrap();
     let request = prompt(&watch);
     assert!(
         matches!(request.prompt,BluetoothPairingPrompt::AuthorizeService(ref service) if service.as_str()=="0000110b-0000-1000-8000-00805f9b34fb")
@@ -345,8 +345,13 @@ fn bluetooth_protocol_connect_authorization_does_not_block_its_answer_or_auto_tr
         .adapter
         .answer_pairing(request.id, BluetoothPairingAnswer::Accept)
         .unwrap();
-    call.join().unwrap().unwrap();
-    let connected = watch.state(|s| s.devices[0].connected && s.pairing_requests.is_empty());
+    let connected = watch.state(|s| {
+        s.devices[0].connected
+            && s.pairing_requests.is_empty()
+            && s.connection
+                .as_ref()
+                .is_some_and(|a| a.id == attempt && a.phase == BluetoothConnectionPhase::Succeeded)
+    });
     assert!(connected.pairing.is_none());
     assert!(!connected.devices[0].trusted);
     assert!(
@@ -355,6 +360,106 @@ fn bluetooth_protocol_connect_authorization_does_not_block_its_answer_or_auto_tr
             .answer_pairing(request.id, BluetoothPairingAnswer::Accept)
             .is_err()
     );
+}
+
+#[test]
+#[ignore = "isolated BlueZ D-Bus protocol"]
+fn bluetooth_protocol_connection_cancellation_terminates_a_pending_callback_and_retires_its_id() {
+    let bus = Bus::new();
+    let state = Arc::new(Mutex::new(State {
+        connect_authorization: true,
+        ..State::default()
+    }));
+    let _server = futures_lite::future::block_on(server(&bus, &state));
+    let watch = Observer::new(&bus, Duration::from_secs(3));
+    let first = watch.state(|s| s.devices.len() == 1);
+    let device = first.devices[0].id;
+    let started = Instant::now();
+    let attempt = watch.adapter.start_connection(device).unwrap();
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "Admission must not await authorization"
+    );
+    let pending = watch.state(|s| s.connection.is_some() && !s.pairing_requests.is_empty());
+    let request = pending.pairing_requests[0].clone();
+    assert_eq!(
+        pending.connection.unwrap().phase,
+        BluetoothConnectionPhase::Connecting
+    );
+    let wrong = BluetoothConnectionId::new(attempt.value() + 1000).unwrap();
+    assert!(watch.adapter.cancel_connection(wrong).is_err());
+    assert_eq!(state.lock().unwrap().disconnects, 0);
+    watch.adapter.cancel_connection(attempt).unwrap();
+    let terminal = watch.state(|s| {
+        s.connection
+            .as_ref()
+            .is_some_and(|a| a.id == attempt && a.phase == BluetoothConnectionPhase::Cancelled)
+            && s.pairing_requests.is_empty()
+    });
+    assert!(
+        !terminal.devices[0].connected
+            && terminal.devices[0].paired
+            && !terminal.devices[0].trusted
+    );
+    assert_eq!(state.lock().unwrap().disconnects, 1);
+    assert!(
+        watch
+            .adapter
+            .answer_pairing(request.id, BluetoothPairingAnswer::Accept)
+            .is_err()
+    );
+    assert!(watch.adapter.cancel_connection(attempt).is_err());
+    let replacement = watch.adapter.start_connection(device).unwrap();
+    prompt(&watch);
+    assert_ne!(replacement, attempt);
+    assert!(
+        watch.adapter.cancel_connection(attempt).is_err(),
+        "A retired ID cannot cancel a replacement"
+    );
+    assert_eq!(state.lock().unwrap().disconnects, 1);
+    watch.adapter.cancel_connection(replacement).unwrap();
+    watch.state(|s| {
+        s.connection
+            .as_ref()
+            .is_some_and(|a| a.id == replacement && a.phase == BluetoothConnectionPhase::Cancelled)
+    });
+}
+
+#[test]
+#[ignore = "isolated BlueZ D-Bus protocol"]
+fn bluetooth_protocol_pending_connection_target_removal_and_timeout_close_its_owner() {
+    for removed in [true, false] {
+        let bus = Bus::new();
+        let state = Arc::new(Mutex::new(State {
+            connect_authorization: true,
+            ..State::default()
+        }));
+        let server = futures_lite::future::block_on(server(&bus, &state));
+        let watch = Observer::new(&bus, Duration::from_millis(500));
+        let first = watch.state(|s| s.devices.len() == 1);
+        let device = first.devices[0].id;
+        let attempt = watch.adapter.start_connection(device).unwrap();
+        let request = prompt(&watch);
+        if removed {
+            futures_lite::future::block_on(server.object_server().remove::<Remote, _>(DEV))
+                .unwrap();
+            watch.state(|s| s.devices.is_empty());
+        } else {
+            watch.state(|s| s.devices.first().is_some_and(|d| d.id != device));
+        }
+        assert!(watch.adapter.cancel_connection(attempt).is_err());
+        assert!(
+            watch
+                .adapter
+                .answer_pairing(request.id, BluetoothPairingAnswer::Accept)
+                .is_err()
+        );
+        assert_eq!(
+            state.lock().unwrap().disconnects,
+            0,
+            "Do not disconnect a retired or reused path"
+        );
+    }
 }
 
 #[test]

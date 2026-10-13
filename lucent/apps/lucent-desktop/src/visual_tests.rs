@@ -1241,6 +1241,42 @@ fn visual_regressions() {
             ("bluetooth-empty", Mode::Apps, 0, 0, "", 1., 640.),
             ("bluetooth-devices", Mode::Apps, 0, 0, "", 1., 390.),
             (
+                "bluetooth-connection-admission",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            (
+                "bluetooth-connection-pending",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            (
+                "bluetooth-connection-cancelled",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            (
+                "bluetooth-connection-failed",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            (
                 "bluetooth-unpaired-connected",
                 Mode::Apps,
                 0,
@@ -1519,7 +1555,7 @@ fn visual_regressions() {
             } else if name.starts_with("bluetooth-") {
                 use crate::bluetooth::{
                     Message as B,
-                    tests::{fixture, id, pairing_fixture, pairing_id},
+                    tests::{connecting_fixture, fixture, id, pairing_fixture, pairing_id},
                 };
                 use lucent_domain::{
                     BluetoothPairingCode as Code, BluetoothPairingPrompt as P, BluetoothServiceId,
@@ -1538,6 +1574,23 @@ fn visual_regressions() {
                             "Bluetooth service disconnected".into(),
                         )),
                         "bluetooth-empty" => Ok(lucent_domain::BluetoothSnapshot::default()),
+                        "bluetooth-connection-pending"
+                        | "bluetooth-connection-cancelled"
+                        | "bluetooth-connection-failed" => {
+                            let mut snapshot = connecting_fixture();
+                            snapshot.connection.as_mut().unwrap().phase = match name {
+                                "bluetooth-connection-cancelled" => {
+                                    lucent_domain::BluetoothConnectionPhase::Cancelled
+                                }
+                                "bluetooth-connection-failed" => {
+                                    lucent_domain::BluetoothConnectionPhase::Failed(
+                                        "Bluetooth permission denied".into(),
+                                    )
+                                }
+                                _ => lucent_domain::BluetoothConnectionPhase::Connecting,
+                            };
+                            Ok(snapshot)
+                        }
                         "bluetooth-unpaired-connected" => {
                             let mut snapshot = fixture();
                             snapshot.devices[0].connected = true;
@@ -1558,6 +1611,9 @@ fn visual_regressions() {
                         _ => Ok(fixture()),
                     };
                     app.update(Message::Bluetooth(B::Observed(snapshot)), &mut effects);
+                }
+                if name == "bluetooth-connection-admission" {
+                    app.update(Message::Bluetooth(B::Connect(id(3))), &mut effects);
                 }
                 if name == "bluetooth-pin" {
                     app.update(

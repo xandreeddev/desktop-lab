@@ -42,12 +42,17 @@ differs from an unavailable daemon or malformed observation.
 
 The pure `validate_bluetooth_command` use case checks current target and parent
 identities. Discovery needs a powered controller. Connection needs a powered
-controller and a paired, unblocked device. Setting trust requires pairing;
+controller and a paired, unblocked device through `validate_connection_target`.
+Setting trust requires pairing;
 clearing trust does not. Connecting an unpaired device is deliberately rejected
 because connection and pairing are distinct operations. `start_pairing` validates
 an unpaired, powered, unblocked target before the explicit pairing operation.
 
 `BluetoothPairingId` identifies one transient attempt or request, not a device.
+`BluetoothConnectionId` is a separate nonzero transient identity for one owned
+Connect operation. It is not the device handle, pairing ID or D-Bus connection.
+The snapshot retains its connecting/succeeded/cancelled/failed phase; the
+device's connected and services-resolved flags remain separate observations.
 `BluetoothPairingCode` validates the six-digit numeric range and redacts Debug;
 `digits()` is an explicit presentation operation. Entered PIN/passkey answers
 consume non-Clone, non-Debug wrappers around zeroizing `Secret` storage. PINs
@@ -73,7 +78,7 @@ Prompts/attempts remain public domain records, not sealed value objects.
    metadata without retiring the device. Unrelated GATT changes do not request
    catalog refreshes. A query crossing a removal is retried within the same
    absolute deadline.
-5. Another worker calls `control(command)` or a pairing method. A bounded queue wakes the owning
+5. Another worker calls `control(command)`, `start_connection` or a pairing method. A bounded queue wakes the owning
    thread, which validates current state, resolves the handle and invokes native
    methods or property setters. A private local executor drives at most one
    ordinary method, one owned pairing method and one urgent cancellation method while the owner routes replies,
@@ -117,8 +122,22 @@ another client's session. Closing the connection releases its owner lifetime.
 BlueZ shares discovery across clients. See the
 [adapter API](https://bluez.readthedocs.io/en/latest/adapter-api/).
 
-`Connect` and `Disconnect` target a currently paired device; `SetTrusted` changes
-its trust flag. `Forget` calls the selected controller's `RemoveDevice` for the
+`start_connection(device)` admits an operation for a current paired device and
+returns a `BluetoothConnectionId` before the native Connect call finishes.
+The owner keeps routing signals and Agent1 authorization while it waits. Watch
+`snapshot.connection` for termination, and the device metadata for the link and
+resolved services. `cancel_connection(attempt)` validates that exact live owner
+and invokes Disconnect on a separate urgent lane; it can reach a native Connect
+that is waiting for authorization. It does not queue behind that Connect.
+Cancellation acknowledgement alone does not establish termination. The adapter
+waits for both native replies in either order: a denied cancellation cannot turn
+a later failure into Cancelled, and a successful Connect remains Succeeded even
+if Disconnect also completed. Retired IDs cannot disconnect a replacement
+attempt. Target removal or an uncertain timeout closes the transport owner and
+retires its handles rather than replaying the operation.
+
+`Disconnect` also works for a currently connected unpaired device;
+`SetTrusted` changes trust without implicitly connecting. `Forget` calls the selected controller's `RemoveDevice` for the
 exact selected device, removing its pairing information. Successful Connect
 does not mean every profile is connected or service discovery has finished. See
 the [device API](https://bluez.readthedocs.io/en/latest/device-api/).
@@ -174,6 +193,7 @@ test bus; the default always uses the system bus.
 {"command":"visibility","adapter":1,"discoverable":true}
 {"command":"pairable","adapter":1,"pairable":false}
 {"command":"connect","device":2}
+{"command":"cancel-connect","connection":5}
 {"command":"trust","device":2,"trusted":true}
 {"command":"disconnect","device":2}
 {"command":"forget","device":2}
@@ -185,7 +205,10 @@ test bus; the default always uses the system bus.
 ```
 
 Use IDs from the current detailed snapshot, not these illustrative values. The
-consumer is a local library example, not a new public control daemon. The
+consumer is a local library example, not a new public control daemon. Connect
+returns a `connection-started` event with the admitted ID; `cancel-connect` uses
+that ID. Detailed snapshots add a `connection` record; counts-only output keeps
+its original four fields. The
 `acknowledged` event is distinct from a subsequent `state` event. Invalid JSON
 and oversized lines fail explicitly. Entered credentials belong only on stdin,
 not argv/environment. Input lines zeroize on drop; typed decoding moves entered
@@ -356,9 +379,13 @@ real SDK layout checks pass locally. The public `vm/test-bluetooth-pairing.py`
 harness refuses other controllers, active discovery and modal UI; it verifies
 terminal phases before quitting the reference peer. Accept requires explicit
 visual code comparison through stdin. Only the two owned fixture controllers
-are used, and the caller must stop the fixture afterward. Pending Connect
-cancellation, PIN entry, incoming-controller authorization and physical profiles
-remain open.
+are used, and the caller must stop the fixture afterward. Pending Connect now
+has an explicit cancellable contract, a native child card and private-D-Bus
+checks for pending authorization, retirement, timeout and stale IDs. Client tests
+cover cancellation before admission, close/late-prompt races and waiting for
+observed completion. These checks do not establish real-daemon profile or
+physical interoperability; native pending-Connect, PIN entry and incoming
+authorization acceptance remain open.
 
 Cleanup stops the owned reference/emulator processes, temporarily masks only
 the fixture's BlueZ service while unloading new module holders, deletes only

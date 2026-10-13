@@ -15,6 +15,8 @@ mod bluetooth;
 pub use bluetooth::*;
 mod bluetooth_pairing;
 pub use bluetooth_pairing::*;
+mod bluetooth_connection;
+pub use bluetooth_connection::*;
 
 mod notifications;
 pub use notifications::*;
