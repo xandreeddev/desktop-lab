@@ -5,9 +5,9 @@
 `bluetooth-service` executable is a consumer of this library. It does not load
 the desktop, Wayland runtime, renderer, Omarchy picker or `bluetoothctl`.
 
-This milestone supplies the service foundation. The desktop composition root
-does **not** inject it yet. Native pairing prompts and the Lucent Bluetooth
-panel are still required; the existing desktop entrypoint remains unchanged.
+The service now implements native pairing conversations. The desktop composition
+root does **not** inject it yet; the Lucent Bluetooth panel and real-controller
+acceptance remain required. Existing installed desktop entrypoints are unchanged.
 
 ## Values, identity and policy
 
@@ -34,8 +34,16 @@ The pure `validate_bluetooth_command` use case checks current target and parent
 identities. Discovery needs a powered controller. Connection needs a powered
 controller and a paired, unblocked device. Setting trust requires pairing;
 clearing trust does not. Connecting an unpaired device is deliberately rejected
-until native pairing exists, because it could otherwise invoke another
-application's default agent.
+because connection and pairing are distinct operations. `start_pairing` validates
+an unpaired, powered, unblocked target before the explicit pairing operation.
+
+`BluetoothPairingId` identifies one transient attempt or request, not a device.
+`BluetoothPairingCode` validates the six-digit numeric range and redacts Debug;
+`digits()` is an explicit presentation operation. Entered PIN/passkey answers
+consume non-Clone, non-Debug wrappers around zeroizing `Secret` storage. PINs
+contain 1–16 ASCII letters/digits; entered passkeys contain 1–6 ASCII digits.
+`BluetoothServiceId` validates a canonical UUID, never an executable command.
+Prompts/attempts remain public domain records, not sealed value objects.
 
 ## What starts and what owns the loop
 
@@ -55,12 +63,14 @@ application's default agent.
    metadata without retiring the device. Unrelated GATT changes do not request
    catalog refreshes. A query crossing a removal is retried within the same
    absolute deadline.
-5. Another worker calls `control(command)`. A bounded queue wakes the owning
+5. Another worker calls `control(command)` or a pairing method. A bounded queue wakes the owning
    thread, which validates current state, resolves the handle and invokes native
-   methods or property setters. It keeps draining signals while awaiting a
-   method reply, so a full signal stream cannot stall the reader behind that
-   reply. Never call `control` synchronously inside the watch callback: that is
-   the command owner's thread.
+   methods or property setters. A private local executor drives at most one
+   ordinary method and one owned pairing method while the owner routes replies,
+   callbacks and signals. This allows a user answer to reach a native `Pair`
+   call that is awaiting that very answer. Further ordinary writes fail busy;
+   they are not silently replayed. Never call port methods synchronously inside
+   the watch callback: that is the command owner's thread.
 6. The returned result acknowledges the request. Later snapshots establish
    observed state. Timeouts do not undo service-side effects; the adapter closes
    the uncertain connection, retires its handles and reconnects without replay.
@@ -71,8 +81,11 @@ application's default agent.
 
 The current implementation admits 32 waiting commands, 128 queued BlueZ signals,
 eight owner-change signals, 32 controllers and 512 devices. A raw object catalog
-over 4096 entries is rejected. Refreshes and commands have five-second absolute
-deadlines, including command queue time. These are admission/catalog limits,
+over 4096 entries is rejected. Refreshes and ordinary commands have five-second
+absolute deadlines including queue time. Connect/default-agent authorization and
+an admitted Pair allow 120 seconds; each interactive callback allows 90 seconds.
+At most eight agent proposals and eight pending cards are retained in their
+separate bounded stages. These are admission/catalog limits,
 **not** a total memory budget: zbus must receive and deserialize messages first,
 and metadata allocations, daemon memory and simultaneous copies remain outside
 those counts. The client must keep its callback responsive.
@@ -93,10 +106,29 @@ the [device API](https://bluez.readthedocs.io/en/latest/device-api/).
 
 BlueZ and system D-Bus policy remain the authorization authority. Named errors
 are translated into safe domain errors without echoing their text bodies. The
-adapter installs no permissive policy rule and registers no automatic pairing
-agent. A native agent must handle explicit PIN/passkey/confirmation requests,
-authorization, cancellation and owner changes before pairing becomes a client
-feature; consult the [agent API](https://bluez.readthedocs.io/en/latest/agent-api/).
+adapter installs no permissive policy rule. Observation registers no agent.
+An explicit Pair/Connect lazily registers a `KeyboardDisplay` application agent.
+Outgoing use does not request the default role; `set_incoming_pairing(true)`
+explicitly requests that separate authority. This does not change the radio's
+discoverable/pairable flags. Disabling unregisters our agent, cancels pending
+cards and permits lazy registration on the next outgoing operation.
+
+The native Agent1 handles PIN/passkey entry, zero-padded display/progress,
+comparison, pairing/service authorization, cancellation and release. Only the
+observed unique BlueZ owner may call it, and every proposal resolves against a
+fresh, current device catalog. Display progress retains one card identity.
+Nothing automatically accepts or trusts a device. Epochs retire pending answers
+on native Cancel/Release; removal, owner changes and uncertain timeouts retire
+the connection. The PIN reply owns zeroizing storage through serialization;
+this does not promise zeroization of D-Bus, kernel or remote copies. See the
+[agent API](https://bluez.readthedocs.io/en/latest/agent-api/).
+
+`start_pairing` returns local admission plus an attempt ID, before human input;
+watch the attempt phase and actual paired/bonded metadata for completion.
+`answer_pairing` delivers one matching answer to one current request. It does
+not itself establish pairing success. `cancel_pairing` targets a live owned
+attempt and does not undo a completed bond. Rejecting an owned display card
+calls native CancelPairing; it does not merely hide the UI.
 
 ## Run the independent consumer
 
@@ -119,13 +151,22 @@ test bus; the default always uses the system bus.
 {"command":"trust","device":2,"trusted":true}
 {"command":"disconnect","device":2}
 {"command":"forget","device":2}
+{"command":"pair","device":2}
+{"command":"answer","request":4,"answer":"accept"}
+{"command":"answer","request":4,"answer":"pin","input":"fixturePin1"}
+{"command":"cancel","attempt":3}
+{"command":"incoming","enabled":true}
 ```
 
 Use IDs from the current detailed snapshot, not these illustrative values. The
 consumer is a local library example, not a new public control daemon. The
 `acknowledged` event is distinct from a subsequent `state` event. Invalid JSON
-and oversized lines fail explicitly. Pairing credentials are not accepted in
-this milestone.
+and oversized lines fail explicitly. Entered credentials belong only on stdin,
+not argv/environment. Input lines zeroize on drop; typed decoding moves entered
+strings into Secret rather than retaining a generic JSON copy. One bounded
+ordinary worker keeps stdin available for replies during an interactive Connect;
+EOF stops observation and joins both workers. Detailed mode explicitly reveals
+displayed comparison codes, never entered credentials; counts-only mode does not.
 
 Private-daemon protocol tests exercise real D-Bus serialization and method/signal
 routing against an owned fixture. They do not contact the host system bus or
@@ -133,10 +174,14 @@ prove physical Bluetooth interoperability. Coverage includes discovery
 ownership, power/paired controls, metadata removal, identity retirement and
 owner replacement, signal pressure, timeout recovery, safe error translation,
 unrelated-signal idle behavior, connection cleanup, and absent versus empty
-versus disconnected service state.
+versus disconnected service state. Native Agent1 tests keep Pair pending while
+another caller responds/cancels, exercise PIN/passkey serialization, confirmation
+and rejection, stable display progress, exact sender/current-target checks,
+default-agent lifecycle, late answers, device removal and uncertain timeout
+connection cleanup. These are protocol fixtures, not radio interoperability.
 
-Native pairing and the desktop panel, physical devices and profiles,
-suspend/resume, incoming authorization and hotplug acceptance remain open. The
+The desktop panel, actual controller pairing and profiles, incoming-controller
+authorization, suspend/resume and hotplug acceptance remain open. The
 larger control-center requirement remains in progress in
 [the implementation ledger](implementation-status.json).
 

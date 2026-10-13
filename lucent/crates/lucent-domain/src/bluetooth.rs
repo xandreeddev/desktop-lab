@@ -81,6 +81,9 @@ pub struct BluetoothDevice {
 pub struct BluetoothSnapshot {
     pub adapters: Vec<BluetoothAdapter>,
     pub devices: Vec<BluetoothDevice>,
+    pub pairing: Option<crate::BluetoothPairingAttempt>,
+    pub pairing_requests: Vec<crate::BluetoothPairingRequest>,
+    pub incoming_pairing_enabled: bool,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BluetoothCommand {
@@ -107,6 +110,19 @@ pub trait BluetoothPort: Send + Sync {
     /// Acknowledges a backend request, not completed discovery or all profiles.
     /// Observe the resulting snapshot; never blindly replay an uncertain command.
     fn control(&self, command: BluetoothCommand) -> Result<()>;
+    /// Starts an asynchronous attempt. The ID acknowledges local admission,
+    /// not successful pairing; watch the attempt and actual device observations.
+    fn start_pairing(&self, device: BluetoothObjectId) -> Result<crate::BluetoothPairingId>;
+    /// Delivers one owned answer to a current prompt, not pairing completion.
+    fn answer_pairing(
+        &self,
+        request: crate::BluetoothPairingId,
+        answer: crate::BluetoothPairingAnswer,
+    ) -> Result<()>;
+    /// Requests cancellation of our current attempt; it does not undo a bond.
+    fn cancel_pairing(&self, attempt: crate::BluetoothPairingId) -> Result<()>;
+    /// Default-agent registration is explicit, separate from controller visibility.
+    fn set_incoming_pairing(&self, enabled: bool) -> Result<()>;
 }
 
 #[cfg(test)]

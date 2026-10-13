@@ -1,6 +1,53 @@
 //! Policy for Bluetooth controls, independent of transport and desktop geometry.
 use lucent_domain::*;
 
+pub fn validate_pairing_target(state: &BluetoothSnapshot, id: BluetoothObjectId) -> Result<()> {
+    let device = state
+        .devices
+        .iter()
+        .find(|d| d.id == id)
+        .ok_or_else(|| DomainError::Invalid("Choose a current Bluetooth device".into()))?;
+    let controller = state
+        .adapters
+        .iter()
+        .find(|a| a.id == device.adapter)
+        .ok_or_else(|| DomainError::Invalid("Bluetooth controller disappeared".into()))?;
+    if !controller.powered || device.blocked || device.paired {
+        return Err(DomainError::Invalid(
+            "Choose an unpaired, available Bluetooth device".into(),
+        ));
+    }
+    Ok(())
+}
+pub fn validate_pairing_answer(
+    prompt: &BluetoothPairingPrompt,
+    answer: &BluetoothPairingAnswer,
+) -> Result<()> {
+    let valid = matches!(answer, BluetoothPairingAnswer::Reject)
+        || matches!(
+            (prompt, answer),
+            (
+                BluetoothPairingPrompt::PinCode,
+                BluetoothPairingAnswer::PinCode(_)
+            ) | (
+                BluetoothPairingPrompt::Passkey,
+                BluetoothPairingAnswer::Passkey(_)
+            ) | (
+                BluetoothPairingPrompt::ConfirmPasskey(_)
+                    | BluetoothPairingPrompt::AuthorizePairing
+                    | BluetoothPairingPrompt::AuthorizeService(_),
+                BluetoothPairingAnswer::Accept
+            )
+        );
+    if valid {
+        Ok(())
+    } else {
+        Err(DomainError::Invalid(
+            "Answer does not match the current Bluetooth prompt".into(),
+        ))
+    }
+}
+
 pub fn validate_bluetooth_command(
     state: &BluetoothSnapshot,
     command: &BluetoothCommand,
@@ -97,6 +144,7 @@ mod tests {
                 rssi: None,
                 battery_percent: None,
             }],
+            ..BluetoothSnapshot::default()
         }
     }
     #[test]

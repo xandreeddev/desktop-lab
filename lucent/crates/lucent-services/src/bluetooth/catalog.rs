@@ -13,6 +13,9 @@ pub(super) struct Catalog {
     parents: BTreeMap<String, String>,
 }
 impl Catalog {
+    pub fn device_at(&self, path: &str) -> Option<BluetoothObjectId> {
+        self.entries.get(&(Kind::Device, path.to_owned())).copied()
+    }
     pub fn invalidate(&mut self, removed: &BTreeSet<String>) {
         self.entries.retain(|(kind, path), _| {
             !removed.contains(path)

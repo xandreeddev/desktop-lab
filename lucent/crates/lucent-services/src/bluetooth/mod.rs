@@ -1,12 +1,13 @@
 //! Native BlueZ adapter. One subscription worker owns its connection.
 //! Commands use that worker; no subprocess, toolkit or network UI is involved.
+mod agent;
 mod catalog;
 mod control;
 mod native;
-use catalog::Catalog;
+mod pairing;
+mod session;
 use lucent_domain::*;
-use native::{Notices, unavailable};
-use std::collections::BTreeSet;
+use native::unavailable;
 use std::{
     sync::{
         Arc, Mutex,
@@ -19,9 +20,20 @@ use std::{
 const REQUEST_LIMIT: usize = 32;
 const OPERATION_TIMEOUT: Duration = Duration::from_secs(5);
 const RECONNECT_DELAY: Duration = Duration::from_secs(2);
+enum Intent {
+    Control(BluetoothCommand),
+    Pair(BluetoothObjectId),
+    Answer(BluetoothPairingId, BluetoothPairingAnswer),
+    Cancel(BluetoothPairingId),
+    Incoming(bool),
+}
+enum Reply {
+    Done,
+    Pairing(BluetoothPairingId),
+}
 struct Request {
-    command: BluetoothCommand,
-    reply: mpsc::SyncSender<Result<()>>,
+    command: Intent,
+    reply: mpsc::SyncSender<Result<Reply>>,
     cancelled: Arc<AtomicBool>,
     deadline: Instant,
 }
@@ -31,6 +43,7 @@ pub struct BlueZ {
     next_id: AtomicU64,
     address: Option<String>,
     timeout: Duration,
+    interactive_timeout: Duration,
 }
 impl Default for BlueZ {
     fn default() -> Self {
@@ -40,6 +53,7 @@ impl Default for BlueZ {
             next_id: AtomicU64::new(1),
             address: None,
             timeout: OPERATION_TIMEOUT,
+            interactive_timeout: Duration::from_secs(120),
         }
     }
 }
@@ -85,6 +99,10 @@ impl BlueZ {
         .await;
         result.and(closed)
     }
+    fn allocate_pairing(&self) -> Result<BluetoothPairingId> {
+        self.allocate()
+            .and_then(|id| BluetoothPairingId::new(id.value()))
+    }
     async fn observe(
         &self,
         transport: &native::Transport,
@@ -92,106 +110,47 @@ impl BlueZ {
         emit: &mut dyn FnMut(Result<BluetoothSnapshot>),
         stop: &dyn StopSignal,
     ) -> Result<()> {
-        let (send, receive) = async_channel::bounded(REQUEST_LIMIT);
-        let mut objects = Catalog::default();
-        let mut owned = BTreeSet::new();
-        let mut notices = Notices::default();
-        let mut previous: Option<BluetoothSnapshot> = None;
-        let mut dirty = true;
-        while !stop.cancelled() {
-            if dirty {
-                let deadline = Instant::now() + self.timeout;
-                loop {
-                    notices.dirty = false;
-                    let raw = signals
-                        .pump(transport.read(), Some(deadline), stop, &mut notices)
-                        .await;
-                    // Drain already queued removals before assigning public handles.
-                    signals.drain(&mut notices).await?;
-
-                    let removed = !notices.removed.is_empty();
-                    objects.invalidate(&notices.removed);
-                    notices.removed.clear();
-                    if removed {
-                        // The query straddled a removal/reuse. Discard it and take
-                        // another within the same absolute refresh deadline.
-                        // A disappearing object is a normal partial-query race,
-                        // not a reason to retire unrelated controllers/devices.
-                        signals
-                            .pump(
-                                async {
-                                    async_io::Timer::after(Duration::from_millis(20)).await;
-                                    Ok(())
-                                },
-                                Some(deadline),
-                                stop,
-                                &mut notices,
-                            )
-                            .await?;
-                        continue;
-                    }
-                    let value = objects.replace(raw?, &mut owned, &mut || self.allocate())?;
-                    dirty = notices.dirty;
-                    *self
-                        .online
-                        .lock()
-                        .map_err(|_| unavailable("Bluetooth adapter lock poisoned"))? =
-                        Some(send.clone());
-                    if previous.as_ref() != Some(&value) {
-                        previous = Some(value.clone());
-                        emit(Ok(value));
-                    }
-                    break;
-                }
+        session::run(self, transport, signals, emit, stop).await
+    }
+    fn request(&self, command: Intent) -> Result<Reply> {
+        let duration = if matches!(
+            command,
+            Intent::Incoming(true) | Intent::Control(BluetoothCommand::Connect(_))
+        ) {
+            self.interactive_timeout
+        } else {
+            self.timeout
+        };
+        let send = self
+            .online
+            .lock()
+            .map_err(|_| unavailable("Bluetooth adapter lock poisoned"))?
+            .clone()
+            .ok_or_else(|| unavailable("Bluetooth service is not ready"))?;
+        let (reply, receive) = mpsc::sync_channel(1);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        send.try_send(Request {
+            command,
+            reply,
+            cancelled: cancelled.clone(),
+            deadline: Instant::now() + duration,
+        })
+        .map_err(|_| unavailable("Bluetooth command queue is unavailable or full"))?;
+        match receive.recv_timeout(duration + Duration::from_millis(200)) {
+            Ok(result) => result,
+            Err(_) => {
+                cancelled.store(true, Ordering::Release);
+                Err(unavailable(
+                    "Bluetooth command was not acknowledged; observe state before retrying",
+                ))
             }
-            // Accepted commands get a turn between coalesced state refreshes.
-            let request = match receive.try_recv() {
-                Ok(request) => request,
-                Err(_) if dirty => continue,
-                Err(_) => match signals.idle(&receive, stop, &mut notices).await? {
-                    Some(request) => request,
-                    None => {
-                        dirty = true;
-                        continue;
-                    }
-                },
-            };
-            signals.drain(&mut notices).await?;
-
-            objects.invalidate(&notices.removed);
-            if request.cancelled.load(Ordering::Relaxed) || Instant::now() >= request.deadline {
-                let _ = request.reply.try_send(Err(unavailable(
-                    "Bluetooth command expired before execution",
-                )));
-                dirty |= notices.dirty;
-                continue;
-            }
-            // Resolve handles against the last observation on this same owner.
-            // A later service-side change can still reject a request.
-            let result = match control::plan(request.command, &objects, previous.as_ref().unwrap())
-            {
-                Ok(plan) => {
-                    signals
-                        .pump(
-                            control::apply(transport, plan, &mut owned),
-                            Some(request.deadline),
-                            stop,
-                            &mut notices,
-                        )
-                        .await
-                }
-                Err(error) => Err(error),
-            };
-            let transport_failed = matches!(result, Err(DomainError::Unavailable(_)));
-            let _ = request.reply.try_send(result);
-            if transport_failed || signals.failed || transport.connection.is_closed() {
-                return Err(unavailable(
-                    "Bluetooth connection ended before state confirmation",
-                ));
-            }
-            dirty = true;
         }
-        Ok(())
+    }
+    fn request_done(&self, intent: Intent) -> Result<()> {
+        match self.request(intent)? {
+            Reply::Done => Ok(()),
+            Reply::Pairing(_) => Err(unavailable("Unexpected Bluetooth acknowledgement")),
+        }
     }
 }
 struct Watching<'a>(&'a BlueZ);
@@ -226,30 +185,22 @@ impl BluetoothPort for BlueZ {
         }
     }
     fn control(&self, command: BluetoothCommand) -> Result<()> {
-        let send = self
-            .online
-            .lock()
-            .map_err(|_| unavailable("Bluetooth adapter lock poisoned"))?
-            .clone()
-            .ok_or_else(|| unavailable("Bluetooth service is not ready"))?;
-        let (reply, receive) = mpsc::sync_channel(1);
-        let cancelled = Arc::new(AtomicBool::new(false));
-        send.try_send(Request {
-            command,
-            reply,
-            cancelled: cancelled.clone(),
-            deadline: Instant::now() + self.timeout,
-        })
-        .map_err(|_| unavailable("Bluetooth command queue is unavailable or full"))?;
-        match receive.recv_timeout(self.timeout + Duration::from_millis(200)) {
-            Ok(result) => result,
-            Err(_) => {
-                cancelled.store(true, Ordering::Release);
-                Err(unavailable(
-                    "Bluetooth command was not acknowledged; observe state before retrying",
-                ))
-            }
+        self.request_done(Intent::Control(command))
+    }
+    fn start_pairing(&self, device: BluetoothObjectId) -> Result<BluetoothPairingId> {
+        match self.request(Intent::Pair(device))? {
+            Reply::Pairing(id) => Ok(id),
+            Reply::Done => Err(unavailable("Unexpected Bluetooth acknowledgement")),
         }
+    }
+    fn answer_pairing(&self, id: BluetoothPairingId, answer: BluetoothPairingAnswer) -> Result<()> {
+        self.request_done(Intent::Answer(id, answer))
+    }
+    fn cancel_pairing(&self, id: BluetoothPairingId) -> Result<()> {
+        self.request_done(Intent::Cancel(id))
+    }
+    fn set_incoming_pairing(&self, enabled: bool) -> Result<()> {
+        self.request_done(Intent::Incoming(enabled))
     }
 }
 

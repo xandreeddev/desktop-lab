@@ -6,6 +6,8 @@ use std::{
     thread,
 };
 use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
+#[path = "pairing_tests.rs"]
+mod pairing_tests;
 const ADAPT: &str = "/org/bluez/hci0";
 const DEV: &str = "/org/bluez/hci0/dev_02_00_00_00_00_02";
 fn path(value: &str) -> OwnedObjectPath {
@@ -134,7 +136,7 @@ fn service_admission_is_bounded_and_rejects_without_backend_work() {
     let (send, _receive) = async_channel::bounded(REQUEST_LIMIT);
     for _ in 0..REQUEST_LIMIT {
         send.try_send(Request {
-            command: command.clone(),
+            command: Intent::Control(command.clone()),
             reply: mpsc::sync_channel(1).0,
             cancelled: Arc::new(AtomicBool::new(false)),
             deadline: Instant::now() + OPERATION_TIMEOUT,
@@ -190,6 +192,25 @@ struct State {
     flood: usize,
     denied: bool,
     reads: usize,
+    paired: bool,
+    agent: Option<(String, OwnedObjectPath)>,
+    registrations: usize,
+    defaults: usize,
+    unregistrations: usize,
+    pairing_mode: PairingMode,
+    pairing_cancelled: bool,
+    pairing_completed: bool,
+    received_pin: Option<String>,
+    received_passkey: Option<u32>,
+}
+#[derive(Clone, Copy, Default)]
+enum PairingMode {
+    #[default]
+    Confirmation,
+    Pin,
+    Passkey,
+    Authorization,
+    Display,
 }
 impl Default for State {
     fn default() -> Self {
@@ -206,6 +227,16 @@ impl Default for State {
             flood: 0,
             denied: false,
             reads: 0,
+            paired: true,
+            agent: None,
+            registrations: 0,
+            defaults: 0,
+            unregistrations: 0,
+            pairing_mode: PairingMode::default(),
+            pairing_cancelled: false,
+            pairing_completed: false,
+            received_pin: None,
+            received_passkey: None,
         }
     }
 }
@@ -346,7 +377,7 @@ impl Remote {
     }
     #[zbus(property)]
     fn paired(&self) -> bool {
-        true
+        self.0.lock().unwrap().paired
     }
     #[zbus(property)]
     fn trusted(&self) -> bool {
@@ -384,6 +415,180 @@ impl Remote {
         self.0.lock().unwrap().connected = false;
         changed(connection, DEV, DEVICE, "Connected", value(false)).await;
     }
+    async fn pair(
+        &self,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> zbus::fdo::Result<()> {
+        let (mode, destination, agent_path) = {
+            let mut s = self.0.lock().unwrap();
+            s.pairing_cancelled = false;
+            let (destination, agent_path) = s
+                .agent
+                .clone()
+                .ok_or_else(|| zbus::fdo::Error::Failed("No explicit application agent".into()))?;
+            (s.pairing_mode, destination, agent_path)
+        };
+        let result = match mode {
+            PairingMode::Confirmation => {
+                connection
+                    .call_method(
+                        Some(destination.as_str()),
+                        agent_path.as_str(),
+                        Some("org.bluez.Agent1"),
+                        "RequestConfirmation",
+                        &(path(DEV), 17_u32),
+                    )
+                    .await
+            }
+            PairingMode::Pin => {
+                connection
+                    .call_method(
+                        Some(destination.as_str()),
+                        agent_path.as_str(),
+                        Some("org.bluez.Agent1"),
+                        "RequestPinCode",
+                        &(path(DEV),),
+                    )
+                    .await
+            }
+            PairingMode::Passkey => {
+                connection
+                    .call_method(
+                        Some(destination.as_str()),
+                        agent_path.as_str(),
+                        Some("org.bluez.Agent1"),
+                        "RequestPasskey",
+                        &(path(DEV),),
+                    )
+                    .await
+            }
+            PairingMode::Authorization => {
+                connection
+                    .call_method(
+                        Some(destination.as_str()),
+                        agent_path.as_str(),
+                        Some("org.bluez.Agent1"),
+                        "RequestAuthorization",
+                        &(path(DEV),),
+                    )
+                    .await
+            }
+            PairingMode::Display => {
+                for entered in [0_u16, 3] {
+                    connection
+                        .call_method(
+                            Some(destination.as_str()),
+                            agent_path.as_str(),
+                            Some("org.bluez.Agent1"),
+                            "DisplayPasskey",
+                            &(path(DEV), 17_u32, entered),
+                        )
+                        .await
+                        .map_err(|_| zbus::fdo::Error::Failed("Display failed".into()))?;
+                    async_io::Timer::after(Duration::from_millis(180)).await;
+                }
+                loop {
+                    let (cancelled, complete) = {
+                        let s = self.0.lock().unwrap();
+                        (s.pairing_cancelled, s.pairing_completed)
+                    };
+                    if cancelled {
+                        return Err(zbus::fdo::Error::Failed("Pairing cancelled".into()));
+                    }
+                    if complete {
+                        break;
+                    }
+                    async_io::Timer::after(Duration::from_millis(10)).await;
+                }
+                connection
+                    .call_method(
+                        Some(destination.as_str()),
+                        agent_path.as_str(),
+                        Some("org.bluez.Agent1"),
+                        "Cancel",
+                        &(),
+                    )
+                    .await
+            }
+        };
+        let reply =
+            result.map_err(|_| zbus::fdo::Error::Failed("Pairing not authorized".into()))?;
+        {
+            let mut s = self.0.lock().unwrap();
+            if s.pairing_cancelled {
+                return Err(zbus::fdo::Error::Failed("Pairing cancelled".into()));
+            }
+            if matches!(mode, PairingMode::Pin) {
+                s.received_pin = Some(reply.body().deserialize().unwrap());
+            }
+            if matches!(mode, PairingMode::Passkey) {
+                s.received_passkey = Some(reply.body().deserialize().unwrap());
+            }
+            s.paired = true;
+        }
+        changed(connection, DEV, DEVICE, "Paired", value(true)).await;
+        Ok(())
+    }
+    async fn cancel_pairing(&self, #[zbus(connection)] connection: &zbus::Connection) {
+        let target = {
+            let mut s = self.0.lock().unwrap();
+            s.pairing_cancelled = true;
+            s.agent.clone()
+        };
+        if let Some((destination, agent_path)) = target {
+            let _ = connection
+                .call_method(
+                    Some(destination.as_str()),
+                    agent_path.as_str(),
+                    Some("org.bluez.Agent1"),
+                    "Cancel",
+                    &(),
+                )
+                .await;
+        }
+    }
+}
+#[derive(Clone)]
+struct AgentManager(Shared);
+#[zbus::interface(name = "org.bluez.AgentManager1")]
+impl AgentManager {
+    fn register_agent(
+        &self,
+        agent_path: OwnedObjectPath,
+        capability: String,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+    ) -> zbus::fdo::Result<()> {
+        if capability != "KeyboardDisplay" || agent_path.as_str() != agent::AGENT_PATH {
+            return Err(zbus::fdo::Error::InvalidArgs(
+                "Wrong application agent".into(),
+            ));
+        }
+        let mut s = self.0.lock().unwrap();
+        s.registrations += 1;
+        s.agent = Some((header.sender().unwrap().to_string(), agent_path));
+        Ok(())
+    }
+    fn request_default_agent(&self, agent_path: OwnedObjectPath) -> zbus::fdo::Result<()> {
+        let mut s = self.0.lock().unwrap();
+        if s.agent.as_ref().is_none_or(|(_, p)| p != &agent_path) {
+            return Err(zbus::fdo::Error::InvalidArgs(
+                "Unregistered application agent".into(),
+            ));
+        }
+        s.defaults += 1;
+        Ok(())
+    }
+    fn unregister_agent(&self, agent_path: OwnedObjectPath) -> zbus::fdo::Result<()> {
+        let mut s = self.0.lock().unwrap();
+        if s.agent.as_ref().is_none_or(|(_, p)| p != &agent_path) {
+            return Err(zbus::fdo::Error::InvalidArgs(
+                "Unregistered application agent".into(),
+            ));
+        }
+        s.unregistrations += 1;
+        s.agent = None;
+        Ok(())
+    }
 }
 struct Battery;
 #[zbus::interface(name = "org.bluez.Battery1")]
@@ -399,6 +604,8 @@ async fn server(bus: &Bus, state: &Shared) -> zbus::Connection {
         .name(SERVICE)
         .unwrap()
         .serve_at("/", zbus::fdo::ObjectManager)
+        .unwrap()
+        .serve_at("/org/bluez", AgentManager(state.clone()))
         .unwrap()
         .serve_at(ADAPT, Controller(state.clone()))
         .unwrap()
@@ -433,6 +640,7 @@ impl Observer {
     fn new(bus: &Bus, timeout: Duration) -> Self {
         let adapter = Arc::new(BlueZ {
             timeout,
+            interactive_timeout: timeout,
             ..BlueZ::with_address(&bus.address)
         });
         let stop = Arc::new(Stop::default());

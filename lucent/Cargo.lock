@@ -277,7 +277,9 @@ version = "0.1.0"
 dependencies = [
  "lucent-domain",
  "lucent-services",
+ "serde",
  "serde_json",
+ "zeroize",
 ]
 
 [[package]]
@@ -1324,6 +1326,7 @@ name = "lucent-services"
 version = "0.1.0"
 dependencies = [
  "async-channel",
+ "async-executor",
  "async-io",
  "chrono",
  "futures-lite",

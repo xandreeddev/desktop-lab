@@ -47,6 +47,18 @@ fn bus_error(error: zbus::Error) -> DomainError {
             "org.bluez.Error.InProgress" => {
                 DomainError::Failed("Bluetooth operation is already in progress".into())
             }
+            "org.bluez.Error.AuthenticationCanceled" | "org.bluez.Error.Canceled" => {
+                DomainError::Failed("Bluetooth authentication was cancelled".into())
+            }
+            "org.bluez.Error.AuthenticationRejected" | "org.bluez.Error.Rejected" => {
+                DomainError::Failed("Bluetooth authentication was rejected".into())
+            }
+            "org.bluez.Error.AuthenticationFailed" => {
+                DomainError::Failed("Bluetooth authentication failed".into())
+            }
+            "org.bluez.Error.AuthenticationTimeout" => {
+                DomainError::Failed("Bluetooth authentication timed out".into())
+            }
             _ => DomainError::Failed("BlueZ rejected the request".into()),
         },
         _ => unavailable("Bluetooth transport is unavailable"),
@@ -62,9 +74,10 @@ pub(super) async fn bounded<T>(
     })
     .await
 }
+#[derive(Clone)]
 pub(super) struct Transport {
     pub connection: Connection,
-    owner: String,
+    pub owner: String,
 }
 impl Transport {
     pub async fn call<B>(
@@ -151,11 +164,9 @@ pub(super) async fn connect(
                 None => zbus::connection::Builder::system(),
             }
             .map_err(bus_error)?;
-            let connection = builder
-                .method_timeout(timeout)
-                .build()
-                .await
-                .map_err(bus_error)?;
+            // Bound each operation: a connection-wide timeout would also
+            // cut off interactive pairing while its user decision is pending.
+            let connection = builder.build().await.map_err(bus_error)?;
             let rule = MatchRule::builder()
                 .msg_type(Type::Signal)
                 .sender("org.freedesktop.DBus")
@@ -251,12 +262,15 @@ enum Pump<T> {
     Tick,
 }
 impl Signals {
-    pub async fn idle(
+    pub async fn wait(
         &mut self,
         receive: &async_channel::Receiver<Request>,
+        agent: &async_channel::Receiver<super::agent::Event>,
+        completed: &async_channel::Receiver<super::session::Completion>,
         stop: &dyn StopSignal,
         notices: &mut Notices,
-    ) -> Result<Option<Request>> {
+    ) -> Result<super::session::Wake> {
+        use super::session::Wake;
         loop {
             if stop.cancelled() {
                 return Err(unavailable("Bluetooth observation cancelled"));
@@ -269,32 +283,55 @@ impl Signals {
                 future::or(
                     async {
                         Pump::Done(
-                            receive
+                            completed
                                 .recv()
                                 .await
-                                .map_err(|_| unavailable("Bluetooth command queue ended")),
+                                .map(Wake::Completed)
+                                .map_err(|_| unavailable("Bluetooth completion queue ended")),
                         )
                     },
-                    future::or(async { Pump::Event(self.events.next().await) }, async {
-                        async_io::Timer::after(Duration::from_millis(100)).await;
-                        Pump::Tick
-                    }),
+                    future::or(
+                        async {
+                            Pump::Done(
+                                receive
+                                    .recv()
+                                    .await
+                                    .map(Wake::Request)
+                                    .map_err(|_| unavailable("Bluetooth command queue ended")),
+                            )
+                        },
+                        future::or(
+                            async {
+                                Pump::Done(
+                                    agent
+                                        .recv()
+                                        .await
+                                        .map(Wake::Agent)
+                                        .map_err(|_| unavailable("Bluetooth agent queue ended")),
+                                )
+                            },
+                            future::or(async { Pump::Event(self.events.next().await) }, async {
+                                async_io::Timer::after(Duration::from_millis(100)).await;
+                                Pump::Tick
+                            }),
+                        ),
+                    ),
                 ),
             )
             .await;
             match event {
-                Pump::Done(request) => return request.map(Some),
+                Pump::Done(result) => return result,
                 Pump::Event(Some(Ok(message))) => {
                     notices.signal(message)?;
                     if notices.dirty {
-                        return Ok(None);
+                        return Ok(Wake::Refresh);
                     }
                 }
                 Pump::Event(_) | Pump::Owner => {
                     self.failed = true;
                     return Err(unavailable("BlueZ disconnected or changed owner"));
                 }
-                Pump::Tick => (),
+                Pump::Tick => return Ok(Wake::Tick),
             }
         }
     }
