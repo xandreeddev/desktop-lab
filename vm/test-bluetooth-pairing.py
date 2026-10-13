@@ -151,7 +151,7 @@ def main():
                       'device_retired': properties is None, 'pairing_observed_phase': state()['pairing']['phase'],
                       'peer_still_running_at_terminal_observation': peer_process.poll() is None,
                       'physical_hardware': False}
-            (v.REPORT / 'bluetooth-vhci-' + mode + '.json').write_text(json.dumps(checks, indent=2) + '\n')
+            (v.REPORT / ('bluetooth-vhci-' + mode + '.json')).write_text(json.dumps(checks, indent=2) + '\n')
             print(json.dumps(checks), flush=True)
             sys.exit(0)
         v.screenshot('bluetooth-virtual-confirmation.png')
@@ -169,6 +169,7 @@ def main():
                   'visual_code_comparison': True, 'bluez_paired': True,
                   'bluez_bonded': prop(device, 'Bonded', 'org.bluez.Device1') == 'b true',
                   'automatic_trust': prop(device, 'Trusted', 'org.bluez.Device1') == 'b true',
+                  'pairing_observed_phase': state()['pairing']['phase'],
                   'prompts_retired': not state()['requests'], 'physical_hardware': False,
                   'profile_interoperability_verified': False}
         assert not checks['automatic_trust'], checks

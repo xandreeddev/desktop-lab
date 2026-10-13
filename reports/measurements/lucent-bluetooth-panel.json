@@ -57,9 +57,9 @@
   },
   "scope": "Rebuilt native input, signal-driven radio changes and recovery, software-HCI discovery/explicit code pairing/bonding, trust/removal and confirmed Forget. Escape closes an active prompt without reopening. Decline delivery does not establish Pair termination. Software controllers do not establish physical/profile interoperability.",
   "pending": [
-    "Complete Decline by retiring its owned Pair conversation; expose Disconnect for connected unpaired devices; native PIN/passkey entry, incoming/service authorization and profile operations.",
+    "Pending-Connect cancellation, native PIN/passkey entry, incoming/service authorization and physical/profile operations.",
     "Physical hardware, permissions, hotplug and suspend/resume; pending-Connect cancellation UX.",
-    "Installed Bluetooth compatibility routing remains unchanged until controller acceptance.",
+    "Native Bluetooth compatibility entrypoints now use the Rust child; no terminal wizard remains in those routes.",
     "This sample meets 300 MiB normal RSS and main-process idle CPU targets; helpers total 1.024% of one core and animation submission hitches remain. Decode/GPU peaks, long idle, hardware pacing and complete resource acceptance remain open.",
     "Full remaining requirement ledger, final evidence-head CI, review and parent-stack merge."
   ],
@@ -227,5 +227,13 @@
       "owned_pair_conversation_completion_verified": false,
       "observed_gap": "The card disappears but the Pair conversation and unpaired connection can remain pending while the peer waits. An explicit unpaired Disconnect action is also missing from the child."
     }
+  },
+  "subsequent_rejection_and_handover_checkpoint": {
+    "source_commit": "3ff2aa3aeabe4c44eb56defa34ac161dd75c4493",
+    "report": "reports/measurements/lucent-bluetooth-rejection.json",
+    "decline_owned_pair_termination": true,
+    "unpaired_disconnect": true,
+    "native_compatibility_handover": true,
+    "physical_profiles_verified": false
   }
 }

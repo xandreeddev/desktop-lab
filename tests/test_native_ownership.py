@@ -106,6 +106,22 @@ class Compatibility(unittest.TestCase):
             output.assert_called_once_with(str(Path.home()/'.local/bin/lucent-cli'),'network','open')
             choose.assert_not_called()
 
+    def test_bluetooth_entrypoints_use_native_controls_without_a_picker_or_terminal(self):
+        compat=load('bluetooth_compat_test','lucent-compat.py')
+        with patch.object(compat,'cli',return_value='ok') as cli, patch.object(compat.subprocess,'Popen') as popen:
+            self.assertEqual(compat.panel('omarchy.bluetooth',toggle=True),'ok')
+            cli.assert_called_once_with('bluetooth','toggle')
+            cli.reset_mock()
+            self.assertEqual(compat.panel('bluetooth'),'ok')
+            cli.assert_called_once_with('bluetooth','open')
+            popen.assert_not_called()
+        controls=load('bluetooth_controls_test','lucent-controls.py')
+        with patch.object(controls,'output') as output, patch.object(controls,'choose') as choose, patch.object(controls.subprocess,'Popen') as popen:
+            controls.bluetooth()
+            output.assert_called_once_with(str(Path.home()/'.local/bin/lucent-cli'),'bluetooth','open')
+            choose.assert_not_called()
+            popen.assert_not_called()
+
     def test_migration_rejects_old_or_unrendered_clients(self):
         setup=load('readiness_test','lucent-setup.py')
         for state in [{}, {'client':{'theme_error':''},'surfaces':[{'id':'background','frames':0}]}]:

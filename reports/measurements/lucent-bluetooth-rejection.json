@@ -1,0 +1,120 @@
+{
+  "status": "native_virtual_controller_workflows_verified",
+  "source_commit": "3ff2aa3aeabe4c44eb56defa34ac161dd75c4493",
+  "desktop_binary_sha256": "4f5b20e4b48c253c740479e033f35910507c01ba609d3d9b17fb78d1c9f15161",
+  "consumer_binary_sha256": "7714c3a3c4692e28d77e93b81b73b9b97467e21e2a1fdf016ec29e6cc41c8f8d",
+  "local_checks": {
+    "workspace_passed": 276,
+    "workspace_ignored": 40,
+    "private_bluetooth_protocol_passed": 15,
+    "python_passed": 78,
+    "software_visual_comparisons_passed": 304,
+    "new_reviewed_synthetic_references": 4,
+    "fmt_clippy_workspace_all_targets": true
+  },
+  "implementation_ci_checks_passed": 6,
+  "test_environment": {
+    "functional_guest_memory_mib": 1536,
+    "saved_guest_memory_mib": 3072,
+    "preferred_configuration_restored": true,
+    "rendering_configuration_reduced": false,
+    "scope": "Functional virtual-controller verification only, not a performance comparison"
+  },
+  "native_checks": {
+    "reject": {
+      "native_reject": true,
+      "prompt_retired": true,
+      "not_paired": true,
+      "not_trusted": true,
+      "link_connected": false,
+      "device_retired": false,
+      "pairing_observed_phase": "cancelled",
+      "peer_still_running_at_terminal_observation": true,
+      "physical_hardware": false
+    },
+    "close": {
+      "native_close": true,
+      "prompt_retired": true,
+      "not_paired": true,
+      "not_trusted": true,
+      "link_connected": false,
+      "device_retired": false,
+      "pairing_observed_phase": "cancelled",
+      "peer_still_running_at_terminal_observation": true,
+      "physical_hardware": false
+    },
+    "disconnect": {
+      "native_disconnect": true,
+      "prompt_retired": true,
+      "not_paired": true,
+      "not_trusted": true,
+      "link_connected": false,
+      "device_retired": false,
+      "pairing_observed_phase": "failed",
+      "peer_still_running_at_terminal_observation": true,
+      "physical_hardware": false
+    }
+  },
+  "pairing_success": {
+    "controllers": 2,
+    "native_discovery": true,
+    "native_confirmation": true,
+    "visual_code_comparison": true,
+    "bluez_paired": true,
+    "bluez_bonded": true,
+    "automatic_trust": false,
+    "prompts_retired": true,
+    "physical_hardware": false,
+    "profile_interoperability_verified": false,
+    "pairing_observed_phase": "succeeded",
+    "phase_evidence": "The executed public harness requires observed Succeeded before recording successful pairing."
+  },
+  "compatibility_entrypoints": {
+    "legacy_shell_toggle_native": true,
+    "legacy_panel_position_native": true,
+    "controls_native": true,
+    "no_new_application_windows": true,
+    "original_panel_openness_restored": true
+  },
+  "fixture_cleanup": {
+    "restored": true,
+    "controllers": 0,
+    "original_service_inactive": true,
+    "bluetooth_and_hci_vhci_absent": true,
+    "owned_processes_storage_directory_removed": true,
+    "runtime_cleanup_mask_absent": true,
+    "native_unavailable_observed": true,
+    "desktop_active_without_restarts": true
+  },
+  "identity_and_rollback": {
+    "clean_release_source": true,
+    "installed_desktop_hash_verified": true,
+    "atomic_binary_and_helper_install": true,
+    "previous_binary_and_entrypoint_copies_retained": true
+  },
+  "privacy": {
+    "pins_or_codes_published": false,
+    "device_names_or_addresses_published": false,
+    "private_captures_published": false
+  },
+  "scope": "Observed native pairing termination before the owned reference peer quits, real successful comparison-code pairing/bonding, and native compatibility routing. Two software HCI controllers, no physical radio/profile/security interoperability claim.",
+  "pending": [
+    "Pending-Connect cancellation UX/contract; native PIN/passkey entry and incoming/service authorization.",
+    "Physical devices/profiles, permissions, suspend/resume, hotplug and hardware faults.",
+    "Current 300 MiB performance acceptance, helper CPU, animation hitches, peaks/GPU allocations, per-output/fractional scaling, text/IME/accessibility, tray, richer desktop features, secure-client audits and packaging/migrations remain in the full requirement ledger.",
+    "Final evidence-head CI and review; no parent-stack merge authorization."
+  ],
+  "native_surface_input": {
+    "bar_pointer_open": true,
+    "actual_native_layer": true,
+    "pointer_region": true,
+    "observed_state": "unavailable",
+    "controllers": null,
+    "keyboard_focus": true,
+    "escape_releases_surface": true,
+    "ipc_open_close": true,
+    "controls_sent": 0,
+    "controller_pairing_verified": false,
+    "original_panel_state_restored": true
+  }
+}

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compatibility adapter: system commands/data → typed native picker requests.
 
-Audio and network open desktop children; other presentation uses lucent-menu.
+Audio, network and Bluetooth open desktop children; other presentation uses lucent-menu.
 Returned values are opaque row IDs,
 validated against the current snapshot. They never become shell expressions.
 """
@@ -57,33 +57,7 @@ def network():
 
 
 def bluetooth():
-    while True:
-        show = output('bluetoothctl','show')
-        powered = 'Powered: yes' in show
-        rows = [('Bluetooth '+('on' if powered else 'off'), 'Toggle adapter', ('power','off' if powered else 'on')),
-                ('Discover devices', 'Scan for 5 seconds', ('scan',))]
-        for line in output('bluetoothctl','devices').splitlines():
-            match = re.fullmatch(r'Device ([0-9A-Fa-f:]{17}) (.*)',line)
-            if not match: continue
-            address, label = match.groups()
-            info = output('bluetoothctl','info',address)
-            connected = 'Connected: yes' in info
-            paired = 'Paired: yes' in info
-            rows.append((label, 'Disconnect' if connected else 'Connect' if paired else 'Pair in Bluetooth manager',
-                         ('disconnect' if connected else 'connect' if paired else 'pair',address)))
-        action = choose('Bluetooth', rows)
-        if action is None: return
-        if action == ('scan',):
-            output('bluetoothctl','--timeout','5','scan','on', timeout=8)
-        elif action[0] == 'pair':
-            # Pairing may require PIN/confirmation. Delegate to BlueZ's existing
-            # terminal agent, never pretend a connection menu is such an agent.
-            subprocess.Popen(['xdg-terminal-exec','--app-id=org.lucent.utility','--title=Bluetooth','-e','bluetoothctl'], start_new_session=True,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return
-        else:
-            result = output('bluetoothctl','--timeout','15',*action,timeout=20)
-            if 'Failed' in result: raise RuntimeError('Bluetooth could not complete the request')
+    output(str(Path.home()/'.local/bin/lucent-cli'), 'bluetooth', 'open')
 
 
 def monitor():

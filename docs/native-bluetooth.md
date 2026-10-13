@@ -13,8 +13,9 @@ controls, discovery, explicit comparison-code pairing, bonding and trust removal
 That run exposed a signal-filter bug: external controller/device property changes
 were not refreshing the panel. The rebuilt native adapter now passes external
 power changes and recovery without a restart or client polling. Installed
-compatibility entrypoints remain unchanged while the Decline flow is completed;
-physical device/profile interoperability remains unverified.
+compatibility entrypoints now open the native Rust child. Decline and unpaired
+Disconnect reach observed termination on the owned virtual controllers; physical
+device/profile interoperability remains unverified.
 
 ## Values, identity and policy
 
@@ -107,8 +108,8 @@ hide it again; observe that state rather than mirroring command acceptance.
 `SetPairable` changes permission for incoming pairing, including while powered
 off. It does not forbid an explicit outgoing Pair, register an agent or trust a
 device. The desktop presents these as separate visibility, incoming permission
-and request-handling decisions. Their native guest/controller acceptance is
-still pending.
+and request-handling decisions. Native virtual-controller visibility/Pairable
+and external property observation pass; physical-controller acceptance remains open.
 
 `SetDiscovery` acquires/releases this
 connection's discovery session idempotently; stopping our scan does not stop
@@ -330,15 +331,15 @@ and private login file; it refuses other controllers, active scans and modal UI.
 Polling in the client would bypass the service boundary and would not repair
 signal ownership.
 
-Decline still has an acceptance gap. The native card disappears and the device
-remains unpaired/untrusted, but the owned Pair conversation can remain pending
-while the reference peer waits. A connected unpaired device also lacks an
-explicit Disconnect button, although the domain/adapter support that command.
-The client must finish these workflows before the compatibility handover; prompt
-delivery alone is not complete rejection. Pending Connect cancellation, PIN
-entry, incoming-controller authorization and physical profiles remain open.
+The earlier Decline checkpoint dismissed its card while leaving Pair pending.
+The current client fixes that workflow and exposes unpaired Disconnect. Native
+input now verifies Cancelled after Decline and Escape, and Failed after explicit
+Disconnect, while the reference agent remains running. Requests retire, links
+are disconnected and devices remain unpaired/untrusted. Comparison-code
+acceptance still reaches observed Succeeded with a real bond and no automatic
+trust. Compatibility toggles, panel position and controls open the native layer
+without creating a terminal window.
 
-The next working checkpoint implements those two client workflows.
 `pairing_attempt_for_rejected_reply` is a pure use case: it selects only the
 live owned attempt matching a current reply-bearing request. The child delivers
 Reject and then requests cancellation on the ordered urgent lane. Retired IDs
@@ -351,7 +352,13 @@ Connected unpaired devices now render Disconnect beside Pair, without offering
 Trust. Inspection adds only attempt/device IDs and the safe phase label, so
 tests can verify termination without exposing a PIN, displayed code or native
 failure metadata. Pure policy, delegated effects, stale-ID/failure behavior and
-real SDK layout checks pass locally; rebuilt native verification is pending.
+real SDK layout checks pass locally. The public `vm/test-bluetooth-pairing.py`
+harness refuses other controllers, active discovery and modal UI; it verifies
+terminal phases before quitting the reference peer. Accept requires explicit
+visual code comparison through stdin. Only the two owned fixture controllers
+are used, and the caller must stop the fixture afterward. Pending Connect
+cancellation, PIN entry, incoming-controller authorization and physical profiles
+remain open.
 
 Cleanup stops the owned reference/emulator processes, temporarily masks only
 the fixture's BlueZ service while unloading new module holders, deletes only
