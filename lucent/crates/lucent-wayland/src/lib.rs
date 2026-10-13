@@ -399,8 +399,14 @@ impl<A: Application> State<A> {
             return;
         }
         for task in effects.tasks {
-            if let Err(failure) = self.tasks.submit(task) {
-                self.runtime_failure(failure, qh);
+            if let Err(rejected) = self.tasks.submit(task) {
+                match rejected.complete() {
+                    Some(effects::Completion::Message(message)) => self.message(message, qh),
+                    Some(effects::Completion::Failure(failure)) => {
+                        self.runtime_failure(failure, qh)
+                    }
+                    None => {}
+                }
             }
         }
         if let Err(e) = self.reconcile(qh) {

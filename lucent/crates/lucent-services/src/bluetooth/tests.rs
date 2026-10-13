@@ -184,10 +184,13 @@ struct State {
     other_discovery: bool,
     owners: BTreeSet<String>,
     starts: usize,
+    start_requests: usize,
     stops: usize,
     connected: bool,
     trusted: bool,
     connects: usize,
+    disconnects: usize,
+    connect_authorization: bool,
     delay: Duration,
     flood: usize,
     denied: bool,
@@ -219,10 +222,13 @@ impl Default for State {
             other_discovery: true,
             owners: BTreeSet::new(),
             starts: 0,
+            start_requests: 0,
             stops: 0,
             connected: false,
             trusted: false,
             connects: 0,
+            disconnects: 0,
+            connect_authorization: false,
             delay: Duration::ZERO,
             flood: 0,
             denied: false,
@@ -299,7 +305,8 @@ impl Controller {
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> zbus::fdo::Result<()> {
         let (delay, flood, denied) = {
-            let s = self.0.lock().unwrap();
+            let mut s = self.0.lock().unwrap();
+            s.start_requests += 1;
             (s.delay, s.flood, s.denied)
         };
         if denied {
@@ -403,16 +410,56 @@ impl Remote {
     fn rssi(&self) -> i16 {
         -64
     }
-    async fn connect(&self, #[zbus(connection)] connection: &zbus::Connection) {
+    async fn connect(
+        &self,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> zbus::fdo::Result<()> {
+        let authorization = self.0.lock().unwrap().connect_authorization;
+        if authorization {
+            let (destination, agent_path) = self
+                .0
+                .lock()
+                .unwrap()
+                .agent
+                .clone()
+                .ok_or_else(|| zbus::fdo::Error::Failed("No application agent".into()))?;
+            connection
+                .call_method(
+                    Some(destination.as_str()),
+                    agent_path.as_str(),
+                    Some("org.bluez.Agent1"),
+                    "AuthorizeService",
+                    &(path(DEV), "0000110b-0000-1000-8000-00805f9b34fb"),
+                )
+                .await
+                .map_err(|_| zbus::fdo::Error::AccessDenied("private-device-metadata".into()))?;
+        }
         {
             let mut s = self.0.lock().unwrap();
             s.connected = true;
             s.connects += 1;
         }
         changed(connection, DEV, DEVICE, "Connected", value(true)).await;
+        Ok(())
     }
     async fn disconnect(&self, #[zbus(connection)] connection: &zbus::Connection) {
-        self.0.lock().unwrap().connected = false;
+        let agent = {
+            let mut s = self.0.lock().unwrap();
+            s.connected = false;
+            s.disconnects += 1;
+            s.agent.clone()
+        };
+        if let Some((destination, agent_path)) = agent {
+            let _ = connection
+                .call_method(
+                    Some(destination.as_str()),
+                    agent_path.as_str(),
+                    Some("org.bluez.Agent1"),
+                    "Cancel",
+                    &(),
+                )
+                .await;
+        }
         changed(connection, DEV, DEVICE, "Connected", value(false)).await;
     }
     async fn pair(

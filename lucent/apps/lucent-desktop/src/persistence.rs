@@ -104,7 +104,7 @@ impl Persistence {
         }
         self.active = Some(snapshot.revision);
         let adapter = self.adapter.clone();
-        effects.task_on("settings", move || {
+        effects.task_on(crate::work::SETTINGS, move || {
             Message::Finished(snapshot.revision, adapter.save(&snapshot.settings))
         });
     }

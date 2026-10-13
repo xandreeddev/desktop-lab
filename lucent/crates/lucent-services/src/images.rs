@@ -195,6 +195,7 @@ pub fn symbol(name: &str, color: &str) -> Arc<ImageData> {
         "previous" => include_str!("../assets/material/previous.svg"),
         "volume" => include_str!("../assets/material/volume.svg"),
         "network" => include_str!("../assets/material/network.svg"),
+        "bluetooth" => include_str!("../assets/material/bluetooth.svg"),
         "sun" => include_str!("../assets/material/sun.svg"),
         "cloud" => include_str!("../assets/material/cloud.svg"),
         "notifications" => include_str!("../assets/material/notifications.svg"),

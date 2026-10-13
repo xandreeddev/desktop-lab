@@ -207,7 +207,7 @@ impl Network {
         }
         self.active = Some(Active { revision, control });
         let adapter = self.adapter.clone();
-        effects.task_on("network", move || {
+        effects.task_on(crate::work::NETWORK, move || {
             Message::Finished(revision, adapter.control(command))
         });
     }

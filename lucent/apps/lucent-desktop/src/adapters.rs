@@ -17,6 +17,7 @@ pub struct DesktopAdapters {
     pub system: Arc<dyn SystemPort>,
     pub audio: Arc<dyn AudioPort>,
     pub network: Arc<dyn NetworkPort>,
+    pub bluetooth: Arc<dyn BluetoothPort>,
     pub media: Arc<dyn MediaPort>,
     pub weather: Arc<dyn WeatherPort>,
     pub wallpaper: Arc<dyn WallpaperPort>,

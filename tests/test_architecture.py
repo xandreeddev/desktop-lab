@@ -157,3 +157,23 @@ class Boundaries(unittest.TestCase):
     def test_network_child_uses_the_domain_port_without_root_or_adapter_selection(self):
         paths = sources(ROOT / 'lucent/apps/lucent-desktop/src/network')
         self.assert_no_platform_operations(paths, ('crate::desktop', 'crate::adapters', 'crate::platform', 'crate::ports'))
+
+    def test_bluetooth_adapter_and_child_preserve_transport_and_client_boundaries(self):
+        self.assert_no_platform_operations(
+            sources(ROOT / 'lucent/crates/lucent-services/src/bluetooth', ('tests.rs','pairing_tests.rs')),
+            ('crate::command','command_with_timeout','lucent_desktop','lucent_design','lucent_wayland'))
+        self.assert_no_platform_operations(sources(ROOT / 'lucent/apps/lucent-desktop/src/bluetooth'),
+            ('crate::desktop','crate::adapters','crate::platform','crate::ports'))
+        self.assertNotIn('lucent-wayland', reachable(self.graph,'bluetooth-service'))
+        self.assertNotIn('lucent-render', reachable(self.graph,'bluetooth-service'))
+
+    def test_all_desktop_effects_fit_the_runtime_worker_budget(self):
+        root=ROOT / 'lucent/apps/lucent-desktop/src'
+        lanes=re.findall(r'pub const \w+: &str = "([^"]+)";', (root/'work.rs').read_text())
+        limit=int(re.search(r'max_workers: (\d+),', (ROOT/'lucent/crates/lucent-wayland/src/effects.rs').read_text())[1])
+        self.assertEqual(len(lanes),len(set(lanes)))
+        self.assertLessEqual(len(lanes),limit)
+        # Queue selection is client policy. New features must reuse/name one
+        # of these bounded lanes, rather than silently starting another worker.
+        for path in sources(root,('visual_tests.rs','test_adapters.rs')):
+            self.assertNotRegex(path.read_text(),r'\.task\(|\.task_(?:cancellable_)?on(?:_with_failure)?\(\s*"',str(path.relative_to(ROOT)))

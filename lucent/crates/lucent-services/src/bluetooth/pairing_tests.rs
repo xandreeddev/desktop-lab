@@ -311,3 +311,150 @@ fn bluetooth_protocol_pending_pairing_removal_and_timeout_close_the_owner() {
         assert!(!state.lock().unwrap().paired);
     }
 }
+
+#[test]
+#[ignore = "isolated BlueZ D-Bus protocol"]
+fn bluetooth_protocol_connect_authorization_does_not_block_its_answer_or_auto_trust() {
+    let bus = Bus::new();
+    let state = Arc::new(Mutex::new(State {
+        connect_authorization: true,
+        ..State::default()
+    }));
+    let _server = futures_lite::future::block_on(server(&bus, &state));
+    let watch = Observer::new(&bus, Duration::from_secs(3));
+    let first = watch.state(|s| s.devices.len() == 1);
+    let adapter = watch.adapter.clone();
+    let device = first.devices[0].id;
+    let call = thread::spawn(move || adapter.control(BluetoothCommand::Connect(device)));
+    let request = prompt(&watch);
+    assert!(
+        matches!(request.prompt,BluetoothPairingPrompt::AuthorizeService(ref service) if service.as_str()=="0000110b-0000-1000-8000-00805f9b34fb")
+    );
+    assert_eq!(state.lock().unwrap().defaults, 0);
+    assert!(
+        watch
+            .adapter
+            .control(BluetoothCommand::SetTrusted {
+                device,
+                trusted: true
+            })
+            .is_err(),
+        "Another write fails busy without running behind the pending method"
+    );
+    watch
+        .adapter
+        .answer_pairing(request.id, BluetoothPairingAnswer::Accept)
+        .unwrap();
+    call.join().unwrap().unwrap();
+    let connected = watch.state(|s| s.devices[0].connected && s.pairing_requests.is_empty());
+    assert!(connected.pairing.is_none());
+    assert!(!connected.devices[0].trusted);
+    assert!(
+        watch
+            .adapter
+            .answer_pairing(request.id, BluetoothPairingAnswer::Accept)
+            .is_err()
+    );
+}
+
+#[test]
+#[ignore = "isolated BlueZ D-Bus protocol"]
+fn bluetooth_protocol_release_clears_default_authority_and_allows_fresh_registration() {
+    let bus = Bus::new();
+    let state = unpaired(PairingMode::Authorization);
+    let server = futures_lite::future::block_on(server(&bus, &state));
+    let watch = Observer::new(&bus, Duration::from_secs(3));
+    let initial = watch.state(|s| s.devices.len() == 1);
+    watch.adapter.set_incoming_pairing(true).unwrap();
+    watch.state(|s| s.incoming_pairing_enabled);
+    futures_lite::future::block_on(agent_call(&server, &state, "Release", &())).unwrap();
+    let released = watch.state(|s| !s.incoming_pairing_enabled);
+    assert_eq!(released.devices[0].id, initial.devices[0].id);
+    watch.adapter.set_incoming_pairing(true).unwrap();
+    watch.state(|s| s.incoming_pairing_enabled);
+    assert_eq!(state.lock().unwrap().registrations, 2);
+    assert_eq!(state.lock().unwrap().defaults, 2);
+    let attempt = watch.adapter.start_pairing(initial.devices[0].id).unwrap();
+    let request = prompt(&watch);
+    futures_lite::future::block_on(agent_call(&server, &state, "Release", &())).unwrap();
+    watch.state(|s| s.devices[0].id != initial.devices[0].id);
+    assert!(
+        watch
+            .adapter
+            .answer_pairing(request.id, BluetoothPairingAnswer::Accept)
+            .is_err()
+    );
+    assert!(watch.adapter.cancel_pairing(attempt).is_err());
+}
+
+#[test]
+#[ignore = "isolated BlueZ D-Bus protocol"]
+fn bluetooth_protocol_incoming_display_decline_disconnects_instead_of_faking_a_reply() {
+    let bus = Bus::new();
+    let state = unpaired(PairingMode::Display);
+    let server = futures_lite::future::block_on(server(&bus, &state));
+    let watch = Observer::new(&bus, Duration::from_secs(3));
+    watch.state(|s| s.devices.len() == 1);
+    watch.adapter.set_incoming_pairing(true).unwrap();
+    watch.state(|s| s.incoming_pairing_enabled);
+    futures_lite::future::block_on(agent_call(
+        &server,
+        &state,
+        "DisplayPinCode",
+        &(path(DEV), "000017"),
+    ))
+    .unwrap();
+    let request = prompt(&watch);
+    watch
+        .adapter
+        .answer_pairing(request.id, BluetoothPairingAnswer::Reject)
+        .unwrap();
+    let final_state = watch.state(|s| s.pairing_requests.is_empty());
+    assert!(final_state.pairing.is_none());
+    assert_eq!(state.lock().unwrap().disconnects, 1);
+    assert!(!state.lock().unwrap().paired);
+}
+
+#[test]
+#[ignore = "isolated BlueZ D-Bus protocol"]
+fn bluetooth_protocol_cancellation_is_not_queued_behind_an_unrelated_native_call() {
+    let bus = Bus::new();
+    let state = unpaired(PairingMode::Confirmation);
+    let _server = futures_lite::future::block_on(server(&bus, &state));
+    let watch = Observer::new(&bus, Duration::from_secs(3));
+    let initial = watch.state(|s| s.devices.len() == 1);
+    let attempt = watch.adapter.start_pairing(initial.devices[0].id).unwrap();
+    prompt(&watch);
+    state.lock().unwrap().delay = Duration::from_millis(900);
+    let adapter = watch.adapter.clone();
+    let controller = initial.adapters[0].id;
+    let (send, receive) = mpsc::sync_channel(1);
+    let scan = thread::spawn(move || {
+        send.send(adapter.control(BluetoothCommand::SetDiscovery {
+            adapter: controller,
+            active: true,
+        }))
+        .unwrap()
+    });
+    let deadline = Instant::now() + Duration::from_secs(1);
+    while state.lock().unwrap().start_requests == 0 {
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(5));
+    }
+    watch.adapter.cancel_pairing(attempt).unwrap();
+    assert!(
+        matches!(receive.try_recv(), Err(mpsc::TryRecvError::Empty)),
+        "Cancellation must complete while the ordinary method is still pending"
+    );
+    let cancelled = result(&watch, attempt);
+    assert_eq!(
+        cancelled.pairing.unwrap().phase,
+        BluetoothPairingPhase::Cancelled
+    );
+    receive
+        .recv_timeout(Duration::from_secs(2))
+        .unwrap()
+        .unwrap();
+    scan.join().unwrap();
+    watch.state(|s| s.adapters[0].discovery_owned);
+}

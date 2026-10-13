@@ -103,6 +103,11 @@
       "symbol": "terminal",
       "url": "https://raw.githubusercontent.com/google/material-design-icons/49d4db35df873165d6bd6ba09b063c7dafbac2f4/symbols/web/terminal/materialsymbolsrounded/terminal_24px.svg",
       "sha256": "ba924a0c39561794685040e624daa32ac86a130323eeec67093611518cf03560"
+    },
+    "bluetooth": {
+      "symbol": "bluetooth",
+      "url": "https://raw.githubusercontent.com/google/material-design-icons/49d4db35df873165d6bd6ba09b063c7dafbac2f4/symbols/web/bluetooth/materialsymbolsrounded/bluetooth_24px.svg",
+      "sha256": "3736a6c4fb26629b36b2ca6e2f28e5a61a72a4419c1ad18bfcf66bac4490e2de"
     }
   }
 }

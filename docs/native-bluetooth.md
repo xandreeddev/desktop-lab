@@ -5,9 +5,10 @@
 `bluetooth-service` executable is a consumer of this library. It does not load
 the desktop, Wayland runtime, renderer, Omarchy picker or `bluetoothctl`.
 
-The service now implements native pairing conversations. The desktop composition
-root does **not** inject it yet; the Lucent Bluetooth panel and real-controller
-acceptance remain required. Existing installed desktop entrypoints are unchanged.
+The desktop composition root injects this adapter into a native Rust Bluetooth
+child. Pairing conversations and token-based views are implemented; native guest
+controller/interaction acceptance is still pending. Installed compatibility
+entrypoints remain unchanged until that acceptance is established.
 
 ## Values, identity and policy
 
@@ -66,7 +67,7 @@ Prompts/attempts remain public domain records, not sealed value objects.
 5. Another worker calls `control(command)` or a pairing method. A bounded queue wakes the owning
    thread, which validates current state, resolves the handle and invokes native
    methods or property setters. A private local executor drives at most one
-   ordinary method and one owned pairing method while the owner routes replies,
+   ordinary method, one owned pairing method and one urgent cancellation method while the owner routes replies,
    callbacks and signals. This allows a user answer to reach a native `Pair`
    call that is awaiting that very answer. Further ordinary writes fail busy;
    they are not silently replayed. Never call port methods synchronously inside
@@ -128,7 +129,8 @@ watch the attempt phase and actual paired/bonded metadata for completion.
 `answer_pairing` delivers one matching answer to one current request. It does
 not itself establish pairing success. `cancel_pairing` targets a live owned
 attempt and does not undo a completed bond. Rejecting an owned display card
-calls native CancelPairing; it does not merely hide the UI.
+calls native CancelPairing; an incoming displayed challenge disconnects its link,
+because it has already replied void. Neither operation merely hides the UI.
 
 ## Run the independent consumer
 
@@ -180,7 +182,7 @@ and rejection, stable display progress, exact sender/current-target checks,
 default-agent lifecycle, late answers, device removal and uncertain timeout
 connection cleanup. These are protocol fixtures, not radio interoperability.
 
-The desktop panel, actual controller pairing and profiles, incoming-controller
+Actual controller pairing and profiles, native guest interaction, incoming-controller
 authorization, suspend/resume and hotplug acceptance remain open. The
 larger control-center requirement remains in progress in
 [the implementation ledger](implementation-status.json).
@@ -209,3 +211,43 @@ python3 vm/test-bluetooth-service.py --start-service --load-module --login-file 
 The [recorded service evidence](../reports/measurements/lucent-bluetooth-service.json)
 distinguishes the real daemon's empty ready catalog from protocol-fixture device
 controls. Neither establishes physical pairing or a native desktop panel.
+
+
+## Native desktop client and failure ownership
+
+`platform::desktop_adapters()` chooses BlueZ once. `DesktopAdapters.bluetooth`
+injects `Arc<dyn BluetoothPort>` into `bluetooth::Bluetooth`; constructing the
+child starts no process. The root's `Subscription::stream("bluetooth", ...)`
+starts observation and adapts framework cancellation to the domain stop signal.
+
+A changed snapshot becomes a typed child message on the UI thread. The child
+owns tab/controller selection, controlled scrolling, panel motion and private
+PIN/passkey editing. Views borrow records and use the shared Element, Motion,
+masked-input and scroll APIs. They perform no OS operations and borrow only an
+entered-character count. The root lifts messages with Element::map and effects
+with Effects::delegate. Native surface, keyboard focus and animation scheduling
+remain generic runtime concerns.
+
+Ordinary Bluetooth effects use the `bluetooth` lane; prompt answers and
+cancellation use the short `controls` lane, independently of a pending Connect.
+The client centralizes eight ordered lanes in work.rs instead of exceeding the
+runtime's worker bound. `task_on_with_failure` captures the specific operation
+revision, so a failure on a shared lane cannot clear another feature's active
+request. Delegation preserves that handler and cancellation. Unhandled task
+failures retain Application::runtime_failure; mapper panics use a safe fallback.
+An uncertain ordinary Bluetooth worker failure restarts the client/owner instead
+of guessing that a write failed before execution.
+
+Closing drops entered input, declines unresolved requests, cancels a live owned
+attempt and releases our discovery sessions. An admission that finishes after
+close is cancelled by its returned attempt ID without reopening the prompt.
+Stopping an accepted scan follows it on the same lane even if its owned-state
+snapshot has not arrived. Unrelated clients' discovery is preserved.
+
+The panel includes controller selection/power, discovery, device pair/connect/
+disconnect/trust, confirmed forgetting, explicit incoming-agent authority and
+native confirmation/entry/display/service prompts. The top-bar button and
+`lucent-cli bluetooth open|toggle|close` use this child. Inspector output excludes
+entered input and displayed codes. Radio discoverable/pairable controls, pending
+Connect cancellation UX, real-device/profile acceptance and broader power/tray
+services still need work. The complete control-center requirement remains open.

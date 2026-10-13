@@ -160,7 +160,7 @@ impl Pairing {
         &mut self,
         id: BluetoothPairingId,
         answer: BluetoothPairingAnswer,
-    ) -> Result<Option<OwnedObjectPath>> {
+    ) -> Result<Option<super::control::Plan>> {
         let pending = self.prompts.get(&id).ok_or_else(|| {
             DomainError::Invalid("Bluetooth request expired; use the current request".into())
         })?;
@@ -182,8 +182,19 @@ impl Pairing {
             // must cancel the current native operation, not merely hide it.
             if self.active_path.as_ref() == Some(&pending.path) {
                 self.cancel_requested = true;
+                Ok(Some(super::control::Plan::Device(
+                    pending.path,
+                    "CancelPairing",
+                )))
+            } else {
+                // CancelPairing is defined for an operation initiated by Pair.
+                // An incoming displayed challenge has already replied void;
+                // disconnect its link rather than claiming a pending reply was rejected.
+                Ok(Some(super::control::Plan::Device(
+                    pending.path,
+                    "Disconnect",
+                )))
             }
-            Ok(Some(pending.path))
         }
     }
     pub fn cancel(&mut self, id: BluetoothPairingId) -> Result<OwnedObjectPath> {

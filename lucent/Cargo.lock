@@ -1271,6 +1271,7 @@ dependencies = [
  "lucent-wayland",
  "serde",
  "serde_json",
+ "zeroize",
 ]
 
 [[package]]

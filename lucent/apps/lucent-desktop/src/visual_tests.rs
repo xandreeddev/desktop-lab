@@ -98,6 +98,31 @@ fn fixture(count: usize, light: bool) -> Desktop {
     );
     app
 }
+
+struct UnavailablePreviews(Arc<dyn crate::ports::AssetPort>);
+impl crate::ports::AssetPort for UnavailablePreviews {
+    fn initial(&self) -> std::collections::BTreeMap<String, Arc<ImageData>> {
+        self.0.initial()
+    }
+    fn application_icons(&self, apps: &[lucent_domain::Application]) -> crate::ports::Images {
+        self.0.application_icons(apps)
+    }
+    fn thumbnail(&self, _: &str) -> lucent_domain::Result<Arc<ImageData>> {
+        Err(lucent_domain::DomainError::Failed(
+            "Unavailable fixture".into(),
+        ))
+    }
+    fn preview(&self, image: &ImageData) -> Arc<ImageData> {
+        self.0.preview(image)
+    }
+    fn background(
+        &self,
+        path: &str,
+        target: Option<crate::ports::BackgroundTarget>,
+    ) -> lucent_domain::Result<Arc<ImageData>> {
+        self.0.background(path, target)
+    }
+}
 /// The offscreen canvas is immediately available at the requested full size.
 /// Native tests separately exercise the asynchronous configure/submission path.
 fn resize_fixture(app: &mut Desktop, width: f32, height: f32) {
@@ -1211,6 +1236,17 @@ fn visual_regressions() {
             ("network-error", Mode::Apps, 0, 0, "", 1., 390.),
             ("network-opening", Mode::Apps, 0, 0, "", 0.12, 640.),
             ("network-last", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-loading", Mode::Apps, 0, 0, "", 1., 640.),
+            ("bluetooth-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-empty", Mode::Apps, 0, 0, "", 1., 640.),
+            ("bluetooth-devices", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-confirmation", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-pin", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-display", Mode::Apps, 0, 0, "", 1., 640.),
+            ("bluetooth-service", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-forget", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-last", Mode::Apps, 0, 0, "", 1., 390.),
+            ("bluetooth-opening", Mode::Apps, 0, 0, "", 0.12, 640.),
         ] {
             if filter
                 .as_ref()
@@ -1252,15 +1288,13 @@ fn visual_regressions() {
                 app.wallpapers = wallpaper_fixtures();
             }
             if name == "wallpapers-unavailable" {
+                app.previews = crate::previews::Previews::new(Arc::new(UnavailablePreviews(
+                    app.adapters.assets.clone(),
+                )));
                 let mut effects = Effects::default();
                 app.update(Message::Clock(app.clock.clone()), &mut effects);
-                while effects.tasks.pop().is_some() {
-                    app.update(
-                        Message::Previews(crate::previews::Message::WorkerFailed(
-                            "Unavailable fixture".into(),
-                        )),
-                        &mut effects,
-                    );
+                while let Some(task) = effects.tasks.pop() {
+                    app.update(task.run(), &mut effects);
                 }
             }
             if name.starts_with("wallpapers-online") {
@@ -1471,6 +1505,65 @@ fn visual_regressions() {
                 };
                 let tree = session.view(&cx).map(|_| Message::Quit);
                 layout.build(&tree, width, height, &Interaction::default(), now)
+            } else if name.starts_with("bluetooth-") {
+                use crate::bluetooth::{
+                    Message as B,
+                    tests::{fixture, id, pairing_fixture, pairing_id},
+                };
+                use lucent_domain::{
+                    BluetoothPairingCode as Code, BluetoothPairingPrompt as P, BluetoothServiceId,
+                };
+                let mut effects = Effects::default();
+                app.update(Message::Bluetooth(B::Open), &mut effects);
+                if name != "bluetooth-loading" {
+                    let snapshot = match name {
+                        "bluetooth-unavailable" => Err(lucent_domain::DomainError::Unavailable(
+                            "Bluetooth service disconnected".into(),
+                        )),
+                        "bluetooth-empty" => Ok(lucent_domain::BluetoothSnapshot::default()),
+                        "bluetooth-confirmation" => {
+                            Ok(pairing_fixture(P::ConfirmPasskey(Code::new(17).unwrap())))
+                        }
+                        "bluetooth-pin" => Ok(pairing_fixture(P::PinCode)),
+                        "bluetooth-display" => Ok(pairing_fixture(P::DisplayPasskey {
+                            code: Code::new(17).unwrap(),
+                            entered: 3,
+                        })),
+                        "bluetooth-service" => Ok(pairing_fixture(P::AuthorizeService(
+                            BluetoothServiceId::new("0000110b-0000-1000-8000-00805f9b34fb")
+                                .unwrap(),
+                        ))),
+                        _ => Ok(fixture()),
+                    };
+                    app.update(Message::Bluetooth(B::Observed(snapshot)), &mut effects);
+                }
+                if name == "bluetooth-pin" {
+                    app.update(
+                        Message::Bluetooth(B::Edit(
+                            pairing_id(41),
+                            InputEdit::Insert("fixturePin1".into()),
+                        )),
+                        &mut effects,
+                    );
+                }
+                if name == "bluetooth-forget" {
+                    app.update(Message::Bluetooth(B::AskForget(id(3))), &mut effects);
+                }
+                if name == "bluetooth-last" {
+                    app.update(
+                        Message::Bluetooth(B::Scroll(ScrollEvent { offset: 10000. })),
+                        &mut effects,
+                    );
+                }
+                let tree = app.view(&ViewContext {
+                    surface: "bluetooth",
+                    width,
+                    height,
+                    now,
+                });
+                let mut input = Interaction::default();
+                input.synchronize(&layout.build(&tree, width, height, &input, now));
+                layout.build(&tree, width, height, &input, now)
             } else if name.starts_with("network-") {
                 use crate::network::{
                     Message as N,
@@ -2782,4 +2875,85 @@ fn network_overlay_keeps_one_keyboard_owner_and_masks_the_form_in_all_public_sta
     );
     assert!(!app.network.open());
     assert!(app.launcher.open());
+}
+
+#[test]
+fn bluetooth_overlay_routes_keyboard_submission_without_exposing_input_or_competing_focus() {
+    use crate::bluetooth::{
+        Message as B,
+        tests::{pairing_fixture, pairing_id},
+    };
+    use lucent_domain::BluetoothPairingPrompt;
+    let mut app = fixture(0, false);
+    let mut effects = Effects::default();
+    app.update(
+        Message::Network(crate::network::Message::Open),
+        &mut effects,
+    );
+    app.update(
+        Message::Bluetooth(B::Observed(Ok(pairing_fixture(
+            BluetoothPairingPrompt::PinCode,
+        )))),
+        &mut effects,
+    );
+    assert!(app.bluetooth.open());
+    assert!(!app.network.open());
+    assert!(!app.audio.open());
+    assert!(!app.launcher.open());
+    assert_eq!(
+        app.surfaces()
+            .iter()
+            .filter(|s| s.visible && s.keyboard == Keyboard::Exclusive)
+            .count(),
+        1
+    );
+    let layout = Layout::new(fonts(&app));
+    let cx = ViewContext {
+        surface: "bluetooth",
+        width: 390.,
+        height: 580.,
+        now: 1.,
+    };
+    let mut input = Interaction::default();
+    let scene = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
+    input.synchronize(&scene);
+    assert_eq!(input.focus.as_deref(), Some("bluetooth-input-41"));
+    for message in input.key(&scene, &Key::Text("fixturePin1".into())) {
+        app.update(message, &mut effects);
+    }
+    let scene = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
+    assert!(
+        scene
+            .paint
+            .iter()
+            .all(|p| !matches!(p,Paint::Text{text,..}if text.contains("fixturePin1")))
+    );
+    assert!(scene.hits.iter().all(|h| !h.value.contains("fixturePin1")));
+    assert!(!app.inspect().contains("fixturePin1"));
+    let submitted = input.key(&scene, &Key::Enter);
+    assert!(
+        matches!(submitted.as_slice(),[Message::Bluetooth(B::Submit(id))] if *id==pairing_id(41))
+    );
+    for message in submitted {
+        app.update(message, &mut effects);
+    }
+    assert_eq!(effects.tasks.last().unwrap().queue, crate::work::CONTROLS);
+    app.update(Message::Bluetooth(B::Close), &mut effects);
+    assert!(!app.bluetooth.open());
+    assert_eq!(app.bluetooth.inspect()["form"], serde_json::Value::Null);
+    let surface = app
+        .surfaces()
+        .into_iter()
+        .find(|s| s.id == "bluetooth")
+        .unwrap();
+    assert_eq!(surface.keyboard, Keyboard::None);
+    assert_eq!(surface.pointer_input, PointerInput::None);
+    assert!(app.command("bluetooth open").is_ok());
+    assert!(
+        app.runtime_failure(RuntimeFailure {
+            source: "effect queue bluetooth".into(),
+            reason: "fixture panic".into()
+        })
+        .is_none()
+    );
 }

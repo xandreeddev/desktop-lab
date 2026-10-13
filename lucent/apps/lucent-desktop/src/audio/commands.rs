@@ -186,7 +186,7 @@ impl Commands {
         let command = request.command.clone();
         let adapter = self.adapter.clone();
         self.active = Some(request);
-        effects.task_on("audio", move || {
+        effects.task_on(crate::work::AUDIO, move || {
             Message::Finished(revision, adapter.control(command))
         });
     }

@@ -155,7 +155,7 @@ impl Selection {
             target,
         });
         let assets = self.assets.clone();
-        effects.task_on("appearance", move || {
+        effects.task_on(crate::work::APPEARANCE, move || {
             Message::Refitted(revision, assets.background(&path, Some(target)))
         });
     }
@@ -179,7 +179,7 @@ impl Selection {
     ) {
         let assets = self.assets.clone();
         let target = self.target;
-        effects.task_on("appearance", move || {
+        effects.task_on(crate::work::APPEARANCE, move || {
             Message::Initial(selected.and_then(|selected| {
                 selected
                     .map(|asset| {
@@ -250,7 +250,7 @@ impl Selection {
         self.preparing_origin = choice.browser_generation;
         self.error.clear();
         let target = self.target;
-        effects.task_on("appearance", move || {
+        effects.task_on(crate::work::APPEARANCE, move || {
             let prepare = || -> Result<Prepared> {
                 if cancel.cancelled() {
                     return Err(DomainError::Unavailable(
@@ -290,7 +290,7 @@ impl Selection {
     }
     fn discard(&self, asset: WallpaperAsset, effects: &mut Effects<Message>) {
         let store = self.store.clone();
-        effects.task_on("appearance", move || {
+        effects.task_on(crate::work::APPEARANCE, move || {
             Message::Discarded(store.discard(&asset))
         });
     }
@@ -325,7 +325,7 @@ impl Selection {
                     Ok(prepared) => {
                         self.phase = Phase::Committing(id);
                         let store = self.store.clone();
-                        effects.task_on("appearance", move || {
+                        effects.task_on(crate::work::APPEARANCE, move || {
                             let result = store.commit(&prepared.asset);
                             Message::Committed(id, prepared, result)
                         });

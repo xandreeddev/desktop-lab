@@ -11,6 +11,10 @@ use async_executor::LocalExecutor;
 use std::{collections::BTreeSet, future::Future};
 
 pub(super) enum Completion {
+    Urgent {
+        reply: mpsc::SyncSender<Result<Reply>>,
+        result: Result<()>,
+    },
     Control {
         reply: mpsc::SyncSender<Result<Reply>>,
         result: Result<()>,
@@ -61,10 +65,11 @@ async fn observe(
     executor: &LocalExecutor<'_>,
 ) -> Result<()> {
     let (send, receive) = async_channel::bounded(REQUEST_LIMIT);
-    // One ordinary call and one owned pairing call can be pending; replies
-    // are serviced independently of either call's backend completion.
+    // One ordinary, one owned pairing and one cancellation call can be pending.
+    // User replies/cancellation must not wait behind the call they terminate.
     let (completed, completions) = async_channel::bounded(4);
     let mut control_pending = false;
+    let mut urgent_pending = false;
     let mut objects = Catalog::default();
     let mut owned = BTreeSet::new();
     let mut pairing = Pairing::new(transport.owner.clone());
@@ -137,6 +142,17 @@ async fn observe(
                 .await?
         };
         match wake {
+            Wake::Completed(Completion::Urgent { reply, result }) => {
+                urgent_pending = false;
+                let failed = matches!(result, Err(DomainError::Unavailable(_)));
+                let _ = reply.try_send(result.map(|()| Reply::Done));
+                dirty = true;
+                if failed {
+                    return Err(unavailable(
+                        "Bluetooth cancellation outcome is uncertain; observe before retrying",
+                    ));
+                }
+            }
             Wake::Tick => (),
             Wake::Refresh => {
                 dirty = true;
@@ -201,7 +217,7 @@ async fn observe(
                 match request.command {
                     Intent::Answer(id, answer) => {
                         let display = pairing.prompts.get(&id).is_some_and(|p| p.reply.is_none());
-                        if display && control_pending {
+                        if display && urgent_pending {
                             let _ = request.reply.try_send(Err(DomainError::Failed(
                                 "Bluetooth operation is already in progress".into(),
                             )));
@@ -213,29 +229,18 @@ async fn observe(
                                 Err(error) => {
                                     let _ = request.reply.try_send(Err(error));
                                 }
-                                Ok(Some(path)) => {
+                                Ok(Some(plan)) => {
                                     let transport = transport.clone();
-                                    control_pending = true;
+                                    urgent_pending = true;
                                     submit(executor, completed.clone(), async move {
                                         let result = bounded(
-                                            async {
-                                                transport
-                                                    .call(
-                                                        path.as_str(),
-                                                        DEVICE,
-                                                        "CancelPairing",
-                                                        &(),
-                                                    )
-                                                    .await?;
-                                                Ok(())
-                                            },
+                                            control::apply(&transport, plan, &mut BTreeSet::new()),
                                             request.deadline,
                                         )
                                         .await;
-                                        Completion::Control {
+                                        Completion::Urgent {
                                             reply: request.reply,
                                             result,
-                                            discovery: None,
                                         }
                                     });
                                 }
@@ -308,6 +313,38 @@ async fn observe(
                             }
                         }
                     }
+                    Intent::Cancel(id) => {
+                        if urgent_pending {
+                            let _ = request.reply.try_send(Err(DomainError::Failed(
+                                "Bluetooth cancellation is already in progress".into(),
+                            )));
+                            continue;
+                        }
+                        match pairing.cancel(id) {
+                            Err(error) => {
+                                let _ = request.reply.try_send(Err(error));
+                            }
+                            Ok(path) => {
+                                urgent_pending = true;
+                                let transport = transport.clone();
+                                submit(executor, completed.clone(), async move {
+                                    let result = bounded(
+                                        control::apply(
+                                            &transport,
+                                            control::Plan::Device(path, "CancelPairing"),
+                                            &mut BTreeSet::new(),
+                                        ),
+                                        request.deadline,
+                                    )
+                                    .await;
+                                    Completion::Urgent {
+                                        reply: request.reply,
+                                        result,
+                                    }
+                                });
+                            }
+                        }
+                    }
                     intent => {
                         if control_pending {
                             let _ = request.reply.try_send(Err(DomainError::Failed(
@@ -317,9 +354,6 @@ async fn observe(
                         }
                         let result = match intent {
                             Intent::Control(command) => control::plan(command, &objects, &snapshot),
-                            Intent::Cancel(id) => pairing
-                                .cancel(id)
-                                .map(|path| control::Plan::Device(path, "CancelPairing")),
                             _ => unreachable!(),
                         };
                         match result {

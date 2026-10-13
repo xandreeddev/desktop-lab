@@ -684,14 +684,21 @@ pub trait Application: Component {
 }
 
 pub type Task<M> = Box<dyn FnOnce() -> M + Send>;
+pub type TaskFailure<M> = Box<dyn FnOnce(RuntimeFailure) -> M + Send>;
 /// Each named queue executes in submission order on an independent worker.
 /// Queue names belong to the client; the engine knows no desktop service names.
 pub struct ScheduledTask<M> {
     pub queue: &'static str,
     pub cancellation: Cancellation,
     task: Task<M>,
+    on_failure: Option<TaskFailure<M>>,
 }
 impl<M> ScheduledTask<M> {
+    /// Runtime engines take this before consuming the task body. The mapper
+    /// must only construct a message; rejection may invoke it on the UI thread.
+    pub fn take_failure_handler(&mut self) -> Option<TaskFailure<M>> {
+        self.on_failure.take()
+    }
     /// Execute after admission/cancellation checks; useful for deterministic client tests.
     pub fn run(self) -> M {
         (self.task)()
@@ -730,6 +737,21 @@ impl<M> Effects<M> {
     pub fn task_on(&mut self, queue: &'static str, task: impl FnOnce() -> M + Send + 'static) {
         self.task_cancellable_on(queue, Cancellation::default(), task);
     }
+    /// Correlate rejection/panic with this operation even on a shared queue.
+    /// Without a mapper, Application::runtime_failure remains the fallback.
+    pub fn task_on_with_failure(
+        &mut self,
+        queue: &'static str,
+        task: impl FnOnce() -> M + Send + 'static,
+        on_failure: impl FnOnce(RuntimeFailure) -> M + Send + 'static,
+    ) {
+        self.tasks.push(ScheduledTask {
+            queue,
+            cancellation: Cancellation::default(),
+            task: Box::new(task),
+            on_failure: Some(Box::new(on_failure)),
+        });
+    }
     /// Cancellation skips queued work and checks again before result delivery.
     /// Running operations cooperate by checking this token at safe points. Once
     /// delivery starts, cancellation does not retract the result or undo effects;
@@ -744,6 +766,7 @@ impl<M> Effects<M> {
             queue,
             cancellation,
             task: Box::new(task),
+            on_failure: None,
         });
     }
     pub fn redraw(&mut self, surface: &'static str) {
@@ -767,8 +790,15 @@ impl<M> Effects<M> {
         let map = Arc::new(map);
         for task in child.tasks {
             let map = map.clone();
-            self.task_cancellable_on(task.queue, task.cancellation.clone(), move || {
-                map(task.run())
+            let failure_map = map.clone();
+            let on_failure = task.on_failure.map(|failure| {
+                Box::new(move |error| failure_map(failure(error))) as TaskFailure<M>
+            });
+            self.tasks.push(ScheduledTask {
+                queue: task.queue,
+                cancellation: task.cancellation,
+                task: Box::new(move || map((task.task)())),
+                on_failure,
             });
         }
     }
@@ -1197,5 +1227,26 @@ mod composition_tests {
         };
         assert!(matches!(registry.view("clock",&(),&cx).unwrap().kind,Kind::Text(s) if s=="one"));
         assert!(registry.view("missing", &(), &cx).is_none());
+    }
+
+    #[test]
+    fn child_task_failure_is_lifted_without_losing_cancellation_or_operation_identity() {
+        let mut parent = Effects::<String>::default();
+        parent.delegate(
+            |child| child.task_on_with_failure("shared", || 41, |_| 42),
+            |id| format!("operation:{id}"),
+        );
+        let mut task = parent.tasks.pop().unwrap();
+        let cancel = task.cancellation.clone();
+        let handler = task.take_failure_handler().unwrap();
+        assert_eq!(
+            handler(RuntimeFailure {
+                source: "effect queue shared".into(),
+                reason: "not admitted".into()
+            }),
+            "operation:42"
+        );
+        cancel.cancel();
+        assert!(task.cancellation.cancelled());
     }
 }

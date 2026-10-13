@@ -48,7 +48,8 @@
       "evidence": [
         "Bounded queue ordering, independent work, overload, cancellation, panic and shutdown tests passed",
         "Native launcher and secure lock/unlock passed",
-        "Subscription ingress now shares a bounded 64-value runtime queue; producer cancellation, stale-generation filtering, calloop dispatch bounds and live worker limits are tested. Native launcher, restart, secure lock and live wallpaper subscription checks passed."
+        "Subscription ingress now shares a bounded 64-value runtime queue; producer cancellation, stale-generation filtering, calloop dispatch bounds and live worker limits are tested. Native launcher, restart, secure lock and live wallpaper subscription checks passed.",
+        "The desktop now defines eight ordered effect lanes to fit the existing eight-worker bound. Task-local failure mapping preserves child operation identity on shared lanes, including delegated messages; cancellation suppresses retired tasks and failure mapping. Default or mapper failures still reach runtime supervision. Private protocol tests verify Bluetooth replies and urgent cancellation progress during pending ordinary native calls. This checkpoint is locally tested; native guest acceptance is pending."
       ]
     },
     {
@@ -223,7 +224,8 @@
         "Native network domain values/port and NetworkManager D-Bus adapter implemented with bounded signal-driven observation/commands, explicit acceptance versus completion and safe credential/error handling. 232 Rust tests, six private D-Bus protocol tests and 68 Python checks pass. Guest NetworkManager with owned simulated radios passes real WPA2/hidden association and DHCP, targeted disconnect/reactivation/forget, radio changes, removal/stale IDs and original-profile/route/desktop cleanup. See reports/measurements/lucent-network-service.json. The independent consumer is tested; desktop injection, native network panel and masked input remain unfinished.",
         "Native network child, framework masked edit/submit controls, generation-bound secret forms, native operation selectors, ownership/motion/error behavior and compatibility routes now implemented. 245 Rust tests, 70 Python checks, 248 software-Vulkan comparisons with 36 new baselines and real pointer/keyboard WPA2/hidden joins, DHCP, saved operations, radio changes and complete owned-fixture cleanup pass. Two-minute warm idle is 225.33 MiB mean RSS and 0.567% of one core; the 200 MiB memory target remains unmet. See reports/measurements/lucent-network-panel.json. Secret-agent, enterprise, physical networking and other control-center services remain unfinished.",
         "BluetoothPort, validated transient handles/addresses, pure command policy and a native BlueZ adapter now have an independent consumer. Five private D-Bus regressions cover discovery ownership, paired controls, retirement/reconnect, signal pressure, timeout/privacy and connection cleanup. A release consumer observes the real guest daemon with zero controllers and cancels in 0.114 seconds; owned daemon/module state is restored. Native pairing, desktop injection and hardware acceptance remain pending.",
-        "Native BluetoothPort pairing conversations now distinguish local attempt admission, explicit prompt answers and observed completion. Lazy KeyboardDisplay Agent1 registration, bounded proposals, zeroizing PIN/passkey input, exact unique-owner/current-target checks, cancellation/release and timeout retirement are implemented. Thirteen Bluetooth unit/protocol tests passed, including five new pairing protocol cases. Native desktop injection and actual-controller/profile acceptance remain open; this does not complete the control center."
+        "Native BluetoothPort pairing conversations now distinguish local attempt admission, explicit prompt answers and observed completion. Lazy KeyboardDisplay Agent1 registration, bounded proposals, zeroizing PIN/passkey input, exact unique-owner/current-target checks, cancellation/release and timeout retirement are implemented. Thirteen Bluetooth unit/protocol tests passed, including five new pairing protocol cases. Native desktop injection and actual-controller/profile acceptance remain open; this does not complete the control center.",
+        "Native Bluetooth child and composition-root injection now use BluetoothPort for loading/unavailable/current controllers, discovery, device controls and explicit pairing cards. Masked input and token-based motion use the framework; generation-bound forms drop on retirement/close. Late pairing admission is cancelled after close, and only accepted discovery sessions owned by Lucent are released. Seventeen Bluetooth unit/private-D-Bus protocol tests and eight injected client/root input checks pass. All 292 software-Vulkan visual comparisons pass, including 44 new Bluetooth references and reviewed bar control changes at 1x/2x. Native guest/controller interaction and compatibility replacement remain pending; this does not complete the control center."
       ]
     },
     {
@@ -1033,6 +1035,26 @@
         "Battery, brightness/power profiles and tray lifecycle; remaining network credential flows and audio/network hardware acceptance.",
         "Desktop memory/pacing/fault targets, per-output/fractional scaling, text/IME/accessibility, richer desktop features, secure-client production audit and packaging/migrations remain in the requirement ledger.",
         "Review and merge of PR #38 and its parent stack; final evidence-head CI is tracked on the PR."
+      ]
+    },
+    {
+      "milestone": "native-bluetooth-panel",
+      "status": "implemented_native_acceptance_pending",
+      "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/39",
+      "checks": [
+        "Native BlueZ pairing conversations, lazy/default agent authority, current sender/target checks and zeroizing entered answers are implemented behind BluetoothPort.",
+        "Seventeen Bluetooth unit/private-D-Bus protocol checks pass, including service authorization during Connect, agent Release, incoming display rejection and urgent pairing cancellation during an ordinary pending method.",
+        "Eight injected child/root checks pass for keyboard/masked input, answer ownership, stale requests, close/admission races and release of accepted discovery before its snapshot arrives.",
+        "All 292 software-Vulkan visual comparisons pass without tolerance changes; new Bluetooth and changed bar references were reviewed at 1x/2x.",
+        "The desktop uses eight named effect lanes and task-local failure routing; protocol fixtures and image comparisons do not establish actual controller or native desktop acceptance.",
+        "Final local checkpoint: 269 Rust workspace tests, 72 Python checks, strict Clippy/formatting, 501 generated design tokens, 58 app icons, Astro diagnostics with zero errors/warnings/hints, and 13 built pages with 487 links/assets pass. Native guest/controller acceptance and final published-head CI remain pending."
+      ],
+      "pending": [
+        "Clean release build, reversible guest deployment and native panel/controller pairing acceptance; compatibility entrypoints still use the existing Bluetooth path until acceptance.",
+        "Radio discoverable/pairable controls and pending-Connect cancellation UX; device/profile interoperability, incoming native pairing, permissions, suspend/resume, hotplug and hardware fault coverage.",
+        "Physical hardware acceptance; a private D-Bus fixture or future virtual HCI result does not prove radio/profile interoperability.",
+        "Memory below 200 MiB, decode/GPU peaks, hardware pacing, per-output/fractional scaling, text/IME/accessibility, tray, richer desktop features, secure-client audit and packaging/migrations remain in the full requirement ledger.",
+        "Final-head CI, review and merge of PR #39 and its parent stack; this milestone does not merge or complete the full objective."
       ]
     }
   ]

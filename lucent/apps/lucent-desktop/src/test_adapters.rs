@@ -122,6 +122,7 @@ pub fn with(fake: Arc<Fake>) -> DesktopAdapters {
         system: fake.clone(),
         audio: fake.clone(),
         network: fake.clone(),
+        bluetooth: fake.clone(),
         media: fake.clone(),
         weather: fake.clone(),
         wallpaper: fake.clone(),
@@ -175,5 +176,28 @@ impl WallpaperCatalogPort for Fake {
     }
     fn download(&self, _: &RemoteWallpaper) -> Result<Wallpaper> {
         Err(DomainError::Unavailable("offline fixture".into()))
+    }
+}
+
+impl BluetoothPort for Fake {
+    fn watch(&self, emit: &mut dyn FnMut(Result<BluetoothSnapshot>), _: &dyn StopSignal) {
+        emit(Ok(BluetoothSnapshot::default()));
+    }
+    fn control(&self, _: BluetoothCommand) -> Result<()> {
+        self.calls.lock().unwrap().push("bluetooth");
+        Ok(())
+    }
+    fn start_pairing(&self, _: BluetoothObjectId) -> Result<BluetoothPairingId> {
+        Err(DomainError::Unavailable("No fixture pairing target".into()))
+    }
+    fn answer_pairing(&self, _: BluetoothPairingId, _: BluetoothPairingAnswer) -> Result<()> {
+        Err(DomainError::Invalid("No fixture pairing prompt".into()))
+    }
+    fn cancel_pairing(&self, _: BluetoothPairingId) -> Result<()> {
+        Err(DomainError::Invalid("No fixture pairing attempt".into()))
+    }
+    fn set_incoming_pairing(&self, _: bool) -> Result<()> {
+        self.calls.lock().unwrap().push("bluetooth incoming");
+        Ok(())
     }
 }
