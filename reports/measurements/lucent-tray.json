@@ -1,0 +1,47 @@
+{
+  "status": "implementation_and_local_checks_passed_application_vm_acceptance_deferred",
+  "source_commit": "b88114c5969a53172470494d4725101dbbf5fa6d",
+  "local_checks": {
+    "workspace_passed": 293,
+    "workspace_ignored": 51,
+    "private_tray_protocol_passed": 5,
+    "python_passed": 80,
+    "software_visual_comparisons_passed": 376,
+    "new_reviewed_references": 28,
+    "reviewed_changed_bar_references": 12,
+    "fmt_clippy_workspace_all_targets": true,
+    "independent_consumer_private_bus_smoke_passed": true,
+    "astro_errors": 0,
+    "astro_warnings": 0,
+    "astro_hints": 0,
+    "pages_each_prefix": 13,
+    "links_assets_each_prefix": 488
+  },
+  "validation_scope": "Full final rendering-source suite passed without golden update mode. The subsequent adapter-only fair-deadline change reran strict workspace and all five private protocol cases. Published-head CI remains pending.",
+  "implemented": [
+    "Domain TrayPort, current TrayItemId handles, validated icon content and pure current-menu action policy.",
+    "Sender-owned KDE/freedesktop watcher registrations, unique-owner retirement, bounded metadata refresh and native item actions.",
+    "Native DBusMenu layout, submenu preparation and fresh revision/visible/enabled ancestry validation before invocation.",
+    "Injected SDK client, controlled scrolling, native icon asset preparation, semantic selection indicators and token-based motion.",
+    "Independent tray-service consumer and CI protocol coverage.",
+    "Dedicated ordered tray queue with a generic nine-worker limit, retaining independence from urgent controls."
+  ],
+  "native_acceptance": {
+    "current_source_deployed_to_vm": false,
+    "real_application_interoperability_tested": false,
+    "deferred_by_user": true,
+    "host_session_bus_mutated_by_protocol_tests": false
+  },
+  "remaining": [
+    "Real application/VM interoperability, daemon restart and broader fault acceptance.",
+    "Individual bar icons, pointer middle/right/wheel gestures, ordering/pinning and legacy XEmbed.",
+    "Additional menu icon/shortcut metadata, indeterminate toggles, deeper lazy menus and animated icons.",
+    "Current RSS/CPU/GPU/decode peaks and animation pacing; full remaining requirement ledger.",
+    "Final published-head CI and authorized merge."
+  ],
+  "privacy": {
+    "private_paths_or_captures_published": false,
+    "credentials_or_application_metadata_published": false
+  },
+  "normal_desktop_rss_target_mib": 300
+}

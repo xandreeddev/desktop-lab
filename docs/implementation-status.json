@@ -244,7 +244,7 @@
         "Service restart and item disconnect tests"
       ],
       "evidence": [
-        "Native TrayPort/StatusNotifier watcher, current item identities, validated icon content, native actions and DBusMenu now have an independent consumer and SDK client. Local protocol and visual validation is in progress. VM/application acceptance is deferred; direct bar gestures, legacy XEmbed and further menu metadata remain open."
+        "Native tray implementation at b88114c5969a53172470494d4725101dbbf5fa6d: 293 Rust workspace tests, 51 ignored fixtures, five owned private D-Bus protocol cases, 80 Python checks and strict formatting/Clippy pass. All 376 software-Vulkan comparisons pass; only 28 new tray references and 12 intentional bar changes were accepted after review. The adapter-only final fairness change reran workspace/protocol checks. Independent consumer and both docs build prefixes pass. VM/application acceptance and published-head CI remain pending; further tray gestures/metadata remain open."
       ]
     },
     {
@@ -1120,6 +1120,24 @@
         "Real logind/profile policy and native session authorization; built-in backlight updates/hotplug, suspend/resume, firmware and faults.",
         "Kernel file reads are on the service worker but are not made cancellable by D-Bus deadlines; kernel notifier failure falls back to command-completion refresh without a hardware-validated external-update guarantee.",
         "Current performance and the broader full requirement ledger remain open.",
+        "Final published-head CI and authorized merge."
+      ]
+    },
+    {
+      "milestone": "native-tray-controls",
+      "source_commit": "b88114c5969a53172470494d4725101dbbf5fa6d",
+      "report": "reports/measurements/lucent-tray.json",
+      "results": [
+        "Sender ownership, owner retirement, native actions, DBusMenu, stale/disabled menu policy, competing watcher and slow-item fairness pass on an owned isolated bus.",
+        "Native client controls, late menu/icon results, controlled scrolling and semantic vector indicators have injected/visual checks.",
+        "Nine bounded effect lanes isolate slow tray calls from urgent pairing replies; no domain/client concepts entered the generic executor.",
+        "Docs remain served locally; power PR #40 and Pages deployment are merged/published."
+      ],
+      "pending": [
+        "Real application/VM interoperability, daemon restart and broader fault acceptance.",
+        "Individual bar icons, pointer middle/right/wheel gestures, ordering/pinning and legacy XEmbed.",
+        "Additional menu icon/shortcut metadata, indeterminate toggles, deeper lazy menus and animated icons.",
+        "Current RSS/CPU/GPU/decode peaks and animation pacing; full remaining requirement ledger.",
         "Final published-head CI and authorized merge."
       ]
     }
