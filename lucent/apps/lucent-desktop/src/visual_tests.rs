@@ -1240,6 +1240,15 @@ fn visual_regressions() {
             ("bluetooth-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("bluetooth-empty", Mode::Apps, 0, 0, "", 1., 640.),
             ("bluetooth-devices", Mode::Apps, 0, 0, "", 1., 390.),
+            (
+                "bluetooth-unpaired-connected",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
             ("bluetooth-radio", Mode::Apps, 0, 0, "", 1., 390.),
             ("bluetooth-radio-last", Mode::Apps, 0, 0, "", 1., 390.),
             ("bluetooth-confirmation", Mode::Apps, 0, 0, "", 1., 390.),
@@ -1529,6 +1538,11 @@ fn visual_regressions() {
                             "Bluetooth service disconnected".into(),
                         )),
                         "bluetooth-empty" => Ok(lucent_domain::BluetoothSnapshot::default()),
+                        "bluetooth-unpaired-connected" => {
+                            let mut snapshot = fixture();
+                            snapshot.devices[0].connected = true;
+                            Ok(snapshot)
+                        }
                         "bluetooth-confirmation" => {
                             Ok(pairing_fixture(P::ConfirmPasskey(Code::new(17).unwrap())))
                         }

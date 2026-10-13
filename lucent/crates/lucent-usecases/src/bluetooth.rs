@@ -48,6 +48,27 @@ pub fn validate_pairing_answer(
     }
 }
 
+/// Declining a reply-bearing prompt also cancels the matching attempt we own.
+/// Incoming requests must not cancel an unrelated local attempt. Display-only
+/// cards have already replied; rejecting them invokes cancellation through the port.
+pub fn pairing_attempt_for_rejected_reply(
+    state: &BluetoothSnapshot,
+    request: BluetoothPairingId,
+) -> Option<BluetoothPairingId> {
+    let request = state.pairing_requests.iter().find(|p| p.id == request)?;
+    if matches!(
+        request.prompt,
+        BluetoothPairingPrompt::DisplayPinCode(_) | BluetoothPairingPrompt::DisplayPasskey { .. }
+    ) {
+        return None;
+    }
+    state
+        .pairing
+        .as_ref()
+        .filter(|a| a.device == request.device && a.phase == BluetoothPairingPhase::Pairing)
+        .map(|a| a.id)
+}
+
 pub fn validate_bluetooth_command(
     state: &BluetoothSnapshot,
     command: &BluetoothCommand,
@@ -157,6 +178,41 @@ mod tests {
             }],
             ..BluetoothSnapshot::default()
         }
+    }
+    #[test]
+    fn rejected_reply_cancels_only_its_live_owned_attempt() {
+        let mut s = state();
+        let attempt = BluetoothPairingId::new(10).unwrap();
+        let request = BluetoothPairingId::new(11).unwrap();
+        s.pairing = Some(BluetoothPairingAttempt {
+            id: attempt,
+            device: s.devices[0].id,
+            phase: BluetoothPairingPhase::Pairing,
+        });
+        s.pairing_requests.push(BluetoothPairingRequest {
+            id: request,
+            device: s.devices[0].id,
+            prompt: BluetoothPairingPrompt::ConfirmPasskey(BluetoothPairingCode::new(17).unwrap()),
+        });
+        assert_eq!(
+            pairing_attempt_for_rejected_reply(&s, request),
+            Some(attempt)
+        );
+        assert_eq!(pairing_attempt_for_rejected_reply(&s, attempt), None);
+        s.pairing_requests[0].device = BluetoothObjectId::new(3).unwrap();
+        assert_eq!(pairing_attempt_for_rejected_reply(&s, request), None);
+        s.pairing_requests[0].device = s.devices[0].id;
+        s.pairing.as_mut().unwrap().phase = BluetoothPairingPhase::Succeeded;
+        assert_eq!(pairing_attempt_for_rejected_reply(&s, request), None);
+        s.pairing.as_mut().unwrap().phase = BluetoothPairingPhase::Pairing;
+        s.pairing_requests[0].prompt = BluetoothPairingPrompt::DisplayPasskey {
+            code: BluetoothPairingCode::new(17).unwrap(),
+            entered: 0,
+        };
+        assert_eq!(pairing_attempt_for_rejected_reply(&s, request), None);
+        s.pairing = None;
+        s.pairing_requests[0].prompt = BluetoothPairingPrompt::AuthorizePairing;
+        assert_eq!(pairing_attempt_for_rejected_reply(&s, request), None);
     }
     #[test]
     fn radio_visibility_and_incoming_permission_have_distinct_policy() {

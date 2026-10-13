@@ -206,8 +206,31 @@ impl Bluetooth {
             self.error = error.to_string();
             return;
         }
+        let cancellation = if matches!(&answer, BluetoothPairingAnswer::Reject) {
+            self.snapshot()
+                .and_then(|s| lucent_usecases::bluetooth::pairing_attempt_for_rejected_reply(s, id))
+        } else {
+            None
+        };
         self.submit_task(true, effects, move |adapter| {
-            adapter.answer_pairing(id, answer).map(|()| Outcome::Done)
+            let response = adapter.answer_pairing(id, answer);
+            if let Some(attempt) = cancellation {
+                // The prompt may retire before this ordered task runs. Its
+                // captured attempt ID cannot cancel a replacement conversation.
+                let mut failure = match response {
+                    Ok(()) | Err(DomainError::Invalid(_)) => None,
+                    Err(error) => Some(error),
+                };
+                match adapter.cancel_pairing(attempt) {
+                    Ok(()) | Err(DomainError::Invalid(_)) => (),
+                    Err(error) => {
+                        failure.get_or_insert(error);
+                    }
+                }
+                failure.map_or(Ok(Outcome::Done), Err)
+            } else {
+                response.map(|()| Outcome::Done)
+            }
         });
     }
     fn close(&mut self, effects: &mut Effects<Message>) {
@@ -557,6 +580,14 @@ impl Bluetooth {
         }
     }
     pub fn inspect(&self) -> serde_json::Value {
-        serde_json::json!({"status":match self.observation {Observation::Loading=>"loading",Observation::Ready(_)=>"ready",Observation::Unavailable(_)=>"unavailable"},"label":self.status(),"open":self.open,"visible":self.mounted,"scroll":self.scroll,"tab":match self.tab {Tab::Available=>"available",Tab::Paired=>"paired",Tab::Radio=>"radio"},"controller":self.controller.map(|id|id.value()),"busy":self.active.is_some(),"answering":self.answering.is_some(),"error":self.error,"notice":self.notice,"controllers":self.snapshot().map(|s|s.adapters.len()),"devices":self.snapshot().map(|s|s.devices.len()),"requests":self.snapshot().map(|s|s.pairing_requests.iter().map(|p|serde_json::json!({"id":p.id.value(),"device":p.device.value()})).collect::<Vec<_>>()),"incoming":self.snapshot().map(|s|s.incoming_pairing_enabled),"form":self.form.as_ref().map(|f|f.request.value())})
+        let pairing = self.snapshot().and_then(|s| s.pairing.as_ref()).map(|a| {
+            serde_json::json!({"id":a.id.value(),"device":a.device.value(),"phase":match a.phase {
+                BluetoothPairingPhase::Pairing => "pairing",
+                BluetoothPairingPhase::Succeeded => "succeeded",
+                BluetoothPairingPhase::Cancelled => "cancelled",
+                BluetoothPairingPhase::Failed(_) => "failed",
+            }})
+        });
+        serde_json::json!({"status":match self.observation {Observation::Loading=>"loading",Observation::Ready(_)=>"ready",Observation::Unavailable(_)=>"unavailable"},"label":self.status(),"open":self.open,"visible":self.mounted,"scroll":self.scroll,"tab":match self.tab {Tab::Available=>"available",Tab::Paired=>"paired",Tab::Radio=>"radio"},"controller":self.controller.map(|id|id.value()),"busy":self.active.is_some(),"answering":self.answering.is_some(),"error":self.error,"notice":self.notice,"controllers":self.snapshot().map(|s|s.adapters.len()),"devices":self.snapshot().map(|s|s.devices.len()),"requests":self.snapshot().map(|s|s.pairing_requests.iter().map(|p|serde_json::json!({"id":p.id.value(),"device":p.device.value()})).collect::<Vec<_>>()),"pairing":pairing,"incoming":self.snapshot().map(|s|s.incoming_pairing_enabled),"form":self.form.as_ref().map(|f|f.request.value())})
     }
 }

@@ -39,15 +39,10 @@ def restore_property(path, name, value):
              'org.bluez.Adapter1', name, 'b', 'true' if value else 'false')
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--login-file', type=Path, required=True)
-    parser.add_argument('--fixture-directory', type=Path, required=True)
-    args = parser.parse_args()
-    directory = args.fixture_directory
+def require_fixture(directory, login_file):
     if directory.parent != Path('/tmp') or not directory.name.startswith('lucent-bluetooth-vhci-'):
         raise SystemExit('Expected the owned guest vHCI fixture directory')
-    secret = next(line.split(':', 1)[1].strip() for line in args.login_file.read_text().splitlines()
+    secret = next(line.split(':', 1)[1].strip() for line in login_file.read_text().splitlines()
                   if line.startswith('Password:'))
     owned = json.loads(subprocess.check_output(lab.ssh_args('lucent') + [shlex.join([
         'sudo', '-S', '-p', '', 'python3', str(directory / 'fixture.py'), 'info', str(directory)
@@ -66,9 +61,17 @@ def main():
     v.eventually(lambda: state()['controllers'] == 2, 'Native controller snapshot did not arrive')
     before = v.inspect()
     if any(s['id'] != 'bluetooth' and s['pointer_input'] == 'all' for s in before['surfaces']):
-        raise SystemExit('Close other modal panels before radio acceptance')
+        raise SystemExit('Close other modal panels before native Bluetooth acceptance')
     if any(property_value(path, 'Discovering') for path in PATHS):
         raise SystemExit('An existing discovery session is not part of this check')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--login-file', type=Path, required=True)
+    parser.add_argument('--fixture-directory', type=Path, required=True)
+    args = parser.parse_args()
+    require_fixture(args.fixture_directory, args.login_file)
     original = {path: {name: property_value(path, name) for name in ('Powered', 'Pairable', 'Discoverable')}
                 for path in PATHS}
     original_open = state()['open']

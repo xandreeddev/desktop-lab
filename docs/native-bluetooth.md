@@ -338,6 +338,21 @@ The client must finish these workflows before the compatibility handover; prompt
 delivery alone is not complete rejection. Pending Connect cancellation, PIN
 entry, incoming-controller authorization and physical profiles remain open.
 
+The next working checkpoint implements those two client workflows.
+`pairing_attempt_for_rejected_reply` is a pure use case: it selects only the
+live owned attempt matching a current reply-bearing request. The child delivers
+Reject and then requests cancellation on the ordered urgent lane. Retired IDs
+cannot target a replacement conversation; incoming requests for another device
+do not cancel our attempt, and display callbacks keep their existing port-level
+cancellation behavior. Native failure outcomes remain visible, and command
+acknowledgement still waits for observed phase changes.
+
+Connected unpaired devices now render Disconnect beside Pair, without offering
+Trust. Inspection adds only attempt/device IDs and the safe phase label, so
+tests can verify termination without exposing a PIN, displayed code or native
+failure metadata. Pure policy, delegated effects, stale-ID/failure behavior and
+real SDK layout checks pass locally; rebuilt native verification is pending.
+
 Cleanup stops the owned reference/emulator processes, temporarily masks only
 the fixture's BlueZ service while unloading new module holders, deletes only
 new storage for the two owned controller addresses and removes its runtime

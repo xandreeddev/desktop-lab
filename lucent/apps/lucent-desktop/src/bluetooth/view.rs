@@ -424,7 +424,7 @@ impl Bluetooth {
                 details.push(format!("{rssi} dBm"));
             }
             let mut actions = vec![];
-            if device.paired {
+            if device.connected || device.paired {
                 let command = if device.connected {
                     BluetoothCommand::Disconnect(device.id)
                 } else {
@@ -444,6 +444,8 @@ impl Bluetooth {
                     valid && self.active.is_none(),
                     theme,
                 ));
+            }
+            if device.paired {
                 actions.push(button(
                     if device.trusted {
                         "Remove trust"

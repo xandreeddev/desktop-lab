@@ -73,6 +73,9 @@ struct Adapter {
     calls: Mutex<Vec<&'static str>>,
     commands: Mutex<Vec<BluetoothCommand>>,
     answers: Mutex<Vec<(BluetoothPairingId, &'static str)>>,
+    operations: Mutex<Vec<(&'static str, BluetoothPairingId)>>,
+    answer_error: Mutex<Option<DomainError>>,
+    cancel_error: Mutex<Option<DomainError>>,
 }
 impl BluetoothPort for Adapter {
     fn watch(&self, emit: &mut dyn FnMut(Result<BluetoothSnapshot>), _: &dyn StopSignal) {
@@ -100,11 +103,13 @@ impl BluetoothPort for Adapter {
             }
         };
         self.answers.lock().unwrap().push((id, kind));
-        Ok(())
+        self.operations.lock().unwrap().push(("answer", id));
+        self.answer_error.lock().unwrap().take().map_or(Ok(()), Err)
     }
-    fn cancel_pairing(&self, _: BluetoothPairingId) -> Result<()> {
+    fn cancel_pairing(&self, id: BluetoothPairingId) -> Result<()> {
         self.calls.lock().unwrap().push("cancel");
-        Ok(())
+        self.operations.lock().unwrap().push(("cancel", id));
+        self.cancel_error.lock().unwrap().take().map_or(Ok(()), Err)
     }
     fn set_incoming_pairing(&self, _: bool) -> Result<()> {
         self.calls.lock().unwrap().push("incoming");
@@ -181,6 +186,30 @@ fn device_actions_are_reachable_and_radio_authority_lives_on_its_own_tab() {
             .iter()
             .any(|h| h.id == "bluetooth-visibility" || h.id == "bluetooth-incoming")
     );
+    let mut connected = fixture();
+    connected.devices[0].connected = true;
+    client.update(Message::Observed(Ok(connected)), &mut effects);
+    let scene = layout.build(
+        &client.view(&cx, theme),
+        cx.width,
+        cx.height,
+        &lucent_ui::Interaction::default(),
+        cx.now,
+    );
+    let disconnect = scene
+        .hits
+        .iter()
+        .find(|h| h.id == "bluetooth-connect-2")
+        .unwrap();
+    assert!(
+        matches!(disconnect.click, Some(Message::Control(BluetoothCommand::Disconnect(device))) if device == id(2))
+    );
+    assert!(disconnect.clip.contains(
+        disconnect.rect.x + disconnect.rect.w / 2.,
+        disconnect.rect.y + disconnect.rect.h / 2.
+    ));
+    assert!(scene.hits.iter().any(|h| h.id == "bluetooth-pair-2"));
+    assert!(!scene.hits.iter().any(|h| h.id == "bluetooth-trust-2"));
     client.update(Message::Tab(Tab::Radio), &mut effects);
     let scene = layout.build(
         &client.view(&cx, theme),
@@ -274,6 +303,87 @@ fn pairing_answers_use_an_independent_lane_and_consume_input_once() {
     );
     client.update(ordinary.run(), &mut effects);
     assert!(!client.snapshot().unwrap().devices[1].connected);
+}
+#[test]
+fn decline_answers_then_cancels_the_captured_attempt_without_faking_completion() {
+    let (mut client, adapter, mut effects) = client();
+    client.update(
+        Message::Observed(Ok(pairing_fixture(
+            BluetoothPairingPrompt::AuthorizePairing,
+        ))),
+        &mut effects,
+    );
+    client.update(Message::Decision(pairing_id(41), false), &mut effects);
+    let task = effects.tasks.remove(0);
+    assert_eq!(task.queue, crate::work::CONTROLS);
+    let mut replacement = pairing_fixture(BluetoothPairingPrompt::AuthorizePairing);
+    replacement.pairing.as_mut().unwrap().id = pairing_id(50);
+    replacement.pairing_requests[0].id = pairing_id(51);
+    client.update(Message::Observed(Ok(replacement)), &mut effects);
+    *adapter.answer_error.lock().unwrap() = Some(DomainError::Invalid("old prompt retired".into()));
+    client.update(task.run(), &mut effects);
+    assert_eq!(
+        *adapter.operations.lock().unwrap(),
+        vec![("answer", pairing_id(41)), ("cancel", pairing_id(40))]
+    );
+    assert!(client.error.is_empty());
+    assert_eq!(
+        client.snapshot().unwrap().pairing.as_ref().unwrap().id,
+        pairing_id(50)
+    );
+    assert_eq!(client.inspect()["pairing"]["phase"], "pairing");
+}
+#[test]
+fn rejection_preserves_native_failures_and_attempts_cancellation_after_delivery_failure() {
+    let (mut client, adapter, mut effects) = client();
+    client.update(
+        Message::Observed(Ok(pairing_fixture(
+            BluetoothPairingPrompt::AuthorizePairing,
+        ))),
+        &mut effects,
+    );
+    *adapter.answer_error.lock().unwrap() =
+        Some(DomainError::Unavailable("delivery uncertain".into()));
+    client.update(Message::Decision(pairing_id(41), false), &mut effects);
+    let task = effects.tasks.remove(0);
+    client.update(task.run(), &mut effects);
+    assert_eq!(
+        *adapter.operations.lock().unwrap(),
+        vec![("answer", pairing_id(41)), ("cancel", pairing_id(40))]
+    );
+    assert!(client.error.contains("delivery uncertain"));
+    *adapter.cancel_error.lock().unwrap() =
+        Some(DomainError::Unavailable("cancellation uncertain".into()));
+    client.update(Message::Decision(pairing_id(41), false), &mut effects);
+    let task = effects.tasks.remove(0);
+    client.update(task.run(), &mut effects);
+    assert!(client.error.contains("cancellation uncertain"));
+}
+#[test]
+fn incoming_rejection_and_display_cancellation_do_not_cancel_an_unrelated_attempt_twice() {
+    let (mut client, adapter, mut effects) = client();
+    for prompt in [
+        BluetoothPairingPrompt::AuthorizePairing,
+        BluetoothPairingPrompt::DisplayPasskey {
+            code: BluetoothPairingCode::new(17).unwrap(),
+            entered: 0,
+        },
+    ] {
+        let mut snapshot = pairing_fixture(prompt.clone());
+        if prompt == BluetoothPairingPrompt::AuthorizePairing {
+            snapshot.pairing_requests[0].device = id(3);
+        }
+        client.update(Message::Observed(Ok(snapshot)), &mut effects);
+        client.update(Message::Decision(pairing_id(41), false), &mut effects);
+        let task = effects.tasks.remove(0);
+        client.update(task.run(), &mut effects);
+    }
+    assert_eq!(
+        *adapter.operations.lock().unwrap(),
+        vec![("answer", pairing_id(41)), ("answer", pairing_id(41))]
+    );
+    assert!(adapter.calls.lock().unwrap().is_empty());
+    assert!(!client.inspect().to_string().contains("000017"));
 }
 #[test]
 fn request_retirement_drops_input_and_late_events_cannot_edit_the_replacement() {

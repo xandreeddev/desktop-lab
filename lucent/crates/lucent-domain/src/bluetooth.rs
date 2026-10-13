@@ -124,6 +124,8 @@ pub trait BluetoothPort: Send + Sync {
     /// not successful pairing; watch the attempt and actual device observations.
     fn start_pairing(&self, device: BluetoothObjectId) -> Result<crate::BluetoothPairingId>;
     /// Delivers one owned answer to a current prompt, not pairing completion.
+    /// Rejecting a display-only card requests cancellation of its native
+    /// operation; a reply-bearing rejection can still require cancel_pairing.
     fn answer_pairing(
         &self,
         request: crate::BluetoothPairingId,
