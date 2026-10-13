@@ -11,9 +11,10 @@ bar/keyboard/IPC surface checks and actual ready-empty/unavailable daemon
 observations pass. Two owned virtual HCI controllers also pass native radio
 controls, discovery, explicit comparison-code pairing, bonding and trust removal.
 That run exposed a signal-filter bug: external controller/device property changes
-were not refreshing the panel. Its native-adapter fix still needs a rebuilt-guest
-check. Installed compatibility entrypoints remain unchanged until that acceptance
-is established; physical device/profile interoperability remains unverified.
+were not refreshing the panel. The rebuilt native adapter now passes external
+power changes and recovery without a restart or client polling. Installed
+compatibility entrypoints remain unchanged while the Decline flow is completed;
+physical device/profile interoperability remains unverified.
 
 ## Values, identity and policy
 
@@ -311,16 +312,31 @@ The test compares the native six-digit card with the peer's actual prompt
 before clicking Accept. It checks BlueZ's `Paired`, `Bonded` and `Trusted`
 properties rather than treating command admission as successful pairing.
 Native discovery, comparison-code pairing/bonding and explicit trust/removal
-pass; no device is automatically trusted. Captures and peer output stay private.
+pass on the rebuilt adapter; no device is automatically trusted. Confirmed Forget
+retires the selected device, while Back preserves the pair. Escape closes an
+active prompt, releases the owned scan and does not reopen on a late event.
+Captures and peer output stay private.
 
 The same run caught an observation defect: a `path_namespace='/'` D-Bus rule
 received no nested property signals on this guest's system bus, while a rule
 limited to BlueZ's unique sender received the power changes. Native control
 completion forced a fresh snapshot and hid this problem in ordinary button
 tests. The fix removes the redundant path filter in the platform adapter;
-interface/member filtering remains in `Notices`. A rebuilt native test is
-pending. Polling in the client would bypass the service boundary and would not
-repair signal ownership.
+interface/member filtering remains in `Notices`. The rebuilt native
+`vm/test-bluetooth-radio.py` check now passes power, visibility, Pairable and
+external property changes, restoring the original radio flags, tab, controller
+and panel openness. It requires an explicitly supplied owned fixture directory
+and private login file; it refuses other controllers, active scans and modal UI.
+Polling in the client would bypass the service boundary and would not repair
+signal ownership.
+
+Decline still has an acceptance gap. The native card disappears and the device
+remains unpaired/untrusted, but the owned Pair conversation can remain pending
+while the reference peer waits. A connected unpaired device also lacks an
+explicit Disconnect button, although the domain/adapter support that command.
+The client must finish these workflows before the compatibility handover; prompt
+delivery alone is not complete rejection. Pending Connect cancellation, PIN
+entry, incoming-controller authorization and physical profiles remain open.
 
 Cleanup stops the owned reference/emulator processes, temporarily masks only
 the fixture's BlueZ service while unloading new module holders, deletes only
