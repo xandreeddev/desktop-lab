@@ -90,9 +90,12 @@ class Boundaries(unittest.TestCase):
         cls.graph = workspace_manifests(ROOT / 'lucent')
 
     def assert_no_platform_operations(self, paths, forbidden=()):
+        self.assert_no_imports(paths, ('std::process', 'std::fs', 'std::net', 'std::os', *forbidden))
+
+    def assert_no_imports(self, paths, forbidden):
         for path in paths:
             text = path.read_text()
-            for token in ('std::process', 'std::fs', 'std::net', 'std::os', *forbidden):
+            for token in forbidden:
                 # Match whitespace around Rust path separators too.
                 pattern = r'\s*::\s*'.join(map(re.escape, token.split('::')))
                 self.assertIsNone(re.search(pattern, text), f'{path.relative_to(ROOT)} imports {token}')
@@ -166,6 +169,15 @@ class Boundaries(unittest.TestCase):
             ('crate::desktop','crate::adapters','crate::platform','crate::ports'))
         self.assertNotIn('lucent-wayland', reachable(self.graph,'bluetooth-service'))
         self.assertNotIn('lucent-render', reachable(self.graph,'bluetooth-service'))
+
+    def test_power_adapter_child_and_consumer_preserve_boundaries(self):
+        self.assert_no_imports(
+            sources(ROOT / 'lucent/crates/lucent-services/src/power', ('tests.rs',)),
+            ('crate::command', 'command_with_timeout', 'lucent_desktop', 'lucent_design', 'lucent_wayland'))
+        self.assert_no_platform_operations(sources(ROOT / 'lucent/apps/lucent-desktop/src/power'),
+            ('crate::desktop', 'crate::adapters', 'crate::platform', 'crate::ports'))
+        self.assertNotIn('lucent-wayland', reachable(self.graph, 'power-service'))
+        self.assertNotIn('lucent-render', reachable(self.graph, 'power-service'))
 
     def test_all_desktop_effects_fit_the_runtime_worker_budget(self):
         root=ROOT / 'lucent/apps/lucent-desktop/src'

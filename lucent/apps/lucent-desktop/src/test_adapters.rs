@@ -123,6 +123,7 @@ pub fn with(fake: Arc<Fake>) -> DesktopAdapters {
         audio: fake.clone(),
         network: fake.clone(),
         bluetooth: fake.clone(),
+        power: fake.clone(),
         media: fake.clone(),
         weather: fake.clone(),
         wallpaper: fake.clone(),
@@ -132,6 +133,15 @@ pub fn with(fake: Arc<Fake>) -> DesktopAdapters {
     }
 }
 
+impl PowerPort for Fake {
+    fn watch(&self, emit: &mut dyn FnMut(Result<PowerSnapshot>), _: &dyn StopSignal) {
+        emit(Ok(PowerSnapshot::default()));
+    }
+    fn control(&self, _: PowerCommand) -> Result<PowerOperationId> {
+        self.calls.lock().unwrap().push("power");
+        PowerOperationId::new(1)
+    }
+}
 impl NotificationPort for Fake {
     fn watch(&self, emit: &mut dyn FnMut(Result<NotificationSnapshot>), _: &dyn StopSignal) {
         emit(Ok(NotificationSnapshot::default()));

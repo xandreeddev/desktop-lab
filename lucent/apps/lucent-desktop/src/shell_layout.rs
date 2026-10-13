@@ -53,6 +53,10 @@ pub fn bluetooth_panel(viewport: (f32, f32)) -> Rect {
     use lucent_design::component::bluetooth;
     control_panel(viewport, (bluetooth::WIDTH, bluetooth::HEIGHT))
 }
+pub fn power_panel(viewport: (f32, f32)) -> Rect {
+    use lucent_design::component::power;
+    control_panel(viewport, (power::WIDTH, power::HEIGHT))
+}
 fn control_panel(viewport: (f32, f32), size: (f32, f32)) -> Rect {
     let width = floor(
         size.0.min(viewport.0 - layout::SHELL_INSET * 2.),
@@ -207,12 +211,22 @@ pub struct BarLayout {
     pub media: Option<Rect>,
     pub clock: Option<Rect>,
     pub system: Rect,
+    pub show_mute: bool,
 }
 impl BarLayout {
     pub fn new(width: f32, workspace_count: usize) -> Self {
         let gap = layout::SECTION_GAP;
         let rect = |x, w| Rect::new(x, bar::TOP, w, pill::HEIGHT);
-        let system_width = pill::PADDING_INLINE * 2. + bar::CONTROL_SIZE * 6. + space::SM * 5.;
+        let system_size = |count: f32| {
+            pill::PADDING_INLINE * 2. + bar::CONTROL_SIZE * count + space::SM * (count - 1.)
+        };
+        let minimum_workspace = pill::PADDING_INLINE * 2. + bar::WORKSPACE_SIZE;
+        let show_mute = width
+            >= layout::SHELL_INSET * 2.
+                + minimum_workspace
+                + gap
+                + system_size(bar::SYSTEM_CONTROL_COUNT);
+        let system_width = system_size(bar::SYSTEM_CONTROL_COUNT - if show_mute { 0. } else { 1. });
         let system = rect(
             floor(
                 width - layout::SHELL_INSET - system_width,
@@ -262,6 +276,7 @@ impl BarLayout {
             media,
             clock,
             system,
+            show_mute,
         }
     }
 }

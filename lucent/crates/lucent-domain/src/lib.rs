@@ -7,6 +7,8 @@ pub use ports::*;
 
 mod audio;
 pub use audio::*;
+mod power;
+pub use power::*;
 
 mod network;
 pub use network::*;

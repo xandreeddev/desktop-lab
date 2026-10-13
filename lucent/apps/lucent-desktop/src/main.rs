@@ -12,6 +12,7 @@ mod palette_intent;
 mod persistence;
 mod platform;
 mod ports;
+mod power;
 mod previews;
 mod shell_layout;
 mod views;

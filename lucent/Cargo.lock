@@ -1846,6 +1846,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "power-service"
+version = "0.1.0"
+dependencies = [
+ "lucent-domain",
+ "lucent-services",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "presser"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

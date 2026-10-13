@@ -26,6 +26,7 @@ pub enum Message {
     Audio(crate::audio::Message),
     Network(crate::network::Message),
     Bluetooth(crate::bluetooth::Message),
+    Power(crate::power::Message),
     Media(domain::Result<MediaSnapshot>),
     Weather(domain::Result<WeatherSnapshot>),
     Launcher(launcher::Message),
@@ -73,6 +74,7 @@ pub struct Desktop {
     pub audio: crate::audio::Audio,
     pub network: crate::network::Network,
     pub bluetooth: crate::bluetooth::Bluetooth,
+    pub power: crate::power::Power,
     pub media: MediaSnapshot,
     pub weather: Option<WeatherSnapshot>,
     pub browser: crate::wallpaper_browser::Browser,
@@ -113,6 +115,7 @@ impl Desktop {
             audio: crate::audio::Audio::new(adapters.audio.clone()),
             network: crate::network::Network::new(adapters.network.clone()),
             bluetooth: crate::bluetooth::Bluetooth::new(adapters.bluetooth.clone()),
+            power: crate::power::Power::new(adapters.power.clone()),
             media: MediaSnapshot::default(),
             weather: None,
             browser: Default::default(),
@@ -202,6 +205,7 @@ impl Desktop {
             "audio",
             "network",
             "bluetooth",
+            "power",
         ] {
             effects.redraw(id);
         }
@@ -328,6 +332,10 @@ impl Desktop {
             Message::Launcher,
         );
         if self.launcher.open() {
+            effects.delegate(
+                |child| self.power.update(crate::power::Message::Close, child),
+                Message::Power,
+            );
             effects.delegate(
                 |child| {
                     self.bluetooth
@@ -480,6 +488,7 @@ impl Component for Desktop {
                 .bluetooth
                 .view(cx, self.theme())
                 .map(Message::Bluetooth),
+            "power" => self.power.view(cx, self.theme()).map(Message::Power),
             "osd" => self.osd.view(cx, self.theme()),
             "background" => self
                 .wallpaper
@@ -643,6 +652,10 @@ impl Component for Desktop {
                     || matches!(message, crate::audio::Message::Toggle) && !self.audio.open();
                 if opening {
                     effects.delegate(
+                        |child| self.power.update(crate::power::Message::Close, child),
+                        Message::Power,
+                    );
+                    effects.delegate(
                         |child| {
                             self.bluetooth
                                 .update(crate::bluetooth::Message::Close, child)
@@ -661,6 +674,10 @@ impl Component for Desktop {
                 let opening = matches!(message, crate::network::Message::Open)
                     || matches!(message, crate::network::Message::Toggle) && !self.network.open();
                 if opening {
+                    effects.delegate(
+                        |child| self.power.update(crate::power::Message::Close, child),
+                        Message::Power,
+                    );
                     effects.delegate(
                         |child| {
                             self.bluetooth
@@ -686,6 +703,10 @@ impl Component for Desktop {
                     Message::Bluetooth,
                 );
                 if self.bluetooth.open() && !before {
+                    effects.delegate(
+                        |child| self.power.update(crate::power::Message::Close, child),
+                        Message::Power,
+                    );
                     self.update_launcher(launcher::Message::Close, effects);
                     effects.delegate(
                         |child| self.audio.update(crate::audio::Message::Close, child),
@@ -696,6 +717,29 @@ impl Component for Desktop {
                         Message::Network,
                     );
                 }
+            }
+            Message::Power(message) => {
+                let opening = matches!(message, crate::power::Message::Open)
+                    || matches!(message, crate::power::Message::Toggle) && !self.power.open();
+                if opening {
+                    self.update_launcher(launcher::Message::Close, effects);
+                    effects.delegate(
+                        |child| self.audio.update(crate::audio::Message::Close, child),
+                        Message::Audio,
+                    );
+                    effects.delegate(
+                        |child| self.network.update(crate::network::Message::Close, child),
+                        Message::Network,
+                    );
+                    effects.delegate(
+                        |child| {
+                            self.bluetooth
+                                .update(crate::bluetooth::Message::Close, child)
+                        },
+                        Message::Bluetooth,
+                    );
+                }
+                effects.delegate(|child| self.power.update(message, child), Message::Power);
             }
             Message::Media(result) => {
                 let value = result.unwrap_or_default();
@@ -966,6 +1010,27 @@ impl api::Application for Desktop {
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         let mut surfaces = vec![
             SurfaceSpec {
+                id: "power",
+                layer: Layer::Overlay,
+                anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
+                width: 0,
+                height: 0,
+                exclusive_zone: -1,
+                keyboard: if self.power.open() {
+                    Keyboard::Exclusive
+                } else {
+                    Keyboard::None
+                },
+                visible: self.power.visible(),
+                pointer_input: if self.power.open() {
+                    PointerInput::All
+                } else {
+                    PointerInput::None
+                },
+            },
+            SurfaceSpec {
                 id: "bluetooth",
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
@@ -1169,7 +1234,14 @@ impl api::Application for Desktop {
         let audio = self.adapters.audio.clone();
         let network = self.adapters.network.clone();
         let bluetooth = self.adapters.bluetooth.clone();
+        let power = self.adapters.power.clone();
         let mut s = vec![
+            Subscription::stream("power", move |out, cancel| {
+                power.watch(
+                    &mut |value| out.send(Message::Power(crate::power::Message::Observed(value))),
+                    &WatchStop(cancel),
+                );
+            }),
             Subscription::stream("bluetooth", move |out, cancel| {
                 bluetooth.watch(
                     &mut |value| {
@@ -1241,6 +1313,14 @@ impl api::Application for Desktop {
                 );
             }));
         }
+        for subscription in self.power.subscriptions() {
+            s.push(Subscription::stream(subscription.id, move |out, cancel| {
+                (subscription.run)(
+                    Emitter::new(move |message| out.send(Message::Power(message))),
+                    cancel,
+                );
+            }));
+        }
         for subscription in self.browser.subscriptions(&self.adapters) {
             s.push(Subscription::stream(subscription.id, move |out, cancel| {
                 (subscription.run)(
@@ -1268,6 +1348,13 @@ impl api::Application for Desktop {
     }
     fn event(&self, event: Event) -> Option<Message> {
         match event {
+            Event::Key {
+                surface: "power",
+                key: Key::Escape,
+            } => Some(Message::Power(self.power.escape())),
+            Event::Key {
+                surface: "power", ..
+            } => None,
             Event::Key {
                 surface: "bluetooth",
                 key: Key::Escape,
@@ -1405,6 +1492,9 @@ impl api::Application for Desktop {
             return Ok(Some(Message::LauncherSize(size)));
         }
         Ok(Some(match command {
+            "power open"=>Message::Power(crate::power::Message::Open),
+            "power toggle"=>Message::Power(crate::power::Message::Toggle),
+            "power close"=>Message::Power(crate::power::Message::Close),
             "bluetooth open"=>Message::Bluetooth(crate::bluetooth::Message::Open),
             "bluetooth toggle"=>Message::Bluetooth(crate::bluetooth::Message::Toggle),
             "bluetooth close"=>Message::Bluetooth(crate::bluetooth::Message::Close),
@@ -1448,10 +1538,12 @@ impl api::Application for Desktop {
         }, "palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_history_open":self.notifications.history_open,"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":self.widgets.grid_visible(),"widget_surfaces":self.widgets.surfaces(&self.settings,self.viewport).iter().map(|s|serde_json::json!({"id":s.id,"members":s.members,"x":s.rect.x,"y":s.rect.y,"width":s.rect.w,"height":s.rect.h})).collect::<Vec<_>>(),"notes":self.settings.notes,"timer_seconds":self.widgets.timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"settings_save_status":self.persistence.status(self.settings_writable).name(),"settings_save_error":self.persistence.error(),"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable});
         value["network"] = self.network.inspect();
         value["bluetooth"] = self.bluetooth.inspect();
+        value["power"] = self.power.inspect();
         value.to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
         (surface == "audio" && self.audio.animating(now))
+            || (surface == "power" && self.power.animating(now))
             || (surface == "bluetooth" && self.bluetooth.animating(now))
             || (surface == "network" && self.network.animating(now))
             || (surface == "osd" && self.osd.animating(now))
