@@ -1,0 +1,55 @@
+{
+  "status": "native_vm_checks_passed",
+  "tested_source_commit": "eb3f5cbfd6498844b567a5274d0a0ca7a44c50d2",
+  "checks": {
+    "synthetic_mp4_webm_gif_encoded": true,
+    "native_path_edit_submit_and_fps": true,
+    "mp4_native_import_and_changing_pixels": true,
+    "pause_freezes_native_frames_and_pixels": true,
+    "resume_restarts_native_playback": true,
+    "invalid_import_preserves_configuration": true,
+    "restart_restores_selection_fps_and_playback": true,
+    "webm_native_import_and_changing_pixels": true,
+    "gif_native_import_and_changing_pixels": true,
+    "native_panel_escape": true
+  },
+  "restoration": {
+    "selected_snapshot_checkpoint": true,
+    "public_wallpaper_transaction": true,
+    "exact_files_replaced_while_stopped": true,
+    "exact_settings_wallpaper_theme_and_login_exports": true,
+    "original_idle_policy": true,
+    "test_owned_assets_removed": true
+  },
+  "synthetic_captures_review_scope": "Private samples verify changing background colors. No personal captures are published.",
+  "configured_vm_memory_mib": 1536,
+  "normal_resource_configuration_restoration": "pending",
+  "hardware_gpu_or_multi_output_acceptance": false,
+  "current_120_second_rss_pacing_measured": false,
+  "binaries": {
+    "lucent-desktop": {
+      "sha256": "0236e65bb228d3b00e0e613697050c1f99726bf7b2934cb1afbbc97c2e7b8335",
+      "bytes": 20281000
+    },
+    "lucent-cli": {
+      "sha256": "b94479b458b588aed26e0b1b67945d009004a0dcb39f4f35ced9eafcced35132",
+      "bytes": 345064
+    },
+    "lucent-menu": {
+      "sha256": "b35894d37ef343bc2840cefbfc155b7d2ed3f232e86bf52905eb98d1a0537e75",
+      "bytes": 8448640
+    },
+    "lucent-lock": {
+      "sha256": "dc73c2e1e5abfc747cdd4fceff4d83c07f3470f7d83b5e6a31ac879600e4c581",
+      "bytes": 11926032
+    },
+    "lucent-greeter": {
+      "sha256": "521710a437a3f93bfd3bf1417afed6a255d1bb3e8b9b36cb8a3e4859b7fcde37",
+      "bytes": 11813008
+    },
+    "lucent-polkit": {
+      "sha256": "b8f0defb203b483ebd1bf836d4c6dd41ce0dd64f440884eacba016348cb973c9",
+      "bytes": 8597144
+    }
+  }
+}
