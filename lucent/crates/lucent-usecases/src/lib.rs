@@ -268,6 +268,7 @@ mod tests {
         }
         fn snapshot(&self) -> Result<CompositorSnapshot> {
             Ok(CompositorSnapshot {
+                monitors: vec![],
                 workspaces: vec![],
                 windows: vec![Window {
                     address: "0x1".into(),

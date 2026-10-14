@@ -1353,6 +1353,8 @@ fn visual_regressions() {
             ("monitor-widgets-right", Mode::Apps, 0, 0, "", 1., 960.),
             ("monitor-grid-right", Mode::Apps, 0, 0, "", 1., 960.),
             ("monitor-selector-right", Mode::Widgets, 0, 0, "", 1., 960.),
+            ("monitor-bar-left", Mode::Apps, 0, 0, "", 1., 960.),
+            ("monitor-bar-right", Mode::Apps, 0, 0, "", 1., 960.),
             ("text-caret-middle", Mode::Apps, 0, 0, "", 1., 640.),
             ("text-selection-forward", Mode::Apps, 0, 0, "", 1., 640.),
             ("text-selection-reverse", Mode::Apps, 0, 0, "", 1., 640.),
@@ -1462,7 +1464,9 @@ fn visual_regressions() {
             {
                 continue;
             }
-            let height = if name == "notification-image-small" {
+            let height = if name.starts_with("monitor-bar-") {
+                lucent_design::component::panel::BAR_HEIGHT
+            } else if name == "notification-image-small" {
                 320.
             } else if name.starts_with("launcher-size-") {
                 1080.
@@ -2447,12 +2451,16 @@ fn visual_regressions() {
                 use lucent_domain::{MonitorId, Placement, WidgetLayout, WidgetSize};
                 let left = MonitorId::new("DEMO-1").unwrap();
                 let right = MonitorId::new("DEMO-2").unwrap();
+                let bar_sample = name.starts_with("monitor-bar-");
                 let catalog = [("DEMO-1", 1), ("DEMO-2", 2)]
                     .into_iter()
                     .map(|(name, global)| DisplayOutput {
                         global,
                         name: Some(OutputName::new(name).unwrap()),
-                        logical_size: Some((width as u32, height as u32)),
+                        logical_size: Some((
+                            width as u32,
+                            if bar_sample { 580 } else { height as u32 },
+                        )),
                         integer_scale: 1,
                     })
                     .collect();
@@ -2483,6 +2491,37 @@ fn visual_regressions() {
                 app.settings.monitor_layouts.insert(left.clone(), first);
                 app.settings.monitor_layouts.insert(right.clone(), second);
                 app.settings.notes = "Shared notes across monitors".into();
+                if bar_sample {
+                    app.compositor = lucent_domain::CompositorSnapshot {
+                        workspaces: (1..=9)
+                            .map(|id| lucent_domain::Workspace {
+                                id,
+                                name: id.to_string(),
+                                windows: usize::from(id == 2 || id == 9),
+                                active: id == 9,
+                            })
+                            .collect(),
+                        windows: vec![],
+                        monitors: vec![
+                            lucent_domain::CompositorMonitor {
+                                id: left.clone(),
+                                focused: true,
+                                active_workspace: Some(
+                                    lucent_domain::WorkspaceRef::numbered(9).unwrap(),
+                                ),
+                                special_workspace: None,
+                            },
+                            lucent_domain::CompositorMonitor {
+                                id: right.clone(),
+                                focused: false,
+                                active_workspace: Some(
+                                    lucent_domain::WorkspaceRef::numbered(2).unwrap(),
+                                ),
+                                special_workspace: None,
+                            },
+                        ],
+                    };
+                }
                 let selected = if name.ends_with("left") { left } else { right };
                 app.update(
                     Message::SelectMonitor(selected.clone()),
@@ -2513,7 +2552,7 @@ fn visual_regressions() {
                     scene(&app, &layout, &mut Interaction::default(), now)
                 } else {
                     let cx = ViewContext {
-                        surface: "widgets",
+                        surface: if bar_sample { "bar" } else { "widgets" },
                         instance: Some(app.monitors.connected[&selected].instance.clone()),
                         width,
                         height,

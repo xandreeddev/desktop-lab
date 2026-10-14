@@ -187,6 +187,12 @@ class Boundaries(unittest.TestCase):
         self.assertNotIn('lucent-wayland', reachable(self.graph, 'tray-service'))
         self.assertNotIn('lucent-render', reachable(self.graph, 'tray-service'))
 
+    def test_compositor_consumer_and_adapter_preserve_monitor_policy_boundaries(self):
+        self.assertNotIn('lucent-wayland', reachable(self.graph, 'compositor-service'))
+        self.assertNotIn('lucent-render', reachable(self.graph, 'compositor-service'))
+        self.assert_no_imports(sources(ROOT/'lucent/crates/lucent-services/src/compositor'),
+                               ('lucent_desktop','lucent_design','lucent_wayland'))
+
     def test_application_catalog_and_dock_preserve_boundaries(self):
         self.assert_no_platform_operations([ROOT / 'lucent/apps/lucent-desktop/src/catalog.rs', ROOT / 'lucent/apps/lucent-desktop/src/dock.rs'],
                                            ('crate::desktop', 'crate::adapters', 'crate::platform'))

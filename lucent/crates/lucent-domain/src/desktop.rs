@@ -113,6 +113,100 @@ pub struct Workspace {
 pub struct CompositorSnapshot {
     pub workspaces: Vec<Workspace>,
     pub windows: Vec<Window>,
+    pub monitors: Vec<CompositorMonitor>,
+}
+/// Observed compositor workspace/focus state, separate from persisted layouts
+/// and native output buffers. Multiple outputs may each have a current workspace.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CompositorMonitor {
+    pub id: MonitorId,
+    pub focused: bool,
+    pub active_workspace: Option<WorkspaceRef>,
+    pub special_workspace: Option<WorkspaceRef>,
+}
+/// Current workspace identity may be numbered or an opaque named address.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkspaceRef(WorkspaceIdentity);
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum WorkspaceIdentity {
+    Numbered(i32),
+    Named(String),
+}
+impl WorkspaceRef {
+    pub fn numbered(id: i32) -> Result<Self> {
+        if id == 0 {
+            return Err(DomainError::Invalid(
+                "Workspace number must be nonzero".into(),
+            ));
+        }
+        Ok(Self(WorkspaceIdentity::Numbered(id)))
+    }
+    pub fn named(address: impl Into<String>) -> Result<Self> {
+        let address = address.into();
+        if address.is_empty() || address.len() > 512 || address.chars().any(char::is_control) {
+            return Err(DomainError::Invalid(
+                "Workspace address must be bounded, nonempty and contain no controls".into(),
+            ));
+        }
+        Ok(Self(WorkspaceIdentity::Named(address)))
+    }
+    pub fn number(&self) -> Option<i32> {
+        match self.0 {
+            WorkspaceIdentity::Numbered(id) => Some(id),
+            WorkspaceIdentity::Named(_) => None,
+        }
+    }
+    pub fn address(&self) -> Option<&str> {
+        match &self.0 {
+            WorkspaceIdentity::Named(address) => Some(address),
+            WorkspaceIdentity::Numbered(_) => None,
+        }
+    }
+}
+impl CompositorSnapshot {
+    pub fn monitor(&self, id: &MonitorId) -> Option<&CompositorMonitor> {
+        let mut matches = self.monitors.iter().filter(|monitor| &monitor.id == id);
+        let first = matches.next()?;
+        matches.next().is_none().then_some(first)
+    }
+    /// Ambiguous focus is not an authority to choose a display.
+    pub fn focused_monitor(&self) -> Option<&MonitorId> {
+        let mut focused = self.monitors.iter().filter(|monitor| monitor.focused);
+        let first = focused.next()?;
+        (focused.next().is_none() && self.monitor(&first.id).is_some()).then_some(&first.id)
+    }
+}
+#[cfg(test)]
+mod compositor_identity_tests {
+    use super::*;
+    #[test]
+    fn workspace_references_validate_identity_and_duplicate_monitor_records_are_ambiguous() {
+        assert!(WorkspaceRef::numbered(0).is_err());
+        for address in ["", "bad\naddress", "bad\0address"] {
+            assert!(WorkspaceRef::named(address).is_err());
+        }
+        assert!(WorkspaceRef::named("x".repeat(513)).is_err());
+        assert_eq!(WorkspaceRef::numbered(-99).unwrap().number(), Some(-99));
+        assert_eq!(
+            WorkspaceRef::named("special:notes").unwrap().address(),
+            Some("special:notes")
+        );
+        let id = MonitorId::new("DP-1").unwrap();
+        let first = CompositorMonitor {
+            id: id.clone(),
+            focused: true,
+            active_workspace: None,
+            special_workspace: None,
+        };
+        let mut duplicate = first.clone();
+        duplicate.focused = false;
+        let snapshot = CompositorSnapshot {
+            monitors: vec![first, duplicate],
+            ..Default::default()
+        };
+        assert!(snapshot.monitor(&id).is_none());
+        assert!(snapshot.focused_monitor().is_none());
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DomainError {
