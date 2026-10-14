@@ -399,6 +399,7 @@ impl Audio {
             .at(rect.x, rect.y - (1. - progress) * token::SLIDE_DISTANCE)
             .opacity(progress)
             .on_click(Message::Ignore)
+            .hover_feedback(false)
             .tab_stop(false)
             .id("audio-panel");
         Element::stack(vec![

@@ -136,6 +136,7 @@ impl LiveWallpaper {
             prepared: BTreeMap::new(),
         }
     }
+    #[cfg(test)]
     pub fn frame(&self, monitor: Option<&MonitorId>) -> Option<&Arc<ImageData>> {
         self.routes
             .get(
@@ -145,6 +146,14 @@ impl LiveWallpaper {
             )
             .and_then(|key| self.players.get(key))
             .and_then(|p| p.frame.as_ref())
+    }
+    /// Selected asset identity paired with the actual prepared frame.
+    pub fn frame_source(&self, monitor: Option<&MonitorId>) -> Option<(&str, &Arc<ImageData>)> {
+        let target = monitor
+            .cloned()
+            .map_or(LiveWallpaperTarget::Default, LiveWallpaperTarget::Monitor);
+        let player = self.players.get(self.routes.get(&target)?)?;
+        Some((player.asset.path.as_str(), player.frame.as_ref()?))
     }
     pub fn reconcile(
         &mut self,

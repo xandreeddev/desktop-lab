@@ -113,7 +113,11 @@ impl Theme {
             e.style.caret_width = component::input::CARET_WIDTH;
             e.style.text_selection_color = theme.primary.alpha(component::input::SELECTION_OPACITY);
             e.style.text_underline_width = component::input::UNDERLINE_WIDTH;
-            e.style.hover_color = theme.primary.alpha(opacity::HOVER);
+            e.style.hover_color = if e.style.hover_feedback {
+                theme.primary.alpha(opacity::HOVER)
+            } else {
+                Color::TRANSPARENT
+            };
             e.style.hover_transition = Transition {
                 duration: motion::HOVER,
                 curve: motion::DECELERATE,
@@ -286,9 +290,29 @@ impl Theme {
         .background(self.surface)
         .on_click(message)
     }
-    /// Ordinary controlled field styling; callers retain IDs, height, submit
-    /// policy and text state. Passwords use the separate masked framework API.
+    /// A complete ordinary field using the shared height and content insets.
+    /// Clients retain IDs, submit policy and text state; masked fields stay separate.
     pub fn text_input<M>(
+        self,
+        value: impl Into<String>,
+        selection: lucent_api::TextSelection,
+        placeholder: impl Into<String>,
+        on_edit: impl Fn(lucent_api::TextEdit) -> M + Send + Sync + 'static,
+    ) -> Element<M> {
+        self.text_input_content(value, selection, placeholder, on_edit)
+            .focus_outline(true)
+            .height(lucent_api::Length::Fixed(component::input::HEIGHT))
+            .padding_xy(
+                component::input::PADDING_INLINE,
+                component::input::PADDING_BLOCK,
+            )
+            .background(self.surface_container)
+            .radius(radius::CONTROL)
+            .clip()
+    }
+    /// Editable content inside `input_group`; the group supplies the field
+    /// height, insets, background and focus decoration exactly once.
+    pub fn text_input_content<M>(
         self,
         value: impl Into<String>,
         selection: lucent_api::TextSelection,
@@ -298,10 +322,26 @@ impl Theme {
         Element::text_input(value, selection, placeholder, on_edit)
             .font(font::BODY)
             .color(self.on_surface)
-            .background(self.surface_container)
-            .padding(space::MD)
-            .radius(radius::CONTROL)
             .width(lucent_api::Length::Fill)
+            .height(lucent_api::Length::Fill)
+            .focus_outline(false)
+    }
+    /// One field containing optional leading and trailing controls. Pass
+    /// `text_input_content` between them; slots move the text start intentionally.
+    pub fn input_group<M>(self, contents: Vec<Element<M>>) -> Element<M> {
+        Element::row(contents)
+            .align(lucent_api::Align::Center)
+            .gap(space::SM)
+            .padding_xy(
+                component::input::PADDING_INLINE,
+                component::input::PADDING_BLOCK,
+            )
+            .width(lucent_api::Length::Fill)
+            .height(lucent_api::Length::Fixed(component::input::HEIGHT))
+            .radius(radius::CONTROL)
+            .background(self.surface_container)
+            .focus_within()
+            .clip()
     }
     /// Supporting status uses the semantic error role when the client reports
     /// a failure. Hosts choose wrapping without changing their input geometry.
@@ -316,6 +356,108 @@ impl Theme {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn plain_and_grouped_fields_share_height_caret_insets_and_vertical_center() {
+        use lucent_api::{Length, TextSelection};
+        use lucent_ui::{Interaction, Layout, Paint};
+        use std::sync::Arc;
+        let fonts = Arc::new(vec![
+            fontdue::Font::from_bytes(
+                include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
+                Default::default(),
+            )
+            .unwrap(),
+        ]);
+        let layout = Layout::new(fonts);
+        for theme in [Theme::new(false), Theme::new(true)] {
+            for width in [232., 640.] {
+                for leading in [None, Some(icon::COMPACT)] {
+                    let field = theme
+                        .text_input_content("", TextSelection::default(), "Search", |_| ())
+                        .id("field")
+                        .autofocus();
+                    let mut contents = vec![];
+                    if let Some(size) = leading {
+                        contents.push(Element::empty().size(size, size));
+                    }
+                    contents.push(field);
+                    let grouped = theme.input_group(contents).width(Length::Fixed(width));
+                    let plain = theme
+                        .text_input("", TextSelection::default(), "Search", |_| ())
+                        .id("field")
+                        .autofocus()
+                        .width(Length::Fixed(width));
+                    let mut carets = vec![];
+                    for tree in [plain, grouped] {
+                        assert_eq!(tree.style.height, Length::Fixed(component::input::HEIGHT));
+                        let tree = theme.apply(tree);
+                        let mut input = Interaction::default();
+                        let initial =
+                            layout.build(&tree, width, component::input::HEIGHT, &input, 0.);
+                        input.synchronize(&initial);
+                        let scene =
+                            layout.build(&tree, width, component::input::HEIGHT, &input, 0.);
+                        let hit = scene.hits.iter().find(|hit| hit.id == "field").unwrap();
+                        let text = hit.text.as_ref().unwrap();
+                        assert_eq!(text.inner.y, component::input::PADDING_BLOCK);
+                        assert_eq!(
+                            text.inner.h,
+                            component::input::HEIGHT - component::input::PADDING_BLOCK * 2.
+                        );
+                        let caret = scene
+                            .paint
+                            .iter()
+                            .find_map(|paint| match paint {
+                                Paint::Shape { rect, .. }
+                                    if rect.w == component::input::CARET_WIDTH =>
+                                {
+                                    Some(*rect)
+                                }
+                                _ => None,
+                            })
+                            .expect("focused empty field paints a caret");
+                        assert_eq!(caret.x, text.inner.x);
+                        assert!(
+                            (caret.y + caret.h / 2. - component::input::HEIGHT / 2.).abs()
+                                < f32::EPSILON * component::input::HEIGHT,
+                            "caret must stay vertically centered: {caret:?}"
+                        );
+                        carets.push(caret);
+                    }
+                    assert_eq!(carets[0].x, component::input::PADDING_INLINE);
+                    assert_eq!(
+                        carets[1].x,
+                        component::input::PADDING_INLINE
+                            + leading.map_or(0., |size| size + space::SM)
+                    );
+                    assert_eq!(carets[0].y, carets[1].y);
+                    assert_eq!(carets[0].h, carets[1].h);
+                }
+            }
+        }
+    }
+    #[test]
+    fn theme_application_and_mapping_preserve_passive_container_feedback_policy() {
+        for theme in [Theme::new(false), Theme::new(true)] {
+            let panel = Element::stack(vec![theme.button("Apply", 1)])
+                .background(theme.surface)
+                .on_click(0)
+                .hover_feedback(false)
+                .tab_stop(false);
+            let themed = theme.apply(panel).map(|message| message.to_string());
+            let themed = theme.apply(themed);
+            assert!(!themed.style.hover_feedback);
+            assert_eq!(themed.style.hover_color, Color::TRANSPARENT);
+            assert_eq!(themed.click.as_deref(), Some("0"));
+            assert!(!themed.style.tab_stop);
+            assert!(themed.children[0].style.hover_feedback);
+            assert_eq!(
+                themed.children[0].style.hover_color,
+                theme.primary.alpha(opacity::HOVER)
+            );
+            assert_eq!(themed.children[0].click.as_deref(), Some("1"));
+        }
+    }
     fn luminance(c: Color) -> f32 {
         fn linear(c: f32) -> f32 {
             if c <= 0.04045 {

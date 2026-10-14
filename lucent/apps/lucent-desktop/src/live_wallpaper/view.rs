@@ -52,7 +52,6 @@ impl LiveWallpaper {
                 )
                 .on_submit(Message::Import(self.target.clone()))
                 .autofocus()
-                .height(Length::Fixed(component::live_wallpaper::INPUT_HEIGHT))
                 .id("live-path"),
             Element::column(targets).gap(space::SM),
         ];
@@ -202,6 +201,7 @@ impl LiveWallpaper {
             .radius(radius::PANEL)
             .background(theme.surface)
             .on_click(Message::Ignore)
+            .hover_feedback(false)
             .tab_stop(false);
         let amount = self.motion.value(cx.now).clamp(0., 1.);
         Element::stack(vec![

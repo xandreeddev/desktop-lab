@@ -181,36 +181,25 @@ impl View<'_> {
                     Element::column(rows).size(width, body_h).clip()
                 };
                 elements.push(list.at(0., body_y));
-                let search = Element::row(vec![
-                    self.icon("search", icon::COMPACT),
-                    Element::text_input(
-                        &self.launcher.query,
-                        self.launcher.query_field.selection(),
-                        "Search apps and settings",
-                        Message::EditQuery,
-                    )
-                    .id("launcher-search")
-                    .autofocus()
-                    .focus_outline(false)
-                    .font(font::BODY)
-                    .color(self.ink())
-                    .width(Length::Fill)
-                    .height(Length::Fill),
-                    self.icon("close", icon::SMALL)
-                        .on_click(Message::Query(String::new()))
-                        .id("clear-search"),
-                ])
-                .align(Align::Center)
-                .gap(space::SM)
-                .padding_xy(
-                    component::input::PADDING_INLINE,
-                    component::input::PADDING_BLOCK,
-                )
-                .size(width, component::input::HEIGHT)
-                .id("launcher-search-field")
-                .focus_within()
-                .radius(radius::SEARCH)
-                .background(self.widget_color());
+                let search = self
+                    .theme()
+                    .input_group(vec![
+                        self.icon("search", icon::COMPACT),
+                        self.theme()
+                            .text_input_content(
+                                &self.launcher.query,
+                                self.launcher.query_field.selection(),
+                                "Search apps and settings",
+                                Message::EditQuery,
+                            )
+                            .id("launcher-search")
+                            .autofocus(),
+                        self.icon("close", icon::SMALL)
+                            .on_click(Message::Query(String::new()))
+                            .id("clear-search"),
+                    ])
+                    .size(width, component::input::HEIGHT)
+                    .id("launcher-search-field");
                 elements.push(search.at(0., height - component::input::HEIGHT));
             }
             Mode::Wallpapers => {

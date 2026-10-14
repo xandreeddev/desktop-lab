@@ -405,11 +405,12 @@ impl Layout {
             || e.scroll.is_some();
         if e.style.background.3 > 0. && alpha > 0. {
             let mut color = e.style.background;
-            if e.click.is_some()
-                || e.input.is_some()
-                || e.edit.is_some()
-                || e.text_edit.is_some()
-                || e.slider.is_some()
+            if e.style.hover_feedback
+                && (e.click.is_some()
+                    || e.input.is_some()
+                    || e.edit.is_some()
+                    || e.text_edit.is_some()
+                    || e.slider.is_some())
             {
                 color = color.mix(
                     e.style.hover_color.alpha(color.3),
@@ -1332,6 +1333,68 @@ impl<M: Clone> Interaction<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn panel_barrier_hover_preserves_surface_color_and_child_action_feedback() {
+        let panel_color = Color::hex(0x181818);
+        let button_color = Color::hex(0x303030);
+        let mut tree = Element::stack(vec![
+            Element::empty()
+                .size(40., 24.)
+                .at(12., 12.)
+                .background(button_color)
+                .on_click("action")
+                .id("button"),
+        ])
+        .size(120., 80.)
+        .background(panel_color)
+        .on_click("absorbed")
+        .on_hover("entered")
+        .hover_feedback(false)
+        .tab_stop(false)
+        .id("panel");
+        // Deliberately provide a tint after disabling feedback. The layout
+        // contract must hold independently of the design system's recipes.
+        tree.style.hover_color = Color::hex(0x80a0ff).alpha(0.5);
+        tree.children[0].style.hover_color = tree.style.hover_color;
+        let layout = Layout::new(Arc::new(vec![]));
+        let mut input = Interaction::default();
+        let initial = layout.build(&tree, 120., 80., &input, 0.);
+        let colors = |scene: &Scene<&str>| {
+            scene
+                .paint
+                .iter()
+                .filter_map(|paint| match paint {
+                    Paint::Shape { color, .. } => Some(*color),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(colors(&initial), [panel_color, button_color]);
+        assert_eq!(input.motion(&initial, 90., 60., 0.), ["entered"]);
+        assert_eq!(input.hovered.as_deref(), Some("panel"));
+        let padding_hover = layout.build(&tree, 120., 80., &input, 1.);
+        assert_eq!(colors(&padding_hover), colors(&initial));
+        assert_eq!(padding_hover.regions, initial.regions);
+        input.press(&padding_hover, 90., 60.);
+        assert_eq!(input.release(90., 60.), Some("absorbed"));
+        assert!(
+            input.focus.is_none(),
+            "the barrier must not become a tab stop"
+        );
+
+        input.motion(&padding_hover, 30., 24., 1.);
+        assert_eq!(input.hovered.as_deref(), Some("button"));
+        let button_hover = layout.build(&tree, 120., 80., &input, 2.);
+        let hovered_colors = colors(&button_hover);
+        assert_eq!(hovered_colors[0], panel_color);
+        assert_ne!(hovered_colors[1], button_color);
+        input.press(&button_hover, 30., 24.);
+        assert_eq!(input.release(30., 24.), Some("action"));
+        assert_eq!(input.focus.as_deref(), Some("button"));
+        input.leave(2.);
+        let left = layout.build(&tree, 120., 80., &input, 3.);
+        assert_eq!(colors(&left), colors(&initial));
+    }
     #[test]
     fn input_only_retains_geometry_focus_and_drag_capture_without_paint() {
         let tree = Element::stack(vec![

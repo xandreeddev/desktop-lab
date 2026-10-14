@@ -268,7 +268,7 @@ pub(super) fn paint<M: Clone>(
                 } else {
                     interaction.hover_amount(&link_id, now)
                 };
-                if amount > 0. && e.style.hover_color.3 > 0. {
+                if e.style.hover_feedback && amount > 0. && e.style.hover_color.3 > 0. {
                     scene.paint.push(Paint::Shape {
                         rect,
                         clip: clip.clone(),

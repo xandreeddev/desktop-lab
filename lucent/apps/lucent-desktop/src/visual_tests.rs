@@ -1887,7 +1887,10 @@ fn visual_regressions() {
                     density: lucent_api::Density::ONE,
                 };
                 let tree = session.view(&cx).map(|_| Message::Quit);
-                layout.build(&tree, width, height, &Interaction::default(), now)
+                let mut input = Interaction::default();
+                let initial = layout.build(&tree, width, height, &input, now);
+                input.synchronize(&initial);
+                layout.build(&tree, width, height, &input, now)
             } else if name.starts_with("catalog-") || name.starts_with("dock-") {
                 let mut effects = Effects::default();
                 if name.starts_with("catalog-") {
@@ -2782,6 +2785,38 @@ fn visual_regressions() {
         "Visual regressions: {}. See reports/local/visual-tests/index.html",
         failures.join("; ")
     );
+}
+
+#[test]
+fn launcher_padding_hover_keeps_panel_paint_stable() {
+    let app = fixture(9, false);
+    let layout = Layout::new(fonts(&app));
+    let mut input = Interaction::default();
+    let before = scene(&app, &layout, &mut input, 1.);
+    let panel = before
+        .hits
+        .iter()
+        .find(|hit| hit.id == "dock-panel")
+        .unwrap();
+    let rect = panel.rect;
+    let x = rect.x + rect.w / 2.;
+    let y = rect.y + lucent_design::space::XS;
+    input.motion(&before, x, y, 1.);
+    let after = scene(&app, &layout, &mut input, 2.);
+    let panel_colors = |scene: &Scene<Message>| {
+        scene
+            .paint
+            .iter()
+            .filter_map(|paint| match paint {
+                Paint::Shape {
+                    rect: shape, color, ..
+                } if *shape == rect => Some(*color),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    assert!(!panel_colors(&before).is_empty());
+    assert_eq!(panel_colors(&before), panel_colors(&after));
 }
 
 #[test]

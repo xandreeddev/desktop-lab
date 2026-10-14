@@ -78,3 +78,12 @@ user PATH wrappers route stock shell entry points to Lucent. Explicit rollback
 stops native services, restores appearance and starts the installed stock shell.
 Install the dependencies listed in `manifests/lucent-dependencies.txt` first.
 See [Lucent usage](../lucent/README.md).
+
+Lucent renders the dock-to-launcher morph itself. Activation adds a targeted
+[Hyprland layer rule](https://wiki.hypr.land/configuring/core/rules/layer-rules/)
+from `configs/lucent/layer-rules.lua` to the managed user appearance block. The
+`lucent-dock` namespace uses `no_anim = true`, so native layer placement and
+buffer resizing do not add another slide over Lucent's own motion. Application
+window animation, tiling and top-bar spacing keep their existing configuration.
+Re-running activation refreshes this rule; rollback removes it together with
+the managed block while preserving later user edits.

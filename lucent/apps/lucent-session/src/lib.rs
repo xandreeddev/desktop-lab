@@ -23,6 +23,8 @@ pub enum Mode {
 pub enum Message {
     Wallpaper(Option<Arc<ImageData>>),
     Key(Key),
+    Identity(TextEdit),
+    Response(InputEdit),
     Submit,
     Prompt(AuthPrompt),
     Finished(domain::Result<()>),
@@ -36,6 +38,7 @@ struct Attempt {
 pub struct SessionScreen {
     mode: Mode,
     identity: String,
+    identity_selection: TextSelection,
     secret: Secret,
     prompt: Option<AuthPrompt>,
     status: String,
@@ -52,6 +55,7 @@ impl SessionScreen {
     pub fn new(mode: Mode, identity: String, backend: Arc<dyn AuthenticationPort>) -> Self {
         Self {
             mode,
+            identity_selection: TextSelection::at_end(&identity),
             identity,
             secret: Secret::default(),
             prompt: None,
@@ -125,17 +129,6 @@ impl Component for SessionScreen {
             "Welcome to Lucent"
         };
         let username_step = self.editing_identity();
-        let value = if username_step {
-            self.identity.clone()
-        } else if self
-            .prompt
-            .as_ref()
-            .is_some_and(|p| p.kind == PromptKind::Visible)
-        {
-            self.secret.expose().to_string()
-        } else {
-            "•".repeat(self.secret.len().min(32))
-        };
         let label = if username_step {
             "Username"
         } else {
@@ -161,16 +154,58 @@ impl Component for SessionScreen {
                 .font(font::BODY)
                 .color(t.on_surface)
                 .wrap(3),
-            Element::text(if value.is_empty() { " " } else { &value })
-                .font(token::INPUT_SIZE)
-                .color(t.on_surface)
-                .width(Length::Fill)
-                .height(Length::Fixed(token::INPUT_HEIGHT))
-                .padding_xy(space::MD, space::SM)
-                .background(t.surface_container)
-                .radius(radius::CONTROL)
-                .selected(self.input_enabled())
-                .id("authentication-input"),
+            if username_step {
+                t.text_input(
+                    self.identity.clone(),
+                    self.identity_selection,
+                    "Username",
+                    Message::Identity,
+                )
+                .id("authentication-input")
+                .autofocus()
+                .on_submit(Message::Submit)
+            } else if self.input_enabled() {
+                let field = if self
+                    .prompt
+                    .as_ref()
+                    .is_some_and(|p| p.kind == PromptKind::Visible)
+                {
+                    // The authentication backend explicitly requests an echoed response.
+                    Element::input(self.secret.expose(), "", |text| {
+                        Message::Response(InputEdit::Replace(text))
+                    })
+                } else {
+                    Element::masked_input(self.secret.len(), "", Message::Response)
+                };
+                field
+                    .font(token::INPUT_SIZE)
+                    .color(t.on_surface)
+                    .width(Length::Fill)
+                    .height(Length::Fixed(token::INPUT_HEIGHT))
+                    .padding_xy(
+                        lucent_design::component::input::PADDING_INLINE,
+                        lucent_design::component::input::PADDING_BLOCK,
+                    )
+                    .background(t.surface_container)
+                    .radius(radius::CONTROL)
+                    .clip()
+                    .id("authentication-input")
+                    .autofocus()
+                    .on_submit(Message::Submit)
+            } else {
+                Element::text(" ")
+                    .font(token::INPUT_SIZE)
+                    .color(t.on_surface)
+                    .width(Length::Fill)
+                    .height(Length::Fixed(token::INPUT_HEIGHT))
+                    .padding_xy(
+                        lucent_design::component::input::PADDING_INLINE,
+                        lucent_design::component::input::PADDING_BLOCK,
+                    )
+                    .background(t.surface_container)
+                    .radius(radius::CONTROL)
+                    .id("authentication-input")
+            },
         ];
         if self.mode == Mode::Authorization {
             children.insert(
@@ -253,6 +288,24 @@ impl Component for SessionScreen {
     }
     fn update(&mut self, message: Message, e: &mut Effects<Message>) {
         match message {
+            Message::Identity(edit) if self.editing_identity() => {
+                let _ = self.identity_selection.apply(&mut self.identity, edit, 128);
+            }
+            Message::Response(edit) if self.input_enabled() && !self.editing_identity() => {
+                match edit {
+                    InputEdit::Insert(mut text) => {
+                        self.secret.push(&text);
+                        text.zeroize();
+                    }
+                    InputEdit::Replace(mut text) => {
+                        self.secret.clear();
+                        self.secret.push(&text);
+                        text.zeroize();
+                    }
+                    InputEdit::Backspace => self.secret.pop(),
+                    InputEdit::Clear => self.secret.clear(),
+                }
+            }
             Message::Wallpaper(image) => self.wallpaper = image,
             Message::Prompt(prompt) => {
                 self.secret.clear();
@@ -348,6 +401,7 @@ impl Component for SessionScreen {
             }
             _ => {}
         }
+        self.identity_selection = self.identity_selection.reconciled(&self.identity);
         e.redraw(self.surface_id());
     }
 }
@@ -459,7 +513,9 @@ impl api::Application for SessionScreen {
     }
     fn event(&self, event: Event) -> Option<Message> {
         match event {
-            Event::Key { key, .. } => Some(Message::Key(key)),
+            Event::Key { key, .. } if key == Key::Escape || !self.input_enabled() => {
+                Some(Message::Key(key))
+            }
             _ => None,
         }
     }
@@ -480,11 +536,27 @@ mod tests {
         }
     }
     fn displayed_input(app: &SessionScreen) -> String {
-        fn find(element: &Element<Message>) -> Option<&str> {
-            if element.id == "authentication-input"
-                && let Kind::Text(value) = &element.kind
-            {
-                return Some(value);
+        fn find(element: &Element<Message>) -> Option<String> {
+            if element.id == "authentication-input" {
+                return Some(match &element.kind {
+                    Kind::Text(value)
+                    | Kind::Input { value, .. }
+                    | Kind::TextInput { value, .. } => {
+                        if value.is_empty() {
+                            " ".into()
+                        } else {
+                            value.clone()
+                        }
+                    }
+                    Kind::MaskedInput { length, .. } => {
+                        if *length == 0 {
+                            " ".into()
+                        } else {
+                            "•".repeat(*length)
+                        }
+                    }
+                    _ => panic!("unexpected field"),
+                });
             }
             element.children.iter().find_map(find)
         }
@@ -496,9 +568,7 @@ mod tests {
             now: 0.,
             density: lucent_api::Density::ONE,
         });
-        find(&tree)
-            .expect("authentication field must be visible")
-            .into()
+        find(&tree).expect("authentication field must be visible")
     }
     #[test]
     fn failed_login_can_clear_username_and_begin_a_fresh_attempt() {
@@ -656,6 +726,86 @@ mod tests {
             assert_eq!(rect.y + rect.h / 2., height / 2.);
             assert_eq!(clip.bounds, Rect::new(0., 0., width, height));
             app.update(Message::Wallpaper(None), &mut Effects::default());
+        }
+    }
+    #[test]
+    fn real_login_and_secret_controls_focus_draw_carets_and_route_edits() {
+        use lucent_ui::{Interaction, Layout, Paint};
+        let mut app = SessionScreen::new(Mode::Login, String::new(), Arc::new(Deny));
+        let fonts = Arc::new(
+            api::Application::fonts(&app)
+                .iter()
+                .map(|bytes| fontdue::Font::from_bytes(*bytes, Default::default()).unwrap())
+                .collect(),
+        );
+        let layout = Layout::new(fonts);
+        let cx = ViewContext {
+            surface: "greeter",
+            instance: None,
+            width: 1280.,
+            height: 800.,
+            now: 0.,
+            density: Density::ONE,
+        };
+        let mut interaction = Interaction::default();
+        for secure in [false, true] {
+            if secure {
+                app.begin();
+                app.update(
+                    Message::Prompt(AuthPrompt {
+                        kind: PromptKind::Secret,
+                        text: "Password".into(),
+                    }),
+                    &mut Effects::default(),
+                );
+            }
+            let scene = layout.build(&app.view(&cx), cx.width, cx.height, &interaction, 0.);
+            interaction.synchronize(&scene);
+            assert_eq!(interaction.focus.as_deref(), Some("authentication-input"));
+            let scene = layout.build(&app.view(&cx), cx.width, cx.height, &interaction, 0.);
+            let hit = scene
+                .hits
+                .iter()
+                .find(|hit| hit.id == "authentication-input")
+                .unwrap();
+            assert_eq!(hit.rect.h, lucent_design::component::input::HEIGHT);
+            assert!(scene.paint.iter().any(|paint| matches!(paint, Paint::Shape { rect, .. } if rect.w <= 2. && rect.h > 10. && (rect.x - hit.rect.x - lucent_design::component::input::PADDING_INLINE).abs() < 0.1)), "focused empty field has an inset caret");
+            assert!(
+                api::Application::event(
+                    &app,
+                    Event::Key {
+                        surface: "greeter",
+                        key: Key::Text("fixture".into())
+                    }
+                )
+                .is_none()
+            );
+            for message in interaction.key(&scene, &Key::Text("fixture".into())) {
+                app.update(message, &mut Effects::default());
+            }
+            if secure {
+                assert_eq!(app.secret.expose(), "fixture");
+            } else {
+                assert_eq!(app.identity, "fixture");
+            }
+            let scene = layout.build(&app.view(&cx), cx.width, cx.height, &interaction, 0.);
+            if secure {
+                let hit = scene
+                    .hits
+                    .iter()
+                    .find(|hit| hit.id == "authentication-input")
+                    .unwrap();
+                assert!(!hit.value.contains("fixture"));
+                assert!(!scene.paint.iter().any(
+                    |paint| matches!(paint, Paint::Text { text, .. } if text.contains("fixture"))
+                ));
+            }
+            assert!(
+                interaction
+                    .key(&scene, &Key::Enter)
+                    .iter()
+                    .any(|message| matches!(message, Message::Submit))
+            );
         }
     }
     #[test]

@@ -225,33 +225,25 @@ impl Browser {
         } else {
             t::FOOTER_HEIGHT
         };
-        let search_height = if compact { control } else { t::SEARCH_HEIGHT };
-        let search = Element::row(vec![
-            Element::text_input(
-                &self.query,
-                self.query_field.selection(),
-                "Search wallpapers",
-                Message::EditQuery,
-            )
-            .id("wallpaper-search")
-            .autofocus()
-            .focus_outline(false)
-            .font(font::BODY)
-            .color(theme.on_surface)
-            .width(Length::Fill)
-            .height(Length::Fill),
-            theme
-                .button("Search", Message::Search(1))
-                .id("wallpaper-search-submit")
-                .height(Length::Fill)
-                .font(font::CAPTION),
-        ])
-        .gap(space::SM)
-        .padding(space::SM)
-        .size(width, search_height)
-        .radius(radius::SEARCH)
-        .background(theme.surface_container)
-        .focus_within();
+        let search_height = lucent_design::component::input::HEIGHT;
+        let search = theme
+            .input_group(vec![
+                theme
+                    .text_input_content(
+                        &self.query,
+                        self.query_field.selection(),
+                        "Search wallpapers",
+                        Message::EditQuery,
+                    )
+                    .id("wallpaper-search")
+                    .autofocus(),
+                theme
+                    .button("Search", Message::Search(1))
+                    .id("wallpaper-search-submit")
+                    .height(Length::Fill)
+                    .font(font::CAPTION),
+            ])
+            .size(width, search_height);
         let footer = control * 2. + gap;
         let available = (height - search_height - gap * 2. - footer).max(0.);
         let columns = ((width + gap) / (t::CARD_MIN_WIDTH + gap)).floor().max(1.) as usize;

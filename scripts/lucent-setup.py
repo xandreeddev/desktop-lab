@@ -175,7 +175,9 @@ o.bind("SUPER + CTRL + SPACE", "Lucent wallpapers", os.getenv("HOME") .. "/.loca
 hl.unbind("SUPER + CTRL + L")
 o.bind("SUPER + CTRL + L", "Lucent secure lock", "python3 " .. os.getenv("HOME") .. "/.local/lib/lucent/lock.py")
 ''')
-    edit(HOME / '.config/hypr/looknfeel.lua', (ROOT / 'configs/lucent/window-rules.lua').read_text())
+    appearance = (ROOT / 'configs/lucent/window-rules.lua').read_text()
+    appearance += '\n' + (ROOT / 'configs/lucent/layer-rules.lua').read_text()
+    edit(HOME / '.config/hypr/looknfeel.lua', appearance)
     wrappers=HOME/'.local/lib/lucent/bin';wrappers.mkdir(parents=True,exist_ok=True)
     for mode in ('select', 'input', 'routes'):
         script = wrappers / ('omarchy-menu' if mode == 'routes' else 'omarchy-menu-' + mode)

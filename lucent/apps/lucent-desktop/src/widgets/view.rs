@@ -615,23 +615,20 @@ pub(super) fn notes(d: &View<'_>, _: &ViewContext) -> Element<Message> {
                 component::notes::HEADING_HEIGHT,
             )
             .at(component::notes::INSET, component::notes::HEADING_TOP),
-        Element::text_input(
-            d.input.notes,
-            d.host.notes_field.selection(),
-            "A thought to keep nearby…",
-            Message::EditNotes,
-        )
-        .id("notes-input")
-        .size(
-            component::notes::CONTENT_WIDTH,
-            component::notes::INPUT_HEIGHT,
-        )
-        .at(component::notes::INSET, component::notes::INPUT_TOP)
-        .padding_xy(component::input::PADDING_INLINE, space::MD)
-        .font(font::BODY)
-        .color(d.ink())
-        .background(d.surface_color())
-        .radius(radius::CONTROL),
+        d.theme()
+            .text_input(
+                d.input.notes,
+                d.host.notes_field.selection(),
+                "A thought to keep nearby…",
+                Message::EditNotes,
+            )
+            .id("notes-input")
+            .size(
+                component::notes::CONTENT_WIDTH,
+                component::notes::INPUT_HEIGHT,
+            )
+            .at(component::notes::INSET, component::notes::INPUT_TOP)
+            .background(d.surface_color()),
         status,
     ])
     .fill()

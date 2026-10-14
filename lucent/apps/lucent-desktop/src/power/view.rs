@@ -308,6 +308,7 @@ impl Power {
             .at(rect.x, rect.y - (1. - progress) * token::SLIDE_DISTANCE)
             .opacity(progress)
             .on_click(Message::Ignore)
+            .hover_feedback(false)
             .tab_stop(false)
             .id("power-panel");
         Element::stack(vec![

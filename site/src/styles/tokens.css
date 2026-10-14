@@ -239,7 +239,7 @@
   --component-notes-inset: 20px;
   --component-notes-heading-height: 30px;
   --component-notes-input-top: 55px;
-  --component-notes-input-height: 60px;
+  --component-notes-input-height: var(--component-input-height);
   --component-notes-caption-top: 128px;
   --component-notes-content-width: 230px;
   --component-system-progress-height: 4px;
@@ -375,8 +375,8 @@
   --component-authentication-height: 460px;
   --component-authentication-padding: var(--space-xl);
   --component-authentication-title-size: var(--font-heading);
-  --component-authentication-input-size: var(--font-title);
-  --component-authentication-input-height: 56px;
+  --component-authentication-input-size: var(--font-body);
+  --component-authentication-input-height: var(--component-input-height);
   --component-menu-width: 800px;
   --component-menu-min-width: 320px;
   --component-menu-height: 560px;
@@ -395,7 +395,7 @@
   --component-osd-margin: var(--space-xl);
   --component-osd-track: var(--space-xs);
   --component-wallpaper-browser-source-height: 40px;
-  --component-wallpaper-browser-search-height: 48px;
+  --component-wallpaper-browser-search-height: var(--component-input-height);
   --component-wallpaper-browser-card-min-width: 176px;
   --component-wallpaper-browser-card-height: 160px;
   --component-wallpaper-browser-footer-height: 40px;
@@ -471,7 +471,7 @@
   --component-widget-resize-inset: var(--space-sm);
   --component-widget-resize-button-padding: var(--space-xxs);
   --component-live-wallpaper-panel-width: 640px;
-  --component-live-wallpaper-input-height: 56px;
+  --component-live-wallpaper-input-height: var(--component-input-height);
   --component-live-wallpaper-panel-height: 560px;
   --component-live-wallpaper-status-lines: var(--component-power-status-lines);
   --icon-tiny: 16px;
