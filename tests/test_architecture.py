@@ -193,6 +193,12 @@ class Boundaries(unittest.TestCase):
         self.assertNotIn('lucent-wayland', reachable(self.graph, 'application-service'))
         self.assertNotIn('lucent-render', reachable(self.graph, 'application-service'))
 
+    def test_text_model_and_example_preserve_framework_boundaries(self):
+        self.assert_no_platform_operations([ROOT/'lucent/crates/lucent-api/src/text_edit.rs'],
+                                           ('lucent_domain', 'lucent_desktop', 'lucent_services', 'lucent_wayland', 'lucent_render'))
+        self.assertNotIn('lucent-desktop', reachable(self.graph, 'text-input'))
+        self.assertNotIn('lucent-services', reachable(self.graph, 'text-input'))
+
     def test_all_desktop_effects_fit_the_runtime_worker_budget(self):
         root=ROOT / 'lucent/apps/lucent-desktop/src'
         lanes=re.findall(r'pub const \w+: &str = "([^"]+)";', (root/'work.rs').read_text())

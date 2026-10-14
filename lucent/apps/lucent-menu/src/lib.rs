@@ -36,6 +36,7 @@ pub struct Request {
 }
 #[derive(Clone)]
 pub enum Message {
+    Edit(TextEdit),
     Noop,
     Query(String),
     Navigate(i32),
@@ -58,6 +59,7 @@ pub struct Menu {
     pub request: Request,
     pub selection: Selection,
     pub query: String,
+    query_selection: TextSelection,
     start: usize,
     viewport: (f32, f32),
     reveal: Motion,
@@ -72,6 +74,7 @@ impl Menu {
                 request,
                 selection,
                 query: String::new(),
+                query_selection: TextSelection::default(),
                 start: 0,
                 viewport: (1920., 1080.),
                 reveal: Motion::fixed(0.),
@@ -154,14 +157,15 @@ impl Component for Menu {
                 .width(Length::Fill)
                 .height(Length::Fixed(token::HEADER_HEIGHT))
                 .align(Align::Center),
-            Element::input(
+            Element::text_input(
                 &self.query,
+                self.query_selection,
                 if self.request.mode == Mode::Input {
                     "Type a value…"
                 } else {
                     "Search actions or keys…"
                 },
-                Message::Query,
+                Message::Edit,
             )
             .id("menu-search")
             .autofocus()
@@ -283,8 +287,17 @@ impl Component for Menu {
             Message::Noop => {}
             Message::Query(query) => {
                 self.query = query.chars().take(4096).collect();
+                self.query_selection = TextSelection::at_end(&self.query);
                 self.selection.search(&self.query);
                 self.start = 0;
+            }
+            Message::Edit(edit) => {
+                if let Ok(change) = self.query_selection.apply(&mut self.query, edit, 4096)
+                    && change.content
+                {
+                    self.selection.search(&self.query);
+                    self.start = 0;
+                }
             }
             Message::Navigate(delta) => self.selection.navigate(delta),
             Message::Select(index) => {
@@ -463,6 +476,28 @@ mod tests {
         assert!(
             e.tasks.is_empty(),
             "Picker must never execute caller commands"
+        );
+    }
+    #[test]
+    fn shared_editor_updates_filtering_and_returns_literal_input_after_burst_edits() {
+        let (mut menu, result) = Menu::new(request());
+        menu.request.mode = Mode::Input;
+        menu.update(Message::Query("café".into()), &mut Effects::default());
+        for edit in [
+            TextEdit::Move {
+                movement: TextMove::Start,
+                extend: false,
+            },
+            TextEdit::Insert("new ".into()),
+            TextEdit::Insert("value ".into()),
+        ] {
+            menu.update(Message::Edit(edit), &mut Effects::default());
+        }
+        assert_eq!(menu.query, "new value café");
+        menu.update(Message::Accept, &mut Effects::default());
+        assert_eq!(
+            result.outcome(),
+            Some(&MenuOutcome::Accepted("new value café".into()))
         );
     }
     #[test]

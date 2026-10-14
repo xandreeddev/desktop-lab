@@ -128,12 +128,15 @@
     {
       "id": "text-and-accessibility",
       "owner": "lucent-api lucent-ui lucent-wayland lucent-render",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "Caret selection navigation deletion and clipboard work across clients",
         "Grapheme editing complex-script shaping and font fallback work",
         "IME integration works",
         "Accessibility semantics and platform bridge work"
+      ],
+      "evidence": [
+        "Source 2b8f17d43d1b018b3c88c8d1de9065036162e9b0 implements shared declarative caret/selection, grapheme/word editing, actual pointer/keyboard geometry and relative-message burst handling in launcher, menus and notes. Final strict checks pass: 331 Rust tests/51 ignored, 82 Python checks and 436 software-Vulkan comparisons, with only 20 reviewed new references. Both docs prefixes pass 13 pages/488 links and zero diagnostics. See reports/measurements/lucent-text-editing.json. Clipboard, shaping/bidi/fallback, IME, accessibility, remaining legacy fields and native acceptance are open."
       ]
     },
     {
@@ -326,7 +329,8 @@
         "PR #40 native power controls passed all six exact-head CI checks and merged into main as 74c72a28229727e7fe738cb6fea100c47f5c6305. Pages deployment on that merge completed successfully.",
         "Native tray PR #41 passed all six CI checks and merged into main as ade6970f4d4e1683d17684052eed9777271e9584. Application catalog/dock work is based on that merge; unavailable VM tests remain deferred under user instruction.",
         "Astro Pages deployment from tray merge ade6970f4d4e1683d17684052eed9777271e9584 succeeded. Pages now selects workflow publishing instead of the obsolete competing Jekyll branch build; the public site and existing local LAN server respond with HTTP 200.",
-        "Catalog/dock PR #42 passed all six exact-head CI checks, including the complete final rendering suite, and merged into protected main as 376bac17dc13db37b5c85986a84406c122ba4e06. Widget resizing work builds on that tested tree."
+        "Catalog/dock PR #42 passed all six exact-head CI checks, including the complete final rendering suite, and merged into protected main as 376bac17dc13db37b5c85986a84406c122ba4e06. Widget resizing work builds on that tested tree.",
+        "Widget layout editor PR #43 passed all six exact-head checks and merged as ed58ca624a9d7e299e370d2ae0f31b6efd9e85de; main checks and its Astro Pages deployment succeeded. Text work is based on that tested tree."
       ]
     },
     {
@@ -1184,6 +1188,26 @@
         "Touch resizing and measured settle animation/pacing.",
         "Native gesture/focus, restart/persistence, output changes and sleep/resume acceptance.",
         "Current RSS/GPU/decode peaks and the complete remaining project requirement ledger.",
+        "Exact published-head CI and authorized merge."
+      ]
+    },
+    {
+      "milestone": "declarative-text-selection-and-grapheme-editing",
+      "source_commit": "2b8f17d43d1b018b3c88c8d1de9065036162e9b0",
+      "report": "reports/measurements/lucent-text-editing.json",
+      "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+      "checks": [
+        "331 Rust workspace tests, 82 Python checks and strict formatting/Clippy pass.",
+        "Shared pointer/caret geometry, input bursts, mapped messages, client filtering/persistence, native accepted values and mask/legacy compatibility are checked.",
+        "436 software-Vulkan cases pass; only 20 new reviewed 1x/2x references are included.",
+        "Root/project Astro builds pass 13 pages/488 links and zero diagnostics; guides and skills match the implementation."
+      ],
+      "pending": [
+        "Native clipboard transfer and IME.",
+        "Complex-script/bidi shaping, visual navigation and font fallback; editing alone does not establish rendering conformance.",
+        "Multiline/undo behavior and platform accessibility.",
+        "Integration of remaining legacy fields and native VM/hardware acceptance.",
+        "Current performance and the full remaining requirement ledger.",
         "Exact published-head CI and authorized merge."
       ]
     }

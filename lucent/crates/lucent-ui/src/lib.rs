@@ -5,6 +5,8 @@ pub use scroll::{FocusClip, ScrollHit};
 #[cfg(test)]
 mod input_tests;
 mod slider;
+mod text_input;
+pub use text_input::TextHit;
 pub mod text;
 pub use slider::SliderHit;
 use std::{collections::BTreeMap, sync::Arc};
@@ -62,6 +64,8 @@ pub struct Hit<M> {
     pub hover: Option<M>,
     pub input: Option<InputCallback<M>>,
     pub edit: Option<EditCallback<M>>,
+    pub text_edit: Option<TextEditCallback<M>>,
+    pub text: Option<TextHit>,
     pub value: String,
     pub drag: Option<DragCallback<M>>,
     pub slider: Option<SliderHit<M>>,
@@ -220,7 +224,7 @@ impl Layout {
                         * t.lines().count().max(1) as f32,
                 )
             }
-            Kind::Input { .. } | Kind::MaskedInput { .. } => (
+            Kind::Input { .. } | Kind::MaskedInput { .. } | Kind::TextInput { .. } => (
                 160.,
                 text::line_metrics(
                     self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
@@ -356,16 +360,39 @@ impl Layout {
             });
             child_focus_clips = clips.into();
         }
+        let prepared_text = if let Kind::TextInput {
+            value, selection, ..
+        } = &e.kind
+        {
+            let font = self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]);
+            Some(text_input::geometry(
+                font,
+                value,
+                *selection,
+                e.style.font_size,
+                inner,
+                e.style.caret_width,
+                interaction.focus.as_deref() == Some(&id),
+            ))
+        } else {
+            None
+        };
         let interactive = e.click.is_some()
             || e.input.is_some()
             || e.edit.is_some()
+            || e.text_edit.is_some()
             || e.drag.is_some()
             || e.hover.is_some()
             || e.slider.is_some()
             || e.scroll.is_some();
         if e.style.background.3 > 0. && alpha > 0. {
             let mut color = e.style.background;
-            if e.click.is_some() || e.input.is_some() || e.edit.is_some() || e.slider.is_some() {
+            if e.click.is_some()
+                || e.input.is_some()
+                || e.edit.is_some()
+                || e.text_edit.is_some()
+                || e.slider.is_some()
+            {
                 color = color.mix(
                     e.style.hover_color.alpha(color.3),
                     interaction.hover_amount(&id, now) * e.style.hover_color.3,
@@ -409,6 +436,8 @@ impl Layout {
                 hover: e.hover.clone(),
                 input: e.input.clone(),
                 edit: e.edit.clone(),
+                text_edit: e.text_edit.clone(),
+                text: prepared_text.clone(),
                 value: if let Kind::Input { value, .. } = &e.kind {
                     value.clone()
                 } else {
@@ -437,6 +466,7 @@ impl Layout {
                     && (e.click.is_some()
                         || e.input.is_some()
                         || e.edit.is_some()
+                        || e.text_edit.is_some()
                         || e.slider.is_some()
                         || e.scroll.is_some()),
             });
@@ -444,6 +474,15 @@ impl Layout {
         let mut fg = e.style.foreground;
         fg.3 *= alpha;
         match &e.kind {
+            Kind::TextInput { .. } => text_input::paint(
+                scene,
+                e,
+                prepared_text.as_ref().expect("prepared text input"),
+                own_clip.intersect(inner),
+                alpha,
+                interaction.focus.as_deref() == Some(&id),
+                self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
+            ),
             Kind::Text(text) => scene.paint.push(Paint::Text {
                 rect: inner,
                 clip: own_clip.intersect(rect),
@@ -719,6 +758,8 @@ struct Press<M> {
     y: f32,
     moved: bool,
     scroll_grab: Option<f32>,
+    text_anchor: Option<usize>,
+    text_last: Option<usize>,
 }
 pub struct Interaction<M> {
     pub focus: Option<String>,
@@ -750,6 +791,21 @@ impl<M> Default for Interaction<M> {
 }
 impl<M: Clone> Interaction<M> {
     pub fn synchronize(&mut self, scene: &Scene<M>) {
+        if let Some(press) = &mut self.press
+            && let Some(previous) = &press.hit.text
+        {
+            let current = scene.hits.iter().find(|hit| hit.id == press.hit.id);
+            if let Some(current) = current
+                && current.text.as_ref().is_some_and(|text| {
+                    text.value == previous.value && text.inner == previous.inner
+                })
+                && current.clip == press.hit.clip
+            {
+                press.hit = current.clone();
+            } else {
+                self.press = None;
+            }
+        }
         if let Some(press) = &mut self.press
             && press.scroll_grab.is_some()
         {
@@ -870,6 +926,14 @@ impl<M: Clone> Interaction<M> {
         if let Some(press) = &mut self.press {
             let (dx, dy) = (x - press.x, y - press.y);
             press.moved |= dx.hypot(dy) >= 5.;
+            if let (Some(anchor), Some(text), Some(callback)) =
+                (press.text_anchor, &press.hit.text, &press.hit.text_edit)
+                && let Some(caret) = text.at(x)
+                && press.text_last != Some(caret)
+            {
+                press.text_last = Some(caret);
+                out.push(callback(TextEdit::Select { anchor, caret }));
+            }
             if let (Some(scroll), Some(grab)) = (&press.hit.scroll, press.scroll_grab) {
                 if let Some(offset) = scroll.at(y, grab) {
                     self.scroll_buffer.insert(scroll.id.clone(), offset);
@@ -894,6 +958,15 @@ impl<M: Clone> Interaction<M> {
         out
     }
     pub fn press(&mut self, scene: &Scene<M>, x: f32, y: f32) -> Option<M> {
+        self.press_with_modifiers(scene, x, y, KeyModifiers::default())
+    }
+    pub fn press_with_modifiers(
+        &mut self,
+        scene: &Scene<M>,
+        x: f32,
+        y: f32,
+        modifiers: KeyModifiers,
+    ) -> Option<M> {
         self.focus_visible = false;
         self.slider_buffer = None;
         self.press = scene
@@ -923,6 +996,14 @@ impl<M: Clone> Interaction<M> {
                         }
                     });
                 Press {
+                    text_anchor: hit.text.as_ref().and_then(|text| {
+                        if modifiers.shift {
+                            Some(text.selection.anchor())
+                        } else {
+                            text.at(x)
+                        }
+                    }),
+                    text_last: hit.text.as_ref().and_then(|text| text.at(x)),
                     hit,
                     scroll_grab,
                     x,
@@ -930,6 +1011,12 @@ impl<M: Clone> Interaction<M> {
                     moved: false,
                 }
             });
+        if let Some(press) = &self.press
+            && let (Some(anchor), Some(caret), Some(callback)) =
+                (press.text_anchor, press.text_last, &press.hit.text_edit)
+        {
+            return Some(callback(TextEdit::Select { anchor, caret }));
+        }
         if let Some(p) = &self.press
             && let (Some(scroll), Some(grab)) = (&p.hit.scroll, p.scroll_grab)
             && let Some(offset) = scroll.at(y, grab)
@@ -944,6 +1031,13 @@ impl<M: Clone> Interaction<M> {
     }
     pub fn release(&mut self, x: f32, y: f32) -> Option<M> {
         let p = self.press.take()?;
+        if let (Some(anchor), Some(text), Some(callback)) =
+            (p.text_anchor, &p.hit.text, &p.hit.text_edit)
+        {
+            return text
+                .at(x)
+                .map(|caret| callback(TextEdit::Select { anchor, caret }));
+        }
         if let (Some(scroll), Some(grab)) = (&p.hit.scroll, p.scroll_grab) {
             let offset = scroll.at(y, grab)?;
             self.scroll_buffer.insert(scroll.id.clone(), offset);
@@ -990,6 +1084,15 @@ impl<M: Clone> Interaction<M> {
     }
     pub fn key(&mut self, scene: &Scene<M>, key: &Key) -> Vec<M> {
         self.focus_visible = true;
+        let key = if scene
+            .hits
+            .iter()
+            .any(|hit| Some(&hit.id) == self.focus.as_ref() && hit.text_edit.is_some())
+        {
+            key
+        } else {
+            key.unmodified()
+        };
         if matches!(key, Key::Tab | Key::BackTab) {
             return self.traverse(scene, key);
         }
@@ -1070,6 +1173,17 @@ impl<M: Clone> Interaction<M> {
         if let Some(hit) = scene
             .hits
             .iter()
+            .find(|hit| Some(&hit.id) == self.focus.as_ref())
+            && let Some(callback) = &hit.text_edit
+        {
+            if matches!(key, Key::Enter) {
+                return hit.submit.clone();
+            }
+            return text_input::key(key).map(|edit| callback(edit));
+        }
+        if let Some(hit) = scene
+            .hits
+            .iter()
             .find(|h| Some(&h.id) == self.focus.as_ref())
             && let Some(edit) = &hit.edit
         {
@@ -1117,7 +1231,10 @@ impl<M: Clone> Interaction<M> {
         }
         if (matches!(key, Key::Enter) || matches!(key, Key::Text(s) if s == " "))
             && let Some(hit) = scene.hits.iter().find(|h| {
-                Some(&h.id) == self.focus.as_ref() && h.input.is_none() && h.edit.is_none()
+                Some(&h.id) == self.focus.as_ref()
+                    && h.input.is_none()
+                    && h.edit.is_none()
+                    && h.text_edit.is_none()
             })
         {
             return hit.click.clone();
@@ -1232,6 +1349,8 @@ mod tests {
             submit: None,
             input: None,
             edit: None,
+            text_edit: None,
+            text: None,
             value: String::new(),
             drag: None,
             slider: None,
@@ -1257,6 +1376,8 @@ mod tests {
             submit: None,
             input: Some(Arc::new(|s: String| s)),
             edit: None,
+            text_edit: None,
+            text: None,
             value: String::new(),
             drag: None,
             slider: None,
@@ -1310,6 +1431,8 @@ mod tests {
             submit: None,
             input: None,
             edit: None,
+            text_edit: None,
+            text: None,
             value: String::new(),
             drag: Some(Arc::new(|d: DragEvent| if d.finished { 3 } else { 2 })),
             slider: None,

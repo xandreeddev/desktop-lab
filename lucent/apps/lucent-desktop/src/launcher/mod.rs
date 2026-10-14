@@ -63,6 +63,7 @@ pub enum Message {
     Submitted { height: f32, now: f64 },
     Mode(Mode),
     Query(String),
+    EditQuery(TextEdit),
     Select(usize),
     Navigate(i32),
     Activate,
@@ -118,6 +119,7 @@ pub struct Launcher {
     closing: Option<CloseRequest>,
     mode: Mode,
     query: String,
+    query_selection: TextSelection,
     results: Vec<usize>,
     selected: usize,
     scroll: usize,
@@ -142,6 +144,7 @@ impl Default for Launcher {
             closing: None,
             mode: Mode::Apps,
             query: String::new(),
+            query_selection: TextSelection::default(),
             results: vec![],
             selected: 0,
             scroll: 0,
@@ -192,6 +195,7 @@ impl Launcher {
     #[cfg(test)]
     pub fn fixture_query(&mut self, value: String) {
         self.query = value;
+        self.query_selection = TextSelection::at_end(&self.query);
     }
 
     /// Discovery refreshes the active query, then clamps selection before paint.
@@ -298,6 +302,7 @@ impl Launcher {
         self.edit_mounted = false;
         self.mode = mode;
         self.query.clear();
+        self.query_selection = TextSelection::default();
         self.selected = 0;
         self.scroll = 0;
         self.refresh(input.apps, geometry, now);
@@ -423,9 +428,20 @@ impl Launcher {
             }
             Message::Query(query) => {
                 self.query = query;
+                self.query_selection = TextSelection::at_end(&self.query);
                 self.selected = 0;
                 self.scroll = 0;
                 self.refresh(input.apps, geometry, now);
+                None
+            }
+            Message::EditQuery(edit) => {
+                if let Ok(change) = self.query_selection.apply(&mut self.query, edit, 8192)
+                    && change.content
+                {
+                    self.selected = 0;
+                    self.scroll = 0;
+                    self.refresh(input.apps, geometry, now);
+                }
                 None
             }
             Message::Select(index) => {

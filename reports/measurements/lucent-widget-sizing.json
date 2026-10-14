@@ -50,5 +50,11 @@
   "privacy": {
     "private_paths_or_captures_published": false,
     "host_preferences_or_credentials_published": false
+  },
+  "delivery": {
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/43",
+    "state": "merged",
+    "merge_commit": "ed58ca624a9d7e299e370d2ae0f31b6efd9e85de",
+    "exact_head_ci_checks_passed": 6
   }
 }

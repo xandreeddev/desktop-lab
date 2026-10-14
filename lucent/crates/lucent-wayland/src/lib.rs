@@ -681,6 +681,7 @@ impl<A: Application> State<A> {
             Keysym::Escape => api::Key::Escape,
             Keysym::Return | Keysym::KP_Enter => api::Key::Enter,
             Keysym::BackSpace => api::Key::Backspace,
+            Keysym::Delete | Keysym::KP_Delete => api::Key::Delete,
             Keysym::Up => api::Key::Up,
             Keysym::Down => api::Key::Down,
             Keysym::Left => api::Key::Left,
@@ -708,6 +709,31 @@ impl<A: Application> State<A> {
                     api::Key::Text(text)
                 }
             }
+        };
+        let key = if matches!(
+            key,
+            api::Key::Left
+                | api::Key::Right
+                | api::Key::Home
+                | api::Key::End
+                | api::Key::Delete
+                | api::Key::Backspace
+        ) && (self.modifiers.ctrl
+            || self.modifiers.shift
+            || self.modifiers.alt
+            || self.modifiers.logo)
+        {
+            api::Key::Modified {
+                key: Box::new(key),
+                modifiers: api::KeyModifiers {
+                    control: self.modifiers.ctrl,
+                    shift: self.modifiers.shift,
+                    alt: self.modifiers.alt,
+                    logo: self.modifiers.logo,
+                },
+            }
+        } else {
+            key
         };
         if let Some(s) = self.surfaces.get_mut(&id) {
             if !s.interaction.focus_visible {
@@ -1022,7 +1048,17 @@ impl<A: Application> PointerHandler for State<A> {
                     PointerEventKind::Leave { .. } => s.interaction.leave(now),
                     PointerEventKind::Press { button: 0x110, .. } => {
                         outside = !s.scene.hits.iter().any(|h| h.contains(x, y));
-                        if let Some(message) = s.interaction.press(&s.scene, x, y) {
+                        if let Some(message) = s.interaction.press_with_modifiers(
+                            &s.scene,
+                            x,
+                            y,
+                            api::KeyModifiers {
+                                control: self.modifiers.ctrl,
+                                shift: self.modifiers.shift,
+                                alt: self.modifiers.alt,
+                                logo: self.modifiers.logo,
+                            },
+                        ) {
                             messages.push(message);
                         }
                     }
