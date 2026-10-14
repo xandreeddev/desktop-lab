@@ -173,6 +173,9 @@ pub struct Style {
     pub shadow: Option<Shadow>,
     /// Tint and strength of the hover state layer; transparent disables it.
     pub hover_color: Color,
+    /// Paint pointer feedback for this element without changing input routing.
+    /// Input barriers can disable it while their child controls keep feedback.
+    pub hover_feedback: bool,
     pub hover_transition: Transition,
     /// Multiplicative image tint; white preserves original image colors.
     pub image_tint: Color,
@@ -211,6 +214,7 @@ impl Default for Style {
             clip: false,
             shadow: None,
             hover_color: Color::TRANSPARENT,
+            hover_feedback: true,
             hover_transition: Transition::default(),
             image_tint: Color::hex(0xffffff),
             image_fit: ImageFit::Fill,
@@ -493,6 +497,12 @@ impl<M> Element<M> {
     }
     pub fn focus_outline(mut self, enabled: bool) -> Self {
         self.style.focus_outline = enabled;
+        self
+    }
+    /// Keep a click or hover target without tinting its background on hover.
+    /// This affects only this element, leaving descendant controls unchanged.
+    pub fn hover_feedback(mut self, enabled: bool) -> Self {
+        self.style.hover_feedback = enabled;
         self
     }
     pub fn tab_stop(mut self, enabled: bool) -> Self {

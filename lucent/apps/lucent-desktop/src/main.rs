@@ -2,6 +2,8 @@ mod actions;
 mod adapters;
 mod artwork;
 mod audio;
+mod background_presentation;
+mod bar;
 mod bluetooth;
 mod catalog;
 mod desktop;

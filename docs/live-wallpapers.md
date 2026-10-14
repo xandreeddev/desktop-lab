@@ -68,6 +68,28 @@ Selecting a different current successfully committed default static wallpaper
 removes the default live selection. Closing the panel or turning off that target
 retires its pending import, so a late result cannot turn playback back on.
 
+## Source changes and animation
+
+The desktop owns a `BackgroundPresentation` for each current output surface.
+A newly prepared source starts a crossfade using the shared `motion.panel`
+timeline (500 ms) and deceleration curve. First load appears immediately;
+refitting a static image or delivering the next video frame does not restart
+that timeline. Missing preparation keeps the previous good image.
+
+The outgoing frame is an immutable SDK `ImageData::snapshot`: its pixels are
+shared with the source allocation, but its GPU identity is separate from the
+stream texture that subsequent frames update. This matters when another output
+still uses that stream. Each presentation retains one current and at most one
+outgoing image; a submitted final frame releases the outgoing reference and
+requests a cleanup redraw. Disconnected or replaced output generations retire
+their presentation state. No second decoder is started for a fade.
+
+A rapid third selection keeps the dominant previous image, rather than
+allocating a GPU screenshot of the intermediate mixture. This bounds retained
+images but does not preserve that interrupted mixture exactly. The fade uses
+ordinary source-over compositing and is intended for opaque wallpapers.
+Prepared-image byte counters are not process RSS or a GPU memory total.
+
 ## Preferences and resource limits
 
 `desktop.json` stores `live_wallpapers` with `default`, `monitors` and a global

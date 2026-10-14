@@ -284,7 +284,7 @@ pub mod component {
         pub const INSET: f32 = 20.0;
         pub const HEADING_HEIGHT: f32 = 30.0;
         pub const INPUT_TOP: f32 = 55.0;
-        pub const INPUT_HEIGHT: f32 = 60.0;
+        pub const INPUT_HEIGHT: f32 = 48.0;
         pub const CAPTION_TOP: f32 = 128.0;
         pub const CONTENT_WIDTH: f32 = 230.0;
     }
@@ -464,8 +464,8 @@ pub mod component {
         pub const HEIGHT: f32 = 460.0;
         pub const PADDING: f32 = 20.0;
         pub const TITLE_SIZE: f32 = 17.0;
-        pub const INPUT_SIZE: f32 = 23.0;
-        pub const INPUT_HEIGHT: f32 = 56.0;
+        pub const INPUT_SIZE: f32 = 14.0;
+        pub const INPUT_HEIGHT: f32 = 48.0;
     }
     pub mod menu {
         pub const WIDTH: f32 = 800.0;
@@ -592,7 +592,7 @@ pub mod component {
     }
     pub mod live_wallpaper {
         pub const PANEL_WIDTH: f32 = 640.0;
-        pub const INPUT_HEIGHT: f32 = 56.0;
+        pub const INPUT_HEIGHT: f32 = 48.0;
         pub const PANEL_HEIGHT: f32 = 560.0;
         pub const STATUS_LINES: f32 = 3.0;
     }

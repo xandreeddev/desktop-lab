@@ -79,18 +79,19 @@ impl Network {
             .font(font::TITLE),
         ];
         if matches!(form.target, Target::Hidden { .. }) {
-            rows.push(field_style(
-                Element::text_input(
-                    &form.name,
-                    form.name_field.selection(),
-                    "Network name",
-                    move |name| Message::Name(generation, name),
-                )
-                .id(format!("network-name-{generation}"))
-                .autofocus()
-                .on_submit(Message::Submit(generation)),
-                theme,
-            ));
+            rows.push(
+                theme
+                    .text_input(
+                        &form.name,
+                        form.name_field.selection(),
+                        "Network name",
+                        move |name| Message::Name(generation, name),
+                    )
+                    .id(format!("network-name-{generation}"))
+                    .autofocus()
+                    .on_submit(Message::Submit(generation))
+                    .background(theme.surface),
+            );
             for choices in [
                 [WifiSecurity::WpaPersonal, WifiSecurity::Open],
                 [WifiSecurity::Wpa3Personal, WifiSecurity::EnhancedOpen],
@@ -573,6 +574,7 @@ impl Network {
             .at(rect.x, rect.y - (1. - progress) * token::SLIDE_DISTANCE)
             .opacity(progress)
             .on_click(Message::Ignore)
+            .hover_feedback(false)
             .tab_stop(false)
             .id("network-panel");
         Element::stack(vec![

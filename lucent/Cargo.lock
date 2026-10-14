@@ -1312,8 +1312,10 @@ version = "0.1.0"
 name = "lucent-design"
 version = "0.1.0"
 dependencies = [
+ "fontdue",
  "lucent-api",
  "lucent-domain",
+ "lucent-ui",
  "serde_json",
 ]
 

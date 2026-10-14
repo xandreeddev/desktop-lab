@@ -1962,6 +1962,103 @@ impl Renderer {
 #[cfg(test)]
 mod streaming_tests {
     use super::*;
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn frozen_stream_snapshot_keeps_pixels_while_shared_live_texture_advances() {
+        let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
+        let mut transition = Canvas::new(gpu.clone());
+        let mut live_output = Canvas::new(gpu.clone());
+        transition.profiling = true;
+        live_output.profiling = true;
+        let stream = lucent_api::ImageStream::new();
+        let first = stream.frame_rgba(2, 1, [255, 0, 0, 255].repeat(2)).unwrap();
+        let frozen = Arc::new(first.snapshot());
+        let full = Rect::new(0., 0., 8., 4.);
+        let paint = |data: Arc<lucent_api::ImageData>, rect: Rect, opacity| Paint::Image {
+            rect,
+            clip: full.into(),
+            data,
+            uv: Rect::new(0., 0., 1., 1.),
+            radius: 0.,
+            opacity,
+            tint: lucent_api::Color::hex(0xffffff),
+        };
+        for scale in [1, 2] {
+            for color in [[0, 255, 0, 255], [0, 0, 255, 255]] {
+                let current = Arc::new(stream.frame_rgba(2, 1, color.repeat(2)).unwrap());
+                let live_scene = [paint(current.clone(), full, 1.)];
+                let live_pixels = live_output.snapshot(8, 4, scale, &live_scene).unwrap();
+                assert!(
+                    live_pixels
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .all(|pixel| *pixel == color)
+                );
+                let split_scene = [
+                    paint(frozen.clone(), Rect::new(0., 0., 4., 4.), 1.),
+                    paint(current.clone(), Rect::new(4., 0., 4., 4.), 1.),
+                ];
+                let split = transition.snapshot(8, 4, scale, &split_scene).unwrap();
+                for (index, pixel) in split.as_chunks::<4>().0.iter().enumerate() {
+                    let x = index % (8 * scale) as usize;
+                    assert_eq!(
+                        *pixel,
+                        if x < (4 * scale) as usize {
+                            [255, 0, 0, 255]
+                        } else {
+                            color
+                        }
+                    );
+                }
+                // The outgoing snapshot and the live frame use two resources,
+                // while both live scenes share the single current stream slot.
+                assert_eq!(gpu.cache_stats().entries, 2);
+                assert_eq!(
+                    transition
+                        .last_profile
+                        .unwrap()
+                        .resources
+                        .texture_upload_bytes,
+                    if scale == 1 && color == [0, 255, 0, 255] {
+                        8
+                    } else {
+                        0
+                    }
+                );
+                let again = live_output.snapshot(8, 4, scale, &live_scene).unwrap();
+                assert_eq!(again, live_pixels);
+                assert_eq!(
+                    live_output
+                        .last_profile
+                        .unwrap()
+                        .resources
+                        .texture_upload_bytes,
+                    0
+                );
+                let layered_scene = [paint(frozen.clone(), full, 1.), paint(current, full, 0.5)];
+                let blend = transition.snapshot(8, 4, scale, &layered_scene).unwrap();
+                assert!(blend.as_chunks::<4>().0.iter().all(|pixel| pixel[0] > 0
+                    && pixel[0] < 255
+                    && pixel[3] == 255
+                    && if color[1] == 255 {
+                        pixel[1] > 0 && pixel[2] == 0
+                    } else {
+                        pixel[2] > 0 && pixel[1] == 0
+                    }));
+                assert_eq!(
+                    transition
+                        .last_profile
+                        .unwrap()
+                        .resources
+                        .texture_upload_bytes,
+                    0
+                );
+            }
+        }
+    }
+
     #[test]
     #[ignore = "requires a Vulkan driver"]
     fn streamed_images_reuse_one_gpu_texture_and_update_real_pixels() {

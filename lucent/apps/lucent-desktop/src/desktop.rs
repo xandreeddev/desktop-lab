@@ -10,6 +10,8 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 #[derive(Clone)]
 pub enum Message {
+    Ignore,
+    BackgroundPresented(Option<SurfaceInstance>, f64),
     Outputs(Vec<DisplayOutput>),
     OnMonitor(crate::monitors::Route, Box<Message>),
     SelectMonitor(MonitorId),
@@ -90,6 +92,10 @@ fn widget_surface_specs(
         .collect()
 }
 pub struct Desktop {
+    backgrounds: BTreeMap<
+        Option<SurfaceInstance>,
+        (u64, crate::background_presentation::BackgroundPresentation),
+    >,
     pub live_wallpaper: crate::live_wallpaper::LiveWallpaper,
     pending_live_default: Option<(u64, u64)>,
     live_poster_intent: Option<u64>,
@@ -138,6 +144,7 @@ impl Desktop {
     pub fn new(adapters: DesktopAdapters) -> Self {
         let images = adapters.assets.initial();
         Self {
+            backgrounds: BTreeMap::new(),
             live_wallpaper: crate::live_wallpaper::LiveWallpaper::new(
                 adapters.playback.clone(),
                 adapters.assets.clone(),
@@ -377,6 +384,58 @@ impl Desktop {
             self.display_catalog_seen,
             self.live_suspended,
         );
+    }
+    fn reconcile_backgrounds(&mut self, effects: &mut Effects<Message>) {
+        use crate::background_presentation::Source;
+        let mut hosts: Vec<_> = self
+            .monitors
+            .connected
+            .iter()
+            .map(|(id, host)| {
+                (
+                    Some(host.instance.clone()),
+                    host.generation,
+                    Some(id.clone()),
+                )
+            })
+            .collect();
+        if self.monitors.legacy() {
+            hosts.push((None, 0, None));
+        }
+        self.backgrounds.retain(|instance, (generation, _)| {
+            hosts
+                .iter()
+                .any(|(key, gen_id, _)| key == instance && gen_id == generation)
+        });
+        for (instance, generation, monitor) in hosts {
+            let target = monitor
+                .clone()
+                .map_or(LiveWallpaperTarget::Default, LiveWallpaperTarget::Monitor);
+            let live_selected = self
+                .settings
+                .live_wallpapers
+                .selected(&target)
+                .is_some_and(|profile| profile.enabled);
+            let live = self.live_wallpaper.frame_source(monitor.as_ref());
+            let (source, image) = match live {
+                Some((path, frame)) => (Some(Source::Live(path.to_owned())), Some(frame.clone())),
+                None if live_selected => (None, None),
+                None => (
+                    Some(Source::Static(self.wallpaper.asset_path().to_owned())),
+                    self.wallpaper.background.clone(),
+                ),
+            };
+            let (_, presentation) = self
+                .backgrounds
+                .entry(instance.clone())
+                .or_insert_with(|| (generation, Default::default()));
+            if presentation.reconcile(source, image, effects.now) {
+                effects.redraw_surface(SurfaceAddress {
+                    role: "background",
+                    instance,
+                });
+            }
+        }
     }
     fn choose_wallpaper(
         &mut self,
@@ -918,10 +977,9 @@ impl Component for Desktop {
             "tray" => self.tray.view(cx, self.theme()).map(Message::Tray),
             "osd" => self.osd.view(cx, self.theme()),
             "background" => self
-                .live_wallpaper
-                .frame(route.as_ref().map(|route| &route.id))
-                .or(self.wallpaper.background.as_ref())
-                .map(|image| Element::image(image.clone()).cover().fill())
+                .backgrounds
+                .get(&cx.instance)
+                .map(|(_, presentation)| presentation.view(cx.now, self.surface_color()))
                 .unwrap_or_else(|| Element::empty().fill().background(self.surface_color())),
             "live-wallpaper" => self
                 .live_wallpaper
@@ -983,6 +1041,19 @@ impl Component for Desktop {
             );
         }
         match message {
+            Message::Ignore => {}
+            Message::BackgroundPresented(instance, now) => {
+                if self
+                    .backgrounds
+                    .get_mut(&instance)
+                    .is_some_and(|(_, presentation)| presentation.presented(now))
+                {
+                    effects.redraw_surface(SurfaceAddress {
+                        role: "background",
+                        instance,
+                    });
+                }
+            }
             Message::Outputs(catalog) => {
                 self.display_catalog_seen = true;
                 self.monitors.reconcile(catalog, self.viewport);
@@ -1022,6 +1093,11 @@ impl Component for Desktop {
                     return;
                 }
                 match *message {
+                    Message::BackgroundPresented(_, now) => {
+                        let instance = self.monitors.connected[&route.id].instance.clone();
+                        self.update(Message::BackgroundPresented(Some(instance), now), effects);
+                    }
+                    Message::Ignore => {}
                     Message::Resize("background", width, height, density) => {
                         if crate::ports::BackgroundTarget::from_density(width, height, density)
                             .is_err()
@@ -1673,6 +1749,7 @@ impl Component for Desktop {
             Message::Quit => effects.quit(),
         }
         self.reconcile_live_wallpapers();
+        self.reconcile_backgrounds(effects);
         self.refresh_previews(effects);
     }
 }
@@ -2203,6 +2280,11 @@ impl api::Application for Desktop {
     fn event(&self, event: Event) -> Option<Message> {
         match event {
             Event::FrameSubmitted {
+                surface: "background",
+                now,
+                ..
+            } => Some(Message::BackgroundPresented(None, now)),
+            Event::FrameSubmitted {
                 surface: "live-wallpaper",
                 now,
                 ..
@@ -2655,7 +2737,17 @@ impl api::Application for Desktop {
             serde_json::json!(self.monitors.active.as_ref().map(MonitorId::as_str));
         value["monitor_layouts"] = serde_json::json!(self.settings.monitor_layouts);
         value["monitor_hosts"] = serde_json::json!(self.monitors.connected.iter().map(|(id,monitor)| serde_json::json!({"id":id.as_str(),"generation":monitor.generation,"viewport":monitor.viewport,"scale":monitor.scale,"density":monitor.density.factor(),"instance":monitor.instance.as_str(),"grid_visible":monitor.widgets.grid_visible(),"editing":monitor.widgets.editing(),"widget_surfaces":monitor.widgets.surfaces(self.widget_layout(Some(id)),monitor.viewport).iter().map(|source|serde_json::json!({"id":source.id,"members":source.members})).collect::<Vec<_>>()})).collect::<Vec<_>>());
+        value["background_transitions"] = serde_json::json!(self.backgrounds.iter().map(|(instance, (_, presentation))| serde_json::json!({"instance": instance.as_ref().map(SurfaceInstance::as_str), "presentation": presentation.inspect()})).collect::<Vec<_>>());
         value.to_string()
+    }
+    fn animating_instance(&self, surface: &SurfaceAddress, now: f64) -> bool {
+        if surface.role == "background" {
+            self.backgrounds
+                .get(&surface.instance)
+                .is_some_and(|(_, presentation)| presentation.active(now))
+        } else {
+            self.animating(surface.role, now)
+        }
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
         (surface == "live-wallpaper" && self.live_wallpaper.motion.active(now))

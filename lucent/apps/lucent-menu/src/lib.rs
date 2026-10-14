@@ -159,7 +159,7 @@ impl Component for Menu {
                 .width(Length::Fill)
                 .height(Length::Fixed(token::HEADER_HEIGHT))
                 .align(Align::Center),
-            Element::text_input(
+            t.text_input(
                 &self.query,
                 self.query_field.selection(),
                 if self.request.mode == Mode::Input {
@@ -170,14 +170,7 @@ impl Component for Menu {
                 Message::Edit,
             )
             .id("menu-search")
-            .autofocus()
-            .width(Length::Fill)
-            .height(Length::Fixed(input::HEIGHT))
-            .padding_xy(input::PADDING_INLINE, input::PADDING_BLOCK)
-            .font(font::BODY)
-            .color(t.on_surface)
-            .background(t.surface_container)
-            .radius(radius::CONTROL),
+            .autofocus(),
         ];
         if self.request.mode == Mode::Select {
             let rows: Vec<_> = self

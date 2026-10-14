@@ -141,6 +141,13 @@ class LucentIntegrationTests(unittest.TestCase):
                 module.activate()
                 self.assertEqual(path.read_text(), once)
                 self.assertIn('rounding = 20', once)
+                self.assertIn('namespace = "^lucent-dock$"', once)
+                self.assertIn('no_anim = true', once)
+                self.assertEqual(once.count('name = "lucent-native-dock-motion"'), 1)
+                # Dock policy must not disable global or app-window animations.
+                self.assertNotIn('animations =', once)
+                self.assertNotIn('hl.animation(', once)
+                self.assertNotIn('hl.window_rule(', once)
                 self.assertEqual((module.BACKUP/'looknfeel.lua').read_text(), original)
                 path.write_text(once+'-- Later user setting\n')
                 module.rollback()
@@ -148,3 +155,4 @@ class LucentIntegrationTests(unittest.TestCase):
             self.assertIn(original.strip(), path.read_text())
             self.assertIn('-- Later user setting', path.read_text())
             self.assertNotIn('rounding = 20', path.read_text())
+            self.assertNotIn('lucent-native-dock-motion', path.read_text())

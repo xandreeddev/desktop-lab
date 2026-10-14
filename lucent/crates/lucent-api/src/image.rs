@@ -43,7 +43,7 @@ struct Prepared {
     id: u64,
     format: ImageFormat,
     stream: Option<(u64, u64)>,
-    levels: Vec<ImageLevel>,
+    levels: Arc<[ImageLevel]>,
 }
 #[derive(Clone, Debug)]
 pub struct ImageData {
@@ -109,7 +109,8 @@ impl ImageStream {
                     width,
                     height,
                     pixels,
-                }],
+                }]
+                .into(),
             }),
         })
     }
@@ -181,7 +182,7 @@ impl ImageData {
                 id: NEXT_IMAGE.fetch_add(1, Ordering::Relaxed),
                 format,
                 stream: None,
-                levels,
+                levels: levels.into(),
             }),
         }
     }
@@ -205,7 +206,7 @@ impl ImageData {
                 id: NEXT_IMAGE.fetch_add(1, Ordering::Relaxed),
                 format: self.format(),
                 stream: None,
-                levels: self.levels()[index..].to_vec(),
+                levels: self.levels()[index..].to_vec().into(),
             }),
         }
     }
@@ -254,6 +255,27 @@ impl ImageData {
     /// Stable GPU resource identity and immutable content revision for a stream.
     pub fn stream_revision(&self) -> Option<(u64, u64)> {
         self.prepared.stream
+    }
+    /// Freeze this immutable frame as an independent GPU image. Pixels and mip
+    /// levels remain shared; no copying, decoding or mip preparation occurs.
+    /// Later stream uploads cannot overwrite a snapshot's texture. Static images
+    /// keep their existing descriptor and cache identity.
+    pub fn snapshot(&self) -> Self {
+        if self.prepared.stream.is_none() {
+            return self.clone();
+        }
+        Self {
+            key: self.key.clone(),
+            aspect_size: self.aspect_size,
+            prepared: Arc::new(Prepared {
+                // Every streamed frame already has a globally unique immutable
+                // storage ID, distinct from the stream's mutable resource ID.
+                id: self.prepared.id,
+                format: self.prepared.format,
+                stream: None,
+                levels: self.prepared.levels.clone(),
+            }),
+        }
     }
     pub fn bytes(&self) -> usize {
         self.prepared
@@ -464,5 +486,45 @@ mod streaming_tests {
                 .stream_revision()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn snapshot_shares_immutable_pixels_but_retires_mutable_stream_identity() {
+        let stream = ImageStream::new();
+        let first = stream
+            .frame_rgba(2, 1, vec![200, 100, 50, 128, 0, 0, 0, 255])
+            .unwrap();
+        let snapshot = first.snapshot();
+        let second = stream.frame_rgba(2, 1, vec![255; 8]).unwrap();
+        assert!(snapshot.stream_revision().is_none());
+        assert_eq!(snapshot.cache_id(), first.cache_id());
+        assert_ne!(snapshot.cache_id(), second.cache_id());
+        assert_eq!(snapshot.format(), first.format());
+        assert_eq!(snapshot.aspect_size(), first.aspect_size());
+        assert_eq!(snapshot.levels().len(), 1);
+        assert_eq!(snapshot.bytes(), first.bytes());
+        assert_eq!(snapshot.pixels().as_ptr(), first.pixels().as_ptr());
+        assert!(Arc::ptr_eq(
+            &snapshot.prepared.levels,
+            &first.prepared.levels
+        ));
+        assert_eq!(snapshot.pixels(), [100, 50, 25, 128, 0, 0, 0, 255]);
+        drop(first);
+        drop(second);
+        drop(stream);
+        assert_eq!(snapshot.pixels(), [100, 50, 25, 128, 0, 0, 0, 255]);
+        let again = snapshot.snapshot();
+        assert!(Arc::ptr_eq(&snapshot.prepared, &again.prepared));
+    }
+
+    #[test]
+    fn static_snapshot_preserves_existing_descriptor_and_full_mip_storage() {
+        let image = ImageData::from_rgba("still", 4, 2, [80, 40, 20, 128].repeat(8)).unwrap();
+        let snapshot = image.snapshot();
+        assert!(Arc::ptr_eq(&image.prepared, &snapshot.prepared));
+        assert_eq!(image.levels().len(), 3);
+        assert_eq!(snapshot.cache_id(), image.cache_id());
+        assert_eq!(snapshot.pixels().as_ptr(), image.pixels().as_ptr());
+        assert_eq!(snapshot.bytes(), image.bytes());
     }
 }
