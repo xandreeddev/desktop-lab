@@ -7,12 +7,17 @@ pub(super) struct PhysicalExtent {
     pub height: u32,
 }
 impl PhysicalExtent {
+    #[cfg(test)]
     pub fn new(width: u32, height: u32, scale: u32, limit: u32) -> Result<Self, Error> {
-        if width == 0 || height == 0 || scale == 0 {
-            return Err("nonzero render dimensions and scale required".into());
-        }
-        let width = width.checked_mul(scale).ok_or("render width overflow")?;
-        let height = height.checked_mul(scale).ok_or("render height overflow")?;
+        Self::density(width, height, lucent_api::Density::integer(scale)?, limit)
+    }
+    pub fn density(
+        width: u32,
+        height: u32,
+        density: lucent_api::Density,
+        limit: u32,
+    ) -> Result<Self, Error> {
+        let (width, height) = density.physical_size(width, height)?;
         if width > limit || height > limit {
             return Err(format!(
                 "render extent {width}x{height} exceeds device texture dimension limit {limit}"
@@ -63,6 +68,24 @@ pub(super) struct ReadbackLayout {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn fractional_extents_and_readback_use_outward_rounded_edges() {
+        let density = lucent_api::Density::new(150, 120).unwrap();
+        let physical = PhysicalExtent::density(65, 3, density, 8192).unwrap();
+        assert_eq!(
+            physical,
+            PhysicalExtent {
+                width: 82,
+                height: 4
+            }
+        );
+        let readback = physical.readback(2048).unwrap();
+        assert_eq!(readback.stride, 512);
+        assert_eq!(readback.buffer_bytes, 2048);
+        assert_eq!(readback.rgba_bytes, 82 * 4 * 4);
+        assert!(PhysicalExtent::density(65, 3, density, 81).is_err());
+        assert!(physical.readback(2047).is_err());
+    }
 
     #[test]
     fn output_rejects_zero_overflow_and_device_limits() {

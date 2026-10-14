@@ -131,7 +131,12 @@ impl crate::ports::AssetPort for UnavailablePreviews {
 /// Native tests separately exercise the asynchronous configure/submission path.
 fn resize_fixture(app: &mut Desktop, width: f32, height: f32) {
     app.update(
-        Message::Resize("background", width, height, 1),
+        Message::Resize(
+            "background",
+            width,
+            height,
+            lucent_api::Density::integer(1).unwrap(),
+        ),
         &mut Effects::default(),
     );
     app.update(
@@ -159,6 +164,7 @@ fn scene(
         width: app.viewport.0,
         height: app.viewport.1,
         now,
+        density: lucent_api::Density::ONE,
     };
     let root = app.view(&cx);
     let first = layout.build(&root, cx.width, cx.height, interaction, now);
@@ -735,6 +741,7 @@ fn drag_grid_matches_snap_spacing_and_never_captures_input() {
         width: 640.,
         height: 580.,
         now: 1.,
+        density: lucent_api::Density::ONE,
     };
     let idle = layout.build(
         &app.view(&cx),
@@ -879,16 +886,31 @@ fn image_comparison_detects_a_clipped_row() {
 fn compact_dock_resize_cannot_replace_the_display_viewport() {
     let mut app = Desktop::new(crate::test_adapters::adapters());
     app.update(
-        Message::Resize("background", 1920., 1080., 1),
+        Message::Resize(
+            "background",
+            1920.,
+            1080.,
+            lucent_api::Density::integer(1).unwrap(),
+        ),
         &mut Effects::default(),
     );
     app.update(
-        Message::Resize("dock", 1920., 120., 1),
+        Message::Resize(
+            "dock",
+            1920.,
+            120.,
+            lucent_api::Density::integer(1).unwrap(),
+        ),
         &mut Effects::default(),
     );
     assert_eq!(app.viewport, (1920., 1080.));
     app.update(
-        Message::Resize("background", f32::NAN, 20., 1),
+        Message::Resize(
+            "background",
+            f32::NAN,
+            20.,
+            lucent_api::Density::integer(1).unwrap(),
+        ),
         &mut Effects::default(),
     );
     assert_eq!(app.viewport, (1920., 1080.));
@@ -917,6 +939,7 @@ fn bounded_widget_sources_preserve_capture_and_pass_through_preview() {
         width: group.rect.w,
         height: group.rect.h,
         now: 1.,
+        density: lucent_api::Density::ONE,
     };
     let mut input = Interaction::default();
     let before = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
@@ -993,6 +1016,7 @@ fn bounded_widget_pixels_match_the_full_surface() {
                     width: width as f32,
                     height: height as f32,
                     now: 1.,
+                    density: lucent_api::Density::ONE,
                 };
                 let full = layout.build(
                     &app.view(&full_cx),
@@ -1012,6 +1036,7 @@ fn bounded_widget_pixels_match_the_full_surface() {
                             width: source.rect.w,
                             height: source.rect.h,
                             now: 1.,
+                            density: lucent_api::Density::ONE,
                         };
                         let native = layout.build(
                             &app.view(&cx),
@@ -1094,6 +1119,7 @@ fn compact_dock_pixels_match_the_full_surface() {
                     width: width as f32,
                     height: native_height as f32,
                     now: 1.,
+                    density: lucent_api::Density::ONE,
                 };
                 layout.build(
                     &app.view(&cx),
@@ -1567,6 +1593,7 @@ fn visual_regressions() {
                         width,
                         height,
                         now,
+                        density: lucent_api::Density::ONE,
                     }),
                     width,
                     height,
@@ -1640,6 +1667,7 @@ fn visual_regressions() {
                         width,
                         height,
                         now,
+                        density: lucent_api::Density::ONE,
                     }),
                     width,
                     height,
@@ -1666,6 +1694,7 @@ fn visual_regressions() {
                         width,
                         height,
                         now,
+                        density: lucent_api::Density::ONE,
                     }),
                     width,
                     height,
@@ -1748,6 +1777,7 @@ fn visual_regressions() {
                         width,
                         height,
                         now,
+                        density: lucent_api::Density::ONE,
                     })
                     .map(|_| Message::Quit);
                 let mut input = Interaction::default();
@@ -1770,6 +1800,7 @@ fn visual_regressions() {
                         width,
                         height,
                         now,
+                        density: lucent_api::Density::ONE,
                     }),
                     width,
                     height,
@@ -1831,6 +1862,7 @@ fn visual_regressions() {
                     width,
                     height,
                     now,
+                    density: lucent_api::Density::ONE,
                 };
                 let tree = session.view(&cx).map(|_| Message::Quit);
                 layout.build(&tree, width, height, &Interaction::default(), now)
@@ -1906,6 +1938,7 @@ fn visual_regressions() {
                     width,
                     height,
                     now,
+                    density: lucent_api::Density::ONE,
                 });
                 layout.build(&tree, width, height, &Interaction::default(), now)
             } else if name.starts_with("tray-") {
@@ -1945,6 +1978,7 @@ fn visual_regressions() {
                     width,
                     height,
                     now,
+                    density: lucent_api::Density::ONE,
                 });
                 let mut input = Interaction::default();
                 input.synchronize(&layout.build(&tree, width, height, &input, now));
@@ -1994,6 +2028,7 @@ fn visual_regressions() {
                     width,
                     height,
                     now,
+                    density: lucent_api::Density::ONE,
                 });
                 let mut input = Interaction::default();
                 input.synchronize(&layout.build(&tree, width, height, &input, now));
@@ -2085,6 +2120,7 @@ fn visual_regressions() {
                     width,
                     height,
                     now,
+                    density: lucent_api::Density::ONE,
                 });
                 let mut input = Interaction::default();
                 input.synchronize(&layout.build(&tree, width, height, &input, now));
@@ -2152,6 +2188,7 @@ fn visual_regressions() {
                     width,
                     height,
                     now,
+                    density: lucent_api::Density::ONE,
                 });
                 let mut input = Interaction::default();
                 input.synchronize(&layout.build(&tree, width, height, &input, now));
@@ -2213,6 +2250,7 @@ fn visual_regressions() {
                     width,
                     height,
                     now,
+                    density: lucent_api::Density::ONE,
                 };
                 layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
             } else if name.starts_with("inline-") {
@@ -2402,6 +2440,7 @@ fn visual_regressions() {
                     width,
                     height,
                     now,
+                    density: lucent_api::Density::ONE,
                 };
                 layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
             } else if name.starts_with("monitor-") {
@@ -2479,6 +2518,7 @@ fn visual_regressions() {
                         width,
                         height,
                         now,
+                        density: lucent_api::Density::ONE,
                     };
                     layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
                 }
@@ -2519,6 +2559,7 @@ fn visual_regressions() {
                     width,
                     height,
                     now,
+                    density: lucent_api::Density::ONE,
                 };
                 layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
             } else {
@@ -2673,6 +2714,7 @@ fn notification_controls_fit_at_normal_and_narrow_widths() {
                 width,
                 height: 720.,
                 now: 1.,
+                density: lucent_api::Density::ONE,
             };
             let tree = app.view(&cx);
             let scene = layout.build(&tree, width, 720., &Interaction::default(), 1.);
@@ -2882,6 +2924,7 @@ fn bar_capsules_share_grid_do_not_overlap_and_keep_active_workspace_visible() {
                 width,
                 height: component::panel::BAR_HEIGHT,
                 now: 1.,
+                density: lucent_api::Density::ONE,
             };
             let rendered = layout.build(
                 &app.view(&cx),
@@ -3163,6 +3206,7 @@ fn widget_catalog_covers_selector_views_geometry_and_ipc() {
         width: 1920.,
         height: 1080.,
         now: 100.,
+        density: lucent_api::Density::ONE,
     };
     let widgets = layout.build(
         &app.view(&cx),
@@ -3248,6 +3292,7 @@ fn settings_save_failure_survives_unrelated_success_and_widget_retry_acknowledge
         width: 390.,
         height: 320.,
         now: 1.,
+        density: lucent_api::Density::ONE,
     };
     let scene = layout.build(
         &app.view(&cx),
@@ -3290,6 +3335,7 @@ fn pending_saves_and_load_failure_never_render_a_saved_caption() {
             width: 390.,
             height: 320.,
             now: 1.,
+            density: lucent_api::Density::ONE,
         };
         let scene = layout.build(
             &app.view(&cx),
@@ -3492,6 +3538,7 @@ fn audio_stale_failure_exposes_dismiss_and_keyboard_reaches_it_at_narrow_sizes()
             width,
             height,
             now: 1.,
+            density: lucent_api::Density::ONE,
         };
         let mut input = Interaction::default();
         let scene = layout.build(&app.view(&cx), width, height, &input, 1.);
@@ -3539,6 +3586,7 @@ fn audio_panel_closes_competing_launcher_and_keyboard_reveals_controls_at_narrow
             width,
             height,
             now: 1.,
+            density: lucent_api::Density::ONE,
         };
         for tab in [Tab::Outputs, Tab::Inputs, Tab::Applications] {
             app.update(
@@ -3632,6 +3680,7 @@ fn network_overlay_keeps_one_keyboard_owner_and_masks_the_form_in_all_public_sta
         width: 390.,
         height: 580.,
         now: 1.,
+        density: lucent_api::Density::ONE,
     };
     let tree = app.view(&cx);
     let mut input = Interaction::default();
@@ -3720,6 +3769,7 @@ fn bluetooth_overlay_routes_keyboard_submission_without_exposing_input_or_compet
         width: 390.,
         height: 580.,
         now: 1.,
+        density: lucent_api::Density::ONE,
     };
     let mut input = Interaction::default();
     let scene = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
@@ -3802,6 +3852,7 @@ fn launcher_pins_are_native_actions_and_hidden_dock_keeps_only_its_hotspot() {
         width: 640.,
         height: 100.,
         now: 10.,
+        density: lucent_api::Density::ONE,
     });
     let hidden = layout.build(&tree, 640., 100., &Interaction::default(), 10.);
     assert!(hidden.paint.is_empty());
@@ -3873,6 +3924,7 @@ fn native_widget_resize_uses_the_grip_and_preserves_source_capture_until_release
         width: group.rect.w,
         height: group.rect.h,
         now: 1.,
+        density: lucent_api::Density::ONE,
     };
     let mut input = Interaction::default();
     let ordinary = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
@@ -3890,6 +3942,7 @@ fn native_widget_resize_uses_the_grip_and_preserves_source_capture_until_release
         width: group.rect.w,
         height: group.rect.h,
         now: 1.,
+        density: lucent_api::Density::ONE,
     };
     let before = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
     let grip = before
@@ -3995,6 +4048,7 @@ fn widget_editor_routes_launcher_keyboard_size_controls_escape_and_checked_ipc()
         width: group.rect.w,
         height: group.rect.h,
         now: 1.,
+        density: lucent_api::Density::ONE,
     };
     let layout = Layout::new(fonts(&app));
     let mut input = Interaction::default();

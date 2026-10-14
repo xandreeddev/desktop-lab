@@ -32,7 +32,7 @@ fn round_distance(point:vec2<f32>,rect:vec4<f32>,requested_radius:f32)->f32 {
 @fragment fn fs(v:Vertex)->@location(0) vec4<f32> {
     // Use the actual sample center for clip boundaries, avoiding interpolation
     // drift when a fractional boundary lands exactly on a physical pixel.
-    let point=v.position.xy/viewport.z;
+    let point=v.position.xy/viewport.zw;
     let d=round_distance(v.local,vec4(0.0,0.0,v.rect.zw),v.params.x);
     // Default derivatives may use a coarse quad estimate on one GPU and fine
     // differences on another. Coverage needs the same per-fragment choice.

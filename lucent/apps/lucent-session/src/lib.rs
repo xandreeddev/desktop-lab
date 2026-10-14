@@ -494,6 +494,7 @@ mod tests {
             width: 1920.,
             height: 1080.,
             now: 0.,
+            density: lucent_api::Density::ONE,
         });
         find(&tree)
             .expect("authentication field must be visible")
@@ -631,6 +632,7 @@ mod tests {
                 width,
                 height,
                 now: 0.,
+                density: lucent_api::Density::ONE,
             };
             assert_eq!(app.view(&cx).style.background.3, 1.);
             app.update(
@@ -678,6 +680,7 @@ mod tests {
             width: 1920.,
             height: 1080.,
             now: 0.,
+            density: lucent_api::Density::ONE,
         });
         fn inspect(e: &Element<Message>) {
             match &e.kind {

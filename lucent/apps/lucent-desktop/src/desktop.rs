@@ -53,7 +53,7 @@ pub enum Message {
     Bar(bool),
     SetWallpaper(String),
     LauncherSize(LauncherSize),
-    Resize(&'static str, f32, f32, u32),
+    Resize(&'static str, f32, f32, Density),
     Completed(domain::Result<()>),
     Quit,
 }
@@ -779,8 +779,8 @@ impl Component for Desktop {
                     return;
                 }
                 match *message {
-                    Message::Resize("background", width, height, scale) => {
-                        if crate::ports::BackgroundTarget::from_surface(width, height, scale)
+                    Message::Resize("background", width, height, density) => {
+                        if crate::ports::BackgroundTarget::from_density(width, height, density)
                             .is_err()
                         {
                             return;
@@ -790,10 +790,10 @@ impl Component for Desktop {
                             .connected
                             .get_mut(&route.id)
                             .expect("validated route");
-                        if monitor.viewport != (width, height) || monitor.scale != scale {
+                        if monitor.viewport != (width, height) || monitor.density != density {
                             monitor.widgets.cancel_interactions();
                             monitor.viewport = (width, height);
-                            monitor.scale = scale;
+                            monitor.density = density;
                         }
                         if self.monitors.active.as_ref() == Some(&route.id) {
                             self.select_monitor(&route.id, effects);
@@ -1317,10 +1317,10 @@ impl Component for Desktop {
                 self.save(effects);
                 effects.redraw("dock");
             }
-            Message::Resize(id, w, h, scale) => {
+            Message::Resize(id, w, h, density) => {
                 self.update_dock(crate::dock::Message::Cancel, effects);
                 if id == "background" {
-                    match crate::ports::BackgroundTarget::from_surface(w, h, scale) {
+                    match crate::ports::BackgroundTarget::from_density(w, h, density) {
                         Ok(target) => {
                             self.update_widgets(widgets::Message::CancelDrags, effects);
                             effects.delegate(
@@ -1973,8 +1973,9 @@ impl api::Application for Desktop {
                 surface,
                 width,
                 height,
-                scale,
-            } => Some(Message::Resize(surface, width, height, scale)),
+                density,
+                ..
+            } => Some(Message::Resize(surface, width, height, density)),
             event => self
                 .launcher
                 .event(event, self.browser.source.is_some())
@@ -2203,7 +2204,7 @@ impl api::Application for Desktop {
         value["active_monitor"] =
             serde_json::json!(self.monitors.active.as_ref().map(MonitorId::as_str));
         value["monitor_layouts"] = serde_json::json!(self.settings.monitor_layouts);
-        value["monitor_hosts"] = serde_json::json!(self.monitors.connected.iter().map(|(id,monitor)| serde_json::json!({"id":id.as_str(),"generation":monitor.generation,"viewport":monitor.viewport,"scale":monitor.scale,"instance":monitor.instance.as_str(),"grid_visible":monitor.widgets.grid_visible(),"editing":monitor.widgets.editing(),"widget_surfaces":monitor.widgets.surfaces(self.widget_layout(Some(id)),monitor.viewport).iter().map(|source|serde_json::json!({"id":source.id,"members":source.members})).collect::<Vec<_>>()})).collect::<Vec<_>>());
+        value["monitor_hosts"] = serde_json::json!(self.monitors.connected.iter().map(|(id,monitor)| serde_json::json!({"id":id.as_str(),"generation":monitor.generation,"viewport":monitor.viewport,"scale":monitor.scale,"density":monitor.density.factor(),"instance":monitor.instance.as_str(),"grid_visible":monitor.widgets.grid_visible(),"editing":monitor.widgets.editing(),"widget_surfaces":monitor.widgets.surfaces(self.widget_layout(Some(id)),monitor.viewport).iter().map(|source|serde_json::json!({"id":source.id,"members":source.members})).collect::<Vec<_>>()})).collect::<Vec<_>>());
         value.to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {

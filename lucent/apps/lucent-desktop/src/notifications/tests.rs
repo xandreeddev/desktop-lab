@@ -172,6 +172,7 @@ fn action_pages_retire_on_replacement_and_history_has_no_action_controls() {
         width: 390.,
         height: 580.,
         now: 1.,
+        density: lucent_api::Density::ONE,
     });
     fn actions<M>(node: &Element<M>) -> bool {
         node.id.starts_with("notification-action-") || node.children.iter().any(actions)
@@ -307,6 +308,7 @@ fn grouped_buttons_scroll_and_close_use_actual_sdk_input_routing() {
         width: 390.,
         height: 580.,
         now: 1.,
+        density: lucent_api::Density::ONE,
     };
     let mut interaction = lucent_ui::Interaction::default();
     let scene = layout.build(&center.view(&cx), cx.width, cx.height, &interaction, cx.now);
@@ -365,6 +367,7 @@ fn image_toast_scrolling_keeps_the_final_native_action_reachable_on_small_output
         width: 390.,
         height: 320.,
         now: 1.,
+        density: lucent_api::Density::ONE,
     };
     let mut input = lucent_ui::Interaction::default();
     let scene = layout.build(&center.view(&cx), cx.width, cx.height, &input, cx.now);

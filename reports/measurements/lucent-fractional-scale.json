@@ -1,0 +1,57 @@
+{
+  "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+  "source_commit": "7ff6962643c0cc8d7bd4853dcbb001fa67d77806",
+  "local_checks": {
+    "workspace_passed": 418,
+    "workspace_ignored": 60,
+    "python_passed": 91,
+    "fmt_clippy_workspace_all_targets": true,
+    "software_vulkan_renderer_checks_passed": 14,
+    "software_vulkan_visual_comparisons_passed": 532,
+    "existing_references_or_tolerance_changed": 0,
+    "example_help_executed": true,
+    "design_tokens_verified": 540,
+    "app_icons_verified": 58,
+    "shellcheck_passed": true,
+    "astro_errors": 0,
+    "astro_warnings": 0,
+    "astro_hints": 0,
+    "pages_each_prefix": 13,
+    "links_assets_each_prefix": 488
+  },
+  "implemented": [
+    "Validated reduced positive SDK Density in view/resize contexts, with exact outward physical extent calculation and checked renderer/readback envelopes.",
+    "Optional fractional-scale plus viewport native adapters, integer fallback, current object matching and extension-before-role/manager-before-flush teardown.",
+    "Fractional renderer variants, actual per-axis shader sample-center mapping and bounded fractional text coverage without logical layout reflow.",
+    "Exact client wallpaper targets and configured per-monitor density independent of integer registry metadata; existing shared coalesced preparation remains authoritative.",
+    "Existing integer convenience APIs/pixels retained; independent multi-output consumer exposes context density.",
+    "Library/desktop documentation and repository skill explain registration, lifetime, input, GPU paint and deferred acceptance."
+  ],
+  "native_acceptance": {
+    "current_source_deployed_to_vm": false,
+    "actual_protocol_negotiation_display_migration_hotplug_input_lock_tested": false,
+    "deferred_by_user": true,
+    "secure_authentication_gate_changed": false
+  },
+  "performance": {
+    "normal_desktop_rss_target_mib": 300,
+    "current_rss_or_frame_pacing_measured": false,
+    "new_effect_worker_polling_timer_or_idle_redraw_loop": false
+  },
+  "remaining": [
+    "Actual compositor negotiation, display density migration, native pointer/keyboard/clipboard, hotplug/suspend and secure all-output coverage.",
+    "Neutral-layer hotplug recovery, compositor-focused output selection, per-output wallpapers and output arrangement policy.",
+    "Current RSS/frame pacing, shaping/bidi/font fallback/IME/accessibility and the full client/release ledger.",
+    "Final exact-head CI and authorized normal merge."
+  ],
+  "prior_delivery": {
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/53",
+    "merge_commit": "1eb0a720c54c1f2356f0f076bd41546253684271",
+    "all_six_exact_head_checks_passed": true,
+    "main_checks_and_pages_passed": true
+  },
+  "protocol_reference": "https://github.com/wayland-mirror/wayland-protocols/blob/main/staging/fractional-scale/fractional-scale-v1.xml",
+  "privacy": {
+    "private_paths_display_metadata_or_captures_published": false
+  }
+}

@@ -163,6 +163,7 @@ fn device_actions_are_reachable_and_radio_authority_lives_on_its_own_tab() {
         width: 390.,
         height: 580.,
         now: 1.,
+        density: lucent_api::Density::ONE,
     };
     let fonts = [
         include_bytes!("../../assets/LucentSans.ttf").as_slice(),
@@ -534,6 +535,7 @@ fn pending_connection_cancel_is_reachable_while_ordinary_controls_are_disabled()
             width,
             height: 580.,
             now: 1.,
+            density: lucent_api::Density::ONE,
         };
         client.update(Message::Observed(Ok(connecting_fixture())), &mut effects);
         let scene = layout.build(

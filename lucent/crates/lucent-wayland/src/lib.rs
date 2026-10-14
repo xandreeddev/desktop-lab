@@ -49,6 +49,7 @@ use lucent_render::display_handle as wgpu_handle;
 mod clipboard;
 mod delivery;
 mod effects;
+mod fractional;
 mod ipc;
 mod outputs;
 mod profiling;
@@ -61,7 +62,8 @@ enum RuntimeEvent<M> {
     Command(String, mpsc::SyncSender<String>),
 }
 struct Native<M> {
-    renderer: Renderer, // Drop before layer.
+    renderer: Renderer,                      // Drop before layer.
+    fractional: Option<fractional::Surface>, // Destroy extensions before role/surface.
     role: SurfaceRole,
     spec: api::SurfaceSpec,
     bound_output: Option<wl_output::WlOutput>,
@@ -75,6 +77,16 @@ struct Native<M> {
     regions: Vec<api::Clip>,
     frame_times: std::collections::VecDeque<f64>,
     profiles: profiling::History,
+}
+impl<M> Native<M> {
+    fn density(&self) -> api::Density {
+        self.fractional
+            .as_ref()
+            .and_then(|scale| scale.preferred)
+            .unwrap_or_else(|| {
+                api::Density::integer(self.scale).expect("positive native integer scale")
+            })
+    }
 }
 enum SurfaceRole {
     Layer(LayerSurface),
@@ -102,6 +114,7 @@ struct State<A: Application> {
     seats: SeatState,
     outputs: OutputState,
     output_bindings: Vec<(api::DisplayOutput, wl_output::WlOutput)>,
+    fractional: Option<fractional::Globals>,
     closed_targets: BTreeMap<api::SurfaceAddress, (api::OutputName, wl_output::WlOutput)>,
     pointer: Option<wl_pointer::WlPointer>,
     keyboard: Option<wl_keyboard::WlKeyboard>,
@@ -129,6 +142,7 @@ impl<A: Application> Drop for State<A> {
         // as a permission agent can outlive this individual runtime invocation.
         // Teardown never authorizes a secure-session unlock.
         self.surfaces.clear();
+        self.fractional.take();
         if let Err(error) = self.connection.flush() {
             eprintln!("{} surface cleanup failed: {error}", self.app.name());
         }
@@ -220,6 +234,7 @@ fn run_inner<A: Application>(
         seats: SeatState::new(&globals, &qh),
         outputs: OutputState::new(&globals, &qh),
         output_bindings: vec![],
+        fractional: fractional::Globals::bind(&globals, &qh),
         closed_targets: BTreeMap::new(),
         pointer: None,
         keyboard: None,
@@ -351,6 +366,10 @@ impl<A: Application> State<A> {
                 ))?),
                 Native {
                     renderer,
+                    fractional: self
+                        .fractional
+                        .as_ref()
+                        .map(|globals| globals.surface(lock_surface.wl_surface(), qh)),
                     role: SurfaceRole::Lock(lock_surface, output),
                     spec,
                     bound_output: None,
@@ -387,7 +406,7 @@ impl<A: Application> State<A> {
             "one_color_buffer_per_surface_bytes": self.surfaces.values().map(|s| s.renderer.single_surface_buffer_bytes()).sum::<u64>(),
             "scope":"Prepared image payloads referenced by current scenes only; app caches excluded. GPU buffer values are requested payloads, not driver allocations. Actual surface buffer counts and total GPU memory are unknown."
         }));
-        let mut result = serde_json::json!({"profile_memory":profile_memory,"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id.to_string(),"role":s.spec.id,"instance":s.spec.instance.as_ref().map(api::SurfaceInstance::as_str),"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"buffer_width":s.width*s.scale,"buffer_height":s.height*s.scale,"frames":s.renderer.frames,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"frame_profiles":s.profiles.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)});
+        let mut result = serde_json::json!({"profile_memory":profile_memory,"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id.to_string(),"role":s.spec.id,"instance":s.spec.instance.as_ref().map(api::SurfaceInstance::as_str),"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"density":s.density().factor(),"buffer_scale":if s.fractional.is_some(){1}else{s.scale},"buffer_width":s.density().physical_size(s.width,s.height).ok().map(|size|size.0),"buffer_height":s.density().physical_size(s.width,s.height).ok().map(|size|size.1),"frames":s.renderer.frames,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"frame_profiles":s.profiles.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)});
         result["outputs"]=serde_json::json!(self.output_bindings.iter().map(|(info,_)|serde_json::json!({"global":info.global,"name":info.name.as_ref().map(api::OutputName::as_str),"logical_size":info.logical_size,"integer_scale":info.integer_scale})).collect::<Vec<_>>());
         result["closed_named_surfaces"] = serde_json::json!(
             self.closed_targets
@@ -604,6 +623,10 @@ impl<A: Application> State<A> {
                     address,
                     Native {
                         renderer,
+                        fractional: self
+                            .fractional
+                            .as_ref()
+                            .map(|globals| globals.surface(layer.wl_surface(), qh)),
                         role: SurfaceRole::Layer(layer),
                         spec,
                         bound_output: target,
@@ -658,6 +681,7 @@ impl<A: Application> State<A> {
                         width: surface.width as f32,
                         height: surface.height as f32,
                         scale,
+                        density: surface.density(),
                     }));
                 }
             }
@@ -684,6 +708,7 @@ impl<A: Application> State<A> {
                 width: s.width as f32,
                 height: s.height as f32,
                 now,
+                density: s.density(),
             });
             let view_ms = profiling::elapsed(started);
             let started = self.profile_frames.then(Instant::now);
@@ -715,13 +740,23 @@ impl<A: Application> State<A> {
                     }
                 }
             }
+            let density = s.density();
             let surface = s.role.wl_surface();
-            surface.set_buffer_scale(s.scale as i32);
+            if let Some(fractional) = &mut s.fractional {
+                if let Err(error) = fractional.destination(s.width, s.height) {
+                    self.error = Some(error.to_string());
+                    self.exit = true;
+                    return;
+                }
+                surface.set_buffer_scale(1);
+            } else {
+                surface.set_buffer_scale(s.scale as i32);
+            }
             let input_ms = profiling::elapsed(started);
             s.renderer.enable_profiling(self.profile_frames);
             match s
                 .renderer
-                .render(s.width, s.height, s.scale, &scene.paint, || {
+                .render_scaled(s.width, s.height, density, &scene.paint, || {
                     surface.frame(qh, FrameCallbackData(surface.clone()));
                 }) {
                 Ok(RenderOutcome::Presented) => {}
@@ -1018,6 +1053,7 @@ impl<A: Application> CompositorHandler for State<A> {
                     width: s.width as f32,
                     height: s.height as f32,
                     scale: s.scale,
+                    density: s.density(),
                 });
                 if let Some(message) = self.app.event(event) {
                     self.message(message, qh);
@@ -1106,6 +1142,7 @@ impl<A: Application> LayerShellHandler for State<A> {
                 width: s.width as f32,
                 height: s.height as f32,
                 scale: s.scale,
+                density: s.density(),
             });
             if let Some(message) = self.app.event(event) {
                 self.message(message, qh);

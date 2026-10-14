@@ -94,7 +94,7 @@ demand. It has no widget catalog, profile migration or desktop monitor policy.
 ## Geometry, density and startup
 
 Background configure events establish each monitor's logical viewport and
-integer buffer scale. Resizing, catalog geometry changes or settings replacement
+actual rendering density. Resizing, catalog geometry changes or settings replacement
 cancels that host's capture. Presentation clamps cards to the current viewport
 without rewriting stored preferred positions or sizes. Reconnecting recreates
 transient host state and reuses the saved layout.
@@ -127,6 +127,7 @@ profile-aware selector at 1×/2× in both palette directions.
 Actual compositor placement, simultaneous native keyboard/pointer/clipboard,
 hotplug/suspend, service restart and secure multi-output acceptance are deferred
 under the user's instruction. Current process RSS and animation pacing remain
-unmeasured. Fractional scaling, per-monitor wallpaper selection, automatic
+unmeasured. The optional fractional protocol path is described in [fractional scaling](fractional-scaling.md).
+Per-monitor wallpaper selection, automatic
 compositor-focused monitor observation, output naming changes and native output
 arrangement settings remain separate work. This source is not deployed to the VM.

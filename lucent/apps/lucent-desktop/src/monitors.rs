@@ -18,6 +18,7 @@ pub struct Monitor {
     reported_size: Option<(u32, u32)>,
     pub viewport: (f32, f32),
     pub scale: u32,
+    pub density: lucent_api::Density,
     pub widgets: widgets::Host,
 }
 impl Monitor {
@@ -109,6 +110,8 @@ impl Monitors {
                         reported_size: output.logical_size,
                         viewport,
                         scale: output.integer_scale,
+                        density: lucent_api::Density::integer(output.integer_scale)
+                            .unwrap_or_default(),
                         widgets: widgets::Host::default(),
                     },
                 );
@@ -130,10 +133,10 @@ impl Monitors {
     pub fn background_target(&self) -> lucent_domain::Result<Option<BackgroundTarget>> {
         let mut extent = (0, 0);
         for monitor in self.connected.values() {
-            let target = BackgroundTarget::from_surface(
+            let target = BackgroundTarget::from_density(
                 monitor.viewport.0,
                 monitor.viewport.1,
-                monitor.scale,
+                monitor.density,
             )?
             .size();
             extent.0 = extent.0.max(target.0);
@@ -155,6 +158,23 @@ mod tests {
         Application, ClipboardOutcome, Component, DragEvent, Effects, Event, TextEdit,
     };
     use lucent_domain::{Placement, WidgetLayout};
+    #[test]
+    fn configured_fractional_density_survives_unchanged_catalog_observation() {
+        let mut app = desktop();
+        let density = lucent_api::Density::new(150, 120).unwrap();
+        send(
+            &mut app,
+            "DP-2",
+            Message::Resize("background", 1280., 720., density),
+        );
+        app.update(Message::Outputs(catalog()), &mut Effects::default());
+        assert_eq!(app.monitors.connected[&id("DP-2")].density, density);
+        assert_eq!(
+            app.monitors.background_target().unwrap().unwrap().size(),
+            (1920, 1080)
+        );
+        assert!(app.settings.monitor_layouts.is_empty());
+    }
     fn output(name: &str, global: u32, size: (u32, u32), scale: u32) -> DisplayOutput {
         DisplayOutput {
             global,
@@ -286,7 +306,12 @@ mod tests {
         send(
             &mut app,
             "DP-2",
-            Message::Resize("background", 640., 480., 2),
+            Message::Resize(
+                "background",
+                640.,
+                480.,
+                lucent_api::Density::integer(2).unwrap(),
+            ),
         );
         send(&mut app, "DP-2", drag(true));
         assert_eq!(app.settings.monitor_layouts[&id("DP-2")], profile);
