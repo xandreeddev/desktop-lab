@@ -150,11 +150,11 @@ impl NotificationPort for Fake {
     fn watch(&self, emit: &mut dyn FnMut(Result<NotificationSnapshot>), _: &dyn StopSignal) {
         emit(Ok(NotificationSnapshot::default()));
     }
-    fn dismiss(&self, _: u32) -> Result<()> {
+    fn dismiss(&self, _: NotificationTarget) -> Result<()> {
         self.calls.lock().unwrap().push("dismiss");
         Ok(())
     }
-    fn invoke(&self, _: u32, _: &str) -> Result<()> {
+    fn invoke(&self, _: NotificationTarget, _: &str) -> Result<()> {
         self.calls.lock().unwrap().push("invoke");
         Ok(())
     }
@@ -162,6 +162,9 @@ impl NotificationPort for Fake {
         Ok(())
     }
     fn clear_history(&self) -> Result<()> {
+        Ok(())
+    }
+    fn retry_history(&self) -> Result<()> {
         Ok(())
     }
 }

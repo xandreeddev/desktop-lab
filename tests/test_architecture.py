@@ -207,6 +207,14 @@ class Boundaries(unittest.TestCase):
                 self.assertNotIn('fn clipboard_enabled',path.read_text())
         self.assertIn('fn clipboard_enabled', (ROOT/'lucent/examples/text-input/src/main.rs').read_text())
 
+    def test_notification_adapters_and_child_keep_storage_out_of_views(self):
+        self.assert_no_imports(sources(ROOT/'lucent/crates/lucent-services/src/notifications',('tests.rs',)),
+                               ('lucent_desktop','lucent_design','lucent_wayland','lucent_render'))
+        self.assert_no_platform_operations(sources(ROOT/'lucent/apps/lucent-desktop/src/notifications'),
+                                           ('crate::desktop','crate::platform','crate::adapters'))
+        self.assertNotIn('lucent-wayland',reachable(self.graph,'notification-service'))
+        self.assertNotIn('lucent-render',reachable(self.graph,'notification-service'))
+
     def test_ordinary_desktop_clients_use_relative_declarative_input(self):
         for path in sources(ROOT/'lucent/apps/lucent-desktop/src'):
             self.assertNotIn('Element::input(',path.read_text(),str(path.relative_to(ROOT)))

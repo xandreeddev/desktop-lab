@@ -29,7 +29,9 @@ pub fn desktop_adapters() -> DesktopAdapters {
         session: Arc::new(LucentSession),
         assets: Arc::new(NativeAssets),
         notifications: Arc::new(
-            lucent_services::notifications::FreedesktopNotifications::default(),
+            lucent_services::notifications::FreedesktopNotifications::with_history(Some(Arc::new(
+                lucent_services::notifications::JsonNotificationHistory::default(),
+            ))),
         ),
     }
 }
