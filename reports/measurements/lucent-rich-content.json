@@ -1,0 +1,62 @@
+{
+  "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+  "source_commit": "861627d0709f9986343f7a246d5155f86bfd3ae1",
+  "local_checks": {
+    "workspace_passed": 381,
+    "workspace_ignored": 58,
+    "owned_notification_protocol_cases_passed": 11,
+    "python_passed": 85,
+    "new_reviewed_references": 20,
+    "existing_references_changed": 0,
+    "fmt_clippy_workspace_all_targets": true,
+    "design_tokens_verified": 537,
+    "app_icons_verified": 58,
+    "shellcheck_passed": true,
+    "font_derivatives_reproduced_byte_for_byte": true,
+    "independent_example_help_executed": true,
+    "astro_errors": 0,
+    "astro_warnings": 0,
+    "astro_hints": 0,
+    "pages_each_prefix": 13,
+    "links_assets_each_prefix": 488,
+    "software_visual_comparisons_passed": 488
+  },
+  "implemented": [
+    "Generic TextSpan/Element::rich_text API with font faces, semantic colors, underlines and mapped opaque link callbacks.",
+    "Word wrapping across style boundaries, grapheme fallback, shared face baselines, line limits and per-line paint.",
+    "One logical keyboard target per link with disjoint pointer/native regions; clipped gaps cannot receive keyboard focus and changed geometry retires click capture.",
+    "Bounded pure notification-body parser and revision-keyed client content, genuine pinned bold/italic font derivatives and a reproducible generator.",
+    "Explicit ExternalUri/UriPort/XdgUri boundaries with literal independent application-unit opening; historical links cannot invoke a retired sender.",
+    "Renderer ink bounds and left-bearing placement preserve italic coverage without changing logical advances.",
+    "Independent native example, library/domain/user guides, architecture guards and repository skills."
+  ],
+  "native_acceptance": {
+    "current_source_deployed_to_vm": false,
+    "real_compositor_keyboard_pointer_and_external_uri_handler_tested": false,
+    "deferred_by_user": true,
+    "authentication_or_authority_changed": false
+  },
+  "performance": {
+    "normal_desktop_rss_target_mib": 300,
+    "current_desktop_rss_measured": false,
+    "current_animation_pacing_measured": false,
+    "physical_density_or_effects_reduced": false
+  },
+  "remaining": [
+    "Notification images/icons, activation tokens, sound and richer interactions; images show alt text and body-images remains unadvertised.",
+    "Complex-script/bidi shaping, font fallback, IME, accessibility and the complete requirement ledger.",
+    "Actual VM/compositor/hardware restart, input, URI handler, filesystem and current RSS/pacing acceptance.",
+    "Final published-head CI and authorized normal merge."
+  ],
+  "prior_delivery": {
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/48",
+    "merge_commit": "32a9b8c2980626021ed946ece1e2a884285bc3ee",
+    "all_six_exact_head_checks_passed": true,
+    "main_checks_and_pages_passed": true
+  },
+  "privacy": {
+    "private_paths_or_captures_published": false,
+    "private_notification_content_or_host_application_metadata_published": false
+  },
+  "validation_scope": "381 Rust workspace tests/58 ignored and 85 Python checks pass. Eleven owned private-bus cases assert actual native capabilities/delivery and retain storage/reconnect coverage. All 488 software-Vulkan comparisons pass without update mode; twenty reviewed new references are added with zero existing reference or tolerance changes. Independent example help runs without Wayland and font derivatives reproduce byte for byte."
+}
