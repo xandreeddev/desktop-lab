@@ -216,7 +216,8 @@
       ],
       "evidence": [
         "Named-output SDK source 8dcb4889d747b617029a52f2015036c0f8b637d9 adds validated selectors, typed registry catalogs, exact current native bindings, disconnected/ambiguous waiting, role recreation and non-spinning named closure. Default consumers compile neutrally; secure lock remains all-output. 397 Rust tests/59 ignored, 85 Python checks, strict checks, example help and both Astro prefixes pass. Actual compositor placement/input/hotplug and full desktop per-output/fractional behavior remain incomplete. See reports/measurements/lucent-output-targets.json.",
-        "Concrete surface instance source c796e01fb33dbc42e665b496a2e683aef2e07f85 adds typed native identity, scoped input/lifecycle/view, per-instance animation/redraw/clipboard and independent multi-output bars. 402 Rust tests/59 ignored, 85 Python checks, strict checks, example help and both Astro prefixes pass. Full desktop per-monitor persistence, fractional scaling and actual compositor acceptance remain incomplete. See reports/measurements/lucent-surface-instances.json."
+        "Concrete surface instance source c796e01fb33dbc42e665b496a2e683aef2e07f85 adds typed native identity, scoped input/lifecycle/view, per-instance animation/redraw/clipboard and independent multi-output bars. 402 Rust tests/59 ignored, 85 Python checks, strict checks, example help and both Astro prefixes pass. Full desktop per-monitor persistence, fractional scaling and actual compositor acceptance remain incomplete. See reports/measurements/lucent-surface-instances.json.",
+        "Per-monitor desktop source 581f7b73faf46f31c58b024f511f43cf09855f08 separates canonical pure layouts from connected hosts, targets bars/background/widgets across named outputs and persists independent profiles through the root coordinator. Scoped generations, precise redraw/clipboard, reflow cancellation and all-host readiness have owned tests. 413 Rust tests/59 ignored, 91 Python checks and all 532 software-Vulkan comparisons pass (16 reviewed additions; no prior reference/tolerance change), with both Astro prefixes clean. Real compositor acceptance, fractional scaling and additional display policy remain incomplete. See reports/measurements/lucent-monitor-layouts.json."
       ]
     },
     {
@@ -1413,6 +1414,29 @@
         "Desktop per-output persisted layouts, neutral-default hotplug recovery and fractional scaling.",
         "Actual compositor placement, two-output pointer/keyboard/clipboard, reconnect and secure multi-output acceptance.",
         "Current RSS/frame pacing, shaping/IME/accessibility and the full client/release ledger.",
+        "Final exact-head CI and authorized normal merge."
+      ],
+      "delivery": {
+        "status": "merged",
+        "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/52",
+        "merge_commit": "8fad30ab5eb2542a6d0c6d9799c10c3a9a531e9a"
+      }
+    },
+    {
+      "milestone": "persisted-monitor-layouts-and-scoped-desktop-hosts",
+      "source_commit": "581f7b73faf46f31c58b024f511f43cf09855f08",
+      "report": "reports/measurements/lucent-monitor-layouts.json",
+      "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+      "checks": [
+        "413 Rust workspace tests/59 ignored, strict formatting/Clippy, 91 Python architecture/integration checks, 540 tokens/58 icons and ShellCheck pass.",
+        "Owned profile/reflow/reconnect/input/clipboard and all-host readiness tests pass; registry/clock observation creates no saved profiles.",
+        "All 532 software-Vulkan comparisons pass with 16 reviewed references and zero existing reference/tolerance changes.",
+        "Both Astro prefixes pass 13 pages/488 links/assets and zero diagnostics; PR #52 and Pages merged/passed."
+      ],
+      "pending": [
+        "Real compositor placement, simultaneous native input/clipboard, reconnect/suspend, startup readiness and secure multi-output acceptance.",
+        "Fractional scaling, neutral-layer hotplug, compositor-focused output observation, per-output wallpaper selection and display arrangement UI.",
+        "Current RSS/frame pacing, shaping/IME/accessibility and the complete client/release ledger.",
         "Final exact-head CI and authorized normal merge."
       ]
     }
