@@ -1,0 +1,76 @@
+{
+  "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+  "source_commit": "c4d6b165ddf1704fb1e998d52d4ebcabed118171",
+  "local_checks": {
+    "workspace_passed": 394,
+    "workspace_ignored": 59,
+    "owned_notification_protocol_cases_passed": 12,
+    "python_passed": 85,
+    "new_reviewed_references": 28,
+    "existing_references_changed": 0,
+    "fmt_clippy_workspace_all_targets": true,
+    "design_tokens_verified": 540,
+    "app_icons_verified": 58,
+    "shellcheck_passed": true,
+    "astro_errors": 0,
+    "astro_warnings": 0,
+    "astro_hints": 0,
+    "pages_each_prefix": 13,
+    "links_assets_each_prefix": 488,
+    "software_visual_comparisons_passed": 516
+  },
+  "implemented": [
+    "Validated notification raw pixels/source references with invariant-preserving serialization and backward image defaults.",
+    "Borrowed native wire validation, RGB/RGBA/stride conversion and associated-image priority/fallback.",
+    "Bounded local regular-file/raster decode and SVG output; no nested SVG resource reads or filters.",
+    "One active/latest visible asset batch on the existing worker, revision/role identity, retirement, retry and prepared payload bounds.",
+    "Token-based native image boxes, explicit fallback states and bounded scroll cards preserving final-action keyboard access.",
+    "SDK Motion reveal reporting through the existing compositor-paced animation path; no extra polling timer or worker lane.",
+    "Separate raw inbox, durable image and prepared payload policies; privacy-safe prepared counters, library/domain/user guides and repository skill update."
+  ],
+  "resource_scope": {
+    "raw_inbox_image_payload_limit_mib": 8,
+    "raw_archive_image_payload_limit_kib": 256,
+    "prepared_client_payload_limit_mib": 8,
+    "local_image_file_limit_mib": 4,
+    "raster_decoder_allocation_envelope_mib": 16,
+    "prepared_physical_extent_limit": [
+      400,
+      200
+    ],
+    "logical_box_tokens": [
+      200,
+      100
+    ],
+    "total_process_or_gpu_budget_established": false
+  },
+  "native_acceptance": {
+    "current_source_deployed_to_vm": false,
+    "real_application_compositor_and_physical_filesystem_tested": false,
+    "deferred_by_user": true,
+    "authentication_or_authority_changed": false
+  },
+  "performance": {
+    "normal_desktop_rss_target_mib": 300,
+    "current_desktop_rss_measured": false,
+    "current_animation_pacing_measured": false,
+    "physical_density_or_effects_reduced": false
+  },
+  "remaining": [
+    "Actual applications/compositor pointer/keyboard, icon-theme interoperability, physical filesystem stalls and current RSS/cold-warm frame pacing.",
+    "Activation tokens, sound, optional notification persistence, text shaping/IME/accessibility, outputs/fractional scaling and the full client/release ledger.",
+    "Payload limits exclude transport allocations, active work, runtime messages/scenes, driver/GPU allocations and parser overhead; kernel file IO is not forcibly cancelled.",
+    "Final published-head CI and authorized normal merge."
+  ],
+  "prior_delivery": {
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/49",
+    "merge_commit": "d029130e52ad8ce553c50af5e06adf0c546d27ce",
+    "all_six_exact_head_checks_passed": true,
+    "main_checks_and_pages_passed": true
+  },
+  "privacy": {
+    "private_paths_or_captures_published": false,
+    "private_notification_content_or_host_application_metadata_published": false
+  },
+  "validation_scope": "394 Rust workspace tests/59 ignored, 85 Python checks and twelve owned native protocol cases pass. All 516 software-Vulkan comparisons pass without update mode. Twenty-eight reviewed references are added; existing references and tolerances stay unchanged. Typed/client/file tests cover byte retention, thousand-demand coalescing, image priority, alpha, SVG/URI/FIFO handling, explicit retry, motion settling and actual keyboard reachability of the final action on a small viewport."
+}
