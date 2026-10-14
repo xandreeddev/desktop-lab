@@ -6,7 +6,9 @@ pub(crate) mod tests;
 mod view;
 pub use control::Control;
 use form::{Form, Target};
-use lucent_api::{Effects, InputEdit, Motion, ScrollEvent, Subscription};
+use lucent_api::{
+    ClipboardTarget, Effects, InputEdit, Motion, ScrollEvent, Subscription, TextEdit,
+};
 use lucent_design::motion;
 use lucent_domain::*;
 use std::{sync::Arc, time::Duration};
@@ -45,7 +47,7 @@ pub enum Message {
     Join(NetworkObjectId),
     Hidden,
     Cancel,
-    Name(u64, String),
+    Name(u64, TextEdit),
     Password(u64, InputEdit),
     Security(u64, WifiSecurity),
     Remember(u64),
@@ -419,12 +421,18 @@ impl Network {
                 self.forget = None;
                 self.scroll = 0.;
             }
-            Message::Name(generation, value) => {
+            Message::Name(generation, edit) => {
                 if let Some(f) = self.form.as_mut().filter(|f| {
                     f.generation == generation && matches!(f.target, Target::Hidden { .. })
-                }) && value.len() <= 32
-                {
-                    f.name = value;
+                }) && let Err(error) = f.name_field.update(
+                    &mut f.name,
+                    edit,
+                    32,
+                    ClipboardTarget::new("network", format!("network-name-{generation}")),
+                    effects,
+                    move |edit| Message::Name(generation, edit),
+                ) {
+                    self.fail(None, error.to_string());
                 }
             }
             Message::Password(generation, edit) => {
