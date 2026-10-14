@@ -80,9 +80,12 @@ impl Network {
         ];
         if matches!(form.target, Target::Hidden { .. }) {
             rows.push(field_style(
-                Element::input(&form.name, "Network name", move |name| {
-                    Message::Name(generation, name)
-                })
+                Element::text_input(
+                    &form.name,
+                    form.name_field.selection(),
+                    "Network name",
+                    move |name| Message::Name(generation, name),
+                )
                 .id(format!("network-name-{generation}"))
                 .autofocus()
                 .on_submit(Message::Submit(generation)),

@@ -2613,7 +2613,10 @@ fn feedback_stops_scheduling_after_expiry_and_has_no_keyboard_grab() {
 fn online_fixture(app: &mut Desktop) {
     use lucent_domain::{RemoteWallpaper, WallpaperProvider};
     app.browser.source = Some(WallpaperProvider::Wallhaven);
-    app.browser.query = "landscape".into();
+    app.browser.update(
+        crate::wallpaper_browser::Message::Query("landscape".into()),
+        &mut Effects::default(),
+    );
     app.browser.page = 1;
     app.browser.has_more = true;
     app.browser.status = "6 results · page 1".into();

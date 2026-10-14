@@ -172,7 +172,10 @@ fn hidden_forms_use_raw_name_supported_security_and_explicit_remember_choice() {
     client.update(Message::Hidden, &mut effects);
     let generation = client.form.as_ref().unwrap().generation;
     client.update(
-        Message::Name(generation, "Hidden fixture".into()),
+        Message::Name(
+            generation,
+            lucent_api::TextEdit::Replace("Hidden fixture".into()),
+        ),
         &mut effects,
     );
     client.update(
@@ -245,4 +248,64 @@ fn reopening_retains_motion_continuity_and_rejects_stale_close_timer() {
     assert!(client.visible());
     client.update(Message::Closed(client.close_generation), &mut effects);
     assert!(!client.visible());
+}
+
+#[test]
+fn hidden_network_text_is_current_bounded_and_clipboard_tickets_do_not_cross_forms() {
+    use lucent_api::{ClipboardOutcome, ClipboardTarget, TextEdit};
+    let (mut client, adapter, mut effects) = client();
+    client.update(Message::Hidden, &mut effects);
+    let generation = client.form.as_ref().unwrap().generation;
+    for text in ["Fixture ", "café"] {
+        client.update(
+            Message::Name(generation, TextEdit::Insert(text.into())),
+            &mut effects,
+        );
+    }
+    assert_eq!(client.form.as_ref().unwrap().name, "Fixture café");
+    assert!(adapter.commands.lock().unwrap().is_empty());
+    client.update(
+        Message::Password(
+            generation,
+            InputEdit::Insert("private-form-password".into()),
+        ),
+        &mut effects,
+    );
+    let secret_count = client.form.as_ref().unwrap().password_length();
+    client.update(Message::Name(generation, TextEdit::SelectAll), &mut effects);
+    client.update(Message::Name(generation, TextEdit::Paste), &mut effects);
+    let request = effects.clipboard.pop().unwrap();
+    assert_eq!(
+        request.target,
+        ClipboardTarget::new("network", format!("network-name-{generation}"))
+    );
+    client.update(
+        request.finish(ClipboardOutcome::Text("x".repeat(33))),
+        &mut effects,
+    );
+    assert_eq!(client.form.as_ref().unwrap().name, "Fixture café");
+    assert_eq!(
+        client.form.as_ref().unwrap().password_length(),
+        secret_count
+    );
+    assert!(client.failure.is_some());
+    client.update(Message::Name(generation, TextEdit::Paste), &mut effects);
+    let request = effects.clipboard.pop().unwrap();
+    client.update(
+        request.finish(ClipboardOutcome::Text("new network".into())),
+        &mut effects,
+    );
+    assert_eq!(client.form.as_ref().unwrap().name, "new network");
+    client.update(Message::Name(generation, TextEdit::Paste), &mut effects);
+    let old = effects.clipboard.pop().unwrap();
+    client.update(Message::Cancel, &mut effects);
+    client.update(Message::Hidden, &mut effects);
+    let current = client.form.as_ref().unwrap().generation;
+    assert_ne!(generation, current);
+    client.update(
+        old.finish(ClipboardOutcome::Text("old form".into())),
+        &mut effects,
+    );
+    assert_eq!(client.form.as_ref().unwrap().name, "");
+    assert_eq!(client.form.as_ref().unwrap().password_length(), 0);
 }

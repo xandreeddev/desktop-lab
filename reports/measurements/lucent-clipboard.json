@@ -50,5 +50,14 @@
     "private_paths_or_captures_published": false,
     "clipboard_payloads_logged": false
   },
-  "validation_scope": "Strict workspace checks plus focused final native checks pass. Pipe tests exercise partial UTF-8, EOF, capacity, dispatch fairness, absolute deadlines and disconnected consumers. Client tests exercise stale/reset/current-content behavior and mapped outcomes; no real compositor acceptance is claimed. All 436 software-Vulkan comparisons pass without baseline or tolerance changes."
+  "validation_scope": "Strict workspace checks plus focused final native checks pass. Pipe tests exercise partial UTF-8, EOF, capacity, dispatch fairness, absolute deadlines and disconnected consumers. Client tests exercise stale/reset/current-content behavior and mapped outcomes; no real compositor acceptance is claimed. All 436 software-Vulkan comparisons pass without baseline or tolerance changes.",
+  "delivery": {
+    "status": "merged",
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/45",
+    "tested_head": "cb1a6b5cf92ef9a302a1dde3cf3ef0476e9bd945",
+    "merge_commit": "9a0871b3cba2e0c5274b53463d603f6abdecbea4",
+    "all_six_published_head_ci_checks_passed": true,
+    "pages_publication_passed": true,
+    "main_ci": "in_progress_last_checked"
+  }
 }

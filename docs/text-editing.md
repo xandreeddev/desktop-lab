@@ -77,7 +77,13 @@ opacity token; physical text density and supersampling remain unchanged.
 ## Clients and boundaries
 
 The launcher owns query selection privately and refilters only after content
-changes. The widget host owns notes selection while borrowing the root settings
+changes. Wallpaper search and hidden network names use the same relative-edit
+control. Wallpaper typing never starts provider I/O until Search/Enter is
+submitted; submitting or changing provider retires earlier paste tickets. The
+network child checks the current form generation and admits at most 32 UTF-8
+bytes before creating a hidden-network SSID. Editing the name never reads or
+changes the form's zeroizing password, and stale replies cannot cross forms.
+The widget host owns notes selection while borrowing the root settings
 aggregate; caret movement never creates a settings write. Notes content still
 returns a save intent to the one persistence coordinator. Native menus use the
 same control and preserve their original accepted-value semantics.
@@ -136,7 +142,9 @@ The receiver requires valid UTF-8 at EOF. Unsupported formats, overflow, timeout
 and disconnected pipes return typed generic errors; they never print clipboard
 text or execute it as a shell command. Incoming CR/LF is removed by single-line
 editing. Launchers and menus show failures without changing their query; notes
-returns the existing typed error intent. No history or primary-selection UI is
+returns the existing typed error intent. Wallpaper search and hidden-network
+name errors use their existing status/failure presentation. No history or
+primary-selection UI is
 added here.
 
 All pipe I/O lives on the native calloop poller with nonblocking descriptors.

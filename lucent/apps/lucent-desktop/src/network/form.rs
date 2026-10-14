@@ -1,5 +1,5 @@
 //! The private editing state owns a zeroizing secret; views borrow only its count.
-use lucent_api::InputEdit;
+use lucent_api::{InputEdit, TextFieldState};
 use lucent_domain::*;
 
 #[derive(Clone)]
@@ -18,6 +18,7 @@ pub struct Form {
     pub generation: u64,
     pub target: Target,
     pub name: String,
+    pub name_field: TextFieldState,
     pub security: WifiSecurity,
     pub remember: bool,
     password: Secret,
@@ -28,10 +29,13 @@ impl Form {
             Target::Visible { ssid, security, .. } => (ssid.display_name(), *security),
             Target::Hidden { .. } => (String::new(), WifiSecurity::WpaPersonal),
         };
+        let mut name_field = TextFieldState::default();
+        name_field.reset(&name);
         Self {
             generation,
             target,
             name,
+            name_field,
             security,
             remember: true,
             password: Secret::default(),

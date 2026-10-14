@@ -8,6 +8,7 @@ use std::{collections::BTreeMap, sync::Arc};
 pub enum Message {
     Source(Option<WallpaperProvider>),
     Query(String),
+    EditQuery(TextEdit),
     Search(u32),
     Select(usize),
     Navigate(i32),
@@ -26,6 +27,7 @@ enum Job {
 pub struct Browser {
     pub source: Option<WallpaperProvider>,
     pub query: String,
+    query_field: TextFieldState,
     pub items: Vec<RemoteWallpaper>,
     pub selected: usize,
     pub page: u32,
@@ -40,9 +42,10 @@ impl Browser {
     pub fn busy(&self) -> bool {
         self.job.is_some()
     }
-    pub fn update(&mut self, message: Message) {
+    pub fn update(&mut self, message: Message, effects: &mut Effects<Message>) {
         match message {
             Message::Source(source) => {
+                self.query_field.cancel();
                 self.generation += 1;
                 self.job = None;
                 self.source = source;
@@ -53,7 +56,22 @@ impl Browser {
                 self.has_more = false;
                 self.status.clear();
             }
-            Message::Query(query) => self.query = query,
+            Message::Query(query) => {
+                self.query = query;
+                self.query_field.reset(&self.query);
+            }
+            Message::EditQuery(edit) => {
+                if let Err(error) = self.query_field.update(
+                    &mut self.query,
+                    edit,
+                    4096,
+                    ClipboardTarget::new("dock", "wallpaper-search"),
+                    effects,
+                    Message::EditQuery,
+                ) {
+                    self.status = error.to_string();
+                }
+            }
             Message::Search(page) => {
                 if page == 0
                     || matches!(self.job, Some(Job::Download(..)))
@@ -62,6 +80,7 @@ impl Browser {
                     return;
                 }
                 if let Some(provider) = self.source {
+                    self.query_field.cancel();
                     self.generation += 1;
                     self.job = Some(Job::Search(provider, self.query.clone(), page));
                     self.submitted = self.query.clone();
@@ -208,14 +227,19 @@ impl Browser {
         };
         let search_height = if compact { control } else { t::SEARCH_HEIGHT };
         let search = Element::row(vec![
-            Element::input(&self.query, "Search wallpapers", Message::Query)
-                .id("wallpaper-search")
-                .autofocus()
-                .focus_outline(false)
-                .font(font::BODY)
-                .color(theme.on_surface)
-                .width(Length::Fill)
-                .height(Length::Fill),
+            Element::text_input(
+                &self.query,
+                self.query_field.selection(),
+                "Search wallpapers",
+                Message::EditQuery,
+            )
+            .id("wallpaper-search")
+            .autofocus()
+            .focus_outline(false)
+            .font(font::BODY)
+            .color(theme.on_surface)
+            .width(Length::Fill)
+            .height(Length::Fill),
             theme
                 .button("Search", Message::Search(1))
                 .id("wallpaper-search-submit")
@@ -333,19 +357,83 @@ impl Browser {
 mod tests {
     use super::*;
     #[test]
+    fn shared_edits_and_clipboard_do_not_search_until_submit_and_retire_old_requests() {
+        let mut browser = Browser::default();
+        let mut effects = Effects::default();
+        browser.update(
+            Message::Source(Some(WallpaperProvider::Wallhaven)),
+            &mut effects,
+        );
+        for text in ["ca", "fé"] {
+            browser.update(
+                Message::EditQuery(TextEdit::Insert(text.into())),
+                &mut effects,
+            );
+        }
+        assert_eq!(browser.query, "café");
+        assert!(!browser.busy());
+        browser.update(Message::EditQuery(TextEdit::SelectAll), &mut effects);
+        browser.update(Message::EditQuery(TextEdit::Paste), &mut effects);
+        let request = effects.clipboard.pop().unwrap();
+        assert_eq!(
+            request.target,
+            ClipboardTarget::new("dock", "wallpaper-search")
+        );
+        browser.update(
+            request.finish(ClipboardOutcome::Text("landscape".into())),
+            &mut effects,
+        );
+        assert_eq!(browser.query, "landscape");
+        assert!(!browser.busy());
+        browser.update(Message::EditQuery(TextEdit::Paste), &mut effects);
+        let request = effects.clipboard.pop().unwrap();
+        browser.update(Message::Search(1), &mut effects);
+        browser.update(
+            request.finish(ClipboardOutcome::Text("late".into())),
+            &mut effects,
+        );
+        assert_eq!(browser.query, "landscape");
+        assert_eq!(browser.submitted, "landscape");
+        browser.update(Message::EditQuery(TextEdit::Paste), &mut effects);
+        let request = effects.clipboard.pop().unwrap();
+        browser.update(
+            Message::Source(Some(WallpaperProvider::AlphaCoders)),
+            &mut effects,
+        );
+        browser.update(
+            request.finish(ClipboardOutcome::Text("old provider".into())),
+            &mut effects,
+        );
+        assert_eq!(browser.query, "landscape");
+        browser.update(Message::EditQuery(TextEdit::Paste), &mut effects);
+        let request = effects.clipboard.pop().unwrap();
+        browser.update(
+            request.finish(ClipboardOutcome::Error(ClipboardError::Timeout)),
+            &mut effects,
+        );
+        assert_eq!(browser.query, "landscape");
+        assert_eq!(browser.status, "Clipboard transfer timed out");
+    }
+    #[test]
     fn changing_source_discards_stale_network_responses() {
         let mut browser = Browser::default();
-        browser.update(Message::Source(Some(WallpaperProvider::Wallhaven)));
-        browser.update(Message::Query("mountains".into()));
-        browser.update(Message::Search(1));
+        browser.update(
+            Message::Source(Some(WallpaperProvider::Wallhaven)),
+            &mut Effects::default(),
+        );
+        browser.update(Message::Query("mountains".into()), &mut Effects::default());
+        browser.update(Message::Search(1), &mut Effects::default());
         let old = browser.generation;
-        browser.update(Message::Source(Some(WallpaperProvider::AlphaCoders)));
-        browser.update(Message::Search(1));
-        browser.update(Message::Results(
-            old,
-            Err(DomainError::Unavailable("old failure".into())),
-        ));
-        browser.update(Message::Finished(old));
+        browser.update(
+            Message::Source(Some(WallpaperProvider::AlphaCoders)),
+            &mut Effects::default(),
+        );
+        browser.update(Message::Search(1), &mut Effects::default());
+        browser.update(
+            Message::Results(old, Err(DomainError::Unavailable("old failure".into()))),
+            &mut Effects::default(),
+        );
+        browser.update(Message::Finished(old), &mut Effects::default());
         assert!(browser.busy());
         assert_eq!(browser.status, "Searching…");
         assert!(browser.items.is_empty());

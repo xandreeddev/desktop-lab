@@ -207,6 +207,10 @@ class Boundaries(unittest.TestCase):
                 self.assertNotIn('fn clipboard_enabled',path.read_text())
         self.assertIn('fn clipboard_enabled', (ROOT/'lucent/examples/text-input/src/main.rs').read_text())
 
+    def test_ordinary_desktop_clients_use_relative_declarative_input(self):
+        for path in sources(ROOT/'lucent/apps/lucent-desktop/src'):
+            self.assertNotIn('Element::input(',path.read_text(),str(path.relative_to(ROOT)))
+
     def test_all_desktop_effects_fit_the_runtime_worker_budget(self):
         root=ROOT / 'lucent/apps/lucent-desktop/src'
         lanes=re.findall(r'pub const \w+: &str = "([^"]+)";', (root/'work.rs').read_text())

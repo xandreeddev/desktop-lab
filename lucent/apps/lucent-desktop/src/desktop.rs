@@ -988,7 +988,10 @@ impl Component for Desktop {
                         Err(_) => self.wallpaper.cancel_reserved(ticket),
                     }
                 }
-                self.browser.update(message);
+                effects.delegate(
+                    |child| self.browser.update(message, child),
+                    Message::Browser,
+                );
                 if download && self.browser.generation != before {
                     self.browser_selection = Some((
                         self.browser.generation,
