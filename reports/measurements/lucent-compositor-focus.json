@@ -1,0 +1,61 @@
+{
+  "status": "implementation_and_local_checks_passed_graphical_acceptance_deferred",
+  "source_commit": "24d863e054504ec458205869f36695c1061962a0",
+  "local_checks": {
+    "workspace_passed": 431,
+    "workspace_ignored": 60,
+    "python_passed": 92,
+    "fmt_clippy_workspace_all_targets": true,
+    "software_vulkan_visual_comparisons_passed": 540,
+    "reviewed_new_references": 8,
+    "existing_references_or_tolerance_changed": 0,
+    "independent_consumer_help_executed": true,
+    "read_only_host_snapshot_executed": true,
+    "design_tokens_verified": 540,
+    "app_icons_verified": 58,
+    "shellcheck_passed": true,
+    "astro_errors": 0,
+    "astro_warnings": 0,
+    "astro_hints": 0,
+    "pages_each_prefix": 13,
+    "links_assets_each_prefix": 488
+  },
+  "implemented": [
+    "Pure CompositorMonitor and validated numbered/opaque WorkspaceRef observations through CompositorPort; duplicate identity/focus cannot select a target.",
+    "Hyprland monitor metadata, disabled/invalid/ambiguous record rejection and an independent read-only consumer without renderer/Wayland dependencies.",
+    "Subscribe-before-query lifetime, bounded incremental event framing, exact event filtering/coalescing, absolute command/snapshot deadlines and explicit disconnect/recovery.",
+    "Client joins fresh compositor focus with exact native host names, waits for discovery, retires pending focus on explicit selection and preserves manual selection across unrelated metadata.",
+    "Connection recovery restores fresh focus authority; compositor availability/error has separate ownership and unrelated completions cannot clear it.",
+    "Each named bar highlights its own observed numbered workspace; shortcut policy remains in the client without mutating reported data.",
+    "Desktop/domain guides and repository skill explain injection, observation, selection, native reconciliation and unresolved identity/action migration."
+  ],
+  "native_acceptance": {
+    "current_source_deployed_to_vm": false,
+    "read_only_running_host_query_compatible": true,
+    "actual_graphical_multi_output_shortcuts_focus_input_hotplug_lock_tested": false,
+    "deferred_by_user": true,
+    "scope": "The host check reads metadata only. Owned sockets exercise real transport, not a real compositor UI. Public evidence omits host counts, names, titles, serials and paths."
+  },
+  "performance": {
+    "normal_desktop_rss_target_mib": 300,
+    "current_rss_or_frame_pacing_measured": false,
+    "new_renderer_idle_loop_or_effect_lane": false,
+    "healthy_observer_polls_snapshots": false
+  },
+  "remaining": [
+    "Actual graphical multi-monitor/global-shortcut focus, input/clipboard, reconnect/suspend, secure coverage and VM deployment.",
+    "Complete named/special workspace identity/action migration of legacy workspace/window records; output arrangement and per-output wallpaper policy.",
+    "XDG/D-Bus activation, shaping/bidi/font fallback/IME/accessibility and the full client/release ledger.",
+    "Current RSS/frame pacing and final exact-head CI/authorized merge."
+  ],
+  "prior_delivery": {
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/54",
+    "merge_commit": "1bcdbfccf8a85b92b2996afe53ac38dc556ca520",
+    "all_six_exact_head_checks_passed": true,
+    "main_checks_and_pages_passed": true
+  },
+  "privacy": {
+    "host_display_names_titles_serials_paths_or_private_captures_published": false,
+    "new_visual_references_use_only_synthetic_fixtures": true
+  }
+}

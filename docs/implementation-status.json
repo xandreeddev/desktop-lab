@@ -218,7 +218,8 @@
         "Named-output SDK source 8dcb4889d747b617029a52f2015036c0f8b637d9 adds validated selectors, typed registry catalogs, exact current native bindings, disconnected/ambiguous waiting, role recreation and non-spinning named closure. Default consumers compile neutrally; secure lock remains all-output. 397 Rust tests/59 ignored, 85 Python checks, strict checks, example help and both Astro prefixes pass. Actual compositor placement/input/hotplug and full desktop per-output/fractional behavior remain incomplete. See reports/measurements/lucent-output-targets.json.",
         "Concrete surface instance source c796e01fb33dbc42e665b496a2e683aef2e07f85 adds typed native identity, scoped input/lifecycle/view, per-instance animation/redraw/clipboard and independent multi-output bars. 402 Rust tests/59 ignored, 85 Python checks, strict checks, example help and both Astro prefixes pass. Full desktop per-monitor persistence, fractional scaling and actual compositor acceptance remain incomplete. See reports/measurements/lucent-surface-instances.json.",
         "Per-monitor desktop source 581f7b73faf46f31c58b024f511f43cf09855f08 separates canonical pure layouts from connected hosts, targets bars/background/widgets across named outputs and persists independent profiles through the root coordinator. Scoped generations, precise redraw/clipboard, reflow cancellation and all-host readiness have owned tests. 413 Rust tests/59 ignored, 91 Python checks and all 532 software-Vulkan comparisons pass (16 reviewed additions; no prior reference/tolerance change), with both Astro prefixes clean. Real compositor acceptance, fractional scaling and additional display policy remain incomplete. See reports/measurements/lucent-monitor-layouts.json.",
-        "Fractional source 7ff6962643c0cc8d7bd4853dcbb001fa67d77806 carries exact density through optional native scale/viewport adapters, contexts, renderer/text, actual per-axis clip sampling and client wallpaper targets. 418 Rust tests/60 ignored, 91 Python checks, 14 software-Vulkan renderer checks and all 532 unchanged visual comparisons pass, plus example help and both Astro prefixes. Native negotiation/migration/input/lock and remaining display policy are deferred or incomplete. See reports/measurements/lucent-fractional-scale.json."
+        "Fractional source 7ff6962643c0cc8d7bd4853dcbb001fa67d77806 carries exact density through optional native scale/viewport adapters, contexts, renderer/text, actual per-axis clip sampling and client wallpaper targets. 418 Rust tests/60 ignored, 91 Python checks, 14 software-Vulkan renderer checks and all 532 unchanged visual comparisons pass, plus example help and both Astro prefixes. Native negotiation/migration/input/lock and remaining display policy are deferred or incomplete. See reports/measurements/lucent-fractional-scale.json.",
+        "Compositor focus source 24d863e054504ec458205869f36695c1061962a0 adds pure monitor/workspace-reference observations, bounded subscribe-first native IO and client focus/native-host joins with pending discovery, explicit override and recovery ownership. Named bars use local active workspaces. 431 Rust tests/60 ignored, 92 Python checks, read-only host query compatibility and all 540 Vulkan comparisons pass (8 reviewed additions; no prior reference/tolerance change), with both Astro prefixes clean. Full workspace identity/actions and graphical multi-output acceptance remain incomplete. See reports/measurements/lucent-compositor-focus.json."
       ]
     },
     {
@@ -1462,6 +1463,30 @@
         "Neutral-layer hotplug recovery, compositor-focused output selection, per-output wallpapers and output arrangement policy.",
         "Current RSS/frame pacing, shaping/bidi/font fallback/IME/accessibility and the full client/release ledger.",
         "Final exact-head CI and authorized normal merge."
+      ],
+      "delivery": {
+        "status": "merged",
+        "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/54",
+        "merge_commit": "1bcdbfccf8a85b92b2996afe53ac38dc556ca520"
+      }
+    },
+    {
+      "milestone": "compositor-local-focus-observation-and-workspace-indicators",
+      "source_commit": "24d863e054504ec458205869f36695c1061962a0",
+      "report": "reports/measurements/lucent-compositor-focus.json",
+      "status": "implementation_and_local_checks_passed_graphical_acceptance_deferred",
+      "checks": [
+        "431 Rust workspace tests/60 ignored, strict formatting/Clippy/all-target checks and 92 Python architecture/integration checks pass.",
+        "Owned Unix sockets prove literal requests, absolute deadlines, byte limits, recovery, subscribe-before-query and event fragmentation across read timeout.",
+        "Independent help and real read-only host snapshot succeed without public metadata; graphical focus acceptance remains deferred.",
+        "All 540 software-Vulkan comparisons pass (8 reviewed additions; zero prior reference/tolerance changes); 540 tokens/58 icons, ShellCheck and both Astro prefixes pass.",
+        "PR #54, main checks and Pages merged/passed."
+      ],
+      "pending": [
+        "Actual graphical multi-monitor/global-shortcut focus, input/clipboard, reconnect/suspend, secure coverage and VM deployment.",
+        "Complete named/special workspace identity/action migration of legacy workspace/window records; output arrangement and per-output wallpaper policy.",
+        "XDG/D-Bus activation, shaping/bidi/font fallback/IME/accessibility and the full client/release ledger.",
+        "Current RSS/frame pacing and final exact-head CI/authorized merge."
       ]
     }
   ],
