@@ -36,10 +36,11 @@ body text. Use `--help` for commands and `--memory` for an ephemeral archive.
    inbox assigns a wire ID for new notices and a new monotonic revision for every
    receive, including replacement. Timeouts use its supplied monotonic clock;
    receipt metadata uses the adapter's supplied Unix time.
-3. The delivery worker prepares the current archive and calls the history port
-   outside the inbox mutex. Multiple incoming changes coalesce into the next
-   bounded save. Storage does not execute on the UI thread or hold native method
-   admission while it writes.
+3. The delivery worker submits the current archive to one ordered storage
+   worker. Its mailbox holds one pending load and the latest pending save, in
+   addition to one active call. Repeated updates replace pending saves. Storage
+   holds neither the inbox mutex nor the native connection while it writes;
+   snapshots, action/close signals and expiration keep progressing.
 4. A snapshot reaches the desktop through its existing bounded subscription
    delivery. `Center::update` keeps a stable selected group where possible and
    retires action-paging state for replaced versions.
@@ -77,7 +78,9 @@ application actions. Historical entries have no executable action controls.
 
 The production file is `$XDG_STATE_HOME/lucent/notifications.json`, normally
 `~/.local/state/lucent/notifications.json`. It is a versioned, bounded JSON
-archive. New directories use mode 0700; replacement files use mode 0600. Writes
+archive. New directories use mode 0700; replacement files use mode 0600. A private
+advisory lease serializes file reads/writes across adapter instances, so a later
+instance cannot restore a counter before an earlier in-flight writer finishes. Writes
 use an exclusively created temporary file, synchronization and an atomic rename.
 The final read rejects symbolic links and non-regular files.
 
@@ -89,6 +92,14 @@ DND and the revision counter survive alongside the archive. Stored body text is
 limited to 4 KiB, with bounded metadata/actions and a 4 MiB file-read limit.
 Transient notices do not enter the archive.
 
+The initial load completes before native sender admission, preserving the
+persisted revision counter. This wait is cancellable and owns no bus name. Later
+recovery loads run while delivery continues. Loading/saving are separate
+observations, and only the latest matching operation may update those states.
+Clear invalidates pending load replies before its queued save, so a late recovery
+cannot restore discarded history. An already live saved entry is not duplicated
+when merging.
+
 Read failures preserve the existing file and disable automatic replacement.
 Delivery continues in memory and the history panel shows the failure. **Retry**
 reads again and merges recovered history without replacing live versions or
@@ -98,12 +109,14 @@ permits replacing an unreadable file; current active notices remain intact.
 Write failure retains live content and reports its storage state. A subsequent
 content change or explicit Retry can attempt saving again. The adapter does not
 spin on a failed write. Completion of a clear/retry command is admission; observe
-the storage state for save completion. Filesystem synchronization runs on the
-subscription worker but is not made cancellable by the byte limit or D-Bus
-checks. A stalled save can delay snapshot/signal publication and expiry checks,
-although native inbox method admission stays independent. A bounded background
-storage coordinator remains work; physical filesystem faults and power-loss
-behavior need separate tests.
+the storage state for save completion. Filesystem calls are not forcibly
+cancelled: retiring an adapter discards queued requests without blocking its
+caller, and an already active call may finish. Its worker owns no native
+connection and holds only a weak completion reference, so it cannot resurrect
+delivery or UI state. The file lease serializes a later instance with that call.
+There is no automatic shutdown flush promise; observe Ready for a current save
+before relying on its completion. Physical filesystem faults and power-loss
+behavior still need separate acceptance.
 
 Notification content stays in this private state file and is not included in
 public reports or application arguments. The history is not encrypted.
@@ -126,14 +139,19 @@ Opening/closing uses the framework's `Motion` with the client's supplied time.
 Reversing an unfinished transition starts from its current value. Closing keeps
 the surface until a settled `FrameSubmitted` message retires the closing state.
 That message means successful submission, not GPU completion or scanout. No
-extra notification animation timer or effect worker is created.
+extra notification animation timer or framework effect worker is created. The
+separate native storage worker sleeps on its mailbox when idle.
 
 ## Validation and remaining work
 
 Owned private-bus cases cover saturation/admission, exclusive ownership,
 disconnection/reconnect, replacement/action/expiry, archive restart, corrupt-file
 preservation, explicit clear/recovery, save failure/retry and method admission
-while a storage writer is stalled. Pure tests cover versions, archive validation,
+while a storage writer is stalled. Further private-bus cases require actual
+snapshot, action, expiration, disconnect/reconnect and name-release progress
+during that stall, plus live delivery during a paused recovery load. Queue tests
+exercise a thousand superseding saves and blocked-call retirement. Pure tests
+cover versions, archive validation,
 retention and merging; injected client tests cover grouping, paging, effects and
 animation continuity. Render references cover both palettes at 1x/2x.
 

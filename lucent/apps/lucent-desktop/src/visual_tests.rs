@@ -1217,6 +1217,24 @@ fn visual_regressions() {
             ("notification-grouped-last", Mode::Apps, 0, 0, "", 1., 390.),
             ("notification-history-empty", Mode::Apps, 0, 0, "", 1., 390.),
             (
+                "notification-history-loading",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            (
+                "notification-history-saving",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            (
                 "notification-history-read-error",
                 Mode::Apps,
                 0,
@@ -2159,6 +2177,14 @@ fn visual_regressions() {
                         }
                         app.notifications
                             .update(Notify::Group("name:Messages".into()), &mut effects);
+                    }
+                    if name.ends_with("loading") {
+                        app.notifications.snapshot.history_status =
+                            lucent_domain::NotificationHistoryStatus::Loading;
+                    }
+                    if name.ends_with("saving") {
+                        app.notifications.snapshot.history_status =
+                            lucent_domain::NotificationHistoryStatus::Saving;
                     }
                     if name.ends_with("read-error") {
                         app.notifications.snapshot.history_status =

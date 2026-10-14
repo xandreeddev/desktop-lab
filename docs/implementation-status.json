@@ -295,7 +295,8 @@
       "evidence": [
         "Static follow-up found an unbounded adapter-local signal queue and no explicit idle connection-disconnect observation. Isolated D-Bus saturation/restart tests remain required; bounded inbox/history and runtime delivery do not prove these adapter properties.",
         "Private-bus tests reproduced queue saturation and missed idle disconnects. Adapter admission now bounds pending signals, preserves state on rejection and accounts for two-signal actions/expiration batches; connection teardown discards pending transport signals. Exclusive name ownership refuses replacement of either another server or this adapter. Four private-bus regressions and 170 Rust tests pass. Native replacement/action/dismiss/expiration, launcher/restart and existing secure lock checks pass; see reports/measurements/lucent-notification-delivery.json; persistent/rich/grouped notifications remain open.",
-        "Source 76c90d422a8584c0b63528356d110c63a9b40d24 implements grouped durable private history through an injected history port, current-version actions, corruption preservation/recovery, transport retirement and native client scrolling/reveal. 365 Rust/85 Python/eight owned D-Bus protocol/460 software-Vulkan cases and both-prefix docs checks pass. See reports/measurements/lucent-notification-history.json. Slow filesystem publication, rich content and current native/performance acceptance remain open."
+        "Source 76c90d422a8584c0b63528356d110c63a9b40d24 implements grouped durable private history through an injected history port, current-version actions, corruption preservation/recovery, transport retirement and native client scrolling/reveal. 365 Rust/85 Python/eight owned D-Bus protocol/460 software-Vulkan cases and both-prefix docs checks pass. See reports/measurements/lucent-notification-history.json. Slow filesystem publication, rich content and current native/performance acceptance remain open.",
+        "Source e3f030a205bf81b4de41dd9bc16ae9a1e74f9162 isolates history in one bounded ordered native worker with current completion IDs, coalescing, recovery retirement and file-instance leases. Actual private-bus tests require snapshots/actions/expiry/reconnect/name-release and recovery progress during stalled IO. 370 Rust/85 Python/11 protocol/468 software-Vulkan cases and both-prefix docs checks pass. See reports/measurements/lucent-notification-io.json. Rich content and current native/performance acceptance remain open."
       ]
     },
     {
@@ -1285,6 +1286,29 @@
         "Actual VM/compositor pointer/keyboard, restart/sleep and physical filesystem/fault acceptance.",
         "Current normal RSS/CPU, GPU/decode peaks and cold/warm animation pacing.",
         "Full requirement ledger including text shaping/IME/accessibility, outputs/fractional scaling, broader clients and secure/release acceptance.",
+        "Final published-head CI and authorized merge."
+      ],
+      "delivery": {
+        "status": "merged",
+        "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/47",
+        "merge_commit": "c1c98d6320f808322861febf8c3ef3b333087fff"
+      }
+    },
+    {
+      "milestone": "notification-storage-isolation-and-current-acknowledgements",
+      "source_commit": "e3f030a205bf81b4de41dd9bc16ae9a1e74f9162",
+      "report": "reports/measurements/lucent-notification-io.json",
+      "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+      "checks": [
+        "370 Rust workspace tests/58 ignored, 85 Python checks, strict formatting/Clippy and 11 private-bus protocol cases pass.",
+        "468 software-Vulkan comparisons pass with only eight reviewed new status references and zero existing reference/tolerance changes.",
+        "Both Astro prefixes pass 13 pages/488 links/assets and zero diagnostics; native history PR #47, main checks and Pages are merged/passed."
+      ],
+      "pending": [
+        "Formatted markup, hyperlinks, images/icons, activation tokens, sound and richer notification interactions.",
+        "Physical filesystem/fault behavior, actual VM/compositor restart/sleep/input and current RSS/pacing measurements.",
+        "Kernel I/O cannot be forcibly cancelled; initial revision bootstrap may wait on an unavailable filesystem. There is no automatic shutdown flush guarantee; current Ready acknowledgements establish save completion.",
+        "The full requirement ledger, including text shaping/IME/accessibility, outputs/fractional scaling, broader clients, secure audit and release acceptance.",
         "Final published-head CI and authorized merge."
       ]
     }

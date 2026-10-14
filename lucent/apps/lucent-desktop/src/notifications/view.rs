@@ -115,6 +115,8 @@ impl Center {
                 "Notification service unavailable"
             } else {
                 match self.snapshot.history_status {
+                    NotificationHistoryStatus::Loading => "Loading saved history…",
+                    NotificationHistoryStatus::Saving => "Saving history…",
                     NotificationHistoryStatus::ReadFailed => {
                         "History could not be read; file preserved"
                     }

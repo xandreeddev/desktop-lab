@@ -128,7 +128,7 @@ impl NotificationInbox {
             .chain(entries.iter().map(|n| n.revision))
             .collect();
         for mut note in archive.entries {
-            if entries.iter().any(|n| n == &note) {
+            if entries.iter().any(|n| n == &note) || self.active.values().any(|(n, _)| n == &note) {
                 continue;
             }
             if !used.insert(note.revision) {
@@ -385,5 +385,35 @@ mod archive_tests {
         a.desktop_entry = Some(AppId::new("org.example.Fixture.desktop").unwrap());
         b.desktop_entry = a.desktop_entry.clone();
         assert_eq!(notification_group(&a), notification_group(&b));
+    }
+}
+
+#[cfg(test)]
+mod recovery_identity_tests {
+    use super::*;
+    #[test]
+    fn recovering_an_already_live_saved_entry_does_not_duplicate_or_rekey_it() {
+        let mut inbox = NotificationInbox::default();
+        let note = Notification {
+            id: 0,
+            revision: 0,
+            received_unix_ms: 1,
+            desktop_entry: None,
+            app: "Fixture".into(),
+            summary: "Current receipt".into(),
+            body: String::new(),
+            actions: vec![],
+            critical: false,
+            resident: false,
+            transient: false,
+            timeout_ms: 0,
+        };
+        let (id, _) = inbox.receive(note, 0).unwrap();
+        let captured = inbox.get(id).unwrap().target().unwrap();
+        let archive = inbox.archive();
+        inbox.merge_archive(archive, true).unwrap();
+        assert!(inbox.matches(captured));
+        assert!(inbox.snapshot().history.is_empty());
+        assert_eq!(inbox.archive().entries.len(), 1);
     }
 }

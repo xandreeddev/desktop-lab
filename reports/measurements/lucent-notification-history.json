@@ -52,5 +52,13 @@
     "private_paths_or_captures_published": false,
     "notification_content_or_host_application_metadata_published": false
   },
-  "validation_scope": "Private-daemon cases exercise actual D-Bus delivery/name/signal and persistence operations. Client/model/file cases plus real SDK keyboard routing and 1x/2x visual review pass. All 460 software-Vulkan comparisons pass in final no-update mode after only four intended history changes and 24 new references; original toast references were retained."
+  "validation_scope": "Private-daemon cases exercise actual D-Bus delivery/name/signal and persistence operations. Client/model/file cases plus real SDK keyboard routing and 1x/2x visual review pass. All 460 software-Vulkan comparisons pass in final no-update mode after only four intended history changes and 24 new references; original toast references were retained.",
+  "delivery": {
+    "status": "merged",
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/47",
+    "tested_head": "221e070ce28fc7e5590390fa0a09e68c49680f73",
+    "merge_commit": "c1c98d6320f808322861febf8c3ef3b333087fff",
+    "all_six_published_head_ci_checks_passed": true,
+    "main_ci_and_pages_passed": true
+  }
 }
