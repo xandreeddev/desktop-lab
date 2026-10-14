@@ -70,10 +70,11 @@ production adapter. It sends a literal target to `xdg-open` in an independent
 systemd application unit. No shell evaluates notification text. A saved link
 opens its content; it never invokes the retired sender's notification action.
 
-Images currently retain alternative text. Body images/icons and native image
-hint preparation remain a separate incomplete feature; `body-images` is not
-advertised. The server advertises `body`, `body-markup`, `body-hyperlinks` and
-`actions`. The supported subset and optional image behavior follow the
+Images use separate parsed blocks and the presentation asset port. The
+[image guide](notification-images.md) follows preparation, bounds, scrolling and
+reveal motion. The server advertises `body`, `body-markup`, `body-hyperlinks`,
+`body-images`, `icon-static` and `actions`; unsupported remote images retain
+alternative text. The subset follows the
 [freedesktop notification specification](https://specifications.freedesktop.org/notification/latest-single/).
 
 ## Independent example and evidence

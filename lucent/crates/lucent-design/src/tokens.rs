@@ -455,6 +455,9 @@ pub mod component {
         pub const HISTORY_HEIGHT: f32 = 640.0;
         pub const HISTORY_OFFSET: f32 = 8.0;
         pub const HISTORY_BODY_LINES: f32 = 256.0;
+        pub const IMAGE_WIDTH: f32 = 200.0;
+        pub const IMAGE_HEIGHT: f32 = 100.0;
+        pub const IMAGE_VIEWPORT_PADDING: f32 = 0.0;
     }
     pub mod authentication {
         pub const WIDTH: f32 = 480.0;

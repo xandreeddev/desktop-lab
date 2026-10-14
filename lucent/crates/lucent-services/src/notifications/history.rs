@@ -207,6 +207,7 @@ mod tests {
             app: "Fixture".into(),
             summary: String::new(),
             body: String::new(),
+            image: None,
             actions: vec![],
             critical: false,
             resident: false,
@@ -282,5 +283,44 @@ mod lease_tests {
         );
         second.join().unwrap();
         fs::remove_dir_all(directory).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod image_tests {
+    use super::*;
+    #[test]
+    fn image_values_serialize_with_backward_defaults_and_reject_invalid_storage() {
+        let old = serde_json::json!({"id":1,"revision":1,"received_unix_ms":1,"desktop_entry":null,"app":"Fixture","summary":"Legacy","body":"Text","actions":[],"critical":false,"resident":false,"transient":false,"timeout_ms":0});
+        assert!(
+            serde_json::from_value::<Notification>(old)
+                .unwrap()
+                .image
+                .is_none()
+        );
+        let source = NotificationImageSource::new("mail-unread").unwrap();
+        let image = NotificationImage::Source(source);
+        let bytes = serde_json::to_vec(&image).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<NotificationImage>(&bytes).unwrap(),
+            image
+        );
+        let image =
+            NotificationImage::Pixels(NotificationPixels::new(1, 1, vec![1, 2, 3, 4]).unwrap());
+        let bytes = serde_json::to_vec(&image).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<NotificationImage>(&bytes).unwrap(),
+            image
+        );
+        assert!(
+            serde_json::from_str::<NotificationImage>(
+                r#"{"Pixels":{"width":1,"height":1,"rgba":[1]}}"#
+            )
+            .is_err()
+        );
+        assert!(
+            serde_json::from_str::<NotificationImage>(r#"{"Source":"https://example.test/a.png"}"#)
+                .is_err()
+        );
     }
 }

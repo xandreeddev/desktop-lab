@@ -5,6 +5,10 @@ use std::collections::{BTreeMap, VecDeque};
 pub const ACTIVE_LIMIT: usize = 64;
 pub const HISTORY_LIMIT: usize = 100;
 pub const BODY_LIMIT: usize = 4096;
+/// Raw image content in one durable archive; newest entries keep it first.
+pub const ARCHIVE_IMAGE_BYTES: usize = 256 * 1024;
+/// Raw pixel retention, distinct from renderer caches, RSS and decoder peaks.
+pub const INBOX_IMAGE_BYTES: usize = 8 * 1024 * 1024;
 #[derive(Default)]
 pub struct NotificationInbox {
     next_id: u32,
@@ -51,6 +55,7 @@ impl NotificationInbox {
             None
         };
         self.active.insert(id, (note, deadline));
+        self.trim_images();
         Ok((id, removed))
     }
     pub fn close(&mut self, id: u32) -> bool {
@@ -84,6 +89,25 @@ impl NotificationInbox {
         self.get(target.id())
             .is_some_and(|note| note.revision == target.revision())
     }
+    fn trim_images(&mut self) {
+        let mut notes: Vec<_> = self
+            .active
+            .values_mut()
+            .map(|(note, _)| note)
+            .chain(self.history.iter_mut())
+            .collect();
+        notes.sort_by_key(|note| std::cmp::Reverse(note.revision));
+        let mut retained = 0usize;
+        for note in notes {
+            if let Some(NotificationImage::Pixels(pixels)) = &note.image {
+                if pixels.rgba().len() > INBOX_IMAGE_BYTES - retained {
+                    note.image = None;
+                } else {
+                    retained += pixels.rgba().len();
+                }
+            }
+        }
+    }
     pub fn archive(&self) -> NotificationArchive {
         let mut entries: Vec<_> = self
             .active
@@ -95,6 +119,16 @@ impl NotificationInbox {
             .collect();
         entries.sort_by_key(|note| std::cmp::Reverse(note.revision));
         entries.truncate(HISTORY_LIMIT);
+        let mut image_bytes = 0usize;
+        for note in &mut entries {
+            if let Some(NotificationImage::Pixels(pixels)) = &note.image {
+                if pixels.rgba().len() > ARCHIVE_IMAGE_BYTES - image_bytes {
+                    note.image = None;
+                } else {
+                    image_bytes += pixels.rgba().len();
+                }
+            }
+        }
         NotificationArchive {
             entries,
             do_not_disturb: self.dnd,
@@ -129,7 +163,12 @@ impl NotificationInbox {
             .chain(entries.iter().map(|n| n.revision))
             .collect();
         for mut note in archive.entries {
-            if entries.iter().any(|n| n == &note) || self.active.values().any(|(n, _)| n == &note) {
+            if entries.iter().any(|n| same_received_content(n, &note))
+                || self
+                    .active
+                    .values()
+                    .any(|(n, _)| same_received_content(n, &note))
+            {
                 continue;
             }
             if !used.insert(note.revision) {
@@ -145,6 +184,7 @@ impl NotificationInbox {
         entries.sort_by_key(|n| std::cmp::Reverse((n.received_unix_ms, n.revision)));
         entries.truncate(HISTORY_LIMIT);
         self.history = entries.into();
+        self.trim_images();
         self.revision = revision;
         if !preserve_dnd {
             self.dnd = archive.do_not_disturb;
@@ -168,6 +208,14 @@ impl NotificationInbox {
             history_status: NotificationHistoryStatus::Memory,
         }
     }
+}
+fn same_received_content(a: &Notification, b: &Notification) -> bool {
+    if a.id != b.id || a.revision != b.revision {
+        return false;
+    }
+    let mut content = a.clone();
+    content.image = b.image.clone();
+    content == *b
 }
 pub fn validate_notification(note: &Notification, assigned: bool) -> Result<()> {
     let invalid = (assigned && (note.id == 0 || note.revision == 0))
@@ -199,9 +247,14 @@ pub fn validate_archive(archive: &NotificationArchive) -> Result<()> {
         ));
     }
     let mut revisions = std::collections::BTreeSet::new();
+    let mut image_bytes = 0usize;
     for note in &archive.entries {
         validate_notification(note, true)?;
-        if note.transient
+        if let Some(NotificationImage::Pixels(pixels)) = &note.image {
+            image_bytes += pixels.rgba().len();
+        }
+        if image_bytes > ARCHIVE_IMAGE_BYTES
+            || note.transient
             || note.revision > archive.last_revision
             || !revisions.insert(note.revision)
         {
@@ -232,6 +285,7 @@ mod tests {
             app: "Fixture".into(),
             summary: "Hello".into(),
             body: String::new(),
+            image: None,
             actions: vec![],
             critical: false,
             resident: false,
@@ -291,6 +345,7 @@ mod archive_tests {
             app: "Fixture".into(),
             summary: "Fixture event".into(),
             body: String::new(),
+            image: None,
             actions: vec![NotificationAction {
                 id: "open".into(),
                 label: "Open".into(),
@@ -403,6 +458,7 @@ mod recovery_identity_tests {
             app: "Fixture".into(),
             summary: "Current receipt".into(),
             body: String::new(),
+            image: None,
             actions: vec![],
             critical: false,
             resident: false,
@@ -416,5 +472,86 @@ mod recovery_identity_tests {
         assert!(inbox.matches(captured));
         assert!(inbox.snapshot().history.is_empty());
         assert_eq!(inbox.archive().entries.len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod image_retention_tests {
+    use super::*;
+    fn note() -> Notification {
+        Notification {
+            id: 0,
+            revision: 0,
+            received_unix_ms: 1,
+            desktop_entry: None,
+            app: "Fixture".into(),
+            summary: "Bounded image".into(),
+            body: "Text remains retained".into(),
+            image: Some(NotificationImage::Pixels(
+                NotificationPixels::new(256, 256, vec![255; 256 * 256 * 4]).unwrap(),
+            )),
+            actions: vec![],
+            critical: false,
+            resident: false,
+            transient: false,
+            timeout_ms: 0,
+        }
+    }
+    #[test]
+    fn newest_pixels_fit_inbox_and_archive_budgets_without_removing_text() {
+        let mut inbox = NotificationInbox::default();
+        for _ in 0..40 {
+            inbox.receive(note(), 0).unwrap();
+        }
+        let snapshot = inbox.snapshot();
+        assert_eq!(snapshot.active.len(), 40);
+        let bytes: usize = snapshot
+            .active
+            .iter()
+            .filter_map(|note| match &note.image {
+                Some(NotificationImage::Pixels(pixels)) => Some(pixels.rgba().len()),
+                _ => None,
+            })
+            .sum();
+        assert_eq!(bytes, INBOX_IMAGE_BYTES);
+        assert!(snapshot.active[0].image.is_some());
+        assert!(snapshot.active.last().unwrap().image.is_none());
+        assert!(
+            snapshot
+                .active
+                .iter()
+                .all(|note| note.body == "Text remains retained")
+        );
+        let archive = inbox.archive();
+        validate_archive(&archive).unwrap();
+        assert_eq!(
+            archive
+                .entries
+                .iter()
+                .filter(|note| note.image.is_some())
+                .count(),
+            1
+        );
+        assert!(archive.entries[0].image.is_some());
+        // Recovery of a budgeted version cannot duplicate a current receive.
+        inbox.merge_archive(archive, false).unwrap();
+        assert!(inbox.snapshot().history.is_empty());
+    }
+    #[test]
+    fn archive_validation_rejects_excess_pixels_even_with_valid_individual_values() {
+        let mut first = note();
+        first.id = 1;
+        first.revision = 1;
+        let mut second = note();
+        second.id = 2;
+        second.revision = 2;
+        assert!(
+            validate_archive(&NotificationArchive {
+                entries: vec![first, second],
+                last_revision: 2,
+                ..Default::default()
+            })
+            .is_err()
+        );
     }
 }

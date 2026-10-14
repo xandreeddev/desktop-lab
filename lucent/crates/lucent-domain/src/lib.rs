@@ -24,6 +24,8 @@ pub use bluetooth_connection::*;
 
 mod notifications;
 pub use notifications::*;
+mod notification_image;
+pub use notification_image::*;
 mod uri;
 pub use uri::*;
 mod authentication;

@@ -157,12 +157,13 @@ animation continuity. Render references cover both palettes at 1x/2x.
 
 Real VM/compositor keyboard and pointer acceptance, restart/sleep behavior and
 physical filesystem/performance measurements remain deferred. The server
-advertises `body`, `body-markup`, `body-hyperlinks` and `actions`. The
+advertises `body`, `body-markup`, `body-hyperlinks`, `body-images`, `icon-static` and `actions`. The
 [rich-text guide](rich-text.md) follows the pure content parser, framework
-flow/link control and injected URI adapter. Images currently show alternative
-text; `body-images` is not advertised. Persistent *history* does not establish the
+flow/link control and injected URI adapter. The [image guide](notification-images.md)
+follows domain image values, hint priority, bounded asset effects, loading/retry
+controls, scroll reachability and compositor-paced image reveal. Persistent *history* does not establish the
 protocol's optional `persistence` guarantee, so that capability is not claimed.
-Images/icons, activation tokens, sound and richer
+Activation tokens, sound and richer
 notification interactions remain implementation work. See the
 [notification specification](https://specifications.freedesktop.org/notification/latest-single/)
 and the complete ledger in `docs/implementation-status.json`.

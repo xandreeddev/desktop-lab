@@ -41,6 +41,7 @@ fn note(id: u32, revision: u64, app: &str) -> Notification {
         app: app.into(),
         summary: "Fixture event".into(),
         body: "Fixture body".into(),
+        image: None,
         actions: vec![NotificationAction {
             id: "open".into(),
             label: "Open".into(),
@@ -53,7 +54,14 @@ fn note(id: u32, revision: u64, app: &str) -> Notification {
 }
 fn center() -> (Center, Arc<Adapter>) {
     let adapter = Arc::new(Adapter::default());
-    (Center::new(adapter.clone(), adapter.clone()), adapter)
+    (
+        Center::new(
+            adapter.clone(),
+            adapter.clone(),
+            super::artwork::tests::adapter(),
+        ),
+        adapter,
+    )
 }
 #[test]
 fn history_groups_active_and_saved_entries_with_stable_selection_and_bounded_pages() {
@@ -320,4 +328,71 @@ fn grouped_buttons_scroll_and_close_use_actual_sdk_input_routing() {
     }
     assert!(!center.history_open());
     assert!(center.visible());
+}
+
+#[test]
+fn image_toast_scrolling_keeps_the_final_native_action_reachable_on_small_outputs() {
+    let (mut center, _) = center();
+    let mut effects = Effects::default();
+    let mut live = note(1, 7, "Fixture");
+    live.image = Some(lucent_domain::NotificationImage::Pixels(
+        lucent_domain::NotificationPixels::new(400, 100, vec![255; 400 * 100 * 4]).unwrap(),
+    ));
+    live.body =
+        "Long image content remains readable through a bounded native viewport. ".repeat(12);
+    let target = live.target().unwrap();
+    center.update(
+        Message::Snapshot(Ok(NotificationSnapshot {
+            active: vec![live],
+            ..Default::default()
+        })),
+        &mut effects,
+    );
+    assert_eq!(effects.tasks.len(), 1);
+    let artwork = effects.tasks.remove(0).run();
+    center.update(artwork, &mut effects);
+    let font = fontdue::Font::from_bytes(
+        include_bytes!("../../assets/LucentSans.ttf").as_slice(),
+        Default::default(),
+    )
+    .unwrap();
+    let layout = lucent_ui::Layout::new(Arc::new(vec![font]));
+    let cx = ViewContext {
+        surface: "notifications",
+        width: 390.,
+        height: 320.,
+        now: 1.,
+    };
+    let mut input = lucent_ui::Interaction::default();
+    let scene = layout.build(&center.view(&cx), cx.width, cx.height, &input, cx.now);
+    input.synchronize(&scene);
+    input.focus = Some("notification-toast-scroll-1-7".into());
+    for message in input.key(&scene, &Key::End) {
+        center.update(message, &mut effects);
+    }
+    assert!(
+        center
+            .toast_scroll
+            .get(&target)
+            .is_some_and(|offset| *offset > 0.)
+    );
+    let scene = layout.build(&center.view(&cx), cx.width, cx.height, &input, cx.now);
+    let action = scene
+        .hits
+        .iter()
+        .find(|hit| hit.id == "notification-action-1-7-0")
+        .unwrap();
+    assert!(action.contains(
+        action.rect.x + action.rect.w / 2.,
+        action.rect.y + action.rect.h / 2.
+    ));
+    center.update(
+        Message::Snapshot(Ok(NotificationSnapshot::default())),
+        &mut effects,
+    );
+    center.update(
+        Message::ToastScroll(target, ScrollEvent { offset: 10. }),
+        &mut effects,
+    );
+    assert!(center.toast_scroll.is_empty());
 }

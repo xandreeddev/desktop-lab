@@ -15,6 +15,8 @@ pub struct Notification {
     pub app: String,
     pub summary: String,
     pub body: String,
+    #[serde(default)]
+    pub image: Option<crate::NotificationImage>,
     pub actions: Vec<NotificationAction>,
     pub critical: bool,
     pub resident: bool,

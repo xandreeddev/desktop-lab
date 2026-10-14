@@ -1,4 +1,5 @@
 //! Notification client state; delivery/history and actions use injected adapters.
+mod artwork;
 mod grouping;
 #[cfg(test)]
 mod tests;
@@ -22,6 +23,8 @@ pub enum Message {
     DismissId(u32),
     Invoke(NotificationTarget, String),
     OpenLink(NotificationTarget, String),
+    Artwork(u64, crate::ports::Images),
+    RetryArtwork,
     Dnd,
     Page(i32),
     ActionPage(NotificationTarget, i32),
@@ -29,6 +32,7 @@ pub enum Message {
     RetryHistory,
     Group(String),
     Scroll(ScrollEvent),
+    ToastScroll(NotificationTarget, ScrollEvent),
     Done(lucent_domain::Result<()>),
 }
 pub struct Center {
@@ -45,9 +49,15 @@ pub struct Center {
     adapter: Arc<dyn NotificationPort>,
     uri: Arc<dyn lucent_domain::UriPort>,
     bodies: std::collections::BTreeMap<NotificationTarget, NotificationBody>,
+    artwork: artwork::Artwork,
+    toast_scroll: std::collections::BTreeMap<NotificationTarget, f32>,
 }
 impl Center {
-    pub fn new(adapter: Arc<dyn NotificationPort>, uri: Arc<dyn lucent_domain::UriPort>) -> Self {
+    pub fn new(
+        adapter: Arc<dyn NotificationPort>,
+        uri: Arc<dyn lucent_domain::UriPort>,
+        assets: Arc<dyn crate::ports::AssetPort>,
+    ) -> Self {
         Self {
             snapshot: NotificationSnapshot::default(),
             ready: false,
@@ -62,13 +72,18 @@ impl Center {
             adapter,
             uri,
             bodies: Default::default(),
+            artwork: artwork::Artwork::new(assets),
+            toast_scroll: Default::default(),
         }
     }
     pub fn history_open(&self) -> bool {
         self.history_open
     }
+    pub fn artwork_inspection(&self) -> serde_json::Value {
+        self.artwork.inspect()
+    }
     pub fn animating(&self, now: f64) -> bool {
-        self.reveal.active(now)
+        self.reveal.active(now) || (self.visible() && self.artwork.animating(now))
     }
     pub fn settled(&self, now: f64) -> bool {
         self.closing && !self.reveal.active(now)
@@ -105,7 +120,15 @@ impl Component for Center {
     fn update(&mut self, message: Message, e: &mut Effects<Message>) {
         let adapter = self.adapter.clone();
         match message {
+            Message::Artwork(revision, images) => self.artwork.complete(revision, images, e),
+            Message::RetryArtwork => self.refresh_artwork(true, e),
             Message::Snapshot(Ok(value)) => {
+                self.toast_scroll.retain(|target, _| {
+                    value
+                        .active
+                        .iter()
+                        .any(|note| note.target() == Some(*target))
+                });
                 self.bodies.retain(|target, _| {
                     value
                         .active
@@ -182,6 +205,18 @@ impl Component for Center {
                 self.scroll = event.offset
             }
             Message::Scroll(_) => {}
+            Message::ToastScroll(target, event) => {
+                if event.offset.is_finite()
+                    && event.offset >= 0.
+                    && self
+                        .snapshot
+                        .active
+                        .iter()
+                        .any(|note| note.target() == Some(target))
+                {
+                    self.toast_scroll.insert(target, event.offset);
+                }
+            }
             Message::Page(delta) => {
                 let count = self
                     .groups()
@@ -315,6 +350,7 @@ impl Component for Center {
             ),
             Message::Done(result) => self.error = result.is_err(),
         }
+        self.refresh_artwork(false, e);
         e.redraw("notifications");
         e.redraw("bar");
     }

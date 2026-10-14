@@ -450,7 +450,14 @@ fn notification_protocol() {
     let capabilities: Vec<String> = proxy.call("GetCapabilities", &()).unwrap();
     assert_eq!(
         capabilities,
-        ["body", "body-markup", "body-hyperlinks", "actions"]
+        [
+            "body",
+            "body-markup",
+            "body-hyperlinks",
+            "body-images",
+            "icon-static",
+            "actions"
+        ]
     );
     let mut actions = proxy.receive_signal("ActionInvoked").unwrap();
     let notify = |replaces: u32, timeout: i32| -> u32 {
@@ -910,6 +917,7 @@ fn notification_stalled_recovery_load_keeps_delivery_live_and_clear_retires_its_
             app: "Old fixture".into(),
             summary: "Previous archive".into(),
             body: String::new(),
+            image: None,
             actions: vec![],
             critical: false,
             resident: false,
@@ -949,5 +957,92 @@ fn notification_stalled_recovery_load_keeps_delivery_live_and_clear_retires_its_
             .entries
             .iter()
             .all(|n| n.id != 20)
+    );
+}
+
+#[test]
+#[ignore = "requires a test-owned private dbus-daemon"]
+fn notification_wire_images_reach_current_snapshots_and_fallback_obeys_priority() {
+    let bus = Bus::new();
+    let watch = Watcher::new(&bus, false);
+    watch.snapshot();
+    let connection = bus.connection();
+    let proxy = zbus::blocking::Proxy::new(&connection, NAME, PATH, NAME).unwrap();
+    let mut hints = HashMap::<String, OwnedValue>::new();
+    hints.insert(
+        "image-data".into(),
+        OwnedValue::try_from(zbus::zvariant::Value::from((
+            2i32,
+            1i32,
+            8i32,
+            true,
+            8i32,
+            4i32,
+            vec![10u8, 20, 30, 128, 40, 50, 60, 255],
+        )))
+        .unwrap(),
+    );
+    hints.insert(
+        "image-path".into(),
+        OwnedValue::from(zbus::zvariant::Str::from("/tmp/fixture.png")),
+    );
+    let id: u32 = proxy
+        .call(
+            "Notify",
+            &(
+                "Fixture",
+                0u32,
+                "mail-unread",
+                "Image event",
+                "<b>Body</b>",
+                Vec::<String>::new(),
+                hints,
+                0i32,
+            ),
+        )
+        .unwrap();
+    let snapshot = watch.snapshot();
+    let note = snapshot.active.iter().find(|note| note.id == id).unwrap();
+    assert!(
+        matches!(&note.image,Some(NotificationImage::Pixels(image)) if image.rgba()==[10,20,30,128,40,50,60,255])
+    );
+    assert_eq!(note.body, "<b>Body</b>");
+    let mut hints = HashMap::<String, OwnedValue>::new();
+    hints.insert(
+        "image-data".into(),
+        OwnedValue::try_from(zbus::zvariant::Value::from((
+            -1i32,
+            1i32,
+            4i32,
+            true,
+            8i32,
+            4i32,
+            vec![0u8; 4],
+        )))
+        .unwrap(),
+    );
+    hints.insert(
+        "image-path".into(),
+        OwnedValue::from(zbus::zvariant::Str::from("/tmp/fixture.png")),
+    );
+    let replacement: u32 = proxy
+        .call(
+            "Notify",
+            &(
+                "Fixture",
+                id,
+                "mail-unread",
+                "Replacement",
+                "Body",
+                Vec::<String>::new(),
+                hints,
+                0i32,
+            ),
+        )
+        .unwrap();
+    assert_eq!(replacement, id);
+    let snapshot = watch.snapshot();
+    assert!(
+        matches!(&snapshot.active.iter().find(|note|note.id==id).unwrap().image,Some(NotificationImage::Source(source)) if source.value()=="/tmp/fixture.png")
     );
 }
