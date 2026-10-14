@@ -5,6 +5,7 @@ Requires the unlocked 1920x1080 Lucent VM. Restores saved settings, output and
 idle marker; does not select a wallpaper. Captures and backups remain private.
 """
 import importlib.util
+from native_surfaces import active_surfaces, find_surface, role
 import json
 import math
 from pathlib import Path
@@ -30,8 +31,8 @@ def client():
 def settled_state(scale):
     state = vm.inspect()
     assert not state['client']['widget_grid']
-    assert 'widgets' not in {s['id'] for s in state['surfaces']}
-    by_id = {s['id']: s for s in state['surfaces']}
+    assert 'widgets' not in {role(s) for s in active_surfaces(state)}
+    by_id = {role(s): s for s in active_surfaces(state)}
     for group in state['client']['widget_surfaces']:
         source = by_id[group['id']]
         assert source['redraw_group'] == 'widgets'
@@ -97,10 +98,10 @@ def main():
             held = True
             hit, end_x, end_y = begin_drag()
             vm.eventually(lambda: all(s['paint_primitives'] == 0 for s in vm.inspect()['surfaces']
-                                     if s['redraw_group'] == 'widgets' and s['id'] != 'widgets'),
+                                     if s['redraw_group'] == 'widgets' and role(s) != 'widgets'),
                           'Drag source paint was not suppressed')
             during = vm.inspect()
-            preview = next(s for s in during['surfaces'] if s['id'] == 'widgets')
+            preview = find_surface(during, 'widgets')
             assert preview['pointer_input'] == 'none' and preview['paint_primitives'] > 0
             assert (preview['width'], preview['height']) == (1920, 1080)
             assert during['client']['positions'] == saved_positions

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Real keyboard checks for launcher modes, selection, scrolling and input focus."""
 import importlib.util
+from native_surfaces import active_surfaces, find_surface, role
 import json
 import runpy
 from pathlib import Path
@@ -35,7 +36,7 @@ def suite():
         assert all(b['y']-a['y'] == pitch for a,b in zip(rows,rows[1:]))
         search = next(h for h in dock['hits'] if h['id'] == 'launcher-search')
         assert (search['y'] - vm.token_value('component.input.padding_block')) % grid == 0
-        clock = next(h for s in state['surfaces'] if s['id']=='bar' for h in s['hits'] if h['id']=='bar-clock')
+        clock = next(h for h in find_surface(state, 'bar')['hits'] if h['id']=='bar-clock')
         assert all(clock[k] % grid == 0 for k in ('x','y','width','height'))
         checks += ['panel_and_rows_on_shell_grid', 'equal_launcher_insets', 'uniform_row_pitch', 'input_on_shell_grid', 'top_bar_clock_on_shell_grid']
         assert rows, 'Launcher contains no visible result rows'

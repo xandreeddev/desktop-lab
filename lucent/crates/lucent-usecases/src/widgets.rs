@@ -46,7 +46,7 @@ pub fn snapped_size(
     )
 }
 pub fn resize_widget(
-    settings: &mut DesktopSettings,
+    settings: &mut WidgetLayout,
     id: &str,
     size: WidgetSize,
     minimum: WidgetSize,
@@ -80,13 +80,13 @@ mod tests {
         );
         assert_eq!(snapped_size(min, min, max, 8.).unwrap(), size(272., 160.));
         assert_eq!(snapped_size(min, min, min, 8.).unwrap(), min);
-        let mut settings = DesktopSettings::default();
+        let mut settings = WidgetLayout::default();
         assert!(resize_widget(&mut settings, "notes", size(286., 172.), min, max, 8.).unwrap());
         assert!(!resize_widget(&mut settings, "notes", size(288., 176.), min, max, 8.).unwrap());
     }
     #[test]
     fn invalid_limits_and_grid_leave_preferences_unchanged() {
-        let mut settings = DesktopSettings::default();
+        let mut settings = WidgetLayout::default();
         let before = settings.clone();
         for step in [0., f32::NAN, f32::INFINITY] {
             assert!(

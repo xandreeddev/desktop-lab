@@ -4,6 +4,7 @@
 Run with an unlocked guest and lucent.service running. Uses QMP pointer/keyboard
 input, the public inspection IPC, and the compositor's actual window state.
 """
+from native_surfaces import active_surfaces, find_surface, role
 import json
 import math
 from pathlib import Path
@@ -70,7 +71,12 @@ def text(value):
 
 def layer_geometry(surface_id):
     """Compositor placement is separate from framework surface-local geometry."""
-    namespace = 'lucent-' + surface_id
+    # A helper may receive a logical role or the actual diagnostic/native ID.
+    state = inspect()
+    native = next((surface for surface in state['surfaces'] if surface['id'] == surface_id), None)
+    if native is None:
+        native = find_surface(state, surface_id)
+    namespace = 'lucent-' + native['id']
     matches = []
     def visit(value):
         if isinstance(value, dict):
@@ -86,7 +92,7 @@ def layer_geometry(surface_id):
 
 def hit(identifier):
     state = inspect()
-    surface, local = next((s, h) for s in state['surfaces']
+    surface, local = next((s, h) for s in active_surfaces(state)
                           if s.get('pointer_input') != 'none'
                           for h in s['hits'] if h['id']==identifier)
     origin = layer_geometry(surface['id'])
@@ -142,7 +148,7 @@ def suite():
     assert session('omarchy-shell','lock','isLocked').strip()=='false', 'Unlock the VM first'
     assert 'Vulkan' in inspect()['adapter']
     initial = inspect()
-    assert {'background','bar','dock'} <= {s['id'] for s in initial['surfaces']}
+    assert {'background','bar','dock'} <= {role(s) for s in active_surfaces(initial)}
     for widget in initial['client']['widgets']:
         hit('widget-' + widget)
     cli('launcher','close');time.sleep(0.7)

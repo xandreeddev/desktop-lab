@@ -10,6 +10,9 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 #[derive(Clone)]
 pub enum Message {
+    Outputs(Vec<DisplayOutput>),
+    OnMonitor(crate::monitors::Route, Box<Message>),
+    SelectMonitor(MonitorId),
     Notifications(crate::notifications::Message),
     Loaded(
         domain::Result<DesktopSettings>,
@@ -55,12 +58,43 @@ pub enum Message {
     Quit,
 }
 pub const SPATIAL: [f32; 4] = motion::SPATIAL;
+fn widget_surface_specs(
+    host: &widgets::Host,
+    layout: &WidgetLayout,
+    viewport: (f32, f32),
+    instance: Option<SurfaceInstance>,
+    output: Option<OutputName>,
+) -> Vec<SurfaceSpec> {
+    host.surfaces(layout, viewport)
+        .into_iter()
+        .map(|source| SurfaceSpec {
+            id: source.id,
+            instance: instance.clone(),
+            output: output.clone(),
+            layer: Layer::Bottom,
+            anchor: Anchor::TopLeft,
+            margins: SurfaceMargins {
+                top: source.rect.y as i32,
+                left: source.rect.x as i32,
+                ..Default::default()
+            },
+            redraw_group: Some("widgets"),
+            width: source.rect.w.ceil() as u32,
+            height: source.rect.h.ceil() as u32,
+            exclusive_zone: -1,
+            keyboard: Keyboard::OnDemand,
+            visible: true,
+            pointer_input: PointerInput::Content,
+        })
+        .collect()
+}
 pub struct Desktop {
     pub notifications: crate::notifications::Center,
     pub osd: crate::osd::Osd,
     pub bar_visible: bool,
     pub theme_error: String,
     pub widgets: widgets::Host,
+    pub monitors: crate::monitors::Monitors,
     pub apps: Vec<domain::Application>,
     pub catalog: crate::catalog::Catalog,
     pub dock: crate::dock::Dock,
@@ -105,6 +139,7 @@ impl Desktop {
                 adapters.assets.clone(),
             ),
             widgets: widgets::Host::default(),
+            monitors: Default::default(),
             apps: vec![],
             catalog: crate::catalog::Catalog::new(adapters.assets.clone()),
             dock: Default::default(),
@@ -326,8 +361,14 @@ impl Desktop {
         let input = launcher::Input {
             apps: &self.apps,
             application_status: self.catalog.status(),
-            widgets_editing: self.widgets.editing(),
+            widgets_editing: self.active_widgets().editing(),
             settings: &self.settings,
+            widget_layout: self
+                .monitors
+                .active
+                .as_ref()
+                .and_then(|id| self.settings.monitor_layouts.get(id))
+                .unwrap_or(&self.settings.layout),
             palettes: &palettes,
             wallpapers: &self.wallpapers,
             wallpaper_index: self.wallpaper_index,
@@ -382,11 +423,65 @@ impl Desktop {
             self.update(message, effects);
         }
     }
-    fn widget_view(&self) -> widgets::View<'_> {
+    pub fn active_widgets(&self) -> &widgets::Host {
+        self.monitors
+            .current()
+            .map_or(&self.widgets, |(_, monitor)| &monitor.widgets)
+    }
+    pub fn widget_layout(&self, id: Option<&MonitorId>) -> &WidgetLayout {
+        id.and_then(|id| self.settings.monitor_layouts.get(id))
+            .unwrap_or(&self.settings.layout)
+    }
+    pub fn active_widget_layout(&self) -> &WidgetLayout {
+        self.widget_layout(self.monitors.active.as_ref())
+    }
+    fn select_monitor(&mut self, id: &MonitorId, effects: &mut Effects<Message>) {
+        let Some(monitor) = self.monitors.connected.get(id) else {
+            return;
+        };
+        let viewport = monitor.viewport;
+        if self.monitors.active.as_ref() == Some(id) && self.viewport == viewport {
+            return;
+        }
+        self.monitors.active = Some(id.clone());
+        self.viewport = viewport;
+        self.update_dock(crate::dock::Message::Cancel, effects);
+        self.retarget_panel_transition(effects.now);
+        for role in [
+            "dock",
+            "audio",
+            "network",
+            "bluetooth",
+            "power",
+            "tray",
+            "notifications",
+            "osd",
+        ] {
+            effects.redraw(role);
+        }
+    }
+    fn resize_monitor_background(&mut self, effects: &mut Effects<Message>) {
+        match self.monitors.background_target() {
+            Ok(Some(target)) => effects.delegate(
+                |child| self.wallpaper.resize(target, child),
+                Message::WallpaperSelection,
+            ),
+            Ok(None) => {}
+            Err(error) => {
+                self.error = error.to_string();
+                effects.redraw("dock");
+            }
+        }
+    }
+    fn widget_view_on(&self, id: Option<&MonitorId>) -> widgets::View<'_> {
+        let host = id
+            .and_then(|id| self.monitors.connected.get(id))
+            .map_or(&self.widgets, |monitor| &monitor.widgets);
         widgets::View {
-            host: &self.widgets,
+            host,
             input: widgets::Input {
-                settings: &self.settings,
+                layout: self.widget_layout(id),
+                notes: &self.settings.notes,
                 clock: &self.clock,
                 system: &self.system,
                 network_status: self.network.status(),
@@ -398,20 +493,101 @@ impl Desktop {
         }
     }
     fn update_widgets(&mut self, message: widgets::Message, effects: &mut Effects<Message>) {
+        let selected = self.monitors.active.clone();
+        self.update_widgets_on(selected.as_ref(), message, effects);
+    }
+    fn update_widgets_on(
+        &mut self,
+        id: Option<&MonitorId>,
+        message: widgets::Message,
+        effects: &mut Effects<Message>,
+    ) {
+        if let (Some(id), widgets::Message::Tick(now)) = (id, &message) {
+            let layout = self
+                .settings
+                .monitor_layouts
+                .get(id)
+                .unwrap_or(&self.settings.layout);
+            let Some(monitor) = self.monitors.connected.get_mut(id) else {
+                return;
+            };
+            if monitor
+                .widgets
+                .tick(*now, layout.visible_widgets.iter().any(|id| id == "timer"))
+            {
+                for source in monitor.widgets.surfaces(layout, monitor.viewport) {
+                    effects.redraw_surface(
+                        SurfaceAddress::new(source.id).instance(monitor.instance.clone()),
+                    );
+                }
+            }
+            return;
+        }
         let mut intent = None;
+        let route = id.and_then(|id| {
+            self.monitors
+                .connected
+                .get(id)
+                .map(|monitor| monitor.route(id))
+        });
+        let instance = route
+            .as_ref()
+            .and_then(|route| self.monitors.connected.get(&route.id))
+            .map(|monitor| monitor.instance.clone());
+        let shared_notes = matches!(message, widgets::Message::EditNotes(_));
+        let (host, layout, viewport) = if let Some(route) = &route {
+            if let Err(error) =
+                lucent_usecases::ensure_monitor_layout(&mut self.settings, &route.id)
+            {
+                self.error = error.to_string();
+                effects.redraw("dock");
+                return;
+            }
+            let layout = self
+                .settings
+                .monitor_layouts
+                .get_mut(&route.id)
+                .expect("initialized monitor layout");
+            let monitor = self
+                .monitors
+                .connected
+                .get_mut(&route.id)
+                .expect("current route");
+            (&mut monitor.widgets, layout, monitor.viewport)
+        } else {
+            (&mut self.widgets, &mut self.settings.layout, self.viewport)
+        };
         effects.delegate(
             |child| {
-                intent = self.widgets.update(
+                intent = host.update(
                     message,
                     widgets::Update {
-                        settings: &mut self.settings,
-                        viewport: self.viewport,
+                        layout,
+                        notes: &mut self.settings.notes,
+                        instance: instance.clone(),
+                        viewport,
                         unix_seconds: self.clock.unix_seconds,
                     },
                     child,
-                )
+                );
+                if let Some(instance) = &instance
+                    && !shared_notes
+                    && child.redraw.remove("widgets")
+                {
+                    child.redraw_surface(SurfaceAddress::new("widgets").instance(instance.clone()));
+                    for source in host.surfaces(layout, viewport) {
+                        child.redraw_surface(
+                            SurfaceAddress::new(source.id).instance(instance.clone()),
+                        );
+                    }
+                }
             },
-            Message::Widgets,
+            move |message| match &route {
+                Some(route) => {
+                    Message::OnMonitor(route.clone(), Box::new(Message::Widgets(message)))
+                }
+                None => Message::Widgets(message),
+            },
         );
         match intent {
             Some(widgets::Intent::Save) => self.save(effects),
@@ -502,7 +678,18 @@ impl Desktop {
 impl Component for Desktop {
     type Message = Message;
     fn view(&self, cx: &ViewContext) -> Element<Message> {
-        self.theme().apply(match cx.surface {
+        let route = cx
+            .instance
+            .as_ref()
+            .and_then(|instance| self.monitors.route(instance));
+        if cx.instance.is_some() && route.is_none() {
+            return Element::empty();
+        }
+        let monitor = route
+            .as_ref()
+            .and_then(|route| self.monitors.connected.get(&route.id));
+        let viewport = monitor.map_or(self.viewport, |monitor| monitor.viewport);
+        let tree = self.theme().apply(match cx.surface {
             "audio" => self.audio.view(cx, self.theme()).map(Message::Audio),
             "network" => self.network.view(cx, self.theme()).map(Message::Network),
             "bluetooth" => self
@@ -519,10 +706,13 @@ impl Component for Desktop {
                 .map(|image| Element::image(image.clone()).cover().fill())
                 .unwrap_or_else(|| Element::empty().fill().background(self.surface_color())),
             "bar" => self.bar(cx),
-            "widgets" => self.widget_view().render(cx).map(Message::Widgets),
+            "widgets" => self
+                .widget_view_on(route.as_ref().map(|route| &route.id))
+                .render(cx)
+                .map(Message::Widgets),
             name if widgets::catalog::find(name).is_some() => self
-                .widget_view()
-                .render_native(cx, self.viewport)
+                .widget_view_on(route.as_ref().map(|route| &route.id))
+                .render_native(cx, viewport)
                 .map(Message::Widgets),
             "dock" => self.dock(cx),
             "notifications" => self
@@ -530,7 +720,13 @@ impl Component for Desktop {
                 .view_with_theme(cx, self.theme())
                 .map(Message::Notifications),
             _ => Element::empty(),
-        })
+        });
+        match route {
+            Some(route) => {
+                tree.map(move |message| Message::OnMonitor(route.clone(), Box::new(message)))
+            }
+            None => tree,
+        }
     }
     fn update(&mut self, message: Message, effects: &mut Effects<Message>) {
         let now = effects.now;
@@ -554,11 +750,90 @@ impl Component for Desktop {
             );
         }
         match message {
+            Message::Outputs(catalog) => {
+                self.monitors.reconcile(catalog, self.viewport);
+                let selected = self.monitors.active.clone();
+                if let Some(id) = selected {
+                    self.select_monitor(&id, effects);
+                }
+                self.resize_monitor_background(effects);
+                for role in [
+                    "background",
+                    "bar",
+                    "widgets",
+                    "dock",
+                    "audio",
+                    "network",
+                    "bluetooth",
+                    "power",
+                    "tray",
+                    "notifications",
+                    "osd",
+                ] {
+                    effects.redraw(role);
+                }
+            }
+            Message::SelectMonitor(id) => self.select_monitor(&id, effects),
+            Message::OnMonitor(route, message) => {
+                if !self.monitors.accepts(&route) {
+                    return;
+                }
+                match *message {
+                    Message::Resize("background", width, height, scale) => {
+                        if crate::ports::BackgroundTarget::from_surface(width, height, scale)
+                            .is_err()
+                        {
+                            return;
+                        }
+                        let monitor = self
+                            .monitors
+                            .connected
+                            .get_mut(&route.id)
+                            .expect("validated route");
+                        if monitor.viewport != (width, height) || monitor.scale != scale {
+                            monitor.widgets.cancel_interactions();
+                            monitor.viewport = (width, height);
+                            monitor.scale = scale;
+                        }
+                        if self.monitors.active.as_ref() == Some(&route.id) {
+                            self.select_monitor(&route.id, effects);
+                        }
+                        self.resize_monitor_background(effects);
+                        effects.redraw("widgets");
+                        effects.redraw_surface(
+                            SurfaceAddress::new("background")
+                                .instance(self.monitors.connected[&route.id].instance.clone()),
+                        );
+                    }
+                    Message::Resize(role, _, _, _) => {
+                        effects.redraw_surface(
+                            SurfaceAddress::new(role)
+                                .instance(self.monitors.connected[&route.id].instance.clone()),
+                        );
+                    }
+                    Message::Widgets(message) => {
+                        if !matches!(
+                            message,
+                            widgets::Message::EditNotes(TextEdit::ClipboardReply(..))
+                                | widgets::Message::Tick(_)
+                                | widgets::Message::CancelDrags
+                        ) {
+                            self.select_monitor(&route.id, effects);
+                        }
+                        self.update_widgets_on(Some(&route.id), message, effects);
+                    }
+                    message => {
+                        self.select_monitor(&route.id, effects);
+                        self.update(message, effects);
+                    }
+                }
+            }
             Message::Notifications(message) => effects.delegate(
                 |e| self.notifications.update(message, e),
                 Message::Notifications,
             ),
             Message::Loaded(settings, wallpapers, current_wallpaper) => {
+                self.monitors.cancel_interactions();
                 self.update_widgets(widgets::Message::CancelDrags, effects);
                 match settings {
                     Ok(settings) => {
@@ -692,11 +967,36 @@ impl Component for Desktop {
                     effects.redraw("bar");
                     effects.redraw("widgets");
                 }
-                self.update_widgets(widgets::Message::Tick(clock.unix_seconds), effects);
+                if self.monitors.legacy() {
+                    self.update_widgets_on(
+                        None,
+                        widgets::Message::Tick(clock.unix_seconds),
+                        effects,
+                    );
+                }
+                let monitors: Vec<_> = self.monitors.connected.keys().cloned().collect();
+                for id in monitors {
+                    self.update_widgets_on(
+                        Some(&id),
+                        widgets::Message::Tick(clock.unix_seconds),
+                        effects,
+                    );
+                }
                 self.clock = clock;
             }
             Message::System(Ok(value)) => {
-                if self.settings.visible_widgets.iter().any(|w| w == "system") {
+                if self
+                    .settings
+                    .layout
+                    .visible_widgets
+                    .iter()
+                    .any(|w| w == "system")
+                    || self
+                        .settings
+                        .monitor_layouts
+                        .values()
+                        .any(|layout| layout.visible_widgets.iter().any(|w| w == "system"))
+                {
                     effects.redraw("widgets");
                 }
                 self.system = value;
@@ -1323,30 +1623,50 @@ impl api::Application for Desktop {
                 },
             },
         ];
-        surfaces.extend(
-            self.widgets
-                .surfaces(&self.settings, self.viewport)
-                .into_iter()
-                .map(|source| SurfaceSpec {
-                    id: source.id,
-                    instance: None,
-                    output: None,
-                    layer: Layer::Bottom,
-                    anchor: Anchor::TopLeft,
-                    margins: SurfaceMargins {
-                        top: source.rect.y as i32,
-                        left: source.rect.x as i32,
-                        ..Default::default()
-                    },
-                    redraw_group: Some("widgets"),
-                    width: source.rect.w.ceil() as u32,
-                    height: source.rect.h.ceil() as u32,
-                    exclusive_zone: -1,
-                    keyboard: Keyboard::OnDemand,
-                    visible: true,
-                    pointer_input: PointerInput::Content,
-                }),
-        );
+        if !self.monitors.legacy() {
+            if self.monitors.connected.is_empty() {
+                return vec![];
+            }
+            let repeated: Vec<_> = surfaces
+                .iter()
+                .filter(|spec| ["bar", "background", "widgets"].contains(&spec.id))
+                .cloned()
+                .collect();
+            surfaces.retain(|spec| !["bar", "background", "widgets"].contains(&spec.id));
+            let active = self
+                .monitors
+                .current()
+                .map(|(_, monitor)| monitor.target.clone());
+            for spec in &mut surfaces {
+                spec.output = active.clone();
+            }
+            for (id, monitor) in &self.monitors.connected {
+                for template in &repeated {
+                    let mut spec = template.clone();
+                    spec.output = Some(monitor.target.clone());
+                    spec.instance = Some(monitor.instance.clone());
+                    if spec.id == "widgets" {
+                        spec.visible = monitor.widgets.grid_visible();
+                    }
+                    surfaces.push(spec);
+                }
+                surfaces.extend(widget_surface_specs(
+                    &monitor.widgets,
+                    self.widget_layout(Some(id)),
+                    monitor.viewport,
+                    Some(monitor.instance.clone()),
+                    Some(monitor.target.clone()),
+                ));
+            }
+            return surfaces;
+        }
+        surfaces.extend(widget_surface_specs(
+            &self.widgets,
+            &self.settings.layout,
+            self.viewport,
+            None,
+            None,
+        ));
         surfaces
     }
     fn init(&mut self, effects: &mut Effects<Message>) {
@@ -1513,6 +1833,40 @@ impl api::Application for Desktop {
     }
     fn event(&self, event: Event) -> Option<Message> {
         match event {
+            Event::OutputsChanged(catalog) => Some(Message::Outputs(catalog)),
+            Event::Scoped { instance, event } => {
+                let route = self.monitors.route(&instance)?;
+                let monitor = self.monitors.connected.get(&route.id)?;
+                let sources = || {
+                    monitor
+                        .widgets
+                        .surfaces(self.widget_layout(Some(&route.id)), monitor.viewport)
+                };
+                let message = match *event {
+                    Event::PointerInside {
+                        surface: "bar",
+                        inside: true,
+                    } => Some(Message::SelectMonitor(route.id.clone())),
+                    Event::PointerButton {
+                        surface,
+                        button: MouseButton::Primary,
+                        pressed: true,
+                        ..
+                    } if sources().iter().any(|source| source.id == surface) => {
+                        Some(Message::Widgets(widgets::Message::Press))
+                    }
+                    Event::Key {
+                        surface,
+                        key: Key::Escape,
+                    } if monitor.widgets.editing()
+                        && sources().iter().any(|source| source.id == surface) =>
+                    {
+                        Some(Message::Widgets(widgets::Message::Edit(false)))
+                    }
+                    event => self.event(event),
+                }?;
+                Some(Message::OnMonitor(route, Box::new(message)))
+            }
             Event::FrameSubmitted {
                 surface: "notifications",
                 now,
@@ -1561,7 +1915,7 @@ impl api::Application for Desktop {
                 ..
             } if self
                 .widgets
-                .surfaces(&self.settings, self.viewport)
+                .surfaces(&self.settings.layout, self.viewport)
                 .iter()
                 .any(|source| source.id == surface) =>
             {
@@ -1573,7 +1927,7 @@ impl api::Application for Desktop {
             } if self.widgets.editing()
                 && self
                     .widgets
-                    .surfaces(&self.settings, self.viewport)
+                    .surfaces(&self.settings.layout, self.viewport)
                     .iter()
                     .any(|source| source.id == surface) =>
             {
@@ -1628,6 +1982,13 @@ impl api::Application for Desktop {
         }
     }
     fn command(&self, command: &str) -> std::result::Result<Option<Message>, String> {
+        if let Some(name) = command.strip_prefix("monitor select ") {
+            let id = MonitorId::new(name).map_err(|error| error.to_string())?;
+            if !self.monitors.connected.contains_key(&id) {
+                return Err("Monitor is not uniquely available".into());
+            }
+            return Ok(Some(Message::SelectMonitor(id)));
+        }
         if let Some(value) = command.strip_prefix("dock auto-hide ") {
             return match value {
                 "on" => Ok(Some(Message::Dock(crate::dock::Message::AutoHide(true)))),
@@ -1828,7 +2189,7 @@ impl api::Application for Desktop {
             "online_previews": crate::previews::usage(self.browser.previews.values()),
             "background": crate::previews::usage(self.wallpaper.background.iter()),
             "total": crate::previews::usage(self.images.values().chain(self.previews.images()).chain(self.browser.previews.values()).chain(self.wallpaper.background.iter())),
-        }, "palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_history_open":self.notifications.history_open(),"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.settings.visible_widgets,"positions":self.settings.positions,"widget_grid":self.widgets.grid_visible(),"widget_surfaces":self.widgets.surfaces(&self.settings,self.viewport).iter().map(|s|serde_json::json!({"id":s.id,"members":s.members,"x":s.rect.x,"y":s.rect.y,"width":s.rect.w,"height":s.rect.h})).collect::<Vec<_>>(),"notes":self.settings.notes,"timer_seconds":self.widgets.timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"settings_save_status":self.persistence.status(self.settings_writable).name(),"settings_save_error":self.persistence.error(),"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable});
+        }, "palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_history_open":self.notifications.history_open(),"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.active_widget_layout().visible_widgets,"positions":self.active_widget_layout().positions,"widget_grid":self.active_widgets().grid_visible(),"widget_surfaces":self.active_widgets().surfaces(self.active_widget_layout(),self.viewport).iter().map(|s|serde_json::json!({"id":s.id,"members":s.members,"x":s.rect.x,"y":s.rect.y,"width":s.rect.w,"height":s.rect.h})).collect::<Vec<_>>(),"notes":self.settings.notes,"timer_seconds":self.active_widgets().timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"settings_save_status":self.persistence.status(self.settings_writable).name(),"settings_save_error":self.persistence.error(),"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable});
         value["notification_artwork"] = self.notifications.artwork_inspection();
         value["network"] = self.network.inspect();
         value["bluetooth"] = self.bluetooth.inspect();
@@ -1836,8 +2197,13 @@ impl api::Application for Desktop {
         value["tray"] = self.tray.inspect();
         value["catalog"] = self.catalog.inspect();
         value["dock"] = self.dock.inspect();
-        value["widget_sizes"] = serde_json::json!(self.settings.widget_sizes);
-        value["widgets_editing"] = serde_json::json!(self.widgets.editing());
+        value["widget_sizes"] = serde_json::json!(self.active_widget_layout().widget_sizes);
+        value["widgets_editing"] = serde_json::json!(self.active_widgets().editing());
+        value["named_monitor_hosts"] = serde_json::json!(!self.monitors.legacy());
+        value["active_monitor"] =
+            serde_json::json!(self.monitors.active.as_ref().map(MonitorId::as_str));
+        value["monitor_layouts"] = serde_json::json!(self.settings.monitor_layouts);
+        value["monitor_hosts"] = serde_json::json!(self.monitors.connected.iter().map(|(id,monitor)| serde_json::json!({"id":id.as_str(),"generation":monitor.generation,"viewport":monitor.viewport,"scale":monitor.scale,"instance":monitor.instance.as_str(),"grid_visible":monitor.widgets.grid_visible(),"editing":monitor.widgets.editing(),"widget_surfaces":monitor.widgets.surfaces(self.widget_layout(Some(id)),monitor.viewport).iter().map(|source|serde_json::json!({"id":source.id,"members":source.members})).collect::<Vec<_>>()})).collect::<Vec<_>>());
         value.to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {

@@ -3,7 +3,9 @@ fn send(host: &mut Host, settings: &mut DesktopSettings, message: Message) -> Op
     host.update(
         message,
         Update {
-            settings,
+            layout: &mut settings.layout,
+            notes: &mut settings.notes,
+            instance: None,
             viewport: (800., 600.),
             unix_seconds: 0,
         },
@@ -12,10 +14,14 @@ fn send(host: &mut Host, settings: &mut DesktopSettings, message: Message) -> Op
 }
 fn settings() -> DesktopSettings {
     let mut settings = DesktopSettings {
-        visible_widgets: vec!["notes".into()],
+        layout: WidgetLayout {
+            visible_widgets: vec!["notes".into()],
+            ..Default::default()
+        },
         ..Default::default()
     };
     settings
+        .layout
         .positions
         .insert("notes".into(), Placement::new(128., 160.).unwrap());
     settings
@@ -39,19 +45,21 @@ fn resize_preview_freezes_native_sources_and_unrelated_saves_commit_only_old_siz
     let mut host = Host::default();
     let mut settings = settings();
     begin(&mut host, &mut settings);
-    let source = host.surfaces(&settings, (800., 600.));
+    let source = host.surfaces(&settings.layout, (800., 600.));
     assert!(send(&mut host, &mut settings, resize(false)).is_none());
     assert!(host.grid_visible());
-    assert!(settings.widget_sizes.is_empty());
+    assert!(settings.layout.widget_sizes.is_empty());
     assert_eq!(
-        host.size("notes", &settings, (800., 600.), false).tuple(),
+        host.size("notes", &settings.layout, (800., 600.), false)
+            .tuple(),
         (323., 207.)
     );
     assert_eq!(
-        host.size("notes", &settings, (800., 600.), true).tuple(),
+        host.size("notes", &settings.layout, (800., 600.), true)
+            .tuple(),
         widget_size("notes")
     );
-    assert_eq!(host.surfaces(&settings, (800., 600.)), source);
+    assert_eq!(host.surfaces(&settings.layout, (800., 600.)), source);
     assert!(matches!(
         send(
             &mut host,
@@ -66,12 +74,12 @@ fn resize_preview_freezes_native_sources_and_unrelated_saves_commit_only_old_siz
         send(&mut host, &mut settings, resize(true)),
         Some(Intent::Save)
     ));
-    assert_eq!(settings.widget_sizes["notes"].tuple(), (320., 208.));
+    assert_eq!(settings.layout.widget_sizes["notes"].tuple(), (320., 208.));
     assert!(!host.grid_visible());
-    assert!(host.surfaces(&settings, (800., 600.))[0].rect.w > source[0].rect.w);
+    assert!(host.surfaces(&settings.layout, (800., 600.))[0].rect.w > source[0].rect.w);
     let restored: DesktopSettings =
         serde_json::from_value(serde_json::to_value(&settings).unwrap()).unwrap();
-    assert_eq!(restored.widget_sizes, settings.widget_sizes);
+    assert_eq!(restored.layout.widget_sizes, settings.layout.widget_sizes);
 }
 #[test]
 fn hide_reset_exit_and_output_changes_cancel_stale_resize_releases() {
@@ -112,7 +120,9 @@ fn malformed_resize_geometry_cannot_panic_or_mutate_preferences() {
     let result = host.update(
         resize(false),
         Update {
-            settings: &mut settings,
+            layout: &mut settings.layout,
+            notes: &mut settings.notes,
+            instance: None,
             viewport: (f32::NAN, 600.),
             unix_seconds: 0,
         },
@@ -144,15 +154,18 @@ fn output_limits_are_presentational_and_explicit_size_changes_cancel_capture() {
     let mut host = Host::default();
     let mut settings = settings();
     settings
+        .layout
         .widget_sizes
         .insert("notes".into(), WidgetSize::new(640., 400.).unwrap());
     assert_eq!(
-        host.size("notes", &settings, (320., 240.), false).tuple(),
+        host.size("notes", &settings.layout, (320., 240.), false)
+            .tuple(),
         (320., 240.)
     );
-    assert_eq!(settings.widget_sizes["notes"].tuple(), (640., 400.));
+    assert_eq!(settings.layout.widget_sizes["notes"].tuple(), (640., 400.));
     assert_eq!(
-        host.size("notes", &settings, (800., 600.), false).tuple(),
+        host.size("notes", &settings.layout, (800., 600.), false)
+            .tuple(),
         (640., 400.)
     );
     begin(&mut host, &mut settings);
@@ -167,7 +180,7 @@ fn output_limits_are_presentational_and_explicit_size_changes_cancel_capture() {
     ));
     assert!(!host.grid_visible());
     send(&mut host, &mut settings, resize(true));
-    assert_eq!(settings.widget_sizes["notes"].tuple(), (400., 240.));
+    assert_eq!(settings.layout.widget_sizes["notes"].tuple(), (400., 240.));
 }
 #[test]
 fn keyboard_size_steps_require_edit_mode_and_unknown_widgets_are_rejected() {
@@ -181,7 +194,7 @@ fn keyboard_size_steps_require_edit_mode_and_unknown_widgets_are_rejected() {
         )
         .is_none()
     );
-    assert!(settings.widget_sizes.is_empty());
+    assert!(settings.layout.widget_sizes.is_empty());
     begin(&mut host, &mut settings);
     assert!(matches!(
         send(
@@ -191,7 +204,7 @@ fn keyboard_size_steps_require_edit_mode_and_unknown_widgets_are_rejected() {
         ),
         Some(Intent::Save)
     ));
-    assert_eq!(settings.widget_sizes["notes"].tuple(), (288., 176.));
+    assert_eq!(settings.layout.widget_sizes["notes"].tuple(), (288., 176.));
     let before = settings.clone();
     assert!(matches!(
         send(
@@ -203,7 +216,7 @@ fn keyboard_size_steps_require_edit_mode_and_unknown_widgets_are_rejected() {
     ));
     assert_eq!(settings, before);
     let old: DesktopSettings = serde_json::from_str("{\"version\":1}").unwrap();
-    assert!(old.widget_sizes.is_empty());
+    assert!(old.layout.widget_sizes.is_empty());
     assert!(
         serde_json::from_str::<DesktopSettings>(
             "{\"widget_sizes\":{\"notes\":{\"width\":0,\"height\":200}}}"

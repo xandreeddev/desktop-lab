@@ -12,7 +12,9 @@ use crate::{
 };
 use lucent_api::*;
 use lucent_design::{component::panel, motion};
-use lucent_domain::{AppId, Application, DesktopSettings, LauncherSize, ThemePalette, Wallpaper};
+use lucent_domain::{
+    AppId, Application, DesktopSettings, LauncherSize, ThemePalette, Wallpaper, WidgetLayout,
+};
 pub use view::View;
 /// The same range drives painting and worker demand; no scan of the full library.
 pub fn visible_wallpapers(count: usize, center: f32) -> std::ops::Range<usize> {
@@ -93,6 +95,7 @@ pub struct Input<'a> {
     pub application_status: crate::catalog::Status,
     pub widgets_editing: bool,
     pub settings: &'a DesktopSettings,
+    pub widget_layout: &'a WidgetLayout,
     pub palettes: &'a [ThemePalette],
     pub wallpapers: &'a [Wallpaper],
     pub wallpaper_index: usize,
@@ -586,6 +589,7 @@ mod tests {
                 application_status: crate::catalog::Status::Ready,
                 widgets_editing: false,
                 settings: &self.settings,
+                widget_layout: &self.settings.layout,
                 palettes: lucent_design::palettes(),
                 wallpapers: &[],
                 wallpaper_index: 0,

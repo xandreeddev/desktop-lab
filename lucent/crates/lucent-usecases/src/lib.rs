@@ -103,7 +103,7 @@ pub fn constrain_placement(
 
 /// Commit a bounded position only after validation succeeds.
 pub fn move_widget(
-    settings: &mut DesktopSettings,
+    settings: &mut WidgetLayout,
     id: &str,
     placement: Placement,
     size: (f32, f32),
@@ -113,14 +113,33 @@ pub fn move_widget(
     settings.positions.insert(id.into(), position);
     Ok(())
 }
-pub fn toggle_widget(settings: &mut DesktopSettings, id: &str) {
+pub fn toggle_widget(settings: &mut WidgetLayout, id: &str) {
     if settings.visible_widgets.iter().any(|w| w == id) {
         settings.visible_widgets.retain(|w| w != id);
     } else {
         settings.visible_widgets.push(id.into());
     }
 }
+/// Initialize one persisted profile, copying only the default layout on its first
+/// mutation. Transport output objects and client host state stay out.
+pub fn ensure_monitor_layout(settings: &mut DesktopSettings, id: &MonitorId) -> Result<()> {
+    if !settings.monitor_layouts.contains_key(id) && settings.monitor_layouts.len() >= 64 {
+        return Err(DomainError::Invalid(
+            "At most 64 saved monitor layouts".into(),
+        ));
+    }
+    settings
+        .monitor_layouts
+        .entry(id.clone())
+        .or_insert_with(|| settings.layout.clone());
+    Ok(())
+}
 pub fn validate_settings(settings: &DesktopSettings) -> Result<()> {
+    if settings.monitor_layouts.len() > 64 {
+        return Err(DomainError::Invalid(
+            "At most 64 saved monitor layouts".into(),
+        ));
+    }
     if let Some(palette) = &settings.palette {
         palette.validate()?;
     }
@@ -148,6 +167,55 @@ pub fn validate_settings(settings: &DesktopSettings) -> Result<()> {
 mod tests {
     use super::*;
     use std::sync::Mutex;
+    #[test]
+    fn monitor_profiles_copy_only_layout_and_preserve_other_profiles() {
+        let mut settings = DesktopSettings {
+            notes: "Shared".into(),
+            ..Default::default()
+        };
+        settings
+            .layout
+            .positions
+            .insert("clock".into(), Placement::new(-12., 800.).unwrap());
+        let first = MonitorId::new("DP-1").unwrap();
+        let second = MonitorId::new("DP-2").unwrap();
+        ensure_monitor_layout(&mut settings, &first).unwrap();
+        ensure_monitor_layout(&mut settings, &second).unwrap();
+        let defaults = settings.layout.clone();
+        settings
+            .monitor_layouts
+            .get_mut(&first)
+            .unwrap()
+            .visible_widgets
+            .clear();
+        ensure_monitor_layout(&mut settings, &first).unwrap();
+        assert!(settings.monitor_layouts[&first].visible_widgets.is_empty());
+        assert_eq!(settings.monitor_layouts[&second], defaults);
+        assert_eq!(settings.layout, defaults);
+        assert_eq!(settings.notes, "Shared");
+    }
+    #[test]
+    fn profile_limit_rejects_new_identity_without_erasing_disconnected_layouts() {
+        let mut settings = DesktopSettings::default();
+        for index in 0..64 {
+            ensure_monitor_layout(
+                &mut settings,
+                &MonitorId::new(format!("display-{index}")).unwrap(),
+            )
+            .unwrap();
+        }
+        let before = settings.clone();
+        assert!(
+            ensure_monitor_layout(&mut settings, &MonitorId::new("overflow").unwrap()).is_err()
+        );
+        assert_eq!(settings, before);
+        ensure_monitor_layout(&mut settings, &MonitorId::new("display-0").unwrap()).unwrap();
+        assert!(validate_settings(&settings).is_ok());
+        settings
+            .monitor_layouts
+            .insert(MonitorId::new("overflow").unwrap(), WidgetLayout::default());
+        assert!(validate_settings(&settings).is_err());
+    }
     fn app(name: &str) -> Application {
         Application {
             id: AppId::new(format!("{name}.desktop")).unwrap(),
@@ -265,17 +333,20 @@ mod tests {
     fn moves_are_validated_and_clamped() {
         let mut s = DesktopSettings::default();
         move_widget(
-            &mut s,
+            &mut s.layout,
             "clock",
             Placement::new(5000., -5.).unwrap(),
             (240., 240.),
             (1920., 1080.),
         )
         .unwrap();
-        assert_eq!(s.positions["clock"], Placement::new(1680., 0.).unwrap());
+        assert_eq!(
+            s.layout.positions["clock"],
+            Placement::new(1680., 0.).unwrap()
+        );
         assert!(
             move_widget(
-                &mut s,
+                &mut s.layout,
                 "clock",
                 Placement::new(1., 1.).unwrap(),
                 (f32::NAN, 1.),
@@ -288,7 +359,7 @@ mod tests {
     fn invalid_output_bounds_do_not_mutate_layout_and_extreme_snaps_stay_finite() {
         let point = Placement::new(10., 20.).unwrap();
         let mut settings = DesktopSettings::default();
-        settings.positions.insert("clock".into(), point);
+        settings.layout.positions.insert("clock".into(), point);
         for (size, viewport) in [
             ((f32::NAN, 1.), (2., 2.)),
             ((1., 1.), (f32::INFINITY, 2.)),
@@ -296,7 +367,7 @@ mod tests {
             ((1., 1.), (2., -1.)),
         ] {
             let before = settings.clone();
-            assert!(move_widget(&mut settings, "clock", point, size, viewport).is_err());
+            assert!(move_widget(&mut settings.layout, "clock", point, size, viewport).is_err());
             assert_eq!(settings, before);
         }
         let extreme = Placement::new(f32::MAX, -f32::MAX).unwrap();

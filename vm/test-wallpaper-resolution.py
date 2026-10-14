@@ -6,6 +6,7 @@ Restores its output and idle marker even after failure. Does not select another
 wallpaper, change settings or modify the immutable source. Captures stay local.
 """
 import importlib.util
+from native_surfaces import active_surfaces, find_surface, role
 import json
 from pathlib import Path
 import time
@@ -42,7 +43,7 @@ def wait_for_target(width, height, scale):
     def ready():
         state = vm.inspect()
         fitted = state['client']['wallpaper_presentation']
-        background = next((s for s in state['surfaces'] if s['id'] == 'background'), None)
+        background = next((s for s in active_surfaces(state) if role(s) == 'background'), None)
         return (background is not None and background['scale'] == scale
                 and [background['buffer_width'], background['buffer_height']] == [width, height]
                 and fitted['target_physical_pixels'] == [width, height]

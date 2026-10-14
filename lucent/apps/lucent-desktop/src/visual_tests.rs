@@ -466,11 +466,18 @@ fn tab_cycles_sections_and_arrows_activate_the_selected_item() {
     assert_eq!(app.launcher.mode(), Mode::Widgets);
     key(&mut app, Key::Down);
     assert_eq!(app.launcher.selected(), 1);
-    let before = app.settings.visible_widgets.contains(&"clock".into());
+    let before = app
+        .settings
+        .layout
+        .visible_widgets
+        .contains(&"clock".into());
     key(&mut app, Key::Enter);
     assert_ne!(
         before,
-        app.settings.visible_widgets.contains(&"clock".into())
+        app.settings
+            .layout
+            .visible_widgets
+            .contains(&"clock".into())
     );
     key(&mut app, Key::BackTab);
     assert_eq!(app.launcher.mode(), Mode::Themes);
@@ -597,6 +604,7 @@ fn widget_drag_is_continuous_until_release_then_snaps_and_clamps() {
     let mut app = fixture(0, false);
     app.viewport = (640., 580.);
     app.settings
+        .layout
         .positions
         .insert("calendar".into(), Placement::new(20., 110.).unwrap());
     let send = |app: &mut Desktop, finished| {
@@ -614,7 +622,7 @@ fn widget_drag_is_continuous_until_release_then_snaps_and_clamps() {
     };
     send(&mut app, false);
     assert_eq!(
-        app.settings.positions["calendar"],
+        app.settings.layout.positions["calendar"],
         Placement::new(20., 110.).unwrap()
     );
     assert_eq!(
@@ -623,7 +631,7 @@ fn widget_drag_is_continuous_until_release_then_snaps_and_clamps() {
     );
     send(&mut app, true);
     assert_eq!(
-        app.settings.positions["calendar"],
+        app.settings.layout.positions["calendar"],
         Placement::new(208., 176.).unwrap()
     );
     assert!(!app.widgets.grid_visible());
@@ -640,7 +648,7 @@ fn widget_drag_is_continuous_until_release_then_snaps_and_clamps() {
         &mut Effects::default(),
     );
     assert_eq!(
-        app.settings.positions["calendar"],
+        app.settings.layout.positions["calendar"],
         Placement::new(370., 304.).unwrap()
     );
     assert!(lucent_usecases::snap_placement(Placement::new(0., 0.).unwrap(), 0.).is_err());
@@ -666,7 +674,10 @@ fn unrelated_preference_save_during_drag_cannot_persist_the_preview() {
     let mut app = Desktop::new(adapters);
     app.settings_writable = true;
     let origin = Placement::new(32., 96.).unwrap();
-    app.settings.positions.insert("calendar".into(), origin);
+    app.settings
+        .layout
+        .positions
+        .insert("calendar".into(), origin);
     let movement = |finished| {
         Message::Widgets(crate::widgets::Message::Move(
             "calendar".into(),
@@ -691,7 +702,10 @@ fn unrelated_preference_save_during_drag_cannot_persist_the_preview() {
     while let Some(task) = effects.tasks.pop() {
         app.update(task.run(), &mut effects);
     }
-    assert_eq!(store.0.lock().unwrap()[0].positions["calendar"], origin);
+    assert_eq!(
+        store.0.lock().unwrap()[0].layout.positions["calendar"],
+        origin
+    );
     assert_eq!(store.0.lock().unwrap()[0].notes, "Keep this edit");
     assert_eq!(app.widgets.preview_position("calendar"), Some(preview));
     app.update(movement(true), &mut effects);
@@ -701,7 +715,7 @@ fn unrelated_preference_save_during_drag_cannot_persist_the_preview() {
     let stored = store.0.lock().unwrap();
     assert_eq!(stored.len(), 2);
     assert_eq!(
-        stored[1].positions["calendar"],
+        stored[1].layout.positions["calendar"],
         lucent_usecases::snap_placement(
             preview,
             lucent_design::component::widget_layout::GRID_STEP
@@ -892,7 +906,7 @@ fn bounded_widget_sources_preserve_capture_and_pass_through_preview() {
     assert!(!initial.iter().find(|s| s.id == "widgets").unwrap().visible);
     let group = app
         .widgets
-        .surfaces(&app.settings, app.viewport)
+        .surfaces(&app.settings.layout, app.viewport)
         .into_iter()
         .find(|s| s.members.contains(&"calendar"))
         .unwrap();
@@ -916,7 +930,7 @@ fn bounded_widget_sources_preserve_capture_and_pass_through_preview() {
     for message in input.motion(&before, x + 400., y + 200., cx.now) {
         app.update(message, &mut Effects::default());
     }
-    assert!(app.settings.positions.is_empty());
+    assert!(app.settings.layout.positions.is_empty());
     assert!(app.widgets.grid_visible());
     let during = app.surfaces();
     let preview = during.iter().find(|s| s.id == "widgets").unwrap();
@@ -934,7 +948,7 @@ fn bounded_widget_sources_preserve_capture_and_pass_through_preview() {
     let message = input.release(x + 500., y + 220.).unwrap();
     app.update(message, &mut Effects::default());
     assert!(!app.widgets.grid_visible());
-    assert!(app.settings.positions.contains_key("calendar"));
+    assert!(app.settings.layout.positions.contains_key("calendar"));
     assert!(
         !app.surfaces()
             .iter()
@@ -957,13 +971,13 @@ fn bounded_widget_pixels_match_the_full_surface() {
             for overlap in [false, true] {
                 let mut app = fixture(9, light);
                 resize_fixture(&mut app, width as f32, height as f32);
-                app.settings.visible_widgets = crate::widgets::catalog::WIDGETS
+                app.settings.layout.visible_widgets = crate::widgets::catalog::WIDGETS
                     .iter()
                     .map(|w| w.id.into())
                     .collect();
                 if overlap {
                     for (index, widget) in crate::widgets::catalog::WIDGETS.iter().enumerate() {
-                        app.settings.positions.insert(
+                        app.settings.layout.positions.insert(
                             widget.id.into(),
                             lucent_domain::Placement::new(
                                 32. + index as f32 * 48.,
@@ -991,7 +1005,7 @@ fn bounded_widget_pixels_match_the_full_surface() {
                     let expected = canvas.snapshot(width, height, scale, &full.paint).unwrap();
                     let mut actual = vec![0; expected.len()];
                     let mut native_hits = std::collections::BTreeMap::new();
-                    for source in app.widgets.surfaces(&app.settings, app.viewport) {
+                    for source in app.widgets.surfaces(&app.settings.layout, app.viewport) {
                         let cx = ViewContext {
                             surface: source.id,
                             instance: None,
@@ -1309,6 +1323,10 @@ fn visual_regressions() {
             ("widget-resize-small", Mode::Apps, 0, 0, "", 1., 390.),
             ("widget-edit-keyboard", Mode::Apps, 0, 0, "", 1., 640.),
             ("widget-editor", Mode::Apps, 0, 0, "", 1., 960.),
+            ("monitor-widgets-left", Mode::Apps, 0, 0, "", 1., 960.),
+            ("monitor-widgets-right", Mode::Apps, 0, 0, "", 1., 960.),
+            ("monitor-grid-right", Mode::Apps, 0, 0, "", 1., 960.),
+            ("monitor-selector-right", Mode::Widgets, 0, 0, "", 1., 960.),
             ("text-caret-middle", Mode::Apps, 0, 0, "", 1., 640.),
             ("text-selection-forward", Mode::Apps, 0, 0, "", 1., 640.),
             ("text-selection-reverse", Mode::Apps, 0, 0, "", 1., 640.),
@@ -1557,15 +1575,15 @@ fn visual_regressions() {
                 )
             } else if name.starts_with("widget-resize-") || name.starts_with("widget-edit") {
                 app.settings_writable = true;
-                app.settings.visible_widgets = vec!["notes".into()];
-                app.settings.positions.insert(
+                app.settings.layout.visible_widgets = vec!["notes".into()];
+                app.settings.layout.positions.insert(
                     "notes".into(),
                     lucent_domain::Placement::new(64., 96.).unwrap(),
                 );
                 app.settings.notes = "A thought to keep nearby".into();
                 if name == "widget-editor" {
-                    app.settings.visible_widgets.push("calendar".into());
-                    app.settings.positions.insert(
+                    app.settings.layout.visible_widgets.push("calendar".into());
+                    app.settings.layout.positions.insert(
                         "calendar".into(),
                         lucent_domain::Placement::new(416., 96.).unwrap(),
                     );
@@ -1580,7 +1598,7 @@ fn visual_regressions() {
                     &mut effects,
                 );
                 if name == "widget-resize-small" {
-                    app.settings.widget_sizes.insert(
+                    app.settings.layout.widget_sizes.insert(
                         "notes".into(),
                         lucent_domain::WidgetSize::new(640., 320.).unwrap(),
                     );
@@ -1629,7 +1647,7 @@ fn visual_regressions() {
                     now,
                 )
             } else if name == "widget-drag-grid" {
-                app.settings.visible_widgets = vec!["calendar".into(), "weather".into()];
+                app.settings.layout.visible_widgets = vec!["calendar".into(), "weather".into()];
                 app.update(
                     Message::Widgets(crate::widgets::Message::Move(
                         "calendar".into(),
@@ -2386,6 +2404,84 @@ fn visual_regressions() {
                     now,
                 };
                 layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
+            } else if name.starts_with("monitor-") {
+                use lucent_domain::{MonitorId, Placement, WidgetLayout, WidgetSize};
+                let left = MonitorId::new("DEMO-1").unwrap();
+                let right = MonitorId::new("DEMO-2").unwrap();
+                let catalog = [("DEMO-1", 1), ("DEMO-2", 2)]
+                    .into_iter()
+                    .map(|(name, global)| DisplayOutput {
+                        global,
+                        name: Some(OutputName::new(name).unwrap()),
+                        logical_size: Some((width as u32, height as u32)),
+                        integer_scale: 1,
+                    })
+                    .collect();
+                app.update(Message::Outputs(catalog), &mut Effects::default());
+                let mut first = WidgetLayout {
+                    visible_widgets: vec!["calendar".into(), "clock".into()],
+                    ..Default::default()
+                };
+                first
+                    .positions
+                    .insert("calendar".into(), Placement::new(64., 112.).unwrap());
+                first
+                    .positions
+                    .insert("clock".into(), Placement::new(600., 112.).unwrap());
+                let mut second = WidgetLayout {
+                    visible_widgets: vec!["notes".into(), "weather".into()],
+                    ..Default::default()
+                };
+                second
+                    .positions
+                    .insert("notes".into(), Placement::new(64., 112.).unwrap());
+                second
+                    .positions
+                    .insert("weather".into(), Placement::new(600., 112.).unwrap());
+                second
+                    .widget_sizes
+                    .insert("notes".into(), WidgetSize::new(384., 240.).unwrap());
+                app.settings.monitor_layouts.insert(left.clone(), first);
+                app.settings.monitor_layouts.insert(right.clone(), second);
+                app.settings.notes = "Shared notes across monitors".into();
+                let selected = if name.ends_with("left") { left } else { right };
+                app.update(
+                    Message::SelectMonitor(selected.clone()),
+                    &mut Effects::default(),
+                );
+                let route = app.monitors.connected[&selected].route(&selected);
+                if name == "monitor-grid-right" {
+                    app.update(
+                        Message::OnMonitor(
+                            route,
+                            Box::new(Message::Widgets(crate::widgets::Message::Move(
+                                "notes".into(),
+                                DragEvent {
+                                    dx: 56.,
+                                    dy: 40.,
+                                    finished: false,
+                                },
+                            ))),
+                        ),
+                        &mut Effects::default(),
+                    );
+                }
+                if name == "monitor-selector-right" {
+                    app.update(
+                        Message::Launcher(launcher::Message::Mode(Mode::Widgets)),
+                        &mut Effects::default(),
+                    );
+                    scene(&app, &layout, &mut Interaction::default(), now)
+                } else {
+                    let cx = ViewContext {
+                        surface: "widgets",
+                        instance: Some(app.monitors.connected[&selected].instance.clone()),
+                        width,
+                        height,
+                        now,
+                    };
+                    layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
+                }
             } else if name == "icon-catalog" {
                 let icons = lucent_design::app_icons::ALL
                     .iter()
@@ -3021,7 +3117,7 @@ fn invalid_drag_does_not_persist_positions_or_leave_grid_visible() {
         )),
         &mut Effects::default(),
     );
-    let position = app.settings.positions.get("calendar").copied();
+    let position = app.settings.layout.positions.get("calendar").copied();
     let mut effects = Effects::default();
     app.update(
         Message::Widgets(crate::widgets::Message::Move(
@@ -3034,7 +3130,10 @@ fn invalid_drag_does_not_persist_positions_or_leave_grid_visible() {
         )),
         &mut effects,
     );
-    assert_eq!(app.settings.positions.get("calendar").copied(), position);
+    assert_eq!(
+        app.settings.layout.positions.get("calendar").copied(),
+        position
+    );
     assert!(!app.widgets.grid_visible());
     assert!(effects.tasks.is_empty());
     assert!(app.error.contains("finite"));
@@ -3056,7 +3155,7 @@ fn calendar_navigation_handles_extreme_messages_without_overflow() {
 fn widget_catalog_covers_selector_views_geometry_and_ipc() {
     let mut app = fixture(0, false);
     let catalog = &crate::widgets::catalog::WIDGETS;
-    app.settings.visible_widgets = catalog.iter().map(|entry| entry.id.into()).collect();
+    app.settings.layout.visible_widgets = catalog.iter().map(|entry| entry.id.into()).collect();
     let layout = Layout::new(fonts(&app));
     let cx = ViewContext {
         surface: "widgets",
@@ -3106,9 +3205,9 @@ fn widget_catalog_covers_selector_views_geometry_and_ipc() {
 fn notes_fixture(state: &str, light: bool) -> Desktop {
     let mut app = fixture(0, light);
     app.settings_writable = state != "unavailable";
-    app.settings.visible_widgets = vec!["notes".into()];
+    app.settings.layout.visible_widgets = vec!["notes".into()];
     app.settings.notes = "An idea to keep".into();
-    app.settings.positions.insert(
+    app.settings.layout.positions.insert(
         "notes".into(),
         lucent_domain::Placement::new(48., 80.).unwrap(),
     );
@@ -3761,13 +3860,13 @@ fn native_widget_resize_uses_the_grip_and_preserves_source_capture_until_release
     let mut app = fixture(0, false);
     resize_fixture(&mut app, 800., 600.);
     app.settings_writable = true;
-    app.settings.visible_widgets = vec!["notes".into()];
-    app.settings.positions.insert(
+    app.settings.layout.visible_widgets = vec!["notes".into()];
+    app.settings.layout.positions.insert(
         "notes".into(),
         lucent_domain::Placement::new(128., 160.).unwrap(),
     );
     let layout = Layout::new(fonts(&app));
-    let group = app.widgets.surfaces(&app.settings, app.viewport)[0].clone();
+    let group = app.widgets.surfaces(&app.settings.layout, app.viewport)[0].clone();
     let cx = ViewContext {
         surface: group.id,
         instance: None,
@@ -3784,7 +3883,7 @@ fn native_widget_resize_uses_the_grip_and_preserves_source_capture_until_release
             .any(|hit| hit.id == "widget-resize-notes")
     );
     app.update(Message::Widgets(W::Edit(true)), &mut Effects::default());
-    let group = app.widgets.surfaces(&app.settings, app.viewport)[0].clone();
+    let group = app.widgets.surfaces(&app.settings.layout, app.viewport)[0].clone();
     let cx = ViewContext {
         surface: group.id,
         instance: None,
@@ -3818,7 +3917,7 @@ fn native_widget_resize_uses_the_grip_and_preserves_source_capture_until_release
                 >= card.rect.y
                     + app
                         .widgets
-                        .size("notes", &app.settings, app.viewport, true)
+                        .size("notes", &app.settings.layout, app.viewport, true)
                         .height()
         );
         assert!(fully_visible(hit.rect, card.rect));
@@ -3838,7 +3937,7 @@ fn native_widget_resize_uses_the_grip_and_preserves_source_capture_until_release
         app.update(message, &mut Effects::default());
     }
     assert!(app.widgets.grid_visible());
-    assert!(app.settings.widget_sizes.is_empty());
+    assert!(app.settings.layout.widget_sizes.is_empty());
     let surfaces = app.surfaces();
     let preview = surfaces.iter().find(|spec| spec.id == "widgets").unwrap();
     assert!(preview.visible);
@@ -3852,7 +3951,10 @@ fn native_widget_resize_uses_the_grip_and_preserves_source_capture_until_release
         input.release(x + 53., y + 47.).unwrap(),
         &mut Effects::default(),
     );
-    assert_eq!(app.settings.widget_sizes["notes"].tuple(), (320., 208.));
+    assert_eq!(
+        app.settings.layout.widget_sizes["notes"].tuple(),
+        (320., 208.)
+    );
     assert!(!app.widgets.grid_visible());
     assert!(
         app.surfaces()
@@ -3870,7 +3972,7 @@ fn widget_editor_routes_launcher_keyboard_size_controls_escape_and_checked_ipc()
     let mut app = fixture(0, false);
     resize_fixture(&mut app, 800., 600.);
     app.settings_writable = true;
-    app.settings.visible_widgets = vec!["notes".into()];
+    app.settings.layout.visible_widgets = vec!["notes".into()];
     app.update(
         Message::Launcher(launcher::Message::Mode(Mode::Widgets)),
         &mut Effects::default(),
@@ -3886,7 +3988,7 @@ fn widget_editor_routes_launcher_keyboard_size_controls_escape_and_checked_ipc()
     assert!(app.widgets.editing());
     assert!(!app.launcher.open());
     assert!(effects.tasks.is_empty());
-    let group = app.widgets.surfaces(&app.settings, app.viewport)[0].clone();
+    let group = app.widgets.surfaces(&app.settings.layout, app.viewport)[0].clone();
     let cx = ViewContext {
         surface: group.id,
         instance: None,
@@ -3903,7 +4005,10 @@ fn widget_editor_routes_launcher_keyboard_size_controls_escape_and_checked_ipc()
     for message in messages {
         app.update(message, &mut Effects::default());
     }
-    assert_eq!(app.settings.widget_sizes["notes"].tuple(), (288., 176.));
+    assert_eq!(
+        app.settings.layout.widget_sizes["notes"].tuple(),
+        (288., 176.)
+    );
     for command in [
         "widgets size notes 0 300",
         "widgets size unknown 320 240",
@@ -3916,7 +4021,10 @@ fn widget_editor_routes_launcher_keyboard_size_controls_escape_and_checked_ipc()
         app.command("widgets size notes 400 240").unwrap().unwrap(),
         &mut Effects::default(),
     );
-    assert_eq!(app.settings.widget_sizes["notes"].tuple(), (400., 240.));
+    assert_eq!(
+        app.settings.layout.widget_sizes["notes"].tuple(),
+        (400., 240.)
+    );
     let exit = app
         .event(Event::Key {
             surface: group.id,
@@ -3974,7 +4082,7 @@ fn notes_cursor_changes_request_paint_without_persisting_and_grapheme_edits_save
     use crate::widgets::Message as W;
     let mut app = fixture(0, false);
     app.settings_writable = true;
-    app.settings.visible_widgets = vec!["notes".into()];
+    app.settings.layout.visible_widgets = vec!["notes".into()];
     app.update(
         Message::Widgets(W::EditNotes(TextEdit::Replace("a e\u{301}".into()))),
         &mut Effects::default(),

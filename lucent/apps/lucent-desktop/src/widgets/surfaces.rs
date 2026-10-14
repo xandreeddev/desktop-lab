@@ -4,7 +4,7 @@
 use super::default_position;
 use lucent_api::{Rect, Shadow};
 use lucent_design::{elevation, layout};
-use lucent_domain::{DesktopSettings, Placement};
+use lucent_domain::{Placement, WidgetLayout};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Surface {
@@ -15,7 +15,7 @@ pub struct Surface {
 
 pub fn position(
     id: &str,
-    settings: &DesktopSettings,
+    settings: &WidgetLayout,
     viewport: (f32, f32),
     editing: bool,
 ) -> Placement {
@@ -32,7 +32,7 @@ pub fn position(
     .expect("validated placement, output and design tokens")
 }
 
-fn crop(id: &str, settings: &DesktopSettings, viewport: (f32, f32), editing: bool) -> Rect {
+fn crop(id: &str, settings: &WidgetLayout, viewport: (f32, f32), editing: bool) -> Rect {
     let pos = position(id, settings, viewport, editing);
     let (width, height) = super::sizing::visual_size(id, settings, viewport, editing);
     let pad = Shadow::blur_outset(elevation::BLUR);
@@ -46,7 +46,7 @@ fn crop(id: &str, settings: &DesktopSettings, viewport: (f32, f32), editing: boo
     Rect::new(x, y, (right - x).max(1.), (bottom - y).max(1.))
 }
 
-pub fn visible(settings: &DesktopSettings) -> Vec<&'static str> {
+pub fn visible(settings: &WidgetLayout) -> Vec<&'static str> {
     let mut ids = Vec::new();
     for id in &settings.visible_widgets {
         if let Some(entry) = super::catalog::find(id)
@@ -71,7 +71,7 @@ fn union(a: Rect, b: Rect) -> Rect {
     )
 }
 
-pub fn layout(settings: &DesktopSettings, viewport: (f32, f32), editing: bool) -> Vec<Surface> {
+pub fn layout(settings: &WidgetLayout, viewport: (f32, f32), editing: bool) -> Vec<Surface> {
     let order = visible(settings);
     let mut result: Vec<_> = order
         .iter()
@@ -105,7 +105,7 @@ pub fn layout(settings: &DesktopSettings, viewport: (f32, f32), editing: bool) -
 /// shown cards get another input source; the full preview owns their paint.
 pub fn captured(
     layout: &[Surface],
-    settings: &DesktopSettings,
+    settings: &WidgetLayout,
     viewport: (f32, f32),
     editing: bool,
 ) -> Vec<Surface> {
@@ -135,7 +135,7 @@ mod tests {
     use super::*;
     #[test]
     fn overlapping_and_transitive_members_keep_order_in_disjoint_buffers() {
-        let mut settings = DesktopSettings {
+        let mut settings = WidgetLayout {
             visible_widgets: vec![
                 "calendar".into(),
                 "weather".into(),
@@ -170,7 +170,7 @@ mod tests {
     }
     #[test]
     fn captured_sources_keep_geometry_through_unrelated_visibility_changes() {
-        let mut settings = DesktopSettings::default();
+        let mut settings = WidgetLayout::default();
         let initial = layout(&settings, (1920., 1080.), false);
         let source = initial
             .iter()

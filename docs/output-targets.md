@@ -12,8 +12,9 @@ cargo run --manifest-path lucent/Cargo.toml --locked -p hello-layer -- --output 
 The independent example receives `Event::OutputsChanged(Vec<DisplayOutput>)`
 through its normal typed message/update path. It displays its requested name and
 catalog count, without accessing native protocol objects. `--help` works before
-connecting to Wayland. The desktop client still uses neutral output defaults;
-per-monitor desktop layout and fractional scaling are separate unfinished work.
+connecting to Wayland. The subsequent [desktop monitor implementation](monitor-layouts.md)
+uses explicit targets and instances for named profiles. Actual compositor
+acceptance and fractional scaling remain unfinished.
 
 ## From a declaration to native objects
 

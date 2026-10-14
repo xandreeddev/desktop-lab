@@ -7,6 +7,7 @@ mod catalog;
 mod desktop;
 mod dock;
 mod launcher;
+mod monitors;
 mod network;
 mod notifications;
 mod osd;

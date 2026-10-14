@@ -4,6 +4,7 @@
 Uses the prepared wide single-monitor guest. Restores its original workspace;
 does not change saved preferences or close applications.
 """
+from native_surfaces import active_surfaces, find_surface, role
 import json
 from pathlib import Path
 import runpy
@@ -23,7 +24,7 @@ def main():
 
     try:
         vm['eventually'](state_matches, 'Adapter invented or omitted workspaces')
-        ids = {h['id'] for s in inspect()['surfaces'] if s['id'] == 'bar' for h in s['hits']}
+        ids = {h['id'] for h in find_surface(inspect(), 'bar')['hits']}
         assert {f'workspace-{i}' for i in range(1, 7)} <= ids, 'Default shortcuts missing'
         target = 2 if original != 2 else 1
         vm['click'](f'workspace-{target}')
