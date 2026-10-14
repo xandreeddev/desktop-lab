@@ -25,6 +25,7 @@ pub struct DesktopAdapters {
     pub wallpaper: Arc<dyn WallpaperPort>,
     pub session: Arc<dyn SessionPort>,
     pub notifications: Arc<dyn NotificationPort>,
+    pub uri: Arc<dyn UriPort>,
     pub assets: Arc<dyn AssetPort>,
 }
 

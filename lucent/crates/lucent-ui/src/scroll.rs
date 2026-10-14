@@ -114,6 +114,24 @@ fn visible(clip: &Clip, rect: Rect) -> bool {
     let end = (clip.bounds.y + clip.bounds.h - 0.5).ceil() as i32;
     (first..end).any(|row| clip.integer_span(row).is_some())
 }
+fn hit_visible<M>(clip: &Clip, hit: &crate::Hit<M>, target: Rect) -> bool {
+    hit.parts.as_ref().map_or_else(
+        || visible(clip, target),
+        |parts| {
+            parts.iter().any(|part| {
+                visible(
+                    clip,
+                    Rect::new(
+                        part.x + target.x - hit.rect.x,
+                        part.y + target.y - hit.rect.y,
+                        part.w,
+                        part.h,
+                    ),
+                )
+            })
+        },
+    )
+}
 
 pub(crate) fn reveal<'a, M>(
     hit: &'a crate::Hit<M>,
@@ -123,7 +141,7 @@ pub(crate) fn reveal<'a, M>(
         return None;
     }
     if hit.scroll_ancestors.is_empty() {
-        return visible(&hit.clip, hit.rect).then(Vec::new);
+        return hit_visible(&hit.clip, hit, hit.rect).then(Vec::new);
     }
     let mut target = hit.rect;
     let mut deltas = vec![0.; hit.scroll_ancestors.len()];
@@ -155,7 +173,7 @@ pub(crate) fn reveal<'a, M>(
         bounds.y -= deltas.iter().take(clip.scroll_depth).sum::<f32>();
         projected = projected.with_rounded(bounds, clip.radius);
     }
-    visible(&projected, target).then_some(changes)
+    hit_visible(&projected, hit, target).then_some(changes)
 }
 
 #[cfg(test)]

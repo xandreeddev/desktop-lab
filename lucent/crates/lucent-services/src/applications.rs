@@ -85,6 +85,21 @@ impl ApplicationPort for XdgApplications {
         launch::application(app)
     }
 }
+/// URI selection starts the desktop handler in an independent application unit.
+pub struct XdgUri;
+impl UriPort for XdgUri {
+    fn open(&self, target: &ExternalUri) -> Result<()> {
+        launch::command(
+            &LaunchCommand {
+                program: "xdg-open".into(),
+                args: vec![target.value().into()],
+                directory: None,
+                terminal: false,
+            },
+            None,
+        )
+    }
+}
 fn executable(program: &str) -> bool {
     let check = |p: &Path| {
         fs::metadata(p).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)

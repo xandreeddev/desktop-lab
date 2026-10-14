@@ -29,6 +29,8 @@ struct TextureResource {
     height: f32,
     _texture: Texture,
     bytes: u64,
+    /// Logical left bearing for text masks; ordinary image resources use zero.
+    text_origin_x: f32,
 }
 /// One GPU device is shared by all native surfaces in an application.
 pub struct Gpu {
@@ -270,6 +272,7 @@ impl Gpu {
             height: height as f32,
             _texture: texture,
             bytes: levels.iter().map(|level| level.pixels.len() as u64).sum(),
+            text_origin_x: 0.,
         });
         if enabled {
             profile.texture_upload += profiling::elapsed(started);
@@ -332,7 +335,7 @@ impl Gpu {
             return Ok(v);
         }
         let started = profiling::start(enabled);
-        let (pixels, width, height) = raster::text(
+        let (pixels, width, height, origin_x) = raster::text(
             font,
             text,
             size,
@@ -343,7 +346,7 @@ impl Gpu {
             profile.text_raster += profiling::elapsed(started);
             profile.text_misses += 1;
         }
-        let texture = self.texture(
+        let mut texture = self.texture(
             &[lucent_api::ImageLevel {
                 width,
                 height,
@@ -353,6 +356,9 @@ impl Gpu {
             profile,
             enabled,
         );
+        Rc::get_mut(&mut texture)
+            .expect("new text texture is not shared")
+            .text_origin_x = origin_x;
         self.cache
             .borrow_mut()
             .insert(key, texture.clone(), texture.bytes);
@@ -591,7 +597,7 @@ impl Canvas {
                         .max(0.);
                     (
                         Rect::new(
-                            (x * scale as f32).round() / scale as f32,
+                            (x * scale as f32).round() / scale as f32 + texture.text_origin_x,
                             ((rect.y + (rect.h - h).max(0.) / 2.) * scale as f32).round()
                                 / scale as f32,
                             w,

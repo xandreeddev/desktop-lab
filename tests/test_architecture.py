@@ -198,6 +198,10 @@ class Boundaries(unittest.TestCase):
                                            ('lucent_domain', 'lucent_desktop', 'lucent_services', 'lucent_wayland', 'lucent_render'))
         self.assertNotIn('lucent-desktop', reachable(self.graph, 'text-input'))
         self.assertNotIn('lucent-services', reachable(self.graph, 'text-input'))
+        for name in ('lucent-usecases','lucent-services','lucent-desktop'):
+            self.assertNotIn(name,reachable(self.graph,'rich-text'))
+        self.assert_no_platform_operations([ROOT/'lucent/crates/lucent-api/src/rich_text.rs',ROOT/'lucent/crates/lucent-ui/src/rich_text.rs'],
+                                           ('lucent_domain','lucent_services','lucent_desktop','std::process','std::fs'))
 
     def test_clipboard_transport_stays_in_native_backend_and_secure_clients_do_not_opt_in(self):
         self.assert_no_imports(sources(ROOT/'lucent/crates/lucent-wayland/src/clipboard'),

@@ -4,6 +4,13 @@ use std::sync::Mutex;
 #[derive(Default)]
 struct Adapter {
     calls: Mutex<Vec<NotificationTarget>>,
+    links: Mutex<Vec<String>>,
+}
+impl lucent_domain::UriPort for Adapter {
+    fn open(&self, target: &lucent_domain::ExternalUri) -> Result<()> {
+        self.links.lock().unwrap().push(target.value().into());
+        Ok(())
+    }
 }
 impl NotificationPort for Adapter {
     fn watch(&self, _: &mut dyn FnMut(Result<NotificationSnapshot>), _: &dyn StopSignal) {}
@@ -46,7 +53,7 @@ fn note(id: u32, revision: u64, app: &str) -> Notification {
 }
 fn center() -> (Center, Arc<Adapter>) {
     let adapter = Arc::new(Adapter::default());
-    (Center::new(adapter.clone()), adapter)
+    (Center::new(adapter.clone(), adapter.clone()), adapter)
 }
 #[test]
 fn history_groups_active_and_saved_entries_with_stable_selection_and_bounded_pages() {
@@ -207,6 +214,61 @@ fn retired_or_unavailable_actions_are_not_queued_from_old_scenes() {
         &mut effects,
     );
     center.update(Message::Invoke(current, "open".into()), &mut effects);
+    assert!(effects.tasks.is_empty());
+}
+
+#[test]
+fn rich_links_use_current_content_and_history_never_invokes_the_sender() {
+    let (mut center, adapter) = center();
+    let mut effects = Effects::default();
+    let mut live = note(1, 5, "Fixture");
+    live.body = "A <b>bold</b> and <a href='https://example.test/details'>linked</a> body".into();
+    let target = live.target().unwrap();
+    center.update(
+        Message::Snapshot(Ok(NotificationSnapshot {
+            active: vec![live.clone()],
+            ..Default::default()
+        })),
+        &mut effects,
+    );
+    center.update(
+        Message::OpenLink(target, "javascript:bad".into()),
+        &mut effects,
+    );
+    assert!(effects.tasks.is_empty());
+    center.update(
+        Message::OpenLink(target, "https://example.test/details".into()),
+        &mut effects,
+    );
+    assert!(adapter.links.lock().unwrap().is_empty());
+    let result = effects.tasks.pop().unwrap().run();
+    center.update(result, &mut effects);
+    assert_eq!(
+        *adapter.links.lock().unwrap(),
+        ["https://example.test/details"]
+    );
+    center.update(
+        Message::Snapshot(Ok(NotificationSnapshot {
+            history: vec![live],
+            ..Default::default()
+        })),
+        &mut effects,
+    );
+    center.update(
+        Message::OpenLink(target, "https://example.test/details".into()),
+        &mut effects,
+    );
+    let result = effects.tasks.pop().unwrap().run();
+    center.update(result, &mut effects);
+    assert!(adapter.calls.lock().unwrap().is_empty());
+    center.update(
+        Message::Snapshot(Ok(NotificationSnapshot::default())),
+        &mut effects,
+    );
+    center.update(
+        Message::OpenLink(target, "https://example.test/details".into()),
+        &mut effects,
+    );
     assert!(effects.tasks.is_empty());
 }
 

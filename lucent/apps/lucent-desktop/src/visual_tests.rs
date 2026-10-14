@@ -1213,6 +1213,11 @@ fn visual_regressions() {
             ("dock", Mode::Apps, 9, 0, "", 1., 640.),
             ("notification", Mode::Apps, 0, 0, "", 1., 640.),
             ("notification-history", Mode::Apps, 0, 0, "", 1., 390.),
+            ("notification-rich", Mode::Apps, 0, 0, "", 1., 640.),
+            ("notification-rich-narrow", Mode::Apps, 0, 0, "", 1., 390.),
+            ("inline-rich", Mode::Apps, 0, 0, "", 1., 640.),
+            ("inline-link-focus", Mode::Apps, 0, 0, "", 1., 390.),
+            ("inline-clipped-links", Mode::Apps, 0, 0, "", 1., 390.),
             ("notification-grouped", Mode::Apps, 0, 0, "", 1., 390.),
             ("notification-grouped-last", Mode::Apps, 0, 0, "", 1., 390.),
             ("notification-history-empty", Mode::Apps, 0, 0, "", 1., 390.),
@@ -2149,9 +2154,50 @@ fn visual_regressions() {
                     now,
                 };
                 layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
+            } else if name.starts_with("inline-") {
+                let t = app.theme();
+                let text=Element::rich_text(vec![TextSpan::new("Regular text and "),TextSpan::new("bold text").face(2),TextSpan::new(" share a baseline with "),TextSpan::new("italic fj").face(3),TextSpan::new(" and "),TextSpan::new("bold italic").face(4),TextSpan::new(".\nThis "),TextSpan::new("wrapped interactive link remains one keyboard focus target across the entire paragraph").link("details").underline(true).color(t.info),TextSpan::new(".\nUnderline: "),TextSpan::new("stable coverage at each display density").underline(true)])
+                    .on_link(|_|Message::Quit).id("rich-body").font(lucent_design::font::BODY).color(t.on_surface).width(Length::Fill).wrap(20);
+                let panel = Element::column(vec![
+                    Element::text("Inline content")
+                        .font(lucent_design::font::TITLE)
+                        .color(t.on_surface),
+                    text,
+                ])
+                .padding(lucent_design::space::LG)
+                .gap(lucent_design::space::SM)
+                .size(
+                    width - lucent_design::space::XXL,
+                    if name == "inline-clipped-links" {
+                        lucent_design::component::input::HEIGHT * 2. + lucent_design::space::LG
+                    } else {
+                        lucent_design::component::example::HEIGHT
+                    },
+                )
+                .radius(lucent_design::radius::PANEL)
+                .background(t.surface)
+                .color(t.on_surface)
+                .clip();
+                let tree = t.apply(Element::stack(vec![panel]).fill());
+                let mut input = Interaction::default();
+                input.synchronize(&layout.build(&tree, width, height, &input, now));
+                if name == "inline-link-focus" {
+                    input.focus = Some("rich-body/link/details".into());
+                    input.focus_visible = true;
+                }
+                layout.build(&tree, width, height, &input, now)
             } else if name.starts_with("notification") {
-                app.notifications.snapshot=lucent_domain::NotificationSnapshot {active:vec![lucent_domain::Notification {id:1,revision:1,received_unix_ms:0,desktop_entry:None,app:"Lucent fixture".into(),summary:"A notification rendered by our framework".into(),body:"Shared design tokens, measured text wrapping, native actions and keyboard focus.".into(),actions:vec![lucent_domain::NotificationAction {id:"default".into(),label:"Open fixture".into()}],critical:false,resident:false,transient:false,timeout_ms:0}],..Default::default()};
+                app.notifications.update(crate::notifications::Message::Snapshot(Ok(lucent_domain::NotificationSnapshot {active:vec![lucent_domain::Notification {id:1,revision:1,received_unix_ms:0,desktop_entry:None,app:"Lucent fixture".into(),summary:"A notification rendered by our framework".into(),body:"Shared design tokens, measured text wrapping, native actions and keyboard focus.".into(),actions:vec![lucent_domain::NotificationAction {id:"default".into(),label:"Open fixture".into()}],critical:false,resident:false,transient:false,timeout_ms:0}],..Default::default()})), &mut Effects::default());
                 app.notifications.ready = true;
+                if name.starts_with("notification-rich") {
+                    let mut snapshot = app.notifications.snapshot.clone();
+                    snapshot.active[0].revision = 2;
+                    snapshot.active[0].body="A <b>bold update</b>, <i>italic details</i> and <b><i>both faces</i></b>.\n<u>Underlined content</u> shares the same native text flow. <a href='https://example.test/details'>Open the full details through this wrapped native link</a>. &lt;escaped markup&gt; stays literal.".into();
+                    app.notifications.update(
+                        crate::notifications::Message::Snapshot(Ok(snapshot)),
+                        &mut Effects::default(),
+                    );
+                }
                 if name.ends_with("history") {
                     app.notifications
                         .update(crate::notifications::Message::Show, &mut Effects::default());
@@ -2193,6 +2239,14 @@ fn visual_regressions() {
                     if name.ends_with("write-error") {
                         app.notifications.snapshot.history_status =
                             lucent_domain::NotificationHistoryStatus::WriteFailed;
+                    }
+                    app.notifications.update(
+                        Notify::Snapshot(Ok(app.notifications.snapshot.clone())),
+                        &mut effects,
+                    );
+                    if name.starts_with("notification-rich") {
+                        app.notifications
+                            .update(Notify::Group("name:Lucent fixture".into()), &mut effects);
                     }
                     app.notifications.update(Notify::Show, &mut effects);
                     if name == "notification-grouped-last" {

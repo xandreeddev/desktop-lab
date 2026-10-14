@@ -3,6 +3,7 @@ use super::{Center, Message};
 use lucent_api::*;
 use lucent_design::{Theme, component::notification as token, font, radius, space};
 use lucent_domain::{Notification, NotificationHistoryStatus};
+use lucent_usecases::notifications::body::{BodyBlock, BodyStyle};
 impl Center {
     fn card(
         &self,
@@ -38,18 +39,61 @@ impl Center {
                 .width(Length::Fill)
                 .wrap(token::TITLE_LINES as usize),
         ];
-        if !note.body.is_empty() {
-            children.push(
-                Element::text(&note.body)
-                    .font(font::BODY)
-                    .color(t.on_surface)
-                    .width(Length::Fill)
-                    .wrap(if detailed {
-                        token::HISTORY_BODY_LINES
-                    } else {
-                        token::BODY_LINES
-                    } as usize),
-            );
+        if !note.body.is_empty()
+            && let Some((target, body)) = note
+                .target()
+                .and_then(|target| self.bodies.get(&target).map(|body| (target, body)))
+        {
+            for (index, block) in body.blocks.iter().enumerate() {
+                let element = match block {
+                    BodyBlock::Text(spans)
+                        if spans.iter().all(|span| span.style == BodyStyle::default()) =>
+                    {
+                        Element::text(
+                            spans
+                                .iter()
+                                .map(|span| span.text.as_str())
+                                .collect::<String>(),
+                        )
+                    }
+                    BodyBlock::Text(spans) => Element::rich_text(
+                        spans
+                            .iter()
+                            .map(|span| {
+                                let mut run = TextSpan::new(&span.text)
+                                    .face(match (span.style.bold, span.style.italic) {
+                                        (true, true) => 4,
+                                        (true, false) => 2,
+                                        (false, true) => 3,
+                                        _ => 0,
+                                    })
+                                    .underline(span.style.underline || span.style.link.is_some());
+                                if let Some(link) = &span.style.link {
+                                    run = run.color(t.info).link(link.value());
+                                }
+                                run
+                            })
+                            .collect(),
+                    )
+                    .on_link(move |key| Message::OpenLink(target, key.into())),
+                    BodyBlock::Image { alt, .. } => Element::text(alt),
+                };
+                children.push(
+                    element
+                        .id(format!(
+                            "notification-body-{}-{}-{index}",
+                            note.id, note.revision
+                        ))
+                        .font(font::BODY)
+                        .color(t.on_surface)
+                        .width(Length::Fill)
+                        .wrap(if detailed {
+                            token::HISTORY_BODY_LINES
+                        } else {
+                            token::BODY_LINES
+                        } as usize),
+                );
+            }
         }
         if !history
             && !note.actions.is_empty()

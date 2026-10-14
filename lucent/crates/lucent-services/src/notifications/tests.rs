@@ -447,6 +447,11 @@ fn notification_protocol() {
     let proxy = zbus::blocking::Proxy::new(&connection, NAME, PATH, NAME).unwrap();
     let info: (String, String, String, String) = proxy.call("GetServerInformation", &()).unwrap();
     assert_eq!(info.0, "Lucent");
+    let capabilities: Vec<String> = proxy.call("GetCapabilities", &()).unwrap();
+    assert_eq!(
+        capabilities,
+        ["body", "body-markup", "body-hyperlinks", "actions"]
+    );
     let mut actions = proxy.receive_signal("ActionInvoked").unwrap();
     let notify = |replaces: u32, timeout: i32| -> u32 {
         proxy

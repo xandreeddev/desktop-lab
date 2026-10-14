@@ -14,15 +14,19 @@ pub(super) fn application(app: &Application) -> Result<()> {
     } else {
         None
     };
+    command(&app.command, terminal)
+}
+
+pub(super) fn command(command: &LaunchCommand, terminal: Option<&str>) -> Result<()> {
     let environment = std::env::vars_os().filter_map(|(name, _)| name.into_string().ok());
-    let args = arguments(&app.command, terminal, environment)?;
+    let args = arguments(command, terminal, environment)?;
     let refs = args.iter().map(String::as_str).collect::<Vec<_>>();
     // Type=exec waits for execve acknowledgement, not for the application to exit.
     // Failure must not fall back to a child inside lucent.service: that would
     // make a shell restart terminate the user's application and its documents.
     crate::command("systemd-run", &refs)
         .map(|_| ())
-        .map_err(|error| DomainError::Failed(format!("Cannot launch {}: {error}", app.name)))
+        .map_err(|_| DomainError::Failed("Application could not be started".into()))
 }
 
 fn arguments(
@@ -88,6 +92,22 @@ fn inherited_environment(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn uri_handler_receives_one_literal_target_after_the_unit_separator() {
+        let target = "https://example.test/?value=$(literal)&other=`literal`";
+        let command = LaunchCommand {
+            program: "xdg-open".into(),
+            args: vec![target.into()],
+            directory: None,
+            terminal: false,
+        };
+        let args = arguments(&command, None, std::iter::empty()).unwrap();
+        let at = args.iter().position(|value| value == "--").unwrap();
+        assert_eq!(&args[at + 1..], ["xdg-open", target]);
+        assert!(args.iter().any(|value| value == "--expand-environment=no"));
+        assert!(args.iter().any(|value| value == "--slice=app.slice"));
+    }
 
     #[test]
     #[ignore = "isolated transient units; requires a running systemd user manager and python3"]
