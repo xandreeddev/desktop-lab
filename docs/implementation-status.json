@@ -207,12 +207,15 @@
     {
       "id": "display-support",
       "owner": "lucent-api lucent-wayland and desktop layout",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "Explicit output targeting",
         "Per-monitor layout persistence",
         "Fractional scaling",
         "Hotplug and output recreation verification"
+      ],
+      "evidence": [
+        "Named-output SDK source 8dcb4889d747b617029a52f2015036c0f8b637d9 adds validated selectors, typed registry catalogs, exact current native bindings, disconnected/ambiguous waiting, role recreation and non-spinning named closure. Default consumers compile neutrally; secure lock remains all-output. 397 Rust tests/59 ignored, 85 Python checks, strict checks, example help and both Astro prefixes pass. Actual compositor placement/input/hotplug and full desktop per-output/fractional behavior remain incomplete. See reports/measurements/lucent-output-targets.json."
       ]
     },
     {
@@ -1364,6 +1367,29 @@
         "Activation tokens, sound, optional notification persistence, text shaping/IME/accessibility, outputs/fractional scaling and the full client/release ledger.",
         "Payload limits exclude transport allocations, active work, runtime messages/scenes, driver/GPU allocations and parser overhead; kernel file IO is not forcibly cancelled.",
         "Final published-head CI and authorized normal merge."
+      ],
+      "delivery": {
+        "status": "merged",
+        "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/50",
+        "merge_commit": "d71f4d9cab14767f67058c04848d454082952981"
+      }
+    },
+    {
+      "milestone": "named-output-sdk-selection-and-registry-lifetime",
+      "source_commit": "8dcb4889d747b617029a52f2015036c0f8b637d9",
+      "report": "reports/measurements/lucent-output-targets.json",
+      "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+      "checks": [
+        "397 Rust workspace tests/59 ignored, 85 Python checks and strict formatting/Clippy pass.",
+        "Pure policy covers literal names, unavailable/unnamed/ambiguous waiting, closed objects and reconnect identity with reused globals.",
+        "Independent example help and both Astro prefixes pass; native graphical output acceptance remains deferred.",
+        "Image PR #50, main CI and Pages merged/passed. No renderer/UI primitive change or reference update."
+      ],
+      "pending": [
+        "Actual compositor target placement, unavailable/reconnect/closed-role behavior, native input/clipboard retirement and secure multi-output acceptance.",
+        "Desktop per-output persisted layouts, multiple instances of one logical role, neutral-default hotplug recovery and fractional scaling.",
+        "Current RSS/frame pacing and the full text/client/release requirement ledger.",
+        "Final exact-head CI and authorized normal merge."
       ]
     }
   ],
