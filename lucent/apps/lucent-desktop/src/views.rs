@@ -78,7 +78,14 @@ impl Desktop {
             .background(self.surface_color())
     }
     pub fn bar(&self, cx: &ViewContext) -> Element<Message> {
-        let buttons = crate::workspaces::buttons(&self.compositor);
+        let monitor = cx
+            .instance
+            .as_ref()
+            .and_then(|instance| self.monitors.route(instance));
+        let buttons = crate::workspaces::buttons_for_monitor(
+            &self.compositor,
+            monitor.as_ref().map(|route| &route.id),
+        );
         let geometry = shell_layout::BarLayout::new(cx.width, buttons.len());
         let active = buttons.iter().position(|w| w.active).unwrap_or(0);
         let start = (active + 1)

@@ -9,7 +9,9 @@ in the desktop composition root.
 
 The launcher/dock, notifications and control panels use the active monitor.
 Entering a monitor's top bar or interacting with one of its widgets selects it.
-The initial choice is the first unique name in sorted order. A disconnected
+The initial fallback is the first unique name in sorted order. Fresh compositor
+focus then selects its matching available host or waits for that exact name. See
+[compositor focus](compositor-focus.md) for recovery and explicit selection policy. A disconnected
 active monitor selects another available name. You can also select explicitly:
 
 ```sh
@@ -128,6 +130,5 @@ Actual compositor placement, simultaneous native keyboard/pointer/clipboard,
 hotplug/suspend, service restart and secure multi-output acceptance are deferred
 under the user's instruction. Current process RSS and animation pacing remain
 unmeasured. The optional fractional protocol path is described in [fractional scaling](fractional-scaling.md).
-Per-monitor wallpaper selection, automatic
-compositor-focused monitor observation, output naming changes and native output
+Per-monitor wallpaper selection, output naming changes and native output
 arrangement settings remain separate work. This source is not deployed to the VM.

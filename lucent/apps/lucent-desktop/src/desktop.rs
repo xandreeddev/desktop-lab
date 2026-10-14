@@ -106,6 +106,8 @@ pub struct Desktop {
     pub previews: crate::previews::Previews,
     pub wallpaper: crate::wallpaper_selection::Selection,
     pub compositor: CompositorSnapshot,
+    pub compositor_available: bool,
+    pub compositor_error: String,
     pub clock: ClockSnapshot,
     pub system: SystemSnapshot,
     pub audio: crate::audio::Audio,
@@ -155,6 +157,8 @@ impl Desktop {
                 adapters.palette_generation.clone(),
             ),
             compositor: CompositorSnapshot::default(),
+            compositor_available: false,
+            compositor_error: String::new(),
             clock: adapters.clock.now(),
             system: SystemSnapshot::default(),
             audio: crate::audio::Audio::new(adapters.audio.clone()),
@@ -269,6 +273,8 @@ impl Desktop {
             error
         } else if let Some(error) = self.wallpaper.presentation_error() {
             error
+        } else if !self.compositor_error.is_empty() {
+            &self.compositor_error
         } else {
             &self.error
         }
@@ -458,6 +464,12 @@ impl Desktop {
             "osd",
         ] {
             effects.redraw(role);
+        }
+    }
+    fn explicitly_select_monitor(&mut self, id: &MonitorId, effects: &mut Effects<Message>) {
+        if self.monitors.connected.contains_key(id) {
+            self.monitors.pending_focus = None;
+            self.select_monitor(id, effects);
         }
     }
     fn resize_monitor_background(&mut self, effects: &mut Effects<Message>) {
@@ -752,7 +764,16 @@ impl Component for Desktop {
         match message {
             Message::Outputs(catalog) => {
                 self.monitors.reconcile(catalog, self.viewport);
-                let selected = self.monitors.active.clone();
+                let pending = self
+                    .monitors
+                    .pending_focus
+                    .as_ref()
+                    .filter(|id| self.monitors.connected.contains_key(*id))
+                    .cloned();
+                let selected = pending.clone().or_else(|| self.monitors.active.clone());
+                if pending.is_some() {
+                    self.monitors.pending_focus = None;
+                }
                 if let Some(id) = selected {
                     self.select_monitor(&id, effects);
                 }
@@ -773,7 +794,7 @@ impl Component for Desktop {
                     effects.redraw(role);
                 }
             }
-            Message::SelectMonitor(id) => self.select_monitor(&id, effects),
+            Message::SelectMonitor(id) => self.explicitly_select_monitor(&id, effects),
             Message::OnMonitor(route, message) => {
                 if !self.monitors.accepts(&route) {
                     return;
@@ -818,12 +839,12 @@ impl Component for Desktop {
                                 | widgets::Message::Tick(_)
                                 | widgets::Message::CancelDrags
                         ) {
-                            self.select_monitor(&route.id, effects);
+                            self.explicitly_select_monitor(&route.id, effects);
                         }
                         self.update_widgets_on(Some(&route.id), message, effects);
                     }
                     message => {
-                        self.select_monitor(&route.id, effects);
+                        self.explicitly_select_monitor(&route.id, effects);
                         self.update(message, effects);
                     }
                 }
@@ -952,15 +973,35 @@ impl Component for Desktop {
             }
             Message::Compositor(result) => match result {
                 Ok(value) => {
-                    if self.compositor != value {
+                    let recovered = !self.compositor_available;
+                    let focus_changed =
+                        recovered || self.compositor.focused_monitor() != value.focused_monitor();
+                    self.compositor_available = true;
+                    self.compositor_error.clear();
+                    if self.compositor != value || recovered {
                         self.update_dock(crate::dock::Message::Cancel, effects);
                         self.compositor = value;
+                        if focus_changed {
+                            self.monitors.pending_focus =
+                                self.compositor.focused_monitor().cloned();
+                            if let Some(id) = self.monitors.pending_focus.clone()
+                                && self.monitors.connected.contains_key(&id)
+                            {
+                                self.monitors.pending_focus = None;
+                                self.select_monitor(&id, effects);
+                            }
+                        }
                         self.retarget_panel_transition(now);
                         effects.redraw("bar");
                         effects.redraw("dock");
                     }
                 }
-                Err(e) => self.error = e.to_string(),
+                Err(e) => {
+                    self.compositor_available = false;
+                    self.compositor_error = e.to_string();
+                    self.monitors.pending_focus = None;
+                    effects.redraw("dock");
+                }
             },
             Message::Clock(clock) => {
                 if self.clock.minute != clock.minute || self.clock.date != clock.date {
@@ -2201,6 +2242,12 @@ impl api::Application for Desktop {
         value["widget_sizes"] = serde_json::json!(self.active_widget_layout().widget_sizes);
         value["widgets_editing"] = serde_json::json!(self.active_widgets().editing());
         value["named_monitor_hosts"] = serde_json::json!(!self.monitors.legacy());
+        value["compositor_available"] = serde_json::json!(self.compositor_available);
+        value["compositor_error"] = serde_json::json!(self.compositor_error);
+        value["compositor_focused_monitor"] =
+            serde_json::json!(self.compositor.focused_monitor().map(MonitorId::as_str));
+        value["pending_monitor_focus"] =
+            serde_json::json!(self.monitors.pending_focus.as_ref().map(MonitorId::as_str));
         value["active_monitor"] =
             serde_json::json!(self.monitors.active.as_ref().map(MonitorId::as_str));
         value["monitor_layouts"] = serde_json::json!(self.settings.monitor_layouts);

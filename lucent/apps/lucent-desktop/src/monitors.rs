@@ -33,6 +33,7 @@ impl Monitor {
 pub struct Monitors {
     pub connected: BTreeMap<MonitorId, Monitor>,
     pub active: Option<MonitorId>,
+    pub pending_focus: Option<MonitorId>,
     observed: bool,
     fallback: bool,
     next: u64,
@@ -158,6 +159,110 @@ mod tests {
         Application, ClipboardOutcome, Component, DragEvent, Effects, Event, TextEdit,
     };
     use lucent_domain::{Placement, WidgetLayout};
+    #[test]
+    fn recovered_focus_is_fresh_authority_and_its_error_survives_unrelated_completions() {
+        let mut app = desktop();
+        app.update(
+            Message::Compositor(Ok(focus("DP-2"))),
+            &mut Effects::default(),
+        );
+        app.update(Message::SelectMonitor(id("DP-1")), &mut Effects::default());
+        app.update(
+            Message::Compositor(Err(lucent_domain::DomainError::Unavailable(
+                "Disconnected fixture".into(),
+            ))),
+            &mut Effects::default(),
+        );
+        assert!(!app.compositor_available);
+        app.update(Message::Completed(Ok(())), &mut Effects::default());
+        assert_eq!(app.compositor_error, "Disconnected fixture");
+        app.update(
+            Message::Compositor(Ok(focus("DP-2"))),
+            &mut Effects::default(),
+        );
+        assert!(app.compositor_available);
+        assert!(app.compositor_error.is_empty());
+        assert_eq!(app.monitors.active, Some(id("DP-2")));
+    }
+    fn focus(name: &str) -> lucent_domain::CompositorSnapshot {
+        lucent_domain::CompositorSnapshot {
+            monitors: vec![lucent_domain::CompositorMonitor {
+                id: id(name),
+                focused: true,
+                active_workspace: Some(lucent_domain::WorkspaceRef::numbered(9).unwrap()),
+                special_workspace: None,
+            }],
+            ..Default::default()
+        }
+    }
+    #[test]
+    fn compositor_focus_follows_available_outputs_but_unchanged_metadata_keeps_manual_selection() {
+        let mut app = desktop();
+        let settings = app.settings.clone();
+        app.update(
+            Message::Compositor(Ok(focus("DP-2"))),
+            &mut Effects::default(),
+        );
+        assert_eq!(app.monitors.active, Some(id("DP-2")));
+        assert_eq!(app.viewport, (1280., 720.));
+        app.update(Message::SelectMonitor(id("DP-1")), &mut Effects::default());
+        let mut unchanged = focus("DP-2");
+        unchanged.workspaces.push(lucent_domain::Workspace {
+            id: 9,
+            name: "Title changed".into(),
+            windows: 1,
+            active: true,
+        });
+        app.update(Message::Compositor(Ok(unchanged)), &mut Effects::default());
+        assert_eq!(app.monitors.active, Some(id("DP-1")));
+        assert_eq!(app.settings, settings);
+    }
+    #[test]
+    fn focus_before_wayland_discovery_waits_for_exact_name_and_manual_choice_retires_pending_focus()
+    {
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        app.update(
+            Message::Compositor(Ok(focus("DP-2"))),
+            &mut Effects::default(),
+        );
+        assert_eq!(app.monitors.pending_focus, Some(id("DP-2")));
+        app.update(
+            Message::Outputs(vec![output("DP-1", 1, (1920, 1080), 1)]),
+            &mut Effects::default(),
+        );
+        assert_eq!(app.monitors.pending_focus, Some(id("DP-2")));
+        let route = app.monitors.connected[&id("DP-1")].route(&id("DP-1"));
+        app.update(
+            Message::OnMonitor(
+                route,
+                Box::new(Message::Resize(
+                    "background",
+                    1920.,
+                    1080.,
+                    lucent_api::Density::ONE,
+                )),
+            ),
+            &mut Effects::default(),
+        );
+        assert_eq!(app.monitors.pending_focus, Some(id("DP-2")));
+        app.update(Message::Outputs(catalog()), &mut Effects::default());
+        assert_eq!(app.monitors.active, Some(id("DP-2")));
+        assert!(app.monitors.pending_focus.is_none());
+        app.update(
+            Message::Compositor(Ok(focus("future"))),
+            &mut Effects::default(),
+        );
+        app.update(Message::SelectMonitor(id("DP-1")), &mut Effects::default());
+        assert!(app.monitors.pending_focus.is_none());
+        app.update(
+            Message::Outputs(vec![
+                output("DP-1", 1, (1920, 1080), 1),
+                output("future", 3, (800, 600), 1),
+            ]),
+            &mut Effects::default(),
+        );
+        assert_eq!(app.monitors.active, Some(id("DP-1")));
+    }
     #[test]
     fn configured_fractional_density_survives_unchanged_catalog_observation() {
         let mut app = desktop();
