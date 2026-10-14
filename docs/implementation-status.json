@@ -136,7 +136,8 @@
         "Accessibility semantics and platform bridge work"
       ],
       "evidence": [
-        "Source 2b8f17d43d1b018b3c88c8d1de9065036162e9b0 implements shared declarative caret/selection, grapheme/word editing, actual pointer/keyboard geometry and relative-message burst handling in launcher, menus and notes. Final strict checks pass: 331 Rust tests/51 ignored, 82 Python checks and 436 software-Vulkan comparisons, with only 20 reviewed new references. Both docs prefixes pass 13 pages/488 links and zero diagnostics. See reports/measurements/lucent-text-editing.json. Clipboard, shaping/bidi/fallback, IME, accessibility, remaining legacy fields and native acceptance are open."
+        "Source 2b8f17d43d1b018b3c88c8d1de9065036162e9b0 implements shared declarative caret/selection, grapheme/word editing, actual pointer/keyboard geometry and relative-message burst handling in launcher, menus and notes. Final strict checks pass: 331 Rust tests/51 ignored, 82 Python checks and 436 software-Vulkan comparisons, with only 20 reviewed new references. Both docs prefixes pass 13 pages/488 links and zero diagnostics. See reports/measurements/lucent-text-editing.json. Clipboard, shaping/bidi/fallback, IME, accessibility, remaining legacy fields and native acceptance are open.",
+        "Source e1a3269ad924d7a5f7ac30fa69bdfa8dc8bf9197 adds opt-in native clipboard effects, bounded nonblocking transfer and current-field completion policy in launcher, menus and notes. Local strict checks pass 348 Rust/83 Python; real compositor/app acceptance is deferred. See reports/measurements/lucent-clipboard.json. Shaping, IME, accessibility and remaining legacy fields remain open."
       ]
     },
     {
@@ -1209,6 +1210,31 @@
         "Integration of remaining legacy fields and native VM/hardware acceptance.",
         "Current performance and the full remaining requirement ledger.",
         "Exact published-head CI and authorized merge."
+      ],
+      "delivery": {
+        "status": "merged",
+        "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/44",
+        "merge_commit": "7bf91a11c84b60628b233d5fdacc1b4a2cb2534d"
+      }
+    },
+    {
+      "milestone": "bounded-native-text-clipboard",
+      "source_commit": "e1a3269ad924d7a5f7ac30fa69bdfa8dc8bf9197",
+      "report": "reports/measurements/lucent-clipboard.json",
+      "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+      "checks": [
+        "348 Rust tests/51 ignored, 83 Python checks, strict workspace formatting/Clippy and focused final native checks pass.",
+        "Pure field/client tests check stale tickets, current text/selection, cut admission, child mapping and persistence. Owned pipe checks exercise partial UTF-8, EOF, size, deadlines, fair dispatch and disconnected consumers.",
+        "Both Astro prefixes pass 13 pages/488 links/assets with zero diagnostics. Text PR #44, main checks and Pages publication are merged/passed.",
+        "All 436 software-Vulkan comparisons pass with zero changed baselines or tolerances; generated 532 tokens/58 icons and ShellCheck pass."
+      ],
+      "pending": [
+        "Real compositor copy/cut/paste, focus/seat/source changes and external application interoperability; current checks use owned pipes and pure client/model policy.",
+        "IME, complex-script/bidi shaping, visual navigation and font fallback.",
+        "Multiline/undo, accessibility semantics/platform bridge and remaining legacy-field integration.",
+        "Clipboard persistence after process exit, primary selection/history and richer MIME transfer are outside this implemented ordinary-text contract.",
+        "Current performance, per-output/fractional scaling and the full remaining requirement ledger.",
+        "Final published-head CI and authorized merge."
       ]
     }
   ],
