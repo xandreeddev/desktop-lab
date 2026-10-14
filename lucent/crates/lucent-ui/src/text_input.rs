@@ -170,6 +170,9 @@ pub(super) fn key(key: &Key) -> Option<TextEdit> {
                 'c' => TextEdit::Copy,
                 'x' => TextEdit::Cut,
                 'v' => TextEdit::Paste,
+                'z' if modifiers.shift => TextEdit::Redo,
+                'z' => TextEdit::Undo,
+                'y' => TextEdit::Redo,
                 _ => return None,
             }
         }
@@ -221,6 +224,15 @@ pub(super) fn key(key: &Key) -> Option<TextEdit> {
 #[cfg(test)]
 mod clipboard_keys {
     use super::*;
+    fn test_layout() -> Layout {
+        Layout::new(Arc::new(vec![
+            fontdue::Font::from_bytes(
+                include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
+                fontdue::FontSettings::default(),
+            )
+            .unwrap(),
+        ]))
+    }
     #[test]
     fn text_clipboard_shortcuts_accept_control_without_alt_or_logo() {
         for (character, edit) in [
@@ -228,6 +240,9 @@ mod clipboard_keys {
             ('x', TextEdit::Cut),
             ('v', TextEdit::Paste),
             ('V', TextEdit::Paste),
+            ('z', TextEdit::Undo),
+            ('Z', TextEdit::Undo),
+            ('y', TextEdit::Redo),
         ] {
             assert_eq!(
                 key(&Key::Shortcut {
@@ -262,5 +277,114 @@ mod clipboard_keys {
                 None
             );
         }
+    }
+    #[test]
+    fn control_shift_z_redoes_and_plain_letters_still_type() {
+        assert_eq!(
+            key(&Key::Shortcut {
+                character: 'Z',
+                modifiers: KeyModifiers {
+                    control: true,
+                    shift: true,
+                    ..Default::default()
+                }
+            }),
+            Some(TextEdit::Redo)
+        );
+        assert_eq!(
+            key(&Key::Text("z".into())),
+            Some(TextEdit::Insert("z".into()))
+        );
+    }
+    #[test]
+    fn history_shortcuts_apply_against_current_client_state_before_another_frame() {
+        let mut value = "base".to_string();
+        let mut field = TextFieldState::default();
+        field.reset(&value);
+        let tree = Element::text_input(&value, field.selection(), "", |edit| edit)
+            .id("input")
+            .autofocus()
+            .size(180., 40.);
+        let mut input = Interaction::default();
+        let scene = test_layout().build(&tree, 180., 40., &input, 0.);
+        input.synchronize(&scene);
+        let mut effects = Effects::default();
+        let undo = Key::Shortcut {
+            character: 'z',
+            modifiers: KeyModifiers {
+                control: true,
+                ..Default::default()
+            },
+        };
+        let redo = Key::Shortcut {
+            character: 'z',
+            modifiers: KeyModifiers {
+                control: true,
+                shift: true,
+                ..Default::default()
+            },
+        };
+        for (key, expected) in [
+            (Key::Text("é".into()), "baseé"),
+            (Key::Text("!".into()), "baseé!"),
+            (undo.clone(), "base"),
+            (redo.clone(), "baseé!"),
+            (Key::Left, "baseé!"),
+            (Key::Delete, "baseé"),
+            (undo, "baseé!"),
+            (redo, "baseé"),
+        ] {
+            let messages = input.key(&scene, &key);
+            assert_eq!(messages.len(), 1);
+            for edit in messages {
+                field
+                    .update(
+                        &mut value,
+                        edit,
+                        8192,
+                        ClipboardTarget::new("test", "input"),
+                        &mut effects,
+                        |edit| edit,
+                    )
+                    .unwrap();
+            }
+            assert_eq!(value, expected);
+        }
+        assert!(input.input_buffer.is_none());
+        assert!(effects.clipboard.is_empty());
+    }
+    #[test]
+    fn masked_controls_do_not_route_ordinary_history_shortcuts() {
+        let tree = Element::masked_input(5, "", |edit| edit)
+            .id("secret")
+            .autofocus()
+            .size(180., 40.);
+        let mut input = Interaction::default();
+        let scene = test_layout().build(&tree, 180., 40., &input, 0.);
+        input.synchronize(&scene);
+        for shift in [false, true] {
+            assert!(
+                input
+                    .key(
+                        &scene,
+                        &Key::Shortcut {
+                            character: 'z',
+                            modifiers: KeyModifiers {
+                                control: true,
+                                shift,
+                                ..Default::default()
+                            },
+                        }
+                    )
+                    .is_empty()
+            );
+        }
+        assert!(input.input_buffer.is_none());
+        assert!(
+            scene
+                .hits
+                .iter()
+                .all(|hit| hit.text_edit.is_none() && hit.value.is_empty())
+        );
     }
 }

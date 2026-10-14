@@ -91,6 +91,8 @@ fn widget_surface_specs(
 }
 pub struct Desktop {
     pub live_wallpaper: crate::live_wallpaper::LiveWallpaper,
+    pending_live_default: Option<(u64, u64)>,
+    live_poster_intent: Option<u64>,
     pub display_catalog_seen: bool,
     pub live_suspended: bool,
     pub notifications: crate::notifications::Center,
@@ -140,6 +142,8 @@ impl Desktop {
                 adapters.playback.clone(),
                 adapters.assets.clone(),
             ),
+            pending_live_default: None,
+            live_poster_intent: None,
             display_catalog_seen: false,
             live_suspended: false,
             osd: Default::default(),
@@ -190,120 +194,175 @@ impl Desktop {
             adapters,
         }
     }
+    fn cancel_default_import(&mut self) {
+        self.live_wallpaper
+            .cancel_import(&LiveWallpaperTarget::Default);
+        if let Some((_, ticket)) = self.pending_live_default.take() {
+            self.wallpaper.cancel_reserved(ticket);
+        }
+    }
+    fn settle_default_live_selection(&mut self, effects: &mut Effects<Message>) {
+        if self.pending_live_default.is_none()
+            && self.wallpaper.committed_intent().is_some()
+            && self.wallpaper.committed_intent() != self.live_poster_intent
+            && !self
+                .live_poster_intent
+                .is_some_and(|ticket| self.wallpaper.is_current_request(ticket))
+            && self.wallpaper.current.is_some()
+            && self
+                .settings
+                .live_wallpapers
+                .default
+                .as_ref()
+                .is_some_and(|live| live.asset.poster.path != self.wallpaper.source_path())
+        {
+            self.settings.live_wallpapers.default = None;
+            self.save(effects);
+        }
+    }
     fn update_live_wallpaper(
         &mut self,
         message: crate::live_wallpaper::Message,
         effects: &mut Effects<Message>,
     ) {
+        use crate::live_wallpaper::{Intent, Message as Live};
+        use lucent_usecases::live_wallpaper::{
+            LiveWallpaperChange as Change, change_live_wallpaper, validate_live_wallpaper_import,
+        };
         if !self.settings_writable
             && matches!(
                 message,
-                crate::live_wallpaper::Message::Import
-                    | crate::live_wallpaper::Message::ImportPath(..)
-                    | crate::live_wallpaper::Message::Pause(_)
-                    | crate::live_wallpaper::Message::Off
-                    | crate::live_wallpaper::Message::Rate(_)
+                Live::Import(_)
+                    | Live::ImportPath(..)
+                    | Live::Pause(..)
+                    | Live::PauseAll(_)
+                    | Live::Off(_)
+                    | Live::Rate(..)
+                    | Live::Inherit(_)
             )
         {
             self.live_wallpaper.error = "Saved preferences are not writable".into();
             effects.redraw("live-wallpaper");
             return;
         }
-        let is_frame = matches!(
-            message,
-            crate::live_wallpaper::Message::Wake(..) | crate::live_wallpaper::Message::Frame(_)
+        let admission = match &message {
+            Live::Import(target) => Some((target, self.live_wallpaper.path.as_str())),
+            Live::ImportPath(target, path) => Some((target, path.as_str())),
+            _ => None,
+        };
+        if let Some((target, path)) = admission
+            && let Err(error) = validate_live_wallpaper_import(&self.settings, target, path)
+        {
+            self.live_wallpaper.error = error.to_string();
+            effects.redraw("live-wallpaper");
+            return;
+        }
+        if let Live::Prepared(revision, _) = &message
+            && let Some((import_revision, ticket)) = self.pending_live_default
+            && *revision == import_revision
+            && !self.wallpaper.is_current_request(ticket)
+        {
+            self.cancel_default_import();
+            return;
+        }
+        let default_import_pending = self.pending_live_default.is_some();
+        if matches!(
+            &message,
+            Live::Close | Live::Off(LiveWallpaperTarget::Default)
+        ) {
+            self.cancel_default_import();
+        }
+        let completed_import = matches!(
+            &message,
+            Live::Prepared(..) | Live::Close | Live::Off(LiveWallpaperTarget::Default)
         );
+        let is_frame = matches!(&message, Live::Wake(..) | Live::Frame(_));
         let mut intent = None;
         effects.delegate(
             |child| intent = self.live_wallpaper.update(message, child),
             Message::LiveWallpaper,
         );
         if let Some(intent) = intent {
-            use crate::live_wallpaper::Intent;
             match intent {
+                Intent::ImportStarted(LiveWallpaperTarget::Default, revision) => {
+                    if let Some((_, ticket)) = self.pending_live_default.take() {
+                        self.wallpaper.cancel_reserved(ticket);
+                    }
+                    self.pending_live_default = Some((revision, self.wallpaper.reserve()));
+                }
+                Intent::ImportStarted(_, _) => {}
                 Intent::FrameChanged(targets) => {
                     for target in targets {
-                        if let Some(id) = target {
-                            if let Some(host) = self.monitors.connected.get(&id) {
-                                effects.redraw_surface(
-                                    SurfaceAddress::new("background")
-                                        .instance(host.instance.clone()),
+                        match target {
+                            LiveWallpaperTarget::Default => effects.redraw("background"),
+                            LiveWallpaperTarget::Monitor(id) => {
+                                if let Some(host) = self.monitors.connected.get(&id) {
+                                    effects.redraw_surface(
+                                        SurfaceAddress::new("background")
+                                            .instance(host.instance.clone()),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                Intent::RetrySave => self.update(
+                    Message::Persistence(crate::persistence::Message::Retry),
+                    effects,
+                ),
+                intent => {
+                    let poster = match &intent {
+                        Intent::Apply(LiveWallpaperTarget::Default, value) => {
+                            Some(value.asset.poster.clone())
+                        }
+                        _ => None,
+                    };
+                    let change = match intent {
+                        Intent::Apply(target, value) => Change::Apply(target, value),
+                        Intent::Pause(target, value) => Change::Pause(target, value),
+                        Intent::PauseAll(value) => Change::PauseAll(value),
+                        Intent::Off(target) => Change::Off(target),
+                        Intent::Rate(target, value) => Change::Rate(target, value),
+                        Intent::Inherit(id) => Change::Inherit(id),
+                        _ => unreachable!(),
+                    };
+                    match change_live_wallpaper(&mut self.settings, change) {
+                        Err(error) => self.live_wallpaper.error = error.to_string(),
+                        Ok(()) => {
+                            self.save(effects);
+                            if let Some(source) = poster
+                                && let Some((_, ticket)) = self.pending_live_default.take()
+                            {
+                                self.live_poster_intent = Some(ticket);
+                                effects.delegate(
+                                    |child| {
+                                        self.wallpaper.submit(
+                                            ticket,
+                                            crate::wallpaper_selection::Choice {
+                                                source,
+                                                colors: None,
+                                                browser_generation: None,
+                                            },
+                                            child,
+                                        )
+                                    },
+                                    Message::WallpaperSelection,
                                 );
                             }
-                        } else {
                             effects.redraw("background");
                         }
                     }
                 }
-                intent => {
-                    let mut next = self.settings.clone();
-                    let mut poster = None;
-                    match intent {
-                        Intent::Apply(target, value) => {
-                            if let Some(target) = target {
-                                next.live_wallpapers.monitors.insert(target, value);
-                            } else {
-                                poster = Some(value.asset.poster.clone());
-                                next.live_wallpapers.default = Some(value);
-                            }
-                            next.live_wallpapers.paused = false;
-                        }
-                        Intent::Pause(value) => next.live_wallpapers.paused = value,
-                        Intent::Off(target) => {
-                            if let Some(target) = target {
-                                if let Some(mut setting) = next
-                                    .live_wallpapers
-                                    .monitors
-                                    .get(&target)
-                                    .or(next.live_wallpapers.default.as_ref())
-                                    .cloned()
-                                {
-                                    setting.enabled = false;
-                                    next.live_wallpapers.monitors.insert(target, setting);
-                                }
-                            } else {
-                                next.live_wallpapers.default = None;
-                            }
-                        }
-                        Intent::Rate(target, value) => {
-                            if let Some(target) = &target
-                                && !next.live_wallpapers.monitors.contains_key(target)
-                                && let Some(default) = next.live_wallpapers.default.clone()
-                            {
-                                next.live_wallpapers
-                                    .monitors
-                                    .insert(target.clone(), default);
-                            }
-                            let selected = target
-                                .as_ref()
-                                .and_then(|id| next.live_wallpapers.monitors.get_mut(id));
-                            if let Some(selected) = selected {
-                                selected.fps = value;
-                            } else if let Some(default) = next.live_wallpapers.default.as_mut() {
-                                default.fps = value;
-                            }
-                        }
-                        Intent::FrameChanged(_) => unreachable!(),
-                    }
-                    if let Err(error) = lucent_usecases::validate_settings(&next) {
-                        self.live_wallpaper.error = error.to_string();
-                    } else {
-                        self.settings = next;
-                        self.save(effects);
-                        if let Some(source) = poster {
-                            self.choose_wallpaper(
-                                crate::wallpaper_selection::Choice {
-                                    source,
-                                    colors: None,
-                                    browser_generation: None,
-                                },
-                                effects,
-                            );
-                        }
-                        effects.redraw("background");
-                    }
-                }
             }
+        }
+        if completed_import
+            && self.live_wallpaper.importing_target() != Some(&LiveWallpaperTarget::Default)
+            && let Some((_, ticket)) = self.pending_live_default.take()
+        {
+            self.wallpaper.cancel_reserved(ticket);
+        }
+        if completed_import && default_import_pending {
+            self.settle_default_live_selection(effects);
         }
         self.reconcile_live_wallpapers();
         if !is_frame {
@@ -324,6 +383,7 @@ impl Desktop {
         choice: crate::wallpaper_selection::Choice,
         effects: &mut Effects<Message>,
     ) {
+        self.cancel_default_import();
         effects.delegate(
             |child| self.wallpaper.choose(choice, child),
             Message::WallpaperSelection,
@@ -870,6 +930,11 @@ impl Component for Desktop {
                     &self.settings.live_wallpapers,
                     &self.monitors.connected.keys().cloned().collect::<Vec<_>>(),
                     self.theme(),
+                    crate::live_wallpaper::SaveState {
+                        status: self.persistence.status(self.settings_writable),
+                        error: self.persistence.error(),
+                        writable: self.settings_writable,
+                    },
                 )
                 .map(Message::LiveWallpaper),
             "bar" => self.bar(cx),
@@ -1097,13 +1162,16 @@ impl Component for Desktop {
                 );
                 match outcome {
                     Some(Outcome::Applied(prepared)) => {
+                        self.settle_default_live_selection(effects);
                         let source = prepared.asset.source;
-                        if self
-                            .settings
-                            .live_wallpapers
-                            .default
-                            .as_ref()
-                            .is_some_and(|live| live.asset.poster.path != source.path)
+                        if self.wallpaper.is_current_request(prepared.intent_revision)
+                            && self.live_poster_intent != Some(prepared.intent_revision)
+                            && self
+                                .settings
+                                .live_wallpapers
+                                .default
+                                .as_ref()
+                                .is_some_and(|live| live.asset.poster.path != source.path)
                         {
                             self.settings.live_wallpapers.default = None;
                             self.save(effects);
@@ -1432,6 +1500,7 @@ impl Component for Desktop {
                         |child| self.persistence.update(message, child),
                         Message::Persistence,
                     );
+                    effects.redraw("live-wallpaper");
                 }
             }
             Message::ThemeApplied(result) => {
@@ -1553,6 +1622,7 @@ impl Component for Desktop {
                     Message::Browser,
                 );
                 if download && self.browser.generation != before {
+                    self.cancel_default_import();
                     self.browser_selection = Some((
                         self.browser.generation,
                         self.wallpaper.reserve(),
@@ -1611,6 +1681,15 @@ impl api::Application for Desktop {
         true
     }
     fn runtime_failure(&self, failure: api::RuntimeFailure) -> Option<Message> {
+        if let Some(revision) = failure
+            .source
+            .strip_prefix("subscription live-wallpaper:")
+            .and_then(|value| value.parse().ok())
+        {
+            return Some(Message::LiveWallpaper(
+                crate::live_wallpaper::Message::WorkerFailed(revision, failure.to_string()),
+            ));
+        }
         if failure.source == "effect queue bluetooth" {
             // A native write may have run before a panic/admission failure.
             // Recreate its owner rather than guessing or replaying the outcome.
@@ -1670,7 +1749,7 @@ impl api::Application for Desktop {
                 height: 0,
                 exclusive_zone: -1,
                 keyboard: if self.live_wallpaper.open {
-                    Keyboard::OnDemand
+                    Keyboard::Exclusive
                 } else {
                     Keyboard::None
                 },
@@ -2291,14 +2370,27 @@ impl api::Application for Desktop {
                 crate::live_wallpaper::Message::Open,
             )));
         }
+        if command == "wallpaper live pause-all" || command == "wallpaper live resume-all" {
+            return Ok(Some(Message::LiveWallpaper(
+                crate::live_wallpaper::Message::PauseAll(command.ends_with("pause-all")),
+            )));
+        }
         if command == "wallpaper live pause" || command == "wallpaper live resume" {
             return Ok(Some(Message::LiveWallpaper(
-                crate::live_wallpaper::Message::Pause(command.ends_with("pause")),
+                crate::live_wallpaper::Message::Pause(
+                    LiveWallpaperTarget::Default,
+                    command.ends_with("pause"),
+                ),
+            )));
+        }
+        if command == "wallpaper live retry" {
+            return Ok(Some(Message::LiveWallpaper(
+                crate::live_wallpaper::Message::Retry(LiveWallpaperTarget::Default),
             )));
         }
         if command == "wallpaper live off" {
             return Ok(Some(Message::LiveWallpaper(
-                crate::live_wallpaper::Message::Off,
+                crate::live_wallpaper::Message::Off(LiveWallpaperTarget::Default),
             )));
         }
         if let Some(path) = command.strip_prefix("wallpaper live play ") {
@@ -2306,7 +2398,10 @@ impl api::Application for Desktop {
                 return Err("Settings are not ready for saving".into());
             }
             return Ok(Some(Message::LiveWallpaper(
-                crate::live_wallpaper::Message::ImportPath(None, path.into()),
+                crate::live_wallpaper::Message::ImportPath(
+                    LiveWallpaperTarget::Default,
+                    path.into(),
+                ),
             )));
         }
         if let Some(value) = command.strip_prefix("workspace select ") {

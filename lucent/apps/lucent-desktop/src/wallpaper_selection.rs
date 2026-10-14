@@ -14,6 +14,8 @@ pub struct Choice {
 }
 #[derive(Clone)]
 pub struct Prepared {
+    /// Selection intent that prepared this asset; zero denotes initial load.
+    pub intent_revision: u64,
     pub asset: WallpaperAsset,
     pub image: Arc<ImageData>,
     pub preview: Arc<ImageData>,
@@ -60,6 +62,7 @@ pub struct Selection {
     pub error: String,
     phase: Phase,
     generation: u64,
+    committed_intent: Option<u64>,
     preparing_origin: Option<u64>,
     pending: Option<(u64, Choice)>,
     awaiting_download: bool,
@@ -85,6 +88,7 @@ impl Selection {
             error: String::new(),
             phase: Phase::Idle,
             generation: 0,
+            committed_intent: None,
             preparing_origin: None,
             pending: None,
             awaiting_download: false,
@@ -186,6 +190,7 @@ impl Selection {
                         assets
                             .background(&asset.path, target)
                             .map(|image| Prepared {
+                                intent_revision: 0,
                                 asset,
                                 preview: assets.preview(&image),
                                 image,
@@ -207,6 +212,9 @@ impl Selection {
         self.awaiting_download = true;
         self.error.clear();
         self.generation
+    }
+    pub fn committed_intent(&self) -> Option<u64> {
+        self.committed_intent
     }
     pub fn is_current_request(&self, id: u64) -> bool {
         id == self.generation
@@ -271,6 +279,7 @@ impl Selection {
                         ));
                     }
                     Ok(Prepared {
+                        intent_revision: generation,
                         asset: asset.clone(),
                         preview: assets.preview(&image),
                         image,
@@ -349,6 +358,7 @@ impl Selection {
                 self.phase = Phase::Idle;
                 let outcome = match result {
                     Ok(()) => {
+                        self.committed_intent = Some(id);
                         self.rendered_target = prepared.target;
                         self.fit_failure = None;
                         self.current = Some(prepared.asset.clone());

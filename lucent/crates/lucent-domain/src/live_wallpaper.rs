@@ -2,6 +2,21 @@
 use crate::{DomainError, MonitorId, Result, StopSignal, Wallpaper};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
+/// A saved default or a monitor override, captured when a control is created.
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LiveWallpaperTarget {
+    #[default]
+    Default,
+    Monitor(MonitorId),
+}
+impl LiveWallpaperTarget {
+    pub fn monitor(&self) -> Option<&MonitorId> {
+        match self {
+            Self::Default => None,
+            Self::Monitor(id) => Some(id),
+        }
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "u8", into = "u8")]
 pub struct WallpaperFps(u8);
@@ -60,6 +75,15 @@ pub struct LiveWallpapers {
     pub default: Option<LiveWallpaperSettings>,
     pub monitors: BTreeMap<MonitorId, LiveWallpaperSettings>,
     pub paused: bool,
+}
+impl LiveWallpapers {
+    /// A disabled override still wins over the default.
+    pub fn selected(&self, target: &LiveWallpaperTarget) -> Option<&LiveWallpaperSettings> {
+        target
+            .monitor()
+            .and_then(|id| self.monitors.get(id))
+            .or(self.default.as_ref())
+    }
 }
 #[derive(Debug)]
 pub struct MediaFrame {

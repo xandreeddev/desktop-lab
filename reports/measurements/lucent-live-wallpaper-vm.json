@@ -1,0 +1,95 @@
+{
+  "status": "native_vm_checks_passed",
+  "tested_source_commit": "63a4518b5140f7082f4bc3fed0ef8b5d5c1ea64c",
+  "checks": {
+    "synthetic_mp4_webm_gif_encoded": true,
+    "native_ordinary_field_undo_and_autofocus": true,
+    "native_path_edit_submit_and_fps": true,
+    "mp4_native_import_and_changing_pixels": true,
+    "pause_freezes_native_frames_and_pixels": true,
+    "resume_restarts_native_playback": true,
+    "invalid_import_preserves_configuration": true,
+    "native_ordinary_field_redo": true,
+    "restart_restores_selection_fps_and_playback": true,
+    "import_preserves_explicit_pause_all": true,
+    "webm_native_import_and_changing_pixels": true,
+    "gif_native_import_and_changing_pixels": true,
+    "native_panel_escape": true
+  },
+  "restoration": {
+    "selected_snapshot_checkpoint": true,
+    "public_wallpaper_transaction": true,
+    "exact_files_replaced_while_stopped": true,
+    "exact_settings_wallpaper_theme_and_login_exports": true,
+    "original_idle_policy": true,
+    "test_owned_assets_removed": true
+  },
+  "synthetic_captures_review_scope": "Private samples verify changing background colors. No personal captures are published.",
+  "configured_vm_memory_mib": 1536,
+  "normal_resource_configuration_restoration": true,
+  "hardware_gpu_or_multi_output_acceptance": false,
+  "current_120_second_rss_pacing_measured": false,
+  "binaries": {
+    "lucent-desktop": {
+      "sha256": "0105bbaa400ba90a2e60246cf3dab0e73b903b3201964b67d739c30771e95d65",
+      "bytes": 20358440
+    },
+    "lucent-cli": {
+      "sha256": "b94479b458b588aed26e0b1b67945d009004a0dcb39f4f35ced9eafcced35132",
+      "bytes": 345064
+    },
+    "lucent-menu": {
+      "sha256": "38eab2488b91337c545a17f7e86fce12947d217f0ba6ea8dd8ea7971d2096e2e",
+      "bytes": 8458880
+    },
+    "lucent-lock": {
+      "sha256": "dd1eaf2a27deacd21452f97d8d5788f480ae05b39b27984c107772f7dd857a64",
+      "bytes": 11926352
+    },
+    "lucent-greeter": {
+      "sha256": "c58dd09d5c116944104aff3bd3dee3f277468789126f50ad29bf17d6e33026bd",
+      "bytes": 11812672
+    },
+    "lucent-polkit": {
+      "sha256": "bd2dd37b7727e8eaa69bbde631a616bdc5daea2e297594e2673529b802460a35",
+      "bytes": 8597448
+    }
+  },
+  "resources": {
+    "static": {
+      "duration_seconds": 120.001,
+      "process": "lucent-desktop",
+      "cpu_percent_one_core": 1.067,
+      "rss_mib_mean": 224.66,
+      "rss_mib_max": 233.7,
+      "scope": "main process CPU and resident mappings; child processes excluded; mapped driver/software-GPU memory may contribute to RSS",
+      "gpu_memory": "not measured",
+      "virtualization": "kvm"
+    },
+    "mp4_15_fps": {
+      "duration_seconds": 120.001,
+      "process": "lucent-desktop",
+      "cpu_percent_one_core": 69.891,
+      "rss_mib_mean": 259.36,
+      "rss_mib_max": 260.12,
+      "scope": "main process CPU and resident mappings; child processes excluded; mapped driver/software-GPU memory may contribute to RSS",
+      "gpu_memory": "not measured",
+      "virtualization": "kvm"
+    }
+  },
+  "current_120_second_process_cpu_rss_measured": true,
+  "physical_gpu_frame_pacing_measured": false,
+  "measurement_workload": {
+    "display_pixels": [
+      1280,
+      800
+    ],
+    "synthetic_media_pixels": [
+      160,
+      90
+    ],
+    "fps": 15,
+    "renderer": "Software Vulkan (llvmpipe)",
+    "scope": "Two 120-second process samples; this synthetic workload does not establish physical-GPU or full-resolution media performance."
+  }
+}

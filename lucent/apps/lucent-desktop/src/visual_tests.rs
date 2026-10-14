@@ -1360,6 +1360,19 @@ fn visual_regressions() {
             ("live-wallpaper", Mode::Apps, 0, 0, "", 1., 960.),
             ("live-wallpaper-narrow", Mode::Apps, 0, 0, "", 1., 390.),
             ("live-wallpaper-opening", Mode::Apps, 0, 0, "", 0.08, 960.),
+            ("live-wallpaper-selected", Mode::Apps, 0, 0, "", 1., 960.),
+            (
+                "live-wallpaper-selected-narrow",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            ("live-wallpaper-monitor", Mode::Apps, 0, 0, "", 1., 390.),
+            ("live-wallpaper-paused", Mode::Apps, 0, 0, "", 1., 960.),
+            ("live-wallpaper-save-error", Mode::Apps, 0, 0, "", 1., 390.),
             ("text-caret-middle", Mode::Apps, 0, 0, "", 1., 640.),
             ("text-selection-forward", Mode::Apps, 0, 0, "", 1., 640.),
             ("text-selection-reverse", Mode::Apps, 0, 0, "", 1., 640.),
@@ -2453,6 +2466,49 @@ fn visual_regressions() {
                 };
                 layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
             } else if name.starts_with("live-wallpaper") {
+                if name.contains("selected")
+                    || name.contains("monitor")
+                    || name.contains("paused")
+                    || name.contains("save-error")
+                {
+                    use lucent_domain::*;
+                    app.settings_writable = true;
+                    app.settings.live_wallpapers.default = Some(LiveWallpaperSettings {
+                        asset: LiveWallpaperAsset {
+                            source: Wallpaper {
+                                path: "/media/synthetic-loop.mp4".into(),
+                                name: "Synthetic loop".into(),
+                            },
+                            path: "/owned/synthetic-loop.mp4".into(),
+                            poster: Wallpaper {
+                                path: "/owned/poster.png".into(),
+                                name: "Poster".into(),
+                            },
+                        },
+                        fps: WallpaperFps::new(15).unwrap(),
+                        paused: name.contains("paused"),
+                        enabled: true,
+                    });
+                    if name.contains("monitor") {
+                        let monitor = MonitorId::new("DEMO-1").unwrap();
+                        app.live_wallpaper.update(
+                            crate::live_wallpaper::Message::Target(LiveWallpaperTarget::Monitor(
+                                monitor,
+                            )),
+                            &mut Effects::default(),
+                        );
+                    }
+                    if name.contains("save-error") {
+                        app.persistence
+                            .request(&app.settings, &mut Effects::default());
+                        app.persistence.update(
+                            crate::persistence::Message::WorkerFailed(
+                                "Storage temporarily unavailable".into(),
+                            ),
+                            &mut Effects::default(),
+                        );
+                    }
+                }
                 app.update(
                     Message::LiveWallpaper(crate::live_wallpaper::Message::Open),
                     &mut Effects::default(),
@@ -2781,10 +2837,16 @@ fn live_wallpaper_preferences_reject_mutations_until_storage_is_ready() {
     let mut app = Desktop::new(crate::test_adapters::adapters());
     let original = serde_json::to_value(&app.settings).unwrap();
     for message in [
-        LiveMessage::ImportPath(None, "/fixture/clip.mp4".into()),
-        LiveMessage::Pause(true),
-        LiveMessage::Off,
-        LiveMessage::Rate(lucent_domain::WallpaperFps::new(60).unwrap()),
+        LiveMessage::ImportPath(
+            lucent_domain::LiveWallpaperTarget::Default,
+            "/fixture/clip.mp4".into(),
+        ),
+        LiveMessage::PauseAll(true),
+        LiveMessage::Off(lucent_domain::LiveWallpaperTarget::Default),
+        LiveMessage::Rate(
+            lucent_domain::LiveWallpaperTarget::Default,
+            lucent_domain::WallpaperFps::new(60).unwrap(),
+        ),
     ] {
         let mut effects = Effects::default();
         app.update(Message::LiveWallpaper(message), &mut effects);
@@ -2795,7 +2857,7 @@ fn live_wallpaper_preferences_reject_mutations_until_storage_is_ready() {
     app.settings_writable = true;
     let mut effects = Effects::default();
     app.update(
-        Message::LiveWallpaper(LiveMessage::Pause(true)),
+        Message::LiveWallpaper(LiveMessage::PauseAll(true)),
         &mut effects,
     );
     assert!(app.settings.live_wallpapers.paused);
@@ -4293,4 +4355,447 @@ fn workspace_cli_maps_pure_identities_without_changing_observed_active_state() {
         assert!(app.command(command).is_err());
     }
     assert!(app.compositor.workspaces.is_empty());
+}
+
+struct LiveIntentAssets(Arc<ImageData>);
+impl crate::ports::AssetPort for LiveIntentAssets {
+    fn initial(&self) -> std::collections::BTreeMap<String, Arc<ImageData>> {
+        std::collections::BTreeMap::new()
+    }
+    fn application_icons(&self, _: &[lucent_domain::Application]) -> crate::ports::Images {
+        vec![]
+    }
+    fn thumbnail(&self, _: &str) -> lucent_domain::Result<Arc<ImageData>> {
+        Ok(self.0.clone())
+    }
+    fn preview(&self, _: &ImageData) -> Arc<ImageData> {
+        self.0.clone()
+    }
+    fn background(
+        &self,
+        _: &str,
+        _: Option<crate::ports::BackgroundTarget>,
+    ) -> lucent_domain::Result<Arc<ImageData>> {
+        Ok(self.0.clone())
+    }
+}
+
+fn live_intent_fixture() -> Desktop {
+    let mut adapters = crate::test_adapters::adapters();
+    adapters.assets = Arc::new(LiveIntentAssets(Arc::new(
+        ImageData::from_rgba("live-intent-fixture", 1, 1, vec![20, 40, 60, 255]).unwrap(),
+    )));
+    let mut app = Desktop::new(adapters);
+    app.settings_writable = true;
+    app
+}
+
+fn take_live_appearance_task(effects: &mut Effects<Message>) -> ScheduledTask<Message> {
+    let index = effects
+        .tasks
+        .iter()
+        .position(|task| task.queue == crate::work::APPEARANCE)
+        .expect("expected an appearance task");
+    effects.tasks.remove(index)
+}
+
+#[test]
+fn historical_static_commit_preserves_newer_live_default_and_its_poster_intent() {
+    use crate::live_wallpaper::Message as Live;
+    use lucent_domain::LiveWallpaperTarget;
+    let mut app = live_intent_fixture();
+    let mut effects = Effects::default();
+    app.update(
+        Message::SetWallpaper("/fixture/older-static.png".into()),
+        &mut effects,
+    );
+    let prepared = take_live_appearance_task(&mut effects).run();
+    app.update(prepared, &mut effects);
+    let accepted_static_commit = take_live_appearance_task(&mut effects);
+
+    app.update(
+        Message::LiveWallpaper(Live::ImportPath(
+            LiveWallpaperTarget::Default,
+            "/fixture/newer-live.mp4".into(),
+        )),
+        &mut effects,
+    );
+    let live_prepared = take_live_appearance_task(&mut effects).run();
+    app.update(live_prepared, &mut effects);
+    let accepted_live = app
+        .settings
+        .live_wallpapers
+        .default
+        .clone()
+        .expect("the validated live import was accepted");
+    assert_eq!(accepted_live.asset.source.path, "/fixture/newer-live.mp4");
+
+    app.update(accepted_static_commit.run(), &mut effects);
+    assert_eq!(app.wallpaper.source_path(), "/fixture/older-static.png");
+    assert_eq!(
+        app.settings.live_wallpapers.default.as_ref(),
+        Some(&accepted_live),
+        "an accepted historical commit must finish without clearing newer live preferences"
+    );
+
+    let poster_prepared = take_live_appearance_task(&mut effects).run();
+    app.update(poster_prepared, &mut effects);
+    let poster_committed = take_live_appearance_task(&mut effects).run();
+    app.update(poster_committed, &mut effects);
+    assert_eq!(app.wallpaper.source_path(), accepted_live.asset.poster.path);
+    assert_eq!(
+        app.settings.live_wallpapers.default.as_ref(),
+        Some(&accepted_live)
+    );
+    assert!(
+        !effects
+            .tasks
+            .iter()
+            .any(|task| task.queue == crate::work::APPEARANCE)
+    );
+}
+
+#[test]
+fn newer_static_and_browser_admission_drop_late_default_live_preparation() {
+    use crate::live_wallpaper::Message as Live;
+    use crate::wallpaper_browser::Message as Browse;
+    use lucent_domain::{LiveWallpaperTarget, RemoteWallpaper, WallpaperProvider};
+    for browser_choice in [false, true] {
+        let mut app = live_intent_fixture();
+        let mut effects = Effects::default();
+        app.update(
+            Message::LiveWallpaper(Live::ImportPath(
+                LiveWallpaperTarget::Default,
+                "/fixture/older-live.mp4".into(),
+            )),
+            &mut effects,
+        );
+        let late_live = take_live_appearance_task(&mut effects).run();
+        if browser_choice {
+            app.update(
+                Message::Browser(Browse::Source(Some(WallpaperProvider::Wallhaven))),
+                &mut effects,
+            );
+            app.browser.items = vec![RemoteWallpaper {
+                provider: WallpaperProvider::Wallhaven,
+                id: "newer-browser-choice".into(),
+                title: "Newer browser choice".into(),
+                page_url: "https://fixture.invalid/page".into(),
+                thumbnail_url: "https://fixture.invalid/thumbnail".into(),
+                image_url: "https://fixture.invalid/image".into(),
+                resolution: "1x1".into(),
+            }];
+            app.update(Message::Browser(Browse::Download(false)), &mut effects);
+            assert!(app.browser.busy());
+        } else {
+            app.update(
+                Message::SetWallpaper("/fixture/newer-static.png".into()),
+                &mut effects,
+            );
+        }
+        assert!(app.live_wallpaper.importing_target().is_none());
+        app.update(late_live, &mut effects);
+        assert!(
+            app.settings.live_wallpapers.default.is_none(),
+            "a late import must not override newer browser/static admission"
+        );
+        assert!(app.live_wallpaper.frame(None).is_none());
+        assert!(
+            app.wallpaper.busy(),
+            "the newer choice retains its transaction authority"
+        );
+
+        if !browser_choice {
+            let static_prepared = take_live_appearance_task(&mut effects).run();
+            app.update(static_prepared, &mut effects);
+            let static_committed = take_live_appearance_task(&mut effects).run();
+            app.update(static_committed, &mut effects);
+            assert_eq!(app.wallpaper.source_path(), "/fixture/newer-static.png");
+            assert!(app.settings.live_wallpapers.default.is_none());
+        }
+    }
+}
+
+#[test]
+fn live_cli_captures_default_and_keeps_pause_all_separate_from_profile_pause() {
+    use crate::live_wallpaper::Message as Live;
+    use lucent_domain::{
+        LiveWallpaperAsset, LiveWallpaperSettings, LiveWallpaperTarget, MonitorId, Wallpaper,
+        WallpaperFps,
+    };
+    let profile = |name: &str| LiveWallpaperSettings {
+        asset: LiveWallpaperAsset {
+            source: Wallpaper {
+                path: format!("/fixture/{name}.mp4"),
+                name: name.into(),
+            },
+            path: format!("/fixture/owned-{name}.mp4"),
+            poster: Wallpaper {
+                path: format!("/fixture/{name}-poster.png"),
+                name: name.into(),
+            },
+        },
+        fps: WallpaperFps::default(),
+        paused: false,
+        enabled: true,
+    };
+    let mut app = live_intent_fixture();
+    let monitor = MonitorId::new("DEMO-1").unwrap();
+    app.settings.live_wallpapers.default = Some(profile("default"));
+    app.settings
+        .live_wallpapers
+        .monitors
+        .insert(monitor.clone(), profile("monitor"));
+    let monitor_profile = app.settings.live_wallpapers.monitors[&monitor].clone();
+    let mut effects = Effects::default();
+    app.update(
+        Message::LiveWallpaper(Live::Target(LiveWallpaperTarget::Monitor(monitor.clone()))),
+        &mut effects,
+    );
+
+    let pause = app.command("wallpaper live pause").unwrap().unwrap();
+    assert!(matches!(
+        &pause,
+        Message::LiveWallpaper(Live::Pause(LiveWallpaperTarget::Default, true))
+    ));
+    app.update(pause, &mut effects);
+    assert!(
+        app.settings
+            .live_wallpapers
+            .default
+            .as_ref()
+            .unwrap()
+            .paused
+    );
+    assert!(!app.settings.live_wallpapers.paused);
+    assert_eq!(
+        app.settings.live_wallpapers.monitors[&monitor],
+        monitor_profile
+    );
+
+    let pause_all = app.command("wallpaper live pause-all").unwrap().unwrap();
+    assert!(matches!(
+        &pause_all,
+        Message::LiveWallpaper(Live::PauseAll(true))
+    ));
+    app.update(pause_all, &mut effects);
+    assert!(app.settings.live_wallpapers.paused);
+    app.update(
+        app.command("wallpaper live resume-all").unwrap().unwrap(),
+        &mut effects,
+    );
+    assert!(!app.settings.live_wallpapers.paused);
+    assert!(
+        app.settings
+            .live_wallpapers
+            .default
+            .as_ref()
+            .unwrap()
+            .paused,
+        "resuming all must preserve an individually paused profile"
+    );
+    app.update(
+        app.command("wallpaper live resume").unwrap().unwrap(),
+        &mut effects,
+    );
+    assert!(
+        !app.settings
+            .live_wallpapers
+            .default
+            .as_ref()
+            .unwrap()
+            .paused
+    );
+
+    let off = app.command("wallpaper live off").unwrap().unwrap();
+    assert!(matches!(
+        &off,
+        Message::LiveWallpaper(Live::Off(LiveWallpaperTarget::Default))
+    ));
+    app.update(off, &mut effects);
+    assert!(app.settings.live_wallpapers.default.is_none());
+    assert_eq!(
+        app.settings.live_wallpapers.monitors[&monitor],
+        monitor_profile
+    );
+    assert_eq!(
+        app.live_wallpaper.target,
+        LiveWallpaperTarget::Monitor(monitor)
+    );
+}
+
+#[test]
+fn failed_or_closed_live_import_settles_an_accepted_static_commit_over_old_live_profile() {
+    use crate::live_wallpaper::Message as Live;
+    use lucent_domain::{
+        DomainError, LiveWallpaperAsset, LiveWallpaperSettings, LiveWallpaperTarget, Wallpaper,
+        WallpaperFps,
+    };
+    for (close_import, commit_first) in [(false, true), (true, true), (false, false), (true, false)]
+    {
+        let mut app = live_intent_fixture();
+        let mut effects = Effects::default();
+        let previous_live = LiveWallpaperSettings {
+            asset: LiveWallpaperAsset {
+                source: Wallpaper {
+                    path: "/fixture/previous-live.mp4".into(),
+                    name: "Previous live".into(),
+                },
+                path: "/fixture/owned-previous-live.mp4".into(),
+                poster: Wallpaper {
+                    path: "/fixture/previous-live-poster.png".into(),
+                    name: "Previous poster".into(),
+                },
+            },
+            fps: WallpaperFps::default(),
+            paused: false,
+            enabled: true,
+        };
+        app.update(
+            Message::SetWallpaper(previous_live.asset.poster.path.clone()),
+            &mut effects,
+        );
+        let previous_poster_prepared = take_live_appearance_task(&mut effects).run();
+        app.update(previous_poster_prepared, &mut effects);
+        let previous_poster_committed = take_live_appearance_task(&mut effects).run();
+        app.update(previous_poster_committed, &mut effects);
+        app.settings.live_wallpapers.default = Some(previous_live.clone());
+
+        app.update(
+            Message::SetWallpaper("/fixture/accepted-static.png".into()),
+            &mut effects,
+        );
+        let static_prepared = take_live_appearance_task(&mut effects).run();
+        app.update(static_prepared, &mut effects);
+        let accepted_static_commit = take_live_appearance_task(&mut effects);
+        app.update(
+            Message::LiveWallpaper(Live::ImportPath(
+                LiveWallpaperTarget::Default,
+                "/fixture/pending-live.mp4".into(),
+            )),
+            &mut effects,
+        );
+        let pending_completion = take_live_appearance_task(&mut effects).run();
+        let mut accepted_commit = Some(accepted_static_commit.run());
+        if commit_first {
+            app.update(accepted_commit.take().unwrap(), &mut effects);
+            assert_eq!(app.wallpaper.source_path(), "/fixture/accepted-static.png");
+        }
+        assert_eq!(
+            app.settings.live_wallpapers.default.as_ref(),
+            Some(&previous_live),
+            "the pending import keeps the old live presentation until its outcome is known"
+        );
+
+        if close_import {
+            app.update(Message::LiveWallpaper(Live::Close), &mut effects);
+            app.update(pending_completion, &mut effects);
+        } else {
+            let Message::LiveWallpaper(Live::Prepared(revision, _)) = pending_completion else {
+                panic!("expected a prepared import completion")
+            };
+            app.update(
+                Message::LiveWallpaper(Live::Prepared(
+                    revision,
+                    Err(DomainError::Failed("import fixture failed".into())),
+                )),
+                &mut effects,
+            );
+            assert!(app.live_wallpaper.error.contains("import fixture failed"));
+        }
+        if let Some(committed) = accepted_commit {
+            assert_eq!(
+                app.settings.live_wallpapers.default.as_ref(),
+                Some(&previous_live)
+            );
+            assert_eq!(app.wallpaper.source_path(), previous_live.asset.poster.path);
+            app.update(committed, &mut effects);
+        }
+        assert!(
+            app.settings.live_wallpapers.default.is_none(),
+            "after import failure/cancellation, the actual accepted static selection must retire the old live profile"
+        );
+        assert!(app.live_wallpaper.importing_target().is_none());
+        assert!(app.live_wallpaper.frame(None).is_none());
+        assert_eq!(app.wallpaper.source_path(), "/fixture/accepted-static.png");
+        assert!(
+            !effects
+                .tasks
+                .iter()
+                .any(|task| task.queue == crate::work::APPEARANCE)
+        );
+    }
+}
+
+#[test]
+fn failed_live_import_preserves_restored_profile_with_a_different_static_fallback() {
+    use crate::live_wallpaper::Message as Live;
+    use lucent_domain::*;
+    for close in [false, true] {
+        let mut app = live_intent_fixture();
+        let image =
+            Arc::new(ImageData::from_rgba("restored-fallback", 1, 1, vec![255; 4]).unwrap());
+        app.update(
+            Message::WallpaperSelection(crate::wallpaper_selection::Message::Initial(Ok(Some(
+                crate::wallpaper_selection::Prepared {
+                    intent_revision: 0,
+                    asset: WallpaperAsset {
+                        source: Wallpaper {
+                            path: "/fixture/fallback.png".into(),
+                            name: "Fallback".into(),
+                        },
+                        path: "/fixture/fallback.png".into(),
+                    },
+                    image: image.clone(),
+                    preview: image,
+                    seed: None,
+                    browser_generation: None,
+                    target: None,
+                },
+            )))),
+            &mut Effects::default(),
+        );
+        let previous = LiveWallpaperSettings {
+            asset: LiveWallpaperAsset {
+                source: Wallpaper {
+                    path: "/fixture/restored.mp4".into(),
+                    name: "Restored".into(),
+                },
+                path: "/owned/restored.mp4".into(),
+                poster: Wallpaper {
+                    path: "/owned/restored-poster.png".into(),
+                    name: "Poster".into(),
+                },
+            },
+            fps: WallpaperFps::default(),
+            paused: false,
+            enabled: true,
+        };
+        app.settings.live_wallpapers.default = Some(previous.clone());
+        let mut effects = Effects::default();
+        app.update(
+            Message::LiveWallpaper(Live::ImportPath(
+                LiveWallpaperTarget::Default,
+                "/fixture/new.mp4".into(),
+            )),
+            &mut effects,
+        );
+        let Message::LiveWallpaper(Live::Prepared(revision, _)) =
+            take_live_appearance_task(&mut effects).run()
+        else {
+            panic!("import completion");
+        };
+        if close {
+            app.update(Message::LiveWallpaper(Live::Close), &mut effects);
+        }
+        app.update(
+            Message::LiveWallpaper(Live::Prepared(
+                revision,
+                Err(DomainError::Failed("fixture failure".into())),
+            )),
+            &mut effects,
+        );
+        assert_eq!(app.settings.live_wallpapers.default, Some(previous));
+        assert_eq!(app.wallpaper.source_path(), "/fixture/fallback.png");
+    }
 }

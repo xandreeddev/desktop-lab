@@ -1,5 +1,5 @@
-//! Pure single-line editing. The component owns its String; this state owns no text.
-use std::{fmt, ops::Range};
+//! Pure single-line editing and bounded ordinary-field history; values stay component-owned.
+use std::{collections::VecDeque, fmt, ops::Range};
 use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -29,6 +29,8 @@ pub enum TextEdit {
     Delete,
     DeleteWord,
     Clear,
+    Undo,
+    Redo,
     SelectAll,
     Move { movement: TextMove, extend: bool },
     Select { anchor: usize, caret: usize },
@@ -47,6 +49,8 @@ impl fmt::Debug for TextEdit {
             Self::Delete => f.write_str("Delete"),
             Self::DeleteWord => f.write_str("DeleteWord"),
             Self::Clear => f.write_str("Clear"),
+            Self::Undo => f.write_str("Undo"),
+            Self::Redo => f.write_str("Redo"),
             Self::SelectAll => f.write_str("SelectAll"),
             Self::Move { movement, extend } => f
                 .debug_struct("Move")
@@ -137,20 +141,37 @@ impl TextSelection {
     }
     /// Apply an edit against the current value, not the last painted snapshot.
     /// A rejected insertion changes neither the value nor selection. Existing
-    /// values above the admission budget remain readable/deletable.
+    /// values above the admission budget remain readable/deletable. Undo/Redo
+    /// require TextFieldState, since a selection owns no history.
     pub fn apply(
         &mut self,
         text: &mut String,
         edit: TextEdit,
         max_bytes: usize,
     ) -> Result<TextChange, TextEditError> {
+        self.apply_inner(text, edit, max_bytes, false)
+            .map(|(change, _)| change)
+    }
+    fn apply_inner(
+        &mut self,
+        text: &mut String,
+        edit: TextEdit,
+        max_bytes: usize,
+        record: bool,
+    ) -> Result<(TextChange, Option<TextDelta>), TextEditError> {
         let before = *self;
         let mut selection = self.reconciled(text);
         let range = selection.range(text);
         let mut content = false;
+        let mut delta = None;
         match edit {
-            TextEdit::Copy | TextEdit::Cut | TextEdit::Paste | TextEdit::ClipboardReply(..) => {
-                return Ok(TextChange::default());
+            TextEdit::Copy
+            | TextEdit::Cut
+            | TextEdit::Paste
+            | TextEdit::ClipboardReply(..)
+            | TextEdit::Undo
+            | TextEdit::Redo => {
+                return Ok((TextChange::default(), None));
             }
             TextEdit::Replace(value) => {
                 let value = value.replace(['\n', '\r'], "");
@@ -158,19 +179,25 @@ impl TextSelection {
                     return Err(TextEditError::ByteLimit);
                 }
                 content = *text != value;
+                if record && content {
+                    delta = TextDelta::new(text, 0..text.len(), &value, selection);
+                }
                 *text = value;
                 selection = Self::at_end(text);
             }
             TextEdit::Insert(insert) => {
                 let insert = insert.replace(['\n', '\r'], "");
                 if insert.is_empty() {
-                    return Ok(TextChange::default());
+                    return Ok((TextChange::default(), None));
                 }
                 let retained = text.len() - range.len();
                 if insert.len() > max_bytes.saturating_sub(retained) || retained > max_bytes {
                     return Err(TextEditError::ByteLimit);
                 }
                 content = text.get(range.clone()) != Some(insert.as_str());
+                if record && content {
+                    delta = TextDelta::new(text, range.clone(), &insert, selection);
+                }
                 text.replace_range(range.clone(), &insert);
                 let target = range.start + insert.len();
                 let at = if floor(text, target) == target {
@@ -208,6 +235,9 @@ impl TextSelection {
                     selection.caret..next(text, selection.caret)
                 };
                 if !deletion.is_empty() {
+                    if record {
+                        delta = TextDelta::new(text, deletion.clone(), "", selection);
+                    }
                     let at = deletion.start;
                     text.replace_range(deletion, "");
                     let at = floor(text, at);
@@ -220,6 +250,9 @@ impl TextSelection {
             }
             TextEdit::Clear => {
                 content = !text.is_empty();
+                if record && content {
+                    delta = TextDelta::new(text, 0..text.len(), "", selection);
+                }
                 text.clear();
                 selection = Self::default();
             }
@@ -274,9 +307,212 @@ impl TextSelection {
             }
         }
         *self = selection;
+        if let Some(delta) = &mut delta {
+            delta.after = selection;
+        }
+        Ok((
+            TextChange {
+                content,
+                selection: before != selection,
+            },
+            delta,
+        ))
+    }
+}
+
+// Shared by ordinary fields only. Exact-sized spans bound retained payload,
+// including redo; oversized edits remain accepted but retire earlier history.
+const HISTORY_EDITS: usize = 128;
+const HISTORY_BYTES: usize = 64 * 1024;
+const SNAPSHOT_BYTES: usize = 64 * 1024;
+const TYPING_BYTES: usize = 4 * 1024;
+struct TextDelta {
+    at: usize,
+    removed: Box<str>,
+    inserted: Box<str>,
+    before: TextSelection,
+    after: TextSelection,
+}
+impl TextDelta {
+    fn new(text: &str, range: Range<usize>, inserted: &str, before: TextSelection) -> Option<Self> {
+        if range.len() > HISTORY_BYTES.saturating_sub(inserted.len())
+            || inserted.len() > HISTORY_BYTES
+        {
+            return None;
+        }
+        Some(Self {
+            at: range.start,
+            removed: text[range].into(),
+            inserted: inserted.into(),
+            before,
+            after: before,
+        })
+    }
+    fn bytes(&self) -> usize {
+        self.removed.len() + self.inserted.len()
+    }
+    fn typing(&self) -> bool {
+        self.removed.is_empty()
+            && self.before.anchor == self.before.caret
+            && self.after.anchor == self.after.caret
+            && self.after.caret == self.at + self.inserted.len()
+    }
+}
+#[derive(Default)]
+pub(crate) struct TextHistory {
+    undo: VecDeque<TextDelta>,
+    redo: VecDeque<TextDelta>,
+    bytes: usize,
+    // Exact comparison retires history even if an external replacement kept
+    // the same length and changed span. This bounded snapshot is not canonical.
+    snapshot: Option<Box<str>>,
+    typing: bool,
+}
+impl TextHistory {
+    fn clear(&mut self) {
+        self.undo.clear();
+        self.redo.clear();
+        self.bytes = 0;
+        self.break_group();
+    }
+    pub(crate) fn reset(&mut self, value: &str) {
+        self.clear();
+        self.remember(value);
+    }
+    pub(crate) fn break_group(&mut self) {
+        self.typing = false;
+    }
+    pub(crate) fn reconcile(&mut self, value: &str) -> bool {
+        let changed = self
+            .snapshot
+            .as_deref()
+            .is_some_and(|previous| previous != value);
+        if changed || value.len() > SNAPSHOT_BYTES {
+            self.clear();
+        }
+        if changed || self.snapshot.is_none() {
+            self.remember(value);
+        }
+        changed
+    }
+    fn remember(&mut self, value: &str) {
+        self.snapshot = (value.len() <= SNAPSHOT_BYTES).then(|| value.into());
+    }
+    pub(crate) fn apply(
+        &mut self,
+        selection: &mut TextSelection,
+        value: &mut String,
+        edit: TextEdit,
+        max_bytes: usize,
+        typed: bool,
+    ) -> Result<TextChange, TextEditError> {
+        if matches!(edit, TextEdit::Undo | TextEdit::Redo) {
+            return self.replay(selection, value, max_bytes, matches!(edit, TextEdit::Undo));
+        }
+        let typing = typed && matches!(edit, TextEdit::Insert(_));
+        let record = value.len() <= SNAPSHOT_BYTES;
+        let (change, delta) = match selection.apply_inner(value, edit, max_bytes, record) {
+            Ok(result) => result,
+            Err(error) => {
+                self.break_group();
+                return Err(error);
+            }
+        };
+        if change.content {
+            self.bytes -= self.redo.iter().map(TextDelta::bytes).sum::<usize>();
+            self.redo.clear();
+            if let Some(delta) = delta.filter(|_| value.len() <= SNAPSHOT_BYTES) {
+                self.record(delta, typing);
+            } else {
+                self.clear();
+            }
+            self.remember(value);
+        } else {
+            self.break_group();
+        }
+        Ok(change)
+    }
+    fn record(&mut self, delta: TextDelta, typing: bool) {
+        let grouping = typing && delta.typing();
+        if grouping
+            && self.typing
+            && let Some(previous) = self.undo.back_mut()
+            && previous.typing()
+            && previous.after == delta.before
+            && previous.at + previous.inserted.len() == delta.at
+            && previous.inserted.len() + delta.inserted.len() <= TYPING_BYTES
+        {
+            let mut inserted =
+                String::with_capacity(previous.inserted.len() + delta.inserted.len());
+            inserted.push_str(&previous.inserted);
+            inserted.push_str(&delta.inserted);
+            previous.inserted = inserted.into_boxed_str();
+            previous.after = delta.after;
+            self.bytes += delta.bytes();
+            self.trim();
+            return;
+        }
+        self.bytes += delta.bytes();
+        self.undo.push_back(delta);
+        self.typing = grouping;
+        self.trim();
+    }
+    fn trim(&mut self) {
+        while self.undo.len() + self.redo.len() > HISTORY_EDITS || self.bytes > HISTORY_BYTES {
+            let Some(oldest) = self.undo.pop_front() else {
+                break;
+            };
+            self.bytes -= oldest.bytes();
+        }
+    }
+    fn replay(
+        &mut self,
+        selection: &mut TextSelection,
+        value: &mut String,
+        max_bytes: usize,
+        undo: bool,
+    ) -> Result<TextChange, TextEditError> {
+        self.break_group();
+        let before = *selection;
+        let source = if undo { &self.undo } else { &self.redo };
+        let Some(delta) = source.back() else {
+            *selection = selection.reconciled(value);
+            return Ok(TextChange {
+                content: false,
+                selection: before != *selection,
+            });
+        };
+        let (expected, replacement, restored) = if undo {
+            (&delta.inserted, &delta.removed, delta.before)
+        } else {
+            (&delta.removed, &delta.inserted, delta.after)
+        };
+        let end = delta.at + expected.len();
+        if value.get(delta.at..end) != Some(expected.as_ref()) {
+            self.reset(value);
+            *selection = selection.reconciled(value);
+            return Ok(TextChange {
+                content: false,
+                selection: before != *selection,
+            });
+        }
+        let retained = value.len() - expected.len();
+        if !replacement.is_empty()
+            && (retained > max_bytes || replacement.len() > max_bytes.saturating_sub(retained))
+        {
+            return Err(TextEditError::ByteLimit);
+        }
+        value.replace_range(delta.at..end, replacement);
+        *selection = restored.reconciled(value);
+        if undo {
+            self.redo.push_back(self.undo.pop_back().unwrap());
+        } else {
+            self.undo.push_back(self.redo.pop_back().unwrap());
+        }
+        self.remember(value);
         Ok(TextChange {
-            content,
-            selection: before != selection,
+            content: true,
+            selection: before != *selection,
         })
     }
 }
@@ -286,6 +522,396 @@ mod tests {
     use super::*;
     fn edit(s: &mut TextSelection, value: &mut String, e: TextEdit) -> TextChange {
         s.apply(value, e, 8192).unwrap()
+    }
+    fn history_edit(
+        history: &mut TextHistory,
+        selection: &mut TextSelection,
+        value: &mut String,
+        edit: TextEdit,
+        max_bytes: usize,
+    ) -> Result<TextChange, TextEditError> {
+        history.reconcile(value);
+        history.apply(selection, value, edit, max_bytes, true)
+    }
+    #[test]
+    fn undo_restores_joined_graphemes_and_directional_selection() {
+        for (original, caret, inserted) in [("a", 1, "\u{301}"), ("👩💻", 4, "\u{200d}")] {
+            let mut value = original.to_string();
+            let mut selection = TextSelection {
+                anchor: caret,
+                caret,
+            };
+            let mut history = TextHistory::default();
+            let before = selection;
+            history_edit(
+                &mut history,
+                &mut selection,
+                &mut value,
+                TextEdit::Insert(inserted.into()),
+                8192,
+            )
+            .unwrap();
+            let combined = value.clone();
+            let after = selection;
+            history_edit(
+                &mut history,
+                &mut selection,
+                &mut value,
+                TextEdit::Undo,
+                8192,
+            )
+            .unwrap();
+            assert_eq!(value, original);
+            assert_eq!(selection, before);
+            history_edit(
+                &mut history,
+                &mut selection,
+                &mut value,
+                TextEdit::Redo,
+                8192,
+            )
+            .unwrap();
+            assert_eq!(value, combined);
+            assert_eq!(selection, after);
+        }
+        let mut value = "Aé💻Z".to_string();
+        let mut selection = TextSelection {
+            anchor: value.len(),
+            caret: 1,
+        };
+        let original = selection;
+        let mut history = TextHistory::default();
+        history_edit(
+            &mut history,
+            &mut selection,
+            &mut value,
+            TextEdit::Insert("!".into()),
+            8192,
+        )
+        .unwrap();
+        assert_eq!(value, "A!");
+        history_edit(
+            &mut history,
+            &mut selection,
+            &mut value,
+            TextEdit::Undo,
+            8192,
+        )
+        .unwrap();
+        assert_eq!(value, "Aé💻Z");
+        assert_eq!(selection, original);
+        assert_eq!(selection.selected(&value), "é💻Z");
+    }
+    #[test]
+    fn adjacent_typing_coalesces_and_navigation_starts_a_new_group() {
+        let mut value = String::new();
+        let mut selection = TextSelection::default();
+        let mut history = TextHistory::default();
+        for inserted in ["h", "é", "!"] {
+            history_edit(
+                &mut history,
+                &mut selection,
+                &mut value,
+                TextEdit::Insert(inserted.into()),
+                8192,
+            )
+            .unwrap();
+        }
+        assert_eq!(history.undo.len(), 1);
+        history_edit(
+            &mut history,
+            &mut selection,
+            &mut value,
+            TextEdit::Move {
+                movement: TextMove::Start,
+                extend: false,
+            },
+            8192,
+        )
+        .unwrap();
+        history_edit(
+            &mut history,
+            &mut selection,
+            &mut value,
+            TextEdit::Insert("new ".into()),
+            8192,
+        )
+        .unwrap();
+        history_edit(
+            &mut history,
+            &mut selection,
+            &mut value,
+            TextEdit::Undo,
+            8192,
+        )
+        .unwrap();
+        assert_eq!(value, "hé!");
+        assert_eq!(selection.caret(), 0);
+        history_edit(
+            &mut history,
+            &mut selection,
+            &mut value,
+            TextEdit::Undo,
+            8192,
+        )
+        .unwrap();
+        assert_eq!(value, "");
+        for expected in ["hé!", "new hé!"] {
+            history_edit(
+                &mut history,
+                &mut selection,
+                &mut value,
+                TextEdit::Redo,
+                8192,
+            )
+            .unwrap();
+            assert_eq!(value, expected);
+        }
+    }
+    #[test]
+    fn rejection_and_identical_edits_preserve_redo_but_new_content_retires_it() {
+        let mut value = "abc".to_string();
+        let mut selection = TextSelection::at_end(&value);
+        let mut history = TextHistory::default();
+        history_edit(
+            &mut history,
+            &mut selection,
+            &mut value,
+            TextEdit::Insert("!".into()),
+            4,
+        )
+        .unwrap();
+        history_edit(&mut history, &mut selection, &mut value, TextEdit::Undo, 4).unwrap();
+        assert_eq!(
+            history_edit(
+                &mut history,
+                &mut selection,
+                &mut value,
+                TextEdit::Insert("XX".into()),
+                4
+            ),
+            Err(TextEditError::ByteLimit)
+        );
+        history_edit(
+            &mut history,
+            &mut selection,
+            &mut value,
+            TextEdit::SelectAll,
+            4,
+        )
+        .unwrap();
+        assert!(
+            !history_edit(
+                &mut history,
+                &mut selection,
+                &mut value,
+                TextEdit::Insert("abc".into()),
+                4
+            )
+            .unwrap()
+            .content
+        );
+        history_edit(&mut history, &mut selection, &mut value, TextEdit::Redo, 4).unwrap();
+        assert_eq!(value, "abc!");
+        history_edit(&mut history, &mut selection, &mut value, TextEdit::Undo, 4).unwrap();
+        history_edit(
+            &mut history,
+            &mut selection,
+            &mut value,
+            TextEdit::Insert("?".into()),
+            4,
+        )
+        .unwrap();
+        assert_eq!(
+            history_edit(&mut history, &mut selection, &mut value, TextEdit::Redo, 4).unwrap(),
+            TextChange::default()
+        );
+        assert_eq!(value, "abc?");
+    }
+    #[test]
+    fn history_playback_respects_current_byte_admission_without_losing_the_edit() {
+        let mut value = "abcdef".to_string();
+        let mut selection = TextSelection::at_end(&value);
+        let mut history = TextHistory::default();
+        history_edit(&mut history, &mut selection, &mut value, TextEdit::Clear, 3).unwrap();
+        let before = selection;
+        assert_eq!(
+            history_edit(&mut history, &mut selection, &mut value, TextEdit::Undo, 3),
+            Err(TextEditError::ByteLimit)
+        );
+        assert!(value.is_empty());
+        assert_eq!(selection, before);
+        history_edit(&mut history, &mut selection, &mut value, TextEdit::Undo, 6).unwrap();
+        assert_eq!(value, "abcdef");
+        history_edit(&mut history, &mut selection, &mut value, TextEdit::Redo, 3).unwrap();
+        assert!(value.is_empty());
+    }
+    #[test]
+    fn external_replacement_reset_and_oversized_edits_retire_history() {
+        let mut value = "abc".to_string();
+        let mut selection = TextSelection::at_end(&value);
+        let mut history = TextHistory::default();
+        history_edit(
+            &mut history,
+            &mut selection,
+            &mut value,
+            TextEdit::Insert("!".into()),
+            8192,
+        )
+        .unwrap();
+        value = "xyz!".into(); // Same length and same changed span as the old value.
+        assert_eq!(
+            history_edit(
+                &mut history,
+                &mut selection,
+                &mut value,
+                TextEdit::Undo,
+                8192
+            )
+            .unwrap(),
+            TextChange::default()
+        );
+        assert_eq!(value, "xyz!");
+        history_edit(
+            &mut history,
+            &mut selection,
+            &mut value,
+            TextEdit::Clear,
+            8192,
+        )
+        .unwrap();
+        history.reset(&value);
+        assert_eq!(
+            history_edit(
+                &mut history,
+                &mut selection,
+                &mut value,
+                TextEdit::Undo,
+                8192
+            )
+            .unwrap(),
+            TextChange::default()
+        );
+        value = "x".repeat(HISTORY_BYTES + 1);
+        selection = TextSelection::at_end(&value);
+        history_edit(
+            &mut history,
+            &mut selection,
+            &mut value,
+            TextEdit::Clear,
+            8192,
+        )
+        .unwrap();
+        assert!(value.is_empty());
+        assert!(history.undo.is_empty());
+        assert_eq!(history.bytes, 0);
+    }
+    #[test]
+    fn undo_and_redo_share_bounded_count_and_retained_payload() {
+        let mut value = String::new();
+        let mut selection = TextSelection::default();
+        let mut history = TextHistory::default();
+        for step in 0..140 {
+            history_edit(
+                &mut history,
+                &mut selection,
+                &mut value,
+                TextEdit::Replace(format!("step{step}")),
+                8192,
+            )
+            .unwrap();
+            assert!(history.undo.len() + history.redo.len() <= HISTORY_EDITS);
+        }
+        for _ in 0..HISTORY_EDITS {
+            history_edit(
+                &mut history,
+                &mut selection,
+                &mut value,
+                TextEdit::Undo,
+                8192,
+            )
+            .unwrap();
+        }
+        assert_eq!(value, "step11");
+        assert_eq!(history.undo.len() + history.redo.len(), HISTORY_EDITS);
+        value.clear();
+        selection = TextSelection::default();
+        history.reset(&value);
+        for step in 0..140 {
+            history.reconcile(&value);
+            history
+                .apply(
+                    &mut selection,
+                    &mut value,
+                    TextEdit::Replace(format!("{step:04}{}", "x".repeat(1020))),
+                    usize::MAX,
+                    false,
+                )
+                .unwrap();
+            assert!(history.bytes <= HISTORY_BYTES);
+            assert!(
+                history.snapshot.as_ref().unwrap().len() + history.bytes
+                    <= SNAPSHOT_BYTES + HISTORY_BYTES
+            );
+        }
+        for _ in 0..32 {
+            history_edit(
+                &mut history,
+                &mut selection,
+                &mut value,
+                TextEdit::Undo,
+                usize::MAX,
+            )
+            .unwrap();
+            assert!(history.bytes <= HISTORY_BYTES);
+        }
+        assert!(value.starts_with("0107"));
+        assert_eq!(value.len(), 1024);
+        assert_eq!(history.redo.len(), 32);
+        assert_eq!(history.bytes, HISTORY_BYTES);
+    }
+    #[test]
+    fn crossing_snapshot_limit_clears_history_and_bounded_edits_reenable_it() {
+        let mut value = "x".to_string();
+        let mut selection = TextSelection::at_end(&value);
+        let mut history = TextHistory::default();
+        history_edit(
+            &mut history,
+            &mut selection,
+            &mut value,
+            TextEdit::Insert("y".repeat(SNAPSHOT_BYTES)),
+            usize::MAX,
+        )
+        .unwrap();
+        assert_eq!(value.len(), SNAPSHOT_BYTES + 1);
+        assert!(history.snapshot.is_none());
+        assert!(history.undo.is_empty());
+        assert_eq!(history.bytes, 0);
+        history_edit(
+            &mut history,
+            &mut selection,
+            &mut value,
+            TextEdit::Backspace,
+            1,
+        )
+        .unwrap();
+        assert_eq!(value.len(), SNAPSHOT_BYTES);
+        assert!(history.snapshot.is_some());
+        assert!(history.undo.is_empty());
+        history_edit(&mut history, &mut selection, &mut value, TextEdit::Clear, 1).unwrap();
+        assert!(value.is_empty());
+        assert_eq!(history.bytes, HISTORY_BYTES);
+        history_edit(
+            &mut history,
+            &mut selection,
+            &mut value,
+            TextEdit::Insert("z".into()),
+            1,
+        )
+        .unwrap();
+        assert_eq!(history.bytes, 1);
+        history_edit(&mut history, &mut selection, &mut value, TextEdit::Undo, 1).unwrap();
+        assert!(value.is_empty());
     }
     #[test]
     fn grapheme_deletion_and_burst_insertion_use_current_client_state() {

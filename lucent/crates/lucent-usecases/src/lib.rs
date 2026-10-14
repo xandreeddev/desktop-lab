@@ -2,6 +2,7 @@
 pub mod audio;
 pub mod bluetooth;
 pub mod dock;
+pub mod live_wallpaper;
 pub mod menu;
 pub mod notifications;
 pub mod power;
