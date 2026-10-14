@@ -94,6 +94,7 @@ mod tests {
             width: 1920.,
             height: 64.,
             scale: 2,
+            density: Density::ONE,
         };
         assert!(matches!(
             spec(None).scope_event(event.clone()),

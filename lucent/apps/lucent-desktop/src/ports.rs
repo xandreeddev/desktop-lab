@@ -26,19 +26,28 @@ impl BackgroundTarget {
         }
         Ok(Self { width, height })
     }
+    #[cfg(test)]
     pub fn from_surface(width: f32, height: f32, scale: u32) -> Result<Self> {
+        let density = lucent_api::Density::integer(scale)
+            .map_err(|error| DomainError::Invalid(error.into()))?;
+        Self::from_density(width, height, density)
+    }
+    pub fn from_density(width: f32, height: f32, density: lucent_api::Density) -> Result<Self> {
         let edge = |value: f32| {
             if !value.is_finite() || value <= 0. || f64::from(value.ceil()) > f64::from(u32::MAX) {
                 return None;
             }
-            (value.ceil() as u32).checked_mul(scale)
+            Some(value.ceil() as u32)
         };
-        match (edge(width), edge(height)) {
-            (Some(width), Some(height)) => Self::new(width, height),
-            _ => Err(DomainError::Invalid(
+        let (Some(width), Some(height)) = (edge(width), edge(height)) else {
+            return Err(DomainError::Invalid(
                 "Background physical size is invalid".into(),
-            )),
-        }
+            ));
+        };
+        let (width, height) = density
+            .physical_size(width, height)
+            .map_err(|error| DomainError::Invalid(error.into()))?;
+        Self::new(width, height)
     }
     pub fn size(self) -> (u32, u32) {
         (self.width, self.height)
@@ -66,6 +75,18 @@ pub trait AssetPort: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn background_density_matches_rounded_native_pixel_edges() {
+        let density = lucent_api::Density::new(150, 120).unwrap();
+        assert_eq!(
+            BackgroundTarget::from_density(65., 3., density)
+                .unwrap()
+                .size(),
+            (82, 4)
+        );
+        assert!(BackgroundTarget::from_density(f32::NAN, 3., density).is_err());
+        assert!(BackgroundTarget::from_density(u32::MAX as f32, 3., density).is_err());
+    }
     #[test]
     fn background_target_uses_physical_pixels_and_rejects_invalid_or_overflowing_geometry() {
         assert_eq!(

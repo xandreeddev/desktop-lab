@@ -480,6 +480,7 @@ mod tests {
                 width,
                 height,
                 now: 1.,
+                density: lucent_api::Density::ONE,
             });
             let mut input = Interaction::default();
             let scene = layout.build(&tree, width, height, &input, 1.);

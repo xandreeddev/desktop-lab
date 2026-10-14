@@ -108,6 +108,7 @@ impl<A: Application> State<A> {
             width: native.width as f32,
             height: native.height as f32,
             now: self.epoch.elapsed().as_secs_f64(),
+            density: native.density(),
         });
         if !ordinary_field(&tree, &target.element) {
             return None;

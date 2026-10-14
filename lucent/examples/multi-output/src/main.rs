@@ -73,10 +73,15 @@ impl Component for Example {
         theme.apply(
             Element::column(vec![
                 Element::row(vec![
-                    Element::text(format!("{} · {} clicks", instance.as_str(), entry.count))
-                        .font(font::TITLE)
-                        .color(theme.on_surface)
-                        .width(Length::Fill),
+                    Element::text(format!(
+                        "{} · {} clicks · {}× density",
+                        instance.as_str(),
+                        entry.count,
+                        cx.density.factor()
+                    ))
+                    .font(font::TITLE)
+                    .color(theme.on_surface)
+                    .width(Length::Fill),
                     theme.button("Count", Message::Count(selected)).id("count"),
                     theme.button("Close all", Message::Quit).id("close"),
                 ])

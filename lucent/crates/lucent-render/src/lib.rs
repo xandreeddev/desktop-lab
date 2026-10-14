@@ -1,5 +1,5 @@
 //! Shared Vulkan device and cached text/image resources for arbitrary framework scenes.
-use lucent_api::{Align, ImageFormat, Rect};
+use lucent_api::{Align, Density, ImageFormat, Rect};
 use lucent_ui::Paint;
 use std::{
     cell::RefCell,
@@ -320,7 +320,7 @@ impl Gpu {
         &self,
         text: &str,
         size: f32,
-        scale: u32,
+        scale: f32,
         face: usize,
         profile: &mut ResourceProfile,
         enabled: bool,
@@ -388,7 +388,7 @@ struct PreparedScene {
 struct ValidatedScene<'a> {
     width: u32,
     height: u32,
-    scale: u32,
+    density: Density,
     paint: &'a [Paint],
     geometry: scene::Geometry,
     validation: Duration,
@@ -455,16 +455,16 @@ impl Canvas {
         &mut self,
         width: u32,
         height: u32,
-        scale: u32,
+        density: Density,
         paint: &'a [Paint],
     ) -> Result<ValidatedScene<'a>, Error> {
         self.last_profile = None;
         let started = profiling::start(self.profiling);
         let limits = self.gpu.device.limits();
-        PhysicalExtent::new(width, height, scale, limits.max_texture_dimension_2d)?;
+        PhysicalExtent::density(width, height, density, limits.max_texture_dimension_2d)?;
         let geometry = scene::validate(
             paint,
-            scale,
+            density.factor(),
             &self.gpu.fonts,
             &limits,
             self.capacity,
@@ -473,7 +473,7 @@ impl Canvas {
         Ok(ValidatedScene {
             width,
             height,
-            scale,
+            density,
             paint,
             geometry,
             validation: profiling::elapsed(started),
@@ -485,11 +485,12 @@ impl Canvas {
         profile: &mut PaintProfile,
     ) -> Result<PreparedScene, Error> {
         let ValidatedScene {
-            scale,
+            density,
             paint,
             geometry,
             ..
         } = *validated;
+        let scale = density.factor();
         let mut records = Vec::new();
         records.try_reserve_exact(paint.len() * scene::INSTANCE_BYTES as usize)?;
         let mut textures = Vec::new();
@@ -586,8 +587,8 @@ impl Canvas {
                             self.profiling,
                         )
                         .map_err(|e| format!("scene primitive {index}: {e}"))?;
-                    let w = texture.width / scale as f32;
-                    let h = texture.height / scale as f32;
+                    let w = texture.width / scale;
+                    let h = texture.height / scale;
                     let x = rect.x
                         + match align {
                             Align::Start => 0.,
@@ -597,9 +598,8 @@ impl Canvas {
                         .max(0.);
                     (
                         Rect::new(
-                            (x * scale as f32).round() / scale as f32 + texture.text_origin_x,
-                            ((rect.y + (rect.h - h).max(0.) / 2.) * scale as f32).round()
-                                / scale as f32,
+                            (x * scale).round() / scale + texture.text_origin_x,
+                            ((rect.y + (rect.h - h).max(0.) / 2.) * scale).round() / scale,
                             w,
                             h,
                         ),
@@ -686,7 +686,17 @@ impl Canvas {
         scale: u32,
         paint: &[Paint],
     ) -> Result<(), Error> {
-        let validated = self.validate_scene(width, height, scale, paint)?;
+        self.paint_scaled(view, width, height, Density::integer(scale)?, paint)
+    }
+    pub fn paint_scaled(
+        &mut self,
+        view: &TextureView,
+        width: u32,
+        height: u32,
+        density: Density,
+        paint: &[Paint],
+    ) -> Result<(), Error> {
+        let validated = self.validate_scene(width, height, density, paint)?;
         self.paint_validated(view, validated)
     }
     fn paint_validated(
@@ -696,7 +706,8 @@ impl Canvas {
     ) -> Result<(), Error> {
         let started = profiling::start(self.profiling);
         let mut profile = PaintProfile::default();
-        let (width, height, scale) = (validated.width, validated.height, validated.scale);
+        let (width, height) = (validated.width, validated.height);
+        let physical = validated.density.physical_size(width, height)?;
         let PreparedScene {
             instances,
             clips,
@@ -749,10 +760,15 @@ impl Canvas {
         if !instances.is_empty() {
             self.gpu.queue.write_buffer(&self.instances, 0, &instances);
         }
-        let view_bytes: Vec<u8> = [width as f32, height as f32, scale as f32, 0.]
-            .iter()
-            .flat_map(|f| f.to_ne_bytes())
-            .collect();
+        let view_bytes: Vec<u8> = [
+            width as f32,
+            height as f32,
+            physical.0 as f32 / width as f32,
+            physical.1 as f32 / height as f32,
+        ]
+        .iter()
+        .flat_map(|f| f.to_ne_bytes())
+        .collect();
         self.gpu.queue.write_buffer(&self.viewport, 0, &view_bytes);
         profile.prepare = validated.validation + profiling::elapsed(started);
         let started = profiling::start(self.profiling);
@@ -802,10 +818,20 @@ impl Canvas {
         scale: u32,
         paint: &[Paint],
     ) -> Result<Vec<u8>, Error> {
+        self.snapshot_scaled(width, height, Density::integer(scale)?, paint)
+    }
+    pub fn snapshot_scaled(
+        &mut self,
+        width: u32,
+        height: u32,
+        density: Density,
+        paint: &[Paint],
+    ) -> Result<Vec<u8>, Error> {
         let limits = self.gpu.device.limits();
-        let physical = PhysicalExtent::new(width, height, scale, limits.max_texture_dimension_2d)?;
+        let physical =
+            PhysicalExtent::density(width, height, density, limits.max_texture_dimension_2d)?;
         let readback = physical.readback(limits.max_buffer_size)?;
-        let validated = self.validate_scene(width, height, scale, paint)?;
+        let validated = self.validate_scene(width, height, density, paint)?;
         let mut rgba = Vec::new();
         rgba.try_reserve_exact(readback.rgba_bytes)?;
         let extent = Extent3d {
@@ -887,6 +913,66 @@ impl Drop for Canvas {
 
 #[cfg(test)]
 mod resource_tests {
+    #[test]
+    #[ignore = "requires Vulkan; run explicitly with --ignored"]
+    fn fractional_pixels_use_actual_per_axis_density_and_keep_integer_convenience_identical() {
+        let fonts = Arc::new(vec![
+            fontdue::Font::from_bytes(
+                include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
+                Default::default(),
+            )
+            .unwrap(),
+        ]);
+        let gpu = Gpu::headless(fonts).unwrap();
+        let mut canvas = Canvas::new(gpu);
+        let (width, height) = (65, 13);
+        let clip = lucent_api::Clip::from(Rect::new(4.15, 3.65, 28.23, 4.59));
+        let paint = [Paint::Shape {
+            rect: Rect::new(0., 0., width as f32, height as f32),
+            clip: clip.clone(),
+            color: lucent_api::Color::hex(0xffffff),
+            radius: 0.,
+        }];
+        for density in [
+            Density::new(5, 4).unwrap(),
+            Density::new(3, 2).unwrap(),
+            Density::new(7, 4).unwrap(),
+            Density::new(9, 4).unwrap(),
+        ] {
+            let pixels = canvas
+                .snapshot_scaled(width, height, density, &paint)
+                .unwrap();
+            let (pw, ph) = density.physical_size(width, height).unwrap();
+            assert_eq!(pixels.len(), (pw * ph * 4) as usize);
+            for y in 0..ph {
+                for x in 0..pw {
+                    let point = (
+                        (x as f32 + 0.5) / (pw as f32 / width as f32),
+                        (y as f32 + 0.5) / (ph as f32 / height as f32),
+                    );
+                    let expected = if clip.contains(point.0, point.1) {
+                        255
+                    } else {
+                        0
+                    };
+                    assert_eq!(
+                        pixels[((y * pw + x) * 4 + 3) as usize],
+                        expected,
+                        "sample {x},{y} at {density:?}"
+                    );
+                }
+            }
+        }
+        for scale in [1, 2] {
+            assert_eq!(
+                canvas.snapshot(width, height, scale, &paint).unwrap(),
+                canvas
+                    .snapshot_scaled(width, height, Density::integer(scale).unwrap(), &paint)
+                    .unwrap()
+            );
+        }
+    }
+
     use super::*;
     use lucent_api::{Color, ImageData};
 
@@ -1729,6 +1815,25 @@ impl Renderer {
         paint: &[Paint],
         before_present: impl FnOnce(),
     ) -> Result<RenderOutcome, Error> {
+        if scale == 0 {
+            return Ok(RenderOutcome::RetryAfter(self.recovery.retry()));
+        }
+        self.render_scaled(
+            width,
+            height,
+            Density::integer(scale)?,
+            paint,
+            before_present,
+        )
+    }
+    pub fn render_scaled(
+        &mut self,
+        width: u32,
+        height: u32,
+        density: Density,
+        paint: &[Paint],
+        before_present: impl FnOnce(),
+    ) -> Result<RenderOutcome, Error> {
         let enabled = self.canvas.profiling;
         let total = profiling::start(enabled);
         let mut profile = RenderProfile::default();
@@ -1742,16 +1847,16 @@ impl Renderer {
         {
             return Err(error.into());
         }
-        if width == 0 || height == 0 || scale == 0 {
+        if width == 0 || height == 0 {
             return Ok(RenderOutcome::RetryAfter(self.recovery.retry()));
         }
-        let physical = PhysicalExtent::new(
+        let physical = PhysicalExtent::density(
             width,
             height,
-            scale,
+            density,
             self.gpu.device.limits().max_texture_dimension_2d,
         )?;
-        let validated = self.canvas.validate_scene(width, height, scale, paint)?;
+        let validated = self.canvas.validate_scene(width, height, density, paint)?;
         let started = profiling::start(enabled);
         if self.reconfigure
             || self.config.width != physical.width

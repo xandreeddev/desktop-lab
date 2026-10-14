@@ -77,7 +77,7 @@ fn color(color: Color) -> Result<(), Error> {
 
 pub(super) fn validate(
     paint: &[Paint],
-    scale: u32,
+    scale: f32,
     fonts: &[fontdue::Font],
     limits: &wgpu::Limits,
     current_instances: usize,
@@ -238,9 +238,9 @@ mod tests {
             f32::MAX,
             COORDINATE_LIMIT,
         ] {
-            assert!(validate(&[shape(value)], 1, &[], &limits, 1, 1).is_err());
+            assert!(validate(&[shape(value)], 1., &[], &limits, 1, 1).is_err());
         }
-        assert!(validate(&[shape(-8.)], 1, &[], &limits, 1, 1).is_ok());
+        assert!(validate(&[shape(-8.)], 1., &[], &limits, 1, 1).is_ok());
         assert!(positive(-1.).is_err());
         assert!(color(Color(0., f32::NAN, 0., 1.)).is_err());
     }
@@ -261,7 +261,7 @@ mod tests {
             radius: 0.,
             color: Color::hex(0xffffff),
         };
-        assert!(validate(&[shape], 1, &[], &limits, 1, 1).is_err());
+        assert!(validate(&[shape], 1., &[], &limits, 1, 1).is_err());
     }
 
     #[test]
@@ -281,7 +281,7 @@ mod tests {
             align: lucent_api::Align::Start,
         };
         assert!(
-            validate(&[text], 1, &[], &limits, 1, 1)
+            validate(&[text], 1., &[], &limits, 1, 1)
                 .unwrap_err()
                 .to_string()
                 .contains("font")
@@ -298,7 +298,7 @@ mod tests {
             tint: Color::hex(0xffffff),
         };
         assert!(
-            validate(&[image], 1, &[], &limits, 1, 1)
+            validate(&[image], 1., &[], &limits, 1, 1)
                 .unwrap_err()
                 .to_string()
                 .contains("texture")

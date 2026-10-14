@@ -1,7 +1,9 @@
 //! A small declarative shell API. Public types contain no Wayland or GPU handles.
 mod clipboard;
+mod density;
 mod output;
 mod surface;
+pub use density::Density;
 pub use output::{DisplayOutput, OutputName};
 pub use surface::{SurfaceAddress, SurfaceInstance};
 mod rich_text;
@@ -663,6 +665,7 @@ impl SurfaceSpec {
 pub struct ViewContext {
     pub surface: &'static str,
     pub instance: Option<SurfaceInstance>,
+    pub density: Density,
     pub width: f32,
     pub height: f32,
     pub now: f64,
@@ -759,10 +762,12 @@ pub enum Event {
     },
     Resize {
         surface: &'static str,
-        /// Logical dimensions; this event also fires when integer buffer scale changes.
+        /// Logical dimensions; this event also fires when effective rendering density changes.
         width: f32,
         height: f32,
         scale: u32,
+        /// Actual rendering density; scale retains the integer output fallback.
+        density: Density,
     },
     Key {
         surface: &'static str,
@@ -1388,6 +1393,7 @@ mod composition_tests {
             width: 500.,
             height: 500.,
             now: 0.,
+            density: Density::ONE,
         };
         assert!(matches!(registry.view("clock",&(),&cx).unwrap().kind,Kind::Text(s) if s=="one"));
         assert!(registry.view("missing", &(), &cx).is_none());

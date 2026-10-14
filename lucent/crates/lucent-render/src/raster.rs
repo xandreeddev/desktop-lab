@@ -10,9 +10,10 @@ const MAX_GLYPH_DIMENSION: usize = (MAX_WIDTH * SUPERSAMPLE) as usize;
 const MAX_GLYPH_PIXELS: usize = (MAX_WIDTH * MAX_HEIGHT * SUPERSAMPLE * SUPERSAMPLE) as usize;
 const MAX_TEXT_BYTES: usize = 64 * 1024;
 
-pub(super) fn validate_request(text: &str, size: f32, scale: u32) -> Result<(), Error> {
-    let pixels = size * scale as f32 * SUPERSAMPLE as f32;
-    if scale == 0
+pub(super) fn validate_request(text: &str, size: f32, scale: f32) -> Result<(), Error> {
+    let pixels = size * scale * SUPERSAMPLE as f32;
+    if !scale.is_normal()
+        || scale <= 0.
         || !size.is_normal()
         || size <= 0.
         || !pixels.is_normal()
@@ -48,11 +49,11 @@ pub fn text(
     font: &fontdue::Font,
     text: &str,
     size: f32,
-    scale: u32,
+    scale: f32,
     texture_limit: u32,
 ) -> Result<(Vec<u8>, u32, u32, f32), Error> {
     validate_request(text, size, scale)?;
-    let density = scale as f32 * SUPERSAMPLE as f32;
+    let density = scale * SUPERSAMPLE as f32;
     if font.horizontal_line_metrics(size).is_none() {
         return Err("font has no horizontal line metrics".into());
     }
@@ -90,9 +91,15 @@ pub fn text(
     let logical_h = (metrics.height * text.lines().count().max(1) as f32)
         .ceil()
         .clamp(1., MAX_HEIGHT as f32);
-    let w = ((logical_w as u64 * u64::from(scale)).min(u64::from(MAX_WIDTH)) as u32 * SUPERSAMPLE)
+    let w = ((logical_w as f64 * f64::from(scale))
+        .ceil()
+        .min(f64::from(MAX_WIDTH)) as u32
+        * SUPERSAMPLE)
         .max(2);
-    let h = ((logical_h as u64 * u64::from(scale)).min(u64::from(MAX_HEIGHT)) as u32 * SUPERSAMPLE)
+    let h = ((logical_h as f64 * f64::from(scale))
+        .ceil()
+        .min(f64::from(MAX_HEIGHT)) as u32
+        * SUPERSAMPLE)
         .max(2);
     if w / SUPERSAMPLE > texture_limit || h / SUPERSAMPLE > texture_limit {
         return Err("text mask exceeds device texture dimension limit".into());
@@ -158,6 +165,25 @@ pub fn text(
 mod tests {
     use super::*;
     #[test]
+    fn fractional_text_keeps_logical_advance_and_bounds_coverage_allocations() {
+        let font = fontdue::Font::from_bytes(
+            include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
+            Default::default(),
+        )
+        .unwrap();
+        let logical = width(&font, "Lucent", 16.);
+        for scale in [1.25, 1.5, 1.75, 2.25] {
+            let (mask, w, h, origin) = text(&font, "Lucent", 16., scale, 8192).unwrap();
+            assert_eq!(mask.len(), (w * h) as usize);
+            assert!(mask.iter().any(|&coverage| coverage > 0));
+            assert!(w as f32 / scale + origin >= logical);
+            assert!(w <= MAX_WIDTH && h <= MAX_HEIGHT);
+        }
+        for scale in [0., -1., f32::NAN, f32::INFINITY, f32::MAX] {
+            assert!(text(&font, "Lucent", 16., scale, 8192).is_err());
+        }
+    }
+    #[test]
     fn italic_ink_overhang_is_inside_the_mask_without_changing_advance() {
         let font = fontdue::Font::from_bytes(
             include_bytes!("../../../apps/lucent-desktop/assets/LucentItalic.ttf") as &[u8],
@@ -167,7 +193,7 @@ mod tests {
         for scale in [1, 2] {
             let value = "fj";
             let size = 32.;
-            let (pixels, w, h, origin) = text(&font, value, size, scale, 8192).unwrap();
+            let (pixels, w, h, origin) = text(&font, value, size, scale as f32, 8192).unwrap();
             let density = scale as f32 * SUPERSAMPLE as f32;
             let right = glyph_positions(&font, value, size)
                 .map(|(c, x)| {
@@ -197,8 +223,8 @@ mod tests {
             fontdue::FontSettings::default(),
         )
         .unwrap();
-        let (a, w, h, x) = text(&font, "AV — Lucent", 14., 1, 8192).unwrap();
-        let (b, w2, h2, x2) = text(&font, "AV — Lucent", 14., 2, 8192).unwrap();
+        let (a, w, h, x) = text(&font, "AV — Lucent", 14., 1., 8192).unwrap();
+        let (b, w2, h2, x2) = text(&font, "AV — Lucent", 14., 2., 8192).unwrap();
         assert_eq!((w2, h2), (w * 2, h * 2));
         assert_eq!(x, x2);
         let coverage = |pixels: &[u8]| pixels.iter().map(|p| f64::from(*p) / 255.).sum::<f64>();
@@ -217,13 +243,13 @@ mod tests {
         )
         .unwrap();
         for size in [0., -1., f32::NAN, f32::INFINITY, f32::MAX] {
-            assert!(text(&font, "W", size, 1, 8192).is_err());
+            assert!(text(&font, "W", size, 1., 8192).is_err());
         }
-        assert!(text(&font, "W", 14., 0, 8192).is_err());
-        assert!(text(&font, "W", 14., u32::MAX, 8192).is_err());
-        assert!(text(&font, "W", 4096., 1, 8192).is_err());
-        assert!(text(&font, &"a".repeat(MAX_TEXT_BYTES + 1), 14., 1, 8192).is_err());
-        assert!(text(&font, "width", 14., 1, 1).is_err());
-        assert!(text(&font, "still usable", 14., 1, 8192).is_ok());
+        assert!(text(&font, "W", 14., 0., 8192).is_err());
+        assert!(text(&font, "W", 14., u32::MAX as f32, 8192).is_err());
+        assert!(text(&font, "W", 4096., 1., 8192).is_err());
+        assert!(text(&font, &"a".repeat(MAX_TEXT_BYTES + 1), 14., 1., 8192).is_err());
+        assert!(text(&font, "width", 14., 1., 1).is_err());
+        assert!(text(&font, "still usable", 14., 1., 8192).is_ok());
     }
 }
