@@ -1,0 +1,52 @@
+{
+  "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+  "source_commit": "c796e01fb33dbc42e665b496a2e683aef2e07f85",
+  "local_checks": {
+    "workspace_passed": 402,
+    "workspace_ignored": 59,
+    "python_passed": 85,
+    "fmt_clippy_workspace_all_targets": true,
+    "example_help_executed": true,
+    "design_tokens_verified": 540,
+    "app_icons_verified": 58,
+    "shellcheck_passed": true,
+    "astro_errors": 0,
+    "astro_warnings": 0,
+    "astro_hints": 0,
+    "pages_each_prefix": 13,
+    "links_assets_each_prefix": 488
+  },
+  "implemented": [
+    "Validated concrete SurfaceInstance and typed SurfaceAddress separate logical roles from output selection without static string leaks.",
+    "Runtime maps, native lifecycle/input routing, view context, inspector and animation demand preserve concrete identity.",
+    "Exact targeted redraw and clipboard address survive child delegation; legacy neutral consumers retain role events.",
+    "Independent multi-output consumer declares one bar per unique named output with independent counters and text state; disconnected actions are rejected.",
+    "Library guide, runtime lifecycle documentation and repository skill updated."
+  ],
+  "native_acceptance": {
+    "current_source_deployed_to_vm": false,
+    "actual_simultaneous_output_input_clipboard_hotplug_tested": false,
+    "deferred_by_user": true,
+    "secure_authentication_gate_changed": false
+  },
+  "performance": {
+    "normal_desktop_rss_target_mib": 300,
+    "current_rss_or_frame_pacing_measured": false,
+    "new_polling_timer_or_effect_worker": false
+  },
+  "remaining": [
+    "Desktop per-output persisted layouts, neutral-default hotplug recovery and fractional scaling.",
+    "Actual compositor placement, two-output pointer/keyboard/clipboard, reconnect and secure multi-output acceptance.",
+    "Current RSS/frame pacing, shaping/IME/accessibility and the full client/release ledger.",
+    "Final exact-head CI and authorized normal merge."
+  ],
+  "visual_scope": "No renderer or layout primitive change; normal CI executes the existing full software rendering suite. No new native/hardware or local visual execution is claimed.",
+  "prior_delivery": {
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/51",
+    "merge_commit": "f45e13d91fe",
+    "all_six_exact_head_checks_passed": true
+  },
+  "privacy": {
+    "host_display_metadata_or_private_paths_published": false
+  }
+}
