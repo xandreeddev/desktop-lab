@@ -78,6 +78,7 @@ pub enum Intent {
     Browser(wallpaper_browser::Message),
     ToggleWidget(String),
     ResetLayout,
+    EditWidgets(bool),
     Palette(ThemePalette),
     ExtractPalette,
     LauncherSize(LauncherSize),
@@ -88,6 +89,7 @@ pub enum Intent {
 pub struct Input<'a> {
     pub apps: &'a [Application],
     pub application_status: crate::catalog::Status,
+    pub widgets_editing: bool,
     pub settings: &'a DesktopSettings,
     pub palettes: &'a [ThemePalette],
     pub wallpapers: &'a [Wallpaper],
@@ -259,7 +261,7 @@ impl Launcher {
         let count = match self.mode {
             Mode::Apps => self.results.len(),
             Mode::Commands => COMMANDS.len(),
-            Mode::Widgets => WIDGETS.len() + 1,
+            Mode::Widgets => WIDGETS.len() + 2,
             Mode::Themes => geometry.palettes + 1 + shell_layout::LAUNCHER_PRESETS.len(),
             Mode::Wallpapers => geometry.wallpapers,
         };
@@ -332,7 +334,13 @@ impl Launcher {
                 WIDGETS
                     .get(self.selected)
                     .map(|entry| Intent::ToggleWidget(entry.id.into()))
-                    .unwrap_or(Intent::ResetLayout),
+                    .unwrap_or_else(|| {
+                        if self.selected == WIDGETS.len() {
+                            Intent::ResetLayout
+                        } else {
+                            Intent::EditWidgets(!input.widgets_editing)
+                        }
+                    }),
             ),
             Mode::Themes => {
                 if let Some(palette) = input.palettes.get(self.selected) {
@@ -548,6 +556,7 @@ mod tests {
             Input {
                 apps: &self.apps,
                 application_status: crate::catalog::Status::Ready,
+                widgets_editing: false,
                 settings: &self.settings,
                 palettes: lucent_design::palettes(),
                 wallpapers: &[],
@@ -792,10 +801,15 @@ mod tests {
             Some(Intent::Action(Action::Terminal))
         ));
         fixture.send(&mut launcher, Message::Mode(Mode::Widgets));
-        fixture.send(&mut launcher, Message::Select(usize::MAX));
+        fixture.send(&mut launcher, Message::Select(WIDGETS.len()));
         assert!(matches!(
             fixture.send(&mut launcher, Message::Activate),
             Some(Intent::ResetLayout)
+        ));
+        fixture.send(&mut launcher, Message::Select(usize::MAX));
+        assert!(matches!(
+            fixture.send(&mut launcher, Message::Activate),
+            Some(Intent::EditWidgets(true))
         ));
         fixture.send(&mut launcher, Message::Mode(Mode::Themes));
         fixture.send(

@@ -1,5 +1,5 @@
 //! Desktop entities and ports. No compositor, D-Bus, UI or filesystem operations.
-use crate::{Date, Placement};
+use crate::{Date, Placement, WidgetSize};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -177,6 +177,7 @@ impl Default for DockSettings {
 pub struct DesktopSettings {
     pub version: u32,
     pub positions: BTreeMap<String, Placement>,
+    pub widget_sizes: BTreeMap<String, WidgetSize>,
     pub visible_widgets: Vec<String>,
     pub notes: String,
     pub pinned: Vec<AppId>,
@@ -192,6 +193,7 @@ impl Default for DesktopSettings {
         Self {
             version: 1,
             positions: BTreeMap::new(),
+            widget_sizes: BTreeMap::new(),
             visible_widgets: ["calendar", "clock", "weather", "media"]
                 .map(str::to_owned)
                 .into(),

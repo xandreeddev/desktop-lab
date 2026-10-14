@@ -47,6 +47,7 @@ impl Desktop {
             input: crate::launcher::Input {
                 apps: &self.apps,
                 application_status: self.catalog.status(),
+                widgets_editing: self.widgets.editing(),
                 settings: &self.settings,
                 palettes: &palettes,
                 wallpapers: &self.wallpapers,

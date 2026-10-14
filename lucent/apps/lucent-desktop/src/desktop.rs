@@ -322,6 +322,7 @@ impl Desktop {
         let input = launcher::Input {
             apps: &self.apps,
             application_status: self.catalog.status(),
+            widgets_editing: self.widgets.editing(),
             settings: &self.settings,
             palettes: &palettes,
             wallpapers: &self.wallpapers,
@@ -365,6 +366,10 @@ impl Desktop {
                 Intent::Browser(message) => Message::Browser(message),
                 Intent::ToggleWidget(id) => Message::Widgets(widgets::Message::Toggle(id)),
                 Intent::ResetLayout => Message::Widgets(widgets::Message::ResetLayout),
+                Intent::EditWidgets(enabled) => {
+                    self.update_launcher(launcher::Message::Close, effects);
+                    Message::Widgets(widgets::Message::Edit(enabled))
+                }
                 Intent::Palette(palette) => Message::Palette(palette),
                 Intent::ExtractPalette => Message::ExtractPalette,
                 Intent::LauncherSize(size) => Message::LauncherSize(size),
@@ -1479,6 +1484,7 @@ impl api::Application for Desktop {
                     },
             } if modifiers.control
                 && !modifiers.alt
+                && !modifiers.logo
                 && self.launcher.open()
                 && self.launcher.mode() == Mode::Apps =>
             {
@@ -1497,6 +1503,31 @@ impl api::Application for Desktop {
                 pressed: true,
                 ..
             } => Some(Message::Dock(crate::dock::Message::Press)),
+            Event::PointerButton {
+                surface,
+                button: MouseButton::Primary,
+                pressed: true,
+                ..
+            } if self
+                .widgets
+                .surfaces(&self.settings, self.viewport)
+                .iter()
+                .any(|source| source.id == surface) =>
+            {
+                Some(Message::Widgets(widgets::Message::Press))
+            }
+            Event::Key {
+                surface,
+                key: Key::Escape,
+            } if self.widgets.editing()
+                && self
+                    .widgets
+                    .surfaces(&self.settings, self.viewport)
+                    .iter()
+                    .any(|source| source.id == surface) =>
+            {
+                Some(Message::Widgets(widgets::Message::Edit(false)))
+            }
             Event::Key {
                 surface: "tray",
                 key: Key::Escape,
@@ -1576,6 +1607,29 @@ impl api::Application for Desktop {
             return Ok(Some(Message::WallpaperSelection(
                 crate::wallpaper_selection::Message::RetryPresentation,
             )));
+        }
+        if let Some(arguments) = command.strip_prefix("widgets size ") {
+            let parts = arguments.split_whitespace().collect::<Vec<_>>();
+            let usage =
+                "Use: widgets size ID WIDTH HEIGHT (positive logical dimensions)".to_string();
+            let [id, width, height] = parts.as_slice() else {
+                return Err(usage);
+            };
+            if widgets::catalog::find(id).is_none() {
+                return Err("Unknown widget".into());
+            }
+            if !self.settings_writable {
+                return Err("Settings are not ready for saving".into());
+            }
+            let size = WidgetSize::new(
+                width.parse().map_err(|_| usage.clone())?,
+                height.parse().map_err(|_| usage.clone())?,
+            )
+            .map_err(|e| e.to_string())?;
+            return Ok(Some(Message::Widgets(widgets::Message::Size(
+                (*id).into(),
+                size,
+            ))));
         }
         if command == "wallpapers retry" {
             return Ok(Some(Message::Previews(crate::previews::Message::Retry)));
@@ -1705,6 +1759,8 @@ impl api::Application for Desktop {
             "launcher open" => Message::Launcher(launcher::Message::Mode(Mode::Apps)),
             "wallpapers open" => Message::Launcher(launcher::Message::Mode(Mode::Wallpapers)),
             "widgets open" => Message::Launcher(launcher::Message::Mode(Mode::Widgets)),
+            "widgets edit on" => Message::Widgets(widgets::Message::Edit(true)),
+            "widgets edit off" => Message::Widgets(widgets::Message::Edit(false)),
             "themes open" => Message::Launcher(launcher::Message::Mode(Mode::Themes)),
             "quit" => Message::Quit,
             _ => return Err(
@@ -1727,6 +1783,8 @@ impl api::Application for Desktop {
         value["tray"] = self.tray.inspect();
         value["catalog"] = self.catalog.inspect();
         value["dock"] = self.dock.inspect();
+        value["widget_sizes"] = serde_json::json!(self.settings.widget_sizes);
+        value["widgets_editing"] = serde_json::json!(self.widgets.editing());
         value.to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {

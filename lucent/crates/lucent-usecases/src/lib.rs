@@ -6,6 +6,7 @@ pub mod menu;
 pub mod notifications;
 pub mod power;
 pub mod tray;
+pub mod widgets;
 use lucent_domain::*;
 
 /// Stable fuzzy ranking: names outrank descriptions; no filesystem work on a keystroke.

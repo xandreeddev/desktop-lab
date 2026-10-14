@@ -264,7 +264,7 @@
     {
       "id": "widgets",
       "owner": "desktop widget host and domain services",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "Grid aligned resizing and placement",
         "Per-monitor persisted layouts",
@@ -273,7 +273,8 @@
         "Transient drag preview cannot be persisted by an unrelated settings change"
       ],
       "evidence": [
-        "Widget host now retains previews separately from saved preferences. Injected-adapter regression verifies unrelated saves exclude the preview; release commits the snapped result. Hide/reset/invalid-input cancellation and clamped-origin tests pass. Native held-drag/unrelated-save/release/restart check passed; original preferences and workspace restored. See reports/measurements/lucent-widget-drag-preview.json."
+        "Widget host now retains previews separately from saved preferences. Injected-adapter regression verifies unrelated saves exclude the preview; release commits the snapped result. Hide/reset/invalid-input cancellation and clamped-origin tests pass. Native held-drag/unrelated-save/release/restart check passed; original preferences and workspace restored. See reports/measurements/lucent-widget-drag-preview.json.",
+        "Widget sizing/editor source 5a3f548365ca6c865041c1cee1900a6aea8eb21e adds an invariant-bearing size value, pure snap/constraint use cases, preferred size persistence, fixed native capture, transient previews and native keyboard/IPC controls. 317 Rust tests/51 ignored, 81 Python checks, strict formatting/Clippy and 416 software-Vulkan comparisons pass. Twenty new and four changed references are reviewed at 1x/2x; original drag-grid references remain. Domain/user/client guides and both Astro prefixes pass with zero diagnostics. Native acceptance is deferred; per-output, richer content and settle/pacing remain open. See reports/measurements/lucent-widget-sizing.json."
       ]
     },
     {
@@ -324,7 +325,8 @@
       "evidence": [
         "PR #40 native power controls passed all six exact-head CI checks and merged into main as 74c72a28229727e7fe738cb6fea100c47f5c6305. Pages deployment on that merge completed successfully.",
         "Native tray PR #41 passed all six CI checks and merged into main as ade6970f4d4e1683d17684052eed9777271e9584. Application catalog/dock work is based on that merge; unavailable VM tests remain deferred under user instruction.",
-        "Astro Pages deployment from tray merge ade6970f4d4e1683d17684052eed9777271e9584 succeeded. Pages now selects workflow publishing instead of the obsolete competing Jekyll branch build; the public site and existing local LAN server respond with HTTP 200."
+        "Astro Pages deployment from tray merge ade6970f4d4e1683d17684052eed9777271e9584 succeeded. Pages now selects workflow publishing instead of the obsolete competing Jekyll branch build; the public site and existing local LAN server respond with HTTP 200.",
+        "Catalog/dock PR #42 passed all six exact-head CI checks, including the complete final rendering suite, and merged into protected main as 376bac17dc13db37b5c85986a84406c122ba4e06. Widget resizing work builds on that tested tree."
       ]
     },
     {
@@ -1162,6 +1164,26 @@
         "Native dock dragging/hover/shortcut, saved settings, output-change and sleep/resume acceptance.",
         "Animated neighbor reorder/settling and current cold/warm visibility pacing; current RSS/GPU/decode peaks.",
         "Full project ledger: text/IME/accessibility, per-output/fractional scaling, richer widgets/notifications, popup/tooltip/focus, OS interoperability, secure-client audit and release/migrations.",
+        "Exact published-head CI and authorized merge."
+      ]
+    },
+    {
+      "milestone": "grid-aligned-widget-sizing-and-native-editor",
+      "source_commit": "5a3f548365ca6c865041c1cee1900a6aea8eb21e",
+      "report": "reports/measurements/lucent-widget-sizing.json",
+      "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+      "checks": [
+        "317 Rust workspace tests, 81 Python checks and strict all-target formatting/Clippy pass.",
+        "Actual SDK grip capture, keyboard controls, launcher/IPC routing, stale release, invalid values, persistence and unrelated saves are checked.",
+        "All 416 software-Vulkan cases pass with only 20 reviewed new/four selector changes; retained drag-grid references pass their focused rerun.",
+        "Both Astro prefixes verify 13 pages/488 links/assets with zero diagnostics; library/user guides and skills describe the implemented boundaries."
+      ],
+      "pending": [
+        "Per-monitor saved layout and fractional/output targeting.",
+        "Richer notes/calendar/weather behavior and content reflow; current implementation centers the original design content.",
+        "Touch resizing and measured settle animation/pacing.",
+        "Native gesture/focus, restart/persistence, output changes and sleep/resume acceptance.",
+        "Current RSS/GPU/decode peaks and the complete remaining project requirement ledger.",
         "Exact published-head CI and authorized merge."
       ]
     }

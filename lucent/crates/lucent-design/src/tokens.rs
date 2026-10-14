@@ -576,6 +576,11 @@ pub mod component {
         pub const FILL_SIZE: f32 = 8.0;
         pub const RADIUS: f32 = 2.0;
     }
+    pub mod widget_resize {
+        pub const HANDLE_SIZE: f32 = 32.0;
+        pub const INSET: f32 = 8.0;
+        pub const BUTTON_PADDING: f32 = 2.0;
+    }
 }
 pub mod icon {
     pub const TINY: f32 = 16.0;

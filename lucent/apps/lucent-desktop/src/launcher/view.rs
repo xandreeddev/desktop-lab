@@ -274,17 +274,37 @@ impl View<'_> {
                         .clip()
                         .at(0., body_y),
                 );
+                let gap = layout::SHELL_STEP;
+                let button_width = shell_layout::floor((width - gap) / 2., layout::SHELL_STEP);
                 elements.push(
-                    self.button(
-                        "Reset widget positions",
-                        Message::Request(Intent::ResetLayout),
-                    )
-                    .selected(self.launcher.selected == WIDGETS.len())
-                    .on_hover(Message::Select(WIDGETS.len()))
-                    .id("reset-layout")
+                    Element::row(vec![
+                        self.button("Reset", Message::Request(Intent::ResetLayout))
+                            .selected(self.launcher.selected == WIDGETS.len())
+                            .on_hover(Message::Select(WIDGETS.len()))
+                            .id("reset-layout")
+                            .size(button_width, component::launcher::RESET_HEIGHT)
+                            .font(font::CONTROL)
+                            .background(self.widget_color()),
+                        self.button(
+                            if self.input.widgets_editing {
+                                "Done"
+                            } else {
+                                "Edit layout"
+                            },
+                            Message::Request(Intent::EditWidgets(!self.input.widgets_editing)),
+                        )
+                        .selected(self.launcher.selected == WIDGETS.len() + 1)
+                        .on_hover(Message::Select(WIDGETS.len() + 1))
+                        .id("edit-layout")
+                        .size(
+                            width - gap - button_width,
+                            component::launcher::RESET_HEIGHT,
+                        )
+                        .font(font::CONTROL)
+                        .background(self.widget_color()),
+                    ])
+                    .gap(gap)
                     .size(width, component::launcher::RESET_HEIGHT)
-                    .font(font::CONTROL)
-                    .background(self.widget_color())
                     .at(0., height - component::launcher::RESET_HEIGHT),
                 );
             }

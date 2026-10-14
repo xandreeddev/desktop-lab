@@ -1,12 +1,13 @@
 //! Widget interaction belongs to this child; persistence and OS actions return
 //! as intents to the composition root. Views only borrow snapshots and artwork.
 pub mod catalog;
+mod sizing;
 pub mod surfaces;
 mod view;
 use crate::actions::Action;
 use lucent_api::{DragEvent, Effects};
 use lucent_design::component;
-use lucent_domain::{DesktopSettings, FocusTimer, Placement};
+use lucent_domain::{DesktopSettings, FocusTimer, Placement, WidgetSize};
 use std::collections::BTreeMap;
 pub use view::{Input, View};
 
@@ -15,6 +16,11 @@ pub enum Message {
     Toggle(String),
     Show(String),
     Move(String, DragEvent),
+    Resize(String, DragEvent),
+    Size(String, WidgetSize),
+    SizeStep(String, i32),
+    Edit(bool),
+    Press,
     Notes(String),
     RetrySave,
     TimerToggle,
@@ -52,21 +58,38 @@ enum Drag {
 #[derive(Default)]
 pub struct Host {
     drags: BTreeMap<String, Drag>,
+    resizer: sizing::Resizer,
     captured_surfaces: Option<Vec<surfaces::Surface>>,
     timer: FocusTimer,
     month_offset: i32,
 }
 impl Host {
     pub fn grid_visible(&self) -> bool {
-        self.drags
-            .values()
-            .any(|drag| matches!(drag, Drag::Active { .. }))
+        self.resizer.active()
+            || self
+                .drags
+                .values()
+                .any(|drag| matches!(drag, Drag::Active { .. }))
     }
     pub fn preview_position(&self, id: &str) -> Option<Placement> {
         match self.drags.get(id) {
             Some(Drag::Active { preview, .. }) => Some(*preview),
-            _ => None,
+            _ => self.resizer.position(id),
         }
+    }
+    pub fn editing(&self) -> bool {
+        self.resizer.editing()
+    }
+    pub fn size(
+        &self,
+        id: &str,
+        settings: &DesktopSettings,
+        viewport: (f32, f32),
+        source: bool,
+    ) -> WidgetSize {
+        self.resizer
+            .size(id, source)
+            .unwrap_or_else(|| sizing::configured(id, settings, viewport, self.editing()))
     }
     pub fn surfaces(
         &self,
@@ -76,9 +99,9 @@ impl Host {
         if self.grid_visible()
             && let Some(layout) = &self.captured_surfaces
         {
-            surfaces::captured(layout, settings, viewport)
+            surfaces::captured(layout, settings, viewport, self.editing())
         } else {
-            surfaces::layout(settings, viewport)
+            surfaces::layout(settings, viewport, self.editing())
         }
     }
     /// The input source stays at the visible press origin throughout capture.
@@ -90,7 +113,10 @@ impl Host {
     ) -> Placement {
         match self.drags.get(id) {
             Some(Drag::Active { origin, .. }) => *origin,
-            _ => surfaces::position(id, settings, viewport),
+            _ => self
+                .resizer
+                .position(id)
+                .unwrap_or_else(|| surfaces::position(id, settings, viewport, self.editing())),
         }
     }
     fn cancel_drag(&mut self, id: &str, finished: bool) {
@@ -102,6 +128,13 @@ impl Host {
         if !self.grid_visible() {
             self.captured_surfaces = None;
         }
+    }
+    fn cancel_interactions(&mut self) {
+        self.resizer.cancel();
+        for drag in self.drags.values_mut() {
+            *drag = Drag::Cancelled;
+        }
+        self.captured_surfaces = None;
     }
     pub fn timer_remaining(&self) -> u64 {
         self.timer.remaining
@@ -121,6 +154,7 @@ impl Host {
             Message::Toggle(id) | Message::Show(id) if catalog::find(&id).is_none() => None,
             Message::Show(id) if settings.visible_widgets.contains(&id) => None,
             Message::Toggle(id) | Message::Show(id) => {
+                self.resizer.cancel_widget(&id);
                 if self.drags.contains_key(&id) {
                     self.cancel_drag(&id, false);
                 }
@@ -130,6 +164,9 @@ impl Host {
                 Some(Intent::Save)
             }
             Message::Move(id, drag) => {
+                if self.resizer.active() {
+                    return None;
+                }
                 catalog::find(&id)?;
                 if matches!(self.drags.get(&id), Some(Drag::Cancelled))
                     || !settings.visible_widgets.contains(&id)
@@ -162,7 +199,7 @@ impl Host {
                                 .get(&id)
                                 .copied()
                                 .unwrap_or_else(|| default_position(&id, input.viewport)),
-                            widget_size(&id),
+                            sizing::visual_size(&id, settings, input.viewport, self.editing()),
                             input.viewport,
                         )?,
                     };
@@ -176,18 +213,18 @@ impl Host {
                             settings,
                             &id,
                             snapped,
-                            widget_size(&id),
+                            sizing::visual_size(&id, settings, input.viewport, self.editing()),
                             input.viewport,
                         )
                     } else {
                         let preview = lucent_usecases::constrain_placement(
                             placement,
-                            widget_size(&id),
+                            sizing::visual_size(&id, settings, input.viewport, self.editing()),
                             input.viewport,
                         )?;
                         if !self.grid_visible() {
                             self.captured_surfaces =
-                                Some(surfaces::layout(settings, input.viewport));
+                                Some(surfaces::layout(settings, input.viewport, self.editing()));
                         }
                         self.drags
                             .insert(id.clone(), Drag::Active { origin, preview });
@@ -203,6 +240,77 @@ impl Host {
                     Ok(()) if drag.finished => Some(Intent::Save),
                     Ok(()) => None,
                 }
+            }
+            Message::Resize(id, event) => {
+                if self
+                    .drags
+                    .values()
+                    .any(|drag| matches!(drag, Drag::Active { .. }))
+                {
+                    return None;
+                }
+                let capture = (!self.grid_visible())
+                    .then(|| surfaces::layout(settings, input.viewport, self.editing()));
+                let result = self.resizer.drag(&id, event, settings, input.viewport);
+                if let Some(capture) = capture
+                    && self.resizer.active()
+                {
+                    self.captured_surfaces = Some(capture);
+                }
+                if !self.grid_visible() {
+                    self.captured_surfaces = None;
+                }
+                effects.redraw("widgets");
+                match result {
+                    Ok(true) => Some(Intent::Save),
+                    Ok(false) => None,
+                    Err(e) => Some(Intent::Error(e)),
+                }
+            }
+            Message::Size(id, size) => {
+                self.cancel_interactions();
+                let result = self.resizer.set(&id, size, settings, input.viewport);
+                if !self.grid_visible() {
+                    self.captured_surfaces = None;
+                }
+                effects.redraw("widgets");
+                match result {
+                    Ok(true) => Some(Intent::Save),
+                    Ok(false) => None,
+                    Err(e) => Some(Intent::Error(e)),
+                }
+            }
+            Message::SizeStep(id, delta) => {
+                if self.editing()
+                    && catalog::find(&id).is_some()
+                    && settings.visible_widgets.contains(&id)
+                {
+                    self.cancel_interactions();
+                }
+                let result = self.resizer.step(&id, delta, settings, input.viewport);
+                if !self.grid_visible() {
+                    self.captured_surfaces = None;
+                }
+                effects.redraw("widgets");
+                match result {
+                    Ok(true) => Some(Intent::Save),
+                    Ok(false) => None,
+                    Err(e) => Some(Intent::Error(e)),
+                }
+            }
+            Message::Edit(enabled) => {
+                self.cancel_interactions();
+                self.resizer.edit(enabled);
+                effects.redraw("widgets");
+                effects.redraw("dock");
+                None
+            }
+            Message::Press => {
+                self.drags.clear();
+                self.resizer.press();
+                self.captured_surfaces = None;
+                effects.redraw("widgets");
+                None
             }
             Message::Notes(text) => {
                 settings.notes = text;
@@ -235,19 +343,15 @@ impl Host {
                 None
             }
             Message::ResetLayout => {
-                for drag in self.drags.values_mut() {
-                    *drag = Drag::Cancelled;
-                }
+                self.cancel_interactions();
                 settings.positions.clear();
+                settings.widget_sizes.clear();
                 self.captured_surfaces = None;
                 effects.redraw("widgets");
                 Some(Intent::Save)
             }
             Message::CancelDrags => {
-                for drag in self.drags.values_mut() {
-                    *drag = Drag::Cancelled;
-                }
-                self.captured_surfaces = None;
+                self.cancel_interactions();
                 effects.redraw("widgets");
                 None
             }
@@ -256,6 +360,9 @@ impl Host {
         }
     }
 }
+
+#[cfg(test)]
+mod sizing_tests;
 
 pub fn widget_size(id: &str) -> (f32, f32) {
     catalog::find(id).map(|entry| entry.size).unwrap_or((
@@ -334,7 +441,7 @@ mod tests {
         assert_eq!(host.surfaces(&settings, (1920., 1080.)), sources);
         assert_eq!(
             host.source_position("calendar", &settings, (1920., 1080.)),
-            surfaces::position("calendar", &settings, (1920., 1080.))
+            surfaces::position("calendar", &settings, (1920., 1080.), false)
         );
         assert!(settings.positions.is_empty());
         let (intent, effects) = send(&mut host, &mut settings, Message::CancelDrags, 0);

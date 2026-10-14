@@ -180,6 +180,7 @@ fn raster_svg(source: &str, size: u32) -> Option<Vec<u8>> {
 pub fn symbol(name: &str, color: &str) -> Arc<ImageData> {
     let source = match name {
         "pin" => include_str!("../assets/material/pin.svg"),
+        "resize" => include_str!("../assets/material/resize.svg"),
         "apps" => include_str!("../assets/material/apps.svg"),
         "search" => include_str!("../assets/material/search.svg"),
         "wallpaper" => include_str!("../assets/material/wallpaper.svg"),

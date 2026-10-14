@@ -88,6 +88,6 @@ const surfaces = [
       <li><a href={withBase('/docs/domain/#ports')}>Domain ports and adapters →</a><span>Add or replace an external capability here, then select it in platform.rs.</span></li>
       <li><a href={withBase('/docs/#quality')}>Validation workflow →</a><span>Pure decisions, scene geometry, reviewed Vulkan baselines and real input checks cover different failure modes.</span></li>
     </ul>
-    <p>Existing examples and clients demonstrate framework reuse. Remaining architectural work includes separating bar/dock coordination, replacing selected polling adapters and making loading/error presentation consistent. Those changes can preserve the port contracts and rendering engine.</p>
+    <p>The dock and catalog have private client coordinators. Widget resizing follows the same boundary: the host freezes native source geometry, keeps its preview outside settings and returns a save intent only after release. <a href={sourceUrl('docs/widget-sizing.md')}>The sizing guide</a> follows that flow through the domain value, use case, SDK grip and rendering tree. Remaining architectural work includes richer bar coordination, selected polling adapters and consistent loading/error presentation.</p>
   </section>
 </DocGuide>

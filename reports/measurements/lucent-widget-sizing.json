@@ -1,0 +1,54 @@
+{
+  "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+  "source_commit": "5a3f548365ca6c865041c1cee1900a6aea8eb21e",
+  "local_checks": {
+    "workspace_passed": 317,
+    "workspace_ignored": 51,
+    "python_passed": 81,
+    "software_visual_comparisons_passed": 416,
+    "retained_drag_grid_comparisons_passed": 4,
+    "new_reviewed_references": 20,
+    "reviewed_changed_selector_references": 4,
+    "fmt_clippy_workspace_all_targets": true,
+    "design_tokens_verified": 531,
+    "app_icons_verified": 58,
+    "astro_errors": 0,
+    "astro_warnings": 0,
+    "astro_hints": 0,
+    "pages_each_prefix": 13,
+    "links_assets_each_prefix": 488
+  },
+  "validation_scope": "Final implementation passes strict workspace and actual SDK capture/keyboard/IPC behavior checks. All 416 software-Vulkan cases passed without update mode; original drag-grid references were retained and their four comparisons reran successfully. Only the reviewed editor states and selector changes are included.",
+  "implemented": [
+    "Checked WidgetSize domain value and serde construction; pure constrained/snapped extent policy.",
+    "Saved preferred sizes with backward defaults and non-mutating viewport presentation limits.",
+    "Native Widgets selector edit/exit actions, reserved token-sized control footer, resize grips and keyboard size buttons.",
+    "One transient resize preview, fixed native source geometry, input-only source trees and pointer-pass-through grid preview.",
+    "Cancellation after hide/reset/output/editor/explicit changes, fresh physical presses and rejected stale release.",
+    "One root settings writer; unrelated saves preserve committed sizes; checked literal IPC size commands.",
+    "Current domain/client/user guides and repository skills."
+  ],
+  "native_acceptance": {
+    "current_source_deployed_to_vm": false,
+    "native_physical_input_tested": false,
+    "output_hotplug_sleep_resume_tested": false,
+    "deferred_by_user": true
+  },
+  "performance": {
+    "normal_desktop_rss_target_mib": 300,
+    "current_desktop_rss_measured": false,
+    "current_animation_pacing_measured": false,
+    "physical_density_or_effects_reduced": false
+  },
+  "remaining": [
+    "Per-monitor saved layout and fractional/output targeting.",
+    "Richer notes/calendar/weather behavior and content reflow; current implementation centers the original design content.",
+    "Touch resizing and measured settle animation/pacing.",
+    "Native gesture/focus, restart/persistence, output changes and sleep/resume acceptance.",
+    "Current RSS/GPU/decode peaks and the complete remaining project requirement ledger."
+  ],
+  "privacy": {
+    "private_paths_or_captures_published": false,
+    "host_preferences_or_credentials_published": false
+  }
+}

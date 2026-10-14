@@ -86,14 +86,57 @@ impl View<'_> {
         }
         lines
     }
-    fn card(&self, id: &str, cx: &ViewContext, pos: (f32, f32)) -> Element<Message> {
+    fn card(
+        &self,
+        id: &str,
+        cx: &ViewContext,
+        pos: (f32, f32),
+        viewport: (f32, f32),
+        source: bool,
+    ) -> Element<Message> {
         let content = super::catalog::registry()
             .view(id, self, cx)
             .expect("catalog members have a registered view");
-        let size = widget_size(id);
+        let size = self
+            .host
+            .size(id, self.input.settings, viewport, source)
+            .tuple();
+        let editor_height = super::sizing::editor_height(self.host.editing());
+        let base = widget_size(id);
+        let mut children = vec![
+            content
+                .size(base.0, base.1)
+                .at((size.0 - base.0) / 2., (size.1 - base.1) / 2.),
+        ];
+        if self.host.editing() {
+            let grip = component::widget_resize::HANDLE_SIZE;
+            let inset = component::widget_resize::INSET;
+            let resize_id = id.to_owned();
+            children.push(
+                self.icon("resize", icon::SMALL)
+                    .padding(space::XS)
+                    .size(grip, grip)
+                    .align(Align::Center)
+                    .at(size.0 - grip - inset, size.1 + inset)
+                    .background(self.theme().surface_container)
+                    .radius(radius::CONTROL)
+                    .on_drag(move |event| Message::Resize(resize_id.clone(), event))
+                    .tab_stop(false)
+                    .id(format!("widget-resize-{id}")),
+            );
+            for (index, (label, delta)) in [("−", -1), ("+", 1)].into_iter().enumerate() {
+                children.push(
+                    self.button(label, Message::SizeStep(id.into(), delta))
+                        .size(grip, grip)
+                        .padding(component::widget_resize::BUTTON_PADDING)
+                        .at(inset + index as f32 * (grip + space::XS), size.1 + inset)
+                        .id(format!("widget-size-{id}-{delta}")),
+                );
+            }
+        }
         let drag_id = id.to_owned();
-        Element::stack(vec![content])
-            .size(size.0, size.1)
+        Element::stack(children)
+            .size(size.0, size.1 + editor_height)
             .at(pos.0, pos.1)
             .background(if id == "calendar" || id == "media" {
                 self.surface_color()
@@ -112,9 +155,14 @@ impl View<'_> {
         let mut children = self.drag_grid(cx);
         children.extend(surfaces::visible(self.input.settings).iter().map(|id| {
             let pos = self.host.preview_position(id).unwrap_or_else(|| {
-                surfaces::position(id, self.input.settings, (cx.width, cx.height))
+                surfaces::position(
+                    id,
+                    self.input.settings,
+                    (cx.width, cx.height),
+                    self.host.editing(),
+                )
             });
-            self.card(id, cx, (pos.x(), pos.y()))
+            self.card(id, cx, (pos.x(), pos.y()), (cx.width, cx.height), false)
         }));
         Element::stack(children).fill()
     }
@@ -134,7 +182,13 @@ impl View<'_> {
             .iter()
             .map(|id| {
                 let pos = self.host.source_position(id, self.input.settings, viewport);
-                self.card(id, cx, (pos.x() - source.rect.x, pos.y() - source.rect.y))
+                self.card(
+                    id,
+                    cx,
+                    (pos.x() - source.rect.x, pos.y() - source.rect.y),
+                    viewport,
+                    true,
+                )
             })
             .collect();
         let tree = Element::stack(children).fill();
