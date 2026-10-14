@@ -1,0 +1,60 @@
+{
+  "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+  "source_commit": "581f7b73faf46f31c58b024f511f43cf09855f08",
+  "local_checks": {
+    "workspace_passed": 413,
+    "workspace_ignored": 59,
+    "python_passed": 91,
+    "fmt_clippy_workspace_all_targets": true,
+    "design_tokens_verified": 540,
+    "app_icons_verified": 58,
+    "shellcheck_passed": true,
+    "software_vulkan_visual_comparisons_passed": 532,
+    "reviewed_new_references": 16,
+    "existing_references_or_tolerance_changed": 0,
+    "astro_errors": 0,
+    "astro_warnings": 0,
+    "astro_hints": 0,
+    "pages_each_prefix": 13,
+    "links_assets_each_prefix": 488
+  },
+  "implemented": [
+    "Pure validated MonitorId and canonical WidgetLayout; default layout retains legacy JSON keys and named profiles round-trip through the same settings adapter.",
+    "One bar, background, bounded widget host and transient grid per unique named output; shared service subscriptions/theme/notes remain in the composition root.",
+    "Generation-bound callback/native-input routing rejects removed/reconnected hosts and recycled globals; exact redraw and ordinary clipboard preserve instance authority.",
+    "Release-only layout mutation, scoped selector/size/reset behavior, disconnected profile retention and reflow cancellation without rewriting preferred positions.",
+    "Shared active-output dock/control panels and explicit monitor selection; shared immutable wallpaper pixels fit the maximum configured physical extents.",
+    "Readiness requires first submissions across all hosts with typed roles/instances. Updated VM helper identity/geometry selection has pure tests, but VM execution is deferred.",
+    "Live desktop/domain/library guides and repository skills explain the actual registration/view/update/persistence path."
+  ],
+  "native_acceptance": {
+    "current_source_deployed_to_vm": false,
+    "actual_multi_monitor_placement_input_clipboard_hotplug_tested": false,
+    "updated_vm_helpers_executed_against_guest": false,
+    "deferred_by_user": true,
+    "secure_authentication_gate_changed": false
+  },
+  "performance": {
+    "normal_desktop_rss_target_mib": 300,
+    "current_rss_or_frame_pacing_measured": false,
+    "new_effect_worker_or_polling_timer": false,
+    "shared_prepared_wallpaper_and_service_subscriptions": true,
+    "scope": "Every native buffer retains its own cost. Prepared image targets are not a total RSS/GPU budget."
+  },
+  "remaining": [
+    "Real compositor placement, simultaneous native input/clipboard, reconnect/suspend, startup readiness and secure multi-output acceptance.",
+    "Fractional scaling, neutral-layer hotplug, compositor-focused output observation, per-output wallpaper selection and display arrangement UI.",
+    "Current RSS/frame pacing, shaping/IME/accessibility and the complete client/release ledger.",
+    "Final exact-head CI and authorized normal merge."
+  ],
+  "prior_delivery": {
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/52",
+    "merge_commit": "8fad30ab5eb2542a6d0c6d9799c10c3a9a531e9a",
+    "all_six_exact_head_checks_passed": true,
+    "pages_passed": true
+  },
+  "privacy": {
+    "host_display_metadata_private_paths_or_captures_published": false,
+    "new_visual_references_use_only_synthetic_fixtures": true
+  }
+}

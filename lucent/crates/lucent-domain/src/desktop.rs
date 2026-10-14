@@ -1,5 +1,5 @@
 //! Desktop entities and ports. No compositor, D-Bus, UI or filesystem operations.
-use crate::{Date, Placement, WidgetSize};
+use crate::{Date, MonitorId, WidgetLayout};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -176,9 +176,11 @@ impl Default for DockSettings {
 #[serde(default)]
 pub struct DesktopSettings {
     pub version: u32,
-    pub positions: BTreeMap<String, Placement>,
-    pub widget_sizes: BTreeMap<String, WidgetSize>,
-    pub visible_widgets: Vec<String>,
+    /// The default layout retains the original JSON keys for existing installs.
+    #[serde(flatten)]
+    pub layout: WidgetLayout,
+    /// Disconnected monitor profiles remain available for reconnection.
+    pub monitor_layouts: BTreeMap<MonitorId, WidgetLayout>,
     pub notes: String,
     pub pinned: Vec<AppId>,
     pub dock: DockSettings,
@@ -192,11 +194,8 @@ impl Default for DesktopSettings {
     fn default() -> Self {
         Self {
             version: 1,
-            positions: BTreeMap::new(),
-            widget_sizes: BTreeMap::new(),
-            visible_widgets: ["calendar", "clock", "weather", "media"]
-                .map(str::to_owned)
-                .into(),
+            layout: WidgetLayout::default(),
+            monitor_layouts: BTreeMap::new(),
             notes: String::new(),
             pinned: Vec::new(),
             dock: DockSettings::default(),

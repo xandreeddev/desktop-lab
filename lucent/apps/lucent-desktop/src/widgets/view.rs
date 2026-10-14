@@ -4,13 +4,13 @@ use crate::{actions::Action, artwork::Artwork, persistence::Status};
 use lucent_api::*;
 use lucent_design::*;
 use lucent_domain::{
-    ClockSnapshot, Date, DesktopSettings, MediaSnapshot, SystemSnapshot, TimerPhase,
-    WeatherSnapshot,
+    ClockSnapshot, Date, MediaSnapshot, SystemSnapshot, TimerPhase, WeatherSnapshot, WidgetLayout,
 };
 
 #[derive(Clone, Copy)]
 pub struct Input<'a> {
-    pub settings: &'a DesktopSettings,
+    pub layout: &'a WidgetLayout,
+    pub notes: &'a str,
     pub save_status: Status,
     pub clock: &'a ClockSnapshot,
     pub system: &'a SystemSnapshot,
@@ -99,7 +99,7 @@ impl View<'_> {
             .expect("catalog members have a registered view");
         let size = self
             .host
-            .size(id, self.input.settings, viewport, source)
+            .size(id, self.input.layout, viewport, source)
             .tuple();
         let editor_height = super::sizing::editor_height(self.host.editing());
         let base = widget_size(id);
@@ -153,11 +153,11 @@ impl View<'_> {
     /// offscreen snapshots. Its native pointer policy is pass-through.
     pub fn render(&self, cx: &ViewContext) -> Element<Message> {
         let mut children = self.drag_grid(cx);
-        children.extend(surfaces::visible(self.input.settings).iter().map(|id| {
+        children.extend(surfaces::visible(self.input.layout).iter().map(|id| {
             let pos = self.host.preview_position(id).unwrap_or_else(|| {
                 surfaces::position(
                     id,
-                    self.input.settings,
+                    self.input.layout,
                     (cx.width, cx.height),
                     self.host.editing(),
                 )
@@ -171,7 +171,7 @@ impl View<'_> {
     pub fn render_native(&self, cx: &ViewContext, viewport: (f32, f32)) -> Element<Message> {
         let Some(source) = self
             .host
-            .surfaces(self.input.settings, viewport)
+            .surfaces(self.input.layout, viewport)
             .into_iter()
             .find(|source| source.id == cx.surface)
         else {
@@ -181,7 +181,7 @@ impl View<'_> {
             .members
             .iter()
             .map(|id| {
-                let pos = self.host.source_position(id, self.input.settings, viewport);
+                let pos = self.host.source_position(id, self.input.layout, viewport);
                 self.card(
                     id,
                     cx,
@@ -616,7 +616,7 @@ pub(super) fn notes(d: &View<'_>, _: &ViewContext) -> Element<Message> {
             )
             .at(component::notes::INSET, component::notes::HEADING_TOP),
         Element::text_input(
-            &d.input.settings.notes,
+            d.input.notes,
             d.host.notes_field.selection(),
             "A thought to keep nearby…",
             Message::EditNotes,

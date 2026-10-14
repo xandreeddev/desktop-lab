@@ -56,6 +56,37 @@ class Appearance(unittest.TestCase):
 
 
 class Compatibility(unittest.TestCase):
+    def test_readiness_requires_first_frames_from_every_named_monitor_host(self):
+        from lucent_readiness import desktop_rendered
+        hosts=[{'instance':name,'widget_surfaces':[{'id':'clock'}]} for name in ('DP-1','DP-2')]
+        surfaces=[{'id':'diagnostic text','role':role,'instance':host['instance'],'frames':1}
+                  for host in hosts for role in ('background','bar','clock')]
+        state={'client':{'theme_error':'','named_monitor_hosts':True,'monitor_hosts':hosts},
+               'surfaces':surfaces+[{'id':'dock','role':'dock','instance':None,'frames':1}]}
+        self.assertTrue(desktop_rendered(state))
+        surfaces[-1]['frames']=0
+        self.assertFalse(desktop_rendered(state))
+        hosts[-1]['widget_surfaces']=[]
+        self.assertTrue(desktop_rendered(state))
+
+    def test_readiness_never_parses_diagnostic_ids_or_confuses_same_role_instances(self):
+        from lucent_readiness import desktop_rendered
+        state={'client':{'theme_error':'','named_monitor_hosts':True,
+                         'monitor_hosts':[{'instance':'DP-2','widget_surfaces':[]}]},
+               'surfaces':[{'id':role+' [DP-2]','role':role,'instance':'DP-1','frames':1}
+                           for role in ('background','bar')]+[{'id':'dock','frames':1}]}
+        self.assertFalse(desktop_rendered(state))
+        for surface in state['surfaces'][:2]: surface['instance']='DP-2'
+        self.assertTrue(desktop_rendered(state))
+        state['surfaces'][0]['frames']=True
+        self.assertFalse(desktop_rendered(state))
+
+    def test_readiness_rejects_absent_ambiguous_or_malformed_monitor_declarations(self):
+        from lucent_readiness import desktop_rendered
+        for hosts in ([],None,[{}],[{'instance':'DP-1','widget_surfaces':None}],
+                      [{'instance':'DP-1','widget_surfaces':[]},{'instance':'DP-1','widget_surfaces':[]}]):
+            self.assertFalse(desktop_rendered({'client':{'theme_error':'','named_monitor_hosts':True,'monitor_hosts':hosts},'surfaces':[]}))
+
     def test_readiness_requires_every_declared_group_and_supports_hidden_widgets(self):
         from lucent_readiness import desktop_rendered
         state={'client':{'theme_error':'','widget_surfaces':[{'id':'calendar'},{'id':'clock'}]},

@@ -28,7 +28,7 @@ fn maximum(
 /// Configured preference survives output changes; presentation alone is constrained.
 pub fn configured(
     id: &str,
-    settings: &DesktopSettings,
+    settings: &WidgetLayout,
     viewport: (f32, f32),
     editing: bool,
 ) -> WidgetSize {
@@ -89,7 +89,7 @@ impl Resizer {
         self.editing = enabled;
         self.cancel();
     }
-    fn eligible(&self, id: &str, settings: &DesktopSettings) -> bool {
+    fn eligible(&self, id: &str, settings: &WidgetLayout) -> bool {
         self.editing
             && catalog::find(id).is_some()
             && settings.visible_widgets.iter().any(|key| key == id)
@@ -98,7 +98,7 @@ impl Resizer {
         &mut self,
         id: &str,
         event: DragEvent,
-        settings: &mut DesktopSettings,
+        settings: &mut WidgetLayout,
         viewport: (f32, f32),
     ) -> Result<bool> {
         if self.cancelled || !self.eligible(id, settings) {
@@ -163,7 +163,7 @@ impl Resizer {
         &mut self,
         id: &str,
         size: WidgetSize,
-        settings: &mut DesktopSettings,
+        settings: &mut WidgetLayout,
         viewport: (f32, f32),
     ) -> Result<bool> {
         if catalog::find(id).is_none() {
@@ -184,7 +184,7 @@ impl Resizer {
         &mut self,
         id: &str,
         delta: i32,
-        settings: &mut DesktopSettings,
+        settings: &mut WidgetLayout,
         viewport: (f32, f32),
     ) -> Result<bool> {
         if !self.eligible(id, settings) {
@@ -213,7 +213,7 @@ pub(super) fn editor_height(editing: bool) -> f32 {
 }
 pub(super) fn visual_size(
     id: &str,
-    settings: &DesktopSettings,
+    settings: &WidgetLayout,
     viewport: (f32, f32),
     editing: bool,
 ) -> (f32, f32) {

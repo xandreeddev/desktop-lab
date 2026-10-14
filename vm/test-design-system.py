@@ -5,6 +5,7 @@ Requires an unlocked, single-output guest. Restores the original output, theme,
 widget settings and idle policy even when a check fails. Captures stay local.
 """
 import importlib.util
+from native_surfaces import active_surfaces, find_surface, role
 import json
 import struct
 import subprocess
@@ -52,12 +53,14 @@ def main():
                 image = vm.REPORT / f'lucent-design-{mode}-{scale}x.png'
                 dimensions = struct.unpack('>II', image.read_bytes()[16:24])
                 assert dimensions == (1920*scale,1080*scale), dimensions
-                surfaces = vm.inspect()['surfaces']
-                assert {s['id'] for s in surfaces} == {'bar','widgets','dock'}
+                state = vm.inspect()
+                surfaces = active_surfaces(state)
+                expected = {'bar', 'background', 'dock', *[group['id'] for group in state['client']['widget_surfaces']]}
+                assert expected <= {role(surface) for surface in surfaces}
                 assert all(s['buffer_width'] == s['width']*scale and s['buffer_height'] == s['height']*scale for s in surfaces)
                 assert next(s for s in surfaces if s['id']=='dock')['width'] == 1920
                 assert not vm.inspect()['client']['error'], 'Desktop service reported an error'
-                report['checks'].append({'theme':mode, 'scale':scale, 'capture_pixels':dimensions, 'logical_width':1920, 'surfaces':3})
+                report['checks'].append({'theme':mode, 'scale':scale, 'capture_pixels':dimensions, 'logical_width':1920, 'surfaces':len(surfaces)})
             vm.key(1)
     finally:
         output_mode(monitor, f"{monitor['width']}x{monitor['height']}@{monitor['refreshRate']}", monitor['scale'])

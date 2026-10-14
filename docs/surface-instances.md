@@ -92,5 +92,6 @@ state and rejection after disconnection. The complete workspace checks compile
 the actual runtime and every existing neutral consumer. Actual compositor
 placement, simultaneous native input, clipboard transfer between outputs,
 disconnect/reconnect, frame pacing and secure multi-output acceptance remain
-deferred. Full desktop per-monitor persistence and fractional scaling remain
-unfinished; this SDK example is not that desktop implementation.
+deferred. The subsequent [desktop monitor implementation](monitor-layouts.md) adds
+persisted profiles and hosts using this API. Actual compositor acceptance and
+fractional scaling remain unfinished. This SDK example is a separate client.

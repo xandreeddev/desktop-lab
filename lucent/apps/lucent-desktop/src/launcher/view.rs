@@ -241,7 +241,12 @@ impl View<'_> {
                     .take(visible_rows)
                     .map(|(index, entry)| {
                         let (id, title, description) = (entry.id, entry.title, entry.description);
-                        let on = self.input.settings.visible_widgets.iter().any(|w| w == id);
+                        let on = self
+                            .input
+                            .widget_layout
+                            .visible_widgets
+                            .iter()
+                            .any(|w| w == id);
                         Element::row(vec![
                             self.icon(
                                 if id == "media" { "music" } else { "widgets" },

@@ -76,6 +76,39 @@ impl SettingsPort for JsonSettings {
 #[cfg(test)]
 mod settings_tests {
     use super::*;
+    #[test]
+    fn monitor_layouts_round_trip_legacy_keys_and_reject_invalid_saved_identities() {
+        let legacy=br#"{"version":1,"positions":{"clock":{"x":32,"y":48}},"visible_widgets":["clock"],"notes":"Shared"}"#;
+        let mut settings: DesktopSettings = serde_json::from_slice(legacy).unwrap();
+        assert_eq!(settings.layout.visible_widgets, ["clock"]);
+        assert!(settings.monitor_layouts.is_empty());
+        let id = MonitorId::new("DP-1").unwrap();
+        lucent_usecases::ensure_monitor_layout(&mut settings, &id).unwrap();
+        settings
+            .monitor_layouts
+            .get_mut(&id)
+            .unwrap()
+            .positions
+            .insert("clock".into(), Placement::new(64., 80.).unwrap());
+        let encoded = serde_json::to_value(&settings).unwrap();
+        assert!(encoded.get("layout").is_none());
+        assert_eq!(encoded["positions"]["clock"]["x"], 32.);
+        assert_eq!(
+            encoded["monitor_layouts"]["DP-1"]["positions"]["clock"]["x"],
+            64.
+        );
+        assert_eq!(
+            serde_json::from_value::<DesktopSettings>(encoded).unwrap(),
+            settings
+        );
+        for bad in [
+            r#"{"monitor_layouts":{"":{"visible_widgets":[]}}}"#,
+            r#"{"monitor_layouts":{"bad\nname":{}}}"#,
+            r#"{"monitor_layouts":{"DP-1":{"positions":{"clock":{"x":1e39,"y":0}}}}}"#,
+        ] {
+            assert!(serde_json::from_str::<DesktopSettings>(bad).is_err());
+        }
+    }
 
     #[test]
     fn settings_adapter_validates_before_replacing_existing_preferences() {
@@ -89,6 +122,7 @@ mod settings_tests {
         let mut settings = store.load().unwrap();
         assert_eq!(settings.launcher, LauncherSize::default());
         settings
+            .layout
             .positions
             .insert("clock".into(), Placement::new(-12.5, 800.).unwrap());
         settings.pinned = vec![AppId::new("org.example.App.desktop").unwrap()];

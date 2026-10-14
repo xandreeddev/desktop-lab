@@ -7,7 +7,9 @@ mod view;
 use crate::actions::Action;
 use lucent_api::{ClipboardTarget, DragEvent, Effects, TextEdit, TextFieldState};
 use lucent_design::component;
-use lucent_domain::{DesktopSettings, FocusTimer, Placement, WidgetSize};
+#[cfg(test)]
+use lucent_domain::DesktopSettings;
+use lucent_domain::{FocusTimer, Placement, WidgetLayout, WidgetSize};
 use std::collections::BTreeMap;
 pub use view::{Input, View};
 
@@ -41,7 +43,9 @@ pub enum Intent {
 /// Preferences remain in the root aggregate. The child borrows them for this
 /// update rather than maintaining a second persisted copy.
 pub struct Update<'a> {
-    pub settings: &'a mut DesktopSettings,
+    pub layout: &'a mut WidgetLayout,
+    pub notes: &'a mut String,
+    pub instance: Option<lucent_api::SurfaceInstance>,
     pub viewport: (f32, f32),
     pub unix_seconds: u64,
 }
@@ -84,7 +88,7 @@ impl Host {
     pub fn size(
         &self,
         id: &str,
-        settings: &DesktopSettings,
+        settings: &WidgetLayout,
         viewport: (f32, f32),
         source: bool,
     ) -> WidgetSize {
@@ -94,7 +98,7 @@ impl Host {
     }
     pub fn surfaces(
         &self,
-        settings: &DesktopSettings,
+        settings: &WidgetLayout,
         viewport: (f32, f32),
     ) -> Vec<surfaces::Surface> {
         if self.grid_visible()
@@ -109,7 +113,7 @@ impl Host {
     pub fn source_position(
         &self,
         id: &str,
-        settings: &DesktopSettings,
+        settings: &WidgetLayout,
         viewport: (f32, f32),
     ) -> Placement {
         match self.drags.get(id) {
@@ -130,7 +134,7 @@ impl Host {
             self.captured_surfaces = None;
         }
     }
-    fn cancel_interactions(&mut self) {
+    pub(crate) fn cancel_interactions(&mut self) {
         self.resizer.cancel();
         for drag in self.drags.values_mut() {
             *drag = Drag::Cancelled;
@@ -139,6 +143,11 @@ impl Host {
     }
     pub fn timer_remaining(&self) -> u64 {
         self.timer.remaining
+    }
+    pub fn tick(&mut self, now: u64, timer_visible: bool) -> bool {
+        let before = self.timer.remaining;
+        self.timer.tick(now);
+        before != self.timer.remaining && timer_visible
     }
     #[cfg(test)]
     pub fn month_offset(&self) -> i32 {
@@ -150,7 +159,7 @@ impl Host {
         input: Update<'_>,
         effects: &mut Effects<Message>,
     ) -> Option<Intent> {
-        let settings = input.settings;
+        let settings = input.layout;
         match message {
             Message::Toggle(id) | Message::Show(id) if catalog::find(&id).is_none() => None,
             Message::Show(id) if settings.visible_widgets.contains(&id) => None,
@@ -321,10 +330,14 @@ impl Host {
                     .find(|s| s.members.contains(&"notes"))
                     .map_or("widgets", |s| s.id);
                 match self.notes_field.update(
-                    &mut settings.notes,
+                    input.notes,
                     edit,
                     8192,
-                    ClipboardTarget::new(surface, "notes-input"),
+                    match &input.instance {
+                        Some(instance) => ClipboardTarget::new(surface, "notes-input")
+                            .in_instance(instance.clone()),
+                        None => ClipboardTarget::new(surface, "notes-input"),
+                    },
                     effects,
                     Message::EditNotes,
                 ) {
@@ -346,11 +359,7 @@ impl Host {
                 None
             }
             Message::Tick(now) => {
-                let before = self.timer.remaining;
-                self.timer.tick(now);
-                if before != self.timer.remaining
-                    && settings.visible_widgets.iter().any(|id| id == "timer")
-                {
+                if self.tick(now, settings.visible_widgets.iter().any(|id| id == "timer")) {
                     effects.redraw("widgets");
                 }
                 None
@@ -431,7 +440,9 @@ mod tests {
         let intent = host.update(
             message,
             Update {
-                settings,
+                layout: &mut settings.layout,
+                notes: &mut settings.notes,
+                instance: None,
                 viewport: (1920., 1080.),
                 unix_seconds: now,
             },
@@ -454,9 +465,9 @@ mod tests {
     fn notes_clipboard_targets_live_group_and_saves_only_accepted_content() {
         let mut host = Host::default();
         let mut settings = DesktopSettings::default();
-        settings.visible_widgets.push("notes".into());
+        settings.layout.visible_widgets.push("notes".into());
         let expected = host
-            .surfaces(&settings, (1920., 1080.))
+            .surfaces(&settings.layout, (1920., 1080.))
             .into_iter()
             .find(|s| s.members.contains(&"notes"))
             .unwrap()
@@ -514,21 +525,21 @@ mod tests {
     fn native_sources_stay_fixed_during_drag_and_resize_cancels_without_saving() {
         let mut host = Host::default();
         let mut settings = DesktopSettings::default();
-        let sources = host.surfaces(&settings, (1920., 1080.));
+        let sources = host.surfaces(&settings.layout, (1920., 1080.));
         send(&mut host, &mut settings, drag(false), 0);
-        assert_eq!(host.surfaces(&settings, (1920., 1080.)), sources);
+        assert_eq!(host.surfaces(&settings.layout, (1920., 1080.)), sources);
         assert_eq!(
-            host.source_position("calendar", &settings, (1920., 1080.)),
-            surfaces::position("calendar", &settings, (1920., 1080.), false)
+            host.source_position("calendar", &settings.layout, (1920., 1080.)),
+            surfaces::position("calendar", &settings.layout, (1920., 1080.), false)
         );
-        assert!(settings.positions.is_empty());
+        assert!(settings.layout.positions.is_empty());
         let (intent, effects) = send(&mut host, &mut settings, Message::CancelDrags, 0);
         assert!(intent.is_none());
         assert!(effects.redraw.contains(&"widgets"));
         assert!(!host.grid_visible());
         assert!(send(&mut host, &mut settings, drag(true), 0).0.is_none());
         assert!(
-            settings.positions.is_empty(),
+            settings.layout.positions.is_empty(),
             "late release cannot persist after cancellation"
         );
     }
@@ -549,9 +560,9 @@ mod tests {
             Some(Intent::Save)
         ));
         assert!(!host.grid_visible());
-        let position = settings.positions.get("calendar").copied();
+        let position = settings.layout.positions.get("calendar").copied();
         assert!(send(&mut host, &mut settings, drag(true), 0).0.is_none());
-        assert_eq!(settings.positions.get("calendar").copied(), position);
+        assert_eq!(settings.layout.positions.get("calendar").copied(), position);
         assert!(!host.grid_visible());
         for message in [
             Message::Show("missing".into()),
@@ -567,8 +578,14 @@ mod tests {
         ] {
             assert!(send(&mut host, &mut settings, message, 0).0.is_none());
         }
-        assert!(!settings.positions.contains_key("missing"));
-        assert!(!settings.visible_widgets.iter().any(|id| id == "missing"));
+        assert!(!settings.layout.positions.contains_key("missing"));
+        assert!(
+            !settings
+                .layout
+                .visible_widgets
+                .iter()
+                .any(|id| id == "missing")
+        );
     }
     #[test]
     fn dragging_saves_only_on_release_and_reset_preserves_other_preferences() {
@@ -577,10 +594,10 @@ mod tests {
             notes: "Keep this".into(),
             ..Default::default()
         };
-        let visibility = settings.visible_widgets.clone();
+        let visibility = settings.layout.visible_widgets.clone();
         let origin = default_position("calendar", (1920., 1080.));
         assert!(send(&mut host, &mut settings, drag(false), 0).0.is_none());
-        assert!(!settings.positions.contains_key("calendar"));
+        assert!(!settings.layout.positions.contains_key("calendar"));
         assert_eq!(
             host.preview_position("calendar"),
             Some(Placement::new(origin.x() + 19., origin.y() + 25.).unwrap())
@@ -591,17 +608,17 @@ mod tests {
         ));
         assert!(!host.grid_visible());
         let step = component::widget_layout::GRID_STEP;
-        assert_eq!(settings.positions["calendar"].x() % step, 0.);
-        assert_eq!(settings.positions["calendar"].y() % step, 0.);
+        assert_eq!(settings.layout.positions["calendar"].x() % step, 0.);
+        assert_eq!(settings.layout.positions["calendar"].y() % step, 0.);
         send(&mut host, &mut settings, drag(false), 0);
         assert!(matches!(
             send(&mut host, &mut settings, Message::ResetLayout, 0).0,
             Some(Intent::Save)
         ));
         assert!(!host.grid_visible());
-        assert!(settings.positions.is_empty());
+        assert!(settings.layout.positions.is_empty());
         assert_eq!(settings.notes, "Keep this");
-        assert_eq!(settings.visible_widgets, visibility);
+        assert_eq!(settings.layout.visible_widgets, visibility);
     }
 
     #[test]
@@ -613,7 +630,7 @@ mod tests {
         assert!(send(&mut host, &mut settings, drag(false), 0).0.is_none());
         assert!(!host.grid_visible());
         assert!(send(&mut host, &mut settings, drag(true), 0).0.is_none());
-        assert!(settings.positions.is_empty());
+        assert!(settings.layout.positions.is_empty());
         send(&mut host, &mut settings, drag(false), 0);
         assert!(host.grid_visible());
         assert!(matches!(
@@ -642,7 +659,7 @@ mod tests {
         assert!(send(&mut host, &mut settings, drag(false), 0).0.is_none());
         assert!(send(&mut host, &mut settings, drag(true), 0).0.is_none());
         assert!(!host.grid_visible());
-        assert!(settings.positions.is_empty());
+        assert!(settings.layout.positions.is_empty());
     }
 
     #[test]
@@ -650,7 +667,7 @@ mod tests {
         let mut host = Host::default();
         let mut settings = DesktopSettings::default();
         let saved = Placement::new(5000., -400.).unwrap();
-        settings.positions.insert("calendar".into(), saved);
+        settings.layout.positions.insert("calendar".into(), saved);
         let maximum = 1920. - widget_size("calendar").0;
         send(
             &mut host,
@@ -665,7 +682,7 @@ mod tests {
             ),
             0,
         );
-        assert_eq!(settings.positions["calendar"], saved);
+        assert_eq!(settings.layout.positions["calendar"], saved);
         assert_eq!(
             host.preview_position("calendar"),
             Some(Placement::new(maximum - 19., 25.).unwrap())
@@ -684,7 +701,7 @@ mod tests {
             0,
         );
         assert_eq!(
-            settings.positions["calendar"],
+            settings.layout.positions["calendar"],
             lucent_usecases::snap_placement(
                 Placement::new(maximum - 19., 25.).unwrap(),
                 component::widget_layout::GRID_STEP
@@ -701,7 +718,9 @@ mod tests {
             let result = host.update(
                 drag(false),
                 Update {
-                    settings: &mut settings,
+                    layout: &mut settings.layout,
+                    notes: &mut settings.notes,
+                    instance: None,
                     viewport,
                     unix_seconds: 0,
                 },
@@ -709,7 +728,7 @@ mod tests {
             );
             assert!(matches!(result, Some(Intent::Error(_))));
             assert!(!host.grid_visible());
-            assert!(settings.positions.is_empty());
+            assert!(settings.layout.positions.is_empty());
             assert!(effects.tasks.is_empty());
         }
     }

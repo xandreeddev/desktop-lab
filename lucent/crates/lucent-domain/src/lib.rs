@@ -1,6 +1,8 @@
 //! Pure desktop entities, value types, and OS service ports.
 mod desktop;
 pub use desktop::*;
+mod monitor;
+pub use monitor::*;
 
 mod ports;
 pub use ports::*;
