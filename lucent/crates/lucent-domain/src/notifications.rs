@@ -58,6 +58,8 @@ pub struct NotificationArchive {
 pub enum NotificationHistoryStatus {
     #[default]
     Memory,
+    Loading,
+    Saving,
     Ready,
     ReadFailed,
     WriteFailed,

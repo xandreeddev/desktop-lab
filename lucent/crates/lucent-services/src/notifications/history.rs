@@ -26,8 +26,49 @@ impl Default for JsonNotificationHistory {
         }
     }
 }
+impl JsonNotificationHistory {
+    fn lease(&self) -> Result<File> {
+        let parent = self
+            .path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .ok_or_else(|| {
+                DomainError::Invalid("Notification history directory is invalid".into())
+            })?;
+        fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(parent)
+            .map_err(|_| {
+                DomainError::Unavailable("Notification history directory is unavailable".into())
+            })?;
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(parent.join(".notifications.lock"))
+            .map_err(|_| {
+                DomainError::Unavailable("Notification history lock is unavailable".into())
+            })?;
+        if !file.metadata().is_ok_and(|meta| meta.is_file()) {
+            return Err(DomainError::Invalid(
+                "Notification history lock is invalid".into(),
+            ));
+        }
+        // A retiring in-flight writer may outlive its caller. A later adapter
+        // must wait for that committed file before restoring its counter.
+        file.lock().map_err(|_| {
+            DomainError::Unavailable("Notification history lock is unavailable".into())
+        })?;
+        Ok(file)
+    }
+}
 impl NotificationHistoryPort for JsonNotificationHistory {
     fn load(&self) -> Result<NotificationArchive> {
+        let _lease = self.lease()?;
         let file = match OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
@@ -74,6 +115,7 @@ impl NotificationHistoryPort for JsonNotificationHistory {
     }
     fn save(&self, archive: &NotificationArchive) -> Result<()> {
         validate_archive(archive)?;
+        let _lease = self.lease()?;
         let bytes = serde_json::to_vec(&Document {
             version: 1,
             archive: archive.clone(),
@@ -207,5 +249,38 @@ mod tests {
         assert!(store.load().is_err());
         assert_eq!(fs::read(&other).unwrap(), b"private data");
         fs::remove_dir_all(directory.parent().unwrap()).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod lease_tests {
+    use super::*;
+    use std::{sync::mpsc, time::Duration};
+    #[test]
+    fn another_adapter_restores_only_after_the_previous_file_lease_is_released() {
+        let directory =
+            std::env::temp_dir().join(format!("lucent-history-lease-{}", std::process::id()));
+        let path = directory.join("notifications.json");
+        let first = JsonNotificationHistory { path: path.clone() };
+        let lease = first.lease().unwrap();
+        let (started, ready) = mpsc::channel();
+        let (done, completion) = mpsc::channel();
+        let second = std::thread::spawn(move || {
+            started.send(()).unwrap();
+            let result = JsonNotificationHistory { path }.load();
+            done.send(result).unwrap();
+        });
+        ready.recv_timeout(Duration::from_secs(2)).unwrap();
+        assert!(completion.recv_timeout(Duration::from_millis(50)).is_err());
+        drop(lease);
+        assert_eq!(
+            completion
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap()
+                .unwrap(),
+            NotificationArchive::default()
+        );
+        second.join().unwrap();
+        fs::remove_dir_all(directory).unwrap();
     }
 }

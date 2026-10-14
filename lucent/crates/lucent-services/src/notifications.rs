@@ -2,6 +2,7 @@
 use lucent_domain::*;
 use lucent_usecases::notifications::NotificationInbox;
 mod history;
+mod storage;
 pub use history::JsonNotificationHistory;
 use std::{
     collections::{HashMap, VecDeque},
@@ -50,6 +51,9 @@ struct Store {
     dirty: bool,
     reload: bool,
     dnd_changed: bool,
+    io_serial: u64,
+    load_pending: Option<u64>,
+    save_pending: Option<u64>,
 }
 impl Store {
     // Called while holding state, before any mutation. This is admission, not a
@@ -79,8 +83,47 @@ struct Shared {
     changed: Condvar,
     epoch: Instant,
     history: Option<Arc<dyn NotificationHistoryPort>>,
+    worker: Mutex<Option<storage::Worker>>,
 }
 impl Shared {
+    fn storage_complete(&self, completion: storage::Completion) {
+        let mut state = self.state.lock().unwrap();
+        match completion {
+            storage::Completion::Loaded(id, result) => {
+                if state.load_pending != Some(id) {
+                    return;
+                }
+                let bootstrap = !state.loaded;
+                state.load_pending = None;
+                state.loaded = true;
+                let preserve_dnd = state.dnd_changed;
+                let result =
+                    result.and_then(|archive| state.inbox.merge_archive(archive, preserve_dnd));
+                state.writable = result.is_ok();
+                state.dirty |= result.is_ok() && !bootstrap;
+                state.history_status = if result.is_ok() {
+                    NotificationHistoryStatus::Ready
+                } else {
+                    NotificationHistoryStatus::ReadFailed
+                };
+            }
+            storage::Completion::Saved(id, result) => {
+                if state.save_pending != Some(id) {
+                    return;
+                }
+                state.save_pending = None;
+                state.history_status = if result.is_err() {
+                    NotificationHistoryStatus::WriteFailed
+                } else if state.dirty {
+                    NotificationHistoryStatus::Saving
+                } else {
+                    NotificationHistoryStatus::Ready
+                };
+            }
+        }
+        state.revision = state.revision.wrapping_add(1);
+        self.changed.notify_all();
+    }
     fn mutate<T, E>(
         &self,
         f: impl FnOnce(&mut Store) -> std::result::Result<T, E>,
@@ -140,6 +183,7 @@ impl FreedesktopNotifications {
             changed: Condvar::new(),
             epoch: Instant::now(),
             history,
+            worker: Mutex::new(None),
         }))
     }
 }
@@ -266,59 +310,66 @@ impl Server {
 }
 impl FreedesktopNotifications {
     fn load_history(&self) {
-        let Some(adapter) = &self.0.history else {
+        if self.0.history.is_none() {
             return;
-        };
-        {
-            let mut state = self.0.state.lock().unwrap();
-            if state.loaded && !state.reload {
-                return;
+        }
+        let mut worker = self.0.worker.lock().unwrap();
+        if worker.is_none() {
+            match storage::Worker::start(
+                self.0.history.as_ref().unwrap().clone(),
+                Arc::downgrade(&self.0),
+            ) {
+                Ok(started) => *worker = Some(started),
+                Err(_) => {
+                    let mut state = self.0.state.lock().unwrap();
+                    state.loaded = true;
+                    state.reload = false;
+                    state.history_status = NotificationHistoryStatus::ReadFailed;
+                    self.0.changed.notify_all();
+                    return;
+                }
             }
+        }
+        let mut state = self.0.state.lock().unwrap();
+        if (state.loaded && !state.reload) || state.load_pending.is_some() {
+            return;
+        }
+        let Some(id) = state.io_serial.checked_add(1) else {
             state.loaded = true;
             state.reload = false;
-        }
-        let result = adapter.load();
-        let mut state = self.0.state.lock().unwrap();
-        let preserve_dnd = state.dnd_changed;
-        let result = result.and_then(|archive| state.inbox.merge_archive(archive, preserve_dnd));
-        state.writable = result.is_ok();
-        state.history_status = if result.is_ok() {
-            NotificationHistoryStatus::Ready
-        } else {
-            NotificationHistoryStatus::ReadFailed
+            state.history_status = NotificationHistoryStatus::ReadFailed;
+            return;
         };
+        state.io_serial = id;
+        state.reload = false;
+        state.load_pending = Some(id);
+        state.history_status = NotificationHistoryStatus::Loading;
         state.revision = state.revision.wrapping_add(1);
-        state.dirty = result.is_ok();
-        self.0.changed.notify_all();
+        worker.as_ref().unwrap().submit(storage::Request::Load(id));
     }
     fn persist_history(&self) {
-        let Some(adapter) = &self.0.history else {
+        let worker = self.0.worker.lock().unwrap();
+        let Some(worker) = worker.as_ref() else {
             return;
         };
-        let pending = {
-            let state = self.0.state.lock().unwrap();
-            if !state.writable || !state.dirty {
-                None
-            } else {
-                Some((state.revision, state.inbox.archive()))
-            }
-        };
-        let Some((revision, archive)) = pending else {
-            return;
-        };
-        let result = adapter.save(&archive);
         let mut state = self.0.state.lock().unwrap();
-        state.dirty = state.revision != revision;
-        let status = if result.is_ok() {
-            NotificationHistoryStatus::Ready
-        } else {
-            NotificationHistoryStatus::WriteFailed
-        };
-        if state.history_status != status {
-            state.history_status = status;
-            state.revision = state.revision.wrapping_add(1);
-            self.0.changed.notify_all();
+        if !state.writable || !state.dirty {
+            return;
         }
+        let Some(id) = state.io_serial.checked_add(1) else {
+            state.history_status = NotificationHistoryStatus::WriteFailed;
+            state.dirty = false;
+            return;
+        };
+        state.io_serial = id;
+        let archive = state.inbox.archive();
+        state.dirty = false;
+        state.save_pending = Some(id);
+        if state.history_status != NotificationHistoryStatus::Saving {
+            state.history_status = NotificationHistoryStatus::Saving;
+            state.revision = state.revision.wrapping_add(1);
+        }
+        worker.submit(storage::Request::Save(id, archive));
     }
     // Private connection selection keeps protocol testing out of the domain port.
     fn watch_with(
@@ -328,6 +379,21 @@ impl FreedesktopNotifications {
         connect: impl Fn() -> zbus::Result<Builder<'static>>,
     ) {
         self.load_history();
+        // Bootstrap the persisted revision counter before admitting a sender.
+        // Waiting does not perform file IO or hold the inbox mutex, and stop
+        // remains observable even when the storage call stalls.
+        while self.0.history.is_some() && !stop.cancelled() {
+            let state = self.0.state.lock().unwrap();
+            if state.loaded {
+                break;
+            }
+            drop(
+                self.0
+                    .changed
+                    .wait_timeout(state, Duration::from_millis(100))
+                    .unwrap(),
+            );
+        }
         while !stop.cancelled() {
             let connection = connect()
                 // Activation owns shell replacement. The delivery adapter must
@@ -492,16 +558,25 @@ impl NotificationPort for FreedesktopNotifications {
         })
     }
     fn clear_history(&self) -> Result<()> {
+        if let Some(worker) = self.0.worker.lock().unwrap().as_ref() {
+            worker.cancel_load();
+        }
         self.0.mutate(|s| {
             s.inbox.clear_history();
             // Explicit Clear authorizes replacing even an unreadable archive.
             s.writable = true;
+            s.reload = false;
+            s.load_pending = None;
+            s.loaded = true;
             Ok(())
         })
     }
     fn retry_history(&self) -> Result<()> {
         self.0.mutate(|state| {
-            if state.history_status == NotificationHistoryStatus::ReadFailed {
+            if matches!(
+                state.history_status,
+                NotificationHistoryStatus::ReadFailed | NotificationHistoryStatus::Loading
+            ) {
                 state.reload = true;
             }
             Ok(())

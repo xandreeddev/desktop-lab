@@ -145,6 +145,19 @@ impl Watcher {
             .unwrap()
             .unwrap()
     }
+    fn until(&self, predicate: impl Fn(&NotificationSnapshot) -> bool) -> NotificationSnapshot {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let value = self
+                .updates
+                .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                .expect("Expected observed notification state")
+                .expect("Notification service failed");
+            if predicate(&value) {
+                return value;
+            }
+        }
+    }
     fn recovered(&self) -> NotificationSnapshot {
         let deadline = Instant::now() + Duration::from_secs(8);
         loop {
@@ -629,7 +642,7 @@ fn notification_history_save_failure_and_retry_do_not_remove_live_content() {
     let connection = bus.connection();
     let proxy = zbus::blocking::Proxy::new(&connection, NAME, PATH, NAME).unwrap();
     let id = notify(&proxy, 0).unwrap();
-    let snapshot = watch.snapshot();
+    let snapshot = watch.until(|s| s.history_status == NotificationHistoryStatus::WriteFailed);
     assert_eq!(
         snapshot.history_status,
         NotificationHistoryStatus::WriteFailed
@@ -638,7 +651,7 @@ fn notification_history_save_failure_and_retry_do_not_remove_live_content() {
     assert!(history.archive.lock().unwrap().entries.is_empty());
     history.fail.store(false, Ordering::Relaxed);
     watch.server.retry_history().unwrap();
-    let snapshot = watch.snapshot();
+    let snapshot = watch.until(|s| s.history_status == NotificationHistoryStatus::Ready);
     assert_eq!(snapshot.history_status, NotificationHistoryStatus::Ready);
     assert!(snapshot.active.iter().any(|n| n.id == id));
     assert!(
@@ -679,4 +692,257 @@ fn notification_history_writer_never_holds_native_inbox_admission_mutex() {
     history.wake.notify_all();
     assert!(entered);
     assert!(result.is_ok());
+}
+
+struct SaveGate(Arc<HistoryAdapter>);
+impl Drop for SaveGate {
+    fn drop(&mut self) {
+        self.0.gate.lock().unwrap().0 = false;
+        self.0.wake.notify_all();
+    }
+}
+#[test]
+#[ignore = "requires a test-owned private dbus-daemon"]
+fn notification_stalled_storage_keeps_snapshots_actions_and_expiration_live() {
+    let bus = Bus::new();
+    let history = Arc::new(HistoryAdapter::default());
+    let watch = Watcher::with_history(&bus, false, Some(history.clone()));
+    watch.snapshot();
+    let gate = SaveGate(history.clone());
+    *history.gate.lock().unwrap() = (true, false);
+    let connection = bus.connection();
+    let proxy = zbus::blocking::Proxy::new(&connection, NAME, PATH, NAME).unwrap();
+    let mut actions = proxy.receive_signal("ActionInvoked").unwrap();
+    let id = notify(&proxy, 0).unwrap();
+    let held = history.gate.lock().unwrap();
+    let (held, wait) = history
+        .wake
+        .wait_timeout_while(held, Duration::from_secs(2), |g| !g.1)
+        .unwrap();
+    assert!(held.1 && !wait.timed_out());
+    drop(held);
+    let snapshot = watch.until(|s| s.active.iter().any(|n| n.id == id));
+    assert_eq!(snapshot.history_status, NotificationHistoryStatus::Saving);
+    let captured = target(&watch.server, id);
+    watch.server.invoke(captured, "default").unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let message = actions.next().unwrap();
+        tx.send(message.body().deserialize::<(u32, String)>().unwrap())
+            .unwrap();
+    });
+    assert_eq!(
+        rx.recv_timeout(Duration::from_secs(2)).unwrap(),
+        (id, "default".into())
+    );
+    let expiring: u32 = proxy
+        .call(
+            "Notify",
+            &(
+                "Fixture",
+                0_u32,
+                "",
+                "Timed fixture",
+                "",
+                Vec::<String>::new(),
+                HashMap::<String, OwnedValue>::new(),
+                30_i32,
+            ),
+        )
+        .unwrap();
+    let snapshot = watch.until(|s| s.history.iter().any(|n| n.id == expiring));
+    assert!(!snapshot.active.iter().any(|n| n.id == expiring));
+    assert_eq!(snapshot.history_status, NotificationHistoryStatus::Saving);
+    assert!(history.archive.lock().unwrap().entries.is_empty());
+    drop(gate);
+    watch.until(|s| s.history_status == NotificationHistoryStatus::Ready);
+    assert!(
+        history
+            .archive
+            .lock()
+            .unwrap()
+            .entries
+            .iter()
+            .any(|n| n.id == expiring)
+    );
+}
+
+#[test]
+fn superseded_io_completions_cannot_acknowledge_newer_save_or_resurrect_cleared_history() {
+    let server = FreedesktopNotifications::default();
+    {
+        let mut state = server.0.state.lock().unwrap();
+        state.save_pending = Some(2);
+        state.history_status = NotificationHistoryStatus::Saving;
+    }
+    server
+        .0
+        .storage_complete(storage::Completion::Saved(1, Ok(())));
+    assert_eq!(
+        server.0.state.lock().unwrap().history_status,
+        NotificationHistoryStatus::Saving
+    );
+    assert_eq!(server.0.state.lock().unwrap().save_pending, Some(2));
+    server
+        .0
+        .storage_complete(storage::Completion::Saved(2, Ok(())));
+    assert_eq!(
+        server.0.state.lock().unwrap().history_status,
+        NotificationHistoryStatus::Ready
+    );
+    {
+        let mut state = server.0.state.lock().unwrap();
+        state.load_pending = Some(3);
+        state.history_status = NotificationHistoryStatus::Loading;
+    }
+    server.clear_history().unwrap();
+    server.0.storage_complete(storage::Completion::Loaded(
+        3,
+        Err(DomainError::Invalid("stale fixture".into())),
+    ));
+    assert!(server.0.state.lock().unwrap().writable);
+    assert!(server.0.state.lock().unwrap().loaded);
+    assert_ne!(
+        server.0.state.lock().unwrap().history_status,
+        NotificationHistoryStatus::ReadFailed
+    );
+}
+
+#[test]
+#[ignore = "requires a test-owned private dbus-daemon"]
+fn notification_stalled_storage_does_not_delay_disconnect_reconnect_or_name_release() {
+    let mut bus = Bus::new();
+    let history = Arc::new(HistoryAdapter::default());
+    let watch = Watcher::with_history(&bus, false, Some(history.clone()));
+    watch.snapshot();
+    let gate = SaveGate(history.clone());
+    *history.gate.lock().unwrap() = (true, false);
+    let connection = bus.connection();
+    let proxy = zbus::blocking::Proxy::new(&connection, NAME, PATH, NAME).unwrap();
+    let id = notify(&proxy, 0).unwrap();
+    watch.until(|s| s.active.iter().any(|n| n.id == id));
+    let old = target(&watch.server, id);
+    bus.stop();
+    watch.until(|s| s.active.is_empty() && s.history.iter().any(|n| n.id == id));
+    assert!(
+        watch
+            .updates
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap()
+            .is_err()
+    );
+    bus.start();
+    watch.recovered();
+    assert!(watch.server.invoke(old, "default").is_err());
+    let connection = bus.connection();
+    let proxy = zbus::blocking::Proxy::new(&connection, NAME, PATH, NAME).unwrap();
+    let fresh = notify(&proxy, 0).unwrap();
+    watch.until(|s| s.active.iter().any(|n| n.id == fresh));
+    let server = watch.server.clone();
+    let started = Instant::now();
+    drop(watch);
+    assert!(started.elapsed() < Duration::from_secs(1));
+    assert!(!server.0.state.lock().unwrap().online);
+    let claimant = bus.connection();
+    claimant.request_name(NAME).unwrap();
+    drop(gate);
+}
+
+struct LoadAdapter {
+    fail: AtomicBool,
+    gate: Mutex<(bool, bool)>,
+    wake: Condvar,
+    archive: Mutex<NotificationArchive>,
+}
+impl NotificationHistoryPort for LoadAdapter {
+    fn load(&self) -> Result<NotificationArchive> {
+        if self.fail.load(Ordering::Relaxed) {
+            return Err(DomainError::Invalid("Fixture load failed".into()));
+        }
+        let mut gate = self.gate.lock().unwrap();
+        gate.1 = true;
+        self.wake.notify_all();
+        while gate.0 {
+            gate = self.wake.wait(gate).unwrap();
+        }
+        drop(gate);
+        Ok(self.archive.lock().unwrap().clone())
+    }
+    fn save(&self, archive: &NotificationArchive) -> Result<()> {
+        *self.archive.lock().unwrap() = archive.clone();
+        Ok(())
+    }
+}
+struct LoadGate(Arc<LoadAdapter>);
+impl Drop for LoadGate {
+    fn drop(&mut self) {
+        self.0.gate.lock().unwrap().0 = false;
+        self.0.wake.notify_all();
+    }
+}
+#[test]
+#[ignore = "requires a test-owned private dbus-daemon"]
+fn notification_stalled_recovery_load_keeps_delivery_live_and_clear_retires_its_result() {
+    let bus = Bus::new();
+    let history = Arc::new(LoadAdapter {
+        fail: AtomicBool::new(true),
+        gate: Mutex::new((false, false)),
+        wake: Condvar::new(),
+        archive: Mutex::new(NotificationArchive::default()),
+    });
+    let gate = LoadGate(history.clone());
+    let watch = Watcher::with_history(&bus, false, Some(history.clone()));
+    assert_eq!(
+        watch.snapshot().history_status,
+        NotificationHistoryStatus::ReadFailed
+    );
+    *history.archive.lock().unwrap() = NotificationArchive {
+        entries: vec![Notification {
+            id: 20,
+            revision: 100,
+            received_unix_ms: 100,
+            desktop_entry: None,
+            app: "Old fixture".into(),
+            summary: "Previous archive".into(),
+            body: String::new(),
+            actions: vec![],
+            critical: false,
+            resident: false,
+            transient: false,
+            timeout_ms: 0,
+        }],
+        last_revision: 100,
+        do_not_disturb: true,
+    };
+    history.fail.store(false, Ordering::Relaxed);
+    *history.gate.lock().unwrap() = (true, false);
+    watch.server.retry_history().unwrap();
+    let held = history.gate.lock().unwrap();
+    let (held, wait) = history
+        .wake
+        .wait_timeout_while(held, Duration::from_secs(2), |g| !g.1)
+        .unwrap();
+    assert!(held.1 && !wait.timed_out());
+    drop(held);
+    let connection = bus.connection();
+    let proxy = zbus::blocking::Proxy::new(&connection, NAME, PATH, NAME).unwrap();
+    let id = notify(&proxy, 0).unwrap();
+    let snapshot = watch.until(|s| s.active.iter().any(|n| n.id == id));
+    assert_eq!(snapshot.history_status, NotificationHistoryStatus::Loading);
+    let captured = target(&watch.server, id);
+    watch.server.clear_history().unwrap();
+    drop(gate);
+    let snapshot = watch.until(|s| s.history_status == NotificationHistoryStatus::Ready);
+    assert!(snapshot.history.is_empty());
+    assert!(snapshot.active.iter().any(|n| n.target() == Some(captured)));
+    assert!(!snapshot.do_not_disturb);
+    assert!(
+        history
+            .archive
+            .lock()
+            .unwrap()
+            .entries
+            .iter()
+            .all(|n| n.id != 20)
+    );
 }
