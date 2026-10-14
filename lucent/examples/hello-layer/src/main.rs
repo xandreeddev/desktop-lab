@@ -113,6 +113,7 @@ impl Application for Example {
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         vec![SurfaceSpec {
             id: "example",
+            instance: None,
             output: self.output.clone(),
             layer: Layer::Overlay,
             anchor: Anchor::Center,

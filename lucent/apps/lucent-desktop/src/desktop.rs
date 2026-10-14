@@ -1103,6 +1103,7 @@ impl api::Application for Desktop {
         let mut surfaces = vec![
             SurfaceSpec {
                 id: "tray",
+                instance: None,
                 output: None,
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
@@ -1125,6 +1126,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "power",
+                instance: None,
                 output: None,
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
@@ -1147,6 +1149,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "bluetooth",
+                instance: None,
                 output: None,
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
@@ -1169,6 +1172,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "network",
+                instance: None,
                 output: None,
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
@@ -1191,6 +1195,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "audio",
+                instance: None,
                 output: None,
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
@@ -1213,6 +1218,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "osd",
+                instance: None,
                 output: None,
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
@@ -1227,6 +1233,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "background",
+                instance: None,
                 output: None,
                 layer: Layer::Background,
                 anchor: Anchor::Fill,
@@ -1241,6 +1248,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "notifications",
+                instance: None,
                 output: None,
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
@@ -1255,6 +1263,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "bar",
+                instance: None,
                 output: None,
                 layer: Layer::Top,
                 anchor: Anchor::Top,
@@ -1269,6 +1278,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "widgets",
+                instance: None,
                 output: None,
                 layer: Layer::Bottom,
                 anchor: Anchor::Fill,
@@ -1283,6 +1293,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "dock",
+                instance: None,
                 output: None,
                 layer: if self.launcher.open() {
                     Layer::Overlay
@@ -1318,6 +1329,7 @@ impl api::Application for Desktop {
                 .into_iter()
                 .map(|source| SurfaceSpec {
                     id: source.id,
+                    instance: None,
                     output: None,
                     layer: Layer::Bottom,
                     anchor: Anchor::TopLeft,

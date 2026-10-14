@@ -168,6 +168,7 @@ fn action_pages_retire_on_replacement_and_history_has_no_action_controls() {
     center.update(Message::Group("name:Fixture".into()), &mut effects);
     let tree = center.view(&ViewContext {
         surface: "notifications",
+        instance: None,
         width: 390.,
         height: 580.,
         now: 1.,
@@ -302,6 +303,7 @@ fn grouped_buttons_scroll_and_close_use_actual_sdk_input_routing() {
     let layout = lucent_ui::Layout::new(Arc::new(fonts));
     let cx = ViewContext {
         surface: "notifications",
+        instance: None,
         width: 390.,
         height: 580.,
         now: 1.,
@@ -359,6 +361,7 @@ fn image_toast_scrolling_keeps_the_final_native_action_reachable_on_small_output
     let layout = lucent_ui::Layout::new(Arc::new(vec![font]));
     let cx = ViewContext {
         surface: "notifications",
+        instance: None,
         width: 390.,
         height: 320.,
         now: 1.,

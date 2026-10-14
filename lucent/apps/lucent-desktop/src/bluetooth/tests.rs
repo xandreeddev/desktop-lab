@@ -159,6 +159,7 @@ fn device_actions_are_reachable_and_radio_authority_lives_on_its_own_tab() {
     let theme = lucent_design::Theme::from_palette(&lucent_design::palettes()[0]);
     let cx = lucent_api::ViewContext {
         surface: "bluetooth",
+        instance: None,
         width: 390.,
         height: 580.,
         now: 1.,
@@ -529,6 +530,7 @@ fn pending_connection_cancel_is_reachable_while_ordinary_controls_are_disabled()
     for width in [320., 640.] {
         let cx = lucent_api::ViewContext {
             surface: "bluetooth",
+            instance: None,
             width,
             height: 580.,
             now: 1.,

@@ -155,6 +155,7 @@ fn scene(
 ) -> Scene<Message> {
     let cx = ViewContext {
         surface: "dock",
+        instance: None,
         width: app.viewport.0,
         height: app.viewport.1,
         now,
@@ -716,6 +717,7 @@ fn drag_grid_matches_snap_spacing_and_never_captures_input() {
     let layout = Layout::new(fonts(&app));
     let cx = ViewContext {
         surface: "widgets",
+        instance: None,
         width: 640.,
         height: 580.,
         now: 1.,
@@ -897,6 +899,7 @@ fn bounded_widget_sources_preserve_capture_and_pass_through_preview() {
     let layout = Layout::new(fonts(&app));
     let cx = ViewContext {
         surface: group.id,
+        instance: None,
         width: group.rect.w,
         height: group.rect.h,
         now: 1.,
@@ -972,6 +975,7 @@ fn bounded_widget_pixels_match_the_full_surface() {
                 }
                 let full_cx = ViewContext {
                     surface: "widgets",
+                    instance: None,
                     width: width as f32,
                     height: height as f32,
                     now: 1.,
@@ -990,6 +994,7 @@ fn bounded_widget_pixels_match_the_full_surface() {
                     for source in app.widgets.surfaces(&app.settings, app.viewport) {
                         let cx = ViewContext {
                             surface: source.id,
+                            instance: None,
                             width: source.rect.w,
                             height: source.rect.h,
                             now: 1.,
@@ -1071,6 +1076,7 @@ fn compact_dock_pixels_match_the_full_surface() {
             let build = |native_height: u32| {
                 let cx = ViewContext {
                     surface: "dock",
+                    instance: None,
                     width: width as f32,
                     height: native_height as f32,
                     now: 1.,
@@ -1539,6 +1545,7 @@ fn visual_regressions() {
                 layout.build(
                     &app.view(&ViewContext {
                         surface: "widgets",
+                        instance: None,
                         width,
                         height,
                         now,
@@ -1611,6 +1618,7 @@ fn visual_regressions() {
                 layout.build(
                     &app.view(&ViewContext {
                         surface: "widgets",
+                        instance: None,
                         width,
                         height,
                         now,
@@ -1636,6 +1644,7 @@ fn visual_regressions() {
                 layout.build(
                     &app.view(&ViewContext {
                         surface: "widgets",
+                        instance: None,
                         width,
                         height,
                         now,
@@ -1717,6 +1726,7 @@ fn visual_regressions() {
                 let tree = menu
                     .view(&ViewContext {
                         surface: "menu",
+                        instance: None,
                         width,
                         height,
                         now,
@@ -1738,6 +1748,7 @@ fn visual_regressions() {
                 layout.build(
                     &app.view(&ViewContext {
                         surface: "osd",
+                        instance: None,
                         width,
                         height,
                         now,
@@ -1798,6 +1809,7 @@ fn visual_regressions() {
                 }
                 let cx = ViewContext {
                     surface: "lock",
+                    instance: None,
                     width,
                     height,
                     now,
@@ -1872,6 +1884,7 @@ fn visual_regressions() {
                 }
                 let tree = app.view(&ViewContext {
                     surface: "dock",
+                    instance: None,
                     width,
                     height,
                     now,
@@ -1910,6 +1923,7 @@ fn visual_regressions() {
                 }
                 let tree = app.view(&ViewContext {
                     surface: "tray",
+                    instance: None,
                     width,
                     height,
                     now,
@@ -1958,6 +1972,7 @@ fn visual_regressions() {
                 }
                 let tree = app.view(&ViewContext {
                     surface: "power",
+                    instance: None,
                     width,
                     height,
                     now,
@@ -2048,6 +2063,7 @@ fn visual_regressions() {
                 }
                 let tree = app.view(&ViewContext {
                     surface: "bluetooth",
+                    instance: None,
                     width,
                     height,
                     now,
@@ -2114,6 +2130,7 @@ fn visual_regressions() {
                 }
                 let tree = app.view(&ViewContext {
                     surface: "network",
+                    instance: None,
                     width,
                     height,
                     now,
@@ -2174,6 +2191,7 @@ fn visual_regressions() {
                 }
                 let cx = ViewContext {
                     surface: "audio",
+                    instance: None,
                     width,
                     height,
                     now,
@@ -2362,6 +2380,7 @@ fn visual_regressions() {
                 }
                 let cx = ViewContext {
                     surface: "notifications",
+                    instance: None,
                     width,
                     height,
                     now,
@@ -2400,6 +2419,7 @@ fn visual_regressions() {
                     .collect();
                 let cx = ViewContext {
                     surface: "bar",
+                    instance: None,
                     width,
                     height,
                     now,
@@ -2553,6 +2573,7 @@ fn notification_controls_fit_at_normal_and_narrow_widths() {
             );
             let cx = ViewContext {
                 surface: "notifications",
+                instance: None,
                 width,
                 height: 720.,
                 now: 1.,
@@ -2761,6 +2782,7 @@ fn bar_capsules_share_grid_do_not_overlap_and_keep_active_workspace_visible() {
             groups.extend(geometry.clock);
             let cx = ViewContext {
                 surface: "bar",
+                instance: None,
                 width,
                 height: component::panel::BAR_HEIGHT,
                 now: 1.,
@@ -3038,6 +3060,7 @@ fn widget_catalog_covers_selector_views_geometry_and_ipc() {
     let layout = Layout::new(fonts(&app));
     let cx = ViewContext {
         surface: "widgets",
+        instance: None,
         width: 1920.,
         height: 1080.,
         now: 100.,
@@ -3122,6 +3145,7 @@ fn settings_save_failure_survives_unrelated_success_and_widget_retry_acknowledge
     let layout = Layout::new(fonts(&app));
     let cx = ViewContext {
         surface: "widgets",
+        instance: None,
         width: 390.,
         height: 320.,
         now: 1.,
@@ -3163,6 +3187,7 @@ fn pending_saves_and_load_failure_never_render_a_saved_caption() {
         let layout = Layout::new(fonts(&app));
         let cx = ViewContext {
             surface: "widgets",
+            instance: None,
             width: 390.,
             height: 320.,
             now: 1.,
@@ -3364,6 +3389,7 @@ fn audio_stale_failure_exposes_dismiss_and_keyboard_reaches_it_at_narrow_sizes()
         let layout = Layout::new(fonts(&app));
         let cx = ViewContext {
             surface: "audio",
+            instance: None,
             width,
             height,
             now: 1.,
@@ -3410,6 +3436,7 @@ fn audio_panel_closes_competing_launcher_and_keyboard_reveals_controls_at_narrow
         let layout = Layout::new(fonts(&app));
         let cx = ViewContext {
             surface: "audio",
+            instance: None,
             width,
             height,
             now: 1.,
@@ -3502,6 +3529,7 @@ fn network_overlay_keeps_one_keyboard_owner_and_masks_the_form_in_all_public_sta
     let layout = Layout::new(fonts(&app));
     let cx = ViewContext {
         surface: "network",
+        instance: None,
         width: 390.,
         height: 580.,
         now: 1.,
@@ -3589,6 +3617,7 @@ fn bluetooth_overlay_routes_keyboard_submission_without_exposing_input_or_compet
     let layout = Layout::new(fonts(&app));
     let cx = ViewContext {
         surface: "bluetooth",
+        instance: None,
         width: 390.,
         height: 580.,
         now: 1.,
@@ -3670,6 +3699,7 @@ fn launcher_pins_are_native_actions_and_hidden_dock_keeps_only_its_hotspot() {
     hidden_app.dock.fixture_hidden();
     let tree = hidden_app.view(&ViewContext {
         surface: "dock",
+        instance: None,
         width: 640.,
         height: 100.,
         now: 10.,
@@ -3740,6 +3770,7 @@ fn native_widget_resize_uses_the_grip_and_preserves_source_capture_until_release
     let group = app.widgets.surfaces(&app.settings, app.viewport)[0].clone();
     let cx = ViewContext {
         surface: group.id,
+        instance: None,
         width: group.rect.w,
         height: group.rect.h,
         now: 1.,
@@ -3756,6 +3787,7 @@ fn native_widget_resize_uses_the_grip_and_preserves_source_capture_until_release
     let group = app.widgets.surfaces(&app.settings, app.viewport)[0].clone();
     let cx = ViewContext {
         surface: group.id,
+        instance: None,
         width: group.rect.w,
         height: group.rect.h,
         now: 1.,
@@ -3857,6 +3889,7 @@ fn widget_editor_routes_launcher_keyboard_size_controls_escape_and_checked_ipc()
     let group = app.widgets.surfaces(&app.settings, app.viewport)[0].clone();
     let cx = ViewContext {
         surface: group.id,
+        instance: None,
         width: group.rect.w,
         height: group.rect.h,
         now: 1.,

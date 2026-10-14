@@ -4,13 +4,25 @@ use std::fmt;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClipboardTarget {
     pub surface: &'static str,
+    pub instance: Option<crate::SurfaceInstance>,
     pub element: String,
 }
 impl ClipboardTarget {
     pub fn new(surface: &'static str, element: impl Into<String>) -> Self {
         Self {
             surface,
+            instance: None,
             element: element.into(),
+        }
+    }
+    pub fn in_instance(mut self, instance: crate::SurfaceInstance) -> Self {
+        self.instance = Some(instance);
+        self
+    }
+    pub fn address(&self) -> crate::SurfaceAddress {
+        crate::SurfaceAddress {
+            role: self.surface,
+            instance: self.instance.clone(),
         }
     }
 }

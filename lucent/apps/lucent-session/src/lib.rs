@@ -396,6 +396,7 @@ impl api::Application for SessionScreen {
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         vec![SurfaceSpec {
             id: self.surface_id(),
+            instance: None,
             output: None,
             layer: Layer::Overlay,
             anchor: Anchor::Fill,
@@ -489,6 +490,7 @@ mod tests {
         }
         let tree = app.view(&ViewContext {
             surface: app.surface_id(),
+            instance: None,
             width: 1920.,
             height: 1080.,
             now: 0.,
@@ -625,6 +627,7 @@ mod tests {
         for (width, height) in [(1920., 1080.), (1080., 1920.)] {
             let cx = ViewContext {
                 surface: "lock",
+                instance: None,
                 width,
                 height,
                 now: 0.,
@@ -671,6 +674,7 @@ mod tests {
         );
         let tree = app.view(&ViewContext {
             surface: "lock",
+            instance: None,
             width: 1920.,
             height: 1080.,
             now: 0.,

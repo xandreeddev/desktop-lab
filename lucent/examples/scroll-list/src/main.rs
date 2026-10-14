@@ -116,6 +116,7 @@ impl Application for Example {
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         vec![SurfaceSpec {
             id: "list",
+            instance: None,
             output: None,
             layer: Layer::Overlay,
             anchor: Anchor::Center,

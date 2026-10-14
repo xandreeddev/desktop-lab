@@ -1,7 +1,9 @@
 //! A small declarative shell API. Public types contain no Wayland or GPU handles.
 mod clipboard;
 mod output;
+mod surface;
 pub use output::{DisplayOutput, OutputName};
+pub use surface::{SurfaceAddress, SurfaceInstance};
 mod rich_text;
 pub use rich_text::TextSpan;
 mod input;
@@ -613,6 +615,7 @@ pub struct SurfaceMargins {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SurfaceSpec {
     pub id: &'static str,
+    pub instance: Option<SurfaceInstance>,
     /// None lets the compositor select an output. A named output must exist;
     /// the runtime waits for it rather than silently changing the target.
     pub output: Option<OutputName>,
@@ -630,6 +633,12 @@ pub struct SurfaceSpec {
     pub pointer_input: PointerInput,
 }
 impl SurfaceSpec {
+    pub fn address(&self) -> SurfaceAddress {
+        SurfaceAddress {
+            role: self.id,
+            instance: self.instance.clone(),
+        }
+    }
     /// Check layer-shell invariants before making native protocol requests.
     /// This is not a renderer extent check or a memory budget.
     pub fn validate(&self) -> Result<(), &'static str> {
@@ -653,6 +662,7 @@ impl SurfaceSpec {
 #[derive(Clone, Debug)]
 pub struct ViewContext {
     pub surface: &'static str,
+    pub instance: Option<SurfaceInstance>,
     pub width: f32,
     pub height: f32,
     pub now: f64,
@@ -719,6 +729,11 @@ impl Key {
 }
 #[derive(Clone, Debug)]
 pub enum Event {
+    /// Native input/lifecycle for one concrete instance of a logical role.
+    Scoped {
+        instance: SurfaceInstance,
+        event: Box<Event>,
+    },
     OutputsChanged(Vec<DisplayOutput>),
     /// Pointer boundary for this native surface, independent of component hover.
     PointerInside {
@@ -801,6 +816,9 @@ pub trait Application: Component {
     fn animating(&self, _surface: &str, _now: f64) -> bool {
         false
     }
+    fn animating_instance(&self, surface: &SurfaceAddress, now: f64) -> bool {
+        self.animating(surface.role, now)
+    }
 }
 
 pub type Task<M> = Box<dyn FnOnce() -> M + Send>;
@@ -838,6 +856,7 @@ pub struct Effects<M> {
     pub now: f64,
     pub tasks: Vec<ScheduledTask<M>>,
     pub redraw: BTreeSet<&'static str>,
+    pub redraw_instances: BTreeSet<SurfaceAddress>,
     pub exit: bool,
     pub clipboard: Vec<ClipboardRequest<M>>,
 }
@@ -847,6 +866,7 @@ impl<M> Default for Effects<M> {
             now: 0.,
             tasks: vec![],
             redraw: BTreeSet::new(),
+            redraw_instances: BTreeSet::new(),
             exit: false,
             clipboard: vec![],
         }
@@ -894,6 +914,9 @@ impl<M> Effects<M> {
     pub fn redraw(&mut self, surface: &'static str) {
         self.redraw.insert(surface);
     }
+    pub fn redraw_surface(&mut self, surface: SurfaceAddress) {
+        self.redraw_instances.insert(surface);
+    }
     /// Run a child update and lift its async results into the parent's message type.
     pub fn delegate<C: Send + 'static>(
         &mut self,
@@ -908,6 +931,7 @@ impl<M> Effects<M> {
         };
         update(&mut child);
         self.redraw.extend(child.redraw);
+        self.redraw_instances.extend(child.redraw_instances);
         self.exit |= child.exit;
         let map = Arc::new(map);
         for request in child.clipboard {
@@ -1064,6 +1088,7 @@ mod tests {
     fn native_surface_requests_validate_anchor_dimensions_and_redraw_targets() {
         let mut spec = SurfaceSpec {
             id: "card",
+            instance: None,
             output: None,
             layer: Layer::Bottom,
             anchor: Anchor::TopLeft,
@@ -1359,6 +1384,7 @@ mod composition_tests {
         );
         let cx = ViewContext {
             surface: "test",
+            instance: None,
             width: 500.,
             height: 500.,
             now: 0.,
