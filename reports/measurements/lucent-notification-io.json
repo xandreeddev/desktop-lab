@@ -1,0 +1,53 @@
+{
+  "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+  "source_commit": "e3f030a205bf81b4de41dd9bc16ae9a1e74f9162",
+  "local_checks": {
+    "workspace_passed": 370,
+    "workspace_ignored": 58,
+    "owned_notification_protocol_cases_passed": 11,
+    "python_passed": 85,
+    "software_visual_comparisons_passed": 468,
+    "new_reviewed_references": 8,
+    "existing_references_changed": 0,
+    "fmt_clippy_workspace_all_targets": true,
+    "design_tokens_verified": 536,
+    "app_icons_verified": 58,
+    "shellcheck_passed": true,
+    "astro_errors": 0,
+    "astro_warnings": 0,
+    "astro_hints": 0,
+    "pages_each_prefix": 13,
+    "links_assets_each_prefix": 488
+  },
+  "implemented": [
+    "One ordered native history worker with one active call, one pending load and one latest save; coalescing bounds queued payloads and preserves idle sleep.",
+    "Independent snapshot/action/expiration/disconnect/reconnect progress during a save stall, and live delivery during recovery load.",
+    "Operation identity rejects superseded save acknowledgements and recovery results retired by Clear; merge policy skips an already live saved entry.",
+    "Initial revision restoration before sender admission, private file leases ordering adapter handoff, cancellable bootstrap waiting and weak storage completion ownership.",
+    "Queued data retires without joining a blocked filesystem call; the worker holds no bus or renderer and cannot resurrect disposed state.",
+    "Explicit Loading/Saving observations plus reviewed 1x/2x views, updated library/domain/user guides and repository skills."
+  ],
+  "native_acceptance": {
+    "current_source_deployed_to_vm": false,
+    "physical_filesystem_and_real_compositor_input_tested": false,
+    "deferred_by_user": true,
+    "authentication_or_authority_changed": false
+  },
+  "performance": {
+    "normal_desktop_rss_target_mib": 300,
+    "current_desktop_rss_measured": false,
+    "current_animation_pacing_measured": false,
+    "physical_density_or_effects_reduced": false
+  },
+  "remaining": [
+    "Formatted markup, hyperlinks, images/icons, activation tokens, sound and richer notification interactions.",
+    "Physical filesystem/fault behavior, actual VM/compositor restart/sleep/input and current RSS/pacing measurements.",
+    "Kernel I/O cannot be forcibly cancelled; initial revision bootstrap may wait on an unavailable filesystem. There is no automatic shutdown flush guarantee; current Ready acknowledgements establish save completion.",
+    "The full requirement ledger, including text shaping/IME/accessibility, outputs/fractional scaling, broader clients, secure audit and release acceptance."
+  ],
+  "privacy": {
+    "private_paths_or_captures_published": false,
+    "private_notification_content_or_host_application_metadata_published": false
+  },
+  "validation_scope": "Eleven actual private-daemon protocol cases plus pure queue/state/file/client checks pass. A thousand superseding saves leave one pending save. Actual snapshots, action signals, expiry, reconnect/name release and Clear recovery retirement are required while IO is blocked. All 468 software-Vulkan comparisons pass without update mode; only eight reviewed new loading/saving references are added."
+}
