@@ -126,14 +126,13 @@
       ]
     },
     {
-      "id": "text-and-accessibility",
+      "id": "text-input-and-shaping",
       "owner": "lucent-api lucent-ui lucent-wayland lucent-render",
       "status": "in_progress",
       "acceptance": [
         "Caret selection navigation deletion and clipboard work across clients",
         "Grapheme editing complex-script shaping and font fallback work",
-        "IME integration works",
-        "Accessibility semantics and platform bridge work"
+        "IME integration works"
       ],
       "evidence": [
         "Source 2b8f17d43d1b018b3c88c8d1de9065036162e9b0 implements shared declarative caret/selection, grapheme/word editing, actual pointer/keyboard geometry and relative-message burst handling in launcher, menus and notes. Final strict checks pass: 331 Rust tests/51 ignored, 82 Python checks and 436 software-Vulkan comparisons, with only 20 reviewed new references. Both docs prefixes pass 13 pages/488 links and zero diagnostics. See reports/measurements/lucent-text-editing.json. Clipboard, shaping/bidi/fallback, IME, accessibility, remaining legacy fields and native acceptance are open.",
@@ -1522,5 +1521,11 @@
     "rendering_quality": "Preserve logical spacing, physical-pixel density, antialiasing and visual effects while measuring their cost.",
     "animation": "Pace dirty surfaces with compositor frame callbacks; target the actual refresh interval and report cold/warm hitches separately.",
     "measurement_scope": "Measure the current binary and workload; historical reports retain their original targets. RSS is distinct from prepared payloads, peak decoding and total GPU allocation."
+  },
+  "deferred_scope": {
+    "accessibility": {
+      "status": "deferred_by_user",
+      "scope": "Accessibility semantics and platform bridge; text input, shaping and IME remain separate requirements."
+    }
   }
 }

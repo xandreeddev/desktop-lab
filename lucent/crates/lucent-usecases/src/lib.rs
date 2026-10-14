@@ -135,6 +135,30 @@ pub fn ensure_monitor_layout(settings: &mut DesktopSettings, id: &MonitorId) -> 
     Ok(())
 }
 pub fn validate_settings(settings: &DesktopSettings) -> Result<()> {
+    let live = &settings.live_wallpapers;
+    if live.monitors.values().filter(|s| s.enabled).count()
+        + usize::from(live.default.as_ref().is_some_and(|s| s.enabled))
+        > 4
+        || live.monitors.len() > 32
+    {
+        return Err(DomainError::Invalid(
+            "At most four live wallpaper profiles are supported".into(),
+        ));
+    }
+    for value in live.default.iter().chain(live.monitors.values()) {
+        for path in [
+            &value.asset.path,
+            &value.asset.source.path,
+            &value.asset.poster.path,
+        ] {
+            if path.is_empty() || path.len() > 4096 || path.chars().any(char::is_control) {
+                return Err(DomainError::Invalid(
+                    "Live wallpaper paths must be bounded and contain no controls".into(),
+                ));
+            }
+        }
+    }
+
     if settings.monitor_layouts.len() > 64 {
         return Err(DomainError::Invalid(
             "At most 64 saved monitor layouts".into(),
@@ -224,12 +248,12 @@ mod tests {
             keywords: vec![],
             icon: String::new(),
             startup_class: name.into(),
-            command: LaunchCommand {
+            launch: lucent_domain::ApplicationLaunch::Command(LaunchCommand {
                 program: name.into(),
                 args: vec![],
                 directory: None,
                 terminal: false,
-            },
+            }),
         }
     }
     #[test]

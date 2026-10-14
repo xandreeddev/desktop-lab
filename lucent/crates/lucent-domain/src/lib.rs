@@ -42,3 +42,6 @@ pub use wallpaper_catalog::*;
 
 mod values;
 pub use values::*;
+
+mod live_wallpaper;
+pub use live_wallpaper::*;

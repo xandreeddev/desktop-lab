@@ -72,7 +72,7 @@ pub struct Application {
     pub keywords: Vec<String>,
     pub icon: String,
     pub startup_class: String,
-    pub command: LaunchCommand,
+    pub launch: ApplicationLaunch,
 }
 impl Application {
     /// Match an observed compositor class using desktop-entry hints. Missing
@@ -85,6 +85,20 @@ impl Application {
                     .as_str()
                     .strip_suffix(".desktop")
                     .is_some_and(|id| id.eq_ignore_ascii_case(class)))
+    }
+}
+/// Application launch behavior, independent of the concrete platform transport.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ApplicationLaunch {
+    Command(LaunchCommand),
+    DesktopService { fallback: Option<LaunchCommand> },
+}
+impl ApplicationLaunch {
+    pub fn command(&self) -> Option<&LaunchCommand> {
+        match self {
+            Self::Command(command) => Some(command),
+            Self::DesktopService { fallback } => fallback.as_ref(),
+        }
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -314,6 +328,7 @@ pub struct DesktopSettings {
     pub palette: Option<crate::ThemePalette>,
     pub saved_palettes: Vec<crate::ThemePalette>,
     pub launcher: LauncherSize,
+    pub live_wallpapers: crate::LiveWallpapers,
 }
 impl Default for DesktopSettings {
     fn default() -> Self {
@@ -328,6 +343,7 @@ impl Default for DesktopSettings {
             palette: None,
             saved_palettes: Vec::new(),
             launcher: LauncherSize::default(),
+            live_wallpapers: Default::default(),
         }
     }
 }

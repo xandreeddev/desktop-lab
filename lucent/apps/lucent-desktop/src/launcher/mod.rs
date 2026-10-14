@@ -571,12 +571,12 @@ mod tests {
                         keywords: vec![],
                         icon: String::new(),
                         startup_class: String::new(),
-                        command: LaunchCommand {
+                        launch: lucent_domain::ApplicationLaunch::Command(LaunchCommand {
                             program: "never-executed".into(),
                             args: vec![],
                             directory: None,
                             terminal: false,
-                        },
+                        }),
                     })
                     .collect(),
                 settings: DesktopSettings::default(),

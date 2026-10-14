@@ -1,0 +1,135 @@
+# Native live wallpapers
+
+Lucent plays local MP4, WebM and animated GIF files. The desktop client and
+playback coordinator are Rust. FFmpeg libraries decode the media; the existing
+wgpu/Vulkan renderer presents it on background Wayland surfaces. There is no
+external wallpaper player or embedded browser.
+
+Video is the normal choice for full-screen playback. GIF is also accepted, with
+its decoded timestamps and frame durations. MP4/WebM describe containers; actual
+codec availability comes from the installed FFmpeg build. Wallpaper Engine's
+video files can be used as media. Its Scene projects and HTML/JavaScript Web
+projects require different engines and are outside this implementation. See
+[Wallpaper Engine's format overview](https://docs.wallpaperengine.io/).
+
+## Choosing a wallpaper
+
+Download a clip from [Pixabay](https://pixabay.com/videos/search/wallpaper/) or
+[Pexels](https://www.pexels.com/search/videos/desktop%20background/), or use your
+existing local video/GIF. Start with a short loop at a resolution suitable for
+your display. A still image from Wallhaven is still a static wallpaper.
+
+Open the launcher, select Commands and choose **Live wallpapers**, or run:
+
+```sh
+lucent-cli wallpaper live open
+lucent-cli wallpaper live play /absolute/path/to/loop.mp4
+lucent-cli wallpaper live pause
+lucent-cli wallpaper live resume
+lucent-cli wallpaper live off
+```
+
+The native panel accepts a local path with ordinary keyboard selection, editing
+and clipboard behavior. **Import and play** copies the source to private owned
+storage, actually decodes it and creates a PNG poster before a preference is
+accepted. An invalid file does not replace the current configuration. The source
+is preserved. Closing the panel cancels pending delivery; already-running native
+file work may finish and retain an unused owned asset.
+
+Choose the default wallpaper or a connected monitor. Monitor overrides take
+precedence over the default. **Use static wallpaper** disables that monitor's
+live override, or removes the default live wallpaper when the default is selected.
+Paused playback freezes its last prepared frame and stops its producer; a resume
+starts the loop again. The native settings panel uses existing semantic colors,
+spacing, radii, typography, scrolling and frame-paced motion.
+
+The default live import also supplies its validated poster to the normal static
+wallpaper transaction. That gives secure/session clients a still background and
+retains ordinary image/theme export behavior. Export failure stays visible through
+the existing wallpaper coordinator; an import does not claim an atomic update of
+all external applications. Selecting a different successfully committed default
+static wallpaper removes the default live selection.
+
+## Preferences and resource limits
+
+`desktop.json` stores `live_wallpapers` with `default`, `monitors` and a global
+`paused` flag. A selected profile contains an owned `asset`, validated `fps`,
+`paused` and `enabled`. Existing settings without these keys continue to load.
+The root persistence coordinator remains the only writer.
+
+FPS can be 1–60; the panel provides 15/30/60 presets and the initial value is 30.
+A cap skips excess/late decoded frames; it does not synthesize intermediate
+frames or increase a source's frame rate. Shared identical media/FPS profiles use
+one producer. Different source profiles have separate playback timelines.
+Disconnected outputs acquire no decoder, and observation of a known sleep
+transition suspends playback. Explicit pause is always available. Automatic
+lock/fullscreen/battery policies remain further work.
+
+Initial envelopes:
+
+- Local regular sources up to 512 MiB; MP4, WebM and GIF containers only.
+- Decoded dimensions at most 4096 per edge and 64 MiB per RGBA frame.
+- At most four enabled profiles, 32 retained monitor preference entries and
+  32 imported assets. Remove unused owned media when the asset store is full;
+  there is no automatic deletion of configured/rollback media.
+- One latest mailbox frame and one wake notice per producer. A slow UI does not
+  queue a sequence of full video frames.
+- One immutable current frame per player and one reusable GPU stream texture.
+  Static image mip preparation and cache policy remain available separately.
+
+These are admission/lifetime limits, not a total process/GPU memory guarantee.
+The normal desktop target remains 300 MiB RSS. Actual current video workloads,
+physical GPU frame pacing, hardware decoding and power use still need measurement.
+This implementation decodes on the CPU with one codec thread; Vulkan renders the
+result. It does not claim Vulkan Video or hardware decode support.
+
+## Architecture and startup path
+
+```text
+saved LiveWallpapers or explicit import
+  → domain preferences and validated WallpaperFps
+  → WallpaperPlaybackPort supplied by NativeVideoWallpapers
+  → producer subscription owns FFmpeg context and timing
+  → decoded MediaFrame with validated dimensions/bytes
+  → SDK ImageStream prepares a single immutable image level on the worker
+  → latest mailbox replaces previous unpublished content
+  → small Wake message reaches the client's UI thread
+  → coordinator accepts the current revision and updates its frame
+  → root maps monitor IDs to exact current SurfaceAddress instances
+  → view describes Element::image(...).cover()
+  → renderer updates the existing stream texture with queue.write_texture
+  → a dirty Wayland surface is submitted at its available frame callback
+```
+
+Domain models/ports know nothing about FFmpeg, file operations, Wayland, wgpu or
+Lucent's appearance. Services own local storage, native codec setup, frame
+validation and timing. The client owns configuration policy, monitor selection,
+import revision, transient panel state and mailbox delivery. The root joins native
+hosts and saves preferences. Views perform no decoding or filesystem work.
+
+`ImageStream` is a generic framework feature, usable by any client with changing
+pixels. Each `ImageData` frame remains immutable and keeps its own allocation ID.
+A separate stream resource ID and revision let the renderer update the same GPU
+allocation when dimensions match; a dimension change replaces that resource.
+Per-frame mip generation is omitted. Already submitted work keeps its native
+resource lifetime. The renderer has no wallpaper or codec policy.
+
+Only new content marks a background dirty. Panel `FrameSubmitted` bookkeeping
+does not request another paint when settled. Frame callbacks pace submissions;
+they do not cause idle surfaces to repaint continuously. Codec timestamps and the
+FPS cap schedule media frames independently of UI component motion.
+
+## Evidence and remaining acceptance
+
+Owned fixtures encode tiny synthetic MP4/WebM/GIF files and decode them through
+this exact native adapter. Tests cover actual pixels, frame counts/timestamps,
+loop cancellation, failed import cleanup and foreign asset rejection. Client
+checks cover sharing, pause without a producer, disconnected outputs, stale
+messages, bounded latest-frame delivery and preservation of the last good image.
+A software-Vulkan test verifies real changing pixels, one reused GPU texture,
+no upload for a repeated revision and replacement on dimension changes.
+
+The settings panel is reviewed at normal/narrow widths, 1×/2× and during its
+opening transition. Actual compositor playback, native input, lock/session poster
+exports, reconnect/suspend, physical GPU performance and the current RSS target
+are separate acceptance and remain deferred until the current source is deployed.

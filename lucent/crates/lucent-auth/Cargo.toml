@@ -10,3 +10,7 @@ greetd_ipc = { version = "0.10", features = ["sync-codec"] }
 zeroize = "1"
 libc = "0.2"
 serde_json = "1"
+
+# FFmpeg uses runtime-loaded libclang; PAM's bindgen must initialize it too.
+[build-dependencies]
+bindgen = { version = "0.69", default-features = false, features = ["runtime"] }

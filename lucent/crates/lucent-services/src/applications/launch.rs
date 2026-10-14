@@ -1,8 +1,28 @@
 //! Application processes belong to independent user units, never the shell cgroup.
-use lucent_domain::{Application, DomainError, LaunchCommand, Result};
+use lucent_domain::{Application, ApplicationLaunch, DomainError, LaunchCommand, Result};
 
 pub(super) fn application(app: &Application) -> Result<()> {
-    let terminal = if app.command.terminal {
+    if let ApplicationLaunch::DesktopService { fallback } = &app.launch {
+        match super::activation::activate(&app.id, None) {
+            Ok(()) => return Ok(()),
+            Err(super::activation::ActivationError::Unsupported) => {}
+            Err(super::activation::ActivationError::Failed) => {
+                return Err(DomainError::Failed(
+                    "Application activation failed without starting another instance".into(),
+                ));
+            }
+        }
+        if fallback.is_none() {
+            return Err(DomainError::Unavailable(
+                "Application has no available desktop activation service".into(),
+            ));
+        }
+    }
+    let launch = app
+        .launch
+        .command()
+        .ok_or_else(|| DomainError::Invalid("Application launch is unavailable".into()))?;
+    let terminal = if launch.terminal {
         Some(
             ["xdg-terminal-exec", "foot", "alacritty", "kitty"]
                 .into_iter()
@@ -14,7 +34,7 @@ pub(super) fn application(app: &Application) -> Result<()> {
     } else {
         None
     };
-    command(&app.command, terminal)
+    command(launch, terminal)
 }
 
 pub(super) fn command(command: &LaunchCommand, terminal: Option<&str>) -> Result<()> {
@@ -123,13 +143,13 @@ mod tests {
                 id: lucent_domain::AppId::new("lucent-lifetime-fixture.desktop").unwrap(),
                 name: "Lifetime fixture".into(), description: String::new(), keywords: vec![],
                 icon: String::new(), startup_class: String::new(),
-                command: LaunchCommand {
+                launch: lucent_domain::ApplicationLaunch::Command(LaunchCommand {
                     program: "/usr/bin/python3".into(), terminal: false,
                     directory: Some(directory.clone()),
                     args: vec!["-c".into(), r#"import json,os,pathlib,sys,time
 pathlib.Path('result.json').write_text(json.dumps({'pid':os.getpid(),'args':sys.argv[1:],'cwd':os.getcwd(),'value':os.environ.get('LUCENT_LAUNCH_VALUE'),'group':pathlib.Path('/proc/self/cgroup').read_text()}))
 time.sleep(30)"#.into(), "$HOME".into(), "%h".into(), "$(unused)".into(), "".into()],
-                },
+                }),
             };
             application(&app).unwrap();
             let start = Instant::now();
@@ -143,7 +163,9 @@ time.sleep(30)"#.into(), "$HOME".into(), "%h".into(), "$(unused)".into(), "".int
                 );
                 std::thread::sleep(Duration::from_millis(10));
             }
-            app.command.program = "/no-such-lucent-fixture-executable".into();
+            if let ApplicationLaunch::Command(command) = &mut app.launch {
+                command.program = "/no-such-lucent-fixture-executable".into();
+            }
             assert!(application(&app).is_err(), "exec failure must be reported");
             return; // systemd stops the parent unit and kills any ordinary children.
         }

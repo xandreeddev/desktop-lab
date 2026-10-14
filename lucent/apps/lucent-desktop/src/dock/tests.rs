@@ -40,12 +40,12 @@ fn apps() -> Vec<Application> {
             keywords: vec![],
             icon: String::new(),
             startup_class: String::new(),
-            command: LaunchCommand {
+            launch: lucent_domain::ApplicationLaunch::Command(LaunchCommand {
                 program: "unused".into(),
                 args: vec![],
                 directory: None,
                 terminal: false,
-            },
+            }),
         })
         .into()
 }

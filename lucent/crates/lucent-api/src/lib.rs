@@ -24,7 +24,7 @@ mod clip;
 pub use clip::{Clip, RoundedRect};
 mod image;
 pub use image::{
-    ImageData, ImageError, ImageFormat, ImageLevel, reduce_alpha, reduce_premultiplied,
+    ImageData, ImageError, ImageFormat, ImageLevel, ImageStream, reduce_alpha, reduce_premultiplied,
 };
 use std::{
     collections::BTreeSet,
@@ -892,9 +892,20 @@ impl<M> Effects<M> {
         task: impl FnOnce() -> M + Send + 'static,
         on_failure: impl FnOnce(RuntimeFailure) -> M + Send + 'static,
     ) {
+        self.task_cancellable_on_with_failure(queue, Cancellation::default(), task, on_failure);
+    }
+    /// Cancellable work with operation-owned rejection/panic delivery. A
+    /// cancelled operation never invokes the failure mapper.
+    pub fn task_cancellable_on_with_failure(
+        &mut self,
+        queue: &'static str,
+        cancellation: Cancellation,
+        task: impl FnOnce() -> M + Send + 'static,
+        on_failure: impl FnOnce(RuntimeFailure) -> M + Send + 'static,
+    ) {
         self.tasks.push(ScheduledTask {
             queue,
-            cancellation: Cancellation::default(),
+            cancellation,
             task: Box::new(task),
             on_failure: Some(Box::new(on_failure)),
         });
@@ -1011,6 +1022,19 @@ impl<M: Send + 'static> Subscription<M> {
             id: id.into(),
             run: Box::new(run),
         }
+    }
+    /// Map a child's messages while preserving subscription identity and its
+    /// cancellation/backpressure lifetime. This creates no additional worker.
+    pub fn map<N: Send + 'static>(
+        self,
+        mapper: impl Fn(M) -> N + Send + Sync + 'static,
+    ) -> Subscription<N> {
+        Subscription::stream(self.id, move |out, cancel| {
+            (self.run)(
+                Emitter::new(move |message| out.send(mapper(message))),
+                cancel,
+            )
+        })
     }
     pub fn every(
         id: &'static str,

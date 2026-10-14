@@ -131,6 +131,7 @@ pub fn with(fake: Arc<Fake>) -> DesktopAdapters {
         media: fake.clone(),
         weather: fake.clone(),
         wallpaper: fake.clone(),
+        playback: fake.clone(),
         session: fake.clone(),
         notifications: fake.clone(),
         uri: fake,
@@ -248,5 +249,26 @@ impl TrayPort for Fake {
     fn invoke(&self, _: TrayItemId, _: u32, _: i32, _: u32) -> Result<()> {
         self.calls.lock().unwrap().push("tray-menu");
         Ok(())
+    }
+}
+
+impl WallpaperPlaybackPort for Fake {
+    fn prepare(&self, source: &Wallpaper) -> Result<LiveWallpaperAsset> {
+        Ok(LiveWallpaperAsset {
+            source: source.clone(),
+            path: "/fixture/media.mp4".into(),
+            poster: Wallpaper {
+                path: "/fixture/poster.png".into(),
+                name: "Poster".into(),
+            },
+        })
+    }
+    fn play(
+        &self,
+        _: &LiveWallpaperAsset,
+        _: PlaybackOptions,
+        _: &mut dyn FnMut(Result<MediaFrame>) -> bool,
+        _: Arc<dyn StopSignal>,
+    ) {
     }
 }

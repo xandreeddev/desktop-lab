@@ -9,10 +9,11 @@ pub enum Action {
     Next,
     Previous,
     Terminal,
+    LiveWallpapers,
     DockAutoHide,
     Quit,
 }
-pub const COMMANDS: [(&str, Action, &str); 7] = [
+pub const COMMANDS: [(&str, Action, &str); 8] = [
     ("New terminal", Action::Terminal, "command"),
     ("Lock screen", Action::Lock, "lock"),
     ("Volume up", Action::VolumeUp, "volume"),
@@ -20,4 +21,5 @@ pub const COMMANDS: [(&str, Action, &str); 7] = [
     ("Mute / unmute", Action::Mute, "volume"),
     ("Close Lucent", Action::Quit, "power"),
     ("Toggle dock auto-hide", Action::DockAutoHide, "apps"),
+    ("Live wallpapers", Action::LiveWallpapers, "wallpaper"),
 ];

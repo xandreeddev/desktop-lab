@@ -1,13 +1,13 @@
 # Build from this repository checkout: cd packaging && makepkg -si
 pkgname=lucent-desktop
 pkgver=0.1.0
-pkgrel=8
+pkgrel=9
 pkgdesc='Native Rust Wayland shell framework and desktop client'
 arch=('x86_64')
 url='https://github.com/xandreeddev/desktop-lab'
 license=('MIT')
 options=('!debug' '!strip') # Cargo's release profile already strips the binary.
-depends=('wayland' 'libxkbcommon' 'fontconfig' 'libpulse' 'vulkan-icd-loader' 'vulkan-driver' 'playerctl' 'wireplumber' 'networkmanager' 'curl' 'pam' 'polkit' 'swayidle' 'hyprlock' 'wl-clipboard' 'wtype')
+depends=('wayland' 'libxkbcommon' 'fontconfig' 'libpulse' 'ffmpeg' 'vulkan-icd-loader' 'vulkan-driver' 'playerctl' 'wireplumber' 'networkmanager' 'curl' 'pam' 'polkit' 'swayidle' 'hyprlock' 'wl-clipboard' 'wtype')
 optdepends=('greetd: native login greeter')
 makedepends=('rust' 'pkgconf' 'clang')
 source=()

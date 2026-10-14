@@ -1,4 +1,5 @@
 //! XDG desktop entry discovery and isolated argument-array launching.
+mod activation;
 mod catalog;
 mod launch;
 mod watch;
@@ -188,11 +189,15 @@ pub fn parse_entry(
         unescape(value(key))
     };
     let name = localized("Name");
-    if name.is_empty() || value("Exec").is_empty() {
+    if name.is_empty() || (value("Exec").is_empty() && value("DBusActivatable") != "true") {
         return Ok(None);
     }
     let icon = unescape(value("Icon"));
-    let argv = parse_exec(&unescape(value("Exec")), &name, path, &icon)?;
+    let argv = if value("Exec").is_empty() {
+        None
+    } else {
+        Some(parse_exec(&unescape(value("Exec")), &name, path, &icon)?)
+    };
     let directory = unescape(value("Path"));
     Ok(Some(Application {
         id: AppId::new(id)?,
@@ -204,11 +209,18 @@ pub fn parse_entry(
             .collect(),
         icon,
         startup_class: unescape(value("StartupWMClass")),
-        command: LaunchCommand {
-            program: argv[0].clone(),
-            args: argv[1..].into(),
-            directory: (!directory.is_empty()).then_some(directory),
-            terminal: value("Terminal") == "true",
+        launch: {
+            let command = argv.map(|argv| LaunchCommand {
+                program: argv[0].clone(),
+                args: argv[1..].into(),
+                directory: (!directory.is_empty()).then_some(directory),
+                terminal: value("Terminal") == "true",
+            });
+            if value("DBusActivatable") == "true" {
+                ApplicationLaunch::DesktopService { fallback: command }
+            } else {
+                ApplicationLaunch::Command(command.expect("Exec required above"))
+            }
         },
     }))
 }
@@ -335,6 +347,52 @@ mod tests {
     fn desktop_actions_do_not_replace_main_exec() {
         let app=parse_entry("a.desktop","/a.desktop","[Desktop Entry]\nType=Application\nName=Test\nName[sv]=Prov\nExec=app %U\n[Desktop Action Other]\nExec=other","Hyprland","sv_SE.UTF-8").unwrap().unwrap();
         assert_eq!(app.name, "Prov");
-        assert_eq!(app.command.program, "app");
+        assert_eq!(app.launch.command().unwrap().program, "app");
+    }
+}
+
+#[cfg(test)]
+mod service_entry_tests {
+    use super::*;
+    #[test]
+    fn dbus_only_entries_and_exec_fallbacks_have_explicit_launch_data() {
+        let only = "[Desktop Entry]\nType=Application\nName=Service\nDBusActivatable=true\n";
+        let app = parse_entry(
+            "org.example.Service.desktop",
+            "/fixture.desktop",
+            only,
+            "Hyprland",
+            "en",
+        )
+        .unwrap()
+        .unwrap();
+        assert!(matches!(
+            app.launch,
+            ApplicationLaunch::DesktopService { fallback: None }
+        ));
+        let with = format!("{only}Exec=service --literal\n");
+        let app = parse_entry(
+            "org.example.Service.desktop",
+            "/fixture.desktop",
+            &with,
+            "Hyprland",
+            "en",
+        )
+        .unwrap()
+        .unwrap();
+        assert!(
+            matches!(app.launch,ApplicationLaunch::DesktopService{fallback:Some(command)} if command.args==["--literal"])
+        );
+        assert!(
+            parse_entry(
+                "org.example.Service.desktop",
+                "/fixture.desktop",
+                "[Desktop Entry]\nType=Application\nName=Missing\n",
+                "Hyprland",
+                "en"
+            )
+            .unwrap()
+            .is_none()
+        );
     }
 }
