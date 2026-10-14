@@ -359,6 +359,7 @@ impl Desktop {
         if let Some(intent) = intent {
             use launcher::Intent;
             let message = match intent {
+                Intent::Error(error) => Message::Completed(Err(error)),
                 Intent::Launch(id, prefer) => Message::Launch(id, prefer),
                 Intent::Pin(id) => Message::Dock(crate::dock::Message::Pin(id)),
                 Intent::Action(action) => Message::Action(action),
@@ -1042,6 +1043,9 @@ impl Component for Desktop {
     }
 }
 impl api::Application for Desktop {
+    fn clipboard_enabled(&self) -> bool {
+        true
+    }
     fn runtime_failure(&self, failure: api::RuntimeFailure) -> Option<Message> {
         if failure.source == "effect queue bluetooth" {
             // A native write may have run before a panic/admission failure.

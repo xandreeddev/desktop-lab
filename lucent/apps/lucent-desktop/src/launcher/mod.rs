@@ -72,6 +72,7 @@ pub enum Message {
 
 #[derive(Clone)]
 pub enum Intent {
+    Error(lucent_domain::DomainError),
     Launch(AppId, bool),
     Pin(AppId),
     Action(Action),
@@ -119,7 +120,7 @@ pub struct Launcher {
     closing: Option<CloseRequest>,
     mode: Mode,
     query: String,
-    query_selection: TextSelection,
+    query_field: TextFieldState,
     results: Vec<usize>,
     selected: usize,
     scroll: usize,
@@ -144,7 +145,7 @@ impl Default for Launcher {
             closing: None,
             mode: Mode::Apps,
             query: String::new(),
-            query_selection: TextSelection::default(),
+            query_field: TextFieldState::default(),
             results: vec![],
             selected: 0,
             scroll: 0,
@@ -195,7 +196,7 @@ impl Launcher {
     #[cfg(test)]
     pub fn fixture_query(&mut self, value: String) {
         self.query = value;
-        self.query_selection = TextSelection::at_end(&self.query);
+        self.query_field.reset(&self.query);
     }
 
     /// Discovery refreshes the active query, then clamps selection before paint.
@@ -302,7 +303,7 @@ impl Launcher {
         self.edit_mounted = false;
         self.mode = mode;
         self.query.clear();
-        self.query_selection = TextSelection::default();
+        self.query_field.reset("");
         self.selected = 0;
         self.scroll = 0;
         self.refresh(input.apps, geometry, now);
@@ -428,21 +429,32 @@ impl Launcher {
             }
             Message::Query(query) => {
                 self.query = query;
-                self.query_selection = TextSelection::at_end(&self.query);
+                self.query_field.reset(&self.query);
                 self.selected = 0;
                 self.scroll = 0;
                 self.refresh(input.apps, geometry, now);
                 None
             }
             Message::EditQuery(edit) => {
-                if let Ok(change) = self.query_selection.apply(&mut self.query, edit, 8192)
-                    && change.content
-                {
-                    self.selected = 0;
-                    self.scroll = 0;
-                    self.refresh(input.apps, geometry, now);
+                match self.query_field.update(
+                    &mut self.query,
+                    edit,
+                    8192,
+                    ClipboardTarget::new("dock", "launcher-search"),
+                    effects,
+                    Message::EditQuery,
+                ) {
+                    Ok(change) if change.content => {
+                        self.selected = 0;
+                        self.scroll = 0;
+                        self.refresh(input.apps, geometry, now);
+                        None
+                    }
+                    Ok(_) => None,
+                    Err(error) => Some(Intent::Error(lucent_domain::DomainError::Invalid(
+                        error.to_string(),
+                    ))),
                 }
-                None
             }
             Message::Select(index) => {
                 self.choose(index, geometry);
@@ -629,6 +641,64 @@ mod tests {
             },
             false,
         )
+    }
+    #[test]
+    fn clipboard_completion_refilters_current_query_and_rejects_a_closed_generation() {
+        let fixture = Fixture::new();
+        let mut launcher = Launcher::default();
+        fixture.send(&mut launcher, Message::Mode(Mode::Apps));
+        let mut effects = Effects::default();
+        launcher.update(
+            Message::EditQuery(TextEdit::Paste),
+            fixture.input(),
+            fixture.geometry(),
+            &mut effects,
+        );
+        let request = effects.clipboard.pop().unwrap();
+        assert_eq!(
+            request.target,
+            ClipboardTarget::new("dock", "launcher-search")
+        );
+        assert_eq!(launcher.result_count(), 2);
+        launcher.update(
+            request.finish(ClipboardOutcome::Text("Beta".into())),
+            fixture.input(),
+            fixture.geometry(),
+            &mut effects,
+        );
+        assert_eq!(launcher.query(), "Beta");
+        assert_eq!(launcher.result_count(), 1);
+        launcher.update(
+            Message::EditQuery(TextEdit::Paste),
+            fixture.input(),
+            fixture.geometry(),
+            &mut effects,
+        );
+        let request = effects.clipboard.pop().unwrap();
+        fixture.send(&mut launcher, Message::Mode(Mode::Commands));
+        launcher.update(
+            request.finish(ClipboardOutcome::Text("old".into())),
+            fixture.input(),
+            fixture.geometry(),
+            &mut effects,
+        );
+        assert_eq!(launcher.query(), "");
+        launcher.update(
+            Message::EditQuery(TextEdit::Paste),
+            fixture.input(),
+            fixture.geometry(),
+            &mut effects,
+        );
+        let request = effects.clipboard.pop().unwrap();
+        assert!(matches!(
+            launcher.update(
+                request.finish(ClipboardOutcome::Error(ClipboardError::Unavailable)),
+                fixture.input(),
+                fixture.geometry(),
+                &mut effects
+            ),
+            Some(Intent::Error(_))
+        ));
     }
     #[test]
     fn opening_waits_for_a_full_submission_and_keeps_early_keyboard_input() {

@@ -59,7 +59,8 @@ pub struct Menu {
     pub request: Request,
     pub selection: Selection,
     pub query: String,
-    query_selection: TextSelection,
+    query_field: TextFieldState,
+    edit_error: String,
     start: usize,
     viewport: (f32, f32),
     reveal: Motion,
@@ -74,7 +75,8 @@ impl Menu {
                 request,
                 selection,
                 query: String::new(),
-                query_selection: TextSelection::default(),
+                query_field: TextFieldState::default(),
+                edit_error: String::new(),
                 start: 0,
                 viewport: (1920., 1080.),
                 reveal: Motion::fixed(0.),
@@ -159,7 +161,7 @@ impl Component for Menu {
                 .align(Align::Center),
             Element::text_input(
                 &self.query,
-                self.query_selection,
+                self.query_field.selection(),
                 if self.request.mode == Mode::Input {
                     "Type a value…"
                 } else {
@@ -246,7 +248,9 @@ impl Component for Menu {
         }
         children.push(
             Element::row(vec![
-                Element::text(if self.request.mode == Mode::Input {
+                Element::text(if !self.edit_error.is_empty() {
+                    self.edit_error.clone()
+                } else if self.request.mode == Mode::Input {
                     "Enter confirm · Esc cancel".into()
                 } else {
                     format!(
@@ -287,16 +291,28 @@ impl Component for Menu {
             Message::Noop => {}
             Message::Query(query) => {
                 self.query = query.chars().take(4096).collect();
-                self.query_selection = TextSelection::at_end(&self.query);
+                self.query_field.reset(&self.query);
+                self.edit_error.clear();
                 self.selection.search(&self.query);
                 self.start = 0;
             }
             Message::Edit(edit) => {
-                if let Ok(change) = self.query_selection.apply(&mut self.query, edit, 4096)
-                    && change.content
-                {
-                    self.selection.search(&self.query);
-                    self.start = 0;
+                match self.query_field.update(
+                    &mut self.query,
+                    edit,
+                    4096,
+                    ClipboardTarget::new("menu", "menu-search"),
+                    effects,
+                    Message::Edit,
+                ) {
+                    Ok(change) => {
+                        self.edit_error.clear();
+                        if change.content {
+                            self.selection.search(&self.query);
+                            self.start = 0;
+                        }
+                    }
+                    Err(error) => self.edit_error = error.to_string(),
                 }
             }
             Message::Navigate(delta) => self.selection.navigate(delta),
@@ -328,6 +344,9 @@ impl Component for Menu {
 }
 
 impl Application for Menu {
+    fn clipboard_enabled(&self) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         "lucent-menu"
     }
@@ -413,6 +432,31 @@ mod tests {
             palette: None,
             back: false,
         }
+    }
+    #[test]
+    fn clipboard_keeps_original_menu_values_and_surfaces_transfer_errors() {
+        let (mut menu, completion) = Menu::new(request());
+        let mut effects = Effects::default();
+        menu.update(Message::Edit(TextEdit::Paste), &mut effects);
+        let request = effects.clipboard.pop().unwrap();
+        assert_eq!(request.target, ClipboardTarget::new("menu", "menu-search"));
+        menu.update(
+            request.finish(ClipboardOutcome::Text("Action 227".into())),
+            &mut effects,
+        );
+        assert_eq!(menu.selection.matches.len(), 1);
+        menu.update(Message::Accept, &mut effects);
+        assert!(
+            matches!(completion.outcome(),Some(MenuOutcome::Accepted(value)) if value=="original-227")
+        );
+        menu.update(Message::Edit(TextEdit::Paste), &mut effects);
+        let request = effects.clipboard.pop().unwrap();
+        menu.update(
+            request.finish(ClipboardOutcome::Error(ClipboardError::Timeout)),
+            &mut effects,
+        );
+        assert_eq!(menu.query, "Action 227");
+        assert_eq!(menu.edit_error, "Clipboard transfer timed out");
     }
     #[test]
     fn last_row_is_visible_and_selection_keeps_input_focus() {

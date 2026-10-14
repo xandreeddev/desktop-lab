@@ -185,7 +185,7 @@ impl View<'_> {
                     self.icon("search", icon::COMPACT),
                     Element::text_input(
                         &self.launcher.query,
-                        self.launcher.query_selection,
+                        self.launcher.query_field.selection(),
                         "Search apps and settings",
                         Message::EditQuery,
                     )

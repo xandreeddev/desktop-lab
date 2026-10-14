@@ -8,16 +8,17 @@ enum Message {
 }
 struct Example {
     value: String,
-    selection: TextSelection,
+    field: TextFieldState,
     error: bool,
 }
 impl Default for Example {
     fn default() -> Self {
         let value = "Edit a word or café".to_string();
-        let selection = TextSelection::at_end(&value);
+        let mut field = TextFieldState::default();
+        field.reset(&value);
         Self {
             value,
-            selection,
+            field,
             error: false,
         }
     }
@@ -32,18 +33,23 @@ impl Component for Example {
                 Element::text("Arrows move · Shift selects · Ctrl moves by word")
                     .font(font::CAPTION)
                     .wrap(2),
-                Element::text_input(&self.value, self.selection, "Type a value", Message::Edit)
-                    .id("editor")
-                    .autofocus()
-                    .width(Length::Fill)
-                    .height(Length::Fixed(component::input::HEIGHT))
-                    .padding_xy(
-                        component::input::PADDING_INLINE,
-                        component::input::PADDING_BLOCK,
-                    )
-                    .font(font::BODY)
-                    .background(theme.surface_container)
-                    .radius(radius::CONTROL),
+                Element::text_input(
+                    &self.value,
+                    self.field.selection(),
+                    "Type a value",
+                    Message::Edit,
+                )
+                .id("editor")
+                .autofocus()
+                .width(Length::Fill)
+                .height(Length::Fixed(component::input::HEIGHT))
+                .padding_xy(
+                    component::input::PADDING_INLINE,
+                    component::input::PADDING_BLOCK,
+                )
+                .font(font::BODY)
+                .background(theme.surface_container)
+                .radius(radius::CONTROL),
                 Element::text(if self.error {
                     "This field has a 4 KiB edit limit"
                 } else {
@@ -64,7 +70,17 @@ impl Component for Example {
     fn update(&mut self, message: Message, effects: &mut Effects<Message>) {
         match message {
             Message::Edit(edit) => {
-                self.error = self.selection.apply(&mut self.value, edit, 4096).is_err();
+                self.error = self
+                    .field
+                    .update(
+                        &mut self.value,
+                        edit,
+                        4096,
+                        ClipboardTarget::new("text-input", "editor"),
+                        effects,
+                        Message::Edit,
+                    )
+                    .is_err();
                 effects.redraw("text-input");
             }
             Message::Quit => effects.quit(),
@@ -72,6 +88,9 @@ impl Component for Example {
     }
 }
 impl Application for Example {
+    fn clipboard_enabled(&self) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         "lucent-text-input"
     }

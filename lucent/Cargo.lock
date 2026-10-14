@@ -1397,6 +1397,7 @@ dependencies = [
  "lucent-api",
  "lucent-render",
  "lucent-ui",
+ "rustix",
  "serde_json",
  "smithay-client-toolkit",
  "wayland-backend",
