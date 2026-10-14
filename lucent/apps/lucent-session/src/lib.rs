@@ -396,6 +396,7 @@ impl api::Application for SessionScreen {
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         vec![SurfaceSpec {
             id: self.surface_id(),
+            output: None,
             layer: Layer::Overlay,
             anchor: Anchor::Fill,
             margins: Default::default(),

@@ -356,6 +356,7 @@ impl Application for Menu {
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         vec![SurfaceSpec {
             id: "menu",
+            output: None,
             layer: Layer::Overlay,
             anchor: Anchor::Fill,
             margins: Default::default(),
@@ -375,6 +376,7 @@ impl Application for Menu {
     }
     fn event(&self, event: Event) -> Option<Message> {
         match event {
+            Event::OutputsChanged(_) => None,
             Event::PointerInside { .. } | Event::PointerButton { .. } => None,
             Event::FrameSubmitted { .. } => None,
             Event::Outside { .. } => Some(Message::Cancel),

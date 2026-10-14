@@ -1,0 +1,53 @@
+{
+  "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+  "source_commit": "8dcb4889d747b617029a52f2015036c0f8b637d9",
+  "local_checks": {
+    "workspace_passed": 397,
+    "workspace_ignored": 59,
+    "python_passed": 85,
+    "fmt_clippy_workspace_all_targets": true,
+    "example_help_executed": true,
+    "design_tokens_verified": 540,
+    "app_icons_verified": 58,
+    "shellcheck_passed": true,
+    "astro_errors": 0,
+    "astro_warnings": 0,
+    "astro_hints": 0,
+    "pages_each_prefix": 13,
+    "links_assets_each_prefix": 488
+  },
+  "implemented": [
+    "Validated protocol OutputName and optional SurfaceSpec output target; neutral defaults across all consumers.",
+    "Typed OutputsChanged catalog observations from native registry callbacks, with transient globals and optional real names/logical extents.",
+    "Exact current binding selection, disconnected/ambiguous waiting, role recreation on target change and named closure without immediate retry loops.",
+    "Native focus/serial retirement, old-surface clipboard guards, GPU-before-role ownership and separate all-output secure lock behavior.",
+    "Standalone hello-layer target argument/catalog consumer, current inspection, live library guide and repository skill."
+  ],
+  "native_acceptance": {
+    "current_source_deployed_to_vm": false,
+    "actual_named_output_placement_input_and_hotplug_tested": false,
+    "deferred_by_user": true,
+    "secure_authentication_gate_changed": false
+  },
+  "performance": {
+    "normal_desktop_rss_target_mib": 300,
+    "current_rss_or_frame_pacing_measured": false,
+    "new_polling_timer_or_effect_worker": false
+  },
+  "remaining": [
+    "Actual compositor target placement, unavailable/reconnect/closed-role behavior, native input/clipboard retirement and secure multi-output acceptance.",
+    "Desktop per-output persisted layouts, multiple instances of one logical role, neutral-default hotplug recovery and fractional scaling.",
+    "Current RSS/frame pacing and the full text/client/release requirement ledger.",
+    "Final exact-head CI and authorized normal merge."
+  ],
+  "visual_scope": "Renderer/UI primitives are unchanged. This checkpoint does not claim a new hardware/native output test or visual suite execution; the previously merged image checkpoint passed all 516 software comparisons. CI still runs its normal full rendering checks.",
+  "prior_delivery": {
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/50",
+    "merge_commit": "d71f4d9cab14767f67058c04848d454082952981",
+    "all_six_exact_head_checks_passed": true,
+    "main_checks_and_pages_passed": true
+  },
+  "privacy": {
+    "host_display_metadata_or_private_paths_published": false
+  }
+}
