@@ -300,6 +300,7 @@ impl Component for SessionScreen {
                 }
             }
             Message::Key(key) => {
+                let key = key.into_unmodified();
                 if self.mode == Mode::Authorization && key == Key::Escape {
                     self.secret.clear();
                     e.quit();

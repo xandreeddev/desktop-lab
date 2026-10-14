@@ -56,7 +56,7 @@ fn resize_preview_freezes_native_sources_and_unrelated_saves_commit_only_old_siz
         send(
             &mut host,
             &mut settings,
-            Message::Notes("saved text".into())
+            Message::EditNotes(TextEdit::Replace("saved text".into()))
         ),
         Some(Intent::Save)
     ));

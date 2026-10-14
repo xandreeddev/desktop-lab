@@ -1,5 +1,7 @@
 //! A small declarative shell API. Public types contain no Wayland or GPU handles.
 mod input;
+mod text_edit;
+pub use text_edit::{TextChange, TextEdit, TextEditError, TextMove, TextSelection};
 mod scroll;
 pub use input::InputEdit;
 pub use scroll::{ScrollEvent, ScrollSpec, ScrollStyle};
@@ -171,6 +173,7 @@ pub struct Style {
     pub selected: bool,
     pub tab_stop: bool,
     pub caret_width: f32,
+    pub text_selection_color: Color,
     pub slider: SliderStyle,
     pub scroll: ScrollStyle,
 }
@@ -204,6 +207,7 @@ impl Default for Style {
             selected: false,
             tab_stop: true,
             caret_width: 1.,
+            text_selection_color: Color::hex(0xffffff).alpha(0.25),
             slider: SliderStyle::default(),
             scroll: ScrollStyle::default(),
         }
@@ -217,8 +221,19 @@ pub enum Kind {
     Grid(usize),
     Text(String),
     Image(Arc<ImageData>),
-    Input { value: String, placeholder: String },
-    MaskedInput { length: usize, placeholder: String },
+    Input {
+        value: String,
+        placeholder: String,
+    },
+    TextInput {
+        value: String,
+        placeholder: String,
+        selection: TextSelection,
+    },
+    MaskedInput {
+        length: usize,
+        placeholder: String,
+    },
     Slider(SliderSpec),
     Scroll(ScrollSpec),
     Empty,
@@ -231,6 +246,7 @@ pub struct DragEvent {
 }
 pub type InputCallback<M> = Arc<dyn Fn(String) -> M + Send + Sync>;
 pub type EditCallback<M> = Arc<dyn Fn(InputEdit) -> M + Send + Sync>;
+pub type TextEditCallback<M> = Arc<dyn Fn(TextEdit) -> M + Send + Sync>;
 pub type ScrollCallback<M> = Arc<dyn Fn(ScrollEvent) -> M + Send + Sync>;
 pub type SliderCallback<M> = Arc<dyn Fn(SliderEvent) -> M + Send + Sync>;
 pub type DragCallback<M> = Arc<dyn Fn(DragEvent) -> M + Send + Sync>;
@@ -245,6 +261,7 @@ pub struct Element<M> {
     pub hover: Option<M>,
     pub input: Option<InputCallback<M>>,
     pub edit: Option<EditCallback<M>>,
+    pub text_edit: Option<TextEditCallback<M>>,
     pub drag: Option<DragCallback<M>>,
     pub slider: Option<SliderCallback<M>>,
     pub scroll: Option<ScrollCallback<M>>,
@@ -262,6 +279,7 @@ impl<M> Element<M> {
             hover: None,
             input: None,
             edit: None,
+            text_edit: None,
             drag: None,
             slider: None,
             scroll: None,
@@ -330,6 +348,25 @@ impl<M> Element<M> {
             placeholder: placeholder.into(),
         });
         e.edit = Some(Arc::new(on_edit));
+        e
+    }
+    /// Declarative single-line text and selection. The callback emits relative
+    /// edits; the component applies them to its current String and selection.
+    /// Use masked_input for secrets; this control exposes its ordinary value.
+    pub fn text_input(
+        value: impl Into<String>,
+        selection: TextSelection,
+        placeholder: impl Into<String>,
+        on_edit: impl Fn(TextEdit) -> M + Send + Sync + 'static,
+    ) -> Self {
+        let value = value.into();
+        let selection = selection.reconciled(&value);
+        let mut e = Self::new(Kind::TextInput {
+            value,
+            selection,
+            placeholder: placeholder.into(),
+        });
+        e.text_edit = Some(Arc::new(on_edit));
         e
     }
     /// Submit a focused text/masked field with Enter; pointer focus never submits.
@@ -604,6 +641,10 @@ pub struct KeyModifiers {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Key {
+    Modified {
+        key: Box<Key>,
+        modifiers: KeyModifiers,
+    },
     Shortcut {
         character: char,
         modifiers: KeyModifiers,
@@ -632,6 +673,24 @@ pub enum MouseButton {
     Secondary,
     Middle,
     Other(u32),
+}
+impl Key {
+    pub fn unmodified(&self) -> &Self {
+        let mut key = self;
+        while let Self::Modified { key: inner, .. } = key {
+            key = inner;
+        }
+        key
+    }
+    pub fn into_unmodified(self) -> Self {
+        let mut key = self;
+        loop {
+            match key {
+                Self::Modified { key: inner, .. } => key = *inner,
+                _ => return key,
+            }
+        }
+    }
 }
 #[derive(Clone, Debug)]
 pub enum Event {
@@ -1116,6 +1175,10 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
             let map = mapper.clone();
             Arc::new(move |event| map(callback(event))) as EditCallback<N>
         });
+        let text_edit = self.text_edit.map(|callback| {
+            let map = mapper.clone();
+            Arc::new(move |event| map(callback(event))) as TextEditCallback<N>
+        });
         let drag = self.drag.map(|drag| {
             let map = mapper.clone();
             Arc::new(move |event| map(drag(event))) as DragCallback<N>
@@ -1142,6 +1205,7 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
             hover: self.hover.map(|m| mapper(m)),
             input,
             edit,
+            text_edit,
             drag,
             slider,
             scroll,

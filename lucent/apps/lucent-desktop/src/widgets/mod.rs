@@ -5,7 +5,7 @@ mod sizing;
 pub mod surfaces;
 mod view;
 use crate::actions::Action;
-use lucent_api::{DragEvent, Effects};
+use lucent_api::{DragEvent, Effects, TextEdit, TextSelection};
 use lucent_design::component;
 use lucent_domain::{DesktopSettings, FocusTimer, Placement, WidgetSize};
 use std::collections::BTreeMap;
@@ -21,7 +21,7 @@ pub enum Message {
     SizeStep(String, i32),
     Edit(bool),
     Press,
-    Notes(String),
+    EditNotes(TextEdit),
     RetrySave,
     TimerToggle,
     TimerReset,
@@ -62,6 +62,7 @@ pub struct Host {
     captured_surfaces: Option<Vec<surfaces::Surface>>,
     timer: FocusTimer,
     month_offset: i32,
+    notes_selection: TextSelection,
 }
 impl Host {
     pub fn grid_visible(&self) -> bool {
@@ -312,10 +313,15 @@ impl Host {
                 effects.redraw("widgets");
                 None
             }
-            Message::Notes(text) => {
-                settings.notes = text;
+            Message::EditNotes(edit) => {
                 effects.redraw("widgets");
-                Some(Intent::Save)
+                match self.notes_selection.apply(&mut settings.notes, edit, 8192) {
+                    Ok(change) if change.content => Some(Intent::Save),
+                    Ok(_) => None,
+                    Err(error) => Some(Intent::Error(lucent_domain::DomainError::Invalid(
+                        error.to_string(),
+                    ))),
+                }
             }
             Message::TimerToggle => {
                 self.timer.toggle(input.unix_seconds);
@@ -680,7 +686,13 @@ mod tests {
         let mut host = Host::default();
         let mut settings = DesktopSettings::default();
         assert!(matches!(
-            send(&mut host, &mut settings, Message::Notes("Hello".into()), 0).0,
+            send(
+                &mut host,
+                &mut settings,
+                Message::EditNotes(TextEdit::Replace("Hello".into())),
+                0
+            )
+            .0,
             Some(Intent::Save)
         ));
         assert_eq!(settings.notes, "Hello");

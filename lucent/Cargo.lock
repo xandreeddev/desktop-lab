@@ -1236,6 +1236,9 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 [[package]]
 name = "lucent-api"
 version = "0.1.0"
+dependencies = [
+ "unicode-segmentation",
+]
 
 [[package]]
 name = "lucent-auth"
@@ -2370,6 +2373,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "text-input"
+version = "0.1.0"
+dependencies = [
+ "lucent-api",
+ "lucent-design",
+ "lucent-wayland",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2597,6 +2609,12 @@ name = "unicode-script"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "383ad40bb927465ec0ce7720e033cb4ca06912855fc35db31b5755d0de75b1ee"
+
+[[package]]
+name = "unicode-segmentation"
+version = "1.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6f5d3c3b1bf09027a88a6bc961fc00497d651009560b5463668dc81b0fa87a8"
 
 [[package]]
 name = "unicode-vo"

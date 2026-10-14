@@ -1,0 +1,9 @@
+[package]
+name = "text-input"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+[dependencies]
+lucent-wayland = { path = "../../crates/lucent-wayland" }
+lucent-api = { path = "../../crates/lucent-api" }
+lucent-design = { path = "../../crates/lucent-design" }

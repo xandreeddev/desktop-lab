@@ -615,10 +615,11 @@ pub(super) fn notes(d: &View<'_>, _: &ViewContext) -> Element<Message> {
                 component::notes::HEADING_HEIGHT,
             )
             .at(component::notes::INSET, component::notes::HEADING_TOP),
-        Element::input(
+        Element::text_input(
             &d.input.settings.notes,
+            d.host.notes_selection,
             "A thought to keep nearby…",
-            Message::Notes,
+            Message::EditNotes,
         )
         .id("notes-input")
         .size(

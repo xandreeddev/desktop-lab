@@ -183,10 +183,11 @@ impl View<'_> {
                 elements.push(list.at(0., body_y));
                 let search = Element::row(vec![
                     self.icon("search", icon::COMPACT),
-                    Element::input(
+                    Element::text_input(
                         &self.launcher.query,
+                        self.launcher.query_selection,
                         "Search apps and settings",
-                        Message::Query,
+                        Message::EditQuery,
                     )
                     .id("launcher-search")
                     .autofocus()

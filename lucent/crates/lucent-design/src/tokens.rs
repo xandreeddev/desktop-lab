@@ -428,6 +428,7 @@ pub mod component {
         pub const CARET_WIDTH: f32 = 1.5;
         pub const PADDING_INLINE: f32 = 16.0;
         pub const PADDING_BLOCK: f32 = 8.0;
+        pub const SELECTION_OPACITY: f32 = 0.16;
     }
     pub mod switch {
         pub const WIDTH: f32 = 32.0;

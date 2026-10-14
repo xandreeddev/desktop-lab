@@ -347,6 +347,7 @@
   --component-input-caret-width: 1.5px;
   --component-input-padding-inline: var(--space-lg);
   --component-input-padding-block: var(--space-sm);
+  --component-input-selection-opacity: var(--opacity-hover);
   --component-switch-width: 32px;
   --component-switch-height: 18px;
   --component-switch-thumb: 14px;

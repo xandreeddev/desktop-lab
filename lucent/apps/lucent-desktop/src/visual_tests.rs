@@ -682,7 +682,9 @@ fn unrelated_preference_save_during_drag_cannot_persist_the_preview() {
     let preview = app.widgets.preview_position("calendar").unwrap();
     assert_ne!(preview, origin);
     app.update(
-        Message::Widgets(crate::widgets::Message::Notes("Keep this edit".into())),
+        Message::Widgets(crate::widgets::Message::EditNotes(TextEdit::Replace(
+            "Keep this edit".into(),
+        ))),
         &mut effects,
     );
     while let Some(task) = effects.tasks.pop() {
@@ -1225,6 +1227,11 @@ fn visual_regressions() {
             ("widget-resize-small", Mode::Apps, 0, 0, "", 1., 390.),
             ("widget-edit-keyboard", Mode::Apps, 0, 0, "", 1., 640.),
             ("widget-editor", Mode::Apps, 0, 0, "", 1., 960.),
+            ("text-caret-middle", Mode::Apps, 0, 0, "", 1., 640.),
+            ("text-selection-forward", Mode::Apps, 0, 0, "", 1., 640.),
+            ("text-selection-reverse", Mode::Apps, 0, 0, "", 1., 640.),
+            ("text-scrolled-selection", Mode::Apps, 0, 0, "", 1., 390.),
+            ("text-grapheme-selection", Mode::Apps, 0, 0, "", 1., 640.),
             ("notes-saved", Mode::Apps, 0, 0, "", 1., 390.),
             ("notes-saving", Mode::Apps, 0, 0, "", 1., 390.),
             ("notes-retrying", Mode::Apps, 0, 0, "", 1., 390.),
@@ -1389,7 +1396,67 @@ fn visual_regressions() {
             if name == "palette-ocean" {
                 app.settings.palette = Some(lucent_design::palettes()[2].clone());
             }
-            let scene = if let Some(state) = name.strip_prefix("notes-") {
+            let scene = if name.starts_with("text-") {
+                let mut value = if name == "text-grapheme-selection" {
+                    "Café e\u{301}".to_string()
+                } else if name == "text-scrolled-selection" {
+                    "A long field that keeps the selected final word visible".to_string()
+                } else {
+                    "Search applications".to_string()
+                };
+                let mut selection = TextSelection::at_end(&value);
+                let edit = match name {
+                    "text-caret-middle" => TextEdit::Select {
+                        anchor: 7,
+                        caret: 7,
+                    },
+                    "text-selection-forward" => TextEdit::Select {
+                        anchor: 7,
+                        caret: 19,
+                    },
+                    "text-selection-reverse" => TextEdit::Select {
+                        anchor: 19,
+                        caret: 7,
+                    },
+                    _ => TextEdit::Move {
+                        movement: TextMove::PreviousWord,
+                        extend: true,
+                    },
+                };
+                selection.apply(&mut value, edit, 8192).unwrap();
+                let theme = app.theme();
+                let tree = theme.apply(
+                    Element::stack(vec![
+                        Element::text_input(value, selection, "Search", |_| Message::Quit)
+                            .id("text-sample")
+                            .size(
+                                width - 2. * lucent_design::space::PAGE,
+                                lucent_design::component::input::HEIGHT,
+                            )
+                            .at(
+                                lucent_design::space::PAGE,
+                                crate::shell_layout::floor(
+                                    height / 2.,
+                                    lucent_design::layout::SHELL_STEP,
+                                ),
+                            )
+                            .padding_xy(
+                                lucent_design::component::input::PADDING_INLINE,
+                                lucent_design::component::input::PADDING_BLOCK,
+                            )
+                            .font(lucent_design::font::BODY)
+                            .color(theme.on_surface)
+                            .background(theme.surface_container)
+                            .radius(lucent_design::radius::SEARCH)
+                            .clip(),
+                    ])
+                    .fill(),
+                );
+                let mut interaction = Interaction::default();
+                interaction.focus = Some("text-sample".into());
+                interaction.focus_visible = true;
+                layout.build(&tree, width, height, &interaction, now)
+            } else if let Some(state) = name.strip_prefix("notes-") {
                 let app = notes_fixture(state, light);
                 layout.build(
                     &app.view(&ViewContext {
@@ -2758,8 +2825,9 @@ fn notes_fixture(state: &str, light: bool) -> Desktop {
         lucent_domain::Placement::new(48., 80.).unwrap(),
     );
     if matches!(state, "saving" | "failed" | "retrying") {
+        let notes = std::mem::take(&mut app.settings.notes);
         app.update(
-            Message::Widgets(crate::widgets::Message::Notes(app.settings.notes.clone())),
+            Message::Widgets(crate::widgets::Message::EditNotes(TextEdit::Replace(notes))),
             &mut Effects::default(),
         );
     }
@@ -3560,4 +3628,77 @@ fn widget_editor_routes_launcher_keyboard_size_controls_escape_and_checked_ipc()
     assert!(matches!(exit, Message::Widgets(W::Edit(false))));
     app.update(exit, &mut Effects::default());
     assert!(!app.widgets.editing());
+}
+
+#[test]
+fn launcher_text_navigation_and_burst_edits_use_the_shared_api() {
+    let mut app = fixture(9, false);
+    app.update(
+        Message::Launcher(launcher::Message::Query("Terminal".into())),
+        &mut Effects::default(),
+    );
+    let layout = Layout::new(fonts(&app));
+    let mut input = Interaction::default();
+    let frame = scene(&app, &layout, &mut input, 1.);
+    input.synchronize(&frame);
+    for key in [
+        Key::Home,
+        Key::Text("New ".into()),
+        Key::Text("app ".into()),
+    ] {
+        for message in input.key(&frame, &key) {
+            app.update(message, &mut Effects::default());
+        }
+    }
+    assert_eq!(app.launcher.query(), "New app Terminal");
+    for key in [
+        Key::SelectAll,
+        Key::Text("Term".into()),
+        Key::Text("inal".into()),
+    ] {
+        for message in input.key(&frame, &key) {
+            app.update(message, &mut Effects::default());
+        }
+    }
+    assert_eq!(app.launcher.query(), "Terminal");
+    assert_eq!(app.launcher.result_count(), 1);
+    let before = app.settings.clone();
+    for message in input.key(&frame, &Key::Left) {
+        let mut effects = Effects::default();
+        app.update(message, &mut effects);
+        assert!(effects.tasks.is_empty());
+    }
+    assert_eq!(app.settings, before);
+}
+
+#[test]
+fn notes_cursor_changes_request_paint_without_persisting_and_grapheme_edits_save() {
+    use crate::widgets::Message as W;
+    let mut app = fixture(0, false);
+    app.settings_writable = true;
+    app.settings.visible_widgets = vec!["notes".into()];
+    app.update(
+        Message::Widgets(W::EditNotes(TextEdit::Replace("a e\u{301}".into()))),
+        &mut Effects::default(),
+    );
+    let before = app.settings.clone();
+    let mut effects = Effects::default();
+    app.update(
+        Message::Widgets(W::EditNotes(TextEdit::Move {
+            movement: TextMove::PreviousGrapheme,
+            extend: true,
+        })),
+        &mut effects,
+    );
+    assert!(effects.tasks.is_empty());
+    assert_eq!(app.settings, before);
+    let mut effects = Effects::default();
+    app.update(
+        Message::Widgets(W::EditNotes(TextEdit::Backspace)),
+        &mut effects,
+    );
+    assert_eq!(app.settings.notes, "a ");
+    // The first save is active; this edit is the persistence coordinator's latest
+    // pending aggregate, not an independent settings-queue producer.
+    assert!(app.persistence.status(true).name().contains("saving"));
 }
