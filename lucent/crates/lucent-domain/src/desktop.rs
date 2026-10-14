@@ -99,12 +99,12 @@ pub struct Window {
     pub address: String,
     pub app_class: String,
     pub title: String,
-    pub workspace: i32,
+    pub workspace: Option<WorkspaceRef>,
     pub focused: bool,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Workspace {
-    pub id: i32,
+    pub id: WorkspaceRef,
     pub name: String,
     pub windows: usize,
     pub active: bool,
@@ -124,44 +124,68 @@ pub struct CompositorMonitor {
     pub active_workspace: Option<WorkspaceRef>,
     pub special_workspace: Option<WorkspaceRef>,
 }
-/// Current workspace identity may be numbered or an opaque named address.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// A desktop workspace identity. Names are labels in this domain, not native
+/// selector expressions. Adapters encode their own numbered/named/special syntax.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct WorkspaceRef(WorkspaceIdentity);
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum WorkspaceIdentity {
     Numbered(i32),
     Named(String),
+    Special(String),
 }
 impl WorkspaceRef {
     pub fn numbered(id: i32) -> Result<Self> {
-        if id == 0 {
+        if id < 1 {
             return Err(DomainError::Invalid(
-                "Workspace number must be nonzero".into(),
+                "Workspace number must be positive".into(),
             ));
         }
         Ok(Self(WorkspaceIdentity::Numbered(id)))
     }
-    pub fn named(address: impl Into<String>) -> Result<Self> {
-        let address = address.into();
-        if address.is_empty() || address.len() > 512 || address.chars().any(char::is_control) {
+    pub fn named(name: impl Into<String>) -> Result<Self> {
+        let name = name.into();
+        Self::validate_name(&name, false)?;
+        Ok(Self(WorkspaceIdentity::Named(name)))
+    }
+    /// An empty name represents the compositor's default special workspace.
+    pub fn special(name: impl Into<String>) -> Result<Self> {
+        let name = name.into();
+        Self::validate_name(&name, true)?;
+        Ok(Self(WorkspaceIdentity::Special(name)))
+    }
+    fn validate_name(name: &str, allow_empty: bool) -> Result<()> {
+        if (!allow_empty && name.is_empty())
+            || name.len() > 512
+            || name.chars().any(char::is_control)
+        {
             return Err(DomainError::Invalid(
-                "Workspace address must be bounded, nonempty and contain no controls".into(),
+                "Workspace name must be bounded and contain no controls".into(),
             ));
         }
-        Ok(Self(WorkspaceIdentity::Named(address)))
+        Ok(())
     }
     pub fn number(&self) -> Option<i32> {
         match self.0 {
             WorkspaceIdentity::Numbered(id) => Some(id),
-            WorkspaceIdentity::Named(_) => None,
+            _ => None,
         }
     }
-    pub fn address(&self) -> Option<&str> {
+    pub fn name(&self) -> Option<&str> {
         match &self.0 {
-            WorkspaceIdentity::Named(address) => Some(address),
+            WorkspaceIdentity::Named(name) | WorkspaceIdentity::Special(name) => Some(name),
             WorkspaceIdentity::Numbered(_) => None,
         }
     }
+    pub fn is_special(&self) -> bool {
+        matches!(self.0, WorkspaceIdentity::Special(_))
+    }
+}
+/// Selecting a regular workspace differs from toggling a special overlay.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WorkspaceCommand {
+    Select(WorkspaceRef),
+    ToggleSpecial(WorkspaceRef),
 }
 impl CompositorSnapshot {
     pub fn monitor(&self, id: &MonitorId) -> Option<&CompositorMonitor> {
@@ -186,10 +210,15 @@ mod compositor_identity_tests {
             assert!(WorkspaceRef::named(address).is_err());
         }
         assert!(WorkspaceRef::named("x".repeat(513)).is_err());
-        assert_eq!(WorkspaceRef::numbered(-99).unwrap().number(), Some(-99));
+        assert!(WorkspaceRef::numbered(-99).is_err());
+        assert!(WorkspaceRef::special("").unwrap().is_special());
+        assert_ne!(
+            WorkspaceRef::named("notes").unwrap(),
+            WorkspaceRef::special("notes").unwrap()
+        );
         assert_eq!(
-            WorkspaceRef::named("special:notes").unwrap().address(),
-            Some("special:notes")
+            WorkspaceRef::special("notes").unwrap().name(),
+            Some("notes")
         );
         let id = MonitorId::new("DP-1").unwrap();
         let first = CompositorMonitor {
@@ -233,7 +262,9 @@ pub trait ApplicationPort: Send + Sync {
 }
 pub trait CompositorPort: Send + Sync {
     fn snapshot(&self) -> Result<CompositorSnapshot>;
-    fn switch_workspace(&self, id: i32) -> Result<()>;
+    /// Implementations validate command kind before native dispatch. Admission
+    /// does not claim the observed workspace state has already changed.
+    fn workspace(&self, command: WorkspaceCommand) -> Result<()>;
     fn focus_window(&self, address: &str) -> Result<()>;
     /// Adapters own event delivery, reconnects and any polling strategy.
     fn watch(&self, emit: &mut dyn FnMut(Result<CompositorSnapshot>), stop: &dyn crate::StopSignal);

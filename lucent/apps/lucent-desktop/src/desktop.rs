@@ -35,7 +35,7 @@ pub enum Message {
     Weather(domain::Result<WeatherSnapshot>),
     Launcher(launcher::Message),
     Launch(AppId, bool),
-    Workspace(i32),
+    Workspace(WorkspaceCommand),
     Action(Action),
     Wallpaper(usize, bool),
     Widgets(widgets::Message),
@@ -1184,10 +1184,26 @@ impl Component for Desktop {
                 self.launch(&id, prefer, effects);
                 self.update_launcher(launcher::Message::Close, effects);
             }
-            Message::Workspace(id) => {
-                if let Some(hypr) = self.adapters.compositor.clone() {
+            Message::Workspace(command) => {
+                // Retained named/special tree actions cannot invent a stale
+                // observed destination. Numbered shortcuts remain client policy.
+                let id = match &command {
+                    WorkspaceCommand::Select(id) | WorkspaceCommand::ToggleSpecial(id) => id,
+                };
+                let present = id.number().is_some()
+                    || self
+                        .compositor
+                        .workspaces
+                        .iter()
+                        .filter(|workspace| &workspace.id == id)
+                        .count()
+                        == 1;
+                if present
+                    && self.compositor_available
+                    && let Some(adapter) = self.adapters.compositor.clone()
+                {
                     effects.task_on(crate::work::CONTROLS, move || {
-                        Message::Completed(hypr.switch_workspace(id))
+                        Message::Completed(adapter.workspace(command))
                     });
                 }
             }
@@ -2024,6 +2040,28 @@ impl api::Application for Desktop {
         }
     }
     fn command(&self, command: &str) -> std::result::Result<Option<Message>, String> {
+        if let Some(value) = command.strip_prefix("workspace select ") {
+            let id = if let Some(name) = value.strip_prefix("name:") {
+                WorkspaceRef::named(name)
+            } else {
+                value
+                    .parse::<i32>()
+                    .map_err(|_| "Use workspace select NUMBER|name:NAME".to_string())
+                    .and_then(|number| {
+                        WorkspaceRef::numbered(number).map_err(|error| error.to_string())
+                    })
+                    .map_err(DomainError::Invalid)
+            }
+            .map_err(|error| error.to_string())?;
+            return Ok(Some(Message::Workspace(WorkspaceCommand::Select(id))));
+        }
+        if let Some(name) = command.strip_prefix("workspace toggle-special ") {
+            let name = if name == "default" { "" } else { name };
+            let id = WorkspaceRef::special(name).map_err(|error| error.to_string())?;
+            return Ok(Some(Message::Workspace(WorkspaceCommand::ToggleSpecial(
+                id,
+            ))));
+        }
         if let Some(name) = command.strip_prefix("monitor select ") {
             let id = MonitorId::new(name).map_err(|error| error.to_string())?;
             if !self.monitors.connected.contains_key(&id) {
@@ -2231,7 +2269,7 @@ impl api::Application for Desktop {
             "online_previews": crate::previews::usage(self.browser.previews.values()),
             "background": crate::previews::usage(self.wallpaper.background.iter()),
             "total": crate::previews::usage(self.images.values().chain(self.previews.images()).chain(self.browser.previews.values()).chain(self.wallpaper.background.iter())),
-        }, "palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_history_open":self.notifications.history_open(),"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id,"active":w.active})).collect::<Vec<_>>(),"widgets":self.active_widget_layout().visible_widgets,"positions":self.active_widget_layout().positions,"widget_grid":self.active_widgets().grid_visible(),"widget_surfaces":self.active_widgets().surfaces(self.active_widget_layout(),self.viewport).iter().map(|s|serde_json::json!({"id":s.id,"members":s.members,"x":s.rect.x,"y":s.rect.y,"width":s.rect.w,"height":s.rect.h})).collect::<Vec<_>>(),"notes":self.settings.notes,"timer_seconds":self.active_widgets().timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"settings_save_status":self.persistence.status(self.settings_writable).name(),"settings_save_error":self.persistence.error(),"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable});
+        }, "palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_history_open":self.notifications.history_open(),"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id.number(),"name":w.id.name(),"special":w.id.is_special(),"active":w.active})).collect::<Vec<_>>(),"widgets":self.active_widget_layout().visible_widgets,"positions":self.active_widget_layout().positions,"widget_grid":self.active_widgets().grid_visible(),"widget_surfaces":self.active_widgets().surfaces(self.active_widget_layout(),self.viewport).iter().map(|s|serde_json::json!({"id":s.id,"members":s.members,"x":s.rect.x,"y":s.rect.y,"width":s.rect.w,"height":s.rect.h})).collect::<Vec<_>>(),"notes":self.settings.notes,"timer_seconds":self.active_widgets().timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"settings_save_status":self.persistence.status(self.settings_writable).name(),"settings_save_error":self.persistence.error(),"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable});
         value["notification_artwork"] = self.notifications.artwork_inspection();
         value["network"] = self.network.inspect();
         value["bluetooth"] = self.bluetooth.inspect();

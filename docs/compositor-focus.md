@@ -2,15 +2,21 @@
 
 The pure `CompositorPort` now reports monitor observations alongside workspaces
 and windows. `CompositorMonitor` contains a validated `MonitorId`, observed focus
-and optional active/special `WorkspaceRef` values. A reference can be a nonzero
-number or a validated opaque named address. These values have no sockets,
+and optional active/special `WorkspaceRef` values. The same validated identity
+is used in `Workspace.id` and optional `Window.workspace`: a positive number,
+a regular name, or a special overlay name. These values have no sockets,
 Wayland outputs, renderer types or persisted-layout policy.
 
 `CompositorSnapshot::focused_monitor` accepts exactly one focused, uniquely
 identified monitor. `monitor(id)` likewise rejects duplicate identities. The
 Hyprland adapter omits invalid/disabled and ambiguously named monitor records.
-Zero workspace IDs and empty names mean no reference, not workspace 1. Modern
-opaque addresses take precedence over display titles when there is no number.
+Zero/invalid workspace IDs and empty native addresses mean no reference. Modern
+addresses and explicit types take precedence over display titles. Regular bare
+names retain even native-looking prefixes; the dispatch selector is not the
+observed address. Legacy negative IDs normalize
+through their names; they never become numeric destinations. Display names can
+change without changing a workspace identity. Duplicate workspace identities are
+omitted, rather than assigning ambiguous action authority.
 
 ## What runs and where
 
@@ -68,13 +74,36 @@ local inspection.
 ## Per-monitor bars
 
 The workspace strip remains client policy. It supplies the existing numbered
-shortcut slots and actual observed numbered destinations. A named bar uses that
+shortcut slots and uniquely observed numbered, named and special destinations. A named bar uses that
 monitor's observed active reference for its indicator; it does not copy the
 global focused workspace to every display. Missing/ambiguous monitor metadata
 produces no claimed active indicator. An uninstanced legacy bar retains its
-global snapshot behavior. Special and opaque named references stay visible to
-port consumers; dedicated named/special workspace controls and complete identity
-migration of the older workspace/window records remain further work.
+global snapshot behavior. Named controls show the first letter of their identity;
+special controls show S. Both use existing size, spacing, font and color tokens.
+The bar remains bounded on narrow displays and reveals the current active slot.
+
+`WorkspaceCommand::Select` accepts regular identities; `ToggleSpecial` accepts
+a special identity. The adapter rejects a mismatched command before opening a
+native connection. The client rejects stale named/special destinations and actions
+while observation is unavailable. Numbered shortcuts can create their regular
+destination. An acknowledgement does not set the active indicator: a fresh
+observed snapshot does that. No action writes settings.
+
+```sh
+lucent-cli workspace select 9
+lucent-cli workspace select 'name:Writing room'
+lucent-cli workspace toggle-special notes
+lucent-cli workspace toggle-special default
+```
+
+These CLI named/special actions require the uniquely observed destination, matching
+the bar. `default` requests the compositor default special overlay. The adapter
+encodes numbers and regular names for `hl.dsp.focus`, and special names for
+`hl.dsp.workspace.toggle_special`. It quotes Lua strings explicitly, preserving
+quotes/backslashes as data. Numeric named workspaces are an unsupported Hyprland capability and are rejected
+before dispatch. Its default `special`/`special:special` native aliases normalize
+to one empty special name. Native selector prefixes belong to the adapter, not
+the domain or rendering engine. See the [upstream dispatcher implementation](https://github.com/hyprwm/Hyprland/blob/main/src/config/lua/bindings/LuaBindingsDispatchers.cpp).
 
 ## Native transport lifetime and limits
 
@@ -112,6 +141,6 @@ A read-only snapshot of the running host compositor was executed successfully;
 no display names, titles or serials enter public evidence. That check proves
 query compatibility, not graphical multi-monitor behavior. VM deployment, global
 shortcut placement, actual focus movement, native input/clipboard, reconnect,
-secure coverage and current RSS/frame pacing remain deferred. Full named-workspace
-actions, per-monitor wallpaper selection, output arrangement and the wider
+secure coverage and current RSS/frame pacing remain deferred.
+Per-monitor wallpaper selection, output arrangement and the wider
 text/client/release ledger remain incomplete.

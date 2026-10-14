@@ -87,7 +87,9 @@ impl Desktop {
             monitor.as_ref().map(|route| &route.id),
         );
         let geometry = shell_layout::BarLayout::new(cx.width, buttons.len());
-        let active = buttons.iter().position(|w| w.active).unwrap_or(0);
+        // Prefer the final active overlay slot, keeping a visible special
+        // control reachable while its regular workspace is also active.
+        let active = buttons.iter().rposition(|w| w.active).unwrap_or(0);
         let start = (active + 1)
             .saturating_sub(geometry.workspace_count)
             .min(buttons.len().saturating_sub(geometry.workspace_count));
@@ -138,8 +140,34 @@ impl Desktop {
                         component::bar::WORKSPACE_SIZE,
                     )
                 };
-                ring.on_click(Message::Workspace(w.id))
-                    .id(format!("workspace-{}", w.id))
+                let control = if let Some(label) = &w.label {
+                    self.label(label.clone(), font::CAPTION)
+                        .color(if w.active {
+                            self.theme().on_primary
+                        } else {
+                            self.ink().alpha(if w.occupied {
+                                opacity::STRONG
+                            } else {
+                                opacity::QUIET
+                            })
+                        })
+                        .align(Align::Center)
+                        .size(
+                            component::bar::WORKSPACE_SIZE,
+                            component::bar::WORKSPACE_SIZE,
+                        )
+                        .radius(radius::CONTROL)
+                        .background(if w.active {
+                            self.accent()
+                        } else {
+                            Color::TRANSPARENT
+                        })
+                } else {
+                    ring
+                };
+                control
+                    .on_click(Message::Workspace(w.command()))
+                    .id(w.element_id())
             })
             .collect();
         let spaces = self

@@ -1,0 +1,59 @@
+{
+  "status": "implementation_and_local_checks_passed_graphical_acceptance_deferred",
+  "source_commit": "8fa350d2c57ed36e70808dc524c834224010b7d8",
+  "local_checks": {
+    "workspace_passed": 438,
+    "workspace_ignored": 60,
+    "python_passed": 92,
+    "fmt_clippy_workspace_all_targets": true,
+    "software_vulkan_visual_comparisons_passed": 548,
+    "reviewed_new_references": 8,
+    "existing_references_or_tolerance_changed": 0,
+    "independent_consumer_help_executed": true,
+    "read_only_host_snapshot_executed": true,
+    "design_tokens_verified": 540,
+    "app_icons_verified": 58,
+    "shellcheck_passed": true,
+    "astro_errors": 0,
+    "astro_warnings": 0,
+    "astro_hints": 0,
+    "pages_each_prefix": 13,
+    "links_assets_each_prefix": 488
+  },
+  "implemented": [
+    "Validated numbered, named and special domain identities shared by workspace, optional window membership and monitor metadata; WorkspaceCommand separates Select and ToggleSpecial.",
+    "Adapter preserves modern bare addresses/types and legacy named identities; absent/invalid/duplicate identities cannot invent numeric destinations or action authority.",
+    "Native dispatch quotes Lua string literals explicitly, validates action kind before connecting and keeps private native rejection data out of errors.",
+    "Client owns numeric shortcut policy, uniquely observed named/special controls, monitor-local indicators, stable element identities, native-effect routing and stale/unavailable admission rejection.",
+    "Native acknowledgements do not fabricate observed active state or save settings; both active regular and special slots remain reachable within the bounded bar.",
+    "Independent read-only consumer, owned native-action protocol checks, reviewed token-driven controls, domain/desktop guides, skills and deferred VM harness are updated."
+  ],
+  "native_acceptance": {
+    "current_source_deployed_to_vm": false,
+    "read_only_running_host_query_compatible": true,
+    "actual_graphical_named_special_multi_output_keyboard_pointer_reconnect_lock_tested": false,
+    "deferred_by_user": true,
+    "scope": "Owned sockets prove transport and literal requests, not compositor UI behavior. The real host query is read-only; public evidence contains no host metadata."
+  },
+  "performance": {
+    "normal_desktop_rss_target_mib": 300,
+    "current_rss_or_frame_pacing_measured": false,
+    "new_renderer_idle_loop_or_effect_lane": false
+  },
+  "remaining": [
+    "Current guest deployment and actual compositor named/special selection, simultaneous monitor focus/input/clipboard, reconnect/suspend and secure coverage.",
+    "Per-output wallpaper/arrangement policy and neutral-layer hotplug acceptance.",
+    "XDG/D-Bus app activation, shaping/bidi/font fallback/IME/accessibility, richer widgets and complete client/release ledger.",
+    "Current RSS/frame pacing and final exact-head CI/authorized merge."
+  ],
+  "prior_delivery": {
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/55",
+    "merge_commit": "749f7cae98854726ba428dab96f93351fbb46092",
+    "all_six_exact_head_checks_passed": true,
+    "main_checks_and_pages_passed": true
+  },
+  "privacy": {
+    "host_display_names_titles_serials_paths_or_private_captures_published": false,
+    "new_visual_references_use_only_synthetic_fixtures": true
+  }
+}

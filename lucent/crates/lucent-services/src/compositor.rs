@@ -88,10 +88,7 @@ impl CompositorPort for Hyprland {
     }
     fn snapshot(&self) -> Result<CompositorSnapshot> {
         let deadline = Instant::now() + wire::REQUEST_TIMEOUT;
-        let active = self.json_before("j/activeworkspace", deadline)?["id"]
-            .as_i64()
-            .and_then(|id| i32::try_from(id).ok())
-            .unwrap_or(0);
+        let active = decode_workspace_ref(&self.json_before("j/activeworkspace", deadline)?);
         let focused = self.json_before("j/activewindow", deadline)?["address"]
             .as_str()
             .unwrap_or("")
@@ -99,20 +96,25 @@ impl CompositorPort for Hyprland {
         let ws = self.json_before("j/workspaces", deadline)?;
         let clients = self.json_before("j/clients", deadline)?;
         let monitors = self.json_before("j/monitors", deadline)?;
-        Ok(decode_snapshot(active, &focused, &ws, &clients, &monitors))
+        Ok(decode_snapshot(
+            active.as_ref(),
+            &focused,
+            &ws,
+            &clients,
+            &monitors,
+        ))
     }
 
-    fn switch_workspace(&self, id: i32) -> Result<()> {
-        if id < 1 {
-            return Err(DomainError::Invalid("Invalid workspace".into()));
-        }
-        let result = self.request(&format!(
-            "dispatch hl.dsp.focus({{ workspace = \"{id}\" }})"
-        ))?;
+    fn workspace(&self, command: WorkspaceCommand) -> Result<()> {
+        let request = workspace_request(command)?;
+        let result = self.request(&request)?;
         if result.trim() == "ok" {
             Ok(())
         } else {
-            Err(DomainError::Failed(result))
+            // Do not return a native error that could echo a selected name.
+            Err(DomainError::Failed(
+                "Hyprland rejected the workspace action".into(),
+            ))
         }
     }
     fn focus_window(&self, address: &str) -> Result<()> {
@@ -134,25 +136,33 @@ impl CompositorPort for Hyprland {
 }
 
 fn decode_snapshot(
-    active: i32,
+    active: Option<&WorkspaceRef>,
     focused: &str,
     ws: &Value,
     clients: &Value,
     raw_monitors: &Value,
 ) -> CompositorSnapshot {
     let monitors = decode_monitors(raw_monitors);
-    let mut workspaces: Vec<_> = ws
-        .as_array()
-        .into_iter()
-        .flatten()
-        .map(|v| Workspace {
-            id: v["id"].as_i64().unwrap_or(0) as i32,
-            name: v["name"].as_str().unwrap_or("").into(),
-            windows: v["windows"].as_u64().unwrap_or(0) as usize,
-            active: v["id"].as_i64() == Some(active as i64),
-        })
-        .collect();
-    workspaces.sort_by_key(|w| w.id);
+    let mut workspaces = std::collections::BTreeMap::new();
+    let mut ambiguous = std::collections::BTreeSet::new();
+    for value in ws.as_array().into_iter().flatten() {
+        let Some(id) = decode_workspace_ref(value) else {
+            continue;
+        };
+        let workspace = Workspace {
+            active: active == Some(&id),
+            id: id.clone(),
+            name: value["name"].as_str().unwrap_or("").into(),
+            windows: value["windows"]
+                .as_u64()
+                .and_then(|n| usize::try_from(n).ok())
+                .unwrap_or(0),
+        };
+        if workspaces.insert(id.clone(), workspace).is_some() {
+            ambiguous.insert(id);
+        }
+    }
+    workspaces.retain(|id, _| !ambiguous.contains(id));
     let windows = clients
         .as_array()
         .into_iter()
@@ -160,34 +170,133 @@ fn decode_snapshot(
         .map(|v| {
             let address = v["address"].as_str().unwrap_or("").to_owned();
             Window {
-                focused: address == focused,
+                focused: !focused.is_empty() && address == focused,
                 address,
                 app_class: v["class"].as_str().unwrap_or("").into(),
                 title: v["title"].as_str().unwrap_or("").into(),
-                workspace: v["workspace"]["id"].as_i64().unwrap_or(0) as i32,
+                workspace: decode_workspace_ref(&v["workspace"]),
             }
         })
         .collect();
     CompositorSnapshot {
-        workspaces,
+        workspaces: workspaces.into_values().collect(),
         windows,
         monitors,
     }
 }
 
+/// Modern `address` is authoritative. Legacy numbered IDs and negative
+/// named/special IDs normalize to the same domain value as modern records.
 fn decode_workspace_ref(value: &Value) -> Option<WorkspaceRef> {
-    if let Some(id) = value["id"]
-        .as_i64()
-        .and_then(|id| i32::try_from(id).ok())
-        .filter(|id| *id != 0)
-    {
+    if value.get("address").is_some() {
+        let address = value["address"].as_str()?;
+        if address.is_empty() {
+            return None;
+        }
+        return match value["type"].as_str() {
+            // Modern normal addresses are the actual bare name, not the
+            // `name:` selector used by dispatch. Preserve reserved prefixes.
+            Some("normal") => {
+                if value.get("id").is_some() {
+                    value["id"]
+                        .as_i64()
+                        .and_then(|id| i32::try_from(id).ok())
+                        .and_then(|id| WorkspaceRef::numbered(id).ok())
+                } else {
+                    WorkspaceRef::named(address).ok()
+                }
+            }
+            Some("special") => decode_workspace_address(address, Some("special")),
+            None | Some("") => decode_workspace_address(address, None),
+            Some(_) => None,
+        };
+    }
+    let id = value["id"].as_i64().and_then(|id| i32::try_from(id).ok());
+    if let Some(id) = id.filter(|id| *id > 0) {
         return WorkspaceRef::numbered(id).ok();
     }
-    let address = value["address"]
-        .as_str()
-        .filter(|name| !name.is_empty())
-        .or_else(|| value["name"].as_str().filter(|name| !name.is_empty()))?;
+    // An invalid/zero numeric identity cannot become a displayed title.
+    if value.get("id").is_some() && !id.is_some_and(|id| id < 0) {
+        return None;
+    }
+    let name = value["name"].as_str()?;
+    if name.is_empty() {
+        return None;
+    }
+    if value["type"].as_str() == Some("normal") {
+        return WorkspaceRef::named(name).ok();
+    }
+    if name == "special"
+        || name.starts_with("special:")
+        || value["type"].as_str() == Some("special")
+    {
+        decode_workspace_address(name, Some("special"))
+    } else {
+        WorkspaceRef::named(name).ok()
+    }
+}
+fn decode_workspace_address(address: &str, kind: Option<&str>) -> Option<WorkspaceRef> {
+    if matches!(address, "special" | "special:special") {
+        return WorkspaceRef::special("").ok();
+    }
+    if let Some(name) = address.strip_prefix("special:") {
+        return WorkspaceRef::special(name).ok();
+    }
+    if kind == Some("special") {
+        return WorkspaceRef::special(address).ok();
+    }
+    if let Some(name) = address.strip_prefix("name:") {
+        return WorkspaceRef::named(name).ok();
+    }
+    if address.as_bytes().iter().all(u8::is_ascii_digit) {
+        return address
+            .parse::<i32>()
+            .ok()
+            .and_then(|id| WorkspaceRef::numbered(id).ok());
+    }
     WorkspaceRef::named(address).ok()
+}
+/// Encode values as Lua string literals, never as source expressions. Names
+/// can contain quotes/backslashes; validated controls can never enter a request.
+fn lua_string(value: &str) -> String {
+    let mut result = String::with_capacity(value.len() + 2);
+    result.push('"');
+    for character in value.chars() {
+        if matches!(character, '"' | '\\') {
+            result.push('\\');
+        }
+        result.push(character);
+    }
+    result.push('"');
+    result
+}
+fn workspace_request(command: WorkspaceCommand) -> Result<String> {
+    match command {
+        WorkspaceCommand::Select(id) if !id.is_special() => {
+            // Current Hyprland forbids numeric names. Reject unsupported
+            // capabilities without reinterpreting the named domain value.
+            if id.name().is_some_and(|name| name.parse::<i64>().is_ok()) {
+                return Err(DomainError::Invalid(
+                    "Hyprland does not support numeric named workspaces".into(),
+                ));
+            }
+            let address = id
+                .number()
+                .map(|number| number.to_string())
+                .unwrap_or_else(|| format!("name:{}", id.name().expect("named identity")));
+            Ok(format!(
+                "dispatch hl.dsp.focus({{ workspace = {} }})",
+                lua_string(&address)
+            ))
+        }
+        WorkspaceCommand::ToggleSpecial(id) if id.is_special() => Ok(format!(
+            "dispatch hl.dsp.workspace.toggle_special({})",
+            lua_string(id.name().expect("special identity"))
+        )),
+        _ => Err(DomainError::Invalid(
+            "Workspace action and identity kind do not match".into(),
+        )),
+    }
 }
 fn decode_monitors(raw: &Value) -> Vec<CompositorMonitor> {
     let mut result = std::collections::BTreeMap::new();
@@ -223,6 +332,115 @@ mod protocol_tests;
 mod tests {
     use super::*;
     #[test]
+    fn modern_and_legacy_workspace_identity_agree_and_display_names_are_not_authority() {
+        let values = [
+            (
+                serde_json::json!({"address":"9","id":9,"type":"normal","name":"Renamed"}),
+                WorkspaceRef::numbered(9).unwrap(),
+            ),
+            (
+                serde_json::json!({"address":"Writing","type":"normal","name":"Displayed title"}),
+                WorkspaceRef::named("Writing").unwrap(),
+            ),
+            (
+                serde_json::json!({"id":-1337,"name":"Writing"}),
+                WorkspaceRef::named("Writing").unwrap(),
+            ),
+            (
+                serde_json::json!({"address":"special:notes","type":"special","name":"Displayed title"}),
+                WorkspaceRef::special("notes").unwrap(),
+            ),
+            (
+                serde_json::json!({"id":-99,"name":"special:notes"}),
+                WorkspaceRef::special("notes").unwrap(),
+            ),
+            (
+                serde_json::json!({"id":-99,"name":"special"}),
+                WorkspaceRef::special("").unwrap(),
+            ),
+        ];
+        assert_eq!(
+            decode_workspace_ref(&serde_json::json!({"address":"special:regular","type":"normal"})),
+            Some(WorkspaceRef::named("special:regular").unwrap())
+        );
+        assert_eq!(
+            decode_workspace_ref(&serde_json::json!({"address":"name:literal","type":"normal"})),
+            Some(WorkspaceRef::named("name:literal").unwrap())
+        );
+        for (value, expected) in values {
+            assert_eq!(decode_workspace_ref(&value), Some(expected));
+        }
+        for value in [
+            serde_json::json!({"address":"","id":9,"name":"No fallback"}),
+            serde_json::json!({"address":false,"id":9}),
+            serde_json::json!({"id":0,"name":"No fallback"}),
+            serde_json::json!({"id":4294967296u64,"name":"No narrowing"}),
+            serde_json::json!({"address":"name:"}),
+            serde_json::json!({"address":"4294967296"}),
+            serde_json::json!({"address":"bad\naddress"}),
+        ] {
+            assert!(decode_workspace_ref(&value).is_none());
+        }
+    }
+    #[test]
+    fn named_active_window_membership_and_ambiguous_records_remain_typed() {
+        let active = WorkspaceRef::named("Writing").unwrap();
+        let snapshot = decode_snapshot(
+            Some(&active),
+            "",
+            &serde_json::json!([
+                {"address":"name:Writing","name":"Display","windows":1},
+                {"id":9,"name":"first"},{"id":9,"name":"duplicate"},{"id":0}
+            ]),
+            &serde_json::json!([
+                {"address":"0xabc","workspace":{"address":"name:Writing"}},
+                {"address":"0xdef","workspace":{"id":0}}
+            ]),
+            &serde_json::json!([]),
+        );
+        assert_eq!(snapshot.workspaces.len(), 1);
+        assert_eq!(snapshot.workspaces[0].id, active);
+        assert!(snapshot.workspaces[0].active);
+        assert_eq!(snapshot.windows[0].workspace, Some(active));
+        assert!(snapshot.windows[1].workspace.is_none());
+        assert!(snapshot.windows.iter().all(|window| !window.focused));
+    }
+    #[test]
+    fn workspace_action_kinds_and_literal_encoding_do_not_interpret_names_as_source() {
+        assert_eq!(
+            workspace_request(WorkspaceCommand::Select(WorkspaceRef::numbered(9).unwrap()))
+                .unwrap(),
+            r#"dispatch hl.dsp.focus({ workspace = "9" })"#
+        );
+        let name = r#"Writing "; os.execute('bad') -- \"#;
+        let encoded = lua_string(&format!("name:{name}"));
+        assert_eq!(
+            workspace_request(WorkspaceCommand::Select(WorkspaceRef::named(name).unwrap()))
+                .unwrap(),
+            format!("dispatch hl.dsp.focus({{ workspace = {encoded} }})")
+        );
+        assert_eq!(lua_string(r#"a"b\c"#), r#""a\"b\\c""#);
+        assert_eq!(
+            workspace_request(WorkspaceCommand::ToggleSpecial(
+                WorkspaceRef::special("notes").unwrap()
+            ))
+            .unwrap(),
+            r#"dispatch hl.dsp.workspace.toggle_special("notes")"#
+        );
+        assert!(
+            workspace_request(WorkspaceCommand::Select(
+                WorkspaceRef::special("notes").unwrap()
+            ))
+            .is_err()
+        );
+        assert!(
+            workspace_request(WorkspaceCommand::ToggleSpecial(
+                WorkspaceRef::named("notes").unwrap()
+            ))
+            .is_err()
+        );
+    }
+    #[test]
     fn monitor_metadata_preserves_numbered_and_named_workspace_references() {
         let monitors = decode_monitors(&serde_json::json!([
             {"name":"DP-1","focused":true,"activeWorkspace":{"id":9,"name":"Work"},"specialWorkspace":{"id":0,"name":""}},
@@ -237,12 +455,12 @@ mod tests {
         );
         assert!(monitors[0].special_workspace.is_none());
         assert_eq!(
-            monitors[1].active_workspace.as_ref().unwrap().address(),
-            Some("name:Writing")
+            monitors[1].active_workspace.as_ref().unwrap().name(),
+            Some("Writing")
         );
         assert_eq!(
-            monitors[1].special_workspace.as_ref().unwrap().address(),
-            Some("special:notes")
+            monitors[1].special_workspace.as_ref().unwrap().name(),
+            Some("notes")
         );
         let snapshot = CompositorSnapshot {
             monitors,
@@ -270,7 +488,7 @@ mod tests {
     #[test]
     fn adapter_reports_actual_workspaces_including_special_without_inventing_shortcuts() {
         let snapshot = decode_snapshot(
-            9,
+            Some(&WorkspaceRef::numbered(9).unwrap()),
             "0xabc",
             &serde_json::json!([
                 {"id":9,"name":"Work","windows":2},
@@ -282,15 +500,22 @@ mod tests {
             &serde_json::json!([]),
         );
         assert_eq!(
-            snapshot.workspaces.iter().map(|w| w.id).collect::<Vec<_>>(),
-            [-99, 9]
+            snapshot
+                .workspaces
+                .iter()
+                .map(|w| w.id.clone())
+                .collect::<Vec<_>>(),
+            [
+                WorkspaceRef::numbered(9).unwrap(),
+                WorkspaceRef::special("scratchpad").unwrap()
+            ]
         );
-        assert!(snapshot.workspaces[1].active);
-        assert_eq!(snapshot.workspaces[1].name, "Work");
+        assert!(snapshot.workspaces[0].active);
+        assert_eq!(snapshot.workspaces[0].name, "Work");
         assert!(snapshot.windows[0].focused);
         assert!(
             decode_snapshot(
-                1,
+                Some(&WorkspaceRef::numbered(1).unwrap()),
                 "",
                 &serde_json::json!([]),
                 &serde_json::json!([]),
