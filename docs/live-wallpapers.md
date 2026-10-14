@@ -26,6 +26,9 @@ lucent-cli wallpaper live open
 lucent-cli wallpaper live play /absolute/path/to/loop.mp4
 lucent-cli wallpaper live pause
 lucent-cli wallpaper live resume
+lucent-cli wallpaper live pause-all
+lucent-cli wallpaper live resume-all
+lucent-cli wallpaper live retry
 lucent-cli wallpaper live off
 ```
 
@@ -39,16 +42,31 @@ file work may finish and retain an unused owned asset.
 Choose the default wallpaper or a connected monitor. Monitor overrides take
 precedence over the default. **Use static wallpaper** disables that monitor's
 live override, or removes the default live wallpaper when the default is selected.
-Paused playback freezes its last prepared frame and stops its producer; a resume
-starts the loop again. The native settings panel uses existing semantic colors,
+Pause/resume in the panel applies to the selected profile. **Pause all** is a
+separate global preference, preserved when importing another clip. CLI
+`pause`, `resume`, `retry` and `off` always target the default profile;
+`pause-all` and `resume-all` explicitly control every profile. A monitor can
+**Use default wallpaper** to remove its override. Paused playback freezes its
+last prepared frame and stops its producer; a resume starts the loop again.
+Changing its FPS retains that frame. A restored paused profile prepares its
+poster once and starts no decoder. Decode failures retain the last good image and offer **Retry playback** for the
+selected profile. Save progress/errors and **Retry save** use the root persistence
+coordinator; changing a control does not claim that storage has finished. Opening
+the panel focuses its path field, Escape or an outside click closes it, and
+ordinary inputs support the shared editing/undo contract. The native settings
+panel uses existing semantic colors,
 spacing, radii, typography, scrolling and frame-paced motion.
 
 The default live import also supplies its validated poster to the normal static
 wallpaper transaction. That gives secure/session clients a still background and
 retains ordinary image/theme export behavior. Export failure stays visible through
 the existing wallpaper coordinator; an import does not claim an atomic update of
-all external applications. Selecting a different successfully committed default
-static wallpaper removes the default live selection.
+all external applications. Default live imports reserve the same selection intent as static choices and
+online downloads. A newer choice retires an older pending import; historical
+accepted static commits can finish without clearing a newer live preference.
+Selecting a different current successfully committed default static wallpaper
+removes the default live selection. Closing the panel or turning off that target
+retires its pending import, so a late result cannot turn playback back on.
 
 ## Preferences and resource limits
 
@@ -129,7 +147,14 @@ messages, bounded latest-frame delivery and preservation of the last good image.
 A software-Vulkan test verifies real changing pixels, one reused GPU texture,
 no upload for a repeated revision and replacement on dimension changes.
 
-The settings panel is reviewed at normal/narrow widths, 1×/2× and during its
-opening transition. Actual compositor playback, native input, lock/session poster
-exports, reconnect/suspend, physical GPU performance and the current RSS target
-are separate acceptance and remain deferred until the current source is deployed.
+The initial playback implementation was exercised in a real Hyprland VM on
+source `eb3f5cbfd6498844b567a5274d0a0ca7a44c50d2`: synthetic MP4/WebM/GIF
+background pixels changed, pause froze frames and pixels, resume worked, invalid
+imports preserved preferences, and restart restored playback/FPS. Native path
+editing, submission and Escape were exercised. Exact settings, wallpaper, theme,
+login exports and idle policy were restored. See the sanitized
+[live wallpaper VM report](../reports/measurements/lucent-live-wallpaper-vm.json).
+This was software Vulkan on one output. New daily-control changes, actual
+lock/session presentation, multi-output/reconnect/suspend, physical-GPU frame
+pacing and the current RSS target require their own acceptance; the earlier VM
+result does not establish them.

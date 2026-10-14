@@ -114,13 +114,17 @@ struct Pending {
     selection: TextSelection,
     operation: Operation,
 }
-/// Ordinary field selection and one clipboard ticket. The String stays in its
-/// component/aggregate. Any newer edit/reset retires the pending completion.
+/// Ordinary field selection, bounded undo/redo spans and one clipboard ticket.
+/// The canonical String stays in its component/aggregate. Any newer edit/reset
+/// retires the pending completion. History retains at most 128 edits/64 KiB,
+/// plus a 64 KiB comparison snapshot; values above that snapshot limit have no
+/// history. Never use this state for masked credentials.
 #[derive(Default)]
 pub struct TextFieldState {
     selection: TextSelection,
     next: u64,
     pending: Option<Pending>,
+    history: crate::text_edit::TextHistory,
 }
 impl TextFieldState {
     pub fn selection(&self) -> TextSelection {
@@ -128,11 +132,13 @@ impl TextFieldState {
     }
     pub fn reset(&mut self, value: &str) {
         self.cancel();
+        self.history.reset(value);
         self.selection = TextSelection::at_end(value);
     }
     pub fn cancel(&mut self) {
         self.pending = None;
         self.next = self.next.wrapping_add(1);
+        self.history.break_group();
     }
     pub fn update<M: 'static>(
         &mut self,
@@ -143,6 +149,9 @@ impl TextFieldState {
         effects: &mut Effects<M>,
         map: impl Fn(TextEdit) -> M + Send + 'static,
     ) -> Result<TextChange, TextEditError> {
+        if self.history.reconcile(value) {
+            self.cancel();
+        }
         if let TextEdit::ClipboardReply(id, outcome) = edit {
             let Some(pending) = self.pending.take() else {
                 return Ok(TextChange::default());
@@ -156,19 +165,34 @@ impl TextFieldState {
             }
             return match outcome {
                 ClipboardOutcome::Text(text) if matches!(pending.operation, Operation::Paste) => {
-                    self.selection
-                        .apply(value, TextEdit::Insert(text), max_bytes)
+                    self.history.apply(
+                        &mut self.selection,
+                        value,
+                        TextEdit::Insert(text),
+                        max_bytes,
+                        false,
+                    )
                 }
                 ClipboardOutcome::WritePosted if matches!(pending.operation, Operation::Cut) => {
-                    self.selection.apply(value, TextEdit::Delete, max_bytes)
+                    self.history.apply(
+                        &mut self.selection,
+                        value,
+                        TextEdit::Delete,
+                        max_bytes,
+                        false,
+                    )
                 }
                 ClipboardOutcome::Error(ClipboardError::Cancelled) => Ok(TextChange::default()),
                 ClipboardOutcome::Error(error) => Err(TextEditError::Clipboard(error)),
                 _ => Ok(TextChange::default()),
             };
         }
-        self.cancel();
+        // Every newer intent retires its clipboard ticket. Ordinary typing may
+        // still join the immediately preceding insertion in the undo history.
+        self.pending = None;
+        self.next = self.next.wrapping_add(1);
         if matches!(edit, TextEdit::Copy | TextEdit::Cut | TextEdit::Paste) {
+            self.history.break_group();
             if value.len() > CLIPBOARD_TEXT_LIMIT {
                 return Err(TextEditError::Clipboard(ClipboardError::TooLarge));
             }
@@ -201,7 +225,8 @@ impl TextFieldState {
                 }));
             Ok(TextChange::default())
         } else {
-            self.selection.apply(value, edit, max_bytes)
+            self.history
+                .apply(&mut self.selection, value, edit, max_bytes, true)
         }
     }
 }
@@ -416,5 +441,163 @@ mod tests {
                 ClipboardOutcome::Text("ok".into())
             ))
         );
+    }
+    #[test]
+    fn completed_paste_and_cut_undo_as_separate_edits_with_selection() {
+        let mut field = TextFieldState::default();
+        let mut value = "café".to_string();
+        field.reset(&value);
+        let mut effects = Effects::default();
+        edit(&mut field, &mut value, TextEdit::SelectAll, &mut effects).unwrap();
+        let selected = field.selection();
+        edit(&mut field, &mut value, TextEdit::Paste, &mut effects).unwrap();
+        let reply = effects
+            .clipboard
+            .pop()
+            .unwrap()
+            .finish(ClipboardOutcome::Text("tea\n".into()));
+        edit(&mut field, &mut value, reply, &mut effects).unwrap();
+        edit(&mut field, &mut value, TextEdit::Undo, &mut effects).unwrap();
+        assert_eq!(value, "café");
+        assert_eq!(field.selection(), selected);
+        edit(&mut field, &mut value, TextEdit::Redo, &mut effects).unwrap();
+        assert_eq!(value, "tea");
+        edit(
+            &mut field,
+            &mut value,
+            TextEdit::Insert("!".into()),
+            &mut effects,
+        )
+        .unwrap();
+        edit(&mut field, &mut value, TextEdit::SelectAll, &mut effects).unwrap();
+        let cut_selection = field.selection();
+        edit(&mut field, &mut value, TextEdit::Cut, &mut effects).unwrap();
+        let reply = effects
+            .clipboard
+            .pop()
+            .unwrap()
+            .finish(ClipboardOutcome::WritePosted);
+        edit(&mut field, &mut value, reply, &mut effects).unwrap();
+        assert!(value.is_empty());
+        edit(&mut field, &mut value, TextEdit::Undo, &mut effects).unwrap();
+        assert_eq!(value, "tea!");
+        assert_eq!(field.selection(), cut_selection);
+        edit(&mut field, &mut value, TextEdit::Undo, &mut effects).unwrap();
+        assert_eq!(value, "tea");
+    }
+    #[test]
+    fn undo_redo_and_cancel_retire_pending_clipboard_tickets() {
+        for action in [TextEdit::Undo, TextEdit::Redo] {
+            let mut field = TextFieldState::default();
+            let mut value = "abc".to_string();
+            field.reset(&value);
+            let mut effects = Effects::default();
+            edit(
+                &mut field,
+                &mut value,
+                TextEdit::Insert("!".into()),
+                &mut effects,
+            )
+            .unwrap();
+            if matches!(action, TextEdit::Redo) {
+                edit(&mut field, &mut value, TextEdit::Undo, &mut effects).unwrap();
+            }
+            edit(&mut field, &mut value, TextEdit::Paste, &mut effects).unwrap();
+            let pending = effects.clipboard.pop().unwrap();
+            edit(&mut field, &mut value, action, &mut effects).unwrap();
+            let expected = value.clone();
+            assert_eq!(
+                edit(
+                    &mut field,
+                    &mut value,
+                    pending.finish(ClipboardOutcome::Text("stale".into())),
+                    &mut effects
+                )
+                .unwrap(),
+                TextChange::default()
+            );
+            assert_eq!(value, expected);
+            edit(&mut field, &mut value, TextEdit::Paste, &mut effects).unwrap();
+            let pending = effects.clipboard.pop().unwrap();
+            field.cancel();
+            edit(
+                &mut field,
+                &mut value,
+                pending.finish(ClipboardOutcome::Text("cancelled".into())),
+                &mut effects,
+            )
+            .unwrap();
+            assert_eq!(value, expected);
+        }
+    }
+    #[test]
+    fn reset_retires_undo_and_cancel_preserves_history() {
+        let mut field = TextFieldState::default();
+        let mut value = "abc".to_string();
+        field.reset(&value);
+        let mut effects = Effects::default();
+        edit(
+            &mut field,
+            &mut value,
+            TextEdit::Insert("!".into()),
+            &mut effects,
+        )
+        .unwrap();
+        field.cancel();
+        edit(&mut field, &mut value, TextEdit::Undo, &mut effects).unwrap();
+        assert_eq!(value, "abc");
+        edit(&mut field, &mut value, TextEdit::Redo, &mut effects).unwrap();
+        field.reset(&value);
+        assert_eq!(
+            edit(&mut field, &mut value, TextEdit::Undo, &mut effects).unwrap(),
+            TextChange::default()
+        );
+        assert_eq!(value, "abc!");
+    }
+    #[test]
+    fn external_replacement_retires_history_and_reconciles_selection_on_undo() {
+        let mut field = TextFieldState::default();
+        let mut value = "abc".to_string();
+        field.reset(&value);
+        let mut effects = Effects::default();
+        edit(
+            &mut field,
+            &mut value,
+            TextEdit::Insert("!".into()),
+            &mut effects,
+        )
+        .unwrap();
+        value = "é".into();
+        let change = edit(&mut field, &mut value, TextEdit::Undo, &mut effects).unwrap();
+        assert!(!change.content);
+        assert!(change.selection);
+        assert_eq!(field.selection().caret(), value.len());
+        assert_eq!(value, "é");
+    }
+    #[test]
+    fn cancelled_or_rejected_paste_does_not_erase_redo() {
+        for outcome in [
+            ClipboardOutcome::Error(ClipboardError::Cancelled),
+            ClipboardOutcome::Text("x".repeat(8192)),
+        ] {
+            let mut field = TextFieldState::default();
+            let mut value = "abc".to_string();
+            field.reset(&value);
+            let mut effects = Effects::default();
+            edit(
+                &mut field,
+                &mut value,
+                TextEdit::Insert("!".into()),
+                &mut effects,
+            )
+            .unwrap();
+            edit(&mut field, &mut value, TextEdit::Undo, &mut effects).unwrap();
+            edit(&mut field, &mut value, TextEdit::Paste, &mut effects).unwrap();
+            let reply = effects.clipboard.pop().unwrap().finish(outcome);
+            let _ = edit(&mut field, &mut value, reply, &mut effects);
+            assert_eq!(value, "abc");
+            edit(&mut field, &mut value, TextEdit::Redo, &mut effects).unwrap();
+            assert_eq!(value, "abc!");
+        }
     }
 }

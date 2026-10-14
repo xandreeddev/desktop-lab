@@ -25,6 +25,12 @@ let launch = theme.button("Open application", Message::Launch)
     .background(theme.primary)
     .color(theme.on_primary);
 
+// Selection and field recipes share the same semantic roles and geometry.
+let choice = theme.choice_button("30 FPS", Message::Rate(30), selected);
+let input = theme.text_input(value, selection, "Media path", Message::Edit);
+let pause = theme.toggle_row("Pause all", Message::PauseAll, paused);
+let status = theme.status_text("Saving preferences…", false);
+
 // Shared hover and elevation recipes, including child elements.
 theme.apply(launch)`;
 ---

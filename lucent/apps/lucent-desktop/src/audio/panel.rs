@@ -154,20 +154,16 @@ impl Audio {
         rows.extend(self.level(device.id, device.volume, device.muted, true, theme));
         rows.push(
             theme
-                .button(
+                .choice_button(
                     if default {
                         "Default device"
                     } else {
                         "Use as default"
                     },
                     Message::Request(AudioCommand::SetDefault(device.id)),
+                    default,
                 )
                 .width(Length::Fill)
-                .color(if default {
-                    theme.primary
-                } else {
-                    theme.on_surface
-                })
                 .id(format!("audio-default-{}", device.id.value())),
         );
         self.card(rows, theme)
@@ -252,36 +248,24 @@ impl Audio {
                         .iter()
                         .filter(|d| d.direction == stream.direction)
                     {
+                        let current = stream.device == Some(device.id);
+                        let choice = theme.choice_button(
+                            format!("{}{}", if current { "Current · " } else { "" }, device.name),
+                            Message::Request(AudioCommand::Route {
+                                stream: stream.id,
+                                device: device.id,
+                            }),
+                            current,
+                        );
                         content.push(
-                            theme
-                                .button(
-                                    format!(
-                                        "{}{}",
-                                        if stream.device == Some(device.id) {
-                                            "Current · "
-                                        } else {
-                                            ""
-                                        },
-                                        device.name
-                                    ),
-                                    Message::Request(AudioCommand::Route {
-                                        stream: stream.id,
-                                        device: device.id,
-                                    }),
-                                )
-                                .background(if stream.device == Some(device.id) {
-                                    theme.primary
-                                } else {
-                                    theme.surface
-                                })
-                                .color(if stream.device == Some(device.id) {
-                                    theme.on_primary
-                                } else {
-                                    theme.on_surface
-                                })
-                                .width(Length::Fill)
-                                .wrap(token::TITLE_LINES as usize)
-                                .id(format!("audio-route-device-{}", device.id.value())),
+                            (if current {
+                                choice
+                            } else {
+                                choice.background(theme.surface)
+                            })
+                            .width(Length::Fill)
+                            .wrap(token::TITLE_LINES as usize)
+                            .id(format!("audio-route-device-{}", device.id.value())),
                         );
                     }
                 } else {
@@ -344,18 +328,8 @@ impl Audio {
                 .into_iter()
                 .map(|tab| {
                     theme
-                        .button(tab.name(), Message::Tab(tab))
+                        .choice_button(tab.name(), Message::Tab(tab), self.panel.tab == tab)
                         .width(Length::Fill)
-                        .background(if self.panel.tab == tab {
-                            theme.primary
-                        } else {
-                            theme.surface_container
-                        })
-                        .color(if self.panel.tab == tab {
-                            theme.on_primary
-                        } else {
-                            theme.on_surface
-                        })
                         .id(format!("audio-tab-{}", tab.name()))
                 })
                 .collect(),
@@ -375,14 +349,15 @@ impl Audio {
         if let Some(error) = self.commands.error() {
             let can_retry = self.commands.can_retry(self.snapshot());
             let mut status = vec![
-                self.text(error, theme)
-                    .color(theme.error)
-                    .font(font::CAPTION),
+                theme
+                    .status_text(error, true)
+                    .wrap(token::STATUS_LINES as usize),
             ];
             if !can_retry {
                 status.push(
-                    self.text("The control changed. Select it again.", theme)
-                        .font(font::CAPTION),
+                    theme
+                        .status_text("The control changed. Select it again.", false)
+                        .wrap(token::STATUS_LINES as usize),
                 );
             }
             children.push(
@@ -406,8 +381,9 @@ impl Audio {
             );
         } else if self.commands.busy() {
             children.push(
-                self.text("Applying audio changes…", theme)
-                    .font(font::CAPTION),
+                theme
+                    .status_text("Applying audio changes…", false)
+                    .wrap(token::STATUS_LINES as usize),
             );
         }
         let rect = crate::shell_layout::audio_panel((cx.width, cx.height));

@@ -2,7 +2,8 @@
 
 Ordinary text fields use a shared framework API rather than editing the last
 painted string in the input dispatcher. The component owns its value and a
-`TextFieldState` (which contains the selection and one clipboard ticket). The framework emits `TextEdit` messages and renders the next
+`TextFieldState` (which contains selection, bounded undo/redo history and one
+clipboard ticket). The framework emits `TextEdit` messages and renders the next
 declared value/selection.
 
 ```rust
@@ -40,6 +41,9 @@ Supported operations include insertion/replacement, backward/forward deletion,
 clear, select all, grapheme/word navigation, word deletion, extending selection
 and pointer selection. Arrow keys move; Shift extends; Ctrl+arrows move by word;
 Home/End reach the ends; Ctrl+Backspace/Delete remove word spans.
+Ctrl+Z undoes; Ctrl+Shift+Z or Ctrl+Y redoes. The callback emits relative
+`TextEdit::Undo`/`Redo` messages, and `TextFieldState::update` applies them against
+the current component value. `TextSelection::apply` alone owns no history.
 
 Extended graphemes use the maintained
 [Unicode segmentation implementation](https://docs.rs/unicode-segmentation/latest/unicode_segmentation/trait.UnicodeSegmentation.html).
@@ -50,6 +54,36 @@ Relative edit messages are essential: several native key events can arrive
 before a compositor frame. Each callback returns an intent such as Insert or
 Move, and the UI thread applies it to the latest component state. An old scene
 cannot overwrite the newly edited string with its prior value.
+
+## Undo and redo
+
+Each ordinary field retains at most 128 edits and 64 KiB of removed/inserted
+UTF-8 bytes across undo and redo combined. History stores replacement spans and
+the original directional selections. One comparison snapshot is bounded at
+64 KiB, for at most 128 KiB of retained text per field for history and exact
+external-change detection. The canonical value remains component-owned.
+Adjacent insertions at a collapsed caret coalesce into a group up to 4 KiB.
+Navigation, pointer selection, clipboard actions, cancellation and history
+playback break the group. Deletion, replacement, clear, completed paste and
+completed cut form individual edits.
+
+An accepted content edit retires redo. Rejected edits and identical content
+preserve it. Undo and redo obey the current client byte admission limit; a
+rejected restoration keeps its history entry for a later attempt. Existing
+oversized values remain deletable. If an accepted edit needs more than the
+history byte budget, it clears earlier history and completes without retaining
+that edit. Oldest undo entries are evicted as count or payload limits are reached.
+
+`reset` clears both histories and pending clipboard authority. `cancel` retires
+clipboard authority and ends a typing group while preserving accepted history.
+Externally replaced text retires history on the next update, using exact
+snapshot comparison; playback also checks the current span before mutation.
+History clears and remains disabled while the value exceeds the 64 KiB snapshot
+limit; edits remain admitted by the client's normal byte limit. Returning to a
+bounded value enables history for later edits. Call `reset` for an intentional
+component/aggregate replacement, including replacement with the same text.
+Undo/redo retire pending paste/cut tickets, so delayed replies cannot mutate the
+restored value. History debug output never exposes retained text.
 
 The Wayland adapter translates modified cursor keys and physical Shift presses
 into generic API inputs. Application-level handling still runs first, so clients
@@ -143,9 +177,8 @@ and disconnected pipes return typed generic errors; they never print clipboard
 text or execute it as a shell command. Incoming CR/LF is removed by single-line
 editing. Launchers and menus show failures without changing their query; notes
 returns the existing typed error intent. Wallpaper search and hidden-network
-name errors use their existing status/failure presentation. No history or
-primary-selection UI is
-added here.
+name errors use their existing status/failure presentation. Clipboard history
+and primary-selection UI remain separate features.
 
 All pipe I/O lives on the native calloop poller with nonblocking descriptors.
 There are at most eight active transfers, each limited to 64 KiB and an absolute
@@ -172,6 +205,6 @@ not replace real compositor serial/selection acceptance.
 
 Native VM/hardware acceptance is deferred under the user instruction. Current
 shaping remains the existing kerning-based implementation. Clipboard native
-interoperability, IME, bidi/complex-script shaping, font fallback, multiline/undo behavior and
+interoperability, IME, bidi/complex-script shaping, font fallback, multiline editing and
 platform accessibility remain separate requirements. Editing tests and
 synthetic Vulkan references cannot prove those features.

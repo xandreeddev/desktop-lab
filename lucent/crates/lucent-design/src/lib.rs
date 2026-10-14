@@ -250,6 +250,67 @@ impl Theme {
             .color(self.on_surface)
             .background(self.surface_container)
     }
+    /// A controlled choice with the same geometry as an ordinary button.
+    /// The client owns selection and supplies the action for this choice.
+    pub fn choice_button<M>(
+        self,
+        label: impl Into<String>,
+        message: M,
+        selected: bool,
+    ) -> Element<M> {
+        let control = self.button(label, message);
+        if selected {
+            control.background(self.primary).color(self.on_primary)
+        } else {
+            control
+        }
+    }
+    /// One keyboard/pointer target for a label and its controlled switch.
+    /// The client supplies the next-value message; rendering changes no state.
+    pub fn toggle_row<M>(self, label: impl Into<String>, message: M, checked: bool) -> Element<M> {
+        Element::row(vec![
+            Element::text(label)
+                .font(font::CONTROL)
+                .color(self.on_surface)
+                .width(lucent_api::Length::Fill),
+            self.switch_indicator(checked),
+        ])
+        .width(lucent_api::Length::Fill)
+        .align(lucent_api::Align::Center)
+        .gap(space::SM)
+        .padding_xy(
+            component::button::PADDING_INLINE,
+            component::button::PADDING_BLOCK,
+        )
+        .radius(component::button::RADIUS)
+        .background(self.surface)
+        .on_click(message)
+    }
+    /// Ordinary controlled field styling; callers retain IDs, height, submit
+    /// policy and text state. Passwords use the separate masked framework API.
+    pub fn text_input<M>(
+        self,
+        value: impl Into<String>,
+        selection: lucent_api::TextSelection,
+        placeholder: impl Into<String>,
+        on_edit: impl Fn(lucent_api::TextEdit) -> M + Send + Sync + 'static,
+    ) -> Element<M> {
+        Element::text_input(value, selection, placeholder, on_edit)
+            .font(font::BODY)
+            .color(self.on_surface)
+            .background(self.surface_container)
+            .padding(space::MD)
+            .radius(radius::CONTROL)
+            .width(lucent_api::Length::Fill)
+    }
+    /// Supporting status uses the semantic error role when the client reports
+    /// a failure. Hosts choose wrapping without changing their input geometry.
+    pub fn status_text<M>(self, label: impl Into<String>, error: bool) -> Element<M> {
+        Element::text(label)
+            .font(font::CAPTION)
+            .color(if error { self.error } else { self.on_surface })
+            .width(lucent_api::Length::Fill)
+    }
 }
 
 #[cfg(test)]

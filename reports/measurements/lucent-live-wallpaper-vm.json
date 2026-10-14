@@ -23,7 +23,7 @@
   },
   "synthetic_captures_review_scope": "Private samples verify changing background colors. No personal captures are published.",
   "configured_vm_memory_mib": 1536,
-  "normal_resource_configuration_restoration": "pending",
+  "normal_resource_configuration_restoration": true,
   "hardware_gpu_or_multi_output_acceptance": false,
   "current_120_second_rss_pacing_measured": false,
   "binaries": {

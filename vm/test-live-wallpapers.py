@@ -49,6 +49,15 @@ def session(*command, timeout=30):
     return remote('python3', 'desktop-lab/scripts/in-session.py', *command, timeout=timeout)
 
 
+def measure_resources(scratch, label):
+    pid = int(remote('pgrep', '-x', 'lucent-desktop').strip())
+    result = json.loads(session('python3', 'desktop-lab/scripts/benchmark.py',
+                               '--pid', str(pid), '--seconds', '120',
+                               '--output', scratch + '/' + label + '.json', timeout=150))
+    require(result['duration_seconds'] >= 120, 'resource_sample_duration')
+    return result
+
+
 def cli(*command):
     return session('/home/omarchy/.local/bin/lucent-cli', *command)
 
@@ -379,15 +388,22 @@ t=p.with_name('desktop.live-test.new'); t.write_text(json.dumps(d)); t.replace(p
         session('systemctl', '--user', 'start', 'lucent.service')
         eventually(lambda: client()['background_ready'] and client()['live_wallpaper']['players'] == 0,
                    'isolated_desktop_ready')
+        print('Measuring the static baseline for 120 seconds.', flush=True)
+        report['resources'] = {'static': measure_resources(scratch, 'static-resources')}
         for extension in ('mp4', 'webm', 'gif'):
             phase = 'native_' + extension + '_playback'
             fixture = scratch + '/fixture.' + extension
             if extension == 'mp4':
                 cli('wallpaper', 'live', 'open')
                 eventually(lambda: client()['live_wallpaper']['open'], 'native_live_panel_open')
+                eventually(lambda: find_surface(inspect(), 'live-wallpaper').get('focus') == 'live-path',
+                           'native_live_panel_autofocus')
                 click(name, monitor, 'live-path')
                 key(name, 29, 30)
                 type_ascii(name, fixture)
+                key(name, 107)  # End breaks typing coalescing before this new edit.
+                type_ascii(name, '-missing')
+                key(name, 29, 44)  # Undo must remove the invalid suffix.
                 key(name, 28)
             else:
                 cli('wallpaper', 'live', 'play', fixture)
@@ -395,6 +411,14 @@ t=p.with_name('desktop.live-test.new'); t.write_text(json.dumps(d)); t.replace(p
                        and (read_settings()['live_wallpapers']['default'] or {})
                        .get('asset', {}).get('source', {}).get('path') == fixture,
                        'native_media_import_and_save', timeout=45)
+            if extension == 'mp4':
+                report['checks']['native_ordinary_field_undo_and_autofocus'] = True
+            if extension == 'webm':
+                eventually(lambda: saved() and read_settings()['live_wallpapers']['paused']
+                           and client()['live_wallpaper']['running'] == 0,
+                           'new_import_preserves_pause_all')
+                report['checks']['import_preserves_explicit_pause_all'] = True
+                cli('wallpaper', 'live', 'resume-all')
             asset = read_settings()['live_wallpapers']['default']['asset']
             media_assets.append(asset)
             eventually(lambda: not client()['wallpaper_busy'] and client()['background_ready']
@@ -419,6 +443,8 @@ t=p.with_name('desktop.live-test.new'); t.write_text(json.dumps(d)); t.replace(p
             changing_samples = verify_colors(scratch, report_dir, captures)
             report['checks'][extension + '_native_import_and_changing_pixels'] = True
             if extension == 'mp4':
+                print('Measuring native 15 FPS MP4 playback for 120 seconds.', flush=True)
+                report['resources']['mp4_15_fps'] = measure_resources(scratch, 'live-resources')
                 phase = 'pause_resume_failure_and_restart'
                 cli('wallpaper', 'live', 'pause')
                 eventually(lambda: saved() and client()['live_wallpaper']['running'] == 0,
@@ -441,13 +467,24 @@ t=p.with_name('desktop.live-test.new'); t.write_text(json.dumps(d)); t.replace(p
                 report['checks']['resume_restarts_native_playback'] = True
                 committed, selected = read_settings(), client()['wallpaper']
                 committed_digest = settings_digest()
-                cli('wallpaper', 'live', 'play', scratch + '/invalid.mp4')
+                cli('wallpaper', 'live', 'open')
+                eventually(lambda: client()['live_wallpaper']['open']
+                           and find_surface(inspect(), 'live-wallpaper').get('focus') == 'live-path',
+                           'native_invalid_import_autofocus')
+                key(name, 29, 30)
+                type_ascii(name, scratch + '/invalid.mp4')
+                key(name, 29, 44)  # Undo restores the valid path.
+                key(name, 29, 42, 44)  # Redo must restore the invalid path.
+                key(name, 28)
                 eventually(lambda: not client()['live_wallpaper']['importing']
                            and 'could not be decoded' in client()['live_wallpaper']['error'],
                            'invalid_media_reports_failure', timeout=45)
                 require(settings_digest() == committed_digest and client()['wallpaper'] == selected,
                         'invalid_import_replaced_configuration')
                 report['checks']['invalid_import_preserves_configuration'] = True
+                report['checks']['native_ordinary_field_redo'] = True
+                key(name, 1)
+                eventually(lambda: not client()['live_wallpaper']['open'], 'invalid_panel_escape')
                 session('systemctl', '--user', 'restart', 'lucent.service')
                 eventually(lambda: client()['background_ready'] and client()['live_wallpaper']['running'] == 1
                            and read_settings()['live_wallpapers'] == committed['live_wallpapers'],
@@ -456,6 +493,10 @@ t=p.with_name('desktop.live-test.new'); t.write_text(json.dumps(d)); t.replace(p
                 eventually(lambda: background_frames() > before + 2, 'restart_native_frame_advance')
                 verify_colors(scratch, report_dir, captures)
                 report['checks']['restart_restores_selection_fps_and_playback'] = True
+                cli('wallpaper', 'live', 'pause-all')
+                eventually(lambda: saved() and read_settings()['live_wallpapers']['paused']
+                           and client()['live_wallpaper']['running'] == 0,
+                           'explicit_pause_all_before_next_import')
         report['checks']['native_panel_escape'] = True
         report['passed'] = True
     except CheckFailure as failure:

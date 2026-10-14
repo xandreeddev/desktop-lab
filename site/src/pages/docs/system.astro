@@ -7,7 +7,8 @@ const sections: [string, string][] = [['startup','01 · Startup'],['ownership','
 const ownership = [
   ['Bar, dock, launcher, widgets', 'Lucent desktop', 'Components describe trees; the framework lays out, animates and renders Vulkan buffers.'],
   ['Online wallpaper catalogs', 'Lucent native browser', 'WallpaperCatalogPort → OnlineWallpapers uses Wallhaven API / Alpha Coders public pages. PaletteGenerationPort → ImagePalette extracts a dominant seed; Lucent design recipes create the semantic colors.'],
-  ['Desktop wallpaper', 'Lucent background surface', 'WallpaperPort → LucentWallpaper stages an immutable source copy; AssetPort → NativeAssets decodes it off the UI thread before the coordinator commits selection.'],
+  ['Desktop wallpaper', 'Lucent background surfaces', 'WallpaperPort → LucentWallpaper stages an immutable source copy; AssetPort → NativeAssets decodes it off the UI thread before the coordinator commits selection. Named outputs have separate background surfaces; static wallpaper selection remains shared.'],
+  ['Live wallpapers', 'Lucent native media and playback coordinator', 'WallpaperPlaybackPort → NativeVideoWallpapers validates owned MP4/WebM/GIF imports and decodes through FFmpeg libraries. The client supplies default/per-monitor policy and latest-frame delivery; Vulkan presents reusable stream textures. Single-output native playback/input/pause/restart checks pass; hardware and multi-output acceptance remain open.'],
   ['Notifications, history, DND', 'Lucent', 'FreedesktopNotifications owns the D-Bus name. Native components render toasts and grouped durable history; versioned targets protect actions. JsonNotificationHistory owns private storage; notification shortcuts route here.'],
   ['Palette and shell appearance', 'Lucent tokens + selected palette', 'Named semantic sets or wallpaper-derived colors → components. DesktopSettings.palette persists the full role set.'],
   ['Application colors and mode', 'Lucent export → applications', 'ThemePort → LucentTheme → theme.py. Omarchy is a headless template exporter, never the theme authority.'],
@@ -25,7 +26,8 @@ const ownership = [
   ['Window corners and gaps', 'Lucent tokens → Hyprland', 'Generated user configuration supplies radius and spacing defaults. Fullscreen and explicit app rules can override them.'],
   ['Screenshot region selection', 'Installed capture tools', 'Existing bindings retain grim/slurp and capture commands. Lucent does not implement a replacement region picker.'],
   ['Updates, packages, storage', 'Arch / Omarchy backends', 'Existing administrative commands remain available. Replacing the shell does not replace the distribution.'],
-  ['Tray and optional stock plugins', 'Not implemented', 'There is no native StatusNotifier watcher or stock QML plugin host. Unsupported plugin IPC fails instead of starting another shell.'],
+  ['Application tray', 'Lucent native StatusNotifier/DBusMenu panel', 'TrayPort → StatusNotifier owns watcher registration, current item lifetimes and native application menus. The SDK child renders prepared icons and explicit actions; real application/VM acceptance remains deferred.'],
+  ['Optional stock plugins', 'Unsupported', 'There is no stock QML plugin host. Unsupported plugin IPC fails instead of starting another shell.'],
 ];
 ---
 <DocGuide chapter="system" title="Lucent and system ownership" heading="One visual shell." accent="Explicit system adapters." description="Lucent owns shell presentation and theme tokens. System services and selected Omarchy commands provide backend behavior." sections={sections} audience="Desktop integration guide">
@@ -46,7 +48,7 @@ Theme selection    → ThemePort → LucentTheme → app exports`} label="Active
   </section>
   <section id="ownership"><span class="eyebrow">02 / CURRENT RESPONSIBILITIES</span><h2>Rendering and behavior<br />have separate owners.</h2>
     <div class="table-scroll"><table><thead><tr><th>Capability</th><th>Owner</th><th>Implementation and limits</th></tr></thead><tbody>{ownership.map(([feature, owner, behavior]) => <tr><td>{feature}</td><td>{owner}</td><td>{behavior}</td></tr>)}</tbody></table></div>
-    <p>This is not a claim of full stock-plugin parity. Wi-Fi QR and custom stock plugins remain missing. Native tray hosting is implemented with VM/application acceptance pending; the complete native control center is still future work. Hardware-specific Wi-Fi, Bluetooth, battery, brightness, sleep and physical display behavior need hardware validation. A VM cannot establish those results.</p>
+    <p>Audio, Wi-Fi, Bluetooth, power and tray have native panels. Enterprise networking, Wi-Fi QR and custom stock plugins remain outside their current coverage. Real tray applications and hardware-specific radios, audio, battery, brightness, sleep and display behavior still need acceptance. The <a href={sourceUrl('reports/measurements/lucent-live-wallpaper-vm.json')}>live-wallpaper VM report</a> establishes single-output import, changing native pixels, pause/resume, input and restart on its recorded source; it does not establish multi-output, physical GPU or current resource/pacing results.</p>
   </section>
   <section id="theming"><span class="eyebrow">03 / ONE SOURCE OF TRUTH</span><h2>The direction is outward.</h2>
     <CodeBlock code={`design/tokens.json

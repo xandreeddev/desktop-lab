@@ -172,7 +172,15 @@ impl Tray {
                         .size(icon::CONTROL, icon::CONTROL),
                         text(title, theme).font(font::TITLE),
                     ])
-                    .gap(space::SM),
+                    .gap(space::SM)
+                    .align(Align::Center)
+                    .on_click(if self.active.is_none() {
+                        Message::Act(item.id, TrayAction::Activate { x: 0, y: 0 })
+                    } else {
+                        Message::Ignore
+                    })
+                    .id(format!("tray-item-open-{}", item.id.value()))
+                    .tab_stop(self.active.is_none()),
                     text(&item.tooltip, theme).font(font::CAPTION),
                 ];
                 if item.status == TrayStatus::NeedsAttention {
@@ -194,10 +202,18 @@ impl Tray {
             }
         }
         if self.active.is_some() {
-            rows.push(text("Waiting for the application…", theme));
+            rows.push(
+                theme
+                    .status_text("Waiting for the application…", false)
+                    .wrap(token::TITLE_LINES as usize),
+            );
         }
         if !self.error.is_empty() {
-            rows.push(text(&self.error, theme).color(theme.error));
+            rows.push(
+                theme
+                    .status_text(&self.error, true)
+                    .wrap(token::TITLE_LINES as usize),
+            );
         }
         rows
     }

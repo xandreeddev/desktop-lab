@@ -23,24 +23,40 @@ impl StopSignal for PlaybackStopAdapter {
 pub enum Message {
     Open,
     Close,
+    Ignore,
     EditPath(TextEdit),
-    Target(Option<MonitorId>),
-    Import,
-    ImportPath(Option<MonitorId>, String),
+    Target(LiveWallpaperTarget),
+    Import(LiveWallpaperTarget),
+    ImportPath(LiveWallpaperTarget, String),
     Prepared(u64, Result<(LiveWallpaperAsset, Arc<ImageData>)>),
     Wake(String, u64),
-    Pause(bool),
-    Off,
-    Rate(WallpaperFps),
+    Pause(LiveWallpaperTarget, bool),
+    PauseAll(bool),
+    Off(LiveWallpaperTarget),
+    Rate(LiveWallpaperTarget, WallpaperFps),
+    Inherit(MonitorId),
+    Retry(LiveWallpaperTarget),
+    RetrySave,
+    WorkerFailed(u64, String),
     Scroll(lucent_api::ScrollEvent),
     Frame(f64),
 }
 pub enum Intent {
-    Apply(Option<MonitorId>, LiveWallpaperSettings),
-    Pause(bool),
-    Off(Option<MonitorId>),
-    Rate(Option<MonitorId>, WallpaperFps),
-    FrameChanged(Vec<Option<MonitorId>>),
+    ImportStarted(LiveWallpaperTarget, u64),
+    Apply(LiveWallpaperTarget, LiveWallpaperSettings),
+    Pause(LiveWallpaperTarget, bool),
+    PauseAll(bool),
+    Off(LiveWallpaperTarget),
+    Rate(LiveWallpaperTarget, WallpaperFps),
+    Inherit(MonitorId),
+    RetrySave,
+    FrameChanged(Vec<LiveWallpaperTarget>),
+}
+#[derive(Clone, Copy)]
+pub struct SaveState<'a> {
+    pub status: crate::persistence::Status,
+    pub error: &'a str,
+    pub writable: bool,
 }
 enum Delivery {
     Frame(Arc<ImageData>),
@@ -77,13 +93,13 @@ struct Player {
 }
 struct Import {
     revision: u64,
-    target: Option<MonitorId>,
+    target: LiveWallpaperTarget,
 }
 pub struct LiveWallpaper {
     pub open: bool,
     pub path: String,
     pub field: TextFieldState,
-    pub target: Option<MonitorId>,
+    pub target: LiveWallpaperTarget,
     pub error: String,
     pub scroll: f32,
     pub mounted: bool,
@@ -91,7 +107,8 @@ pub struct LiveWallpaper {
     importing: Option<Import>,
     revision: u64,
     players: BTreeMap<String, Player>,
-    routes: BTreeMap<Option<MonitorId>, String>,
+    routes: BTreeMap<LiveWallpaperTarget, String>,
+    default_key: Option<String>,
     adapter: Arc<dyn WallpaperPlaybackPort>,
     assets: Arc<dyn AssetPort>,
     import_cancel: Cancellation,
@@ -103,7 +120,7 @@ impl LiveWallpaper {
             open: false,
             path: String::new(),
             field: TextFieldState::default(),
-            target: None,
+            target: LiveWallpaperTarget::Default,
             error: String::new(),
             scroll: 0.,
             mounted: false,
@@ -112,6 +129,7 @@ impl LiveWallpaper {
             revision: 0,
             players: BTreeMap::new(),
             routes: BTreeMap::new(),
+            default_key: None,
             adapter,
             assets,
             import_cancel: Cancellation::default(),
@@ -120,7 +138,11 @@ impl LiveWallpaper {
     }
     pub fn frame(&self, monitor: Option<&MonitorId>) -> Option<&Arc<ImageData>> {
         self.routes
-            .get(&monitor.cloned())
+            .get(
+                &monitor
+                    .cloned()
+                    .map_or(LiveWallpaperTarget::Default, LiveWallpaperTarget::Monitor),
+            )
             .and_then(|key| self.players.get(key))
             .and_then(|p| p.frame.as_ref())
     }
@@ -132,17 +154,19 @@ impl LiveWallpaper {
         suspended: bool,
     ) {
         let targets: Vec<_> = if monitors.is_empty() && !outputs_known {
-            vec![None]
+            vec![LiveWallpaperTarget::Default]
         } else {
-            monitors.iter().cloned().map(Some).collect()
+            monitors
+                .iter()
+                .cloned()
+                .map(LiveWallpaperTarget::Monitor)
+                .collect()
         };
         let mut wanted = BTreeMap::new();
         let mut routes = BTreeMap::new();
+        let mut seeds = BTreeMap::new();
         for target in targets {
-            let selected = target
-                .as_ref()
-                .and_then(|id| settings.monitors.get(id))
-                .or(settings.default.as_ref());
+            let selected = settings.selected(&target);
             if let Some(setting) = selected.filter(|s| s.enabled) {
                 let key = format!(
                     "{}:{}:{}",
@@ -150,6 +174,15 @@ impl LiveWallpaper {
                     setting.fps.value(),
                     setting.paused
                 );
+                if let Some(previous) = self
+                    .routes
+                    .get(&target)
+                    .and_then(|key| self.players.get(key))
+                    && previous.asset.path == setting.asset.path
+                    && let Some(frame) = &previous.frame
+                {
+                    seeds.entry(key.clone()).or_insert_with(|| frame.clone());
+                }
                 routes.insert(target, key.clone());
                 wanted.entry(key).or_insert((
                     setting.clone(),
@@ -157,6 +190,18 @@ impl LiveWallpaper {
                 ));
             }
         }
+        // A changed FPS/pause profile retires its producer identity, but keeps
+        // the same source's last immutable image while its replacement starts.
+        let last_frames: BTreeMap<_, _> = self
+            .players
+            .values()
+            .filter_map(|player| {
+                player
+                    .frame
+                    .as_ref()
+                    .map(|frame| (player.asset.path.clone(), frame.clone()))
+            })
+            .collect();
         self.players.retain(|key, _| wanted.contains_key(key));
         self.routes = routes;
         for (key, (setting, running)) in wanted.into_iter().take(4) {
@@ -170,7 +215,11 @@ impl LiveWallpaper {
                 }
             } else {
                 self.revision = self.revision.wrapping_add(1);
-                let frame = self.prepared.remove(&setting.asset.path);
+                let frame = seeds
+                    .get(&key)
+                    .cloned()
+                    .or_else(|| last_frames.get(&setting.asset.path).cloned())
+                    .or_else(|| self.prepared.get(&setting.asset.path).cloned());
                 self.players.insert(
                     key,
                     Player {
@@ -185,22 +234,58 @@ impl LiveWallpaper {
                 );
             }
         }
+        self.default_key = settings
+            .default
+            .as_ref()
+            .filter(|profile| profile.enabled)
+            .map(|profile| {
+                format!(
+                    "{}:{}:{}",
+                    profile.asset.path,
+                    profile.fps.value(),
+                    profile.paused
+                )
+            });
         self.prepared.clear();
     }
     pub fn subscriptions(&self) -> Vec<Subscription<Message>> {
         self.players
             .iter()
-            .filter(|(_, p)| p.running && p.error.is_empty())
+            .filter(|(_, p)| p.error.is_empty() && (p.running || p.frame.is_none()))
             .map(|(key, player)| {
                 let key = key.clone();
                 let revision = player.revision;
                 let mailbox = player.mailbox.clone();
                 let adapter = self.adapter.clone();
                 let asset = player.asset.clone();
+                let assets = self.assets.clone();
                 let fps = player.fps;
+                let running = player.running;
                 Subscription::stream(format!("live-wallpaper:{revision}"), move |out, cancel| {
                     let stream = ImageStream::new();
                     let stop = Arc::new(PlaybackStopAdapter(cancel));
+                    let publish = |delivery| {
+                        if stop.cancelled() {
+                            return;
+                        }
+                        let notify = mailbox
+                            .lock()
+                            .unwrap_or_else(|p| p.into_inner())
+                            .publish(delivery);
+                        if notify {
+                            out.send(Message::Wake(key.clone(), revision));
+                        }
+                    };
+                    if !running {
+                        // A restored paused profile still needs its own poster.
+                        // Delivery remains bounded and never carries pixels in
+                        // a runtime message. This finite worker retires on Wake.
+                        publish(match assets.background(&asset.poster.path, None) {
+                            Ok(image) => Delivery::Frame(image),
+                            Err(error) => Delivery::Error(error.to_string()),
+                        });
+                        return;
+                    }
                     adapter.play(
                         &asset,
                         PlaybackOptions { fps, looping: true },
@@ -218,13 +303,7 @@ impl LiveWallpaper {
                                 Ok(image) => Delivery::Frame(image),
                                 Err(error) => Delivery::Error(error.to_string()),
                             };
-                            let notify = mailbox
-                                .lock()
-                                .unwrap_or_else(|p| p.into_inner())
-                                .publish(delivery);
-                            if notify {
-                                out.send(Message::Wake(key.clone(), revision));
-                            }
+                            publish(delivery);
                             !stop.cancelled()
                         },
                         stop.clone(),
@@ -235,6 +314,7 @@ impl LiveWallpaper {
     }
     pub fn update(&mut self, message: Message, effects: &mut Effects<Message>) -> Option<Intent> {
         match message {
+            Message::Ignore => return None,
             Message::Open => {
                 self.open = true;
                 self.mounted = true;
@@ -267,8 +347,7 @@ impl LiveWallpaper {
                     lucent_design::motion::SPATIAL,
                 );
                 self.field.cancel();
-                self.import_cancel.cancel();
-                self.importing = None;
+                self.retire_import();
             }
             Message::EditPath(edit) => {
                 if let Err(error) = self.field.update(
@@ -282,12 +361,12 @@ impl LiveWallpaper {
                     self.error = error.to_string();
                 }
             }
-            Message::Target(target) => self.target = target,
-            Message::Import => {
-                return self.update(
-                    Message::ImportPath(self.target.clone(), self.path.clone()),
-                    effects,
-                );
+            Message::Target(target) => {
+                self.target = target;
+                self.error.clear();
+            }
+            Message::Import(target) => {
+                return self.update(Message::ImportPath(target, self.path.clone()), effects);
             }
             Message::ImportPath(target, path) => {
                 if self.importing.is_some() {
@@ -295,7 +374,10 @@ impl LiveWallpaper {
                 } else {
                     self.revision = self.revision.wrapping_add(1);
                     let revision = self.revision;
-                    self.importing = Some(Import { revision, target });
+                    self.importing = Some(Import {
+                        revision,
+                        target: target.clone(),
+                    });
                     self.error.clear();
                     self.import_cancel = Cancellation::default();
                     let adapter = self.adapter.clone();
@@ -324,6 +406,8 @@ impl LiveWallpaper {
                             )
                         },
                     );
+                    effects.redraw("live-wallpaper");
+                    return Some(Intent::ImportStarted(target, revision));
                 }
             }
             Message::Prepared(revision, result) => {
@@ -356,7 +440,6 @@ impl LiveWallpaper {
             Message::Wake(key, revision) => {
                 if let Some(player) = self.players.get_mut(&key)
                     && player.revision == revision
-                    && player.running
                 {
                     let item = player
                         .mailbox
@@ -379,12 +462,138 @@ impl LiveWallpaper {
                     }
                 }
             }
-            Message::Pause(value) => return Some(Intent::Pause(value)),
-            Message::Off => return Some(Intent::Off(self.target.clone())),
-            Message::Rate(rate) => return Some(Intent::Rate(self.target.clone(), rate)),
+            Message::Pause(target, value) => {
+                self.error.clear();
+                return Some(Intent::Pause(target, value));
+            }
+            Message::PauseAll(value) => {
+                self.error.clear();
+                return Some(Intent::PauseAll(value));
+            }
+            Message::Off(target) => {
+                self.cancel_import(&target);
+                self.error.clear();
+                return Some(Intent::Off(target));
+            }
+            Message::Rate(target, rate) => {
+                self.error.clear();
+                return Some(Intent::Rate(target, rate));
+            }
+            Message::Inherit(id) => {
+                self.cancel_import(&LiveWallpaperTarget::Monitor(id.clone()));
+                self.error.clear();
+                return Some(Intent::Inherit(id));
+            }
+            Message::Retry(target) => {
+                if let Some(key) = self.route_key(&target)
+                    && let Some(player) = self.players.get_mut(&key)
+                    && !player.error.is_empty()
+                {
+                    self.revision = self.revision.wrapping_add(1);
+                    player.revision = self.revision;
+                    player.error.clear();
+                    player.mailbox = Arc::new(Mutex::new(Mailbox::default()));
+                }
+                self.error.clear();
+            }
+            Message::RetrySave => return Some(Intent::RetrySave),
+            Message::WorkerFailed(revision, reason) => {
+                if let Some(player) = self
+                    .players
+                    .values_mut()
+                    .find(|player| player.revision == revision)
+                {
+                    player.error = reason;
+                }
+            }
         }
         effects.redraw("live-wallpaper");
         None
+    }
+    fn retire_import(&mut self) {
+        self.import_cancel.cancel();
+        self.importing = None;
+    }
+    pub fn cancel_import(&mut self, target: &LiveWallpaperTarget) {
+        if self
+            .importing
+            .as_ref()
+            .is_some_and(|job| &job.target == target)
+        {
+            self.retire_import();
+        }
+    }
+    pub fn importing_target(&self) -> Option<&LiveWallpaperTarget> {
+        self.importing.as_ref().map(|job| &job.target)
+    }
+    fn route_key(&self, target: &LiveWallpaperTarget) -> Option<String> {
+        match target {
+            LiveWallpaperTarget::Default => self.default_key.clone(),
+            LiveWallpaperTarget::Monitor(_) => self.routes.get(target).cloned(),
+        }
+    }
+    fn selected_player(
+        &self,
+        settings: &LiveWallpapers,
+        target: &LiveWallpaperTarget,
+    ) -> Option<&Player> {
+        if matches!(target, LiveWallpaperTarget::Monitor(_)) && !self.routes.contains_key(target) {
+            return None;
+        }
+        let selected = settings.selected(target)?;
+        let key = format!(
+            "{}:{}:{}",
+            selected.asset.path,
+            selected.fps.value(),
+            selected.paused
+        );
+        self.players.get(&key)
+    }
+    pub fn retry_available(&self, settings: &LiveWallpapers, target: &LiveWallpaperTarget) -> bool {
+        self.selected_player(settings, target)
+            .is_some_and(|player| !player.error.is_empty())
+    }
+    pub fn selected_status<'a>(
+        &'a self,
+        settings: &LiveWallpapers,
+        target: &LiveWallpaperTarget,
+    ) -> &'a str {
+        if self
+            .importing
+            .as_ref()
+            .is_some_and(|job| &job.target == target)
+        {
+            return "Importing and decoding…";
+        }
+        if &self.target == target && !self.error.is_empty() {
+            return &self.error;
+        }
+        let Some(selected) = settings.selected(target) else {
+            return "Choose a local MP4, WebM or GIF";
+        };
+        if !selected.enabled {
+            return "Using the static wallpaper";
+        }
+        if let Some(player) = self.selected_player(settings, target) {
+            if !player.error.is_empty() {
+                return &player.error;
+            }
+            if settings.paused {
+                return "All live wallpapers are paused";
+            }
+            if selected.paused {
+                return "Paused";
+            }
+            return if player.running {
+                "Playing"
+            } else {
+                "Suspended"
+            };
+        }
+        match target {
+            LiveWallpaperTarget::Default => "No connected output uses this profile",
+            LiveWallpaperTarget::Monitor(_) => "Monitor disconnected",
+        }
     }
     pub fn status(&self) -> &str {
         if self.importing.is_some() {
@@ -402,7 +611,12 @@ impl LiveWallpaper {
         }
     }
     pub fn inspect(&self) -> serde_json::Value {
-        serde_json::json!({"open":self.open,"importing":self.importing.is_some(),"players":self.players.len(),"running":self.players.values().filter(|p|p.running&&p.error.is_empty()).count(),"retained_frame_bytes":self.players.values().filter_map(|p|p.frame.as_ref()).map(|f|f.bytes()).sum::<usize>(),"error":self.status()})
+        let retained = crate::previews::usage(
+            self.players
+                .values()
+                .filter_map(|player| player.frame.as_ref()),
+        );
+        serde_json::json!({"open":self.open,"importing":self.importing.is_some(),"players":self.players.len(),"running":self.players.values().filter(|p|p.running&&p.error.is_empty()).count(),"retained_frame_bytes":retained.bytes,"error":self.status()})
     }
 }
 #[cfg(test)]
