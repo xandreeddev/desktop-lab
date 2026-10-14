@@ -50,6 +50,7 @@ mod clipboard;
 mod delivery;
 mod effects;
 mod ipc;
+mod outputs;
 mod profiling;
 mod subscriptions;
 
@@ -63,6 +64,7 @@ struct Native<M> {
     renderer: Renderer, // Drop before layer.
     role: SurfaceRole,
     spec: api::SurfaceSpec,
+    bound_output: Option<wl_output::WlOutput>,
     width: u32,
     height: u32,
     scale: u32,
@@ -99,6 +101,8 @@ struct State<A: Application> {
     registry: RegistryState,
     seats: SeatState,
     outputs: OutputState,
+    output_bindings: Vec<(api::DisplayOutput, wl_output::WlOutput)>,
+    closed_targets: BTreeMap<&'static str, (api::OutputName, wl_output::WlOutput)>,
     pointer: Option<wl_pointer::WlPointer>,
     keyboard: Option<wl_keyboard::WlKeyboard>,
     keyboard_seat: Option<wl_seat::WlSeat>,
@@ -215,6 +219,8 @@ fn run_inner<A: Application>(
         registry: RegistryState::new(&globals),
         seats: SeatState::new(&globals, &qh),
         outputs: OutputState::new(&globals, &qh),
+        output_bindings: vec![],
+        closed_targets: BTreeMap::new(),
         pointer: None,
         keyboard: None,
         keyboard_seat: None,
@@ -325,6 +331,7 @@ impl<A: Application> State<A> {
             }?;
             let spec = api::SurfaceSpec {
                 id: "lock",
+                output: None,
                 layer: api::Layer::Overlay,
                 anchor: api::Anchor::Fill,
                 margins: Default::default(),
@@ -342,6 +349,7 @@ impl<A: Application> State<A> {
                     renderer,
                     role: SurfaceRole::Lock(lock_surface, output),
                     spec,
+                    bound_output: None,
                     width: 1,
                     height: 1,
                     scale: 1,
@@ -375,7 +383,11 @@ impl<A: Application> State<A> {
             "one_color_buffer_per_surface_bytes": self.surfaces.values().map(|s| s.renderer.single_surface_buffer_bytes()).sum::<u64>(),
             "scope":"Prepared image payloads referenced by current scenes only; app caches excluded. GPU buffer values are requested payloads, not driver allocations. Actual surface buffer counts and total GPU memory are unknown."
         }));
-        serde_json::json!({"profile_memory":profile_memory,"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id,"redraw_group":s.spec.redraw_group,"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"buffer_width":s.width*s.scale,"buffer_height":s.height*s.scale,"frames":s.renderer.frames,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"frame_profiles":s.profiles.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)}).to_string()
+        let mut result = serde_json::json!({"profile_memory":profile_memory,"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id,"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"buffer_width":s.width*s.scale,"buffer_height":s.height*s.scale,"frames":s.renderer.frames,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"frame_profiles":s.profiles.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)});
+        result["outputs"]=serde_json::json!(self.output_bindings.iter().map(|(info,_)|serde_json::json!({"global":info.global,"name":info.name.as_ref().map(api::OutputName::as_str),"logical_size":info.logical_size,"integer_scale":info.integer_scale})).collect::<Vec<_>>());
+        result["closed_named_surfaces"] =
+            serde_json::json!(self.closed_targets.keys().collect::<Vec<_>>());
+        result.to_string()
     }
     fn message(&mut self, message: A::Message, qh: &QueueHandle<Self>) {
         self.messages([message], qh);
@@ -396,6 +408,49 @@ impl<A: Application> State<A> {
             self.message(message, qh);
         } else {
             self.error = Some(failure.to_string());
+            self.exit = true;
+        }
+    }
+    fn outputs_changed(&mut self, qh: &QueueHandle<Self>) {
+        let mut bindings: Vec<_> = self
+            .outputs
+            .outputs()
+            .filter_map(|output| {
+                let info = self.outputs.info(&output)?;
+                let logical_size = info.logical_size.and_then(|(width, height)| {
+                    let width = u32::try_from(width).ok()?;
+                    let height = u32::try_from(height).ok()?;
+                    (width > 0 && height > 0).then_some((width, height))
+                });
+                Some((
+                    api::DisplayOutput {
+                        global: info.id,
+                        name: info.name.and_then(|name| api::OutputName::new(name).ok()),
+                        logical_size,
+                        integer_scale: info.scale_factor.max(1) as u32,
+                    },
+                    output,
+                ))
+            })
+            .collect();
+        bindings.sort_by_key(|(info, _)| info.global);
+        if self.output_bindings == bindings {
+            return;
+        }
+        self.output_bindings = bindings;
+        let event = api::Event::OutputsChanged(
+            self.output_bindings
+                .iter()
+                .map(|(info, _)| info.clone())
+                .collect(),
+        );
+        if let Some(message) = self.app.event(event) {
+            self.message(message, qh);
+        }
+        if !self.exit
+            && let Err(error) = self.reconcile(qh)
+        {
+            self.error = Some(error.to_string());
             self.exit = true;
         }
     }
@@ -453,9 +508,43 @@ impl<A: Application> State<A> {
                     return Err(format!("Duplicate native surface ID: {}", spec.id).into());
                 }
             }
-            self.surfaces
-                .retain(|id, _| specs.iter().any(|s| s.id == *id && s.visible));
+            let removed: Vec<_> = self
+                .surfaces
+                .keys()
+                .filter(|id| !specs.iter().any(|spec| spec.id == **id && spec.visible))
+                .cloned()
+                .collect();
+            for id in removed {
+                self.retire_native(&id);
+            }
+            self.closed_targets.retain(|id, (name, output)| {
+                specs.iter().any(|spec| {
+                    spec.id == *id && spec.visible && spec.output.as_ref() == Some(name)
+                }) && self
+                    .output_bindings
+                    .iter()
+                    .any(|(info, current)| info.name.as_ref() == Some(name) && current == output)
+            });
             for spec in specs.into_iter().filter(|s| s.visible) {
+                let target = match outputs::resolve(
+                    spec.output.as_ref(),
+                    &self.output_bindings,
+                    self.closed_targets.get(spec.id),
+                ) {
+                    outputs::Target::Compositor => None,
+                    outputs::Target::Waiting => {
+                        self.retire_native(spec.id);
+                        continue;
+                    }
+                    outputs::Target::Named(output) => Some(output),
+                };
+                if self
+                    .surfaces
+                    .get(spec.id)
+                    .is_some_and(|native| native.bound_output != target)
+                {
+                    self.retire_native(spec.id);
+                }
                 if let Some(native) = self.surfaces.get_mut(spec.id) {
                     if native.spec != spec {
                         if let SurfaceRole::Layer(layer) = &native.role {
@@ -473,7 +562,7 @@ impl<A: Application> State<A> {
                     surface,
                     layer_kind(spec.layer),
                     Some(format!("{}-{}", self.app.name(), spec.id)),
-                    None,
+                    target.as_ref(),
                 );
                 configure_layer(&layer, &spec);
                 let region = Region::new(&self.compositor)?;
@@ -495,6 +584,7 @@ impl<A: Application> State<A> {
                         renderer,
                         role: SurfaceRole::Layer(layer),
                         spec,
+                        bound_output: target,
                         width: 1,
                         height: 1,
                         scale: 1,
@@ -513,6 +603,13 @@ impl<A: Application> State<A> {
             .reconcile(self.app.subscriptions(), &self.sender)
             .map_err(|failure| failure.to_string())?;
         Ok(())
+    }
+    fn retire_native(&mut self, id: &str) -> Option<Native<A::Message>> {
+        if self.keyboard_surface.as_deref() == Some(id) {
+            self.keyboard_surface = None;
+            self.input_serial = None;
+        }
+        self.surfaces.remove(id)
     }
     /// Some compositors update wl_output scale without repeating the preferred
     /// buffer-scale event on every existing layer surface. Track entered outputs
@@ -941,8 +1038,24 @@ impl<A: Application> CompositorHandler for State<A> {
     }
 }
 impl<A: Application> LayerShellHandler for State<A> {
-    fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &LayerSurface) {
-        self.exit = true;
+    fn closed(&mut self, _: &Connection, qh: &QueueHandle<Self>, layer: &LayerSurface) {
+        let Some(id) = self.id_for(layer.wl_surface()) else {
+            return;
+        };
+        let Some(native) = self.retire_native(&id) else {
+            return;
+        };
+        if let (Some(name), Some(output)) = (&native.spec.output, &native.bound_output) {
+            self.closed_targets
+                .insert(native.spec.id, (name.clone(), output.clone()));
+            drop(native); // GPU surface retires before its protocol role.
+            if let Err(error) = self.reconcile(qh) {
+                self.error = Some(error.to_string());
+                self.exit = true;
+            }
+        } else {
+            self.exit = true;
+        }
     }
     fn configure(
         &mut self,
@@ -980,18 +1093,31 @@ impl<A: Application> OutputHandler for State<A> {
             self.error = Some(e.to_string());
             self.exit = true;
         }
+        self.outputs_changed(qh);
     }
     fn update_output(&mut self, _: &Connection, qh: &QueueHandle<Self>, _: wl_output::WlOutput) {
         self.refresh_output_scales(qh);
+        self.outputs_changed(qh);
     }
     fn output_destroyed(
         &mut self,
         _: &Connection,
-        _: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         output: wl_output::WlOutput,
     ) {
-        self.surfaces
-            .retain(|_, s| !matches!(&s.role,SurfaceRole::Lock(_,o) if *o==output));
+        let removed: Vec<_> = self
+            .surfaces
+            .iter()
+            .filter(|(_, native)| {
+                matches!(&native.role,SurfaceRole::Lock(_,bound) if *bound==output)
+                    || native.bound_output.as_ref() == Some(&output)
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in removed {
+            self.retire_native(&id);
+        }
+        self.outputs_changed(qh);
     }
 }
 impl<A: Application> SeatHandler for State<A> {

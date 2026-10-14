@@ -1,5 +1,7 @@
 //! A small declarative shell API. Public types contain no Wayland or GPU handles.
 mod clipboard;
+mod output;
+pub use output::{DisplayOutput, OutputName};
 mod rich_text;
 pub use rich_text::TextSpan;
 mod input;
@@ -611,6 +613,9 @@ pub struct SurfaceMargins {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SurfaceSpec {
     pub id: &'static str,
+    /// None lets the compositor select an output. A named output must exist;
+    /// the runtime waits for it rather than silently changing the target.
+    pub output: Option<OutputName>,
     pub layer: Layer,
     pub anchor: Anchor,
     pub margins: SurfaceMargins,
@@ -714,6 +719,7 @@ impl Key {
 }
 #[derive(Clone, Debug)]
 pub enum Event {
+    OutputsChanged(Vec<DisplayOutput>),
     /// Pointer boundary for this native surface, independent of component hover.
     PointerInside {
         surface: &'static str,
@@ -1058,6 +1064,7 @@ mod tests {
     fn native_surface_requests_validate_anchor_dimensions_and_redraw_targets() {
         let mut spec = SurfaceSpec {
             id: "card",
+            output: None,
             layer: Layer::Bottom,
             anchor: Anchor::TopLeft,
             margins: SurfaceMargins {

@@ -42,12 +42,15 @@ impl Component for Counter {
 enum Message {
     Counter(CounterMessage),
     Level(SliderEvent),
+    Outputs(Vec<DisplayOutput>),
     Quit,
 }
 #[derive(Default)]
 struct Example {
     counter: Counter,
     level: f32,
+    output: Option<OutputName>,
+    outputs: Vec<DisplayOutput>,
 }
 impl Component for Example {
     type Message = Message;
@@ -56,6 +59,15 @@ impl Component for Example {
         theme.apply(
             Element::column(vec![
                 Element::text("Hello, native Wayland").font(font::TITLE),
+                Element::text(format!(
+                    "Output target: {} · {} available",
+                    self.output
+                        .as_ref()
+                        .map_or("compositor choice", OutputName::as_str),
+                    self.outputs.len()
+                ))
+                .font(font::CAPTION)
+                .wrap(2),
                 self.counter.view(cx).map(Message::Counter),
                 Element::text(format!("Demo level: {:.0}%", self.level * 100.)).font(font::BODY),
                 theme
@@ -86,6 +98,10 @@ impl Component for Example {
                 self.level = event.value;
                 effects.redraw("example");
             }
+            Message::Outputs(outputs) => {
+                self.outputs = outputs;
+                effects.redraw("example");
+            }
             Message::Quit => effects.quit(),
         }
     }
@@ -97,6 +113,7 @@ impl Application for Example {
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         vec![SurfaceSpec {
             id: "example",
+            output: self.output.clone(),
             layer: Layer::Overlay,
             anchor: Anchor::Center,
             margins: Default::default(),
@@ -109,6 +126,13 @@ impl Application for Example {
             pointer_input: lucent_api::PointerInput::Content,
         }]
     }
+    fn event(&self, event: Event) -> Option<Message> {
+        if let Event::OutputsChanged(outputs) = event {
+            Some(Message::Outputs(outputs))
+        } else {
+            None
+        }
+    }
     fn animating(&self, _: &str, now: f64) -> bool {
         self.counter.motion.is_some_and(|m| m.active(now))
     }
@@ -120,5 +144,23 @@ impl Application for Example {
     }
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    lucent_wayland::run(Example::default())
+    let mut app = Example::default();
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--help" => {
+                println!(
+                    "hello-layer [--output NAME]: a named target waits when disconnected; omitted target lets the compositor choose"
+                );
+                return Ok(());
+            }
+            "--output" => {
+                app.output = Some(OutputName::new(
+                    args.next().ok_or("--output requires a name")?,
+                )?)
+            }
+            _ => return Err("Unknown argument; use --help".into()),
+        }
+    }
+    lucent_wayland::run(app)
 }

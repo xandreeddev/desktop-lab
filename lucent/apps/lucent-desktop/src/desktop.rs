@@ -1103,6 +1103,7 @@ impl api::Application for Desktop {
         let mut surfaces = vec![
             SurfaceSpec {
                 id: "tray",
+                output: None,
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
                 margins: Default::default(),
@@ -1124,6 +1125,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "power",
+                output: None,
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
                 margins: Default::default(),
@@ -1145,6 +1147,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "bluetooth",
+                output: None,
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
                 margins: Default::default(),
@@ -1166,6 +1169,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "network",
+                output: None,
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
                 margins: Default::default(),
@@ -1187,6 +1191,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "audio",
+                output: None,
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
                 margins: Default::default(),
@@ -1208,6 +1213,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "osd",
+                output: None,
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
                 margins: Default::default(),
@@ -1221,6 +1227,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "background",
+                output: None,
                 layer: Layer::Background,
                 anchor: Anchor::Fill,
                 margins: Default::default(),
@@ -1234,6 +1241,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "notifications",
+                output: None,
                 layer: Layer::Overlay,
                 anchor: Anchor::Fill,
                 margins: Default::default(),
@@ -1247,6 +1255,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "bar",
+                output: None,
                 layer: Layer::Top,
                 anchor: Anchor::Top,
                 margins: Default::default(),
@@ -1260,6 +1269,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "widgets",
+                output: None,
                 layer: Layer::Bottom,
                 anchor: Anchor::Fill,
                 margins: Default::default(),
@@ -1273,6 +1283,7 @@ impl api::Application for Desktop {
             },
             SurfaceSpec {
                 id: "dock",
+                output: None,
                 layer: if self.launcher.open() {
                     Layer::Overlay
                 } else {
@@ -1307,6 +1318,7 @@ impl api::Application for Desktop {
                 .into_iter()
                 .map(|source| SurfaceSpec {
                     id: source.id,
+                    output: None,
                     layer: Layer::Bottom,
                     anchor: Anchor::TopLeft,
                     margins: SurfaceMargins {

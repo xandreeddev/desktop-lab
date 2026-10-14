@@ -47,6 +47,7 @@ impl Application for Example {
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         vec![SurfaceSpec {
             id: "rich-text",
+            output: None,
             layer: Layer::Top,
             anchor: Anchor::Top,
             margins: Default::default(),
