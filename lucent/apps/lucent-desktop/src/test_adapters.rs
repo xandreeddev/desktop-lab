@@ -132,8 +132,15 @@ pub fn with(fake: Arc<Fake>) -> DesktopAdapters {
         weather: fake.clone(),
         wallpaper: fake.clone(),
         session: fake.clone(),
-        notifications: fake,
+        notifications: fake.clone(),
+        uri: fake,
         assets: Arc::new(crate::platform::NativeAssets),
+    }
+}
+impl UriPort for Fake {
+    fn open(&self, _: &ExternalUri) -> Result<()> {
+        self.calls.lock().unwrap().push("uri");
+        Ok(())
     }
 }
 

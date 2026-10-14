@@ -2037,6 +2037,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rich-text"
+version = "0.1.0"
+dependencies = [
+ "lucent-api",
+ "lucent-design",
+ "lucent-wayland",
+]
+
+[[package]]
 name = "roxmltree"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

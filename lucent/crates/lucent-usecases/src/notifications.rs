@@ -1,5 +1,6 @@
 //! Pure bounded inbox and timeout policy; time is provided by the adapter.
 use lucent_domain::*;
+pub mod body;
 use std::collections::{BTreeMap, VecDeque};
 pub const ACTIVE_LIMIT: usize = 64;
 pub const HISTORY_LIMIT: usize = 100;

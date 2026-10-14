@@ -4,6 +4,7 @@ mod scroll;
 pub use scroll::{FocusClip, ScrollHit};
 #[cfg(test)]
 mod input_tests;
+mod rich_text;
 mod slider;
 mod text_input;
 pub use text_input::TextHit;
@@ -57,6 +58,8 @@ pub enum Paint {
 pub struct Hit<M> {
     pub id: String,
     pub rect: Rect,
+    /// Inline links share one focus target while keeping disjoint pointer areas.
+    pub parts: Option<Arc<[Rect]>>,
     pub clip: Clip,
     pub radius: f32,
     pub click: Option<M>,
@@ -78,7 +81,11 @@ pub struct Hit<M> {
 }
 impl<M> Hit<M> {
     pub fn contains(&self, x: f32, y: f32) -> bool {
-        self.clip.contains(x, y) && RoundedRect::new(self.rect, self.radius).contains(x, y)
+        self.clip.contains(x, y)
+            && self.parts.as_ref().map_or_else(
+                || RoundedRect::new(self.rect, self.radius).contains(x, y),
+                |parts| parts.iter().any(|rect| rect.contains(x, y)),
+            )
     }
 }
 pub struct Scene<M> {
@@ -223,6 +230,17 @@ impl Layout {
                     .height
                         * t.lines().count().max(1) as f32,
                 )
+            }
+            Kind::RichText(spans) => {
+                let flow = rich_text::flow(
+                    spans,
+                    &self.fonts,
+                    e.style.font_face,
+                    e.style.font_size,
+                    (available.0 - px).max(0.),
+                    e.style.max_lines.unwrap_or(usize::MAX),
+                );
+                (flow.width, flow.height)
             }
             Kind::Input { .. } | Kind::MaskedInput { .. } | Kind::TextInput { .. } => (
                 160.,
@@ -429,6 +447,7 @@ impl Layout {
             scene.hits.push(Hit {
                 id: id.clone(),
                 rect,
+                parts: None,
                 clip: clip.clone(),
                 radius: e.style.radius,
                 click: e.click.clone(),
@@ -474,6 +493,20 @@ impl Layout {
         let mut fg = e.style.foreground;
         fg.3 *= alpha;
         match &e.kind {
+            Kind::RichText(spans) => rich_text::paint(
+                scene,
+                e,
+                spans,
+                &self.fonts,
+                inner,
+                own_clip.intersect(rect),
+                alpha,
+                interaction,
+                now,
+                scrolls,
+                &child_focus_clips,
+                &id,
+            ),
             Kind::TextInput { .. } => text_input::paint(
                 scene,
                 e,
@@ -692,6 +725,10 @@ impl Layout {
         fn contains_focus<M>(e: &Element<M>, focus: &str, path: &str) -> bool {
             let id = if e.id.is_empty() { path } else { &e.id };
             id == focus
+                || (matches!(e.kind, Kind::RichText(_))
+                    && focus
+                        .strip_prefix(id)
+                        .is_some_and(|rest| rest.starts_with("/link/")))
                 || e.children
                     .iter()
                     .enumerate()
@@ -791,6 +828,16 @@ impl<M> Default for Interaction<M> {
 }
 impl<M: Clone> Interaction<M> {
     pub fn synchronize(&mut self, scene: &Scene<M>) {
+        if self.press.as_ref().is_some_and(|press| {
+            press.hit.parts.is_some()
+                && !scene.hits.iter().any(|hit| {
+                    hit.id == press.hit.id
+                        && hit.parts == press.hit.parts
+                        && hit.clip == press.hit.clip
+                })
+        }) {
+            self.press = None;
+        }
         if let Some(press) = &mut self.press
             && let Some(previous) = &press.hit.text
         {
@@ -1342,6 +1389,7 @@ mod tests {
         let h: Hit<()> = Hit {
             id: "a".into(),
             rect: Rect::new(0., 0., 100., 100.),
+            parts: None,
             clip: Rect::new(0., 0., 100., 100.).into(),
             radius: 20.,
             click: None,
@@ -1369,6 +1417,7 @@ mod tests {
         let hit = Hit {
             id: "input".into(),
             rect: Rect::new(0., 0., 100., 30.),
+            parts: None,
             clip: Rect::new(0., 0., 100., 30.).into(),
             radius: 0.,
             click: None,
@@ -1424,6 +1473,7 @@ mod tests {
         let h = Hit {
             id: "a".into(),
             rect: Rect::new(0., 0., 100., 100.),
+            parts: None,
             clip: Rect::new(0., 0., 100., 100.).into(),
             radius: 0.,
             click: Some(1),

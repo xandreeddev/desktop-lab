@@ -138,7 +138,8 @@
       "evidence": [
         "Source 2b8f17d43d1b018b3c88c8d1de9065036162e9b0 implements shared declarative caret/selection, grapheme/word editing, actual pointer/keyboard geometry and relative-message burst handling in launcher, menus and notes. Final strict checks pass: 331 Rust tests/51 ignored, 82 Python checks and 436 software-Vulkan comparisons, with only 20 reviewed new references. Both docs prefixes pass 13 pages/488 links and zero diagnostics. See reports/measurements/lucent-text-editing.json. Clipboard, shaping/bidi/fallback, IME, accessibility, remaining legacy fields and native acceptance are open.",
         "Source e1a3269ad924d7a5f7ac30fa69bdfa8dc8bf9197 adds opt-in native clipboard effects, bounded nonblocking transfer and current-field completion policy in launcher, menus and notes. Local strict checks pass 348 Rust/83 Python; real compositor/app acceptance is deferred. See reports/measurements/lucent-clipboard.json. Shaping, IME, accessibility and remaining legacy fields remain open.",
-        "Source f0ddae06fb0ced4c0888c01119eb74c99c4b5c3b migrates wallpaper search and hidden-network names to the shared declarative/clipboard API, removes the ordinary desktop legacy snapshot-input path and adds provider/form generation tests. 350 Rust/84 Python/436 unchanged software-Vulkan comparisons and both-prefix docs checks pass. See reports/measurements/lucent-text-clients.json; native interop, shaping, IME and accessibility remain open."
+        "Source f0ddae06fb0ced4c0888c01119eb74c99c4b5c3b migrates wallpaper search and hidden-network names to the shared declarative/clipboard API, removes the ordinary desktop legacy snapshot-input path and adds provider/form generation tests. 350 Rust/84 Python/436 unchanged software-Vulkan comparisons and both-prefix docs checks pass. See reports/measurements/lucent-text-clients.json; native interop, shaping, IME and accessibility remain open.",
+        "Inline rich-content source 861627d0709f9986343f7a246d5155f86bfd3ae1 adds a generic TextSpan/Element::rich_text control, shared baselines, wrapping, underlines and mapped opaque links with one keyboard target and disjoint native/pointer coverage. The pure notification parser, revision-keyed client and ExternalUri/UriPort/XdgUri adapters retain architecture boundaries; genuine pinned font faces preserve density and renderer ink overhang. 381 Rust tests/58 ignored, 85 Python checks, 11 owned native protocol cases and all 488 software-Vulkan comparisons pass. Twenty new references are reviewed with zero existing reference/tolerance changes. The independent example help, byte-for-byte font generation and both Astro prefixes pass. Notification images/other rich behavior, shaping/IME/accessibility and actual compositor/RSS/pacing acceptance remain open. See reports/measurements/lucent-rich-content.json."
       ]
     },
     {
@@ -296,7 +297,8 @@
         "Static follow-up found an unbounded adapter-local signal queue and no explicit idle connection-disconnect observation. Isolated D-Bus saturation/restart tests remain required; bounded inbox/history and runtime delivery do not prove these adapter properties.",
         "Private-bus tests reproduced queue saturation and missed idle disconnects. Adapter admission now bounds pending signals, preserves state on rejection and accounts for two-signal actions/expiration batches; connection teardown discards pending transport signals. Exclusive name ownership refuses replacement of either another server or this adapter. Four private-bus regressions and 170 Rust tests pass. Native replacement/action/dismiss/expiration, launcher/restart and existing secure lock checks pass; see reports/measurements/lucent-notification-delivery.json; persistent/rich/grouped notifications remain open.",
         "Source 76c90d422a8584c0b63528356d110c63a9b40d24 implements grouped durable private history through an injected history port, current-version actions, corruption preservation/recovery, transport retirement and native client scrolling/reveal. 365 Rust/85 Python/eight owned D-Bus protocol/460 software-Vulkan cases and both-prefix docs checks pass. See reports/measurements/lucent-notification-history.json. Slow filesystem publication, rich content and current native/performance acceptance remain open.",
-        "Source e3f030a205bf81b4de41dd9bc16ae9a1e74f9162 isolates history in one bounded ordered native worker with current completion IDs, coalescing, recovery retirement and file-instance leases. Actual private-bus tests require snapshots/actions/expiry/reconnect/name-release and recovery progress during stalled IO. 370 Rust/85 Python/11 protocol/468 software-Vulkan cases and both-prefix docs checks pass. See reports/measurements/lucent-notification-io.json. Rich content and current native/performance acceptance remain open."
+        "Source e3f030a205bf81b4de41dd9bc16ae9a1e74f9162 isolates history in one bounded ordered native worker with current completion IDs, coalescing, recovery retirement and file-instance leases. Actual private-bus tests require snapshots/actions/expiry/reconnect/name-release and recovery progress during stalled IO. 370 Rust/85 Python/11 protocol/468 software-Vulkan cases and both-prefix docs checks pass. See reports/measurements/lucent-notification-io.json. Rich content and current native/performance acceptance remain open.",
+        "Inline rich-content source 861627d0709f9986343f7a246d5155f86bfd3ae1 adds a generic TextSpan/Element::rich_text control, shared baselines, wrapping, underlines and mapped opaque links with one keyboard target and disjoint native/pointer coverage. The pure notification parser, revision-keyed client and ExternalUri/UriPort/XdgUri adapters retain architecture boundaries; genuine pinned font faces preserve density and renderer ink overhang. 381 Rust tests/58 ignored, 85 Python checks, 11 owned native protocol cases and all 488 software-Vulkan comparisons pass. Twenty new references are reviewed with zero existing reference/tolerance changes. The independent example help, byte-for-byte font generation and both Astro prefixes pass. Notification images/other rich behavior, shaping/IME/accessibility and actual compositor/RSS/pacing acceptance remain open. See reports/measurements/lucent-rich-content.json."
       ]
     },
     {
@@ -313,6 +315,9 @@
         "Controlled normalized slider API, pointer capture, keyboard adjustment, shared paint/hit geometry and semantic token recipe implemented with an independent hello-layer client example. Audio integration, general scrolling, popup/tooltip lifecycle and accessibility remain incomplete.",
         "176 Rust unit tests, 60 Python checks, focused Vulkan pixels at 1x/2x and existing software-Vulkan visual regressions pass. Independent native hello-layer checks pass for pointer capture, keyboard/focus, existing buttons, idle frame demand and shutdown on the 3 GiB/four-vCPU guest. See reports/measurements/lucent-framework-slider.json. All six exact-head CI checks pass for PR #27; review and merge remain pending. Native audio observation is implemented in PR #28; the audio panel remains separate.",
         "Controlled vertical scrolling now has topmost-hit ancestor routing, keyboard reveal, rounded clipping, capture invalidation and shared immutable ancestry. Independent token-based scroll-list client, 193 Rust tests, 60 Python checks, focused 1x/2x Vulkan pixels on software/hardware, unchanged desktop visual baselines and native wheel/drag/32-row keyboard/resize/shrink/hide/idle/close checks pass. See reports/measurements/lucent-framework-scroll.json. No virtualization, touch or complete audio-panel claim."
+      ],
+      "evidence": [
+        "Inline rich-content source 861627d0709f9986343f7a246d5155f86bfd3ae1 adds a generic TextSpan/Element::rich_text control, shared baselines, wrapping, underlines and mapped opaque links with one keyboard target and disjoint native/pointer coverage. The pure notification parser, revision-keyed client and ExternalUri/UriPort/XdgUri adapters retain architecture boundaries; genuine pinned font faces preserve density and renderer ink overhang. 381 Rust tests/58 ignored, 85 Python checks, 11 owned native protocol cases and all 488 software-Vulkan comparisons pass. Twenty new references are reviewed with zero existing reference/tolerance changes. The independent example help, byte-for-byte font generation and both Astro prefixes pass. Notification images/other rich behavior, shaping/IME/accessibility and actual compositor/RSS/pacing acceptance remain open. See reports/measurements/lucent-rich-content.json."
       ]
     },
     {
@@ -1310,6 +1315,29 @@
         "Kernel I/O cannot be forcibly cancelled; initial revision bootstrap may wait on an unavailable filesystem. There is no automatic shutdown flush guarantee; current Ready acknowledgements establish save completion.",
         "The full requirement ledger, including text shaping/IME/accessibility, outputs/fractional scaling, broader clients, secure audit and release acceptance.",
         "Final published-head CI and authorized merge."
+      ],
+      "delivery": {
+        "status": "merged",
+        "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/48",
+        "merge_commit": "32a9b8c2980626021ed946ece1e2a884285bc3ee"
+      }
+    },
+    {
+      "milestone": "native-inline-formatting-and-revision-checked-content-links",
+      "source_commit": "861627d0709f9986343f7a246d5155f86bfd3ae1",
+      "report": "reports/measurements/lucent-rich-content.json",
+      "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+      "checks": [
+        "381 Rust workspace tests/58 ignored, 85 Python checks, strict formatting/Clippy, 537 tokens/58 icons and ShellCheck pass.",
+        "Eleven owned private-bus cases verify advertised capabilities and native delivery/storage/reconnect; independent consumer help and byte-for-byte pinned font generation pass.",
+        "All 488 software-Vulkan comparisons pass; twenty reviewed new references with zero existing reference/tolerance changes. Both Astro prefixes pass 13 pages/488 links/assets and zero diagnostics.",
+        "Notification IO PR #48 merged after all six exact-head checks; main CI and Pages passed."
+      ],
+      "pending": [
+        "Notification images/icons, activation tokens, sound and richer interactions; images show alt text and body-images remains unadvertised.",
+        "Complex-script/bidi shaping, font fallback, IME, accessibility and the complete requirement ledger.",
+        "Actual VM/compositor/hardware restart, input, URI handler, filesystem and current RSS/pacing acceptance.",
+        "Final published-head CI and authorized normal merge."
       ]
     }
   ],

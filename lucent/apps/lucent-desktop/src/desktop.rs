@@ -99,7 +99,10 @@ impl Desktop {
             osd: Default::default(),
             bar_visible: true,
             theme_error: String::new(),
-            notifications: crate::notifications::Center::new(adapters.notifications.clone()),
+            notifications: crate::notifications::Center::new(
+                adapters.notifications.clone(),
+                adapters.uri.clone(),
+            ),
             widgets: widgets::Host::default(),
             apps: vec![],
             catalog: crate::catalog::Catalog::new(adapters.assets.clone()),
@@ -1090,6 +1093,9 @@ impl api::Application for Desktop {
         vec![
             include_bytes!("../assets/LucentSans.ttf"),
             include_bytes!("../assets/LucentDisplay.ttf"),
+            include_bytes!("../assets/LucentBold.ttf"),
+            include_bytes!("../assets/LucentItalic.ttf"),
+            include_bytes!("../assets/LucentBoldItalic.ttf"),
         ]
     }
     fn surfaces(&self) -> Vec<SurfaceSpec> {

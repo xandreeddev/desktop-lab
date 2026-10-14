@@ -348,6 +348,7 @@
   --component-input-padding-inline: var(--space-lg);
   --component-input-padding-block: var(--space-sm);
   --component-input-selection-opacity: var(--opacity-hover);
+  --component-input-underline-width: 1px;
   --component-switch-width: 32px;
   --component-switch-height: 18px;
   --component-switch-thumb: 14px;

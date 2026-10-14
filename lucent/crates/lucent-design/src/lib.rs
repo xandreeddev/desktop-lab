@@ -112,6 +112,7 @@ impl Theme {
             e.style.focus_width = component::focus::WIDTH;
             e.style.caret_width = component::input::CARET_WIDTH;
             e.style.text_selection_color = theme.primary.alpha(component::input::SELECTION_OPACITY);
+            e.style.text_underline_width = component::input::UNDERLINE_WIDTH;
             e.style.hover_color = theme.primary.alpha(opacity::HOVER);
             e.style.hover_transition = Transition {
                 duration: motion::HOVER,

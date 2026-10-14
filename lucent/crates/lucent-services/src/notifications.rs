@@ -202,7 +202,7 @@ fn bounded(text: &str, max: usize) -> String {
 #[zbus::interface(name = "org.freedesktop.Notifications")]
 impl Server {
     fn get_capabilities(&self) -> Vec<&str> {
-        vec!["body", "actions"]
+        vec!["body", "body-markup", "body-hyperlinks", "actions"]
     }
     fn get_server_information(&self) -> (&str, &str, &str, &str) {
         ("Lucent", "Lucent", env!("CARGO_PKG_VERSION"), "1.2")

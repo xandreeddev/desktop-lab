@@ -1,5 +1,7 @@
 //! A small declarative shell API. Public types contain no Wayland or GPU handles.
 mod clipboard;
+mod rich_text;
+pub use rich_text::TextSpan;
 mod input;
 mod text_edit;
 pub use clipboard::{
@@ -179,6 +181,7 @@ pub struct Style {
     pub tab_stop: bool,
     pub caret_width: f32,
     pub text_selection_color: Color,
+    pub text_underline_width: f32,
     pub slider: SliderStyle,
     pub scroll: ScrollStyle,
 }
@@ -213,6 +216,7 @@ impl Default for Style {
             tab_stop: true,
             caret_width: 1.,
             text_selection_color: Color::hex(0xffffff).alpha(0.25),
+            text_underline_width: 1.,
             slider: SliderStyle::default(),
             scroll: ScrollStyle::default(),
         }
@@ -225,6 +229,7 @@ pub enum Kind {
     Stack,
     Grid(usize),
     Text(String),
+    RichText(Vec<TextSpan>),
     Image(Arc<ImageData>),
     Input {
         value: String,
@@ -252,6 +257,7 @@ pub struct DragEvent {
 pub type InputCallback<M> = Arc<dyn Fn(String) -> M + Send + Sync>;
 pub type EditCallback<M> = Arc<dyn Fn(InputEdit) -> M + Send + Sync>;
 pub type TextEditCallback<M> = Arc<dyn Fn(TextEdit) -> M + Send + Sync>;
+pub type LinkCallback<M> = Arc<dyn Fn(&str) -> M + Send + Sync>;
 pub type ScrollCallback<M> = Arc<dyn Fn(ScrollEvent) -> M + Send + Sync>;
 pub type SliderCallback<M> = Arc<dyn Fn(SliderEvent) -> M + Send + Sync>;
 pub type DragCallback<M> = Arc<dyn Fn(DragEvent) -> M + Send + Sync>;
@@ -267,6 +273,7 @@ pub struct Element<M> {
     pub input: Option<InputCallback<M>>,
     pub edit: Option<EditCallback<M>>,
     pub text_edit: Option<TextEditCallback<M>>,
+    pub link: Option<LinkCallback<M>>,
     pub drag: Option<DragCallback<M>>,
     pub slider: Option<SliderCallback<M>>,
     pub scroll: Option<ScrollCallback<M>>,
@@ -285,6 +292,7 @@ impl<M> Element<M> {
             input: None,
             edit: None,
             text_edit: None,
+            link: None,
             drag: None,
             slider: None,
             scroll: None,
@@ -298,6 +306,13 @@ impl<M> Element<M> {
     }
     pub fn text(text: impl Into<String>) -> Self {
         Self::new(Kind::Text(text.into()))
+    }
+    pub fn rich_text(spans: Vec<TextSpan>) -> Self {
+        Self::new(Kind::RichText(spans))
+    }
+    pub fn on_link(mut self, callback: impl Fn(&str) -> M + Send + Sync + 'static) -> Self {
+        self.link = Some(Arc::new(callback));
+        self
     }
     pub fn image(image: Arc<ImageData>) -> Self {
         Self::new(Kind::Image(image))
@@ -1195,6 +1210,10 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
             let map = mapper.clone();
             Arc::new(move |event| map(callback(event))) as TextEditCallback<N>
         });
+        let link = self.link.map(|callback| {
+            let map = mapper.clone();
+            Arc::new(move |id: &str| map(callback(id))) as LinkCallback<N>
+        });
         let drag = self.drag.map(|drag| {
             let map = mapper.clone();
             Arc::new(move |event| map(drag(event))) as DragCallback<N>
@@ -1222,6 +1241,7 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
             input,
             edit,
             text_edit,
+            link,
             drag,
             slider,
             scroll,

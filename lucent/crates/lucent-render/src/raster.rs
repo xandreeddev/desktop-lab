@@ -50,7 +50,7 @@ pub fn text(
     size: f32,
     scale: u32,
     texture_limit: u32,
-) -> Result<(Vec<u8>, u32, u32), Error> {
+) -> Result<(Vec<u8>, u32, u32, f32), Error> {
     validate_request(text, size, scale)?;
     let density = scale as f32 * SUPERSAMPLE as f32;
     if font.horizontal_line_metrics(size).is_none() {
@@ -65,7 +65,28 @@ pub fn text(
     {
         return Err("invalid text layout metrics".into());
     }
-    let logical_w = (measured_width.ceil() + 2.).clamp(1., MAX_WIDTH as f32);
+    // A glyph's ink can overhang its advance, especially in italic faces.
+    // Keep layout advances unchanged and return the mask origin separately.
+    let mut left_edge = 0f32;
+    let mut right_edge = measured_width * density;
+    for line in text.lines() {
+        for (c, x) in glyph_positions(font, line, size) {
+            if x * density >= MAX_WIDTH as f32 * density {
+                break;
+            }
+            let glyph = font.metrics(c, size * density);
+            validate_glyph(&glyph)?;
+            let left = (x * density).round() + glyph.xmin as f32;
+            left_edge = left_edge.min(left);
+            right_edge = right_edge.max(left + glyph.width as f32);
+        }
+    }
+    let left_padding = (-left_edge / SUPERSAMPLE as f32).ceil() * SUPERSAMPLE as f32;
+    let logical_w = ((right_edge + left_padding) / density)
+        .ceil()
+        .max(measured_width.ceil())
+        + 2.;
+    let logical_w = logical_w.clamp(1., MAX_WIDTH as f32);
     let logical_h = (metrics.height * text.lines().count().max(1) as f32)
         .ceil()
         .clamp(1., MAX_HEIGHT as f32);
@@ -89,7 +110,7 @@ pub fn text(
             }
             let glyph = font.metrics(c, size * density);
             validate_glyph(&glyph)?;
-            let left = f64::from((x * density).round()) + f64::from(glyph.xmin);
+            let left = f64::from((x * density).round() + left_padding) + f64::from(glyph.xmin);
             let top = f64::from(
                 ((line_index as f32 * metrics.height + metrics.baseline) * density).round(),
             ) - glyph.height as f64
@@ -129,12 +150,39 @@ pub fn text(
             }
         }
     }
-    Ok(lucent_api::reduce_alpha(&pixels, w, h)?)
+    let (pixels, width, height) = lucent_api::reduce_alpha(&pixels, w, h)?;
+    Ok((pixels, width, height, -left_padding / density))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn italic_ink_overhang_is_inside_the_mask_without_changing_advance() {
+        let font = fontdue::Font::from_bytes(
+            include_bytes!("../../../apps/lucent-desktop/assets/LucentItalic.ttf") as &[u8],
+            Default::default(),
+        )
+        .unwrap();
+        for scale in [1, 2] {
+            let value = "fj";
+            let size = 32.;
+            let (pixels, w, h, origin) = text(&font, value, size, scale, 8192).unwrap();
+            let density = scale as f32 * SUPERSAMPLE as f32;
+            let right = glyph_positions(&font, value, size)
+                .map(|(c, x)| {
+                    let glyph = font.metrics(c, size * density);
+                    (x * density).round() + glyph.xmin as f32 + glyph.width as f32
+                })
+                .fold(0., f32::max)
+                / density;
+            assert!(w as f32 / scale as f32 + origin > right);
+            assert!(origin <= 0.);
+            assert_eq!(origin * scale as f32, (origin * scale as f32).round());
+            assert!(pixels.iter().any(|&coverage| coverage > 0));
+            assert_eq!(pixels.len(), (w * h) as usize);
+        }
+    }
     #[test]
     fn mip_reduction_preserves_alpha_and_odd_edges() {
         let pixels = [255, 0, 0];
@@ -149,9 +197,10 @@ mod tests {
             fontdue::FontSettings::default(),
         )
         .unwrap();
-        let (a, w, h) = text(&font, "AV — Lucent", 14., 1, 8192).unwrap();
-        let (b, w2, h2) = text(&font, "AV — Lucent", 14., 2, 8192).unwrap();
+        let (a, w, h, x) = text(&font, "AV — Lucent", 14., 1, 8192).unwrap();
+        let (b, w2, h2, x2) = text(&font, "AV — Lucent", 14., 2, 8192).unwrap();
         assert_eq!((w2, h2), (w * 2, h * 2));
+        assert_eq!(x, x2);
         let coverage = |pixels: &[u8]| pixels.iter().map(|p| f64::from(*p) / 255.).sum::<f64>();
         let ratio = coverage(&b) / (coverage(&a) * 4.);
         assert!((0.9..1.1).contains(&ratio), "coverage ratio {ratio}");

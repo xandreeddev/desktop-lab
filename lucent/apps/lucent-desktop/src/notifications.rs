@@ -6,6 +6,7 @@ mod view;
 use lucent_api::*;
 use lucent_design::{Theme, motion};
 use lucent_domain::{Notification, NotificationPort, NotificationSnapshot, NotificationTarget};
+use lucent_usecases::notifications::body::{BodyBlock, NotificationBody, notification_body};
 use std::sync::Arc;
 #[derive(Clone)]
 pub enum Message {
@@ -20,6 +21,7 @@ pub enum Message {
     Dismiss(NotificationTarget),
     DismissId(u32),
     Invoke(NotificationTarget, String),
+    OpenLink(NotificationTarget, String),
     Dnd,
     Page(i32),
     ActionPage(NotificationTarget, i32),
@@ -41,9 +43,11 @@ pub struct Center {
     action_pages: std::collections::BTreeMap<NotificationTarget, usize>,
     error: bool,
     adapter: Arc<dyn NotificationPort>,
+    uri: Arc<dyn lucent_domain::UriPort>,
+    bodies: std::collections::BTreeMap<NotificationTarget, NotificationBody>,
 }
 impl Center {
-    pub fn new(adapter: Arc<dyn NotificationPort>) -> Self {
+    pub fn new(adapter: Arc<dyn NotificationPort>, uri: Arc<dyn lucent_domain::UriPort>) -> Self {
         Self {
             snapshot: NotificationSnapshot::default(),
             ready: false,
@@ -56,6 +60,8 @@ impl Center {
             action_pages: Default::default(),
             error: false,
             adapter,
+            uri,
+            bodies: Default::default(),
         }
     }
     pub fn history_open(&self) -> bool {
@@ -100,6 +106,20 @@ impl Component for Center {
         let adapter = self.adapter.clone();
         match message {
             Message::Snapshot(Ok(value)) => {
+                self.bodies.retain(|target, _| {
+                    value
+                        .active
+                        .iter()
+                        .chain(&value.history)
+                        .any(|note| note.target() == Some(*target))
+                });
+                for note in value.active.iter().chain(&value.history) {
+                    if let Some(target) = note.target() {
+                        self.bodies
+                            .entry(target)
+                            .or_insert_with(|| notification_body(&note.body));
+                    }
+                }
                 self.action_pages
                     .retain(|target, _| value.active.iter().any(|n| n.target() == Some(*target)));
                 self.snapshot = value;
@@ -228,6 +248,34 @@ impl Component for Center {
                         |_| {
                             Message::Done(Err(lucent_domain::DomainError::Failed(
                                 "Notification action failed".into(),
+                            )))
+                        },
+                    );
+                } else {
+                    self.error = true;
+                }
+            }
+            Message::OpenLink(target, key) => {
+                let selected = self.bodies.get(&target).and_then(|body| {
+                    body.blocks.iter().find_map(|block| match block {
+                        BodyBlock::Text(spans) => spans
+                            .iter()
+                            .filter_map(|span| span.style.link.as_ref())
+                            .find(|link| link.value() == key)
+                            .cloned(),
+                        BodyBlock::Image { .. } => None,
+                    })
+                });
+                // A history link opens its content URI; it never invokes the old
+                // sender. A replacement or clear retires that exact version.
+                if let Some(selected) = selected {
+                    let uri = self.uri.clone();
+                    e.task_on_with_failure(
+                        crate::work::CONTROLS,
+                        move || Message::Done(uri.open(&selected)),
+                        |_| {
+                            Message::Done(Err(lucent_domain::DomainError::Failed(
+                                "Link could not be opened".into(),
                             )))
                         },
                     );

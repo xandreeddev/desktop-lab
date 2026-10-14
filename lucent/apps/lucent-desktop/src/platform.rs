@@ -28,6 +28,7 @@ pub fn desktop_adapters() -> DesktopAdapters {
         wallpaper: Arc::new(LucentWallpaper),
         session: Arc::new(LucentSession),
         assets: Arc::new(NativeAssets),
+        uri: Arc::new(lucent_services::applications::XdgUri),
         notifications: Arc::new(
             lucent_services::notifications::FreedesktopNotifications::with_history(Some(Arc::new(
                 lucent_services::notifications::JsonNotificationHistory::default(),
