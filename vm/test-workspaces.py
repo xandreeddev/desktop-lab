@@ -18,8 +18,26 @@ def main():
     assert original > 0, 'This test requires a standard workspace'
 
     def state_matches():
-        reported = {w['id'] for w in inspect()['client']['workspaces']}
-        actual = {w['id'] for w in json.loads(session('hyprctl', '-j', 'workspaces'))}
+        def native_identity(value):
+            address = value.get('address')
+            if address:
+                if address == 'special': return ('special', '')
+                if address.startswith('special:'): return ('special', address[8:])
+                if address.startswith('name:'): return ('named', address[5:])
+                if address.isdecimal(): return ('numbered', int(address))
+                return ('named', address)
+            identifier = value.get('id')
+            if isinstance(identifier, int) and identifier > 0: return ('numbered', identifier)
+            name = value.get('name', '')
+            if name == 'special': return ('special', '')
+            if name.startswith('special:'): return ('special', name[8:])
+            if name: return ('named', name)
+            return None
+        reported = {('special' if w['special'] else 'named', w['name'])
+                    if w['id'] is None else ('numbered', w['id'])
+                    for w in inspect()['client']['workspaces']}
+        actual = {native_identity(w) for w in json.loads(session('hyprctl', '-j', 'workspaces'))}
+        actual.discard(None)
         return reported == actual
 
     try:

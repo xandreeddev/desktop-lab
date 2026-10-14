@@ -114,3 +114,60 @@ fn watch_subscribes_before_snapshot_and_preserves_focus_event_split_across_timeo
         "DP-2"
     );
 }
+
+#[test]
+fn workspace_actions_use_owned_native_connection_and_invalid_kinds_send_nothing() {
+    let directory = Directory(
+        std::env::temp_dir().join(format!("lucent-compositor-actions-{}", std::process::id())),
+    );
+    std::fs::create_dir(&directory.0).unwrap();
+    let listener = UnixListener::bind(directory.0.join(".socket.sock")).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let adapter = Hyprland {
+        base: directory.0.clone(),
+    };
+    assert!(
+        adapter
+            .workspace(WorkspaceCommand::Select(
+                WorkspaceRef::special("notes").unwrap()
+            ))
+            .is_err()
+    );
+    assert!(
+        matches!(listener.accept(), Err(error) if error.kind() == std::io::ErrorKind::WouldBlock)
+    );
+    let server = thread::spawn(move || {
+        let mut requests = vec![];
+        for response in ["ok", "ok", "private native rejection"] {
+            let mut peer = accept(&listener);
+            peer.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+            let mut buffer = [0; 4096];
+            let n = peer.read(&mut buffer).unwrap();
+            requests.push(String::from_utf8(buffer[..n].to_vec()).unwrap());
+            peer.write_all(response.as_bytes()).unwrap();
+        }
+        requests
+    });
+    adapter
+        .workspace(WorkspaceCommand::Select(
+            WorkspaceRef::named("Writing room").unwrap(),
+        ))
+        .unwrap();
+    adapter
+        .workspace(WorkspaceCommand::ToggleSpecial(
+            WorkspaceRef::special("notes").unwrap(),
+        ))
+        .unwrap();
+    let error = adapter
+        .workspace(WorkspaceCommand::Select(WorkspaceRef::numbered(9).unwrap()))
+        .unwrap_err();
+    assert_eq!(error.to_string(), "Hyprland rejected the workspace action");
+    assert_eq!(
+        server.join().unwrap(),
+        [
+            r#"dispatch hl.dsp.focus({ workspace = "name:Writing room" })"#,
+            r#"dispatch hl.dsp.workspace.toggle_special("notes")"#,
+            r#"dispatch hl.dsp.focus({ workspace = "9" })"#,
+        ]
+    );
+}

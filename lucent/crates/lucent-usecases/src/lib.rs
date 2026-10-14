@@ -274,12 +274,12 @@ mod tests {
                     address: "0x1".into(),
                     app_class: "foot".into(),
                     title: String::new(),
-                    workspace: 1,
+                    workspace: Some(WorkspaceRef::numbered(1).unwrap()),
                     focused: false,
                 }],
             })
         }
-        fn switch_workspace(&self, _: i32) -> Result<()> {
+        fn workspace(&self, _: WorkspaceCommand) -> Result<()> {
             Ok(())
         }
         fn focus_window(&self, _: &str) -> Result<()> {

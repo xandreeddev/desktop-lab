@@ -1355,6 +1355,8 @@ fn visual_regressions() {
             ("monitor-selector-right", Mode::Widgets, 0, 0, "", 1., 960.),
             ("monitor-bar-left", Mode::Apps, 0, 0, "", 1., 960.),
             ("monitor-bar-right", Mode::Apps, 0, 0, "", 1., 960.),
+            ("monitor-bar-named-right", Mode::Apps, 0, 0, "", 1., 960.),
+            ("monitor-bar-special-right", Mode::Apps, 0, 0, "", 1., 960.),
             ("text-caret-middle", Mode::Apps, 0, 0, "", 1., 640.),
             ("text-selection-forward", Mode::Apps, 0, 0, "", 1., 640.),
             ("text-selection-reverse", Mode::Apps, 0, 0, "", 1., 640.),
@@ -2495,7 +2497,7 @@ fn visual_regressions() {
                     app.compositor = lucent_domain::CompositorSnapshot {
                         workspaces: (1..=9)
                             .map(|id| lucent_domain::Workspace {
-                                id,
+                                id: lucent_domain::WorkspaceRef::numbered(id).unwrap(),
                                 name: id.to_string(),
                                 windows: usize::from(id == 2 || id == 9),
                                 active: id == 9,
@@ -2521,6 +2523,28 @@ fn visual_regressions() {
                             },
                         ],
                     };
+                }
+                if name == "monitor-bar-named-right" || name == "monitor-bar-special-right" {
+                    let writing = lucent_domain::WorkspaceRef::named("Writing room").unwrap();
+                    let notes = lucent_domain::WorkspaceRef::special("notes").unwrap();
+                    app.compositor.workspaces.extend([
+                        lucent_domain::Workspace {
+                            id: writing.clone(),
+                            name: "Displayed title".into(),
+                            windows: 1,
+                            active: false,
+                        },
+                        lucent_domain::Workspace {
+                            id: notes.clone(),
+                            name: "Notes".into(),
+                            windows: 1,
+                            active: false,
+                        },
+                    ]);
+                    app.compositor.monitors[1].active_workspace = Some(writing);
+                    if name == "monitor-bar-special-right" {
+                        app.compositor.monitors[1].special_workspace = Some(notes);
+                    }
                 }
                 let selected = if name.ends_with("left") { left } else { right };
                 app.update(
@@ -2586,7 +2610,7 @@ fn visual_regressions() {
                 app.audio.observe(Ok(crate::audio::fixture()));
                 app.compositor.workspaces = (1..=8)
                     .map(|id| lucent_domain::Workspace {
-                        id,
+                        id: lucent_domain::WorkspaceRef::numbered(id).unwrap(),
                         name: id.to_string(),
                         windows: 0,
                         active: id == 8,
@@ -2947,7 +2971,7 @@ fn bar_capsules_share_grid_do_not_overlap_and_keep_active_workspace_visible() {
         for count in 1..=8 {
             app.compositor.workspaces = (1..=count)
                 .map(|id| lucent_domain::Workspace {
-                    id,
+                    id: lucent_domain::WorkspaceRef::numbered(id).unwrap(),
                     name: id.to_string(),
                     windows: 0,
                     active: id == count,
@@ -4200,4 +4224,27 @@ fn notes_cursor_changes_request_paint_without_persisting_and_grapheme_edits_save
     // The first save is active; this edit is the persistence coordinator's latest
     // pending aggregate, not an independent settings-queue producer.
     assert!(app.persistence.status(true).name().contains("saving"));
+}
+
+#[test]
+fn workspace_cli_maps_pure_identities_without_changing_observed_active_state() {
+    let app = Desktop::new(crate::test_adapters::adapters());
+    assert!(
+        matches!(app.command("workspace select 9").unwrap().unwrap(), Message::Workspace(lucent_domain::WorkspaceCommand::Select(id)) if id.number() == Some(9))
+    );
+    assert!(
+        matches!(app.command("workspace select name:Writing room").unwrap().unwrap(), Message::Workspace(lucent_domain::WorkspaceCommand::Select(id)) if id.name() == Some("Writing room") && !id.is_special())
+    );
+    assert!(
+        matches!(app.command("workspace toggle-special default").unwrap().unwrap(), Message::Workspace(lucent_domain::WorkspaceCommand::ToggleSpecial(id)) if id.name() == Some("") && id.is_special())
+    );
+    for command in [
+        "workspace select 0",
+        "workspace select -99",
+        "workspace select name:",
+        "workspace toggle-special bad\nname",
+    ] {
+        assert!(app.command(command).is_err());
+    }
+    assert!(app.compositor.workspaces.is_empty());
 }

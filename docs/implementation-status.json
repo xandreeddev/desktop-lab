@@ -201,7 +201,8 @@
         "Launcher private state, messages, event routing, selector views and panel motion extracted into a child controller; borrowed inputs and typed intents preserve adapter/use-case ownership",
         "126 Rust tests and 53 Python checks pass, including child behavior, exact motion restart and child/root import guard; 148 existing Vulkan comparisons pass without baseline changes",
         "Native keyboard, custom size/presets/restart, live wallpaper providers, palette selection, application survival and secure lock/unlock passed; original preferences/wallpaper restored. Widget coordination extraction remains open.",
-        "Widget drag/calendar/timer state moved into a private child host with borrowed input and typed parent intents. One catalog supplies selector entries, IPC validation, geometry and compiled views. Child behavior, boundaries, unchanged Vulkan visuals and native input/persistence checks passed."
+        "Widget drag/calendar/timer state moved into a private child host with borrowed input and typed parent intents. One catalog supplies selector entries, IPC validation, geometry and compiled views. Child behavior, boundaries, unchanged Vulkan visuals and native input/persistence checks passed.",
+        "Workspace/window/monitor records now share validated numbered/named/special identities. Typed commands separate regular selection from overlay toggling; domain has no native selector syntax and native encoding stays in the adapter. See the compositor-focus guide and workspace identity measurement report."
       ]
     },
     {
@@ -1487,7 +1488,12 @@
         "Complete named/special workspace identity/action migration of legacy workspace/window records; output arrangement and per-output wallpaper policy.",
         "XDG/D-Bus activation, shaping/bidi/font fallback/IME/accessibility and the full client/release ledger.",
         "Current RSS/frame pacing and final exact-head CI/authorized merge."
-      ]
+      ],
+      "delivery": {
+        "status": "merged",
+        "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/55",
+        "merge_commit": "749f7cae98854726ba428dab96f93351fbb46092"
+      }
     }
   ],
   "performance_targets": {

@@ -208,7 +208,7 @@ mod tests {
         app.update(Message::SelectMonitor(id("DP-1")), &mut Effects::default());
         let mut unchanged = focus("DP-2");
         unchanged.workspaces.push(lucent_domain::Workspace {
-            id: 9,
+            id: lucent_domain::WorkspaceRef::numbered(9).unwrap(),
             name: "Title changed".into(),
             windows: 1,
             active: true,
