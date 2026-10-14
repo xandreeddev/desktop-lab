@@ -1,0 +1,73 @@
+{
+  "status": "implementation_and_local_checks_passed_graphical_acceptance_deferred",
+  "source_commit": "e05576c24fbafd82cc4f5c89dcebd49472fbda4b",
+  "local_checks": {
+    "workspace_passed": 452,
+    "workspace_ignored": 61,
+    "python_passed": 93,
+    "fmt_clippy_workspace_all_targets": true,
+    "software_vulkan_visual_comparisons_passed": 560,
+    "reviewed_new_references": 12,
+    "reviewed_existing_commands_references_changed": 4,
+    "unrelated_references_or_tolerances_changed": 0,
+    "software_vulkan_stream_texture_reuse_and_actual_pixels_passed": true,
+    "native_mp4_webm_gif_decode_fixture_passed": true,
+    "native_loop_cancel_import_cleanup_foreign_asset_rejection_passed": true,
+    "private_dbus_activation_success_missing_denial_uncertain_timeout_passed": true,
+    "design_tokens_verified": 544,
+    "app_icons_verified": 58,
+    "shellcheck_passed": true,
+    "astro_errors": 0,
+    "astro_warnings": 0,
+    "astro_hints": 0,
+    "pages_each_prefix": 13,
+    "links_assets_each_prefix": 488
+  },
+  "implemented": [
+    "Pure live wallpaper preferences, validated FPS/RGBA values, injected playback port and settings admission preserve domain boundaries.",
+    "Native FFmpeg library decoding imports immutable owned media, validates actual frames and creates a still poster before preference admission; original sources remain preserved.",
+    "Timestamp/FPS paced cancellable producers share identical profiles, suspend for observed sleep and acquire no decoder for disconnected outputs.",
+    "The native token-driven panel provides import/default/per-output/FPS/pause/static controls with controlled text editing, scrolling and frame-paced entry/exit motion.",
+    "Latest-frame mailboxes, generation-bound wake delivery and exact current surface addresses avoid queued full frames and unrelated background redraws.",
+    "Generic ImageStream reuses matching GPU textures with queue.write_texture, omits per-frame mip generation and replaces resources on extent changes.",
+    "Subscription mapping adds no worker; cancellable operation-owned failure mapping retires rejected imports. Settled FrameSubmitted bookkeeping requests no paint.",
+    "Standard ApplicationLaunch behavior retains service-only entries, validates native endpoints and activates through D-Bus with a bounded deadline and no duplicate fallback after uncertain outcomes.",
+    "Packaging/CI dependencies and library/domain/desktop/architecture guides and repository skills describe the actual path."
+  ],
+  "native_acceptance": {
+    "current_source_deployed_to_vm": false,
+    "actual_graphical_playback_input_multi_output_sleep_reconnect_secure_poster_tested": false,
+    "deferred_by_user": true,
+    "scope": "Owned synthetic media, private D-Bus calls and software Vulkan pixels prove those paths; they do not prove current compositor, VM or physical-device acceptance."
+  },
+  "performance": {
+    "normal_desktop_rss_target_mib": 300,
+    "current_rss_frame_pacing_or_power_measured": false,
+    "decode_backend": "CPU FFmpeg libraries through Rust bindings; one codec thread",
+    "presentation_backend": "Existing wgpu/Vulkan renderer",
+    "external_player_or_browser_required": false,
+    "continuous_idle_surface_repainting_added": false,
+    "limits_are_total_memory_guarantees": false
+  },
+  "remaining": [
+    "Current guest deployment and actual native playback/input/output/clipboard, sleep/reconnect and secure poster exports.",
+    "Physical GPU pacing, current RSS/startup/idle/interaction and power measurements; hardware decoding.",
+    "Wallpaper Engine Scene/Web compatibility, automatic lock/fullscreen/battery policy and automatic unused-import cleanup.",
+    "Application Open/desktop actions/fresh activation tokens, broader entry compatibility and current dock-autohide acceptance.",
+    "Shaping/bidi/font fallback/IME, richer widgets, tooltips/popup lifecycle, network secret-agent support and remaining physical/secure-session checks.",
+    "Final exact-head CI, authorized merge and the full requirement/release completion audit."
+  ],
+  "deferred_scope": {
+    "accessibility_semantics_and_platform_bridge": "deferred_by_user"
+  },
+  "prior_delivery": {
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/56",
+    "merge_commit": "cbb754be1a4c92ac81372237d26f9718935cd234",
+    "all_six_exact_head_checks_passed": true,
+    "main_checks_and_pages_passed": true
+  },
+  "privacy": {
+    "private_paths_media_metadata_credentials_or_captures_published": false,
+    "visual_references_use_only_synthetic_fixtures": true
+  }
+}

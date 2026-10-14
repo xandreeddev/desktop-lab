@@ -273,7 +273,8 @@
         "Autohide and interaction coverage"
       ],
       "evidence": [
-        "Catalog observation, last-good data, selection identity, bounded icon preparation, saved pin/order policy, transient native drag previews and auto-hide are implemented at 2f5c9dcbee0eecd773d829c83ee65eab694c071b. Final strict workspace checks pass: 307 Rust/51 ignored, four owned catalog cases including two kernel protocol cases, 81 Python checks and an isolated independent consumer. The full 396 software-Vulkan comparisons pass, followed by four reviewed corrected no-match references. Both Astro prefixes pass 13 pages/488 links with zero diagnostics. See reports/measurements/lucent-application-catalog.json. VM/hardware acceptance is deferred; D-Bus activation, broader desktop-entry support and measured pacing remain open."
+        "Catalog observation, last-good data, selection identity, bounded icon preparation, saved pin/order policy, transient native drag previews and auto-hide are implemented at 2f5c9dcbee0eecd773d829c83ee65eab694c071b. Final strict workspace checks pass: 307 Rust/51 ignored, four owned catalog cases including two kernel protocol cases, 81 Python checks and an isolated independent consumer. The full 396 software-Vulkan comparisons pass, followed by four reviewed corrected no-match references. Both Astro prefixes pass 13 pages/488 links with zero diagnostics. See reports/measurements/lucent-application-catalog.json. VM/hardware acceptance is deferred; D-Bus activation, broader desktop-entry support and measured pacing remain open.",
+        "Source e05576c24fbafd82cc4f5c89dcebd49472fbda4b adds explicit ApplicationLaunch command/desktop-service behavior and native Activate with conservative fallback. Service-only entries and actual owned D-Bus fixtures pass. Open/actions/fresh activation tokens and current graphical acceptance remain incomplete. See docs/application-activation.md."
       ]
     },
     {
@@ -436,6 +437,21 @@
         "Two real permission cancellation cycles deny checks, expose no command socket, remove native surfaces and retain the same agent with no automatic restart. The preceding checkpoint reproduced one empty surface after cancellation.",
         "All three authentication clients share a clean release checkpoint, installed hashes and retained rollback copies are verified, and desktop preferences remain present. See reports/measurements/lucent-session-input.json.",
         "Production authentication audit, native denied-lock recovery, authority/service faults and physical sessions remain open; other installed clients still need a rebuilt runtime."
+      ]
+    },
+    {
+      "id": "live-wallpapers",
+      "owner": "lucent-domain lucent-services lucent-api lucent-render and desktop client",
+      "status": "in_progress",
+      "acceptance": [
+        "Local MP4/WebM/GIF imports validate decoding before preference admission",
+        "Native settings expose looping pause FPS defaults and per-output overrides",
+        "Latest-frame delivery GPU reuse cancellation and disconnected-output lifetime remain bounded",
+        "Actual graphical input playback reconnect sleep and secure poster export are verified",
+        "Current media RSS frame pacing idle and power measurements have workload/hardware evidence"
+      ],
+      "evidence": [
+        "Source e05576c24fbafd82cc4f5c89dcebd49472fbda4b implements the complete native media path and client controls; native fixtures, client lifetime checks and software Vulkan texture checks pass. Graphical acceptance and current resource/pacing measurements remain deferred. See reports/measurements/lucent-native-media-and-activation.json."
       ]
     }
   ],
@@ -1512,6 +1528,32 @@
         "Per-output wallpaper/arrangement policy and neutral-layer hotplug acceptance.",
         "XDG/D-Bus app activation, shaping/bidi/font fallback/IME/accessibility, richer widgets and complete client/release ledger.",
         "Current RSS/frame pacing and final exact-head CI/authorized merge."
+      ],
+      "delivery": {
+        "status": "merged",
+        "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/56",
+        "merge_commit": "cbb754be1a4c92ac81372237d26f9718935cd234"
+      }
+    },
+    {
+      "milestone": "native-live-wallpapers-and-standard-desktop-service-activation",
+      "source_commit": "e05576c24fbafd82cc4f5c89dcebd49472fbda4b",
+      "report": "reports/measurements/lucent-native-media-and-activation.json",
+      "status": "implementation_and_local_checks_passed_graphical_acceptance_deferred",
+      "checks": [
+        "452 Rust workspace tests/61 ignored, strict formatting/Clippy/all-target checks and 93 Python architecture/integration checks pass.",
+        "Actual native MP4/WebM/GIF pixel/timestamp fixtures, loop cancellation, import cleanup/rejection and private D-Bus activation success/unavailable/denial/uncertain timeout pass.",
+        "Software Vulkan verifies changing stream pixels, matching-extent texture reuse, repeated-revision no-upload and extent replacement.",
+        "All 560 software-Vulkan comparisons pass with baseline updates disabled: twelve reviewed additions and four intentional Commands updates; zero unrelated reference/tolerance changes. 544 tokens/58 icons, ShellCheck and both Astro prefixes pass.",
+        "PR #56 passed all six exact-head checks and merged; protected-main checks and Pages succeeded."
+      ],
+      "pending": [
+        "Current guest deployment and actual native playback/input/output/clipboard, sleep/reconnect and secure poster exports.",
+        "Physical GPU pacing, current RSS/startup/idle/interaction and power measurements; hardware decoding.",
+        "Wallpaper Engine Scene/Web compatibility, automatic lock/fullscreen/battery policy and automatic unused-import cleanup.",
+        "Application Open/desktop actions/fresh activation tokens, broader entry compatibility and current dock-autohide acceptance.",
+        "Shaping/bidi/font fallback/IME, richer widgets, tooltips/popup lifecycle, network secret-agent support and remaining physical/secure-session checks.",
+        "Final exact-head CI, authorized merge and the full requirement/release completion audit."
       ]
     }
   ],
