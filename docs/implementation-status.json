@@ -220,7 +220,8 @@
         "Concrete surface instance source c796e01fb33dbc42e665b496a2e683aef2e07f85 adds typed native identity, scoped input/lifecycle/view, per-instance animation/redraw/clipboard and independent multi-output bars. 402 Rust tests/59 ignored, 85 Python checks, strict checks, example help and both Astro prefixes pass. Full desktop per-monitor persistence, fractional scaling and actual compositor acceptance remain incomplete. See reports/measurements/lucent-surface-instances.json.",
         "Per-monitor desktop source 581f7b73faf46f31c58b024f511f43cf09855f08 separates canonical pure layouts from connected hosts, targets bars/background/widgets across named outputs and persists independent profiles through the root coordinator. Scoped generations, precise redraw/clipboard, reflow cancellation and all-host readiness have owned tests. 413 Rust tests/59 ignored, 91 Python checks and all 532 software-Vulkan comparisons pass (16 reviewed additions; no prior reference/tolerance change), with both Astro prefixes clean. Real compositor acceptance, fractional scaling and additional display policy remain incomplete. See reports/measurements/lucent-monitor-layouts.json.",
         "Fractional source 7ff6962643c0cc8d7bd4853dcbb001fa67d77806 carries exact density through optional native scale/viewport adapters, contexts, renderer/text, actual per-axis clip sampling and client wallpaper targets. 418 Rust tests/60 ignored, 91 Python checks, 14 software-Vulkan renderer checks and all 532 unchanged visual comparisons pass, plus example help and both Astro prefixes. Native negotiation/migration/input/lock and remaining display policy are deferred or incomplete. See reports/measurements/lucent-fractional-scale.json.",
-        "Compositor focus source 24d863e054504ec458205869f36695c1061962a0 adds pure monitor/workspace-reference observations, bounded subscribe-first native IO and client focus/native-host joins with pending discovery, explicit override and recovery ownership. Named bars use local active workspaces. 431 Rust tests/60 ignored, 92 Python checks, read-only host query compatibility and all 540 Vulkan comparisons pass (8 reviewed additions; no prior reference/tolerance change), with both Astro prefixes clean. Full workspace identity/actions and graphical multi-output acceptance remain incomplete. See reports/measurements/lucent-compositor-focus.json."
+        "Compositor focus source 24d863e054504ec458205869f36695c1061962a0 adds pure monitor/workspace-reference observations, bounded subscribe-first native IO and client focus/native-host joins with pending discovery, explicit override and recovery ownership. Named bars use local active workspaces. 431 Rust tests/60 ignored, 92 Python checks, read-only host query compatibility and all 540 Vulkan comparisons pass (8 reviewed additions; no prior reference/tolerance change), with both Astro prefixes clean. Full workspace identity/actions and graphical multi-output acceptance remain incomplete. See reports/measurements/lucent-compositor-focus.json.",
+        "Typed workspace source 8fa350d2c57ed36e70808dc524c834224010b7d8 removes numeric-only records/actions, distinguishes named regular selection from special toggling, preserves native bare names/types, and keeps both monitor-local active controls reachable. 438 Rust tests/60 ignored, 92 Python checks and all 548 software-Vulkan comparisons pass (8 reviewed additions; zero old reference/tolerance changes). Current graphical acceptance and additional display policy remain incomplete. See reports/measurements/lucent-workspace-identities.json."
       ]
     },
     {
@@ -1494,6 +1495,25 @@
         "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/55",
         "merge_commit": "749f7cae98854726ba428dab96f93351fbb46092"
       }
+    },
+    {
+      "milestone": "typed-named-and-special-workspace-identities-and-actions",
+      "source_commit": "8fa350d2c57ed36e70808dc524c834224010b7d8",
+      "report": "reports/measurements/lucent-workspace-identities.json",
+      "status": "implementation_and_local_checks_passed_graphical_acceptance_deferred",
+      "checks": [
+        "438 Rust workspace tests/60 ignored, strict formatting/Clippy/all-target checks and 92 Python architecture/integration checks pass.",
+        "Owned native sockets exercise literal typed actions, native rejection and rejection before connection. Injected client checks verify stale/unavailable admission, observed-state ownership and zero settings writes.",
+        "Independent help and real read-only host snapshot pass; no private host metadata is published.",
+        "All 548 software-Vulkan visual comparisons pass: eight reviewed additions, zero existing reference/tolerance changes. 540 tokens/58 icons, ShellCheck and both Astro prefixes pass.",
+        "PR #55 passed all six exact-head checks and merged; protected-main checks and Pages succeeded."
+      ],
+      "pending": [
+        "Current guest deployment and actual compositor named/special selection, simultaneous monitor focus/input/clipboard, reconnect/suspend and secure coverage.",
+        "Per-output wallpaper/arrangement policy and neutral-layer hotplug acceptance.",
+        "XDG/D-Bus app activation, shaping/bidi/font fallback/IME/accessibility, richer widgets and complete client/release ledger.",
+        "Current RSS/frame pacing and final exact-head CI/authorized merge."
+      ]
     }
   ],
   "performance_targets": {
