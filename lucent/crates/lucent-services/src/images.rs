@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
+pub mod notification;
 mod raster;
 pub use raster::LoadError;
 
@@ -98,8 +99,14 @@ pub fn try_load(path: &Path, size: u32) -> Result<Arc<ImageData>, LoadError> {
     ))
 }
 pub fn icon(name: &str) -> Option<Arc<ImageData>> {
+    icon_with(name, |path| load(path, ICON_PIXELS))
+}
+fn icon_with(
+    name: &str,
+    mut load: impl FnMut(&Path) -> Option<Arc<ImageData>>,
+) -> Option<Arc<ImageData>> {
     if Path::new(name).is_absolute() {
-        return load(Path::new(name), ICON_PIXELS);
+        return load(Path::new(name));
     }
     let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
     let roots = [
@@ -120,7 +127,7 @@ pub fn icon(name: &str) -> Option<Arc<ImageData>> {
                             .join(category)
                             .join(format!("{name}.{ext}"));
                         if path.is_file()
-                            && let Some(image) = load(&path, ICON_PIXELS)
+                            && let Some(image) = load(&path)
                         {
                             return Some(image);
                         }
@@ -130,10 +137,9 @@ pub fn icon(name: &str) -> Option<Arc<ImageData>> {
         }
     }
     for ext in ["png", "svg"] {
-        if let Some(image) = load(
-            &PathBuf::from("/usr/share/pixmaps").join(format!("{name}.{ext}")),
-            ICON_PIXELS,
-        ) {
+        if let Some(image) =
+            load(&PathBuf::from("/usr/share/pixmaps").join(format!("{name}.{ext}")))
+        {
             return Some(image);
         }
     }

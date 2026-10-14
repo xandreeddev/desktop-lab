@@ -2,6 +2,7 @@
 use lucent_domain::*;
 use lucent_usecases::notifications::NotificationInbox;
 mod history;
+mod image;
 mod storage;
 pub use history::JsonNotificationHistory;
 use std::{
@@ -202,7 +203,14 @@ fn bounded(text: &str, max: usize) -> String {
 #[zbus::interface(name = "org.freedesktop.Notifications")]
 impl Server {
     fn get_capabilities(&self) -> Vec<&str> {
-        vec!["body", "body-markup", "body-hyperlinks", "actions"]
+        vec![
+            "body",
+            "body-markup",
+            "body-hyperlinks",
+            "body-images",
+            "icon-static",
+            "actions",
+        ]
     }
     fn get_server_information(&self) -> (&str, &str, &str, &str) {
         ("Lucent", "Lucent", env!("CARGO_PKG_VERSION"), "1.2")
@@ -212,7 +220,7 @@ impl Server {
         &self,
         app_name: &str,
         replaces_id: u32,
-        _app_icon: &str,
+        app_icon: &str,
         summary: &str,
         body: &str,
         actions: Vec<String>,
@@ -250,6 +258,7 @@ impl Server {
             app: bounded(app_name, 128),
             summary: bounded(summary, 256),
             body: bounded(body, 4096),
+            image: image::select(&hints, app_icon),
             actions: actions
                 .as_chunks::<2>()
                 .0

@@ -3,6 +3,12 @@ use lucent_api::ImageData;
 use lucent_domain::*;
 use std::{collections::BTreeMap, sync::Arc};
 pub type Images = Vec<(String, Arc<ImageData>)>;
+/// A current-version presentation request; image content remains domain data.
+#[derive(Clone)]
+pub struct NotificationAsset {
+    pub key: String,
+    pub image: NotificationImage,
+}
 /// Prepared previews retain density for the current cards through 2× scale.
 pub const PREVIEW_DIMENSION: u32 = 1024;
 /// Physical display size for background preparation; never a persisted preference.
@@ -44,6 +50,9 @@ pub trait AssetPort: Send + Sync {
     fn application_icons(&self, apps: &[Application]) -> Images;
     /// Prepare tray image resources on an asset worker, never in a view.
     fn tray_icons(&self, _items: &[lucent_domain::TrayItem]) -> Images {
+        vec![]
+    }
+    fn notification_images(&self, _requests: &[NotificationAsset]) -> Images {
         vec![]
     }
     /// Decode on a worker; both dimensions must be at most PREVIEW_DIMENSION.

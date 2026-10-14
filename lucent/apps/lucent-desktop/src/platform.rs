@@ -38,6 +38,16 @@ pub fn desktop_adapters() -> DesktopAdapters {
 }
 pub struct NativeAssets;
 impl AssetPort for NativeAssets {
+    fn notification_images(&self, requests: &[NotificationAsset]) -> Images {
+        requests
+            .iter()
+            .filter_map(|request| {
+                images::notification::prepare(&request.key, &request.image)
+                    .ok()
+                    .map(|image| (request.key.clone(), image))
+            })
+            .collect()
+    }
     fn preview(&self, image: &ImageData) -> Arc<ImageData> {
         Arc::new(image.downsample(PREVIEW_DIMENSION))
     }

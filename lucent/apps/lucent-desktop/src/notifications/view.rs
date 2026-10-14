@@ -5,12 +5,38 @@ use lucent_design::{Theme, component::notification as token, font, radius, space
 use lucent_domain::{Notification, NotificationHistoryStatus};
 use lucent_usecases::notifications::body::{BodyBlock, BodyStyle};
 impl Center {
+    fn image(&self, key: &str, alt: &str, t: Theme, now: f64) -> Element<Message> {
+        let image = if let Some(image) = self.artwork.image(key) {
+            let mut element = Element::image(image.clone());
+            element.style.image_fit = ImageFit::Contain;
+            element.opacity(self.artwork.opacity(key, now))
+        } else {
+            Element::text(format!(
+                "{alt} · {}",
+                if self.artwork.loading() {
+                    "loading image…"
+                } else {
+                    "image unavailable"
+                }
+            ))
+            .font(font::CAPTION)
+            .color(t.on_surface)
+            .wrap(3)
+            .padding(space::SM)
+            .background(t.surface_container)
+        };
+        image
+            .size(token::IMAGE_WIDTH, token::IMAGE_HEIGHT)
+            .radius(radius::CONTROL)
+            .clip()
+    }
     fn card(
         &self,
         note: &Notification,
         history: bool,
         detailed: bool,
         t: Theme,
+        now: f64,
     ) -> Element<Message> {
         let mut children = vec![
             Element::row(vec![
@@ -39,6 +65,16 @@ impl Center {
                 .width(Length::Fill)
                 .wrap(token::TITLE_LINES as usize),
         ];
+        if let Some(target) = note.target()
+            && note.image.is_some()
+        {
+            children.push(self.image(
+                &super::artwork::key(target, "image"),
+                "Notification image",
+                t,
+                now,
+            ));
+        }
         if !note.body.is_empty()
             && let Some((target, body)) = note
                 .target()
@@ -76,7 +112,26 @@ impl Center {
                             .collect(),
                     )
                     .on_link(move |key| Message::OpenLink(target, key.into())),
-                    BodyBlock::Image { alt, .. } => Element::text(alt),
+                    BodyBlock::Image { alt, .. } => {
+                        children.push(
+                            Element::column(vec![
+                                self.image(
+                                    &super::artwork::key(target, &format!("body-{index}")),
+                                    alt,
+                                    t,
+                                    now,
+                                ),
+                                Element::text(alt)
+                                    .font(font::CAPTION)
+                                    .color(t.on_surface)
+                                    .width(Length::Fill)
+                                    .wrap(2),
+                            ])
+                            .gap(space::XS)
+                            .width(Length::Fill),
+                        );
+                        continue;
+                    }
                 };
                 children.push(
                     element
@@ -94,6 +149,15 @@ impl Center {
                         } as usize),
                 );
             }
+        }
+        if note
+            .target()
+            .is_some_and(|target| self.artwork.failed_for(target))
+        {
+            children.push(t.button("Retry images", Message::RetryArtwork).id(format!(
+                "notification-images-retry-{}-{}",
+                note.id, note.revision
+            )));
         }
         if !history
             && !note.actions.is_empty()
@@ -237,7 +301,7 @@ impl Center {
                 if selected {
                     let page = self.page.min(group.entries.len().saturating_sub(1));
                     if let Some((note, history)) = group.entries.get(page) {
-                        rows.push(self.card(note, *history, true, t));
+                        rows.push(self.card(note, *history, true, t, cx.now));
                     }
                     if group.entries.len() > 1 {
                         rows.push(
@@ -290,17 +354,50 @@ impl Center {
                 .shadow()
                 .clip()
         } else {
-            let room = cx.height - top - token::MARGIN;
-            let limit = (room / (token::MAX_CARD_HEIGHT + token::GAP))
-                .floor()
-                .max(1.) as usize;
+            let room = (cx.height - top - token::MARGIN).max(0.);
+            let rich = self
+                .snapshot
+                .active
+                .iter()
+                .any(|note| self.has_images(note));
+            let card_height = if rich {
+                token::MAX_CARD_HEIGHT + token::IMAGE_HEIGHT
+            } else {
+                token::MAX_CARD_HEIGHT
+            };
+            let limit = (room / (card_height + token::GAP)).floor().max(1.) as usize;
             let cards = self
                 .snapshot
                 .active
                 .iter()
                 .filter(|n| !self.snapshot.do_not_disturb || n.critical)
                 .take(limit.min(token::TOAST_LIMIT as usize))
-                .map(|note| self.card(note, false, false, t))
+                .map(|note| {
+                    let card = self.card(note, false, false, t, cx.now);
+                    if self.has_images(note)
+                        && let Some(target) = note.target()
+                    {
+                        t.scroll(
+                            ScrollSpec::new(
+                                self.toast_scroll.get(&target).copied().unwrap_or(0.),
+                                lucent_design::component::scroll::LINE_STEP,
+                            )
+                            .expect("controlled toast offset"),
+                            card,
+                            move |event| Message::ToastScroll(target, event),
+                        )
+                        .id(format!(
+                            "notification-toast-scroll-{}-{}",
+                            note.id, note.revision
+                        ))
+                        .padding(token::IMAGE_VIEWPORT_PADDING)
+                        .width(Length::Fill)
+                        .height(Length::Fixed(card_height.min(room)))
+                        .radius(radius::PANEL)
+                    } else {
+                        card
+                    }
+                })
                 .collect();
             Element::column(cards)
                 .gap(token::GAP)
@@ -324,5 +421,16 @@ impl Center {
             ])
             .fill(),
         )
+    }
+    fn has_images(&self, note: &Notification) -> bool {
+        note.image.is_some()
+            || note
+                .target()
+                .and_then(|target| self.bodies.get(&target))
+                .is_some_and(|body| {
+                    body.blocks
+                        .iter()
+                        .any(|block| matches!(block, BodyBlock::Image { .. }))
+                })
     }
 }

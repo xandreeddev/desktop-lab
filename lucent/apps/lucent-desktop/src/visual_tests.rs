@@ -1214,6 +1214,29 @@ fn visual_regressions() {
             ("notification", Mode::Apps, 0, 0, "", 1., 640.),
             ("notification-history", Mode::Apps, 0, 0, "", 1., 390.),
             ("notification-rich", Mode::Apps, 0, 0, "", 1., 640.),
+            ("notification-image-ready", Mode::Apps, 0, 0, "", 1., 390.),
+            (
+                "notification-image-reveal",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                0.08,
+                390.,
+            ),
+            ("notification-image-loading", Mode::Apps, 0, 0, "", 1., 390.),
+            ("notification-image-failed", Mode::Apps, 0, 0, "", 1., 390.),
+            (
+                "notification-image-history-last",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            ("notification-image-toast", Mode::Apps, 0, 0, "", 1., 390.),
+            ("notification-image-small", Mode::Apps, 0, 0, "", 1., 390.),
             ("notification-rich-narrow", Mode::Apps, 0, 0, "", 1., 390.),
             ("inline-rich", Mode::Apps, 0, 0, "", 1., 640.),
             ("inline-link-focus", Mode::Apps, 0, 0, "", 1., 390.),
@@ -1389,7 +1412,9 @@ fn visual_regressions() {
             {
                 continue;
             }
-            let height = if name.starts_with("launcher-size-") {
+            let height = if name == "notification-image-small" {
+                320.
+            } else if name.starts_with("launcher-size-") {
                 1080.
             } else if name.starts_with("notes-") {
                 320.
@@ -2187,7 +2212,7 @@ fn visual_regressions() {
                 }
                 layout.build(&tree, width, height, &input, now)
             } else if name.starts_with("notification") {
-                app.notifications.update(crate::notifications::Message::Snapshot(Ok(lucent_domain::NotificationSnapshot {active:vec![lucent_domain::Notification {id:1,revision:1,received_unix_ms:0,desktop_entry:None,app:"Lucent fixture".into(),summary:"A notification rendered by our framework".into(),body:"Shared design tokens, measured text wrapping, native actions and keyboard focus.".into(),actions:vec![lucent_domain::NotificationAction {id:"default".into(),label:"Open fixture".into()}],critical:false,resident:false,transient:false,timeout_ms:0}],..Default::default()})), &mut Effects::default());
+                app.notifications.update(crate::notifications::Message::Snapshot(Ok(lucent_domain::NotificationSnapshot {active:vec![lucent_domain::Notification {id:1,revision:1,received_unix_ms:0,desktop_entry:None,app:"Lucent fixture".into(),summary:"A notification rendered by our framework".into(),body:"Shared design tokens, measured text wrapping, native actions and keyboard focus.".into(),image:None,actions:vec![lucent_domain::NotificationAction {id:"default".into(),label:"Open fixture".into()}],critical:false,resident:false,transient:false,timeout_ms:0}],..Default::default()})), &mut Effects::default());
                 app.notifications.ready = true;
                 if name.starts_with("notification-rich") {
                     let mut snapshot = app.notifications.snapshot.clone();
@@ -2198,11 +2223,63 @@ fn visual_regressions() {
                         &mut Effects::default(),
                     );
                 }
+                if name.starts_with("notification-image") {
+                    let t = app.theme();
+                    let mut rgba = vec![];
+                    for y in 0..100 {
+                        for x in 0..400 {
+                            let color = if (x / 32 + y / 16) % 2 == 0 {
+                                t.primary
+                            } else {
+                                t.surface
+                            };
+                            rgba.extend([
+                                (color.0 * 255.) as u8,
+                                (color.1 * 255.) as u8,
+                                (color.2 * 255.) as u8,
+                                255,
+                            ]);
+                        }
+                    }
+                    let path = report.join("notification-image-fixture.png");
+                    image::save_buffer(&path, &rgba, 400, 100, image::ColorType::Rgba8).unwrap();
+                    let mut snapshot = app.notifications.snapshot.clone();
+                    snapshot.active[0].revision = 3;
+                    snapshot.active[0].image = Some(lucent_domain::NotificationImage::Pixels(
+                        lucent_domain::NotificationPixels::new(400, 100, rgba).unwrap(),
+                    ));
+                    let source = if name == "notification-image-failed" {
+                        report.join("notification-image-absent.png")
+                    } else {
+                        path
+                    };
+                    snapshot.active[0].body = format!(
+                        "A <b>native image</b> uses prepared assets. <img src='{}' alt='Local fixture image'/>The original notification action remains reachable below this image.",
+                        source
+                            .to_string_lossy()
+                            .replace('&', "&amp;")
+                            .replace('\'', "&apos;")
+                    );
+                    let mut image_effects = Effects::default();
+                    app.notifications.update(
+                        crate::notifications::Message::Snapshot(Ok(snapshot)),
+                        &mut image_effects,
+                    );
+                    if name != "notification-image-loading" {
+                        while let Some(task) = image_effects.tasks.pop() {
+                            app.notifications.update(task.run(), &mut image_effects);
+                        }
+                    }
+                }
                 if name.ends_with("history") {
                     app.notifications
                         .update(crate::notifications::Message::Show, &mut Effects::default());
                 }
-                if name != "notification" && name != "notification-history" {
+                if name != "notification"
+                    && name != "notification-history"
+                    && name != "notification-image-toast"
+                    && name != "notification-image-small"
+                {
                     use crate::notifications::Message as Notify;
                     let mut effects = Effects::default();
                     if name == "notification-history-empty" {
@@ -2224,7 +2301,7 @@ fn visual_regressions() {
                         app.notifications
                             .update(Notify::Group("name:Messages".into()), &mut effects);
                     }
-                    if name.ends_with("loading") {
+                    if name.ends_with("loading") && !name.starts_with("notification-image") {
                         app.notifications.snapshot.history_status =
                             lucent_domain::NotificationHistoryStatus::Loading;
                     }
@@ -2249,11 +2326,39 @@ fn visual_regressions() {
                             .update(Notify::Group("name:Lucent fixture".into()), &mut effects);
                     }
                     app.notifications.update(Notify::Show, &mut effects);
+                    if name.starts_with("notification-image") {
+                        app.notifications
+                            .update(Notify::Group("name:Lucent fixture".into()), &mut effects);
+                        if name != "notification-image-loading" {
+                            app.notifications.update(Notify::RetryArtwork, &mut effects);
+                            while let Some(task) = effects.tasks.pop() {
+                                app.notifications.update(task.run(), &mut effects);
+                            }
+                        }
+                        if matches!(
+                            name,
+                            "notification-image-history-last" | "notification-image-failed"
+                        ) {
+                            app.notifications.update(
+                                Notify::Scroll(ScrollEvent { offset: 10000. }),
+                                &mut effects,
+                            );
+                        }
+                    }
                     if name == "notification-grouped-last" {
                         app.notifications.update(Notify::Page(100), &mut effects);
                         app.notifications
                             .update(Notify::Scroll(ScrollEvent { offset: 1000. }), &mut effects);
                     }
+                }
+                if name == "notification-image-small" {
+                    app.notifications.update(
+                        crate::notifications::Message::ToastScroll(
+                            lucent_domain::NotificationTarget::new(1, 3).unwrap(),
+                            ScrollEvent { offset: 10000. },
+                        ),
+                        &mut Effects::default(),
+                    );
                 }
                 let cx = ViewContext {
                     surface: "notifications",
@@ -2434,7 +2539,7 @@ fn desktop_actions_use_injected_adapters_without_executing_host_commands() {
 #[test]
 fn notification_controls_fit_at_normal_and_narrow_widths() {
     let mut app = fixture(0, false);
-    app.notifications.update(crate::notifications::Message::Snapshot(Ok(lucent_domain::NotificationSnapshot {active:vec![lucent_domain::Notification {id:1,revision:1,received_unix_ms:0,desktop_entry:None,app:"Fixture".into(),summary:"A long notification title that wraps onto two lines".into(),body:"A body with enough text to exercise wrapping and leave room for actions below the text.".repeat(3),actions:(0..8).map(|n|lucent_domain::NotificationAction {id:n.to_string(),label:format!("Action {n}")}).collect(),critical:false,resident:false,transient:false,timeout_ms:0}],..Default::default()})),&mut Effects::default());
+    app.notifications.update(crate::notifications::Message::Snapshot(Ok(lucent_domain::NotificationSnapshot {active:vec![lucent_domain::Notification {id:1,revision:1,received_unix_ms:0,desktop_entry:None,app:"Fixture".into(),summary:"A long notification title that wraps onto two lines".into(),body:"A body with enough text to exercise wrapping and leave room for actions below the text.".repeat(3),image:None,actions:(0..8).map(|n|lucent_domain::NotificationAction {id:n.to_string(),label:format!("Action {n}")}).collect(),critical:false,resident:false,transient:false,timeout_ms:0}],..Default::default()})),&mut Effects::default());
     let layout = Layout::new(fonts(&app));
     for width in [390., 1920.] {
         for history in [false, true] {
