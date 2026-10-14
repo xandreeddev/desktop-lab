@@ -1213,6 +1213,36 @@ fn visual_regressions() {
             ("dock", Mode::Apps, 9, 0, "", 1., 640.),
             ("notification", Mode::Apps, 0, 0, "", 1., 640.),
             ("notification-history", Mode::Apps, 0, 0, "", 1., 390.),
+            ("notification-grouped", Mode::Apps, 0, 0, "", 1., 390.),
+            ("notification-grouped-last", Mode::Apps, 0, 0, "", 1., 390.),
+            ("notification-history-empty", Mode::Apps, 0, 0, "", 1., 390.),
+            (
+                "notification-history-read-error",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            (
+                "notification-history-write-error",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            (
+                "notification-history-opening",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                0.08,
+                390.,
+            ),
             ("lock", Mode::Apps, 0, 0, "", 1., 640.),
             ("greeter", Mode::Apps, 0, 0, "", 1., 640.),
             ("authorization", Mode::Apps, 0, 0, "", 1., 640.),
@@ -2102,9 +2132,49 @@ fn visual_regressions() {
                 };
                 layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
             } else if name.starts_with("notification") {
-                app.notifications.snapshot=lucent_domain::NotificationSnapshot {active:vec![lucent_domain::Notification {id:1,app:"Lucent fixture".into(),summary:"A notification rendered by our framework".into(),body:"Shared design tokens, measured text wrapping, native actions and keyboard focus.".into(),actions:vec![lucent_domain::NotificationAction {id:"default".into(),label:"Open fixture".into()}],critical:false,resident:false,transient:false,timeout_ms:0}],..Default::default()};
+                app.notifications.snapshot=lucent_domain::NotificationSnapshot {active:vec![lucent_domain::Notification {id:1,revision:1,received_unix_ms:0,desktop_entry:None,app:"Lucent fixture".into(),summary:"A notification rendered by our framework".into(),body:"Shared design tokens, measured text wrapping, native actions and keyboard focus.".into(),actions:vec![lucent_domain::NotificationAction {id:"default".into(),label:"Open fixture".into()}],critical:false,resident:false,transient:false,timeout_ms:0}],..Default::default()};
                 app.notifications.ready = true;
-                app.notifications.history_open = name.ends_with("history");
+                if name.ends_with("history") {
+                    app.notifications
+                        .update(crate::notifications::Message::Show, &mut Effects::default());
+                }
+                if name != "notification" && name != "notification-history" {
+                    use crate::notifications::Message as Notify;
+                    let mut effects = Effects::default();
+                    if name == "notification-history-empty" {
+                        app.notifications.snapshot.active.clear();
+                    }
+                    if name.starts_with("notification-grouped") {
+                        app.notifications.snapshot.active[0].app = "Messages".into();
+                        let base = app.notifications.snapshot.active[0].clone();
+                        for index in 0..6 {
+                            let mut note = base.clone();
+                            note.id = index + 2;
+                            note.revision = (index + 2) as u64;
+                            note.received_unix_ms = note.revision;
+                            note.app = if index < 4 { "Messages" } else { "Calendar" }.into();
+                            note.summary = format!("Saved event {}", index + 1);
+                            note.body="Saved content stays available without resurrecting an action from the old sender.".into();
+                            app.notifications.snapshot.history.push(note);
+                        }
+                        app.notifications
+                            .update(Notify::Group("name:Messages".into()), &mut effects);
+                    }
+                    if name.ends_with("read-error") {
+                        app.notifications.snapshot.history_status =
+                            lucent_domain::NotificationHistoryStatus::ReadFailed;
+                    }
+                    if name.ends_with("write-error") {
+                        app.notifications.snapshot.history_status =
+                            lucent_domain::NotificationHistoryStatus::WriteFailed;
+                    }
+                    app.notifications.update(Notify::Show, &mut effects);
+                    if name == "notification-grouped-last" {
+                        app.notifications.update(Notify::Page(100), &mut effects);
+                        app.notifications
+                            .update(Notify::Scroll(ScrollEvent { offset: 1000. }), &mut effects);
+                    }
+                }
                 let cx = ViewContext {
                     surface: "notifications",
                     width,
@@ -2284,19 +2354,26 @@ fn desktop_actions_use_injected_adapters_without_executing_host_commands() {
 #[test]
 fn notification_controls_fit_at_normal_and_narrow_widths() {
     let mut app = fixture(0, false);
-    app.notifications.update(crate::notifications::Message::Snapshot(Ok(lucent_domain::NotificationSnapshot {active:vec![lucent_domain::Notification {id:1,app:"Fixture".into(),summary:"A long notification title that wraps onto two lines".into(),body:"A body with enough text to exercise wrapping and leave room for actions below the text.".repeat(3),actions:(0..8).map(|n|lucent_domain::NotificationAction {id:n.to_string(),label:format!("Action {n}")}).collect(),critical:false,resident:false,transient:false,timeout_ms:0}],..Default::default()})),&mut Effects::default());
+    app.notifications.update(crate::notifications::Message::Snapshot(Ok(lucent_domain::NotificationSnapshot {active:vec![lucent_domain::Notification {id:1,revision:1,received_unix_ms:0,desktop_entry:None,app:"Fixture".into(),summary:"A long notification title that wraps onto two lines".into(),body:"A body with enough text to exercise wrapping and leave room for actions below the text.".repeat(3),actions:(0..8).map(|n|lucent_domain::NotificationAction {id:n.to_string(),label:format!("Action {n}")}).collect(),critical:false,resident:false,transient:false,timeout_ms:0}],..Default::default()})),&mut Effects::default());
     let layout = Layout::new(fonts(&app));
     for width in [390., 1920.] {
         for history in [false, true] {
-            app.notifications.history_open = history;
+            app.notifications.update(
+                if history {
+                    crate::notifications::Message::Show
+                } else {
+                    crate::notifications::Message::Hide
+                },
+                &mut Effects::default(),
+            );
             let cx = ViewContext {
                 surface: "notifications",
                 width,
                 height: 720.,
-                now: 0.,
+                now: 1.,
             };
             let tree = app.view(&cx);
-            let scene = layout.build(&tree, width, 720., &Interaction::default(), 0.);
+            let scene = layout.build(&tree, width, 720., &Interaction::default(), 1.);
             for hit in scene.hits {
                 assert!(
                     fully_visible(hit.rect, hit.clip.bounds),

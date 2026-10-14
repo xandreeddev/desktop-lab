@@ -363,6 +363,10 @@
   --component-notification-body-lines: 3;
   --component-notification-toast-limit: 3;
   --component-notification-max-card-height: 320px;
+  --component-notification-group-height: var(--component-input-height);
+  --component-notification-history-height: 640px;
+  --component-notification-history-offset: var(--space-sm);
+  --component-notification-history-body-lines: 256;
   --component-authentication-width: 480px;
   --component-authentication-height: 460px;
   --component-authentication-padding: var(--space-xl);

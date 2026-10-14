@@ -285,7 +285,7 @@
     {
       "id": "notifications",
       "owner": "domain use cases notification adapter and client",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "Persistent history and grouping",
         "Supported rich content and actions",
@@ -294,7 +294,8 @@
       ],
       "evidence": [
         "Static follow-up found an unbounded adapter-local signal queue and no explicit idle connection-disconnect observation. Isolated D-Bus saturation/restart tests remain required; bounded inbox/history and runtime delivery do not prove these adapter properties.",
-        "Private-bus tests reproduced queue saturation and missed idle disconnects. Adapter admission now bounds pending signals, preserves state on rejection and accounts for two-signal actions/expiration batches; connection teardown discards pending transport signals. Exclusive name ownership refuses replacement of either another server or this adapter. Four private-bus regressions and 170 Rust tests pass. Native replacement/action/dismiss/expiration, launcher/restart and existing secure lock checks pass; see reports/measurements/lucent-notification-delivery.json; persistent/rich/grouped notifications remain open."
+        "Private-bus tests reproduced queue saturation and missed idle disconnects. Adapter admission now bounds pending signals, preserves state on rejection and accounts for two-signal actions/expiration batches; connection teardown discards pending transport signals. Exclusive name ownership refuses replacement of either another server or this adapter. Four private-bus regressions and 170 Rust tests pass. Native replacement/action/dismiss/expiration, launcher/restart and existing secure lock checks pass; see reports/measurements/lucent-notification-delivery.json; persistent/rich/grouped notifications remain open.",
+        "Source 76c90d422a8584c0b63528356d110c63a9b40d24 implements grouped durable private history through an injected history port, current-version actions, corruption preservation/recovery, transport retirement and native client scrolling/reveal. 365 Rust/85 Python/eight owned D-Bus protocol/460 software-Vulkan cases and both-prefix docs checks pass. See reports/measurements/lucent-notification-history.json. Slow filesystem publication, rich content and current native/performance acceptance remain open."
       ]
     },
     {
@@ -1258,6 +1259,32 @@
         "Real compositor/external-application clipboard acceptance across all ordinary clients, seat/focus/source changes and restart.",
         "IME, complex-script/bidi shaping, font fallback, multiline/undo and accessibility platform bridge.",
         "Current RSS/pacing, per-output/fractional scaling and the full implementation ledger.",
+        "Final published-head CI and authorized merge."
+      ],
+      "delivery": {
+        "status": "merged",
+        "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/46",
+        "merge_commit": "dee602a1f4b15a51bf453022f8e7f963329091ed"
+      }
+    },
+    {
+      "milestone": "grouped-durable-notification-history",
+      "source_commit": "76c90d422a8584c0b63528356d110c63a9b40d24",
+      "report": "reports/measurements/lucent-notification-history.json",
+      "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+      "checks": [
+        "365 Rust workspace tests/55 ignored, 85 Python checks, strict workspace formatting/Clippy, 536 tokens/58 icons and ShellCheck pass.",
+        "Eight private-bus cases verify name ownership, saturation, disconnect/restart, archive restart, unreadable preservation/recovery, failed save/retry and independent admission during stalled storage.",
+        "460 software-Vulkan comparisons pass without update mode; four intentional history changes and 24 new reviewed references retain the original toast baselines.",
+        "Independent consumer help executes without native bus binding. Library/domain/user docs build at both prefixes: 13 pages/488 links/assets, zero diagnostics.",
+        "Text clients PR #46 merged after all six exact-head CI checks; its main CI and Pages publication passed."
+      ],
+      "pending": [
+        "A bounded background history I/O coordinator: current saves/loads are outside the inbox mutex but can delay observer snapshot/signal publication and expiry checks while the filesystem stalls. Owned tests prove independent native method admission, not observer progress during the stall.",
+        "Formatted markup, hyperlinks, images/icons, activation tokens, sound and richer notification interactions; body/actions remain the truthful advertised capabilities. History is distinct from the optional protocol persistence guarantee.",
+        "Actual VM/compositor pointer/keyboard, restart/sleep and physical filesystem/fault acceptance.",
+        "Current normal RSS/CPU, GPU/decode peaks and cold/warm animation pacing.",
+        "Full requirement ledger including text shaping/IME/accessibility, outputs/fractional scaling, broader clients and secure/release acceptance.",
         "Final published-head CI and authorized merge."
       ]
     }

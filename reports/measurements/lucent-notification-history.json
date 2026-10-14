@@ -1,0 +1,56 @@
+{
+  "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+  "source_commit": "76c90d422a8584c0b63528356d110c63a9b40d24",
+  "local_checks": {
+    "workspace_passed": 365,
+    "workspace_ignored": 55,
+    "owned_notification_protocol_cases_passed": 8,
+    "python_passed": 85,
+    "software_visual_comparisons_passed": 460,
+    "new_reviewed_references": 24,
+    "existing_history_references_changed": 4,
+    "existing_toast_references_retained": 4,
+    "fmt_clippy_workspace_all_targets": true,
+    "design_tokens_verified": 536,
+    "app_icons_verified": 58,
+    "shellcheck_passed": true,
+    "independent_consumer_help_executed": true,
+    "astro_errors": 0,
+    "astro_warnings": 0,
+    "astro_hints": 0,
+    "pages_each_prefix": 13,
+    "links_assets_each_prefix": 488
+  },
+  "implemented": [
+    "Validated NotificationTarget separates replaceable wire IDs from received versions; stale replacements/actions, exact action keys and current-client admission are checked.",
+    "Pure bounded inbox/archive policy, desktop-entry grouping, restored content without live authority and merge behavior preserving live targets/local DND.",
+    "Injected NotificationHistoryPort and private JsonNotificationHistory with bounded schema/read, mode 0600/new directory mode 0700, exclusive temporary files and atomic synchronized replacement.",
+    "Read failure preserves files and live in-memory delivery; explicit retry/clear, write failure/retry and transport retirement expose separate observed storage state.",
+    "Native grouped scrollable history, group/note/action paging, long detail bodies, semantic colors and compositor-paced reversible reveal/closing submission lifecycle.",
+    "Independent notification-service consumer, source boundaries, library/domain/user guides and repository skills."
+  ],
+  "native_acceptance": {
+    "current_source_deployed_to_vm": false,
+    "real_compositor_input_reboot_or_suspend_tested": false,
+    "deferred_by_user": true,
+    "authentication_or_authority_changed": false
+  },
+  "performance": {
+    "normal_desktop_rss_target_mib": 300,
+    "current_desktop_rss_measured": false,
+    "current_animation_pacing_measured": false,
+    "physical_density_or_effects_reduced": false
+  },
+  "remaining": [
+    "A bounded background history I/O coordinator: current saves/loads are outside the inbox mutex but can delay observer snapshot/signal publication and expiry checks while the filesystem stalls. Owned tests prove independent native method admission, not observer progress during the stall.",
+    "Formatted markup, hyperlinks, images/icons, activation tokens, sound and richer notification interactions; body/actions remain the truthful advertised capabilities. History is distinct from the optional protocol persistence guarantee.",
+    "Actual VM/compositor pointer/keyboard, restart/sleep and physical filesystem/fault acceptance.",
+    "Current normal RSS/CPU, GPU/decode peaks and cold/warm animation pacing.",
+    "Full requirement ledger including text shaping/IME/accessibility, outputs/fractional scaling, broader clients and secure/release acceptance."
+  ],
+  "privacy": {
+    "private_paths_or_captures_published": false,
+    "notification_content_or_host_application_metadata_published": false
+  },
+  "validation_scope": "Private-daemon cases exercise actual D-Bus delivery/name/signal and persistence operations. Client/model/file cases plus real SDK keyboard routing and 1x/2x visual review pass. All 460 software-Vulkan comparisons pass in final no-update mode after only four intended history changes and 24 new references; original toast references were retained."
+}

@@ -1,6 +1,8 @@
 //! Freedesktop delivery adapter. No rendering or application message types.
 use lucent_domain::*;
 use lucent_usecases::notifications::NotificationInbox;
+mod history;
+pub use history::JsonNotificationHistory;
 use std::{
     collections::{HashMap, VecDeque},
     sync::{Arc, Condvar, Mutex, Weak},
@@ -42,6 +44,12 @@ struct Store {
     signals: VecDeque<Signal>,
     revision: u64,
     online: bool,
+    history_status: NotificationHistoryStatus,
+    loaded: bool,
+    writable: bool,
+    dirty: bool,
+    reload: bool,
+    dnd_changed: bool,
 }
 impl Store {
     // Called while holding state, before any mutation. This is admission, not a
@@ -62,6 +70,7 @@ impl Store {
             self.signals
                 .push_back(Signal::Closed(id, CloseReason::Expired));
             self.revision = self.revision.wrapping_add(1);
+            self.dirty = true;
         }
     }
 }
@@ -69,6 +78,7 @@ struct Shared {
     state: Mutex<Store>,
     changed: Condvar,
     epoch: Instant,
+    history: Option<Arc<dyn NotificationHistoryPort>>,
 }
 impl Shared {
     fn mutate<T, E>(
@@ -78,6 +88,7 @@ impl Shared {
         let mut state = self.state.lock().unwrap();
         let result = f(&mut state)?;
         state.revision = state.revision.wrapping_add(1);
+        state.dirty = true;
         self.changed.notify_one();
         Ok(result)
     }
@@ -110,16 +121,25 @@ impl Drop for Online {
             .unwrap_or_else(|error| error.into_inner());
         state.online = false;
         state.signals.clear();
+        state.inbox.retire_active();
+        state.revision = state.revision.wrapping_add(1);
+        state.dirty = true;
         self.0.changed.notify_all();
     }
 }
 pub struct FreedesktopNotifications(Arc<Shared>);
 impl Default for FreedesktopNotifications {
     fn default() -> Self {
+        Self::with_history(None)
+    }
+}
+impl FreedesktopNotifications {
+    pub fn with_history(history: Option<Arc<dyn NotificationHistoryPort>>) -> Self {
         Self(Arc::new(Shared {
             state: Mutex::new(Store::default()),
             changed: Condvar::new(),
             epoch: Instant::now(),
+            history,
         }))
     }
 }
@@ -127,7 +147,12 @@ struct Server(Weak<Shared>);
 fn bounded(text: &str, max: usize) -> String {
     text.chars()
         .filter(|c| !c.is_control() || *c == '\n')
-        .take(max)
+        .scan(0usize, |bytes, c| {
+            *bytes += c.len_utf8();
+            Some((*bytes <= max).then_some(c))
+        })
+        .take_while(Option::is_some)
+        .flatten()
         .collect()
 }
 #[zbus::interface(name = "org.freedesktop.Notifications")]
@@ -160,8 +185,24 @@ impl Server {
                 .and_then(|v| bool::try_from(v).ok())
                 .unwrap_or(false)
         };
+        let mut action_ids = std::collections::BTreeSet::new();
         let note = Notification {
             id: replaces_id,
+            revision: 0,
+            received_unix_ms: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_millis().min(u64::MAX as u128) as u64),
+            desktop_entry: hints
+                .get("desktop-entry")
+                .and_then(|v| <&str>::try_from(v).ok().map(str::to_owned))
+                .and_then(|id| {
+                    AppId::new(if id.ends_with(".desktop") {
+                        id
+                    } else {
+                        format!("{id}.desktop")
+                    })
+                    .ok()
+                }),
             app: bounded(app_name, 128),
             summary: bounded(summary, 256),
             body: bounded(body, 4096),
@@ -170,10 +211,12 @@ impl Server {
                 .0
                 .iter()
                 .take(8)
+                .filter(|a| !a[0].is_empty() && a[0].len() <= 128)
                 .map(|a| NotificationAction {
-                    id: bounded(&a[0], 128),
+                    id: a[0].clone(),
                     label: bounded(&a[1], 64),
                 })
+                .filter(|a| !a.id.is_empty() && action_ids.insert(a.id.clone()))
                 .collect(),
             critical: hints.get("urgency").and_then(|v| u8::try_from(v).ok()) == Some(2),
             resident: flag("resident"),
@@ -186,7 +229,10 @@ impl Server {
             state.admit(1).map_err(AdmissionError::dbus)?;
             let (id, evicted) = state
                 .inbox
-                .receive(note, shared.epoch.elapsed().as_millis() as u64);
+                .receive(note, shared.epoch.elapsed().as_millis() as u64)
+                .map_err(|_| {
+                    zbus::fdo::Error::InvalidArgs("Notification payload is invalid".into())
+                })?;
             if let Some(id) = evicted {
                 state
                     .signals
@@ -219,6 +265,61 @@ impl Server {
     ) -> zbus::Result<()>;
 }
 impl FreedesktopNotifications {
+    fn load_history(&self) {
+        let Some(adapter) = &self.0.history else {
+            return;
+        };
+        {
+            let mut state = self.0.state.lock().unwrap();
+            if state.loaded && !state.reload {
+                return;
+            }
+            state.loaded = true;
+            state.reload = false;
+        }
+        let result = adapter.load();
+        let mut state = self.0.state.lock().unwrap();
+        let preserve_dnd = state.dnd_changed;
+        let result = result.and_then(|archive| state.inbox.merge_archive(archive, preserve_dnd));
+        state.writable = result.is_ok();
+        state.history_status = if result.is_ok() {
+            NotificationHistoryStatus::Ready
+        } else {
+            NotificationHistoryStatus::ReadFailed
+        };
+        state.revision = state.revision.wrapping_add(1);
+        state.dirty = result.is_ok();
+        self.0.changed.notify_all();
+    }
+    fn persist_history(&self) {
+        let Some(adapter) = &self.0.history else {
+            return;
+        };
+        let pending = {
+            let state = self.0.state.lock().unwrap();
+            if !state.writable || !state.dirty {
+                None
+            } else {
+                Some((state.revision, state.inbox.archive()))
+            }
+        };
+        let Some((revision, archive)) = pending else {
+            return;
+        };
+        let result = adapter.save(&archive);
+        let mut state = self.0.state.lock().unwrap();
+        state.dirty = state.revision != revision;
+        let status = if result.is_ok() {
+            NotificationHistoryStatus::Ready
+        } else {
+            NotificationHistoryStatus::WriteFailed
+        };
+        if state.history_status != status {
+            state.history_status = status;
+            state.revision = state.revision.wrapping_add(1);
+            self.0.changed.notify_all();
+        }
+    }
     // Private connection selection keeps protocol testing out of the domain port.
     fn watch_with(
         &self,
@@ -226,6 +327,7 @@ impl FreedesktopNotifications {
         stop: &dyn StopSignal,
         connect: impl Fn() -> zbus::Result<Builder<'static>>,
     ) {
+        self.load_history();
         while !stop.cancelled() {
             let connection = connect()
                 // Activation owns shell replacement. The delivery adapter must
@@ -253,11 +355,21 @@ impl FreedesktopNotifications {
                 if connection.is_closed() {
                     break;
                 }
+                if self.0.state.lock().unwrap().reload {
+                    self.load_history();
+                }
+                self.0
+                    .state
+                    .lock()
+                    .unwrap()
+                    .expire(self.0.epoch.elapsed().as_millis() as u64);
+                self.persist_history();
                 let mut state = self.0.state.lock().unwrap();
-                state.expire(self.0.epoch.elapsed().as_millis() as u64);
                 let snapshot = if revision != state.revision {
                     revision = state.revision;
-                    Some(state.inbox.snapshot())
+                    let mut snapshot = state.inbox.snapshot();
+                    snapshot.history_status = state.history_status;
+                    Some(snapshot)
                 } else {
                     None
                 };
@@ -307,7 +419,15 @@ impl FreedesktopNotifications {
             }
             drop(online);
             drop(connection);
+            self.persist_history();
             if !stop.cancelled() {
+                let snapshot = {
+                    let state = self.0.state.lock().unwrap();
+                    let mut value = state.inbox.snapshot();
+                    value.history_status = state.history_status;
+                    value
+                };
+                emit(Ok(snapshot));
                 emit(Err(DomainError::Unavailable(
                     "Notification bus disconnected".into(),
                 )));
@@ -319,13 +439,32 @@ impl NotificationPort for FreedesktopNotifications {
     fn watch(&self, emit: &mut dyn FnMut(Result<NotificationSnapshot>), stop: &dyn StopSignal) {
         self.watch_with(emit, stop, Builder::session);
     }
-    fn dismiss(&self, id: u32) -> Result<()> {
-        self.0
-            .close(id, CloseReason::Dismissed)
-            .map_err(AdmissionError::domain)
+    fn dismiss(&self, target: NotificationTarget) -> Result<()> {
+        self.0.mutate(|state| {
+            if !state.inbox.matches(target) {
+                return Err(DomainError::Invalid(
+                    "Notification changed or expired".into(),
+                ));
+            }
+            state.admit(1).map_err(AdmissionError::domain)?;
+            state.inbox.close(target.id());
+            state
+                .signals
+                .push_back(Signal::Closed(target.id(), CloseReason::Dismissed));
+            Ok(())
+        })
     }
-    fn invoke(&self, id: u32, action: &str) -> Result<()> {
+    fn invoke(&self, target: NotificationTarget, action: &str) -> Result<()> {
+        let id = target.id();
         self.0.mutate(|s| {
+            if !s.online {
+                return Err(AdmissionError::Offline.domain());
+            }
+            if !s.inbox.matches(target) {
+                return Err(DomainError::Invalid(
+                    "Notification changed or expired".into(),
+                ));
+            }
             let note = s
                 .inbox
                 .get(id)
@@ -348,12 +487,23 @@ impl NotificationPort for FreedesktopNotifications {
     fn set_do_not_disturb(&self, enabled: bool) -> Result<()> {
         self.0.mutate(|s| {
             s.inbox.dnd(enabled);
+            s.dnd_changed = true;
             Ok(())
         })
     }
     fn clear_history(&self) -> Result<()> {
         self.0.mutate(|s| {
             s.inbox.clear_history();
+            // Explicit Clear authorizes replacing even an unreadable archive.
+            s.writable = true;
+            Ok(())
+        })
+    }
+    fn retry_history(&self) -> Result<()> {
+        self.0.mutate(|state| {
+            if state.history_status == NotificationHistoryStatus::ReadFailed {
+                state.reload = true;
+            }
             Ok(())
         })
     }

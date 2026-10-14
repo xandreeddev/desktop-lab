@@ -450,6 +450,10 @@ pub mod component {
         pub const BODY_LINES: f32 = 3.0;
         pub const TOAST_LIMIT: f32 = 3.0;
         pub const MAX_CARD_HEIGHT: f32 = 320.0;
+        pub const GROUP_HEIGHT: f32 = 48.0;
+        pub const HISTORY_HEIGHT: f32 = 640.0;
+        pub const HISTORY_OFFSET: f32 = 8.0;
+        pub const HISTORY_BODY_LINES: f32 = 256.0;
     }
     pub mod authentication {
         pub const WIDTH: f32 = 480.0;

@@ -1532,6 +1532,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "notification-service"
+version = "0.1.0"
+dependencies = [
+ "lucent-domain",
+ "lucent-services",
+]
+
+[[package]]
 name = "num-derive"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
