@@ -47,5 +47,13 @@
     "private_paths_or_captures_published": false,
     "credentials_or_host_application_metadata_published": false
   },
-  "validation_scope": "Final strict workspace/client/geometry checks pass. All 436 software-Vulkan comparisons pass without update mode; no existing visual references changed. Twenty new caret/selection references were reviewed at 1x/2x in both palettes."
+  "validation_scope": "Final strict workspace/client/geometry checks pass. All 436 software-Vulkan comparisons pass without update mode; no existing visual references changed. Twenty new caret/selection references were reviewed at 1x/2x in both palettes.",
+  "delivery": {
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/44",
+    "status": "merged",
+    "tested_head": "911d70ec9f7af249a4bbc8ab38d4baeffd8dcd28",
+    "merge_commit": "7bf91a11c84b60628b233d5fdacc1b4a2cb2534d",
+    "all_six_published_head_ci_checks_passed": true,
+    "main_ci_and_pages_passed": true
+  }
 }

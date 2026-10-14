@@ -617,7 +617,7 @@ pub(super) fn notes(d: &View<'_>, _: &ViewContext) -> Element<Message> {
             .at(component::notes::INSET, component::notes::HEADING_TOP),
         Element::text_input(
             &d.input.settings.notes,
-            d.host.notes_selection,
+            d.host.notes_field.selection(),
             "A thought to keep nearby…",
             Message::EditNotes,
         )

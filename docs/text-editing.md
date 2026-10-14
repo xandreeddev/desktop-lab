@@ -2,11 +2,11 @@
 
 Ordinary text fields use a shared framework API rather than editing the last
 painted string in the input dispatcher. The component owns its value and a
-`TextSelection`. The framework emits `TextEdit` messages and renders the next
+`TextFieldState` (which contains the selection and one clipboard ticket). The framework emits `TextEdit` messages and renders the next
 declared value/selection.
 
 ```rust
-Element::text_input(&self.value, self.selection, "Search", Message::Edit)
+Element::text_input(&self.value, self.field.selection(), "Search", Message::Edit)
     .id("search")
     .autofocus()
 ```
@@ -14,7 +14,10 @@ Element::text_input(&self.value, self.selection, "Search", Message::Edit)
 In the component's update, apply the message to the **current** value:
 
 ```rust
-let change = self.selection.apply(&mut self.value, edit, 8192)?;
+let change = self.field.update(
+    &mut self.value, edit, 8192,
+    ClipboardTarget::new("panel", "search"), effects, Message::Edit,
+)?;
 if change.content {
     // Refilter results or request persistence through the owning coordinator.
 }
@@ -92,10 +95,75 @@ intents. Their actual values stay in the client's zeroizing storage. Ordinary
 Secure clients retain their existing authenticated protocol and end-editing
 behavior; this feature does not change authorization.
 
+## Clipboard: intent, transfer, completion
+
+Opt in with `Application::clipboard_enabled() -> true`. It defaults to false;
+secure-session runtimes additionally refuse clipboard binding. Ordinary field
+clients handle Ctrl+C/X/V through the same `TextEdit` callback as navigation.
+`TextFieldState::update` queues a `ClipboardRequest` in `Effects`, addressed to
+the current surface and element. `Effects::delegate` maps completion messages
+with the child while preserving that target. This is presentation/runtime API;
+clipboard transports do not belong in the pure desktop domain or renderer.
+
+The component keeps its one canonical `String`. A pending operation retains a
+bounded copy and selection so a late completion cannot paste into newer text or
+cut a newer selection. Every subsequent edit/reset retires that ticket. Replies
+from older tickets do not consume the current one. Selection-only changes and
+copy requests do not refilter or save. Accepted paste/cut content follows the
+same child intent and root persistence path as typed text.
+
+The runtime binds SCTK's core Wayland data-device manager for the selected
+keyboard seat. Copy/cut require a real native key/button serial, not a CLI
+command or fabricated serial. The current keyboard surface, focused ordinary
+field, live surface object and focus epoch must match. Completion checks a fresh
+component view, not just the last painted scene. Losing keyboard/field focus,
+seat removal and surface replacement retire stale requests. Masked controls
+never pass the ordinary-field check and expose no clipboard action. Lock,
+greeter and permission clients do not opt in.
+
+Copy creates one source advertising UTF-8 text MIME types. The source owns the
+selected bytes until replaced/cancelled or the runtime stops; it serves native
+send requests. An already accepted send retains its bounded bytes until completion
+or deadline, so replacing selection does not truncate an in-flight transfer. `WritePosted` means the request was queued using an actual input
+serial. It is not an ownership acknowledgement: the
+[core Wayland protocol](https://wayland.freedesktop.org/docs/html/apa.html#protocol-spec-wl_data_device)
+provides none. Cut deletes only after this posted result and only while its
+snapshot remains current. Clipboard persistence after client exit is not
+promised; that requires a separate compositor/clipboard-manager policy.
+
+Paste negotiates `text/plain;charset=utf-8`, `UTF8_STRING`, then `text/plain`.
+The receiver requires valid UTF-8 at EOF. Unsupported formats, overflow, timeout
+and disconnected pipes return typed generic errors; they never print clipboard
+text or execute it as a shell command. Incoming CR/LF is removed by single-line
+editing. Launchers and menus show failures without changing their query; notes
+returns the existing typed error intent. No history or primary-selection UI is
+added here.
+
+All pipe I/O lives on the native calloop poller with nonblocking descriptors.
+There are at most eight active transfers, each limited to 64 KiB and an absolute
+two-second deadline. One callback performs at most eight 4 KiB operations before
+yielding. Partial UTF-8 waits for EOF; a slow peer cannot extend the deadline.
+One timer exists while transfers may be pending and drops when they finish.
+No clipboard worker, continuously ticking redraw or subprocess is started.
+Source and pipe teardown precedes the existing protocol cleanup flush.
+
+Run the independent example and test against a normal Wayland application:
+
+1. Select a word by Shift+arrows or pointer dragging; press Ctrl+C.
+2. Paste in an external application, then copy different text there.
+3. Focus the example field and press Ctrl+V. Ctrl+X should remove the selected
+   text only when its selection request is posted.
+4. While a delayed transfer is pending, edit, close or change focus. The old
+   reply must not change a newer field.
+
+Those native interoperability steps remain deferred. The current automated
+checks use pure client/model cases and owned local nonblocking pipes; they do
+not replace real compositor serial/selection acceptance.
+
 ## Acceptance still open
 
 Native VM/hardware acceptance is deferred under the user instruction. Current
-shaping remains the existing kerning-based implementation. Clipboard transfer,
-IME, bidi/complex-script shaping, font fallback, multiline/undo behavior and
+shaping remains the existing kerning-based implementation. Clipboard native
+interoperability, IME, bidi/complex-script shaping, font fallback, multiline/undo behavior and
 platform accessibility remain separate requirements. Editing tests and
 synthetic Vulkan references cannot prove those features.

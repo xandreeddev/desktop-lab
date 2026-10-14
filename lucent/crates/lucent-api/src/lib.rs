@@ -1,6 +1,11 @@
 //! A small declarative shell API. Public types contain no Wayland or GPU handles.
+mod clipboard;
 mod input;
 mod text_edit;
+pub use clipboard::{
+    CLIPBOARD_TEXT_LIMIT, ClipboardAction, ClipboardError, ClipboardOutcome, ClipboardRequest,
+    ClipboardTarget, TextFieldState,
+};
 pub use text_edit::{TextChange, TextEdit, TextEditError, TextMove, TextSelection};
 mod scroll;
 pub use input::InputEdit;
@@ -744,6 +749,10 @@ pub trait Component: 'static {
 }
 /// An application supplies surfaces and subscriptions in addition to its component tree.
 pub trait Application: Component {
+    /// Clipboard protocol integration is opt-in. Secure clients keep it disabled.
+    fn clipboard_enabled(&self) -> bool {
+        false
+    }
     /// Register font bytes once. Elements select a face by index; an empty list uses Fontconfig.
     fn fonts(&self) -> Vec<&'static [u8]> {
         vec![]
@@ -809,6 +818,7 @@ pub struct Effects<M> {
     pub tasks: Vec<ScheduledTask<M>>,
     pub redraw: BTreeSet<&'static str>,
     pub exit: bool,
+    pub clipboard: Vec<ClipboardRequest<M>>,
 }
 impl<M> Default for Effects<M> {
     fn default() -> Self {
@@ -817,6 +827,7 @@ impl<M> Default for Effects<M> {
             tasks: vec![],
             redraw: BTreeSet::new(),
             exit: false,
+            clipboard: vec![],
         }
     }
 }
@@ -878,6 +889,11 @@ impl<M> Effects<M> {
         self.redraw.extend(child.redraw);
         self.exit |= child.exit;
         let map = Arc::new(map);
+        for request in child.clipboard {
+            let map = map.clone();
+            self.clipboard
+                .push(request.map(move |message| map(message)));
+        }
         for task in child.tasks {
             let map = map.clone();
             let failure_map = map.clone();

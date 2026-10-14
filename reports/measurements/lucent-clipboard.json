@@ -1,0 +1,54 @@
+{
+  "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+  "source_commit": "e1a3269ad924d7a5f7ac30fa69bdfa8dc8bf9197",
+  "local_checks": {
+    "workspace_passed": 348,
+    "workspace_ignored": 51,
+    "python_passed": 83,
+    "fmt_clippy_workspace_all_targets": true,
+    "final_native_tests_passed": true,
+    "software_visual_comparisons_passed": 436,
+    "existing_references_changed": 0,
+    "design_tokens_verified": 532,
+    "app_icons_verified": 58,
+    "astro_errors": 0,
+    "astro_warnings": 0,
+    "astro_hints": 0,
+    "pages_each_prefix": 13,
+    "links_assets_each_prefix": 488,
+    "shellcheck_passed": true
+  },
+  "implemented": [
+    "SDK clipboard effects with child message mapping and one bounded current-field ticket; component values remain canonical.",
+    "Opt-in core Wayland data-device selection, actual native input serials for writes, live ordinary-field/focus/surface checks and generic errors.",
+    "Nonblocking calloop transfers with UTF-8 EOF validation, 64 KiB admission, eight active transfers, bounded dispatch steps and absolute two-second deadlines.",
+    "Owned source lifetime and native cleanup; accepted sends retain bounded bytes through selection replacement instead of truncating a transfer.",
+    "Launcher/menu/notes and independent example integration; only accepted content refilters or requests settings persistence.",
+    "Library/user docs, repository skills and architecture checks preserve engine/domain/client boundaries and secure-client opt-out."
+  ],
+  "native_acceptance": {
+    "current_source_deployed_to_vm": false,
+    "real_compositor_selection_and_serials_tested": false,
+    "external_application_interoperability_tested": false,
+    "deferred_by_user": true,
+    "authentication_or_authority_changed": false
+  },
+  "performance": {
+    "normal_desktop_rss_target_mib": 300,
+    "current_desktop_rss_measured": false,
+    "current_animation_pacing_measured": false,
+    "physical_density_or_effects_reduced": false
+  },
+  "remaining": [
+    "Real compositor copy/cut/paste, focus/seat/source changes and external application interoperability; current checks use owned pipes and pure client/model policy.",
+    "IME, complex-script/bidi shaping, visual navigation and font fallback.",
+    "Multiline/undo, accessibility semantics/platform bridge and remaining legacy-field integration.",
+    "Clipboard persistence after process exit, primary selection/history and richer MIME transfer are outside this implemented ordinary-text contract.",
+    "Current performance, per-output/fractional scaling and the full remaining requirement ledger."
+  ],
+  "privacy": {
+    "private_paths_or_captures_published": false,
+    "clipboard_payloads_logged": false
+  },
+  "validation_scope": "Strict workspace checks plus focused final native checks pass. Pipe tests exercise partial UTF-8, EOF, capacity, dispatch fairness, absolute deadlines and disconnected consumers. Client tests exercise stale/reset/current-content behavior and mapped outcomes; no real compositor acceptance is claimed. All 436 software-Vulkan comparisons pass without baseline or tolerance changes."
+}

@@ -5,7 +5,7 @@ mod sizing;
 pub mod surfaces;
 mod view;
 use crate::actions::Action;
-use lucent_api::{DragEvent, Effects, TextEdit, TextSelection};
+use lucent_api::{ClipboardTarget, DragEvent, Effects, TextEdit, TextFieldState};
 use lucent_design::component;
 use lucent_domain::{DesktopSettings, FocusTimer, Placement, WidgetSize};
 use std::collections::BTreeMap;
@@ -62,7 +62,7 @@ pub struct Host {
     captured_surfaces: Option<Vec<surfaces::Surface>>,
     timer: FocusTimer,
     month_offset: i32,
-    notes_selection: TextSelection,
+    notes_field: TextFieldState,
 }
 impl Host {
     pub fn grid_visible(&self) -> bool {
@@ -315,7 +315,19 @@ impl Host {
             }
             Message::EditNotes(edit) => {
                 effects.redraw("widgets");
-                match self.notes_selection.apply(&mut settings.notes, edit, 8192) {
+                let surface = self
+                    .surfaces(settings, input.viewport)
+                    .into_iter()
+                    .find(|s| s.members.contains(&"notes"))
+                    .map_or("widgets", |s| s.id);
+                match self.notes_field.update(
+                    &mut settings.notes,
+                    edit,
+                    8192,
+                    ClipboardTarget::new(surface, "notes-input"),
+                    effects,
+                    Message::EditNotes,
+                ) {
                     Ok(change) if change.content => Some(Intent::Save),
                     Ok(_) => None,
                     Err(error) => Some(Intent::Error(lucent_domain::DomainError::Invalid(
@@ -437,6 +449,66 @@ mod tests {
                 finished,
             },
         )
+    }
+    #[test]
+    fn notes_clipboard_targets_live_group_and_saves_only_accepted_content() {
+        let mut host = Host::default();
+        let mut settings = DesktopSettings::default();
+        settings.visible_widgets.push("notes".into());
+        let expected = host
+            .surfaces(&settings, (1920., 1080.))
+            .into_iter()
+            .find(|s| s.members.contains(&"notes"))
+            .unwrap()
+            .id;
+        let (intent, mut effects) = send(
+            &mut host,
+            &mut settings,
+            Message::EditNotes(TextEdit::Paste),
+            0,
+        );
+        assert!(intent.is_none());
+        let request = effects.clipboard.pop().unwrap();
+        assert_eq!(
+            request.target,
+            ClipboardTarget::new(expected, "notes-input")
+        );
+        assert!(matches!(
+            send(
+                &mut host,
+                &mut settings,
+                request.finish(lucent_api::ClipboardOutcome::Text("new notes".into())),
+                0
+            )
+            .0,
+            Some(Intent::Save)
+        ));
+        assert!(settings.notes.contains("new notes"));
+        let (_, mut effects) = send(
+            &mut host,
+            &mut settings,
+            Message::EditNotes(TextEdit::Paste),
+            0,
+        );
+        let request = effects.clipboard.pop().unwrap();
+        send(
+            &mut host,
+            &mut settings,
+            Message::EditNotes(TextEdit::Insert("!".into())),
+            0,
+        );
+        let expected = settings.notes.clone();
+        assert!(
+            send(
+                &mut host,
+                &mut settings,
+                request.finish(lucent_api::ClipboardOutcome::Text("late".into())),
+                0
+            )
+            .0
+            .is_none()
+        );
+        assert_eq!(settings.notes, expected);
     }
     #[test]
     fn native_sources_stay_fixed_during_drag_and_resize_cancels_without_saving() {

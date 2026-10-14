@@ -46,6 +46,7 @@ use wayland_client::{
 use wgpu_handle::HasDisplayHandle;
 // Use the exact raw-window-handle version used by the renderer.
 use lucent_render::display_handle as wgpu_handle;
+mod clipboard;
 mod delivery;
 mod effects;
 mod ipc;
@@ -100,7 +101,11 @@ struct State<A: Application> {
     outputs: OutputState,
     pointer: Option<wl_pointer::WlPointer>,
     keyboard: Option<wl_keyboard::WlKeyboard>,
+    keyboard_seat: Option<wl_seat::WlSeat>,
+    pointer_seat: Option<wl_seat::WlSeat>,
     keyboard_surface: Option<String>,
+    input_serial: Option<u32>,
+    clipboard: clipboard::Clipboard<A::Message>,
     modifiers: Modifiers,
     epoch: Instant,
     profile_frames: bool,
@@ -114,6 +119,7 @@ struct State<A: Application> {
 }
 impl<A: Application> Drop for State<A> {
     fn drop(&mut self) {
+        self.clipboard_drop();
         // Drop GPU surfaces before their protocol roles, then send the queued
         // destroy requests while the connection is still alive. A caller such
         // as a permission agent can outlive this individual runtime invocation.
@@ -190,6 +196,12 @@ fn run_inner<A: Application>(
         };
         let _ = completion.send(event);
     });
+    let clipboard_manager = if app.clipboard_enabled() && authorize_unlock.is_none() {
+        smithay_client_toolkit::data_device_manager::DataDeviceManagerState::bind(&globals, &qh)
+            .ok()
+    } else {
+        None
+    };
     let mut state = State {
         surfaces: BTreeMap::new(),
         gpu,
@@ -205,7 +217,11 @@ fn run_inner<A: Application>(
         outputs: OutputState::new(&globals, &qh),
         pointer: None,
         keyboard: None,
+        keyboard_seat: None,
+        pointer_seat: None,
         keyboard_surface: None,
+        input_serial: None,
+        clipboard: clipboard::Clipboard::new(clipboard_manager),
         modifiers: Modifiers::default(),
         epoch: Instant::now(),
         profile_frames: std::env::var_os("LUCENT_PROFILE_FRAMES").is_some_and(|value| value == "1"),
@@ -408,6 +424,9 @@ impl<A: Application> State<A> {
                     None => {}
                 }
             }
+        }
+        for request in effects.clipboard {
+            self.clipboard_request(request, qh);
         }
         if let Err(e) = self.reconcile(qh) {
             self.error = Some(e.to_string());
@@ -642,6 +661,7 @@ impl<A: Application> State<A> {
                 });
             }
         }
+        self.clipboard_observe_focus(qh);
         let messages: Vec<_> = submitted
             .into_iter()
             .filter_map(|event| self.app.event(event))
@@ -758,6 +778,7 @@ impl<A: Application> State<A> {
             if before != s.interaction.focus {
                 s.demand.invalidate();
             }
+            self.clipboard_observe_focus(qh);
             if messages.is_empty() {
                 self.draw_all(qh);
             } else {
@@ -987,6 +1008,9 @@ impl<A: Application> SeatHandler for State<A> {
     ) {
         if capability == Capability::Pointer && self.pointer.is_none() {
             self.pointer = self.seats.get_pointer(qh, &seat).ok();
+            if self.pointer.is_some() {
+                self.pointer_seat = Some(seat.clone());
+            }
         }
         if capability == Capability::Keyboard && self.keyboard.is_none() {
             let key_qh = qh.clone();
@@ -1000,28 +1024,41 @@ impl<A: Application> SeatHandler for State<A> {
                     Box::new(move |state, _, event| state.key(event, &key_qh)),
                 )
                 .ok();
+            if self.keyboard.is_some() {
+                self.keyboard_seat = Some(seat.clone());
+                self.clipboard_seat(&seat, qh);
+            }
         }
     }
     fn remove_capability(
         &mut self,
         _: &Connection,
-        _: &QueueHandle<Self>,
-        _: wl_seat::WlSeat,
+        qh: &QueueHandle<Self>,
+        seat: wl_seat::WlSeat,
         capability: Capability,
     ) {
         if capability == Capability::Pointer
+            && self.pointer_seat.as_ref() == Some(&seat)
             && let Some(p) = self.pointer.take()
         {
             p.release();
+            self.pointer_seat = None;
         }
         if capability == Capability::Keyboard
+            && self.keyboard_seat.as_ref() == Some(&seat)
             && let Some(k) = self.keyboard.take()
         {
             k.release();
             self.keyboard_surface = None;
+            self.keyboard_seat = None;
+            self.clipboard_cancel(qh, true);
+            self.clipboard_drop();
         }
     }
-    fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
+    fn remove_seat(&mut self, conn: &Connection, qh: &QueueHandle<Self>, seat: wl_seat::WlSeat) {
+        self.remove_capability(conn, qh, seat.clone(), Capability::Keyboard);
+        self.remove_capability(conn, qh, seat, Capability::Pointer);
+    }
 }
 impl<A: Application> PointerHandler for State<A> {
     fn pointer_frame(
@@ -1040,6 +1077,10 @@ impl<A: Application> PointerHandler for State<A> {
             let mut messages = vec![];
             let mut outside = false;
             let mut scroll = None;
+            self.input_serial = match event.kind {
+                PointerEventKind::Press { serial, .. } => Some(serial),
+                _ => None,
+            };
             if let Some(s) = self.surfaces.get_mut(&id) {
                 match event.kind {
                     PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
@@ -1083,6 +1124,7 @@ impl<A: Application> PointerHandler for State<A> {
                 }
                 s.demand.invalidate();
             }
+            self.clipboard_observe_focus(qh);
             let logical_id = self.surfaces[&id].spec.id;
             let boundary = match event.kind {
                 PointerEventKind::Enter { .. } => Some(true),
@@ -1139,6 +1181,7 @@ impl<A: Application> PointerHandler for State<A> {
                 self.message(m, qh);
             }
         }
+        self.input_serial = None;
         self.draw_all(qh);
     }
 }
@@ -1146,34 +1189,39 @@ impl<A: Application> KeyboardHandler for State<A> {
     fn enter(
         &mut self,
         _: &Connection,
-        _: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         surface: &wl_surface::WlSurface,
         _: u32,
         _: &[u32],
         _: &[Keysym],
     ) {
+        self.clipboard_cancel(qh, false);
         self.keyboard_surface = self.id_for(surface);
     }
     fn leave(
         &mut self,
         _: &Connection,
-        _: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         _: &wl_surface::WlSurface,
         _: u32,
     ) {
         self.keyboard_surface = None;
+        self.input_serial = None;
+        self.clipboard_cancel(qh, false);
     }
     fn press_key(
         &mut self,
         _: &Connection,
         qh: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
-        _: u32,
+        serial: u32,
         event: KeyEvent,
     ) {
+        self.input_serial = Some(serial);
         self.key(event, qh);
+        self.input_serial = None;
     }
     fn repeat_key(
         &mut self,

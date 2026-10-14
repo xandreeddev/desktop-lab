@@ -18,6 +18,10 @@ pub enum TextMove {
 }
 #[derive(Clone, PartialEq, Eq)]
 pub enum TextEdit {
+    Copy,
+    Cut,
+    Paste,
+    ClipboardReply(u64, super::ClipboardOutcome),
     Insert(String),
     Replace(String),
     Backspace,
@@ -32,6 +36,10 @@ pub enum TextEdit {
 impl fmt::Debug for TextEdit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Copy => f.write_str("Copy"),
+            Self::Cut => f.write_str("Cut"),
+            Self::Paste => f.write_str("Paste"),
+            Self::ClipboardReply(id, _) => f.debug_tuple("ClipboardReply").field(id).finish(),
             Self::Insert(_) => f.write_str("Insert(..)"),
             Self::Replace(_) => f.write_str("Replace(..)"),
             Self::Backspace => f.write_str("Backspace"),
@@ -61,10 +69,14 @@ pub struct TextChange {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextEditError {
     ByteLimit,
+    Clipboard(super::ClipboardError),
 }
 impl fmt::Display for TextEditError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Text edit exceeds the field byte limit")
+        match self {
+            Self::ByteLimit => f.write_str("Text edit exceeds the field byte limit"),
+            Self::Clipboard(error) => fmt::Display::fmt(error, f),
+        }
     }
 }
 impl std::error::Error for TextEditError {}
@@ -137,6 +149,9 @@ impl TextSelection {
         let range = selection.range(text);
         let mut content = false;
         match edit {
+            TextEdit::Copy | TextEdit::Cut | TextEdit::Paste | TextEdit::ClipboardReply(..) => {
+                return Ok(TextChange::default());
+            }
             TextEdit::Replace(value) => {
                 let value = value.replace(['\n', '\r'], "");
                 if value.len() > max_bytes {

@@ -162,6 +162,17 @@ pub(super) fn key(key: &Key) -> Option<TextEdit> {
         return None;
     }
     Some(match key {
+        Key::Shortcut {
+            character,
+            modifiers,
+        } if modifiers.control && !modifiers.alt && !modifiers.logo => {
+            match character.to_ascii_lowercase() {
+                'c' => TextEdit::Copy,
+                'x' => TextEdit::Cut,
+                'v' => TextEdit::Paste,
+                _ => return None,
+            }
+        }
         Key::Text(value) => TextEdit::Insert(value.clone()),
         Key::Backspace => {
             if modifiers.control {
@@ -205,4 +216,51 @@ pub(super) fn key(key: &Key) -> Option<TextEdit> {
         },
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod clipboard_keys {
+    use super::*;
+    #[test]
+    fn text_clipboard_shortcuts_accept_control_without_alt_or_logo() {
+        for (character, edit) in [
+            ('c', TextEdit::Copy),
+            ('x', TextEdit::Cut),
+            ('v', TextEdit::Paste),
+            ('V', TextEdit::Paste),
+        ] {
+            assert_eq!(
+                key(&Key::Shortcut {
+                    character,
+                    modifiers: KeyModifiers {
+                        control: true,
+                        ..Default::default()
+                    }
+                }),
+                Some(edit)
+            );
+            assert_eq!(
+                key(&Key::Shortcut {
+                    character,
+                    modifiers: KeyModifiers {
+                        control: true,
+                        alt: true,
+                        ..Default::default()
+                    }
+                }),
+                None
+            );
+            assert_eq!(
+                key(&Key::Shortcut {
+                    character,
+                    modifiers: KeyModifiers {
+                        control: true,
+                        logo: true,
+                        ..Default::default()
+                    }
+                }),
+                None
+            );
+        }
+    }
 }

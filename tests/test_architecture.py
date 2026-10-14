@@ -194,10 +194,18 @@ class Boundaries(unittest.TestCase):
         self.assertNotIn('lucent-render', reachable(self.graph, 'application-service'))
 
     def test_text_model_and_example_preserve_framework_boundaries(self):
-        self.assert_no_platform_operations([ROOT/'lucent/crates/lucent-api/src/text_edit.rs'],
+        self.assert_no_platform_operations([ROOT/'lucent/crates/lucent-api/src/text_edit.rs', ROOT/'lucent/crates/lucent-api/src/clipboard.rs'],
                                            ('lucent_domain', 'lucent_desktop', 'lucent_services', 'lucent_wayland', 'lucent_render'))
         self.assertNotIn('lucent-desktop', reachable(self.graph, 'text-input'))
         self.assertNotIn('lucent-services', reachable(self.graph, 'text-input'))
+
+    def test_clipboard_transport_stays_in_native_backend_and_secure_clients_do_not_opt_in(self):
+        self.assert_no_imports(sources(ROOT/'lucent/crates/lucent-wayland/src/clipboard'),
+                               ('std::process', 'lucent_services', 'lucent_domain', 'lucent_desktop'))
+        for name in ('lucent-session', 'lucent-polkit'):
+            for path in sources(ROOT/'lucent/apps'/name/'src'):
+                self.assertNotIn('fn clipboard_enabled',path.read_text())
+        self.assertIn('fn clipboard_enabled', (ROOT/'lucent/examples/text-input/src/main.rs').read_text())
 
     def test_all_desktop_effects_fit_the_runtime_worker_budget(self):
         root=ROOT / 'lucent/apps/lucent-desktop/src'
