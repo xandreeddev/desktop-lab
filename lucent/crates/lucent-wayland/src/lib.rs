@@ -51,6 +51,7 @@ mod delivery;
 mod effects;
 mod fractional;
 mod ipc;
+mod layer_commit;
 mod outputs;
 mod profiling;
 mod subscriptions;
@@ -66,6 +67,7 @@ struct Native<M> {
     fractional: Option<fractional::Surface>, // Destroy extensions before role/surface.
     role: SurfaceRole,
     spec: api::SurfaceSpec,
+    committed_spec: api::SurfaceSpec,
     bound_output: Option<wl_output::WlOutput>,
     width: u32,
     height: u32,
@@ -371,6 +373,7 @@ impl<A: Application> State<A> {
                         .as_ref()
                         .map(|globals| globals.surface(lock_surface.wl_surface(), qh)),
                     role: SurfaceRole::Lock(lock_surface, output),
+                    committed_spec: spec.clone(),
                     spec,
                     bound_output: None,
                     width: 1,
@@ -588,10 +591,9 @@ impl<A: Application> State<A> {
                 }
                 if let Some(native) = self.surfaces.get_mut(&address) {
                     if native.spec != spec {
-                        if let SurfaceRole::Layer(layer) = &native.role {
-                            configure_layer(layer, &spec);
-                            layer.commit();
-                        }
+                        // Stage role changes until a matching buffer is ready.
+                        // A geometry-only commit can move the old image before
+                        // the configure response and replacement buffer arrive.
                         native.spec = spec;
                         native.demand.invalidate();
                     }
@@ -628,6 +630,7 @@ impl<A: Application> State<A> {
                             .as_ref()
                             .map(|globals| globals.surface(layer.wl_surface(), qh)),
                         role: SurfaceRole::Layer(layer),
+                        committed_spec: spec.clone(),
                         spec,
                         bound_output: target,
                         width: 1,
@@ -702,19 +705,21 @@ impl<A: Application> State<A> {
             }
             let total = self.profile_frames.then(Instant::now);
             let started = self.profile_frames.then(Instant::now);
+            let (width, height) =
+                layer_commit::buffer_extent(&s.committed_spec, &s.spec, (s.width, s.height));
             let tree = self.app.view(&ViewContext {
                 surface: s.spec.id,
                 instance: s.spec.instance.clone(),
-                width: s.width as f32,
-                height: s.height as f32,
+                width: width as f32,
+                height: height as f32,
                 now,
                 density: s.density(),
             });
             let view_ms = profiling::elapsed(started);
             let started = self.profile_frames.then(Instant::now);
-            let scene =
-                self.layout
-                    .build(&tree, s.width as f32, s.height as f32, &s.interaction, now);
+            let scene = self
+                .layout
+                .build(&tree, width as f32, height as f32, &s.interaction, now);
             let layout_ms = profiling::elapsed(started);
             let started = self.profile_frames.then(Instant::now);
             let focus = s.interaction.focus.clone();
@@ -722,7 +727,7 @@ impl<A: Application> State<A> {
             if focus != s.interaction.focus {
                 s.demand.invalidate();
             }
-            let regions = pointer_regions(s.spec.pointer_input, s.width, s.height, &scene);
+            let regions = pointer_regions(s.spec.pointer_input, width, height, &scene);
             if regions != s.regions {
                 match Region::new(&self.compositor) {
                     Ok(region) => {
@@ -743,7 +748,7 @@ impl<A: Application> State<A> {
             let density = s.density();
             let surface = s.role.wl_surface();
             if let Some(fractional) = &mut s.fractional {
-                if let Err(error) = fractional.destination(s.width, s.height) {
+                if let Err(error) = fractional.destination(width, height) {
                     self.error = Some(error.to_string());
                     self.exit = true;
                     return;
@@ -756,7 +761,14 @@ impl<A: Application> State<A> {
             s.renderer.enable_profiling(self.profile_frames);
             match s
                 .renderer
-                .render_scaled(s.width, s.height, density, &scene.paint, || {
+                .render_scaled(width, height, density, &scene.paint, || {
+                    if s.committed_spec != s.spec
+                        && let SurfaceRole::Layer(layer) = &s.role
+                    {
+                        configure_layer(layer, &s.spec);
+                    }
+                    // WSI presentation commits the role state, viewport,
+                    // input region and newly rendered buffer together.
                     surface.frame(qh, FrameCallbackData(surface.clone()));
                 }) {
                 Ok(RenderOutcome::Presented) => {}
@@ -787,6 +799,9 @@ impl<A: Application> State<A> {
                     continue;
                 }
             }
+            s.committed_spec = s.spec.clone();
+            s.width = width;
+            s.height = height;
             let started = self.profile_frames.then(Instant::now);
             if self.app.animating_instance(&s.spec.address(), now) || s.interaction.animating(now) {
                 s.demand.invalidate();
