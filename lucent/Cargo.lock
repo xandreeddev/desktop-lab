@@ -1465,6 +1465,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "multi-output"
+version = "0.1.0"
+dependencies = [
+ "lucent-api",
+ "lucent-design",
+ "lucent-wayland",
+]
+
+[[package]]
 name = "naga"
 version = "30.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

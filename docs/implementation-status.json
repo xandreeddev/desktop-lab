@@ -215,7 +215,8 @@
         "Hotplug and output recreation verification"
       ],
       "evidence": [
-        "Named-output SDK source 8dcb4889d747b617029a52f2015036c0f8b637d9 adds validated selectors, typed registry catalogs, exact current native bindings, disconnected/ambiguous waiting, role recreation and non-spinning named closure. Default consumers compile neutrally; secure lock remains all-output. 397 Rust tests/59 ignored, 85 Python checks, strict checks, example help and both Astro prefixes pass. Actual compositor placement/input/hotplug and full desktop per-output/fractional behavior remain incomplete. See reports/measurements/lucent-output-targets.json."
+        "Named-output SDK source 8dcb4889d747b617029a52f2015036c0f8b637d9 adds validated selectors, typed registry catalogs, exact current native bindings, disconnected/ambiguous waiting, role recreation and non-spinning named closure. Default consumers compile neutrally; secure lock remains all-output. 397 Rust tests/59 ignored, 85 Python checks, strict checks, example help and both Astro prefixes pass. Actual compositor placement/input/hotplug and full desktop per-output/fractional behavior remain incomplete. See reports/measurements/lucent-output-targets.json.",
+        "Concrete surface instance source c796e01fb33dbc42e665b496a2e683aef2e07f85 adds typed native identity, scoped input/lifecycle/view, per-instance animation/redraw/clipboard and independent multi-output bars. 402 Rust tests/59 ignored, 85 Python checks, strict checks, example help and both Astro prefixes pass. Full desktop per-monitor persistence, fractional scaling and actual compositor acceptance remain incomplete. See reports/measurements/lucent-surface-instances.json."
       ]
     },
     {
@@ -1389,6 +1390,29 @@
         "Actual compositor target placement, unavailable/reconnect/closed-role behavior, native input/clipboard retirement and secure multi-output acceptance.",
         "Desktop per-output persisted layouts, multiple instances of one logical role, neutral-default hotplug recovery and fractional scaling.",
         "Current RSS/frame pacing and the full text/client/release requirement ledger.",
+        "Final exact-head CI and authorized normal merge."
+      ],
+      "delivery": {
+        "status": "merged",
+        "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/51",
+        "merge_commit": "f45e13d91fe"
+      }
+    },
+    {
+      "milestone": "concrete-surface-instance-routing",
+      "source_commit": "c796e01fb33dbc42e665b496a2e683aef2e07f85",
+      "report": "reports/measurements/lucent-surface-instances.json",
+      "status": "implementation_and_local_checks_passed_native_acceptance_deferred",
+      "checks": [
+        "402 Rust tests/59 ignored, 85 Python checks, strict formatting/Clippy, 540 tokens/58 icons and ShellCheck pass.",
+        "Typed identity/scoped events and delegated clipboard/redraw tests pass; example state remains independent and rejects retired instances.",
+        "Independent example help and both Astro prefixes pass 13 pages/488 links/assets with zero diagnostics.",
+        "Output target PR #51 merged with all six exact-head CI checks passing."
+      ],
+      "pending": [
+        "Desktop per-output persisted layouts, neutral-default hotplug recovery and fractional scaling.",
+        "Actual compositor placement, two-output pointer/keyboard/clipboard, reconnect and secure multi-output acceptance.",
+        "Current RSS/frame pacing, shaping/IME/accessibility and the full client/release ledger.",
         "Final exact-head CI and authorized normal merge."
       ]
     }

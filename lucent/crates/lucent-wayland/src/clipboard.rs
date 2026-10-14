@@ -46,7 +46,7 @@ pub(super) struct Clipboard<M> {
     next: u64,
     timer: Option<RegistrationToken>,
     epoch: u64,
-    focus: Option<(String, String)>,
+    focus: Option<(lucent_api::SurfaceAddress, String)>,
 }
 impl<M> Clipboard<M> {
     pub(super) fn new(manager: Option<DataDeviceManagerState>) -> Self {
@@ -90,22 +90,21 @@ impl<A: Application> State<A> {
     fn clipboard_guard(&self, target: &ClipboardTarget) -> Option<Guard> {
         if self.authorize_unlock.is_some()
             || !self.app.clipboard_enabled()
-            || self.keyboard_surface.as_deref() != Some(target.surface)
+            || self.keyboard_surface.as_ref() != Some(&target.address())
         {
             return None;
         }
-        let native = self.surfaces.get(target.surface)?;
+        let native = self.surfaces.get(&target.address())?;
         if native.interaction.focus.as_deref() != Some(&target.element)
-            || !self
-                .app
-                .surfaces()
-                .iter()
-                .any(|s| s.id == target.surface && s.visible && s.keyboard != api::Keyboard::None)
+            || !self.app.surfaces().iter().any(|s| {
+                s.address() == target.address() && s.visible && s.keyboard != api::Keyboard::None
+            })
         {
             return None;
         }
         let tree = self.app.view(&ViewContext {
             surface: native.spec.id,
+            instance: native.spec.instance.clone(),
             width: native.width as f32,
             height: native.height as f32,
             now: self.epoch.elapsed().as_secs_f64(),

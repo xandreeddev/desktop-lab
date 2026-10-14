@@ -82,5 +82,7 @@ demonstrates registration and typed output observation through the SDK.
 Actual target placement, input/clipboard retirement, disconnection/reconnection
 and secure multi-output acceptance still require a real compositor. They are
 deferred under the current user instruction. No new renderer scaling support,
-per-monitor persisted desktop layouts, duplicate logical surfaces across outputs
-or fractional-scale protocol support is claimed.
+per-monitor persisted desktop layouts or fractional-scale protocol support is
+claimed. The subsequent [surface instance API](surface-instances.md) supplies
+concrete identity for multiple copies of one role; its independent example does
+not establish the full desktop's persisted monitor policy.

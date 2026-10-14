@@ -89,7 +89,7 @@ impl SurfaceRole {
     }
 }
 struct State<A: Application> {
-    surfaces: BTreeMap<String, Native<A::Message>>,
+    surfaces: BTreeMap<api::SurfaceAddress, Native<A::Message>>,
     gpu: Rc<Gpu>,
     app: A,
     layout: Layout,
@@ -102,12 +102,12 @@ struct State<A: Application> {
     seats: SeatState,
     outputs: OutputState,
     output_bindings: Vec<(api::DisplayOutput, wl_output::WlOutput)>,
-    closed_targets: BTreeMap<&'static str, (api::OutputName, wl_output::WlOutput)>,
+    closed_targets: BTreeMap<api::SurfaceAddress, (api::OutputName, wl_output::WlOutput)>,
     pointer: Option<wl_pointer::WlPointer>,
     keyboard: Option<wl_keyboard::WlKeyboard>,
     keyboard_seat: Option<wl_seat::WlSeat>,
     pointer_seat: Option<wl_seat::WlSeat>,
-    keyboard_surface: Option<String>,
+    keyboard_surface: Option<api::SurfaceAddress>,
     input_serial: Option<u32>,
     clipboard: clipboard::Clipboard<A::Message>,
     modifiers: Modifiers,
@@ -331,6 +331,7 @@ impl<A: Application> State<A> {
             }?;
             let spec = api::SurfaceSpec {
                 id: "lock",
+                instance: None,
                 output: None,
                 layer: api::Layer::Overlay,
                 anchor: api::Anchor::Fill,
@@ -344,7 +345,10 @@ impl<A: Application> State<A> {
                 pointer_input: lucent_api::PointerInput::All,
             };
             self.surfaces.insert(
-                format!("lock-{}", output.id().protocol_id()),
+                api::SurfaceAddress::new("lock").instance(api::SurfaceInstance::new(format!(
+                    "global-{}",
+                    output.id().protocol_id()
+                ))?),
                 Native {
                     renderer,
                     role: SurfaceRole::Lock(lock_surface, output),
@@ -383,10 +387,14 @@ impl<A: Application> State<A> {
             "one_color_buffer_per_surface_bytes": self.surfaces.values().map(|s| s.renderer.single_surface_buffer_bytes()).sum::<u64>(),
             "scope":"Prepared image payloads referenced by current scenes only; app caches excluded. GPU buffer values are requested payloads, not driver allocations. Actual surface buffer counts and total GPU memory are unknown."
         }));
-        let mut result = serde_json::json!({"profile_memory":profile_memory,"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id,"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"buffer_width":s.width*s.scale,"buffer_height":s.height*s.scale,"frames":s.renderer.frames,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"frame_profiles":s.profiles.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)});
+        let mut result = serde_json::json!({"profile_memory":profile_memory,"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id.to_string(),"role":s.spec.id,"instance":s.spec.instance.as_ref().map(api::SurfaceInstance::as_str),"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"buffer_width":s.width*s.scale,"buffer_height":s.height*s.scale,"frames":s.renderer.frames,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"frame_profiles":s.profiles.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)});
         result["outputs"]=serde_json::json!(self.output_bindings.iter().map(|(info,_)|serde_json::json!({"global":info.global,"name":info.name.as_ref().map(api::OutputName::as_str),"logical_size":info.logical_size,"integer_scale":info.integer_scale})).collect::<Vec<_>>());
-        result["closed_named_surfaces"] =
-            serde_json::json!(self.closed_targets.keys().collect::<Vec<_>>());
+        result["closed_named_surfaces"] = serde_json::json!(
+            self.closed_targets
+                .keys()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+        );
         result.to_string()
     }
     fn message(&mut self, message: A::Message, qh: &QueueHandle<Self>) {
@@ -496,6 +504,15 @@ impl<A: Application> State<A> {
                 s.demand.invalidate();
             }
         }
+        for address in effects.redraw_instances {
+            for native in self
+                .surfaces
+                .values_mut()
+                .filter(|native| native.spec.address() == address)
+            {
+                native.demand.invalidate();
+            }
+        }
         self.draw_all(qh);
     }
     fn reconcile(&mut self, qh: &QueueHandle<Self>) -> Result<(), Error> {
@@ -504,14 +521,18 @@ impl<A: Application> State<A> {
             let mut ids = std::collections::BTreeSet::new();
             for spec in &specs {
                 spec.validate()?;
-                if !ids.insert(spec.id) {
+                if !ids.insert(spec.address()) {
                     return Err(format!("Duplicate native surface ID: {}", spec.id).into());
                 }
             }
             let removed: Vec<_> = self
                 .surfaces
                 .keys()
-                .filter(|id| !specs.iter().any(|spec| spec.id == **id && spec.visible))
+                .filter(|id| {
+                    !specs
+                        .iter()
+                        .any(|spec| spec.address() == **id && spec.visible)
+                })
                 .cloned()
                 .collect();
             for id in removed {
@@ -519,33 +540,34 @@ impl<A: Application> State<A> {
             }
             self.closed_targets.retain(|id, (name, output)| {
                 specs.iter().any(|spec| {
-                    spec.id == *id && spec.visible && spec.output.as_ref() == Some(name)
+                    spec.address() == *id && spec.visible && spec.output.as_ref() == Some(name)
                 }) && self
                     .output_bindings
                     .iter()
                     .any(|(info, current)| info.name.as_ref() == Some(name) && current == output)
             });
             for spec in specs.into_iter().filter(|s| s.visible) {
+                let address = spec.address();
                 let target = match outputs::resolve(
                     spec.output.as_ref(),
                     &self.output_bindings,
-                    self.closed_targets.get(spec.id),
+                    self.closed_targets.get(&address),
                 ) {
                     outputs::Target::Compositor => None,
                     outputs::Target::Waiting => {
-                        self.retire_native(spec.id);
+                        self.retire_native(&address);
                         continue;
                     }
                     outputs::Target::Named(output) => Some(output),
                 };
                 if self
                     .surfaces
-                    .get(spec.id)
+                    .get(&address)
                     .is_some_and(|native| native.bound_output != target)
                 {
-                    self.retire_native(spec.id);
+                    self.retire_native(&address);
                 }
-                if let Some(native) = self.surfaces.get_mut(spec.id) {
+                if let Some(native) = self.surfaces.get_mut(&address) {
                     if native.spec != spec {
                         if let SurfaceRole::Layer(layer) = &native.role {
                             configure_layer(layer, &spec);
@@ -561,7 +583,7 @@ impl<A: Application> State<A> {
                     qh,
                     surface,
                     layer_kind(spec.layer),
-                    Some(format!("{}-{}", self.app.name(), spec.id)),
+                    Some(format!("{}-{}", self.app.name(), address)),
                     target.as_ref(),
                 );
                 configure_layer(&layer, &spec);
@@ -579,7 +601,7 @@ impl<A: Application> State<A> {
                     )
                 }?;
                 self.surfaces.insert(
-                    spec.id.into(),
+                    address,
                     Native {
                         renderer,
                         role: SurfaceRole::Layer(layer),
@@ -604,8 +626,8 @@ impl<A: Application> State<A> {
             .map_err(|failure| failure.to_string())?;
         Ok(())
     }
-    fn retire_native(&mut self, id: &str) -> Option<Native<A::Message>> {
-        if self.keyboard_surface.as_deref() == Some(id) {
+    fn retire_native(&mut self, id: &api::SurfaceAddress) -> Option<Native<A::Message>> {
+        if self.keyboard_surface.as_ref() == Some(id) {
             self.keyboard_surface = None;
             self.input_serial = None;
         }
@@ -631,12 +653,12 @@ impl<A: Application> State<A> {
                 surface.scale = scale;
                 surface.demand.invalidate();
                 if surface.configured {
-                    events.push(api::Event::Resize {
+                    events.push(surface.spec.scope_event(api::Event::Resize {
                         surface: surface.spec.id,
                         width: surface.width as f32,
                         height: surface.height as f32,
                         scale,
-                    });
+                    }));
                 }
             }
         }
@@ -658,6 +680,7 @@ impl<A: Application> State<A> {
             let started = self.profile_frames.then(Instant::now);
             let tree = self.app.view(&ViewContext {
                 surface: s.spec.id,
+                instance: s.spec.instance.clone(),
                 width: s.width as f32,
                 height: s.height as f32,
                 now,
@@ -730,7 +753,7 @@ impl<A: Application> State<A> {
                 }
             }
             let started = self.profile_frames.then(Instant::now);
-            if self.app.animating(s.spec.id, now) || s.interaction.animating(now) {
+            if self.app.animating_instance(&s.spec.address(), now) || s.interaction.animating(now) {
                 s.demand.invalidate();
             }
             let submitted_ms = self.epoch.elapsed().as_secs_f64() * 1000.;
@@ -739,12 +762,12 @@ impl<A: Application> State<A> {
                 s.frame_times.pop_front();
             }
             s.scene = scene;
-            submitted.push(api::Event::FrameSubmitted {
+            submitted.push(s.spec.scope_event(api::Event::FrameSubmitted {
                 surface: s.spec.id,
                 width: s.width as f32,
                 height: s.height as f32,
                 now,
-            });
+            }));
             if let Some(render) = s.renderer.last_profile {
                 s.profiles.push(profiling::FrameProfile {
                     frame: s.renderer.frames,
@@ -767,7 +790,11 @@ impl<A: Application> State<A> {
             self.messages(messages, qh);
         }
     }
-    fn id_for(&self, surface: &wl_surface::WlSurface) -> Option<String> {
+    fn surface_event(&self, id: &api::SurfaceAddress, event: api::Event) -> Option<A::Message> {
+        let native = self.surfaces.get(id)?;
+        self.app.event(native.spec.scope_event(event))
+    }
+    fn id_for(&self, surface: &wl_surface::WlSurface) -> Option<api::SurfaceAddress> {
         self.surfaces
             .iter()
             .find(|(_, s)| s.role.wl_surface() == surface)
@@ -862,10 +889,13 @@ impl<A: Application> State<A> {
             self.keyboard_surface = None;
             return;
         };
-        if let Some(message) = self.app.event(api::Event::Key {
-            surface: logical_id,
-            key: key.clone(),
-        }) {
+        if let Some(message) = self.surface_event(
+            &id,
+            api::Event::Key {
+                surface: logical_id,
+                key: key.clone(),
+            },
+        ) {
             self.message(message, qh);
             return;
         }
@@ -983,12 +1013,12 @@ impl<A: Application> CompositorHandler for State<A> {
             s.scale = factor.max(1) as u32;
             s.demand.invalidate();
             if s.configured {
-                let event = api::Event::Resize {
+                let event = s.spec.scope_event(api::Event::Resize {
                     surface: s.spec.id,
                     width: s.width as f32,
                     height: s.height as f32,
                     scale: s.scale,
-                };
+                });
                 if let Some(message) = self.app.event(event) {
                     self.message(message, qh);
                 }
@@ -1047,7 +1077,7 @@ impl<A: Application> LayerShellHandler for State<A> {
         };
         if let (Some(name), Some(output)) = (&native.spec.output, &native.bound_output) {
             self.closed_targets
-                .insert(native.spec.id, (name.clone(), output.clone()));
+                .insert(native.spec.address(), (name.clone(), output.clone()));
             drop(native); // GPU surface retires before its protocol role.
             if let Err(error) = self.reconcile(qh) {
                 self.error = Some(error.to_string());
@@ -1071,12 +1101,12 @@ impl<A: Application> LayerShellHandler for State<A> {
             s.height = config.new_size.1.max(1);
             s.configured = true;
             s.demand.invalidate();
-            let event = api::Event::Resize {
+            let event = s.spec.scope_event(api::Event::Resize {
                 surface: s.spec.id,
                 width: s.width as f32,
                 height: s.height as f32,
                 scale: s.scale,
-            };
+            });
             if let Some(message) = self.app.event(event) {
                 self.message(message, qh);
             }
@@ -1258,10 +1288,13 @@ impl<A: Application> PointerHandler for State<A> {
                 _ => None,
             };
             if let Some(inside) = boundary
-                && let Some(message) = self.app.event(api::Event::PointerInside {
-                    surface: logical_id,
-                    inside,
-                })
+                && let Some(message) = self.surface_event(
+                    &id,
+                    api::Event::PointerInside {
+                        surface: logical_id,
+                        inside,
+                    },
+                )
             {
                 messages.push(message);
             }
@@ -1277,29 +1310,38 @@ impl<A: Application> PointerHandler for State<A> {
                     0x112 => api::MouseButton::Middle,
                     other => api::MouseButton::Other(other),
                 };
-                if let Some(message) = self.app.event(api::Event::PointerButton {
-                    surface: logical_id,
-                    button,
-                    pressed,
-                    x,
-                    y,
-                }) {
+                if let Some(message) = self.surface_event(
+                    &id,
+                    api::Event::PointerButton {
+                        surface: logical_id,
+                        button,
+                        pressed,
+                        x,
+                        y,
+                    },
+                ) {
                     messages.push(message);
                 }
             }
 
             if outside
-                && let Some(m) = self.app.event(api::Event::Outside {
-                    surface: logical_id,
-                })
+                && let Some(m) = self.surface_event(
+                    &id,
+                    api::Event::Outside {
+                        surface: logical_id,
+                    },
+                )
             {
                 messages.push(m);
             }
             if let Some(lines) = scroll
-                && let Some(m) = self.app.event(api::Event::Scroll {
-                    surface: logical_id,
-                    lines,
-                })
+                && let Some(m) = self.surface_event(
+                    &id,
+                    api::Event::Scroll {
+                        surface: logical_id,
+                        lines,
+                    },
+                )
             {
                 messages.push(m);
             }

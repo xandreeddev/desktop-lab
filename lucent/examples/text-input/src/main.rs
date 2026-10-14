@@ -102,6 +102,7 @@ impl Application for Example {
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         vec![SurfaceSpec {
             id: "text-input",
+            instance: None,
             output: None,
             layer: Layer::Top,
             anchor: Anchor::Top,

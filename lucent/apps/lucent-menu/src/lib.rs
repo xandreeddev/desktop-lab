@@ -356,6 +356,7 @@ impl Application for Menu {
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         vec![SurfaceSpec {
             id: "menu",
+            instance: None,
             output: None,
             layer: Layer::Overlay,
             anchor: Anchor::Fill,
@@ -376,7 +377,7 @@ impl Application for Menu {
     }
     fn event(&self, event: Event) -> Option<Message> {
         match event {
-            Event::OutputsChanged(_) => None,
+            Event::OutputsChanged(_) | Event::Scoped { .. } => None,
             Event::PointerInside { .. } | Event::PointerButton { .. } => None,
             Event::FrameSubmitted { .. } => None,
             Event::Outside { .. } => Some(Message::Cancel),
@@ -475,6 +476,7 @@ mod tests {
             menu.update(Message::Navigate(227), &mut Effects::default());
             let tree = menu.view(&ViewContext {
                 surface: "menu",
+                instance: None,
                 width,
                 height,
                 now: 1.,
