@@ -453,7 +453,8 @@
       ],
       "evidence": [
         "Source e05576c24fbafd82cc4f5c89dcebd49472fbda4b implements the complete native media path and client controls; native fixtures, client lifetime checks and software Vulkan texture checks pass. Graphical acceptance and current resource/pacing measurements remain deferred. See reports/measurements/lucent-native-media-and-activation.json.",
-        "Recorded source eb3f5cbfd6498844b567a5274d0a0ca7a44c50d2 passes single-output native VM MP4/WebM/GIF imports and changing captured background pixels, keyboard path submission/FPS selection, Escape, pause/resume, invalid-import preservation and restart persistence. Exact settings, selected wallpaper, theme/login exports, idle policy and test-owned asset cleanup are restored. See reports/measurements/lucent-live-wallpaper-vm.json. This establishes the baseline native path, not later daily-control changes, multi-output/hardware/secure-session acceptance or current RSS/pacing."
+        "Recorded source eb3f5cbfd6498844b567a5274d0a0ca7a44c50d2 passes single-output native VM MP4/WebM/GIF imports and changing captured background pixels, keyboard path submission/FPS selection, Escape, pause/resume, invalid-import preservation and restart persistence. Exact settings, selected wallpaper, theme/login exports, idle policy and test-owned asset cleanup are restored. See reports/measurements/lucent-live-wallpaper-baseline-vm.json. This establishes the baseline native path, not later daily-control changes, multi-output/hardware/secure-session acceptance or current RSS/pacing.",
+        "Source 63a4518b5140f7082f4bc3fed0ef8b5d5c1ea64c passes updated native autofocus, keyboard undo/redo, explicit pause-all preservation across imports, MP4/WebM/GIF pixels, profile pause/resume, FPS, invalid-media recovery and restart with exact rollback. Two 120-second software-Vulkan samples peak at 233.70 MiB static and 260.12 MiB during synthetic 160x90 MP4 playback at 15 FPS on a 1280x800 output. CPU is 1.067% and 69.891% of one core; GPU allocations and physical-GPU pacing are not measured. See reports/measurements/lucent-live-wallpaper-vm.json."
       ]
     }
   ],
@@ -1561,7 +1562,7 @@
     {
       "milestone": "native-live-wallpaper-single-output-vm-acceptance",
       "source_commit": "eb3f5cbfd6498844b567a5274d0a0ca7a44c50d2",
-      "report": "reports/measurements/lucent-live-wallpaper-vm.json",
+      "report": "reports/measurements/lucent-live-wallpaper-baseline-vm.json",
       "status": "native_vm_checks_passed",
       "checks": [
         "Synthetic MP4/WebM/GIF files are encoded by guest FFmpeg only as fixtures; the native Rust adapter imports/decodes them and actual background captures change with native frame submissions.",
@@ -1573,6 +1574,23 @@
         "Later daily-control changes require their own source-specific validation; this report records the pre-change baseline.",
         "Simultaneous native multi-output playback/input, clipboard interoperability, suspend/reconnect and secure-session display acceptance.",
         "Physical GPU/decode/power behavior, current 120-second RSS and frame-pacing measurements."
+      ]
+    },
+    {
+      "milestone": "daily-controls-native-vm-acceptance",
+      "source_commit": "63a4518b5140f7082f4bc3fed0ef8b5d5c1ea64c",
+      "report": "reports/measurements/lucent-live-wallpaper-vm.json",
+      "status": "native_vm_checks_passed",
+      "checks": [
+        "483 Rust tests, strict formatting/all-targets/Clippy, 93 Python checks, ShellCheck and generated design assets pass.",
+        "All six source-head CI checks pass, including the full 580 software-Vulkan visual comparisons with 20 new and 44 reviewed intentional references and unchanged tolerances.",
+        "Native VM exercises undo/redo, autofocus, FPS, pause-all preservation across imports, all media formats, restart and exact settings/wallpaper/theme/login/idle restoration.",
+        "Two actual 120-second process samples fit the 300 MiB allowance for the recorded synthetic workload; normal persistent VM allocation is restored."
+      ],
+      "pending": [
+        "Physical GPU pacing/power, full-resolution media, multi-output/suspend/reconnect and secure-client live poster presentation.",
+        "Owned-media cleanup/lease design and automatic battery/fullscreen policy.",
+        "Final evidence-head protected CI and merge."
       ]
     }
   ],

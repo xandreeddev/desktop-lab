@@ -147,14 +147,19 @@ messages, bounded latest-frame delivery and preservation of the last good image.
 A software-Vulkan test verifies real changing pixels, one reused GPU texture,
 no upload for a repeated revision and replacement on dimension changes.
 
-The initial playback implementation was exercised in a real Hyprland VM on
-source `eb3f5cbfd6498844b567a5274d0a0ca7a44c50d2`: synthetic MP4/WebM/GIF
+The daily-control implementation was exercised in a real Hyprland VM on
+source `63a4518b5140f7082f4bc3fed0ef8b5d5c1ea64c`: synthetic MP4/WebM/GIF
 background pixels changed, pause froze frames and pixels, resume worked, invalid
 imports preserved preferences, and restart restored playback/FPS. Native path
-editing, submission and Escape were exercised. Exact settings, wallpaper, theme,
+editing, submission, FPS, autofocus, keyboard undo/redo and Escape were exercised.
+Importing another clip preserved explicit pause-all. Exact settings, wallpaper, theme,
 login exports and idle policy were restored. See the sanitized
 [live wallpaper VM report](../reports/measurements/lucent-live-wallpaper-vm.json).
-This was software Vulkan on one output. New daily-control changes, actual
-lock/session presentation, multi-output/reconnect/suspend, physical-GPU frame
-pacing and the current RSS target require their own acceptance; the earlier VM
-result does not establish them.
+This was software Vulkan on one 1280×800 output with a synthetic 160×90 clip
+capped at 15 FPS. Two 120-second samples measured static RSS at 224.66 MiB mean /
+233.70 MiB peak and playback at 259.36 MiB mean / 260.12 MiB peak. Main-process
+CPU was 1.067% and 69.891% of one core respectively; software rendering contributes
+to those values. GPU allocations were not measured separately. Both tested
+process peaks fit the 300 MiB allowance. Full-resolution media, actual secure-client
+presentation, multi-output/reconnect/suspend and physical-GPU pacing/power remain
+separate acceptance; these synthetic samples do not establish them.

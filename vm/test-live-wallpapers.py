@@ -473,7 +473,7 @@ t=p.with_name('desktop.live-test.new'); t.write_text(json.dumps(d)); t.replace(p
                            'native_invalid_import_autofocus')
                 key(name, 29, 30)
                 type_ascii(name, scratch + '/invalid.mp4')
-                key(name, 29, 44)  # Undo restores the valid path.
+                key(name, 29, 44)  # Undo the latest typing group.
                 key(name, 29, 42, 44)  # Redo must restore the invalid path.
                 key(name, 28)
                 eventually(lambda: not client()['live_wallpaper']['importing']
