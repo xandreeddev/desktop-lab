@@ -15,7 +15,7 @@ pub enum Message {
     SelectMonitor(MonitorId),
     Notifications(crate::notifications::Message),
     Loaded(
-        domain::Result<DesktopSettings>,
+        Box<domain::Result<DesktopSettings>>,
         Vec<Wallpaper>,
         domain::Result<Option<WallpaperAsset>>,
     ),
@@ -36,6 +36,7 @@ pub enum Message {
     Launcher(launcher::Message),
     Launch(AppId, bool),
     Workspace(WorkspaceCommand),
+    LiveWallpaper(crate::live_wallpaper::Message),
     Action(Action),
     Wallpaper(usize, bool),
     Widgets(widgets::Message),
@@ -89,6 +90,9 @@ fn widget_surface_specs(
         .collect()
 }
 pub struct Desktop {
+    pub live_wallpaper: crate::live_wallpaper::LiveWallpaper,
+    pub display_catalog_seen: bool,
+    pub live_suspended: bool,
     pub notifications: crate::notifications::Center,
     pub osd: crate::osd::Osd,
     pub bar_visible: bool,
@@ -132,6 +136,12 @@ impl Desktop {
     pub fn new(adapters: DesktopAdapters) -> Self {
         let images = adapters.assets.initial();
         Self {
+            live_wallpaper: crate::live_wallpaper::LiveWallpaper::new(
+                adapters.playback.clone(),
+                adapters.assets.clone(),
+            ),
+            display_catalog_seen: false,
+            live_suspended: false,
             osd: Default::default(),
             bar_visible: true,
             theme_error: String::new(),
@@ -179,6 +189,135 @@ impl Desktop {
             error: String::new(),
             adapters,
         }
+    }
+    fn update_live_wallpaper(
+        &mut self,
+        message: crate::live_wallpaper::Message,
+        effects: &mut Effects<Message>,
+    ) {
+        if !self.settings_writable
+            && matches!(
+                message,
+                crate::live_wallpaper::Message::Import
+                    | crate::live_wallpaper::Message::ImportPath(..)
+                    | crate::live_wallpaper::Message::Pause(_)
+                    | crate::live_wallpaper::Message::Off
+                    | crate::live_wallpaper::Message::Rate(_)
+            )
+        {
+            self.live_wallpaper.error = "Saved preferences are not writable".into();
+            effects.redraw("live-wallpaper");
+            return;
+        }
+        let is_frame = matches!(
+            message,
+            crate::live_wallpaper::Message::Wake(..) | crate::live_wallpaper::Message::Frame(_)
+        );
+        let mut intent = None;
+        effects.delegate(
+            |child| intent = self.live_wallpaper.update(message, child),
+            Message::LiveWallpaper,
+        );
+        if let Some(intent) = intent {
+            use crate::live_wallpaper::Intent;
+            match intent {
+                Intent::FrameChanged(targets) => {
+                    for target in targets {
+                        if let Some(id) = target {
+                            if let Some(host) = self.monitors.connected.get(&id) {
+                                effects.redraw_surface(
+                                    SurfaceAddress::new("background")
+                                        .instance(host.instance.clone()),
+                                );
+                            }
+                        } else {
+                            effects.redraw("background");
+                        }
+                    }
+                }
+                intent => {
+                    let mut next = self.settings.clone();
+                    let mut poster = None;
+                    match intent {
+                        Intent::Apply(target, value) => {
+                            if let Some(target) = target {
+                                next.live_wallpapers.monitors.insert(target, value);
+                            } else {
+                                poster = Some(value.asset.poster.clone());
+                                next.live_wallpapers.default = Some(value);
+                            }
+                            next.live_wallpapers.paused = false;
+                        }
+                        Intent::Pause(value) => next.live_wallpapers.paused = value,
+                        Intent::Off(target) => {
+                            if let Some(target) = target {
+                                if let Some(mut setting) = next
+                                    .live_wallpapers
+                                    .monitors
+                                    .get(&target)
+                                    .or(next.live_wallpapers.default.as_ref())
+                                    .cloned()
+                                {
+                                    setting.enabled = false;
+                                    next.live_wallpapers.monitors.insert(target, setting);
+                                }
+                            } else {
+                                next.live_wallpapers.default = None;
+                            }
+                        }
+                        Intent::Rate(target, value) => {
+                            if let Some(target) = &target
+                                && !next.live_wallpapers.monitors.contains_key(target)
+                                && let Some(default) = next.live_wallpapers.default.clone()
+                            {
+                                next.live_wallpapers
+                                    .monitors
+                                    .insert(target.clone(), default);
+                            }
+                            let selected = target
+                                .as_ref()
+                                .and_then(|id| next.live_wallpapers.monitors.get_mut(id));
+                            if let Some(selected) = selected {
+                                selected.fps = value;
+                            } else if let Some(default) = next.live_wallpapers.default.as_mut() {
+                                default.fps = value;
+                            }
+                        }
+                        Intent::FrameChanged(_) => unreachable!(),
+                    }
+                    if let Err(error) = lucent_usecases::validate_settings(&next) {
+                        self.live_wallpaper.error = error.to_string();
+                    } else {
+                        self.settings = next;
+                        self.save(effects);
+                        if let Some(source) = poster {
+                            self.choose_wallpaper(
+                                crate::wallpaper_selection::Choice {
+                                    source,
+                                    colors: None,
+                                    browser_generation: None,
+                                },
+                                effects,
+                            );
+                        }
+                        effects.redraw("background");
+                    }
+                }
+            }
+        }
+        self.reconcile_live_wallpapers();
+        if !is_frame {
+            effects.redraw("live-wallpaper");
+        }
+    }
+    fn reconcile_live_wallpapers(&mut self) {
+        let monitors = self.monitors.connected.keys().cloned().collect::<Vec<_>>();
+        self.live_wallpaper.reconcile(
+            &self.settings.live_wallpapers,
+            &monitors,
+            self.display_catalog_seen,
+            self.live_suspended,
+        );
     }
     fn choose_wallpaper(
         &mut self,
@@ -646,6 +785,13 @@ impl Desktop {
             effects.quit();
             return;
         }
+        if matches!(action, Action::LiveWallpapers) {
+            self.update(
+                Message::LiveWallpaper(crate::live_wallpaper::Message::Open),
+                effects,
+            );
+            return;
+        }
         if matches!(action, Action::Terminal) {
             if let Some(app) = self.apps.iter().find(|a| a.id.as_str() == "foot.desktop") {
                 self.launch(&app.id, false, effects);
@@ -712,11 +858,20 @@ impl Component for Desktop {
             "tray" => self.tray.view(cx, self.theme()).map(Message::Tray),
             "osd" => self.osd.view(cx, self.theme()),
             "background" => self
-                .wallpaper
-                .background
-                .as_ref()
+                .live_wallpaper
+                .frame(route.as_ref().map(|route| &route.id))
+                .or(self.wallpaper.background.as_ref())
                 .map(|image| Element::image(image.clone()).cover().fill())
                 .unwrap_or_else(|| Element::empty().fill().background(self.surface_color())),
+            "live-wallpaper" => self
+                .live_wallpaper
+                .view(
+                    cx,
+                    &self.settings.live_wallpapers,
+                    &self.monitors.connected.keys().cloned().collect::<Vec<_>>(),
+                    self.theme(),
+                )
+                .map(Message::LiveWallpaper),
             "bar" => self.bar(cx),
             "widgets" => self
                 .widget_view_on(route.as_ref().map(|route| &route.id))
@@ -756,6 +911,7 @@ impl Component for Desktop {
             _ => false,
         };
         if other_panel {
+            self.update_live_wallpaper(crate::live_wallpaper::Message::Close, effects);
             effects.delegate(
                 |child| self.tray.update(crate::tray::Message::Close, child),
                 Message::Tray,
@@ -763,6 +919,7 @@ impl Component for Desktop {
         }
         match message {
             Message::Outputs(catalog) => {
+                self.display_catalog_seen = true;
                 self.monitors.reconcile(catalog, self.viewport);
                 let pending = self
                     .monitors
@@ -856,7 +1013,7 @@ impl Component for Desktop {
             Message::Loaded(settings, wallpapers, current_wallpaper) => {
                 self.monitors.cancel_interactions();
                 self.update_widgets(widgets::Message::CancelDrags, effects);
-                match settings {
+                match *settings {
                     Ok(settings) => {
                         self.settings = settings;
                         self.settings_writable = true;
@@ -941,6 +1098,16 @@ impl Component for Desktop {
                 match outcome {
                     Some(Outcome::Applied(prepared)) => {
                         let source = prepared.asset.source;
+                        if self
+                            .settings
+                            .live_wallpapers
+                            .default
+                            .as_ref()
+                            .is_some_and(|live| live.asset.poster.path != source.path)
+                        {
+                            self.settings.live_wallpapers.default = None;
+                            self.save(effects);
+                        }
                         if !self.wallpapers.iter().any(|wall| wall.path == source.path) {
                             self.wallpapers.push(source.clone());
                         }
@@ -1142,6 +1309,9 @@ impl Component for Desktop {
                 effects.delegate(|child| self.tray.update(message, child), Message::Tray);
             }
             Message::Power(message) => {
+                if let crate::power::Message::Observed(Ok(snapshot)) = &message {
+                    self.live_suspended = snapshot.preparing_for_sleep;
+                }
                 let opening = matches!(message, crate::power::Message::Open)
                     || matches!(message, crate::power::Message::Toggle) && !self.power.open();
                 if opening {
@@ -1183,6 +1353,35 @@ impl Component for Desktop {
             Message::Launch(id, prefer) => {
                 self.launch(&id, prefer, effects);
                 self.update_launcher(launcher::Message::Close, effects);
+            }
+            Message::LiveWallpaper(message) => {
+                if matches!(message, crate::live_wallpaper::Message::Open) {
+                    self.update_launcher(launcher::Message::Close, effects);
+                    effects.delegate(
+                        |child| self.audio.update(crate::audio::Message::Close, child),
+                        Message::Audio,
+                    );
+                    effects.delegate(
+                        |child| self.network.update(crate::network::Message::Close, child),
+                        Message::Network,
+                    );
+                    effects.delegate(
+                        |child| {
+                            self.bluetooth
+                                .update(crate::bluetooth::Message::Close, child)
+                        },
+                        Message::Bluetooth,
+                    );
+                    effects.delegate(
+                        |child| self.power.update(crate::power::Message::Close, child),
+                        Message::Power,
+                    );
+                    effects.delegate(
+                        |child| self.tray.update(crate::tray::Message::Close, child),
+                        Message::Tray,
+                    );
+                }
+                self.update_live_wallpaper(message, effects)
             }
             Message::Workspace(command) => {
                 // Retained named/special tree actions cannot invent a stale
@@ -1403,6 +1602,7 @@ impl Component for Desktop {
             }
             Message::Quit => effects.quit(),
         }
+        self.reconcile_live_wallpapers();
         self.refresh_previews(effects);
     }
 }
@@ -1458,6 +1658,29 @@ impl api::Application for Desktop {
     }
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         let mut surfaces = vec![
+            SurfaceSpec {
+                id: "live-wallpaper",
+                instance: None,
+                output: None,
+                layer: Layer::Overlay,
+                anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
+                width: 0,
+                height: 0,
+                exclusive_zone: -1,
+                keyboard: if self.live_wallpaper.open {
+                    Keyboard::OnDemand
+                } else {
+                    Keyboard::None
+                },
+                visible: self.live_wallpaper.mounted,
+                pointer_input: if self.live_wallpaper.open {
+                    PointerInput::All
+                } else {
+                    PointerInput::None
+                },
+            },
             SurfaceSpec {
                 id: "tray",
                 instance: None,
@@ -1730,7 +1953,11 @@ impl api::Application for Desktop {
         let store = self.adapters.settings.clone();
         let wallpaper = self.adapters.wallpaper.clone();
         effects.task_on(crate::work::ASSETS, move || {
-            Message::Loaded(store.load(), wallpaper.list(), wallpaper.current())
+            Message::Loaded(
+                Box::new(store.load()),
+                wallpaper.list(),
+                wallpaper.current(),
+            )
         });
     }
     fn subscriptions(&self) -> Vec<Subscription<Message>> {
@@ -1886,10 +2113,29 @@ impl api::Application for Desktop {
                 );
             }));
         }
+        s.extend(
+            self.live_wallpaper
+                .subscriptions()
+                .into_iter()
+                .map(|subscription| subscription.map(Message::LiveWallpaper)),
+        );
         s
     }
     fn event(&self, event: Event) -> Option<Message> {
         match event {
+            Event::FrameSubmitted {
+                surface: "live-wallpaper",
+                now,
+                ..
+            } => Some(Message::LiveWallpaper(
+                crate::live_wallpaper::Message::Frame(now),
+            )),
+            Event::Key {
+                surface: "live-wallpaper",
+                key: Key::Escape,
+            } => Some(Message::LiveWallpaper(
+                crate::live_wallpaper::Message::Close,
+            )),
             Event::OutputsChanged(catalog) => Some(Message::Outputs(catalog)),
             Event::Scoped { instance, event } => {
                 let route = self.monitors.route(&instance)?;
@@ -2040,6 +2286,29 @@ impl api::Application for Desktop {
         }
     }
     fn command(&self, command: &str) -> std::result::Result<Option<Message>, String> {
+        if command == "wallpaper live open" {
+            return Ok(Some(Message::LiveWallpaper(
+                crate::live_wallpaper::Message::Open,
+            )));
+        }
+        if command == "wallpaper live pause" || command == "wallpaper live resume" {
+            return Ok(Some(Message::LiveWallpaper(
+                crate::live_wallpaper::Message::Pause(command.ends_with("pause")),
+            )));
+        }
+        if command == "wallpaper live off" {
+            return Ok(Some(Message::LiveWallpaper(
+                crate::live_wallpaper::Message::Off,
+            )));
+        }
+        if let Some(path) = command.strip_prefix("wallpaper live play ") {
+            if !self.settings_writable {
+                return Err("Settings are not ready for saving".into());
+            }
+            return Ok(Some(Message::LiveWallpaper(
+                crate::live_wallpaper::Message::ImportPath(None, path.into()),
+            )));
+        }
         if let Some(value) = command.strip_prefix("workspace select ") {
             let id = if let Some(name) = value.strip_prefix("name:") {
                 WorkspaceRef::named(name)
@@ -2270,6 +2539,7 @@ impl api::Application for Desktop {
             "background": crate::previews::usage(self.wallpaper.background.iter()),
             "total": crate::previews::usage(self.images.values().chain(self.previews.images()).chain(self.browser.previews.values()).chain(self.wallpaper.background.iter())),
         }, "palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_history_open":self.notifications.history_open(),"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id.number(),"name":w.id.name(),"special":w.id.is_special(),"active":w.active})).collect::<Vec<_>>(),"widgets":self.active_widget_layout().visible_widgets,"positions":self.active_widget_layout().positions,"widget_grid":self.active_widgets().grid_visible(),"widget_surfaces":self.active_widgets().surfaces(self.active_widget_layout(),self.viewport).iter().map(|s|serde_json::json!({"id":s.id,"members":s.members,"x":s.rect.x,"y":s.rect.y,"width":s.rect.w,"height":s.rect.h})).collect::<Vec<_>>(),"notes":self.settings.notes,"timer_seconds":self.active_widgets().timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"settings_save_status":self.persistence.status(self.settings_writable).name(),"settings_save_error":self.persistence.error(),"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable});
+        value["live_wallpaper"] = self.live_wallpaper.inspect();
         value["notification_artwork"] = self.notifications.artwork_inspection();
         value["network"] = self.network.inspect();
         value["bluetooth"] = self.bluetooth.inspect();
@@ -2293,7 +2563,8 @@ impl api::Application for Desktop {
         value.to_string()
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
-        (surface == "notifications" && self.notifications.animating(now))
+        (surface == "live-wallpaper" && self.live_wallpaper.motion.active(now))
+            || (surface == "notifications" && self.notifications.animating(now))
             || (surface == "audio" && self.audio.animating(now))
             || (surface == "power" && self.power.animating(now))
             || (surface == "tray" && self.tray.animating(now))

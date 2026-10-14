@@ -2,7 +2,7 @@
 use lucent_api::{Align, Density, ImageFormat, Rect};
 use lucent_ui::Paint;
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     ffi::c_void,
     ptr::NonNull,
     rc::Rc,
@@ -28,6 +28,7 @@ struct TextureResource {
     width: f32,
     height: f32,
     _texture: Texture,
+    revision: Cell<u64>,
     bytes: u64,
     /// Logical left bearing for text masks; ordinary image resources use zero.
     text_origin_x: f32,
@@ -271,6 +272,7 @@ impl Gpu {
             width: width as f32,
             height: height as f32,
             _texture: texture,
+            revision: Cell::new(0),
             bytes: levels.iter().map(|level| level.pixels.len() as u64).sum(),
             text_origin_x: 0.,
         });
@@ -303,14 +305,56 @@ impl Gpu {
         profile: &mut ResourceProfile,
         enabled: bool,
     ) -> Rc<TextureResource> {
-        let key = format!("image:{}", data.cache_id());
-        if let Some(v) = self.cache.borrow_mut().get(&key) {
-            return v;
+        let streamed = data.stream_revision();
+        let key = streamed.map_or_else(
+            || format!("image:{}", data.cache_id()),
+            |(id, _)| format!("stream:{id}"),
+        );
+        if let Some(texture) = self.cache.borrow_mut().get(&key) {
+            if let Some((_, revision)) = streamed {
+                if texture.width == data.width() as f32 && texture.height == data.height() as f32 {
+                    if texture.revision.get() != revision {
+                        let started = profiling::start(enabled);
+                        self.queue.write_texture(
+                            TexelCopyTextureInfo {
+                                texture: &texture._texture,
+                                mip_level: 0,
+                                origin: Origin3d::ZERO,
+                                aspect: TextureAspect::All,
+                            },
+                            data.pixels(),
+                            TexelCopyBufferLayout {
+                                offset: 0,
+                                bytes_per_row: Some(data.width() * 4),
+                                rows_per_image: Some(data.height()),
+                            },
+                            Extent3d {
+                                width: data.width(),
+                                height: data.height(),
+                                depth_or_array_layers: 1,
+                            },
+                        );
+                        texture.revision.set(revision);
+                        if enabled {
+                            profile.texture_upload += profiling::elapsed(started);
+                            profile.texture_upload_bytes += data.bytes() as u64;
+                        }
+                    }
+                    return texture;
+                }
+                // Size changes replace this cache slot; already submitted work
+                // keeps its own resource reference until its lifetime ends.
+            } else {
+                return texture;
+            }
         }
         if enabled {
             profile.image_misses += 1;
         }
         let texture = self.texture(data.levels(), data.format(), profile, enabled);
+        if let Some((_, revision)) = streamed {
+            texture.revision.set(revision);
+        }
         self.cache
             .borrow_mut()
             .insert(key, texture.clone(), texture.bytes);
@@ -1912,5 +1956,74 @@ impl Renderer {
         self.frames += 1;
         self.recovery.presented();
         Ok(RenderOutcome::Presented)
+    }
+}
+
+#[cfg(test)]
+mod streaming_tests {
+    use super::*;
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn streamed_images_reuse_one_gpu_texture_and_update_real_pixels() {
+        let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
+        let mut canvas = Canvas::new(gpu.clone());
+        canvas.profiling = true;
+        let stream = lucent_api::ImageStream::new();
+        let rect = Rect::new(0., 0., 8., 8.);
+        for (index, color) in [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255]]
+            .into_iter()
+            .enumerate()
+        {
+            let image = Arc::new(stream.frame_rgba(2, 1, color.repeat(2)).unwrap());
+            let paint = [Paint::Image {
+                rect,
+                clip: rect.into(),
+                data: image.clone(),
+                uv: Rect::new(0., 0., 1., 1.),
+                radius: 0.,
+                opacity: 1.,
+                tint: lucent_api::Color::hex(0xffffff),
+            }];
+            let pixels = canvas.snapshot(8, 8, 1, &paint).unwrap();
+            assert!(
+                pixels
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .all(|pixel| *pixel == color)
+            );
+            let profile = canvas.last_profile.unwrap();
+            assert_eq!(
+                profile.resources.image_misses,
+                usize::from(index == 0) as u64
+            );
+            assert_eq!(profile.resources.texture_upload_bytes, 8);
+            let warm = canvas.snapshot(8, 8, 1, &paint).unwrap();
+            assert_eq!(warm, pixels);
+            assert_eq!(
+                canvas.last_profile.unwrap().resources.texture_upload_bytes,
+                0
+            );
+            assert_eq!(gpu.cache_stats().entries, 1);
+        }
+        let changed = Arc::new(stream.frame_rgba(1, 1, vec![255, 255, 0, 255]).unwrap());
+        let paint = [Paint::Image {
+            rect,
+            clip: rect.into(),
+            data: changed,
+            uv: Rect::new(0., 0., 1., 1.),
+            radius: 0.,
+            opacity: 1.,
+            tint: lucent_api::Color::hex(0xffffff),
+        }];
+        let pixels = canvas.snapshot(8, 8, 2, &paint).unwrap();
+        assert!(
+            pixels
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|pixel| *pixel == [255, 255, 0, 255])
+        );
+        assert_eq!(gpu.cache_stats().entries, 1);
     }
 }

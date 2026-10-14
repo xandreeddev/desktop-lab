@@ -187,6 +187,12 @@ class Boundaries(unittest.TestCase):
         self.assertNotIn('lucent-wayland', reachable(self.graph, 'tray-service'))
         self.assertNotIn('lucent-render', reachable(self.graph, 'tray-service'))
 
+    def test_live_wallpaper_client_and_decoder_preserve_domain_engine_boundaries(self):
+        self.assert_no_platform_operations([ROOT/'lucent/apps/lucent-desktop/src/live_wallpaper.rs', *sources(ROOT/'lucent/apps/lucent-desktop/src/live_wallpaper', ('tests.rs',))],
+                                           ('crate::desktop', 'crate::adapters', 'crate::platform', 'lucent_services', 'ffmpeg_next'))
+        self.assert_no_imports([ROOT/'lucent/crates/lucent-services/src/video.rs'],
+                               ('lucent_desktop', 'lucent_design', 'lucent_wayland', 'lucent_render'))
+
     def test_compositor_consumer_and_adapter_preserve_monitor_policy_boundaries(self):
         self.assertNotIn('lucent-wayland', reachable(self.graph, 'compositor-service'))
         self.assertNotIn('lucent-render', reachable(self.graph, 'compositor-service'))

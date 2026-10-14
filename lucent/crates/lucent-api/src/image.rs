@@ -42,6 +42,7 @@ pub struct ImageLevel {
 struct Prepared {
     id: u64,
     format: ImageFormat,
+    stream: Option<(u64, u64)>,
     levels: Vec<ImageLevel>,
 }
 #[derive(Clone, Debug)]
@@ -50,6 +51,68 @@ pub struct ImageData {
     pub key: String,
     aspect_size: (u32, u32),
     prepared: Arc<Prepared>,
+}
+/// One generic streamed image resource, independent of media/OS policy. Each
+/// prepared frame is immutable; the renderer may reuse its GPU allocation when
+/// dimensions match. Clones of a stream share its identity and revision counter.
+#[derive(Clone, Debug)]
+pub struct ImageStream(Arc<StreamIdentity>);
+#[derive(Debug)]
+struct StreamIdentity {
+    id: u64,
+    revision: AtomicU64,
+}
+impl Default for ImageStream {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl ImageStream {
+    pub fn new() -> Self {
+        Self(Arc::new(StreamIdentity {
+            id: NEXT_IMAGE.fetch_add(1, Ordering::Relaxed),
+            revision: AtomicU64::new(0),
+        }))
+    }
+    /// Prepare one straight-alpha RGBA8 frame without building per-frame mips.
+    /// Call from a producer/asset worker. Static images retain full mip support.
+    pub fn frame_rgba(
+        &self,
+        width: u32,
+        height: u32,
+        mut pixels: Vec<u8>,
+    ) -> Result<ImageData, ImageError> {
+        validate(&pixels, width, height, ImageFormat::PremultipliedRgba8)?;
+        for pixel in pixels.as_chunks_mut::<4>().0 {
+            if pixel[3] != 255 {
+                for channel in 0..3 {
+                    pixel[channel] = (u16::from(pixel[channel]) * u16::from(pixel[3]) / 255) as u8;
+                }
+            }
+        }
+        let revision = self
+            .0
+            .revision
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                value.checked_add(1)
+            })
+            .map_err(|_| ImageError("Image stream revision exhausted"))?
+            + 1;
+        Ok(ImageData {
+            key: "streamed-image".into(),
+            aspect_size: (width, height),
+            prepared: Arc::new(Prepared {
+                id: NEXT_IMAGE.fetch_add(1, Ordering::Relaxed),
+                format: ImageFormat::PremultipliedRgba8,
+                stream: Some((self.0.id, revision)),
+                levels: vec![ImageLevel {
+                    width,
+                    height,
+                    pixels,
+                }],
+            }),
+        })
+    }
 }
 impl ImageData {
     /// Validate straight-alpha RGBA8, premultiply and prepare the full mip chain.
@@ -117,6 +180,7 @@ impl ImageData {
             prepared: Arc::new(Prepared {
                 id: NEXT_IMAGE.fetch_add(1, Ordering::Relaxed),
                 format,
+                stream: None,
                 levels,
             }),
         }
@@ -140,6 +204,7 @@ impl ImageData {
             prepared: Arc::new(Prepared {
                 id: NEXT_IMAGE.fetch_add(1, Ordering::Relaxed),
                 format: self.format(),
+                stream: None,
                 levels: self.levels()[index..].to_vec(),
             }),
         }
@@ -185,6 +250,10 @@ impl ImageData {
     }
     pub fn cache_id(&self) -> u64 {
         self.prepared.id
+    }
+    /// Stable GPU resource identity and immutable content revision for a stream.
+    pub fn stream_revision(&self) -> Option<(u64, u64)> {
+        self.prepared.stream
     }
     pub fn bytes(&self) -> usize {
         self.prepared
@@ -364,5 +433,36 @@ mod tests {
         assert_eq!(image.clone().cache_id(), image.cache_id());
         let replacement = ImageData::from_rgba("same-name", 1, 1, vec![255; 4]).unwrap();
         assert_ne!(replacement.cache_id(), image.cache_id());
+    }
+}
+
+#[cfg(test)]
+mod streaming_tests {
+    use super::*;
+    #[test]
+    fn streaming_frames_are_immutable_and_have_one_mip_with_a_stable_resource_identity() {
+        let stream = ImageStream::new();
+        let first = stream
+            .frame_rgba(2, 1, vec![200, 100, 50, 128, 0, 0, 0, 255])
+            .unwrap();
+        let second = stream
+            .frame_rgba(2, 1, vec![0, 255, 0, 255, 0, 0, 0, 255])
+            .unwrap();
+        assert_eq!(first.levels().len(), 1);
+        assert_eq!(first.pixels()[0], 100);
+        assert_eq!(first.bytes(), 8);
+        assert_ne!(first.cache_id(), second.cache_id());
+        let (a, ra) = first.stream_revision().unwrap();
+        let (b, rb) = second.stream_revision().unwrap();
+        assert_eq!(a, b);
+        assert!(rb > ra);
+        assert_eq!(first.pixels()[0], 100);
+        assert!(stream.frame_rgba(2, 1, vec![0; 4]).is_err());
+        assert!(
+            ImageData::from_rgba("static", 1, 1, vec![0; 4])
+                .unwrap()
+                .stream_revision()
+                .is_none()
+        );
     }
 }

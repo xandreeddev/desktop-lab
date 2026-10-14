@@ -20,3 +20,5 @@ futures-lite = "2.6"
 lucent-usecases = { path = "../lucent-usecases" }
 jpeg-decoder = { version = "0.3.2", default-features = false }
 pulse = { version = "1.23.0", package = "libpulse-sys" }
+
+ffmpeg-next = { version = "9", default-features = false, features = ["codec", "format", "software-scaling"] }

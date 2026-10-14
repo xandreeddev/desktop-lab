@@ -590,6 +590,12 @@ pub mod component {
         pub const INSET: f32 = 8.0;
         pub const BUTTON_PADDING: f32 = 2.0;
     }
+    pub mod live_wallpaper {
+        pub const PANEL_WIDTH: f32 = 640.0;
+        pub const INPUT_HEIGHT: f32 = 56.0;
+        pub const PANEL_HEIGHT: f32 = 560.0;
+        pub const STATUS_LINES: f32 = 3.0;
+    }
 }
 pub mod icon {
     pub const TINY: f32 = 16.0;

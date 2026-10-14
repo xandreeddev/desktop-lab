@@ -26,6 +26,7 @@ pub fn desktop_adapters() -> DesktopAdapters {
         media: Arc::new(Playerctl),
         weather: Arc::new(OpenMeteo),
         wallpaper: Arc::new(LucentWallpaper),
+        playback: Arc::new(lucent_services::video::NativeVideoWallpapers::default()),
         session: Arc::new(LucentSession),
         assets: Arc::new(NativeAssets),
         uri: Arc::new(lucent_services::applications::XdgUri),

@@ -90,9 +90,11 @@ pub(super) fn discover(source: &XdgApplications) -> Result<Vec<Application>> {
                     + app.description.len()
                     + app.icon.len()
                     + app.startup_class.len()
-                    + app.command.program.len()
-                    + app.command.directory.as_ref().map_or(0, String::len)
-                    + app.command.args.iter().map(String::len).sum::<usize>()
+                    + app.launch.command().map_or(0, |command| {
+                        command.program.len()
+                            + command.directory.as_ref().map_or(0, String::len)
+                            + command.args.iter().map(String::len).sum::<usize>()
+                    })
                     + app.keywords.iter().map(String::len).sum::<usize>();
                 if bytes > MAX_CATALOG_BYTES {
                     return Err(DomainError::Unavailable(

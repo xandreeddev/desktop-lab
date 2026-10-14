@@ -64,12 +64,12 @@ fn fixture(count: usize, light: bool) -> Desktop {
                 format!("symbol:{}", icons[n % icons.len()])
             },
             startup_class: String::new(),
-            command: LaunchCommand {
+            launch: lucent_domain::ApplicationLaunch::Command(LaunchCommand {
                 program: "unused-fixture".into(),
                 args: vec![],
                 directory: None,
                 terminal: false,
-            },
+            }),
         })
         .collect();
     app.update(
@@ -1357,6 +1357,9 @@ fn visual_regressions() {
             ("monitor-bar-right", Mode::Apps, 0, 0, "", 1., 960.),
             ("monitor-bar-named-right", Mode::Apps, 0, 0, "", 1., 960.),
             ("monitor-bar-special-right", Mode::Apps, 0, 0, "", 1., 960.),
+            ("live-wallpaper", Mode::Apps, 0, 0, "", 1., 960.),
+            ("live-wallpaper-narrow", Mode::Apps, 0, 0, "", 1., 390.),
+            ("live-wallpaper-opening", Mode::Apps, 0, 0, "", 0.08, 960.),
             ("text-caret-middle", Mode::Apps, 0, 0, "", 1., 640.),
             ("text-selection-forward", Mode::Apps, 0, 0, "", 1., 640.),
             ("text-selection-reverse", Mode::Apps, 0, 0, "", 1., 640.),
@@ -2449,6 +2452,22 @@ fn visual_regressions() {
                     density: lucent_api::Density::ONE,
                 };
                 layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
+            } else if name.starts_with("live-wallpaper") {
+                app.update(
+                    Message::LiveWallpaper(crate::live_wallpaper::Message::Open),
+                    &mut Effects::default(),
+                );
+                app.live_wallpaper.path = "/media/synthetic-loop.mp4".into();
+                app.live_wallpaper.field.reset(&app.live_wallpaper.path);
+                let cx = ViewContext {
+                    surface: "live-wallpaper",
+                    instance: None,
+                    width,
+                    height,
+                    now,
+                    density: lucent_api::Density::ONE,
+                };
+                layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
             } else if name.starts_with("monitor-") {
                 use lucent_domain::{MonitorId, Placement, WidgetLayout, WidgetSize};
                 let left = MonitorId::new("DEMO-1").unwrap();
@@ -2754,6 +2773,33 @@ fn desktop_actions_use_injected_adapters_without_executing_host_commands() {
         }
     }
     assert_eq!(*fake.calls.lock().unwrap(), ["audio", "media", "lock"]);
+}
+
+#[test]
+fn live_wallpaper_preferences_reject_mutations_until_storage_is_ready() {
+    use crate::live_wallpaper::Message as LiveMessage;
+    let mut app = Desktop::new(crate::test_adapters::adapters());
+    let original = serde_json::to_value(&app.settings).unwrap();
+    for message in [
+        LiveMessage::ImportPath(None, "/fixture/clip.mp4".into()),
+        LiveMessage::Pause(true),
+        LiveMessage::Off,
+        LiveMessage::Rate(lucent_domain::WallpaperFps::new(60).unwrap()),
+    ] {
+        let mut effects = Effects::default();
+        app.update(Message::LiveWallpaper(message), &mut effects);
+        assert!(effects.tasks.is_empty());
+        assert_eq!(serde_json::to_value(&app.settings).unwrap(), original);
+        assert!(!app.live_wallpaper.error.is_empty());
+    }
+    app.settings_writable = true;
+    let mut effects = Effects::default();
+    app.update(
+        Message::LiveWallpaper(LiveMessage::Pause(true)),
+        &mut effects,
+    );
+    assert!(app.settings.live_wallpapers.paused);
+    assert_eq!(effects.tasks.len(), 1);
 }
 
 #[test]
@@ -3432,9 +3478,9 @@ fn invalid_settings_remain_visible_after_unrelated_successful_effects() {
     let mut effects = Effects::default();
     app.update(
         Message::Loaded(
-            Err(lucent_domain::DomainError::Invalid(
+            Box::new(Err(lucent_domain::DomainError::Invalid(
                 "invalid saved position".into(),
-            )),
+            ))),
             vec![],
             Ok(None),
         ),

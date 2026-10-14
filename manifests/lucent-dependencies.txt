@@ -17,3 +17,4 @@ swayidle
 hyprlock
 wl-clipboard
 wtype
+ffmpeg
