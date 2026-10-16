@@ -2,16 +2,45 @@
 //! remain in the injected adapter and the desktop coordinator.
 use lucent_domain::{
     DesktopSettings, DomainError, LiveWallpaperSettings, LiveWallpaperTarget, LiveWallpapers,
-    MonitorId, Result, WallpaperFps,
+    MonitorId, Result, WallpaperFps, WallpaperPauseCondition, WallpaperPauseReason,
+    WallpaperPlaybackContext,
 };
 
 pub enum LiveWallpaperChange {
     Apply(LiveWallpaperTarget, LiveWallpaperSettings),
     Pause(LiveWallpaperTarget, bool),
     PauseAll(bool),
+    Policy(WallpaperPauseCondition, bool),
     Off(LiveWallpaperTarget),
     Rate(LiveWallpaperTarget, WallpaperFps),
     Inherit(MonitorId),
+}
+
+/// Evaluate one output without changing saved preferences. Explicit pauses win;
+/// unavailable observations never masquerade as battery or fullscreen state.
+pub fn wallpaper_pause_reason(
+    settings: &LiveWallpapers,
+    profile: &LiveWallpaperSettings,
+    target: &LiveWallpaperTarget,
+    context: &WallpaperPlaybackContext,
+) -> Option<WallpaperPauseReason> {
+    if settings.paused {
+        Some(WallpaperPauseReason::All)
+    } else if profile.paused {
+        Some(WallpaperPauseReason::Profile)
+    } else if context.preparing_for_sleep {
+        Some(WallpaperPauseReason::Sleep)
+    } else if settings.policy.pause_on_battery && context.on_battery == Some(true) {
+        Some(WallpaperPauseReason::Battery)
+    } else if settings.policy.pause_when_fullscreen
+        && target
+            .monitor()
+            .is_some_and(|id| context.fullscreen_monitors.contains(id))
+    {
+        Some(WallpaperPauseReason::Fullscreen)
+    } else {
+        None
+    }
 }
 
 /// Reject cheap invalid demands before copying or decoding native media.
@@ -83,6 +112,10 @@ pub fn change_live_wallpaper(
         },
         LiveWallpaperChange::Pause(target, value) => selected_mut(live, &target)?.paused = value,
         LiveWallpaperChange::PauseAll(value) => live.paused = value,
+        LiveWallpaperChange::Policy(condition, value) => match condition {
+            WallpaperPauseCondition::Battery => live.policy.pause_on_battery = value,
+            WallpaperPauseCondition::Fullscreen => live.policy.pause_when_fullscreen = value,
+        },
         LiveWallpaperChange::Off(target) => match target {
             LiveWallpaperTarget::Default => live.default = None,
             LiveWallpaperTarget::Monitor(_) => {
@@ -123,6 +156,112 @@ mod tests {
             paused: false,
             enabled: true,
         }
+    }
+    #[test]
+    fn automatic_pause_is_per_output_and_never_clears_an_explicit_pause() {
+        use WallpaperPauseReason::*;
+        let id = MonitorId::new("DP-1").unwrap();
+        let target = LiveWallpaperTarget::Monitor(id.clone());
+        let other = LiveWallpaperTarget::Monitor(MonitorId::new("DP-2").unwrap());
+        let mut settings = LiveWallpapers::default();
+        let mut selected = profile();
+        let mut context = WallpaperPlaybackContext::default();
+        assert_eq!(
+            wallpaper_pause_reason(&settings, &selected, &target, &context),
+            None
+        );
+        context.fullscreen_monitors.insert(id);
+        assert_eq!(
+            wallpaper_pause_reason(&settings, &selected, &target, &context),
+            Some(Fullscreen)
+        );
+        assert_eq!(
+            wallpaper_pause_reason(&settings, &selected, &other, &context),
+            None
+        );
+        assert_eq!(
+            wallpaper_pause_reason(
+                &settings,
+                &selected,
+                &LiveWallpaperTarget::Default,
+                &context
+            ),
+            None
+        );
+        context.on_battery = Some(true);
+        assert_eq!(
+            wallpaper_pause_reason(&settings, &selected, &other, &context),
+            Some(Battery)
+        );
+        context.preparing_for_sleep = true;
+        assert_eq!(
+            wallpaper_pause_reason(&settings, &selected, &other, &context),
+            Some(Sleep)
+        );
+        selected.paused = true;
+        assert_eq!(
+            wallpaper_pause_reason(&settings, &selected, &other, &context),
+            Some(Profile)
+        );
+        settings.paused = true;
+        context = WallpaperPlaybackContext::default();
+        assert_eq!(
+            wallpaper_pause_reason(&settings, &selected, &target, &context),
+            Some(All)
+        );
+        settings.paused = false;
+        assert_eq!(
+            wallpaper_pause_reason(&settings, &selected, &target, &context),
+            Some(Profile)
+        );
+    }
+    #[test]
+    fn policy_controls_change_only_the_requested_preference_and_allow_unavailable_observations() {
+        let id = MonitorId::new("DP-1").unwrap();
+        let target = LiveWallpaperTarget::Monitor(id.clone());
+        let mut settings = DesktopSettings::default();
+        let selected = profile();
+        let mut context = WallpaperPlaybackContext {
+            on_battery: Some(true),
+            fullscreen_monitors: [id].into(),
+            ..Default::default()
+        };
+        change_live_wallpaper(
+            &mut settings,
+            LiveWallpaperChange::Policy(WallpaperPauseCondition::Battery, false),
+        )
+        .unwrap();
+        assert!(settings.live_wallpapers.policy.pause_when_fullscreen);
+        assert_eq!(
+            wallpaper_pause_reason(&settings.live_wallpapers, &selected, &target, &context),
+            Some(WallpaperPauseReason::Fullscreen)
+        );
+        change_live_wallpaper(
+            &mut settings,
+            LiveWallpaperChange::Policy(WallpaperPauseCondition::Fullscreen, false),
+        )
+        .unwrap();
+        assert_eq!(
+            wallpaper_pause_reason(&settings.live_wallpapers, &selected, &target, &context),
+            None
+        );
+        settings.live_wallpapers.policy = Default::default();
+        context.fullscreen_monitors.clear();
+        for power in [None, Some(false)] {
+            context.on_battery = power;
+            assert_eq!(
+                wallpaper_pause_reason(&settings.live_wallpapers, &selected, &target, &context),
+                None
+            );
+        }
+        // Sleep is an observed lifecycle pause, independent of optional policies.
+        settings.live_wallpapers.policy.pause_on_battery = false;
+        settings.live_wallpapers.policy.pause_when_fullscreen = false;
+        context.preparing_for_sleep = true;
+        assert_eq!(
+            wallpaper_pause_reason(&settings.live_wallpapers, &selected, &target, &context),
+            Some(WallpaperPauseReason::Sleep)
+        );
     }
     #[test]
     fn monitor_controls_copy_default_without_changing_other_targets_or_global_pause() {

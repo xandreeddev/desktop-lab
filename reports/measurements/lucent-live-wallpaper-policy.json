@@ -1,0 +1,79 @@
+{
+  "status": "native_single_output_vm_checks_passed",
+  "tested_implementation_commit": "faec272e21fe301284f6212a59b7de84cc8752aa",
+  "tested_harness": {
+    "path": "vm/test-live-wallpapers.py",
+    "sha256": "d81875b6bb980e37ff550fa5f7d80913492261bdf42b0101ecba41da093186be",
+    "mode": "--policy-only",
+    "note": "Harness includes the Lua dispatcher and explicit workspace/focus restoration checks committed with this report; desktop implementation is unchanged from the recorded source."
+  },
+  "binaries": {
+    "lucent-desktop": {
+      "sha256": "cd8d19a0dab596ba255af5cff0858909d2baec53b0329a5a08d4b76b379a0817",
+      "bytes": 20430120
+    }
+  },
+  "running_binary_hash_verified": true,
+  "checks": {
+    "synthetic_mp4_webm_gif_encoded": true,
+    "native_ordinary_field_undo_and_autofocus": true,
+    "native_path_edit_submit_and_fps": true,
+    "mp4_native_import_and_changing_pixels": true,
+    "visible_fullscreen_stops_decoder_and_redraws": true,
+    "fullscreen_on_hidden_workspace_does_not_pause": true,
+    "leaving_fullscreen_preserves_manual_pause": true,
+    "native_policy_controls_and_restart_preserve_opt_outs": true,
+    "leaving_fullscreen_resumes_unpaused_profile": true,
+    "workspace_focus_and_test_window_restored": true,
+    "native_panel_escape": true
+  },
+  "restoration": {
+    "selected_snapshot_checkpoint": true,
+    "public_wallpaper_transaction": true,
+    "exact_files_replaced_while_stopped": true,
+    "exact_settings_wallpaper_theme_and_login_exports": true,
+    "original_idle_policy": true,
+    "test_owned_assets_removed": true
+  },
+  "environment": {
+    "virtualization": "KVM",
+    "vcpus": 4,
+    "memory_mib": 3072,
+    "outputs": [
+      {
+        "width": 1920,
+        "height": 1080,
+        "scale": 1
+      }
+    ],
+    "compositor": "Hyprland 0.56.2",
+    "compositor_commit": "efb50993780079460b0cbed1363e2166a2de1d9f",
+    "renderer": "Vulkan / llvmpipe (LLVM 22.1.8), Mesa 26.2.2",
+    "media": {
+      "format": "MP4",
+      "width": 160,
+      "height": 90,
+      "fps": 15
+    }
+  },
+  "private_captures": {
+    "count": 2,
+    "scope": "Actual synthetic background pixels changed during playback; no personal screenshots, wallpaper paths or metadata are published."
+  },
+  "implementation_ci": {
+    "source_commit": "faec272e21fe301284f6212a59b7de84cc8752aa",
+    "workflow_run": "https://github.com/xandreeddev/desktop-lab/actions/runs/38878173436",
+    "all_six_push_and_pull_request_checks_passed": true,
+    "regular_rust_tests_passed": 514,
+    "full_software_vulkan_visual_suite_passed": true,
+    "python_tests_passed": 93,
+    "strict_format_clippy_and_both_site_prefixes_passed": true
+  },
+  "current_resource_or_power_measurements": false,
+  "remaining_acceptance": [
+    "Physical battery/AC transitions and measured power savings.",
+    "Native simultaneous multi-output sharing, freezing and hotplug/suspend behavior.",
+    "Automatic secure-lock pausing and secure-client poster display acceptance.",
+    "Full-resolution RSS against the 300 MiB target, hardware decode and physical-GPU frame pacing."
+  ]
+}

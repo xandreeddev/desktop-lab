@@ -449,12 +449,14 @@
         "Native settings expose looping pause FPS defaults and per-output overrides",
         "Latest-frame delivery GPU reuse cancellation and disconnected-output lifetime remain bounded",
         "Actual graphical input playback reconnect sleep and secure poster export are verified",
-        "Current media RSS frame pacing idle and power measurements have workload/hardware evidence"
+        "Current media RSS frame pacing idle and power measurements have workload/hardware evidence",
+        "Automatic battery/fullscreen pauses preserve manual preferences and independent per-output presentation"
       ],
       "evidence": [
         "Source e05576c24fbafd82cc4f5c89dcebd49472fbda4b implements the complete native media path and client controls; native fixtures, client lifetime checks and software Vulkan texture checks pass. Graphical acceptance and current resource/pacing measurements remain deferred. See reports/measurements/lucent-native-media-and-activation.json.",
         "Recorded source eb3f5cbfd6498844b567a5274d0a0ca7a44c50d2 passes single-output native VM MP4/WebM/GIF imports and changing captured background pixels, keyboard path submission/FPS selection, Escape, pause/resume, invalid-import preservation and restart persistence. Exact settings, selected wallpaper, theme/login exports, idle policy and test-owned asset cleanup are restored. See reports/measurements/lucent-live-wallpaper-baseline-vm.json. This establishes the baseline native path, not later daily-control changes, multi-output/hardware/secure-session acceptance or current RSS/pacing.",
-        "Source 63a4518b5140f7082f4bc3fed0ef8b5d5c1ea64c passes updated native autofocus, keyboard undo/redo, explicit pause-all preservation across imports, MP4/WebM/GIF pixels, profile pause/resume, FPS, invalid-media recovery and restart with exact rollback. Two 120-second software-Vulkan samples peak at 233.70 MiB static and 260.12 MiB during synthetic 160x90 MP4 playback at 15 FPS on a 1280x800 output. CPU is 1.067% and 69.891% of one core; GPU allocations and physical-GPU pacing are not measured. See reports/measurements/lucent-live-wallpaper-vm.json."
+        "Source 63a4518b5140f7082f4bc3fed0ef8b5d5c1ea64c passes updated native autofocus, keyboard undo/redo, explicit pause-all preservation across imports, MP4/WebM/GIF pixels, profile pause/resume, FPS, invalid-media recovery and restart with exact rollback. Two 120-second software-Vulkan samples peak at 233.70 MiB static and 260.12 MiB during synthetic 160x90 MP4 playback at 15 FPS on a 1280x800 output. CPU is 1.067% and 69.891% of one core; GPU allocations and physical-GPU pacing are not measured. See reports/measurements/lucent-live-wallpaper-vm.json.",
+        "Source faec272e21fe301284f6212a59b7de84cc8752aa passes native single-output fullscreen pause with zero decoder/background redraw demand, hidden-workspace playback, manual-pause precedence, keyboard policy toggles and restart persistence. Exact settings, wallpaper, exports, workspace/focus and idle policy are restored; test-owned windows/assets are removed. Battery and shared-output behavior have owned-fixture coverage; physical battery/native multi-output/resource acceptance remains open. See reports/measurements/lucent-live-wallpaper-policy.json."
       ]
     }
   ],
@@ -1591,6 +1593,25 @@
         "Physical GPU pacing/power, full-resolution media, multi-output/suspend/reconnect and secure-client live poster presentation.",
         "Owned-media cleanup/lease design and automatic battery/fullscreen policy.",
         "Final evidence-head protected CI and merge."
+      ]
+    },
+    {
+      "milestone": "live-wallpaper-automatic-policy-native-vm-acceptance",
+      "source_commit": "faec272e21fe301284f6212a59b7de84cc8752aa",
+      "report": "reports/measurements/lucent-live-wallpaper-policy.json",
+      "status": "native_single_output_vm_checks_passed",
+      "checks": [
+        "514 regular Rust workspace tests, strict formatting/Clippy, 93 Python checks and the full software-Vulkan visual suite pass on the implementation commit; both Astro prefixes and all six CI checks pass.",
+        "The pure use case combines manual pause, sleep, battery and per-output fullscreen facts. Existing ports supply observations; the compositor adapter normalizes visible-workspace fullscreen state. The client freezes paused images and controls shared decoder demand without adding wallpaper policy to the renderer.",
+        "Native fullscreen/workspace transitions, manual-pause preservation, keyboard policy controls and restart pass. The harness uses the installed Lua dispatch API and verifies workspace/focus/test-window restoration.",
+        "Exact preferences, selected wallpaper, theme/login exports and idle policy are restored; owned test assets are removed. No new resource or power benchmark is claimed."
+      ],
+      "pending": [
+        "Physical battery/AC transitions and measured power savings.",
+        "Native simultaneous multi-output sharing, freezing and hotplug/suspend behavior.",
+        "Automatic secure-lock pausing and secure-client poster display acceptance.",
+        "Full-resolution RSS against the 300 MiB target, hardware decode and physical-GPU frame pacing.",
+        "Final evidence-head CI and authorized merge."
       ]
     }
   ],

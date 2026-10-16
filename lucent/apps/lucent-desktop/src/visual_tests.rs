@@ -1373,6 +1373,24 @@ fn visual_regressions() {
             ("live-wallpaper-monitor", Mode::Apps, 0, 0, "", 1., 390.),
             ("live-wallpaper-paused", Mode::Apps, 0, 0, "", 1., 960.),
             ("live-wallpaper-save-error", Mode::Apps, 0, 0, "", 1., 390.),
+            (
+                "live-wallpaper-policy-battery",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            (
+                "live-wallpaper-policy-fullscreen",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
             ("text-caret-middle", Mode::Apps, 0, 0, "", 1., 640.),
             ("text-selection-forward", Mode::Apps, 0, 0, "", 1., 640.),
             ("text-selection-reverse", Mode::Apps, 0, 0, "", 1., 640.),
@@ -2473,6 +2491,7 @@ fn visual_regressions() {
                     || name.contains("monitor")
                     || name.contains("paused")
                     || name.contains("save-error")
+                    || name.contains("policy")
                 {
                     use lucent_domain::*;
                     app.settings_writable = true;
@@ -2512,10 +2531,35 @@ fn visual_regressions() {
                         );
                     }
                 }
+                if name.contains("policy") {
+                    if name.contains("battery") {
+                        app.wallpaper_context.on_battery = Some(true);
+                    } else {
+                        let monitor = lucent_domain::MonitorId::new("DEMO-1").unwrap();
+                        app.update(
+                            Message::Outputs(vec![lucent_api::DisplayOutput {
+                                global: 1,
+                                name: Some(lucent_api::OutputName::new("DEMO-1").unwrap()),
+                                logical_size: Some((390, 800)),
+                                integer_scale: 1,
+                            }]),
+                            &mut Effects::default(),
+                        );
+                        app.wallpaper_context
+                            .fullscreen_monitors
+                            .insert(monitor.clone());
+                        app.live_wallpaper.target =
+                            lucent_domain::LiveWallpaperTarget::Monitor(monitor);
+                    }
+                }
                 app.update(
                     Message::LiveWallpaper(crate::live_wallpaper::Message::Open),
                     &mut Effects::default(),
                 );
+                if name.contains("policy") || name.contains("save-error") || name.contains("paused")
+                {
+                    app.live_wallpaper.scroll = 10000.;
+                }
                 app.live_wallpaper.path = "/media/synthetic-loop.mp4".into();
                 app.live_wallpaper.field.reset(&app.live_wallpaper.path);
                 let cx = ViewContext {
@@ -2590,6 +2634,7 @@ fn visual_regressions() {
                                     lucent_domain::WorkspaceRef::numbered(9).unwrap(),
                                 ),
                                 special_workspace: None,
+                                has_fullscreen_window: false,
                             },
                             lucent_domain::CompositorMonitor {
                                 id: right.clone(),
@@ -2598,6 +2643,7 @@ fn visual_regressions() {
                                     lucent_domain::WorkspaceRef::numbered(2).unwrap(),
                                 ),
                                 special_workspace: None,
+                                has_fullscreen_window: false,
                             },
                         ],
                     };
@@ -2712,6 +2758,20 @@ fn visual_regressions() {
                 }
                 scene(&app, &layout, &mut Interaction::default(), now)
             };
+            let assert_visible = |id: &str| {
+                let hit = scene.hits.iter().find(|hit| hit.id == id).expect(id);
+                assert!(
+                    fully_visible(hit.rect, hit.clip.bounds),
+                    "{name}: {id} is clipped"
+                );
+            };
+            if name.starts_with("live-wallpaper-policy") {
+                assert_visible("live-policy-battery");
+                assert_visible("live-policy-fullscreen");
+            }
+            if name == "live-wallpaper-save-error" {
+                assert_visible("live-save-retry");
+            }
             let mut paint = vec![Paint::Shape {
                 rect: Rect::new(0., 0., width, height),
                 clip: Rect::new(0., 0., width, height).into(),

@@ -137,6 +137,9 @@ pub struct CompositorMonitor {
     pub focused: bool,
     pub active_workspace: Option<WorkspaceRef>,
     pub special_workspace: Option<WorkspaceRef>,
+    /// An observed fullscreen window on this output's currently visible workspace.
+    /// Maximized windows and fullscreen windows on hidden workspaces do not count.
+    pub has_fullscreen_window: bool,
 }
 /// A desktop workspace identity. Names are labels in this domain, not native
 /// selector expressions. Adapters encode their own numbered/named/special syntax.
@@ -240,6 +243,7 @@ mod compositor_identity_tests {
             focused: true,
             active_workspace: None,
             special_workspace: None,
+            has_fullscreen_window: false,
         };
         let mut duplicate = first.clone();
         duplicate.focused = false;

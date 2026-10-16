@@ -57,15 +57,7 @@ impl LiveWallpaper {
         ];
         if save.writable {
             children.push(
-                button(
-                    if settings.paused {
-                        "Import wallpaper"
-                    } else {
-                        "Import and play"
-                    },
-                    Message::Import(self.target.clone()),
-                )
-                .id("live-import"),
+                button("Import wallpaper", Message::Import(self.target.clone())).id("live-import"),
             );
             if let Some(profile) = selected.filter(|profile| profile.enabled) {
                 children.push(
@@ -120,6 +112,26 @@ impl LiveWallpaper {
                     )
                     .id("live-pause-all"),
             );
+            for (label, condition, enabled, id) in [
+                (
+                    "Pause on battery",
+                    WallpaperPauseCondition::Battery,
+                    settings.policy.pause_on_battery,
+                    "live-policy-battery",
+                ),
+                (
+                    "Pause in fullscreen",
+                    WallpaperPauseCondition::Fullscreen,
+                    settings.policy.pause_when_fullscreen,
+                    "live-policy-fullscreen",
+                ),
+            ] {
+                children.push(
+                    theme
+                        .toggle_row(label, Message::Policy(condition, !enabled), enabled)
+                        .id(id),
+                );
+            }
         }
         let target_label = self
             .target
