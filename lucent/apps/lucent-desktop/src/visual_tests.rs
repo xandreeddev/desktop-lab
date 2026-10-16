@@ -1991,7 +1991,9 @@ fn visual_regressions() {
             } else if name.starts_with("tray-bar-") {
                 use crate::tray::Message as T;
                 let mut snapshot = crate::tray::tests::fixture();
-                snapshot.items[0].overlay_icon = snapshot.items[0].icon.clone();
+                snapshot.items[0].overlay_icon.pixmap = Some(
+                    lucent_domain::TrayPixmap::new(2, 2, [185, 85, 145, 255].repeat(4)).unwrap(),
+                );
                 snapshot.items[1].attention_icon.pixmap = Some(
                     lucent_domain::TrayPixmap::new(2, 2, [240, 170, 65, 255].repeat(4)).unwrap(),
                 );
