@@ -7,6 +7,7 @@ pub mod desktop_adapters;
 pub mod images;
 pub mod network;
 pub mod power;
+pub mod session;
 pub mod tray;
 pub mod video;
 pub mod wallpapers;

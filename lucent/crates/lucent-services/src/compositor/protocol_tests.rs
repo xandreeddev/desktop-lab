@@ -39,6 +39,62 @@ fn accept(listener: &UnixListener) -> UnixStream {
     }
 }
 #[test]
+fn session_lock_watch_uses_owned_socket_deduplicates_and_recovers_without_lock_actions() {
+    let directory = Directory(
+        std::env::temp_dir().join(format!("lucent-session-watch-{}", std::process::id())),
+    );
+    std::fs::create_dir(&directory.0).unwrap();
+    let commands = UnixListener::bind(directory.0.join(".socket.sock")).unwrap();
+    commands.set_nonblocking(true).unwrap();
+    let server = thread::spawn(move || {
+        for reasons in [
+            serde_json::json!(["LOCK"]),
+            serde_json::json!(["LOCK"]),
+            serde_json::json!(["WORKSPACE"]),
+            serde_json::json!(["WORKSPACE"]),
+            Value::Null,
+        ] {
+            let mut peer = accept(&commands);
+            peer.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+            let mut request = [0; 10];
+            peer.read_exact(&mut request).unwrap();
+            assert_eq!(&request, b"j/monitors");
+            peer.write_all(
+                serde_json::json!([{"solitaryBlockedBy": reasons}])
+                    .to_string()
+                    .as_bytes(),
+            )
+            .unwrap();
+        }
+    });
+    let adapter = Hyprland {
+        base: directory.0.clone(),
+    };
+    let stop = Stop(AtomicBool::new(false));
+    let mut observed = vec![];
+    crate::session::watch_lock(
+        || adapter.session_lock(),
+        &mut |state| {
+            let resumed = state == Ok(SessionLockState::Unlocked);
+            observed.push(state);
+            if resumed {
+                stop.0.store(true, Ordering::Release);
+            }
+        },
+        &stop,
+    );
+    server.join().unwrap();
+    assert_eq!(observed.len(), 3);
+    assert_eq!(observed[0], Ok(SessionLockState::Locked));
+    assert!(observed[1].is_err());
+    assert_eq!(observed[2], Ok(SessionLockState::Unlocked));
+    crate::session::watch_lock(
+        || panic!("cancelled subscriptions must not make another native query"),
+        &mut |_| panic!("cancelled subscriptions must not deliver observations"),
+        &stop,
+    );
+}
+#[test]
 fn watch_subscribes_before_snapshot_and_preserves_focus_event_split_across_timeout() {
     let directory = Directory(
         std::env::temp_dir().join(format!("lucent-compositor-watch-{}", std::process::id())),

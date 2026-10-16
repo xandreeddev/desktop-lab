@@ -105,6 +105,8 @@ pub enum WallpaperPauseCondition {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WallpaperPlaybackContext {
     pub preparing_for_sleep: bool,
+    /// Last known lock observation; an observation failure must not resume it.
+    pub session_locked: bool,
     /// None means unavailable, not a claim that AC power is connected.
     pub on_battery: Option<bool>,
     pub fullscreen_monitors: BTreeSet<MonitorId>,
@@ -115,6 +117,7 @@ pub enum WallpaperPauseReason {
     All,
     Profile,
     Sleep,
+    SessionLock,
     Battery,
     Fullscreen,
 }

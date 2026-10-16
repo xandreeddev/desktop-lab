@@ -77,11 +77,3 @@ impl WallpaperPort for LucentWallpaper {
         crate::wallpapers::WallpaperStore::default().discard(asset)
     }
 }
-pub struct LucentSession;
-impl SessionPort for LucentSession {
-    fn lock(&self) -> Result<()> {
-        let home = std::env::var("HOME")
-            .map_err(|_| DomainError::Unavailable("Missing home directory".into()))?;
-        crate::command("python3", &[&format!("{home}/.local/lib/lucent/lock.py")]).map(|_| ())
-    }
-}

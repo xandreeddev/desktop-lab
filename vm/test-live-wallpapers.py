@@ -3,7 +3,9 @@
 
 Uses guest ffmpeg only to encode tiny synthetic fixtures. Rust imports/decodes
 them; the public inspector, native QMP input and grim captures establish actual
-presentation. No passwords, deployment, guest startup or hardware claims.
+presentation. No deployment, guest startup or hardware claims. The optional
+lock check requires a private login file and uses the guarded native input
+helper; credentials never enter reports, arguments, environment or stdout.
 Private rollback data remains in guest /tmp until restoration succeeds. Reports
 and captures stay under ignored reports/local; stdout contains only sanitized
 booleans/counts. Requires one display at origin, ffmpeg and grim in the guest.
@@ -506,11 +508,96 @@ print(p.pid)
             checks['workspace_focus_and_test_window_restored'] = True
 
 
+def check_session_lock(login_file, checks):
+    def locked():
+        return session('omarchy-shell', 'lock', 'isLocked').strip() == 'true'
+
+    def native_locker():
+        return bool(remote('pgrep', '-x', 'lucent-lock').strip())
+
+    def pause_reason():
+        return next((o['pause_reason'] for o in client()['live_wallpaper']['outputs']), None)
+
+    def unlock():
+        require(locked() and native_locker(), 'native_secure_locker_before_password')
+        run([sys.executable, str(lab.ROOT / 'vm/run.py'), '--type-password',
+             '--login-file', str(login_file), PROFILE], timeout=40)
+        eventually(lambda: not locked(), 'native_authenticated_unlock', timeout=45)
+
+    original = read_settings()['live_wallpapers']
+    started_lock = False
+    try:
+        for manual in (False, True):
+            if manual:
+                cli('wallpaper', 'live', 'pause')
+                eventually(lambda: saved() and client()['live_wallpaper']['running'] == 0,
+                           'manual_pause_before_lock')
+            preferences = read_settings()['live_wallpapers']
+            started_lock = True
+            session('omarchy-shell', 'lock', 'lock')
+            eventually(lambda: locked() and native_locker(), 'native_lock_acknowledged')
+            expected = 'profile' if manual else 'session_lock'
+            eventually(lambda: client()['live_wallpaper']['running'] == 0
+                       and pause_reason() == expected, 'lock_stops_native_decoder')
+            time.sleep(.7)
+            frames = background_frames()
+            time.sleep(1.1)
+            require(background_frames() == frames, 'locked_wallpaper_kept_redrawing')
+            require(read_settings()['live_wallpapers'] == preferences,
+                    'lock_observation_changed_preferences')
+            if not manual:
+                checks['secure_lock_stops_decoder_and_background_redraws'] = True
+                # Restart the desktop while the independent secure locker stays
+                # active, proving initial observation rather than a lock action flag.
+                session('systemctl', '--user', 'restart', 'lucent.service')
+                eventually(lambda: client()['background_ready']
+                           and client()['live_wallpaper']['running'] == 0
+                           and pause_reason() == 'session_lock',
+                           'restart_observes_existing_secure_lock', timeout=45)
+                require(locked() and native_locker(), 'desktop_restart_preserves_secure_locker')
+                require(read_settings()['live_wallpapers'] == preferences,
+                        'locked_restart_changed_preferences')
+                checks['desktop_restart_observes_existing_lock'] = True
+            unlock()
+            started_lock = False
+            if manual:
+                time.sleep(1.5)  # Allow the advisory adapter to observe unlock.
+                require(client()['live_wallpaper']['running'] == 0 and pause_reason() == 'profile',
+                        'authenticated_unlock_cleared_manual_pause')
+                checks['authenticated_unlock_preserves_manual_pause'] = True
+            else:
+                frames = background_frames()
+                eventually(lambda: client()['live_wallpaper']['running'] == 1
+                           and pause_reason() is None and background_frames() > frames + 2,
+                           'authenticated_unlock_resumes_playback')
+                checks['authenticated_unlock_resumes_unpaused_profile'] = True
+            require(read_settings()['live_wallpapers'] == preferences,
+                    'unlock_observation_changed_preferences')
+        cli('wallpaper', 'live', 'resume')
+        eventually(lambda: saved() and read_settings()['live_wallpapers'] == original,
+                   'lock_check_restores_manual_preferences')
+    finally:
+        if started_lock and locked():
+            unlock()
+        checks['secure_session_left_unlocked'] = not locked()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--policy-only', action='store_true',
-                        help='Test fullscreen/manual pause and native policy controls with one MP4; skip resource benchmarks.')
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--policy-only', action='store_true',
+                       help='Test fullscreen/manual pause and native policy controls with one MP4; skip resource benchmarks.')
+    modes.add_argument('--lock-only', action='store_true',
+                       help='Test native secure lock, restart and authenticated unlock with one MP4; skip resource benchmarks.')
+    parser.add_argument('--login-file', type=Path,
+                        help='Private test-account login file, required only for --lock-only.')
     args = parser.parse_args()
+    if args.lock_only:
+        if args.login_file is None or not args.login_file.is_file():
+            parser.error('--lock-only requires an existing private --login-file')
+        if args.login_file.stat().st_mode & 0o077:
+            parser.error('--login-file must not allow group or other access')
+    focused_check = args.policy_only or args.lock_only
     report_dir = lab.ROOT / 'reports/local' / ('live-wallpapers-' + time.strftime('%Y%m%d-%H%M%S'))
     report_dir.mkdir(parents=True, exist_ok=False)
     report = {'checks': {}, 'restoration': {}, 'captures': 0, 'passed': False}
@@ -553,10 +640,10 @@ t=p.with_name('desktop.live-test.new'); t.write_text(json.dumps(d)); t.replace(p
         session('systemctl', '--user', 'start', 'lucent.service')
         eventually(lambda: client()['background_ready'] and client()['live_wallpaper']['players'] == 0,
                    'isolated_desktop_ready')
-        if not args.policy_only:
+        if not focused_check:
             print('Measuring the static baseline for 120 seconds.', flush=True)
             report['resources'] = {'static': measure_resources(scratch, 'static-resources')}
-        for extension in (('mp4',) if args.policy_only else ('mp4', 'webm', 'gif')):
+        for extension in (('mp4',) if focused_check else ('mp4', 'webm', 'gif')):
             phase = 'native_' + extension + '_playback'
             fixture = scratch + '/fixture.' + extension
             if extension == 'mp4':
@@ -611,6 +698,10 @@ t=p.with_name('desktop.live-test.new'); t.write_text(json.dumps(d)); t.replace(p
             if args.policy_only:
                 phase = 'native_playback_policy'
                 check_playback_policy(name, monitor, report['checks'])
+                continue
+            if args.lock_only:
+                phase = 'native_session_lock'
+                check_session_lock(args.login_file, report['checks'])
                 continue
             if extension == 'mp4':
                 print('Measuring native 15 FPS MP4 playback for 120 seconds.', flush=True)

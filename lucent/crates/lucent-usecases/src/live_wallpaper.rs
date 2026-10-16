@@ -30,6 +30,8 @@ pub fn wallpaper_pause_reason(
         Some(WallpaperPauseReason::Profile)
     } else if context.preparing_for_sleep {
         Some(WallpaperPauseReason::Sleep)
+    } else if context.session_locked {
+        Some(WallpaperPauseReason::SessionLock)
     } else if settings.policy.pause_on_battery && context.on_battery == Some(true) {
         Some(WallpaperPauseReason::Battery)
     } else if settings.policy.pause_when_fullscreen
@@ -194,9 +196,15 @@ mod tests {
             Some(Battery)
         );
         context.preparing_for_sleep = true;
+        context.session_locked = true;
         assert_eq!(
             wallpaper_pause_reason(&settings, &selected, &other, &context),
             Some(Sleep)
+        );
+        context.preparing_for_sleep = false;
+        assert_eq!(
+            wallpaper_pause_reason(&settings, &selected, &other, &context),
+            Some(SessionLock)
         );
         selected.paused = true;
         assert_eq!(

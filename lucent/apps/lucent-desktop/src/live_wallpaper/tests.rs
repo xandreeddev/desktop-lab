@@ -609,3 +609,72 @@ fn old_settings_get_optional_pause_policies_and_roundtrip_preserves_opt_outs() {
     assert!(partial.policy.pause_on_battery);
     assert!(!partial.policy.pause_when_fullscreen);
 }
+
+#[test]
+fn session_lock_observation_lifetime_and_failure_preserve_manual_preferences() {
+    use crate::desktop::{Desktop, Message as DesktopMessage};
+    use lucent_api::{Application, Component};
+    let mut app = Desktop::new(crate::test_adapters::adapters());
+    let watching = |app: &Desktop| app.subscriptions().iter().any(|s| s.id == "session-lock");
+    assert!(!watching(&app), "static wallpapers need no lock polling");
+    app.settings.live_wallpapers.default = Some(setting("/fixture/session.mp4"));
+    app.settings.live_wallpapers.policy.pause_on_battery = false;
+    app.settings.live_wallpapers.policy.pause_when_fullscreen = false;
+    let settings = app.settings.clone();
+    let observe = |app: &mut Desktop, value| {
+        let mut effects = Effects::default();
+        app.update(DesktopMessage::SessionLock(value), &mut effects);
+        assert!(
+            effects.tasks.is_empty(),
+            "observations must not change saved preferences"
+        );
+    };
+    observe(&mut app, Ok(SessionLockState::Unlocked));
+    assert!(watching(&app));
+    assert_eq!(app.live_wallpaper.subscriptions().len(), 1);
+    let frame = put_frame(&mut app.live_wallpaper, &LiveWallpaperTarget::Default);
+    observe(&mut app, Ok(SessionLockState::Locked));
+    assert!(
+        watching(&app),
+        "paused playback still needs unlock observations"
+    );
+    assert!(app.live_wallpaper.subscriptions().is_empty());
+    assert_eq!(
+        app.live_wallpaper.frame(None).unwrap().pixels(),
+        frame.pixels()
+    );
+    assert_eq!(
+        app.live_wallpaper
+            .selected_status(&app.settings.live_wallpapers, &LiveWallpaperTarget::Default),
+        "Paused while the session is locked"
+    );
+    observe(&mut app, Err(DomainError::Unavailable("fixture".into())));
+    assert!(app.live_wallpaper.subscriptions().is_empty());
+    observe(&mut app, Ok(SessionLockState::Unlocked));
+    assert_eq!(app.live_wallpaper.subscriptions().len(), 1);
+    assert_eq!(app.settings, settings);
+
+    app.settings
+        .live_wallpapers
+        .default
+        .as_mut()
+        .unwrap()
+        .paused = true;
+    observe(&mut app, Ok(SessionLockState::Locked));
+    observe(&mut app, Ok(SessionLockState::Unlocked));
+    assert!(app.live_wallpaper.subscriptions().is_empty());
+    assert!(
+        app.settings
+            .live_wallpapers
+            .default
+            .as_ref()
+            .unwrap()
+            .paused
+    );
+    app.settings.live_wallpapers.default = None;
+    observe(&mut app, Ok(SessionLockState::Unlocked));
+    assert!(
+        !watching(&app),
+        "removing playback retires lock observation"
+    );
+}
