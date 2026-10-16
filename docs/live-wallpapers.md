@@ -71,8 +71,14 @@ retires its pending import, so a late result cannot turn playback back on.
 ## Source changes and animation
 
 The desktop owns a `BackgroundPresentation` for each current output surface.
-A newly prepared source starts a crossfade using the shared `motion.panel`
-timeline (500 ms) and deceleration curve. First load appears immediately;
+A newly prepared source queues a crossfade using the shared `motion.panel`
+timeline (500 ms) and deceleration curve. The timeline starts after the first
+background frame for that selection submits. Waiting for a compositor callback
+or rendering that first frame does not consume the fade duration. Completion
+uses the time sampled by the final rendered view, not its later submission time;
+a slow partial frame cannot retire the old image early. Submission is not a
+scanout acknowledgement, and slow rendering can still reduce intermediate frames.
+First load appears immediately;
 refitting a static image or delivering the next video frame does not restart
 that timeline. Missing preparation keeps the previous good image.
 

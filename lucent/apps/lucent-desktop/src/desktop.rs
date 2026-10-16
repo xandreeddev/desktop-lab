@@ -1046,7 +1046,7 @@ impl Component for Desktop {
                 if self
                     .backgrounds
                     .get_mut(&instance)
-                    .is_some_and(|(_, presentation)| presentation.presented(now))
+                    .is_some_and(|(_, presentation)| presentation.presented(now, effects.now))
                 {
                     effects.redraw_surface(SurfaceAddress {
                         role: "background",
