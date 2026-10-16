@@ -700,6 +700,7 @@ impl Desktop {
         self.update_dock(crate::dock::Message::Cancel, effects);
         self.retarget_panel_transition(effects.now);
         for role in [
+            "bar",
             "dock",
             "audio",
             "network",
@@ -954,7 +955,7 @@ impl Component for Desktop {
             .as_ref()
             .and_then(|route| self.monitors.connected.get(&route.id));
         let viewport = monitor.map_or(self.viewport, |monitor| monitor.viewport);
-        let tree = self.theme().apply(match cx.surface {
+        let tree = match cx.surface {
             "audio" => self.audio.view(cx, self.theme()).map(Message::Audio),
             "network" => self.network.view(cx, self.theme()).map(Message::Network),
             "bluetooth" => self
@@ -983,7 +984,7 @@ impl Component for Desktop {
                     },
                 )
                 .map(Message::LiveWallpaper),
-            "bar" => self.bar(cx),
+            "bar" => self.standalone_bar(cx),
             "widgets" => self
                 .widget_view_on(route.as_ref().map(|route| &route.id))
                 .render(cx)
@@ -998,7 +999,8 @@ impl Component for Desktop {
                 .view_with_theme(cx, self.theme())
                 .map(Message::Notifications),
             _ => Element::empty(),
-        });
+        };
+        let tree = self.theme().apply(self.compose_panel_bar(cx, tree));
         match route {
             Some(route) => {
                 tree.map(move |message| Message::OnMonitor(route.clone(), Box::new(message)))
@@ -1008,6 +1010,7 @@ impl Component for Desktop {
     }
     fn update(&mut self, message: Message, effects: &mut Effects<Message>) {
         let now = effects.now;
+        let bar_host = self.panel_surface();
         match message {
             Message::Ignore => {}
             Message::BackgroundPresented(instance, now) => {
@@ -1650,6 +1653,9 @@ impl Component for Desktop {
             }
             Message::Quit => effects.quit(),
         }
+        if bar_host != self.panel_surface() {
+            effects.redraw("bar");
+        }
         self.reconcile_live_wallpapers();
         self.reconcile_backgrounds(effects);
         self.refresh_previews(effects);
@@ -1734,7 +1740,7 @@ impl api::Application for Desktop {
                 },
                 visible: self.live_wallpaper.mounted,
                 pointer_input: if self.live_wallpaper.open {
-                    self.panel_pointer_input()
+                    PointerInput::All
                 } else {
                     PointerInput::None
                 },
@@ -1757,7 +1763,7 @@ impl api::Application for Desktop {
                 },
                 visible: self.tray.visible(),
                 pointer_input: if self.tray.open() {
-                    self.panel_pointer_input()
+                    PointerInput::All
                 } else {
                     PointerInput::None
                 },
@@ -1780,7 +1786,7 @@ impl api::Application for Desktop {
                 },
                 visible: self.power.visible(),
                 pointer_input: if self.power.open() {
-                    self.panel_pointer_input()
+                    PointerInput::All
                 } else {
                     PointerInput::None
                 },
@@ -1803,7 +1809,7 @@ impl api::Application for Desktop {
                 },
                 visible: self.bluetooth.visible(),
                 pointer_input: if self.bluetooth.open() {
-                    self.panel_pointer_input()
+                    PointerInput::All
                 } else {
                     PointerInput::None
                 },
@@ -1826,7 +1832,7 @@ impl api::Application for Desktop {
                 },
                 visible: self.network.visible(),
                 pointer_input: if self.network.open() {
-                    self.panel_pointer_input()
+                    PointerInput::All
                 } else {
                     PointerInput::None
                 },
@@ -1849,7 +1855,7 @@ impl api::Application for Desktop {
                 },
                 visible: self.audio.visible(),
                 pointer_input: if self.audio.open() {
-                    self.panel_pointer_input()
+                    PointerInput::All
                 } else {
                     PointerInput::None
                 },
@@ -1904,7 +1910,7 @@ impl api::Application for Desktop {
                 },
                 visible: self.notifications.visible(),
                 pointer_input: if self.notifications.history_open() {
-                    self.panel_pointer_input()
+                    PointerInput::All
                 } else if self.notifications.history_closing() {
                     PointerInput::None
                 } else {
@@ -1967,12 +1973,18 @@ impl api::Application for Desktop {
                 },
                 visible: true,
                 pointer_input: if self.launcher.open() {
-                    self.panel_pointer_input()
+                    PointerInput::All
                 } else {
                     PointerInput::Content
                 },
             },
         ];
+        if let Some(role) = self.panel_surface() {
+            // Bar observations invalidate the surface that currently presents it.
+            if let Some(surface) = surfaces.iter_mut().find(|surface| surface.id == role) {
+                surface.redraw_group = Some("bar");
+            }
+        }
         if !self.monitors.legacy() {
             if self.monitors.connected.is_empty() {
                 return vec![];

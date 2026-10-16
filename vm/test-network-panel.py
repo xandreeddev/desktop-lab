@@ -46,7 +46,7 @@ def click(identifier):
 
 def enter(value, field):
     v.eventually(lambda: panel()['focus'] == field, 'Expected input is not focused')
-    assert state()['open'] and panel()['pointer_input'] in ('all', 'inset')
+    assert state()['open'] and panel()['pointer_input'] == 'all'
     assert v.session('omarchy-shell', 'lock', 'isLocked').strip() == 'false'
     assert v.layer_geometry('network')['namespace'] == 'lucent-' + panel()['id']
     mapping = {}

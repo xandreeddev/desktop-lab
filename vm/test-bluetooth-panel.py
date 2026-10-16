@@ -25,7 +25,7 @@ def panel():
 
 def main():
     before = v.inspect()
-    if any(role(s) != 'bluetooth' and s['pointer_input'] in ('all', 'inset') for s in active_surfaces(before)):
+    if any(role(s) != 'bluetooth' and s['pointer_input'] == 'all' for s in active_surfaces(before)):
         raise SystemExit('Close other modal panels before the native input test')
     original_open = before['client']['bluetooth']['open']
     checks = {}
@@ -34,7 +34,7 @@ def main():
         v.eventually(lambda: not state()['visible'], 'Initial close did not release the surface')
         v.click('bar-bluetooth')
         v.eventually(lambda: state()['open'] and panel()['frames'] > 0, 'Bar did not open native Bluetooth')
-        assert panel()['pointer_input'] in ('all', 'inset')
+        assert panel()['pointer_input'] == 'all'
         assert v.layer_geometry('bluetooth')['namespace'] == 'lucent-' + panel()['id']
         checks.update(bar_pointer_open=True, actual_native_layer=True, pointer_region=True,
                       observed_state=state()['status'], controllers=state()['controllers'])

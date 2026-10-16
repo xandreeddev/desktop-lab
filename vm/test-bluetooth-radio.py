@@ -61,7 +61,7 @@ def require_fixture(directory, login_file):
         raise SystemExit('This input harness requires the prepared single 1920x1080 scale-1 output')
     v.eventually(lambda: state()['controllers'] == 2, 'Native controller snapshot did not arrive')
     before = v.inspect()
-    if any(role(s) != 'bluetooth' and s['pointer_input'] in ('all', 'inset') for s in active_surfaces(before)):
+    if any(role(s) != 'bluetooth' and s['pointer_input'] == 'all' for s in active_surfaces(before)):
         raise SystemExit('Close other modal panels before native Bluetooth acceptance')
     if any(property_value(path, 'Discovering') for path in PATHS):
         raise SystemExit('An existing discovery session is not part of this check')

@@ -1,98 +1,90 @@
-# Ordinary panels, bar input and keyboard focus
+# Ordinary panels, shared bar controls and keyboard focus
 
-Lucent owns this presentation policy. Omarchy, the domain ports and the Vulkan
-renderer do not decide which panel is in front. Secure lock and authentication
-clients have their own protocol authority; this guide describes ordinary desktop
-panels only.
+Lucent's desktop owns which ordinary panel has the foreground. Domain ports,
+OS adapters and the renderer keep their existing responsibilities. Secure lock
+and authentication clients have separate protocol authority.
 
-## What happens when a bar control is clicked
+## Follow a click from the launcher to audio
 
-1. Hyprland delivers the pointer event to the surface whose native input region
-   contains that position. Ordinary overlays leave the bar strip outside that
-   region, so the bar can receive the first click even while a panel is open.
-2. The SDK tests the bar's prepared, rounded hit geometry. Its button produces a
-   typed child message, mapped through the root's monitor route.
-3. `Desktop::update` delegates the message to that child. The child changes its
-   own open state and requests any service effects it needs.
-4. `Desktop::panel_opened` compares the child's state before and after update.
-   On a new opening, it sends normal Close/Hide messages to the other panels.
-   Those children retain their own cancellation and fade-out behavior.
-5. The runtime reconciles `SurfaceSpec` values, draws dirty surfaces and commits
-   their pixels and input regions to Wayland. The closing panel releases its
-   exclusive keyboard mode; the new panel becomes the keyboard owner.
+1. While the launcher is open, its native layer surface has exclusive keyboard
+   focus. Its element tree contains both the launcher and the shared bar component.
+2. Hyprland delivers the pointer event to that surface. The SDK tests the normal
+   prepared, rounded bar hit geometry and emits the existing typed audio message.
+3. `Desktop::update` delegates to the audio child. The child changes its own state
+   and requests its service effects.
+4. `Desktop::panel_opened` observes the closed-to-open transition and sends normal
+   Close/Hide messages to other panels. Each child owns cancellation and exit motion.
+5. The audio surface now presents the same bar component and owns keyboard focus.
+   The standalone bar surface retains its exclusive zone, so tiled windows keep
+   their position. Its contents on the active monitor stay empty during the panel.
+6. When the last panel closes, the standalone bar presents the controls again.
+   Bars on other monitors remain independent.
 
-The client policy is in `lucent/apps/lucent-desktop/src/desktop/panels.rs`. It covers the
-launcher, audio, network, Bluetooth, power, tray, live-wallpaper settings and
-notification history. There is no duplicate global “active panel” state: each
-child owns its state and the root observes transitions. A notification toast or
-an incoming snapshot is not itself a history-panel opening.
+This is ordinary declarative composition: `compose_panel_bar` builds a stack of
+panel content and `bar(&bar_context)`. Both use the same `Element` layout, design
+tokens, hit testing and typed callbacks. The view does no native operations.
+The SDK does not forward synthetic clicks between native surfaces or know about
+a desktop bar. There is no extra domain port for this presentation policy.
 
-This distinction matters for asynchronous messages. A Bluetooth prompt or a tray
-error may open a panel after a native operation completes. The same foreground
-rule applies to that actual opening. Repeated updates in an already-open panel
-do not repeatedly cancel work elsewhere. Opening a different panel retires a
-pending direct tray action so its late failure cannot reopen dismissed UI.
+The policy lives in
+`lucent/apps/lucent-desktop/src/desktop/panels.rs`. It covers launcher, audio,
+network, Bluetooth, power, tray, live-wallpaper settings and notification history.
+Each child owns its open state; the root derives the current host from those
+states, without keeping another active-panel state variable.
 
-## Input regions do not resize windows
+## Why the controls share a native surface
 
-`PointerInput` is a generic presentation API in `lucent-api`:
+Wayland keyboard and pointer declarations are separate, but compositor behavior
+must be tested. Hyprland 0.56.2 first checks exclusive layer surfaces and falls
+back to one even when its input region does not contain the pointer. See its
+[pinned input-routing implementation](https://github.com/hyprwm/Hyprland/blob/v0.56.2/src/managers/input/InputManager.cpp#L413-L424).
+A native VM test confirmed that excluding the bar strip from the launcher's
+input region still sent the click to the launcher.
 
-```rust
-PointerInput::Inset {
-    top: reserved_header_height,
-    right: 0,
-    bottom: 0,
-    left: 0,
-}
-```
+The desktop therefore composes the related controls inside the focused native
+surface. It keeps reliable keyboard ownership and uses the normal SDK event
+path for those controls. `PointerInput::All` captures the open panel's extent;
+`Content` and `None` retain their existing uses. No compositor patch or custom
+input-region API is required.
 
-Insets are unsigned logical pixels. The Wayland adapter clamps all four against
-the configured native extent, using saturating arithmetic. If opposite edges
-meet or cross, the region is empty. The adapter creates a normal `wl_region` and
-submits it through `wl_surface.set_input_region`. It contains no bar identity,
-design token or panel rule.
+The active panel declares the existing `redraw_group: Some("bar")`. Clock,
+workspace, audio and tray observations that invalidate the bar also invalidate
+its current host. Changing hosts invalidates the standalone bar. Hiding the bar
+removes its composed controls as well as the standalone reservation.
 
-The desktop supplies `component.panel.bar_height` when its bar is visible and
-zero when hidden. The input region follows the actual native size; it does not
-alter the viewport, painting, framebuffer, GPU shader or window placement.
-`Content`, `All` and `None` remain available for other surface policies.
+The live-wallpaper panel stays below the bar on the shared spacing grid. Its
+existing scroll viewport keeps lower controls reachable on shorter outputs.
 
-A captured primary press outside the tree's hits becomes `Event::Outside`.
-Launcher and notification history map it to dismissal. Other panel children use
-their existing backdrop hit and Close message. Inert hits inside panel padding
-prevent that padding from becoming an outside click; they disable hover feedback
-and keyboard tab stops. The clock capsule also stays inert.
+## Child state, asynchronous replies and dismissal
 
-The live-wallpaper panel is centered within the area below the bar. Its bounds
-use the existing shell grid and spacing tokens, and its controls retain the
-shared scroll viewport. It no longer paints its header over the bar on a short
-output. This geometry is client policy in `shell_layout`.
+A Bluetooth prompt or tray error can open a panel after an adapter finishes.
+The foreground rule observes that actual opening. Repeated messages inside an
+already-open panel do not repeatedly cancel unrelated work. Opening another
+panel retires a pending direct tray action, preventing a late error from
+reopening dismissed UI.
 
-## Keyboard and pointer ownership are separate
+Notification history has exclusive keyboard focus while open; Tab and Escape
+work immediately. Closing releases keyboard and pointer ownership during its
+fade. Ordinary toast delivery and history storage continue independently.
 
-An ordinary open panel uses `Keyboard::Exclusive`; closing releases it.
-Notification history now follows that rule, so Tab and Escape work immediately
-after opening from the bar. Passive notification toasts retain on-demand keyboard
-behavior. Their delivery and history storage are not cancelled by another panel.
-
-Inspection exposes `keyboard`, `pointer_input` and, for inset coverage,
-`pointer_insets` in top/right/bottom/left order. These are declarations and prepared
-runtime state. Real pointer/key acceptance is still needed to prove compositor
-behavior; a unit assertion about a SurfaceSpec is not enough.
+Captured primary presses outside a hit produce `Event::Outside`; launcher and
+history map it to dismissal. Other children use their backdrop Close callback.
+History padding has an inert hit with hover feedback and tab stops disabled.
+The shared clock capsule also stays passive.
 
 Use `lucent-cli notifications hide` (or `close`) and
 `lucent-cli wallpaper live close` to dismiss those panels. Closing live-wallpaper
-settings does not turn off playback; `wallpaper live off` is a separate command.
+settings does not stop playback; `wallpaper live off` is separate.
 
 ## Validation
 
-The client tests all 64 ordered panel pairs, repeated updates, pending tray work,
-notification dismissal and bar/grid geometry. SDK tests check inset bounds,
-resizing, zero extents and overflowing edge values.
+Tests cover all 64 ordered panel pairs, repeated updates, pending tray work,
+notification dismissal, host ownership, shared hit geometry/messages and bar/grid
+geometry. Dedicated Vulkan panel-host fixtures complement the isolated component
+references; screenshot tolerances remain unchanged.
 
 `python3 vm/test-panel-flow.py` exercises real bar clicks, history padding,
-keyboard focus/Escape, outside dismissal and a hidden bar in the existing VM.
-`vm/test-tray.py` also checks direct application activation while the launcher is
-open. Both require the prepared unlocked guest and preserve saved settings and
-wallpaper. Executed results belong in the acceptance report; having a harness
-in the repository is not evidence that it passed.
+keyboard focus/Escape, outside dismissal and hiding the bar in the existing VM.
+`vm/test-tray.py` also checks direct app activation while the launcher is open.
+Both require the prepared unlocked guest and preserve saved settings and wallpaper.
+Having a harness does not prove acceptance; executed results are recorded separately.

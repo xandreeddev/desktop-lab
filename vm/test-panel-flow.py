@@ -67,9 +67,11 @@ def suite():
             v['click']('bar-' + name)
             eventually(lambda: only(name), 'one_click_switch_to_' + name)
             current = find_surface(inspect(), name)
-            require(current['pointer_input'] == 'inset', 'ordinary_overlay_uses_inset')
-            require(current['pointer_insets'] == [v['token_value']('component.panel.bar_height'), 0, 0, 0],
-                    'bar_strip_remains_reachable')
+            require(current['pointer_input'] == 'all', 'ordinary_overlay_captures_pointer')
+            require(any(hit['id'] == 'bar-audio' for hit in current['hits']),
+                    'bar_controls_share_native_panel_host')
+            require(not any(hit['id'] == 'bar-audio' for hit in find_surface(inspect(), 'bar')['hits']),
+                    'standalone_bar_reservation_has_no_duplicate_controls')
         checks['single_click_bar_switches_all_control_panels'] = True
         # Padding inside history is an inert hit, not an outside-click close.
         panel = v['hit']('notification-history-panel')
@@ -105,11 +107,11 @@ def suite():
 
         cli('launcher', 'open')
         cli('bar', 'hide')
-        eventually(lambda: find_surface(inspect(), 'dock')['pointer_insets'] == [0, 0, 0, 0],
-                   'hidden_bar_releases_reserved_strip')
+        eventually(lambda: not any(hit['id'] == 'bar-audio' for hit in find_surface(inspect(), 'dock')['hits']),
+                   'hidden_bar_removes_composed_controls')
         click_at(20, 20)
         eventually(lambda: only(None), 'hidden_bar_strip_dismisses_launcher')
-        checks['hidden_bar_input_region_updates'] = True
+        checks['hidden_bar_controls_update'] = True
     finally:
         cli('bar', 'show')
         for name in ('launcher', 'audio', 'network', 'bluetooth', 'power', 'tray'):

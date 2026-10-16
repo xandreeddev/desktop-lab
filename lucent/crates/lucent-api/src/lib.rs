@@ -636,15 +636,6 @@ pub enum PointerInput {
     Content,
     /// The entire native extent captures input, including outside-click areas.
     All,
-    /// Capture the native extent minus logical-pixel edge insets. Insets are
-    /// clamped to the current extent; overlapping edges produce an empty region.
-    /// This changes pointer coverage only, not painting, layout or keyboard focus.
-    Inset {
-        top: u32,
-        right: u32,
-        bottom: u32,
-        left: u32,
-    },
 }
 impl PointerInput {
     pub fn name(self) -> &'static str {
@@ -652,7 +643,6 @@ impl PointerInput {
             Self::None => "none",
             Self::Content => "content",
             Self::All => "all",
-            Self::Inset { .. } => "inset",
         }
     }
 }
