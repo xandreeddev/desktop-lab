@@ -95,7 +95,7 @@ pub mod motion {
     pub const EXIT: f64 = 0.19;
     pub const SELECTION: f64 = 0.35;
     pub const HOVER: f64 = 0.16;
-    pub const SPATIAL: [f32; 4] = [0.38, 1.21, 0.22, 1.0];
+    pub const SPATIAL: [f32; 4] = [0.38, 1.0, 0.22, 1.0];
     pub const DECELERATE: [f32; 4] = [0.05, 0.7, 0.1, 1.0];
 }
 pub mod theme {

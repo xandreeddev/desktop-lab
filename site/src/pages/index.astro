@@ -11,7 +11,8 @@ import noctalia from '../../../reports/screenshots/noctalia.png';
 import lucent from '../../../reports/screenshots/lucent-framework-desktop.png';
 import metrics from '../../../reports/measurements/lucent-framework-idle-600.json';
 import { layers, componentCode } from '../data/framework';
-import { tokens } from '../data/tokens';
+import { tokens, displayValue } from '../data/tokens';
+const spatialCurve = displayValue(tokens.find(token => token.name === 'motion.spatial')!);
 const repo = sourceUrl('');
 const warmIntervals = metrics.animations.filter(a => !a.warmup).map(a => a.median_frame_interval_ms);
 const minInterval = Math.min(...warmIntervals);
@@ -54,7 +55,7 @@ const desktops = [
 
   <section class="motion-section section">
     <div class="wrap motion-layout"><div><span class="eyebrow">03 / THE FEEL OF IT</span><h2>Motion with<br />a destination.</h2><p>The dock expands into a launcher. The selector brings the next wallpaper forward. Interrupted transitions continue from their current position.</p><p>Lucent uses the spatial curve inspected in the pinned Lucid reference. Frames follow compositor callbacks, and stop when the transition ends.</p><div class="motion-values"><div><strong>500<span> ms</span></strong><small>Dock & selector</small></div><div><strong>350<span> ms</span></strong><small>App selection</small></div><div><strong>0</strong><small>Idle dock frames / 120 s</small></div></div></div>
-      <div class="motion-demo" data-motion-demo><div class="demo-label"><span>INTERACTIVE MOTION STUDY</span><span>Browser illustration</span></div><div class="motion-stage"><div class="motion-orbit" aria-hidden="true"></div><div class="demo-shell" id="motion-panel"><div class="demo-expanded" inert><div class="demo-mini-tabs"><span>Apps</span><span>Widgets</span><span>Palette</span></div><div class="demo-app selected"><span class="demo-icon">›_</span><span>Terminal</span><small>↵</small></div><div class="demo-app"><span class="demo-icon">◉</span><span>Browser</span></div><div class="demo-search">⌕ <span>Search your applications</span></div></div><div class="demo-dock" aria-hidden="true"><span>⠿</span><span>›_</span><span>◉</span><span>▤</span><span>✳</span></div></div></div><div class="demo-controls"><button class="button secondary" type="button" data-motion-toggle aria-expanded="false" aria-controls="motion-panel">Expand launcher <span aria-hidden="true">↗</span></button><code>cubic-bezier(.38, 1.21, .22, 1)</code></div><p class="demo-note">Illustrates the curve and geometry in CSS. The desktop above renders natively through Vulkan.</p></div>
+      <div class="motion-demo" data-motion-demo><div class="demo-label"><span>INTERACTIVE MOTION STUDY</span><span>Browser illustration</span></div><div class="motion-stage"><div class="motion-orbit" aria-hidden="true"></div><div class="demo-shell" id="motion-panel"><div class="demo-expanded" inert><div class="demo-mini-tabs"><span>Apps</span><span>Widgets</span><span>Palette</span></div><div class="demo-app selected"><span class="demo-icon">›_</span><span>Terminal</span><small>↵</small></div><div class="demo-app"><span class="demo-icon">◉</span><span>Browser</span></div><div class="demo-search">⌕ <span>Search your applications</span></div></div><div class="demo-dock" aria-hidden="true"><span>⠿</span><span>›_</span><span>◉</span><span>▤</span><span>✳</span></div></div></div><div class="demo-controls"><button class="button secondary" type="button" data-motion-toggle aria-expanded="false" aria-controls="motion-panel">Expand launcher <span aria-hidden="true">↗</span></button><code>{spatialCurve}</code></div><p class="demo-note">Illustrates the curve and geometry in CSS. The desktop above renders natively through Vulkan.</p></div>
     </div>
   </section>
 
