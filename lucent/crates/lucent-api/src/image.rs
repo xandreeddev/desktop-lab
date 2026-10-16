@@ -42,6 +42,7 @@ pub struct ImageLevel {
 struct Prepared {
     id: u64,
     format: ImageFormat,
+    opaque: bool,
     stream: Option<(u64, u64)>,
     levels: Arc<[ImageLevel]>,
 }
@@ -83,8 +84,10 @@ impl ImageStream {
         mut pixels: Vec<u8>,
     ) -> Result<ImageData, ImageError> {
         validate(&pixels, width, height, ImageFormat::PremultipliedRgba8)?;
+        let mut opaque = true;
         for pixel in pixels.as_chunks_mut::<4>().0 {
             if pixel[3] != 255 {
+                opaque = false;
                 for channel in 0..3 {
                     pixel[channel] = (u16::from(pixel[channel]) * u16::from(pixel[3]) / 255) as u8;
                 }
@@ -104,6 +107,7 @@ impl ImageStream {
             prepared: Arc::new(Prepared {
                 id: NEXT_IMAGE.fetch_add(1, Ordering::Relaxed),
                 format: ImageFormat::PremultipliedRgba8,
+                opaque,
                 stream: Some((self.0.id, revision)),
                 levels: vec![ImageLevel {
                     width,
@@ -125,7 +129,9 @@ impl ImageData {
         mut rgba: Vec<u8>,
     ) -> Result<Self, ImageError> {
         validate(&rgba, width, height, ImageFormat::PremultipliedRgba8)?;
+        let mut opaque = true;
         for pixel in rgba.as_chunks_mut::<4>().0 {
+            opaque &= pixel[3] == 255;
             for channel in 0..3 {
                 pixel[channel] = (u16::from(pixel[channel]) * u16::from(pixel[3]) / 255) as u8;
             }
@@ -136,6 +142,7 @@ impl ImageData {
             height,
             rgba,
             ImageFormat::PremultipliedRgba8,
+            opaque,
         ))
     }
     /// Prepare a monochrome coverage image without duplicating coverage in four
@@ -148,15 +155,24 @@ impl ImageData {
         coverage: Vec<u8>,
     ) -> Result<Self, ImageError> {
         validate(&coverage, width, height, ImageFormat::Alpha8)?;
+        let opaque = coverage.iter().all(|alpha| *alpha == 255);
         Ok(Self::prepare(
             key.into(),
             width,
             height,
             coverage,
             ImageFormat::Alpha8,
+            opaque,
         ))
     }
-    fn prepare(key: String, width: u32, height: u32, pixels: Vec<u8>, format: ImageFormat) -> Self {
+    fn prepare(
+        key: String,
+        width: u32,
+        height: u32,
+        pixels: Vec<u8>,
+        format: ImageFormat,
+        opaque: bool,
+    ) -> Self {
         let mut levels = vec![ImageLevel {
             width,
             height,
@@ -181,6 +197,7 @@ impl ImageData {
             prepared: Arc::new(Prepared {
                 id: NEXT_IMAGE.fetch_add(1, Ordering::Relaxed),
                 format,
+                opaque,
                 stream: None,
                 levels: levels.into(),
             }),
@@ -205,6 +222,7 @@ impl ImageData {
             prepared: Arc::new(Prepared {
                 id: NEXT_IMAGE.fetch_add(1, Ordering::Relaxed),
                 format: self.format(),
+                opaque: self.is_opaque(),
                 stream: None,
                 levels: self.levels()[index..].to_vec().into(),
             }),
@@ -245,6 +263,12 @@ impl ImageData {
     pub fn format(&self) -> ImageFormat {
         self.prepared.format
     }
+    /// True only when every prepared texel has full coverage. Calculated on the
+    /// asset worker; querying does not scan pixels. Element opacity, tint and
+    /// geometric coverage remain the caller's separate responsibility.
+    pub fn is_opaque(&self) -> bool {
+        self.prepared.opaque
+    }
     /// Base level bytes in format(), without row padding.
     pub fn pixels(&self) -> &[u8] {
         &self.prepared.levels[0].pixels
@@ -272,6 +296,7 @@ impl ImageData {
                 // storage ID, distinct from the stream's mutable resource ID.
                 id: self.prepared.id,
                 format: self.prepared.format,
+                opaque: self.is_opaque(),
                 stream: None,
                 levels: self.prepared.levels.clone(),
             }),
@@ -461,6 +486,32 @@ mod tests {
 #[cfg(test)]
 mod streaming_tests {
     use super::*;
+    #[test]
+    fn prepared_coverage_survives_clones_mips_and_snapshots_without_becoming_optimistic() {
+        for alpha in [0, 1, 254, 255] {
+            let pixels = [80, 120, 160, alpha].repeat(15);
+            let image = ImageData::from_rgba("coverage", 3, 5, pixels.clone()).unwrap();
+            let opaque = alpha == 255;
+            assert_eq!(image.is_opaque(), opaque);
+            assert_eq!(image.clone().is_opaque(), opaque);
+            assert_eq!(image.downsample(1).is_opaque(), opaque);
+            let mask = ImageData::from_alpha("mask", 3, 5, vec![alpha; 15]).unwrap();
+            assert_eq!(mask.is_opaque(), opaque);
+            assert_eq!(mask.downsample(1).is_opaque(), opaque);
+            let stream = ImageStream::new();
+            let frame = stream.frame_rgba(3, 5, pixels).unwrap();
+            assert_eq!(frame.is_opaque(), opaque);
+            assert_eq!(frame.snapshot().is_opaque(), opaque);
+        }
+        let stream = ImageStream::new();
+        let mut pixels = vec![255; 60];
+        pixels[59] = 254;
+        let transparent = stream.frame_rgba(3, 5, pixels).unwrap();
+        let opaque = stream.frame_rgba(3, 5, vec![255; 60]).unwrap();
+        assert!(!transparent.is_opaque());
+        assert!(opaque.is_opaque());
+        assert!(!transparent.snapshot().is_opaque());
+    }
     #[test]
     fn streaming_frames_are_immutable_and_have_one_mip_with_a_stable_resource_identity() {
         let stream = ImageStream::new();

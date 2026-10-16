@@ -300,6 +300,10 @@ fn decode(
             ffmpeg::software::scaling::flag::Flags::BILINEAR,
         )
         .map_err(|_| failed())?;
+        // swscale writes into one private conversion buffer for this decoder.
+        // Published frames still own separate immutable bytes: consumers can
+        // retain an old frame while the worker converts the next one.
+        let mut rgba = ffmpeg::util::frame::video::Video::empty();
         let mut clock = FrameClock::new(options.fps.value());
         let mut count = 0u64;
         let mut first = None;
@@ -368,7 +372,6 @@ fn decode(
                 if stop.cancelled() {
                     return Ok(false);
                 }
-                let mut rgba = ffmpeg::util::frame::video::Video::empty();
                 scaler.run(&frame, &mut rgba).map_err(|_| failed())?;
                 let row = frame.width() as usize * 4;
                 let stride = rgba.stride(0);
