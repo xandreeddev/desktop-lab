@@ -43,6 +43,8 @@ lucent-cli wallpaper live resume
 lucent-cli wallpaper live pause-all
 lucent-cli wallpaper live resume-all
 lucent-cli wallpaper live retry
+lucent-cli wallpaper live rate source
+lucent-cli wallpaper live rate 60
 lucent-cli wallpaper live off
 ```
 
@@ -146,7 +148,7 @@ Prepared-image byte counters are not process RSS or a GPU memory total.
 ## Preferences and resource limits
 
 `desktop.json` stores `live_wallpapers` with `default`, `monitors` and a global
-`paused` flag and a `policy` object. A selected profile contains an owned `asset`, validated `fps`,
+`paused` flag and a `policy` object. A selected profile contains an owned `asset`, a validated frame-rate policy in `fps`,
 `paused` and `enabled`. Existing settings without these keys continue to load.
 The root persistence coordinator remains the only writer.
 
@@ -161,9 +163,20 @@ This object belongs inside `live_wallpapers`. Existing configurations without it
 receive the defaults; explicit `false` values survive save/restart. Runtime pause
 reasons and fullscreen output observations are never written to `desktop.json`.
 
-FPS can be 1–60; the panel provides 15/30/60 presets and the initial value is 30.
-A cap skips excess/late decoded frames; it does not synthesize intermediate
-frames or increase a source's frame rate. Shared identical media/FPS profiles use
+The saved value `"fps": "source"` selects source timing; historical numeric
+values such as `"fps": 30` remain explicit caps and are preserved. Missing `fps`
+uses source timing. To roll back to a binary from before source timing, select
+numeric limits for Source profiles first, or restore that binary's matching
+preferences backup. New imports use **Source frame rate**. Playback follows the clip’s presentation
+timestamps, including fractional rates such as 59.94 FPS and variable frame
+durations. A 60 FPS source can provide 60 frames per second; the bundled 15 FPS
+clips remain 15 FPS. The panel also offers optional 15/30/60 FPS limits; custom
+limits can be 1–60. Caps skip excess/late frames and never synthesize additional
+frames. The runtime presents available frames at compositor callbacks, so a slow
+decoder or display can still deliver fewer frames than the source.
+When timestamps are absent, playback continues from the previous frame duration;
+missing duration metadata uses the source's average rate, or 30 FPS when that is
+also unavailable. Shared identical media/frame-rate profiles use
 one producer. Different source profiles have separate playback timelines.
 Disconnected outputs acquire no decoder, and observation of a known sleep
 transition suspends playback. Explicit pause is always available. Session lock
@@ -194,7 +207,7 @@ result. It does not claim Vulkan Video or hardware decode support.
 
 ```text
 saved LiveWallpapers or explicit import
-  → domain preferences and validated WallpaperFps
+  → domain WallpaperFrameRate policy (Source or validated WallpaperFps cap)
   → WallpaperPlaybackPort supplied by NativeVideoWallpapers
   → producer subscription owns FFmpeg context and timing
   → decoded MediaFrame with validated dimensions/bytes

@@ -55,7 +55,7 @@ fn setting(path: &str) -> LiveWallpaperSettings {
                 name: "Poster".into(),
             },
         },
-        fps: WallpaperFps::default(),
+        fps: WallpaperFrameRate::default(),
         paused: false,
         enabled: true,
     }
@@ -206,7 +206,12 @@ fn visible_library_choice_uses_the_existing_validated_import_for_its_target() {
         matches!(controller.update(message, &mut effects), Some(Intent::ImportStarted(captured, _)) if captured == target)
     );
     let prepared = effects.tasks.pop().unwrap().run();
-    assert!(matches!(prepared, Message::Prepared(_, Ok((asset, _))) if asset.source == source));
+    assert!(matches!(&prepared, Message::Prepared(_, Ok((asset, _))) if asset.source == source));
+    let Some(Intent::Apply(captured, profile)) = controller.update(prepared, &mut effects) else {
+        panic!("a validated import must apply its captured target");
+    };
+    assert_eq!(captured, target);
+    assert_eq!(profile.fps, WallpaperFrameRate::Source);
 }
 
 #[test]
@@ -234,7 +239,7 @@ fn library_choices_keep_the_active_profile_and_show_busy_and_failure_status_abov
     effects.tasks.clear();
     let mut profile = setting("/owned/moon-lake.mp4");
     profile.asset.source = source.clone();
-    profile.fps = WallpaperFps::new(15).unwrap();
+    profile.fps = WallpaperFps::new(15).unwrap().into();
     let settings = LiveWallpapers {
         default: Some(profile.clone()),
         ..Default::default()
@@ -640,7 +645,10 @@ fn controls_use_their_captured_target_and_import_reads_the_current_path() {
         matches!(controller.update(Message::Pause(captured.clone(), true), &mut effects), Some(Intent::Pause(target, true)) if target == captured)
     );
     assert!(
-        matches!(controller.update(Message::Rate(captured.clone(), WallpaperFps::new(15).unwrap()), &mut effects), Some(Intent::Rate(target, rate)) if target == captured && rate.value() == 15)
+        matches!(controller.update(Message::Rate(captured.clone(), WallpaperFps::new(15).unwrap().into()), &mut effects), Some(Intent::Rate(target, rate)) if target == captured && rate.cap().is_some_and(|cap| cap.value() == 15))
+    );
+    assert!(
+        matches!(controller.update(Message::Rate(captured.clone(), WallpaperFrameRate::Source), &mut effects), Some(Intent::Rate(target, WallpaperFrameRate::Source)) if target == captured)
     );
     controller.path = "/fixture/latest.mp4".into();
     assert!(
@@ -686,7 +694,7 @@ fn paused_profiles_keep_their_own_frame_across_fps_changes_and_stream_splitting(
     controller
         .prepared
         .insert(settings.monitors[&id].asset.path.clone(), imported_poster);
-    settings.monitors.get_mut(&id).unwrap().fps = WallpaperFps::new(15).unwrap();
+    settings.monitors.get_mut(&id).unwrap().fps = WallpaperFps::new(15).unwrap().into();
     controller.reconcile(
         &settings,
         &[id.clone(), other.clone()],

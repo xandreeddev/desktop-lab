@@ -365,9 +365,8 @@ fn decode(
         // Published frames still own separate immutable bytes: consumers can
         // retain an old frame while the worker converts the next one.
         let mut rgba = ffmpeg::util::frame::video::Video::empty();
-        let mut clock = FrameClock::new(options.fps.value());
-        let mut count = 0u64;
-        let mut first = None;
+        let mut timeline = PresentationTimeline::new(time_base, rate);
+        let mut clock = FrameClock::new(options.fps);
         let started = Instant::now();
         let mut delivered = false;
         let mut end_time = Duration::ZERO;
@@ -391,39 +390,10 @@ fn decode(
                         "Video changes dimensions or pixel format during playback".into(),
                     ));
                 }
-                let raw = frame
-                    .timestamp()
-                    .map(|pts| pts as f64 * time_base)
-                    .filter(|v| v.is_finite())
-                    .unwrap_or_else(|| {
-                        count as f64
-                            / if rate.is_finite() && rate > 0. {
-                                rate
-                            } else {
-                                30.
-                            }
-                    });
-                let base = *first.get_or_insert(raw);
-                let seconds = (raw - base).max(0.);
-                count += 1;
-                if !seconds.is_finite() || seconds > 24. * 60. * 60. {
-                    return Err(failed());
-                }
-                let timestamp = Duration::from_secs_f64(seconds);
-                let duration = frame.packet().duration as f64 * time_base;
-                let hold = if duration.is_finite() && duration > 0. && duration < 60. {
-                    Duration::from_secs_f64(duration)
-                } else {
-                    Duration::from_secs_f64(
-                        1. / if rate.is_finite() && rate > 0. {
-                            rate
-                        } else {
-                            f64::from(options.fps.value())
-                        },
-                    )
-                };
-                end_time = timestamp.saturating_add(hold);
-                if !clock.accept(timestamp, started.elapsed()) {
+                let (timestamp, hold) =
+                    timeline.frame(frame.timestamp(), frame.packet().duration)?;
+                end_time = end_time.max(timestamp.saturating_add(hold));
+                if !clock.accept(timestamp, started.elapsed(), hold) {
                     continue;
                 }
                 let wait = timestamp.saturating_sub(started.elapsed());
@@ -493,28 +463,97 @@ fn decode(
         }
     }
 }
-struct FrameClock {
-    interval: Duration,
+/// Normalize decoder timestamps without rounding the source rate to an integer.
+/// Missing timestamps continue from the preceding frame's duration, including
+/// variable-rate media; only missing/invalid metadata uses the 30 Hz fallback.
+struct PresentationTimeline {
+    time_base: f64,
+    fallback_period: Duration,
+    origin: Option<f64>,
     next: Duration,
-    first: bool,
 }
-impl FrameClock {
-    fn new(fps: u8) -> Self {
+impl PresentationTimeline {
+    fn new(time_base: f64, rate: f64) -> Self {
+        let fallback_period = Duration::try_from_secs_f64(1. / rate)
+            .ok()
+            .filter(|duration| !duration.is_zero() && *duration < Duration::from_secs(60))
+            .unwrap_or_else(|| Duration::from_secs_f64(1. / 30.));
         Self {
-            interval: Duration::from_secs_f64(1. / f64::from(fps)),
+            time_base,
+            fallback_period,
+            origin: None,
             next: Duration::ZERO,
-            first: true,
         }
     }
-    fn accept(&mut self, timestamp: Duration, elapsed: Duration) -> bool {
-        if !self.first
-            && (timestamp.saturating_add(Duration::from_millis(1)) < self.next
-                || elapsed.saturating_sub(timestamp) > self.interval)
+    fn frame(&mut self, pts: Option<i64>, packet_duration: i64) -> Result<(Duration, Duration)> {
+        let valid_time_base = self.time_base.is_finite() && self.time_base > 0.;
+        let raw = pts
+            .filter(|_| valid_time_base)
+            .map(|pts| pts as f64 * self.time_base)
+            .filter(|seconds| seconds.is_finite());
+        let timestamp = if let Some(raw) = raw {
+            // A first PTS may follow frames without timestamps. Align that PTS
+            // with their continuation rather than returning to media time zero.
+            let origin = *self.origin.get_or_insert(raw - self.next.as_secs_f64());
+            let seconds = (raw - origin).max(0.);
+            if !seconds.is_finite() || seconds > 24. * 60. * 60. {
+                return Err(failed());
+            }
+            Duration::from_secs_f64(seconds)
+        } else {
+            self.next
+        };
+        if timestamp > Duration::from_secs(24 * 60 * 60) {
+            return Err(failed());
+        }
+        let duration = packet_duration as f64 * self.time_base;
+        let hold = if valid_time_base && duration.is_finite() && duration > 0. && duration < 60. {
+            Duration::try_from_secs_f64(duration)
+                .ok()
+                .filter(|duration| !duration.is_zero())
+                .unwrap_or(self.fallback_period)
+        } else {
+            self.fallback_period
+        };
+        self.next = self.next.max(timestamp.saturating_add(hold));
+        Ok((timestamp, hold))
+    }
+}
+struct FrameClock {
+    interval: Option<Duration>,
+    next: Duration,
+    previous: Option<Duration>,
+}
+impl FrameClock {
+    fn new(rate: WallpaperFrameRate) -> Self {
+        Self {
+            interval: rate
+                .cap()
+                .map(|fps| Duration::from_secs_f64(1. / f64::from(fps.value()))),
+            next: Duration::ZERO,
+            previous: None,
+        }
+    }
+    fn accept(&mut self, timestamp: Duration, elapsed: Duration, hold: Duration) -> bool {
+        if self.previous.is_some_and(|previous| timestamp <= previous)
+            || (self.previous.is_some() && elapsed.saturating_sub(timestamp) > hold)
         {
             return false;
         }
-        self.first = false;
-        self.next = timestamp.saturating_add(self.interval);
+        if let Some(interval) = self.interval {
+            // Containers such as WebM round presentation timestamps to ms.
+            // Keep that tolerance without resetting the cap phase on every
+            // accepted frame, which would turn a 30 -> 24 cap into 15 FPS.
+            if timestamp.saturating_add(Duration::from_millis(1)) < self.next {
+                return false;
+            }
+            let slots = timestamp.saturating_sub(self.next).as_nanos() / interval.as_nanos() + 1;
+            let advance = interval.as_nanos().saturating_mul(slots);
+            self.next = self.next.saturating_add(Duration::from_nanos(
+                u64::try_from(advance).unwrap_or(u64::MAX),
+            ));
+        }
+        self.previous = Some(timestamp);
         true
     }
 }

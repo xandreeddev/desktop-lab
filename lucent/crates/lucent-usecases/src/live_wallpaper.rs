@@ -2,7 +2,7 @@
 //! remain in the injected adapter and the desktop coordinator.
 use lucent_domain::{
     DesktopSettings, DomainError, LiveWallpaperSettings, LiveWallpaperTarget, LiveWallpapers,
-    MonitorId, Result, WallpaperFps, WallpaperPauseCondition, WallpaperPauseReason,
+    MonitorId, Result, WallpaperFrameRate, WallpaperPauseCondition, WallpaperPauseReason,
     WallpaperPlaybackContext,
 };
 
@@ -12,7 +12,7 @@ pub enum LiveWallpaperChange {
     PauseAll(bool),
     Policy(WallpaperPauseCondition, bool),
     Off(LiveWallpaperTarget),
-    Rate(LiveWallpaperTarget, WallpaperFps),
+    Rate(LiveWallpaperTarget, WallpaperFrameRate),
     Inherit(MonitorId),
 }
 
@@ -139,7 +139,7 @@ pub fn change_live_wallpaper(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lucent_domain::{LiveWallpaperAsset, Wallpaper};
+    use lucent_domain::{LiveWallpaperAsset, Wallpaper, WallpaperFps};
 
     fn profile() -> LiveWallpaperSettings {
         LiveWallpaperSettings {
@@ -154,7 +154,7 @@ mod tests {
                     name: "Poster".into(),
                 },
             },
-            fps: WallpaperFps::default(),
+            fps: WallpaperFps::default().into(),
             paused: false,
             enabled: true,
         }
@@ -291,10 +291,17 @@ mod tests {
         assert!(settings.live_wallpapers.paused);
         change_live_wallpaper(
             &mut settings,
-            LiveWallpaperChange::Rate(target.clone(), WallpaperFps::new(15).unwrap()),
+            LiveWallpaperChange::Rate(target.clone(), WallpaperFps::new(15).unwrap().into()),
         )
         .unwrap();
-        assert_eq!(settings.live_wallpapers.monitors[&id].fps.value(), 15);
+        assert_eq!(
+            settings.live_wallpapers.monitors[&id]
+                .fps
+                .cap()
+                .unwrap()
+                .value(),
+            15
+        );
         assert_eq!(
             settings
                 .live_wallpapers
@@ -302,6 +309,8 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .fps
+                .cap()
+                .unwrap()
                 .value(),
             30
         );

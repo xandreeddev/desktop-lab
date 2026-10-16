@@ -140,14 +140,31 @@ impl LiveWallpaper {
                 );
             }
             if selected.is_some() {
+                children.push(label("Frame rate"));
+                children.push(
+                    theme
+                        .choice_button(
+                            "Source frame rate",
+                            Message::Rate(self.target.clone(), WallpaperFrameRate::Source),
+                            selected
+                                .is_some_and(|setting| setting.fps == WallpaperFrameRate::Source),
+                        )
+                        .width(Length::Fill)
+                        .id("live-fps-source"),
+                );
                 let rates = [15, 30, 60]
                     .into_iter()
                     .map(|fps| {
                         theme
                             .choice_button(
                                 format!("{fps} FPS"),
-                                Message::Rate(self.target.clone(), WallpaperFps::new(fps).unwrap()),
-                                selected.is_some_and(|setting| setting.fps.value() == fps),
+                                Message::Rate(
+                                    self.target.clone(),
+                                    WallpaperFps::new(fps).unwrap().into(),
+                                ),
+                                selected.is_some_and(|setting| {
+                                    setting.fps.cap().is_some_and(|cap| cap.value() == fps)
+                                }),
                             )
                             .id(format!("live-fps-{fps}"))
                     })
@@ -193,13 +210,15 @@ impl LiveWallpaper {
             .target
             .monitor()
             .map_or("Default wallpaper", MonitorId::as_str);
+        let frame_rate = selected.map_or(WallpaperFrameRate::Source, |profile| profile.fps);
+        let rate_label = frame_rate.cap().map_or_else(
+            || "Source frame rate".to_string(),
+            |cap| format!("{} FPS limit", cap.value()),
+        );
         children.push(
-            label(&format!(
-                "Target: {target_label} · {} FPS",
-                selected.map_or(30, |profile| profile.fps.value())
-            ))
-            .width(Length::Fill)
-            .wrap(component::live_wallpaper::STATUS_LINES as usize),
+            label(&format!("Target: {target_label} · {rate_label}",))
+                .width(Length::Fill)
+                .wrap(component::live_wallpaper::STATUS_LINES as usize),
         );
         if self
             .target

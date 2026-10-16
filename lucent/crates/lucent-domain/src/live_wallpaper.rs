@@ -54,6 +54,64 @@ impl From<WallpaperFps> for u8 {
         value.0
     }
 }
+/// Playback follows media timestamps unless the user chooses a delivery cap.
+/// A cap never invents frames for media whose own cadence is slower.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "FrameRateValue", into = "FrameRateValue")]
+pub enum WallpaperFrameRate {
+    #[default]
+    Source,
+    Capped(WallpaperFps),
+}
+impl WallpaperFrameRate {
+    pub fn cap(self) -> Option<WallpaperFps> {
+        match self {
+            Self::Source => None,
+            Self::Capped(fps) => Some(fps),
+        }
+    }
+}
+impl From<WallpaperFps> for WallpaperFrameRate {
+    fn from(fps: WallpaperFps) -> Self {
+        Self::Capped(fps)
+    }
+}
+impl std::fmt::Display for WallpaperFrameRate {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Source => formatter.write_str("source"),
+            Self::Capped(fps) => write!(formatter, "{}", fps.value()),
+        }
+    }
+}
+// Keep existing numeric `fps` preferences intact while adding an explicit mode.
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(untagged)]
+enum FrameRateValue {
+    Capped(WallpaperFps),
+    Mode(FrameRateMode),
+}
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum FrameRateMode {
+    Source,
+}
+impl From<FrameRateValue> for WallpaperFrameRate {
+    fn from(value: FrameRateValue) -> Self {
+        match value {
+            FrameRateValue::Capped(fps) => Self::Capped(fps),
+            FrameRateValue::Mode(FrameRateMode::Source) => Self::Source,
+        }
+    }
+}
+impl From<WallpaperFrameRate> for FrameRateValue {
+    fn from(value: WallpaperFrameRate) -> Self {
+        match value {
+            WallpaperFrameRate::Capped(fps) => Self::Capped(fps),
+            WallpaperFrameRate::Source => Self::Mode(FrameRateMode::Source),
+        }
+    }
+}
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LiveWallpaperAsset {
     pub source: Wallpaper,
@@ -64,7 +122,7 @@ pub struct LiveWallpaperAsset {
 pub struct LiveWallpaperSettings {
     pub asset: LiveWallpaperAsset,
     #[serde(default)]
-    pub fps: WallpaperFps,
+    pub fps: WallpaperFrameRate,
     #[serde(default)]
     pub paused: bool,
     #[serde(default = "enabled")]
@@ -167,13 +225,13 @@ impl MediaFrame {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PlaybackOptions {
-    pub fps: WallpaperFps,
+    pub fps: WallpaperFrameRate,
     pub looping: bool,
 }
 impl Default for PlaybackOptions {
     fn default() -> Self {
         Self {
-            fps: WallpaperFps::default(),
+            fps: WallpaperFrameRate::default(),
             looping: true,
         }
     }
@@ -215,5 +273,21 @@ mod tests {
                 .dimensions(),
             (2, 1)
         );
+    }
+    #[test]
+    fn frame_rate_defaults_to_source_and_retains_validated_caps_and_labels() {
+        for fps in [1, 15, 30, 60] {
+            let rate = WallpaperFrameRate::Capped(WallpaperFps::new(fps).unwrap());
+            assert_eq!(
+                WallpaperFrameRate::from(WallpaperFps::new(fps).unwrap()),
+                rate
+            );
+            assert_eq!(rate.cap().unwrap().value(), fps);
+            assert_eq!(rate.to_string(), fps.to_string());
+        }
+        assert_eq!(WallpaperFrameRate::default(), WallpaperFrameRate::Source);
+        assert_eq!(PlaybackOptions::default().fps, WallpaperFrameRate::Source);
+        assert_eq!(WallpaperFrameRate::Source.cap(), None);
+        assert_eq!(WallpaperFrameRate::Source.to_string(), "source");
     }
 }

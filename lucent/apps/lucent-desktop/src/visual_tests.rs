@@ -1437,6 +1437,16 @@ fn visual_regressions() {
             ),
             ("live-wallpaper-opening", Mode::Apps, 0, 0, "", 0.08, 960.),
             ("live-wallpaper-selected", Mode::Apps, 0, 0, "", 1., 960.),
+            ("live-wallpaper-source-rate", Mode::Apps, 0, 0, "", 1., 960.),
+            (
+                "live-wallpaper-source-rate-narrow",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
             (
                 "live-wallpaper-selected-narrow",
                 Mode::Apps,
@@ -2654,6 +2664,7 @@ fn visual_regressions() {
                     || name.contains("paused")
                     || name.contains("save-error")
                     || name.contains("policy")
+                    || name.contains("source-rate")
                 {
                     use lucent_domain::*;
                     app.settings_writable = true;
@@ -2669,7 +2680,11 @@ fn visual_regressions() {
                                 name: "Poster".into(),
                             },
                         },
-                        fps: WallpaperFps::new(15).unwrap(),
+                        fps: if name.contains("source-rate") {
+                            WallpaperFrameRate::Source
+                        } else {
+                            WallpaperFps::new(15).unwrap().into()
+                        },
                         paused: name.contains("paused"),
                         enabled: true,
                     });
@@ -2715,7 +2730,10 @@ fn visual_regressions() {
                     }
                 }
                 open_live_fixture(&mut app);
-                if name.contains("policy") || name.contains("save-error") || name.contains("paused")
+                if name.contains("policy")
+                    || name.contains("save-error")
+                    || name.contains("paused")
+                    || name.contains("source-rate")
                 {
                     app.live_wallpaper.scroll = 10000.;
                 }
@@ -2932,6 +2950,16 @@ fn visual_regressions() {
                 assert_visible("live-library-0");
                 assert_visible("live-library-1");
             }
+            if name.starts_with("live-wallpaper-source-rate") {
+                for id in [
+                    "live-fps-source",
+                    "live-fps-15",
+                    "live-fps-30",
+                    "live-fps-60",
+                ] {
+                    assert_visible(id);
+                }
+            }
             if name == "live-wallpaper-save-error" {
                 assert_visible("live-save-retry");
             }
@@ -3090,6 +3118,29 @@ fn desktop_actions_use_injected_adapters_without_executing_host_commands() {
 }
 
 #[test]
+fn live_wallpaper_rate_commands_parse_typed_source_and_validated_caps() {
+    use crate::live_wallpaper::Message as LiveMessage;
+    use lucent_domain::{LiveWallpaperTarget, WallpaperFps, WallpaperFrameRate};
+    let app = Desktop::new(crate::test_adapters::adapters());
+    for (value, expected) in [
+        ("source", WallpaperFrameRate::Source),
+        ("15", WallpaperFps::new(15).unwrap().into()),
+        ("60", WallpaperFps::new(60).unwrap().into()),
+    ] {
+        assert!(matches!(
+            app.command(&format!("wallpaper live rate {value}")).unwrap(),
+            Some(Message::LiveWallpaper(LiveMessage::Rate(LiveWallpaperTarget::Default, rate))) if rate == expected
+        ));
+    }
+    for value in ["", "0", "61", "256", "60.0", "unknown", "source extra"] {
+        assert!(
+            app.command(&format!("wallpaper live rate {value}"))
+                .is_err()
+        );
+    }
+}
+
+#[test]
 fn live_wallpaper_preferences_reject_mutations_until_storage_is_ready() {
     use crate::live_wallpaper::Message as LiveMessage;
     let mut app = Desktop::new(crate::test_adapters::adapters());
@@ -3103,7 +3154,11 @@ fn live_wallpaper_preferences_reject_mutations_until_storage_is_ready() {
         LiveMessage::Off(lucent_domain::LiveWallpaperTarget::Default),
         LiveMessage::Rate(
             lucent_domain::LiveWallpaperTarget::Default,
-            lucent_domain::WallpaperFps::new(60).unwrap(),
+            lucent_domain::WallpaperFps::new(60).unwrap().into(),
+        ),
+        LiveMessage::Rate(
+            lucent_domain::LiveWallpaperTarget::Default,
+            lucent_domain::WallpaperFrameRate::Source,
         ),
     ] {
         let mut effects = Effects::default();
@@ -4827,7 +4882,7 @@ fn live_cli_captures_default_and_keeps_pause_all_separate_from_profile_pause() {
     use crate::live_wallpaper::Message as Live;
     use lucent_domain::{
         LiveWallpaperAsset, LiveWallpaperSettings, LiveWallpaperTarget, MonitorId, Wallpaper,
-        WallpaperFps,
+        WallpaperFrameRate,
     };
     let profile = |name: &str| LiveWallpaperSettings {
         asset: LiveWallpaperAsset {
@@ -4841,7 +4896,7 @@ fn live_cli_captures_default_and_keeps_pause_all_separate_from_profile_pause() {
                 name: name.into(),
             },
         },
-        fps: WallpaperFps::default(),
+        fps: WallpaperFrameRate::default(),
         paused: false,
         enabled: true,
     };
@@ -4935,7 +4990,7 @@ fn failed_or_closed_live_import_settles_an_accepted_static_commit_over_old_live_
     use crate::live_wallpaper::Message as Live;
     use lucent_domain::{
         DomainError, LiveWallpaperAsset, LiveWallpaperSettings, LiveWallpaperTarget, Wallpaper,
-        WallpaperFps,
+        WallpaperFrameRate,
     };
     for (close_import, commit_first) in [(false, true), (true, true), (false, false), (true, false)]
     {
@@ -4953,7 +5008,7 @@ fn failed_or_closed_live_import_settles_an_accepted_static_commit_over_old_live_
                     name: "Previous poster".into(),
                 },
             },
-            fps: WallpaperFps::default(),
+            fps: WallpaperFrameRate::default(),
             paused: false,
             enabled: true,
         };
@@ -5073,7 +5128,7 @@ fn failed_live_import_preserves_restored_profile_with_a_different_static_fallbac
                     name: "Poster".into(),
                 },
             },
-            fps: WallpaperFps::default(),
+            fps: WallpaperFrameRate::default(),
             paused: false,
             enabled: true,
         };
