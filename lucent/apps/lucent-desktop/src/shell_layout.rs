@@ -217,6 +217,7 @@ pub struct BarLayout {
     pub system: Rect,
     pub show_mute: bool,
     pub show_tray: bool,
+    pub tray_count: usize,
 }
 impl BarLayout {
     pub fn new(width: f32, workspace_count: usize) -> Self {
@@ -286,6 +287,24 @@ impl BarLayout {
             system,
             show_mute,
             show_tray,
+            tray_count: 0,
         }
+    }
+
+    /// Fill spare space without displacing the clock, media or workspaces.
+    /// The overflow control remains available even when all icons fit.
+    pub fn with_tray(mut self, items: usize) -> Self {
+        if !self.show_tray {
+            return self;
+        }
+        let neighbor = self.clock.or(self.media).unwrap_or(self.workspaces);
+        let end = neighbor.x + neighbor.w + layout::SECTION_GAP;
+        let step = bar::CONTROL_SIZE + space::SM;
+        let capacity = ((self.system.x - end) / step).floor().max(0.) as usize;
+        self.tray_count = items.min(bar::MAX_TRAY_ITEMS as usize).min(capacity);
+        let added = step * self.tray_count as f32;
+        self.system.x -= added;
+        self.system.w += added;
+        self
     }
 }

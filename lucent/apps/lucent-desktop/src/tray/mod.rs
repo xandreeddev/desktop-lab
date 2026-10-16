@@ -1,6 +1,8 @@
 //! Native tray client: injected ports, current identities and application-owned menus.
+mod bar;
 mod view;
 use crate::ports::{AssetPort, Images};
+pub use bar::Action as BarAction;
 use lucent_api::*;
 use lucent_design::motion;
 use lucent_domain::*;
@@ -14,6 +16,7 @@ pub enum Message {
     Closed(u64),
     Scroll(ScrollEvent),
     Act(TrayItemId, TrayAction),
+    Bar(TrayItemId, BarAction),
     Menu(TrayItemId, i32),
     Invoke(i32),
     Back,
@@ -43,6 +46,8 @@ pub struct Tray {
     icon_active: Option<u64>,
     icon_pending: Option<TraySnapshot>,
     images: BTreeMap<String, Arc<ImageData>>,
+    wheel: Option<bar::WheelDemand>,
+    wheel_active: Option<u64>,
 }
 impl Tray {
     pub fn new(adapter: Arc<dyn TrayPort>, assets: Arc<dyn AssetPort>) -> Self {
@@ -67,6 +72,8 @@ impl Tray {
             icon_active: None,
             icon_pending: None,
             images: BTreeMap::new(),
+            wheel: None,
+            wheel_active: None,
         }
     }
     #[cfg(test)]
@@ -91,6 +98,8 @@ impl Tray {
         self.scroll = 0.;
         self.revision = self.revision.wrapping_add(1);
         self.active = None;
+        self.wheel = None;
+        self.wheel_active = None;
     }
     fn set_open(&mut self, open: bool, now: f64) {
         if self.open == open {
@@ -134,6 +143,14 @@ impl Tray {
     pub fn update(&mut self, message: Message, effects: &mut Effects<Message>) {
         match message {
             Message::Observed(Ok(snapshot)) => {
+                if self.wheel.as_ref().is_some_and(|demand| {
+                    !snapshot
+                        .items
+                        .iter()
+                        .any(|item| item.id == demand.item && item.status != TrayStatus::Passive)
+                }) {
+                    self.wheel = None;
+                }
                 if self
                     .target
                     .is_some_and(|id| !snapshot.items.iter().any(|i| i.id == id))
@@ -177,7 +194,15 @@ impl Tray {
             }
             Message::Open => self.set_open(true, effects.now),
             Message::Toggle => self.set_open(!self.open, effects.now),
-            Message::Close => self.set_open(false, effects.now),
+            Message::Close => {
+                // Also retire an action started directly from a bar icon while
+                // no panel was open. Late failures must not reopen a dismissed UI.
+                if self.open {
+                    self.set_open(false, effects.now);
+                } else {
+                    self.reset_menu();
+                }
+            }
             Message::Closed(id) => {
                 if !self.open && id == self.close_generation {
                     self.mounted = false;
@@ -199,25 +224,9 @@ impl Tray {
                 {
                     return;
                 }
-                if matches!(action, TrayAction::Activate { .. })
-                    && self
-                        .snapshot
-                        .items
-                        .iter()
-                        .any(|i| i.id == id && i.item_is_menu && i.has_menu)
-                {
-                    self.update(Message::Menu(id, 0), effects);
-                    return;
-                }
-                let revision = self.next();
-                self.target = Some(id);
-                let adapter = self.adapter.clone();
-                effects.task_on_with_failure(
-                    crate::work::TRAY,
-                    move || Message::Completed(revision, adapter.act(id, action)),
-                    move |e| Message::Completed(revision, Err(DomainError::Failed(e.to_string()))),
-                );
+                self.activate(id, action, effects);
             }
+            Message::Bar(id, action) => self.bar_action(id, action, effects),
             Message::Menu(id, parent) => {
                 if !self.open
                     || self.active.is_some()
@@ -277,10 +286,15 @@ impl Tray {
             }
             Message::Completed(revision, result) if self.active == Some(revision) => {
                 self.active = None;
+                let scrolling = self.wheel_active.take() == Some(revision);
                 if let Err(error) = result {
+                    self.wheel = None;
                     self.error = error.to_string();
                     self.menu = None;
                     self.parents.clear();
+                    self.set_open(true, effects.now);
+                } else if scrolling {
+                    self.drain_wheel(effects);
                 } else if self.menu.is_some() {
                     self.set_open(false, effects.now);
                 }
@@ -310,6 +324,7 @@ impl Tray {
             }
         }
         effects.redraw("tray");
+        effects.redraw("bar");
     }
     pub fn escape(&self) -> Message {
         if self.menu.is_some() {

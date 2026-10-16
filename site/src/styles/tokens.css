@@ -218,6 +218,7 @@
   --component-bar-control-size: 24px;
   --component-bar-max-workspaces: 8;
   --component-bar-system-control-count: 8;
+  --component-bar-max-tray-items: 4;
   --component-pill-height: 32px;
   --component-pill-padding-inline: var(--space-md);
   --component-pill-padding-block: var(--space-xs);
@@ -463,6 +464,7 @@
   --component-tray-title-lines: var(--component-power-title-lines);
   --component-tray-status-lines: var(--component-power-status-lines);
   --component-tray-separator-height: var(--space-hairline);
+  --component-tray-bar-overlay-size: var(--space-sm);
   --component-selection-indicator-size: var(--icon-tiny);
   --component-selection-indicator-stroke: var(--space-hairline);
   --component-selection-indicator-fill-size: var(--space-sm);

@@ -1,0 +1,65 @@
+{
+  "status": "native_fixture_verified_third_party_interoperability_pending",
+  "tested_implementation_commit": "b8a69c8fd900b8f4856f70a71d923e677e26a792",
+  "binaries": {
+    "lucent-desktop": {
+      "sha256": "45621029b2be6e227c47c1e5834dff57a4270edee0c8c36714c807e50b100afe",
+      "bytes": 20502440
+    }
+  },
+  "implementation": [
+    "Shared Element callbacks for secondary/middle clicks and fractional two-axis wheel input; clipped capture and mapping stay in the SDK.",
+    "The Tray child maps gestures to the existing TrayPort; StatusNotifier remains the adapter and AssetPort prepares images outside views.",
+    "At most four token-sized bar controls fill spare space without moving other bar groups. Overflow remains available.",
+    "One active native wheel call, one latest pending target, and at most 64 unsent steps per axis; retirement and failure clear unsubmitted work."
+  ],
+  "local_validation": {
+    "regular_rust_tests_passed": 536,
+    "strict_format_clippy_and_all_targets": true,
+    "python_tests_passed": 93,
+    "design_tokens_verified": 546,
+    "site_check_both_prefixes_and_links": true,
+    "focused_vulkan_comparisons_passed": 52,
+    "new_reviewed_visual_baselines": 16,
+    "visual_scope": "Tray bar and existing tray panels/bar layouts; dark/light at 1x/2x. Full local screenshot suite was not run."
+  },
+  "native_fixture": {
+    "primary_middle_vertical_wheel": true,
+    "right_click_lucent_menu_and_invocation": true,
+    "menu_only_and_context_fallback": true,
+    "status_lifecycle": true,
+    "overflow_keyboard_activation": true,
+    "late_reply_retirement_and_overflow": true,
+    "owner_retirement": true,
+    "settings_and_wallpaper_preserved": true,
+    "scope": "Owned SNI/DBusMenu fixture and QMP input; no third-party app coverage"
+  },
+  "environment": {
+    "vcpus": 4,
+    "memory_mib": 3072,
+    "display_pixels": [
+      1920,
+      1080
+    ],
+    "scale": 1,
+    "compositor": "Hyprland 0.56.2",
+    "renderer": "Vulkan / llvmpipe, Mesa 26.2.2",
+    "fixture": "Owned Python SNI/DBusMenu application with bounded lifetime; QMP pointer and keyboard input."
+  },
+  "deployment": {
+    "atomic_install_with_rollback": true,
+    "running_binary_hash_verified": true,
+    "wallpaper_and_saved_settings_preserved": true,
+    "fixture_removed": true
+  },
+  "limits": [
+    "Third-party application compatibility, watcher restarts under broader faults and legacy XEmbed remain open.",
+    "Native methods retain neutral screen-position hints; app-owned popups may not appear next to the clicked icon.",
+    "An open launcher can consume the first pointer click on the bar to dismiss its full-screen backdrop. Gesture acceptance starts with overlays closed.",
+    "The bar is non-focusable; the native test verifies keyboard activation through the overflow panel.",
+    "Horizontal/high-resolution wheel behavior is unit-tested; this VM acceptance exercises vertical wheel input.",
+    "Ordering/pinning, additional menu metadata and animated application icons remain open.",
+    "No new CPU/RSS/frame-pacing or physical-GPU performance claim; broader shell completion remains in the requirement ledger.",
+    "Final published-head CI and authorized merge are pending."
+  ]
+}

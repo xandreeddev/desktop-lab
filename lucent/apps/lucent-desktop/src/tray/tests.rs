@@ -89,6 +89,287 @@ fn header_message(tray: &mut Tray, keyboard: bool) -> Message {
         input.release(x, y).unwrap()
     }
 }
+
+fn bar_message(tray: &Tray, button: MouseButton) -> Message {
+    let font = fontdue::Font::from_bytes(
+        include_bytes!("../../assets/LucentSans.ttf") as &[u8],
+        Default::default(),
+    )
+    .unwrap();
+    let theme = lucent_design::Theme::new(false);
+    let tree = theme.apply(Element::row(tray.bar_icons(4, theme)));
+    let mut input = Interaction::default();
+    let scene = Layout::new(Arc::new(vec![font])).build(&tree, 300., 48., &input, 1.);
+    let hit = scene
+        .hits
+        .iter()
+        .find(|hit| hit.id == "bar-tray-item-1")
+        .unwrap();
+    let x = hit.rect.x + hit.rect.w / 2.;
+    let y = hit.rect.y + hit.rect.h / 2.;
+    assert!(
+        input
+            .press_button(&scene, x, y, button, KeyModifiers::default())
+            .is_none()
+    );
+    input.release_button(x, y, button).unwrap()
+}
+
+#[test]
+fn direct_bar_buttons_activate_without_a_panel_and_render_native_menus() {
+    let id = TrayItemId::new(1).unwrap();
+    for (button, item_is_menu, has_menu, expected) in [
+        (
+            MouseButton::Primary,
+            false,
+            true,
+            HeaderCall::Activate(id, TrayAction::Activate { x: 0, y: 0 }),
+        ),
+        (
+            MouseButton::Middle,
+            false,
+            true,
+            HeaderCall::Activate(id, TrayAction::SecondaryActivate { x: 0, y: 0 }),
+        ),
+        (MouseButton::Secondary, false, true, HeaderCall::Menu(id, 0)),
+        (MouseButton::Primary, true, true, HeaderCall::Menu(id, 0)),
+        (
+            MouseButton::Secondary,
+            false,
+            false,
+            HeaderCall::Activate(id, TrayAction::ContextMenu { x: 0, y: 0 }),
+        ),
+        (
+            MouseButton::Primary,
+            true,
+            false,
+            HeaderCall::Activate(id, TrayAction::ContextMenu { x: 0, y: 0 }),
+        ),
+    ] {
+        let (mut tray, adapter) = header_client(item_is_menu);
+        tray.set_open(false, 0.);
+        tray.snapshot.items[0].has_menu = has_menu;
+        let message = bar_message(&tray, button);
+        let mut effects = Effects::default();
+        tray.update(message, &mut effects);
+        assert_eq!(effects.tasks.len(), 1);
+        assert_eq!(effects.tasks[0].queue, crate::work::TRAY);
+        assert_eq!(tray.open(), matches!(expected, HeaderCall::Menu(..)));
+        let result = effects.tasks.pop().unwrap().run();
+        tray.update(result, &mut Effects::default());
+        assert_eq!(*adapter.0.lock().unwrap(), vec![expected]);
+        assert_eq!(tray.menu.is_some(), tray.open());
+    }
+}
+
+#[test]
+fn direct_bar_revalidates_hidden_removed_and_busy_targets() {
+    for retirement in 0..3 {
+        let (mut tray, adapter) = header_client(false);
+        tray.set_open(false, 0.);
+        let message = bar_message(&tray, MouseButton::Primary);
+        match retirement {
+            0 => tray.snapshot.items.clear(),
+            1 => tray.snapshot.items[0].status = TrayStatus::Passive,
+            _ => tray.active = Some(41),
+        }
+        let mut effects = Effects::default();
+        tray.update(message, &mut effects);
+        assert!(effects.tasks.is_empty());
+        assert!(adapter.0.lock().unwrap().is_empty());
+        assert!(!tray.open());
+    }
+}
+
+#[test]
+fn wheel_accumulates_fractional_axes_and_coalesces_while_native_call_is_pending() {
+    let (mut tray, adapter) = header_client(false);
+    tray.set_open(false, 0.);
+    let id = TrayItemId::new(1).unwrap();
+    let mut effects = Effects::default();
+    for event in [
+        WheelEvent {
+            vertical: 0.75,
+            horizontal: 0.,
+        },
+        WheelEvent {
+            vertical: 0.75,
+            horizontal: 0.,
+        },
+        WheelEvent {
+            vertical: 2.25,
+            horizontal: -1.25,
+        },
+    ] {
+        tray.update(Message::Bar(id, BarAction::Wheel(event)), &mut effects);
+    }
+    assert_eq!(effects.tasks.len(), 1);
+    while let Some(task) = effects.tasks.pop() {
+        tray.update(task.run(), &mut effects);
+        assert!(effects.tasks.len() <= 1);
+    }
+    assert_eq!(
+        *adapter.0.lock().unwrap(),
+        vec![
+            HeaderCall::Activate(
+                id,
+                TrayAction::Scroll {
+                    delta: 1,
+                    horizontal: false
+                }
+            ),
+            HeaderCall::Activate(
+                id,
+                TrayAction::Scroll {
+                    delta: 2,
+                    horizontal: false
+                }
+            ),
+            HeaderCall::Activate(
+                id,
+                TrayAction::Scroll {
+                    delta: -1,
+                    horizontal: true
+                }
+            ),
+        ]
+    );
+    assert!(!tray.open());
+    assert!(tray.active.is_none());
+    tray.update(
+        Message::Bar(
+            id,
+            BarAction::Wheel(WheelEvent {
+                vertical: 0.25,
+                horizontal: 0.25,
+            }),
+        ),
+        &mut effects,
+    );
+    assert_eq!(effects.tasks.len(), 1);
+    let task = effects.tasks.pop().unwrap();
+    tray.update(task.run(), &mut effects);
+    assert!(effects.tasks.is_empty());
+    assert_eq!(adapter.0.lock().unwrap().len(), 4);
+}
+
+#[test]
+fn dismissed_bar_action_cannot_reopen_on_late_failure_or_drain_queued_wheel() {
+    let (mut tray, _) = header_client(false);
+    tray.set_open(false, 0.);
+    let id = TrayItemId::new(1).unwrap();
+    let mut effects = Effects::default();
+    tray.update(
+        Message::Bar(
+            id,
+            BarAction::Wheel(WheelEvent {
+                vertical: 1.,
+                horizontal: 0.,
+            }),
+        ),
+        &mut effects,
+    );
+    let revision = tray.active.unwrap();
+    tray.update(
+        Message::Bar(
+            id,
+            BarAction::Wheel(WheelEvent {
+                vertical: 4.,
+                horizontal: 0.,
+            }),
+        ),
+        &mut effects,
+    );
+    tray.update(Message::Close, &mut effects);
+    effects.tasks.clear();
+    tray.update(
+        Message::Completed(revision, Err(DomainError::Failed("fixture failure".into()))),
+        &mut effects,
+    );
+    assert!(!tray.open());
+    assert!(tray.wheel.is_none());
+    assert!(effects.tasks.is_empty());
+}
+
+#[test]
+fn bar_action_failure_is_visible_in_the_native_panel() {
+    let (mut tray, _) = header_client(false);
+    tray.set_open(false, 0.);
+    let message = bar_message(&tray, MouseButton::Primary);
+    let mut effects = Effects::default();
+    tray.update(message, &mut effects);
+    let revision = tray.active.unwrap();
+    tray.update(
+        Message::Completed(revision, Err(DomainError::Failed("fixture failure".into()))),
+        &mut effects,
+    );
+    assert!(tray.open());
+    assert!(!tray.error.is_empty());
+    assert!(tray.menu.is_none());
+}
+
+#[test]
+fn wheel_pending_demand_is_bounded_latest_target_and_revalidated_before_drain() {
+    for retired in [false, true] {
+        let (mut tray, adapter) = header_client(false);
+        tray.set_open(false, 0.);
+        tray.snapshot = fixture();
+        let first = TrayItemId::new(1).unwrap();
+        let second = TrayItemId::new(2).unwrap();
+        let mut effects = Effects::default();
+        for (id, vertical, horizontal) in [(first, 1., 0.), (first, 12., 0.), (second, 999., -999.)]
+        {
+            tray.update(
+                Message::Bar(
+                    id,
+                    BarAction::Wheel(WheelEvent {
+                        vertical,
+                        horizontal,
+                    }),
+                ),
+                &mut effects,
+            );
+        }
+        assert_eq!(effects.tasks.len(), 1);
+        if retired {
+            let mut snapshot = tray.snapshot.clone();
+            snapshot.items.retain(|item| item.id != second);
+            // Retiring a pending target while another call runs cannot send its demand later.
+            tray.update(Message::Observed(Ok(snapshot)), &mut Effects::default());
+        }
+        while let Some(task) = effects.tasks.pop() {
+            tray.update(task.run(), &mut effects);
+            assert!(effects.tasks.len() <= 1);
+        }
+        let mut expected = vec![HeaderCall::Activate(
+            first,
+            TrayAction::Scroll {
+                delta: 1,
+                horizontal: false,
+            },
+        )];
+        if !retired {
+            expected.extend([
+                HeaderCall::Activate(
+                    second,
+                    TrayAction::Scroll {
+                        delta: 64,
+                        horizontal: false,
+                    },
+                ),
+                HeaderCall::Activate(
+                    second,
+                    TrayAction::Scroll {
+                        delta: -64,
+                        horizontal: true,
+                    },
+                ),
+            ]);
+        }
+        assert_eq!(*adapter.0.lock().unwrap(), expected);
+    }
+}
+
 #[test]
 fn item_header_pointer_and_keyboard_use_current_native_activate() {
     for keyboard in [false, true] {

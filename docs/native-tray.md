@@ -39,8 +39,9 @@ straight RGBA. `TrayPixmap` enforces dimensions and byte length. The asset
 adapter prefers a valid icon-theme name, falls back to the pixmap, premultiplies
 and prepares mip levels on the asset queue. Views borrow prepared resources.
 Application-supplied absolute paths and custom icon-theme paths are not read.
-Attention and overlay icons remain application artwork; missing icons currently
-render an empty icon area. Movie/animated tray icons are not implemented.
+Attention and overlay icons remain application artwork. Bar controls without
+valid artwork show an initial from the current title/application, or `?`.
+The panel retains its labelled action rows. Movie/animated tray icons are not implemented.
 
 Native tray requests use their own ordered effect queue. The runtime allows nine
 bounded effect workers, with 64 waiting tasks per queue. A slow app cannot block
@@ -57,10 +58,38 @@ The 100 ms idle wake checks cancellation, without polling application properties
 
 `Activate`, `SecondaryActivate`, `ContextMenu` and `Scroll` call the current
 application owner directly. A method reply acknowledges that call; it does not
-prove a new window appeared. The current panel exposes Open, Secondary action
-and Menu buttons. `ItemIsMenu` routes Open to the native menu when one exists.
-The port also supports context/scroll actions for additional clients. Direct
-pointer middle/right/wheel gestures on individual bar icons remain future work.
+prove a new window appeared. A bar icon maps primary click to Activate, middle
+click to SecondaryActivate and right click to Lucent's DBusMenu panel. If an
+item offers no DBusMenu object, right click calls ContextMenu instead. For
+`ItemIsMenu`, primary click uses that same menu path instead of Activate. The
+overflow panel also exposes labelled Open, Secondary action and Menu buttons.
+
+`Activate`/`SecondaryActivate`/`ContextMenu` still pass a neutral `(0, 0)`
+screen-position hint. Wayland does not give these layer surfaces a global
+origin; surface-local coordinates would be incorrect hints. App-owned popups
+may therefore choose a different position. Lucent's own menu uses the clicked
+bar's output route and does not depend on this native hint.
+
+The SDK owns clipped hit testing and matching-button capture, exposed through
+`Element::on_secondary_click`, `on_middle_click` and `on_wheel`. `Element::map`
+lifts all callbacks through the component tree. Native axis events normalize
+to signed logical lines, retaining fractional horizontal and vertical values.
+A leaf wheel handler consumes the event before ancestor scrolling; unrelated
+covered controls never receive it. A focused secondary action can also use
+Context Menu or Shift+F10. This does not give the non-focusable top bar keyboard
+focus; use the keyboard-accessible overflow panel there.
+
+The tray child translates gestures into domain actions on the existing ordered
+tray queue. Fractional wheel demand accumulates per current target. One call
+runs at a time, with at most one latest pending target and 64 unsent whole steps
+per axis. Changing targets discards the old pending demand. Closing, retirement
+and failure discard unsent work; accepted native actions cannot be undone.
+Late failures cannot reopen a dismissed panel. At the component-routing level,
+direct activation does not close other panels; actually opening a tray
+menu/error panel does. An open launcher has a full-screen outside-click region
+that can consume the first pointer click on the bar to dismiss the launcher.
+The native gesture harness starts with overlays closed; changing that overlay
+interaction policy is separate work.
 
 Menus use `AboutToShow`, `GetLayout` and `Event` from
 [DBusMenu](https://docs.rs/dbusmenu-zbus/latest/src/dbusmenu_zbus/dbusmenu.rs.html).
@@ -89,12 +118,15 @@ application cannot consume the entire read budget. These are count/content limit
 message allocation or a guarantee against a hostile peer flooding the bus.
 Payloads are decoded by zbus before retained image/menu limits are checked.
 
-The client currently opens a dedicated tray panel from `bar-tray`, instead of
-allocating an unbounded row of icons in the bar. IPC is `tray open`, `tray toggle`
-or `tray close`. At very narrow widths the bar hides its tray shortcut to retain
-the active workspace control; IPC remains available. Other native control panels close when this one opens. XEmbed
-legacy tray proxies, visual order/pinning preferences and real application/VM
-acceptance remain pending.
+The bar shows up to `component.bar.max_tray_items` (four) active/attention icons
+in spare space without moving existing clock, media or workspace groups. Their
+size, padding, gap, radius and attention background use design tokens. An
+overflow control remains available even when every icon fits. IPC is `tray
+open`, `tray toggle` or `tray close`. At very narrow widths the bar hides its
+tray shortcut to retain the active workspace control; IPC remains available.
+Other native control panels close when this one opens. XEmbed legacy tray
+proxies, visual order/pinning preferences and third-party application acceptance
+remain pending.
 
 ## Independent consumer and validation
 
@@ -108,5 +140,15 @@ Run it in a session without a competing watcher. Observation publishes counts;
 Private protocol tests spawn and destroy their own `dbus-daemon`. They exercise
 registration authority, pixel conversion, native methods, DBusMenu, owner
 retirement and competing watcher behavior without touching the host tray.
-Executed results belong in the measurement report; VM/application interoperability
-and performance are deferred, and must not be reported as passed.
+`python3 vm/test-tray.py` uses an owned time-limited Python SNI/DBusMenu fixture
+and real QMP input in the existing unlocked VM. It requires an empty tray and
+single 1920×1080 output, checks native gestures/menu/overflow/owner retirement,
+and preserves saved settings and wallpaper. Results stay under ignored
+`reports/local`; merely adding the harness does not establish a pass.
+Executed results belong in the measurement report. Third-party interoperability,
+hardware input and performance remain separate acceptance.
+
+The [tray bar acceptance report](../reports/measurements/lucent-tray-bar.json) records
+536 Rust tests, 93 Python checks, 52 focused Vulkan comparisons and the executed
+native fixture path, including overflow keyboard activation. It keeps third-party
+compatibility, overlay click behavior and unmeasured performance explicit.
