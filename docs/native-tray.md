@@ -84,8 +84,12 @@ tray queue. Fractional wheel demand accumulates per current target. One call
 runs at a time, with at most one latest pending target and 64 unsent whole steps
 per axis. Changing targets discards the old pending demand. Closing, retirement
 and failure discard unsent work; accepted native actions cannot be undone.
-Late failures cannot reopen a dismissed panel. Direct activation does not close
-other panels; actually opening a tray menu/error panel does.
+Late failures cannot reopen a dismissed panel. At the component-routing level,
+direct activation does not close other panels; actually opening a tray
+menu/error panel does. An open launcher has a full-screen outside-click region
+that can consume the first pointer click on the bar to dismiss the launcher.
+The native gesture harness starts with overlays closed; changing that overlay
+interaction policy is separate work.
 
 Menus use `AboutToShow`, `GetLayout` and `Event` from
 [DBusMenu](https://docs.rs/dbusmenu-zbus/latest/src/dbusmenu_zbus/dbusmenu.rs.html).
@@ -143,3 +147,8 @@ and preserves saved settings and wallpaper. Results stay under ignored
 `reports/local`; merely adding the harness does not establish a pass.
 Executed results belong in the measurement report. Third-party interoperability,
 hardware input and performance remain separate acceptance.
+
+The [tray bar acceptance report](../reports/measurements/lucent-tray-bar.json) records
+536 Rust tests, 93 Python checks, 52 focused Vulkan comparisons and the executed
+native fixture path, including overflow keyboard activation. It keeps third-party
+compatibility, overlay click behavior and unmeasured performance explicit.

@@ -14,7 +14,7 @@ import subprocess
 import time
 
 import lab
-from native_surfaces import active_surfaces
+from native_surfaces import active_surfaces, find_surface
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -82,10 +82,7 @@ def suite():
                    'fixture_registered_and_visible')
         require(state()['registration_errors'] == 0, 'non_replacing_registration')
         item = bar_items()[0]
-        cli('launcher', 'open')
         action(item, 'left', 'activate')
-        require(inspect()['client']['launcher'], 'activation_preserves_existing_panel')
-        cli('launcher', 'close')
         action(item, 'middle', 'secondary')
         action(item, 'wheel-up', 'scroll')
         action(item, 'wheel-down', 'scroll')
@@ -130,6 +127,17 @@ def suite():
                    'bounded_icons_with_overflow')
         v['click']('bar-tray')
         eventually(lambda: inspect()['client']['tray']['open'], 'overflow_opens')
+        for _ in range(16):
+            focus = find_surface(inspect(), 'tray').get('focus') or ''
+            if focus.startswith('tray-item-open-'):
+                break
+            v['key'](15)  # Tab through the actual native panel focus order.
+        else:
+            require(False, 'overflow_keyboard_reaches_application')
+        activations = count('activate')
+        v['key'](28)  # Enter invokes the focused application's primary action.
+        eventually(lambda: count('activate') == activations + 1, 'overflow_keyboard_activation')
+        results['overflow_keyboard_activation'] = True
         results['late_reply_retirement_and_overflow'] = True
         cli('tray', 'close')
         control('quit')
