@@ -265,6 +265,13 @@ pub struct DragEvent {
     pub dy: f32,
     pub finished: bool,
 }
+/// Wheel movement in logical line units, positive right/down. Fractional
+/// touchpad movement is retained; native pixel distance stays in the adapter.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct WheelEvent {
+    pub horizontal: f64,
+    pub vertical: f64,
+}
 pub type InputCallback<M> = Arc<dyn Fn(String) -> M + Send + Sync>;
 pub type EditCallback<M> = Arc<dyn Fn(InputEdit) -> M + Send + Sync>;
 pub type TextEditCallback<M> = Arc<dyn Fn(TextEdit) -> M + Send + Sync>;
@@ -272,6 +279,7 @@ pub type LinkCallback<M> = Arc<dyn Fn(&str) -> M + Send + Sync>;
 pub type ScrollCallback<M> = Arc<dyn Fn(ScrollEvent) -> M + Send + Sync>;
 pub type SliderCallback<M> = Arc<dyn Fn(SliderEvent) -> M + Send + Sync>;
 pub type DragCallback<M> = Arc<dyn Fn(DragEvent) -> M + Send + Sync>;
+pub type WheelCallback<M> = Arc<dyn Fn(WheelEvent) -> M + Send + Sync>;
 #[derive(Clone)]
 pub struct Element<M> {
     pub id: String,
@@ -279,6 +287,9 @@ pub struct Element<M> {
     pub style: Style,
     pub children: Vec<Element<M>>,
     pub click: Option<M>,
+    pub secondary_click: Option<M>,
+    pub middle_click: Option<M>,
+    pub wheel: Option<WheelCallback<M>>,
     pub submit: Option<M>,
     pub hover: Option<M>,
     pub input: Option<InputCallback<M>>,
@@ -298,6 +309,9 @@ impl<M> Element<M> {
             style: Style::default(),
             children: vec![],
             click: None,
+            secondary_click: None,
+            middle_click: None,
+            wheel: None,
             submit: None,
             hover: None,
             input: None,
@@ -561,6 +575,22 @@ impl<M> Element<M> {
         self.click = Some(msg);
         self
     }
+    /// Activate on a secondary-button click, or the focused control's context
+    /// menu key. Uses the same clipped hit geometry as primary activation.
+    pub fn on_secondary_click(mut self, message: M) -> Self {
+        self.secondary_click = Some(message);
+        self
+    }
+    pub fn on_middle_click(mut self, message: M) -> Self {
+        self.middle_click = Some(message);
+        self
+    }
+    /// Consume wheel movement on this hit before an ancestor scroll viewport.
+    /// The client owns any accumulation/coalescing and application action policy.
+    pub fn on_wheel(mut self, callback: impl Fn(WheelEvent) -> M + Send + Sync + 'static) -> Self {
+        self.wheel = Some(Arc::new(callback));
+        self
+    }
     pub fn on_hover(mut self, msg: M) -> Self {
         self.hover = Some(msg);
         self
@@ -702,6 +732,7 @@ pub enum Key {
     Backspace,
     Delete,
     Enter,
+    ContextMenu,
     Escape,
     Up,
     Down,
@@ -1298,6 +1329,10 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
             let map = mapper.clone();
             Arc::new(move |event| map(f(event))) as ScrollCallback<N>
         });
+        let wheel = self.wheel.map(|callback| {
+            let map = mapper.clone();
+            Arc::new(move |event| map(callback(event))) as WheelCallback<N>
+        });
         Element {
             id: self.id,
             kind: self.kind,
@@ -1308,6 +1343,9 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
                 .map(|c| c.map_arc(mapper.clone()))
                 .collect(),
             click: self.click.map(|m| mapper(m)),
+            secondary_click: self.secondary_click.map(|m| mapper(m)),
+            middle_click: self.middle_click.map(|m| mapper(m)),
+            wheel,
             submit: self.submit.map(|m| mapper(m)),
             hover: self.hover.map(|m| mapper(m)),
             input,
@@ -1405,6 +1443,24 @@ mod composition_tests {
         let task = parent.tasks.pop().unwrap();
         assert_eq!(task.queue, "settings");
         assert_eq!(task.run(), "child:42");
+    }
+    #[test]
+    fn message_mapping_preserves_alternate_buttons_and_fractional_wheel_axes() {
+        let child = Element::empty()
+            .on_secondary_click("secondary".to_owned())
+            .on_middle_click("middle".to_owned())
+            .on_wheel(|event| format!("{}:{}", event.horizontal, event.vertical));
+        let parent = Element::stack(vec![child]).map(|message| format!("child:{message}"));
+        let child = &parent.children[0];
+        assert_eq!(child.secondary_click.as_deref(), Some("child:secondary"));
+        assert_eq!(child.middle_click.as_deref(), Some("child:middle"));
+        assert_eq!(
+            child.wheel.as_ref().unwrap()(WheelEvent {
+                horizontal: -0.25,
+                vertical: 0.5
+            }),
+            "child:-0.25:0.5"
+        );
     }
     #[test]
     fn registry_rejects_duplicate_stable_ids() {

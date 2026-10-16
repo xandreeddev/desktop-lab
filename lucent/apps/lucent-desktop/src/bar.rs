@@ -29,7 +29,8 @@ impl Desktop {
             &self.compositor,
             monitor.as_ref().map(|route| &route.id),
         );
-        let geometry = shell_layout::BarLayout::new(cx.width, buttons.len());
+        let geometry =
+            shell_layout::BarLayout::new(cx.width, buttons.len()).with_tray(self.tray.bar_count());
         // Prefer the final active overlay slot, keeping a visible special
         // control reachable while its regular workspace is also active.
         let active = buttons.iter().rposition(|w| w.active).unwrap_or(0);
@@ -217,6 +218,13 @@ impl Desktop {
                     .id("bar-mute"),
             );
         }
+        controls.splice(
+            0..0,
+            self.tray
+                .bar_icons(geometry.tray_count, self.theme())
+                .into_iter()
+                .map(|element| element.map(Message::Tray)),
+        );
         let right = self
             .pill(controls)
             .size(geometry.system.w, geometry.system.h)
@@ -246,6 +254,27 @@ mod tests {
             return Some(tree);
         }
         tree.children.iter().find_map(|child| element(child, id))
+    }
+
+    #[test]
+    fn root_closes_other_panels_only_when_tray_actually_opens() {
+        use crate::tray::{BarAction, Message as T};
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        let mut effects = Effects::default();
+        app.update(
+            Message::Tray(T::Observed(Ok(crate::tray::tests::fixture()))),
+            &mut effects,
+        );
+        app.update(Message::Audio(crate::audio::Message::Open), &mut effects);
+        let id = lucent_domain::TrayItemId::new(1).unwrap();
+        app.update(Message::Tray(T::Bar(id, BarAction::Activate)), &mut effects);
+        assert!(app.audio.open());
+        assert!(!app.tray.open());
+        // Retire the unexecuted effect; actual adapter calls are covered by the child.
+        app.update(Message::Tray(T::Close), &mut effects);
+        app.update(Message::Tray(T::Bar(id, BarAction::Menu)), &mut effects);
+        assert!(app.tray.open());
+        assert!(!app.audio.open());
     }
 
     #[test]
@@ -310,5 +339,104 @@ mod tests {
             element(&tree, "bar-lock").unwrap().click,
             Some(Message::Action(Action::Lock))
         ));
+    }
+
+    #[test]
+    fn tray_capacity_keeps_existing_modules_and_spacing_grid() {
+        for width in [320., 390., 640., 960., 1024., 1280., 1366., 1920., 3840.] {
+            for items in [0, 1, 4, 8, 64] {
+                let base = shell_layout::BarLayout::new(width, 8);
+                let actual = shell_layout::BarLayout::new(width, 8).with_tray(items);
+                assert!(actual.tray_count <= items.min(component::bar::MAX_TRAY_ITEMS as usize));
+                assert_eq!(actual.workspaces, base.workspaces);
+                assert_eq!(actual.clock, base.clock);
+                assert_eq!(actual.media, base.media);
+                assert_eq!(
+                    actual.system.x + actual.system.w,
+                    base.system.x + base.system.w
+                );
+                let mut groups = vec![actual.workspaces, actual.system];
+                groups.extend(actual.clock);
+                groups.extend(actual.media);
+                groups.retain(|rect| rect.w > 0.);
+                groups.sort_by(|a, b| a.x.total_cmp(&b.x));
+                for rect in &groups {
+                    for value in [rect.x, rect.y, rect.w, rect.h] {
+                        assert_eq!(value % layout::SHELL_STEP, 0.);
+                    }
+                    assert!(
+                        rect.x >= layout::SHELL_INSET
+                            && rect.x + rect.w <= width - layout::SHELL_INSET
+                    );
+                }
+                for pair in groups.windows(2) {
+                    assert!(pair[1].x - pair[0].x - pair[0].w >= layout::SECTION_GAP);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn visible_tray_icons_use_bounded_token_geometry_and_keep_overflow_reachable() {
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        app.update(
+            Message::Tray(crate::tray::Message::Observed(Ok(
+                crate::tray::tests::fixture(),
+            ))),
+            &mut Effects::default(),
+        );
+        let fonts = Arc::new(
+            app.fonts()
+                .into_iter()
+                .map(|bytes| fontdue::Font::from_bytes(bytes, Default::default()).unwrap())
+                .collect(),
+        );
+        let engine = Layout::new(fonts);
+        for width in [390., 640., 1024., 1920.] {
+            let cx = ViewContext {
+                surface: "bar",
+                instance: None,
+                width,
+                height: component::panel::BAR_HEIGHT,
+                now: 1.,
+                density: Density::ONE,
+            };
+            let tree = app.view(&cx);
+            let scene = engine.build(&tree, width, cx.height, &Interaction::default(), cx.now);
+            let geometry = shell_layout::BarLayout::new(
+                width,
+                crate::workspaces::buttons_for_monitor(&app.compositor, None).len(),
+            )
+            .with_tray(8);
+            let hits: Vec<_> = scene
+                .hits
+                .iter()
+                .filter(|hit| hit.id.starts_with("bar-tray-item-"))
+                .collect();
+            assert_eq!(hits.len(), geometry.tray_count);
+            for (index, hit) in hits.iter().enumerate() {
+                assert_eq!(hit.rect.w, component::bar::CONTROL_SIZE);
+                assert_eq!(hit.rect.h, component::bar::CONTROL_SIZE);
+                assert_eq!(
+                    hit.rect.x,
+                    geometry.system.x
+                        + component::pill::PADDING_INLINE
+                        + index as f32 * (component::bar::CONTROL_SIZE + space::SM)
+                );
+                assert_eq!(hit.rect.x % layout::UNIT, 0.);
+                assert_eq!(
+                    hit.rect.y,
+                    geometry.system.y + component::pill::PADDING_BLOCK
+                );
+                assert!(
+                    hit.middle_click.is_some()
+                        && hit.secondary_click.is_some()
+                        && hit.wheel.is_some()
+                );
+            }
+            if geometry.show_tray {
+                assert!(scene.hits.iter().any(|hit| hit.id == "bar-tray"));
+            }
+        }
     }
 }

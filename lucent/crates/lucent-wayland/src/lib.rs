@@ -53,6 +53,7 @@ mod fractional;
 mod ipc;
 mod layer_commit;
 mod outputs;
+mod pointer_input;
 mod profiling;
 mod subscriptions;
 
@@ -874,6 +875,15 @@ impl<A: Application> State<A> {
         let key = match event.keysym {
             Keysym::Escape => api::Key::Escape,
             Keysym::Return | Keysym::KP_Enter => api::Key::Enter,
+            Keysym::Menu => api::Key::ContextMenu,
+            Keysym::F10
+                if self.modifiers.shift
+                    && !self.modifiers.ctrl
+                    && !self.modifiers.alt
+                    && !self.modifiers.logo =>
+            {
+                api::Key::ContextMenu
+            }
             Keysym::BackSpace => api::Key::Backspace,
             Keysym::Delete | Keysym::KP_Delete => api::Key::Delete,
             Keysym::Up => api::Key::Up,
@@ -1295,12 +1305,15 @@ impl<A: Application> PointerHandler for State<A> {
                         messages.extend(s.interaction.motion(&s.scene, x, y, now))
                     }
                     PointerEventKind::Leave { .. } => s.interaction.leave(now),
-                    PointerEventKind::Press { button: 0x110, .. } => {
-                        outside = !s.scene.hits.iter().any(|h| h.contains(x, y));
-                        if let Some(message) = s.interaction.press_with_modifiers(
+                    PointerEventKind::Press { button, .. } => {
+                        let button = pointer_input::button(button);
+                        outside = button == api::MouseButton::Primary
+                            && !s.scene.hits.iter().any(|h| h.contains(x, y));
+                        if let Some(message) = s.interaction.press_button(
                             &s.scene,
                             x,
                             y,
+                            button,
                             api::KeyModifiers {
                                 control: self.modifiers.ctrl,
                                 shift: self.modifiers.shift,
@@ -1311,24 +1324,29 @@ impl<A: Application> PointerHandler for State<A> {
                             messages.push(message);
                         }
                     }
-                    PointerEventKind::Release { button: 0x110, .. } => {
-                        if let Some(m) = s.interaction.release(x, y) {
+                    PointerEventKind::Release { button, .. } => {
+                        if let Some(m) =
+                            s.interaction
+                                .release_button(x, y, pointer_input::button(button))
+                        {
                             messages.push(m);
                         }
                     }
-                    PointerEventKind::Axis { vertical, .. } => {
-                        let lines = if vertical.discrete != 0 {
-                            vertical.discrete as f64
-                        } else {
-                            vertical.absolute / 15.
+                    PointerEventKind::Axis {
+                        horizontal,
+                        vertical,
+                        ..
+                    } => {
+                        let wheel = api::WheelEvent {
+                            horizontal: pointer_input::lines(horizontal),
+                            vertical: pointer_input::lines(vertical),
                         };
-                        if let Some(emitted) = s.interaction.scroll(&s.scene, x, y, lines) {
+                        if let Some(emitted) = s.interaction.wheel(&s.scene, x, y, wheel) {
                             messages.extend(emitted);
-                        } else {
-                            scroll = Some(lines);
+                        } else if wheel.vertical.is_finite() && wheel.vertical != 0. {
+                            scroll = Some(wheel.vertical);
                         }
                     }
-                    _ => continue,
                 }
                 s.demand.invalidate();
             }
@@ -1356,12 +1374,7 @@ impl<A: Application> PointerHandler for State<A> {
                 _ => None,
             };
             if let Some((button, pressed)) = button {
-                let button = match button {
-                    0x110 => api::MouseButton::Primary,
-                    0x111 => api::MouseButton::Secondary,
-                    0x112 => api::MouseButton::Middle,
-                    other => api::MouseButton::Other(other),
-                };
+                let button = pointer_input::button(button);
                 if let Some(message) = self.surface_event(
                     &id,
                     api::Event::PointerButton {

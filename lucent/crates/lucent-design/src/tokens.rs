@@ -255,6 +255,7 @@ pub mod component {
         pub const CONTROL_SIZE: f32 = 24.0;
         pub const MAX_WORKSPACES: f32 = 8.0;
         pub const SYSTEM_CONTROL_COUNT: f32 = 8.0;
+        pub const MAX_TRAY_ITEMS: f32 = 4.0;
     }
     pub mod pill {
         pub const HEIGHT: f32 = 32.0;
@@ -578,6 +579,7 @@ pub mod component {
         pub const TITLE_LINES: f32 = 2.0;
         pub const STATUS_LINES: f32 = 3.0;
         pub const SEPARATOR_HEIGHT: f32 = 1.0;
+        pub const BAR_OVERLAY_SIZE: f32 = 8.0;
     }
     pub mod selection_indicator {
         pub const SIZE: f32 = 16.0;

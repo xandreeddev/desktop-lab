@@ -1404,6 +1404,10 @@ fn visual_regressions() {
             ("menu-submenu", Mode::Apps, 0, 0, "", 1., 640.),
             ("audio-loading", Mode::Apps, 0, 0, "", 1., 640.),
             ("tray-loading", Mode::Apps, 0, 0, "", 1., 640.),
+            ("tray-bar-wide", Mode::Apps, 0, 0, "", 1., 1920.),
+            ("tray-bar-narrow", Mode::Apps, 0, 0, "", 1., 640.),
+            ("tray-bar-hover", Mode::Apps, 0, 0, "", 1., 1280.),
+            ("tray-bar-fallback", Mode::Apps, 0, 0, "", 1., 1280.),
             ("tray-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("tray-empty", Mode::Apps, 0, 0, "", 1., 390.),
             ("tray-items", Mode::Apps, 0, 0, "", 1., 390.),
@@ -1500,7 +1504,7 @@ fn visual_regressions() {
             {
                 continue;
             }
-            let height = if name.starts_with("monitor-bar-") {
+            let height = if name.starts_with("monitor-bar-") || name.starts_with("tray-bar-") {
                 lucent_design::component::panel::BAR_HEIGHT
             } else if name == "notification-image-small" {
                 320.
@@ -1984,6 +1988,49 @@ fn visual_regressions() {
                     density: lucent_api::Density::ONE,
                 });
                 layout.build(&tree, width, height, &Interaction::default(), now)
+            } else if name.starts_with("tray-bar-") {
+                use crate::tray::Message as T;
+                let mut snapshot = crate::tray::tests::fixture();
+                snapshot.items[0].overlay_icon = snapshot.items[0].icon.clone();
+                snapshot.items[1].attention_icon.pixmap = Some(
+                    lucent_domain::TrayPixmap::new(2, 2, [240, 170, 65, 255].repeat(4)).unwrap(),
+                );
+                if name == "tray-bar-fallback" {
+                    for item in &mut snapshot.items {
+                        item.icon = Default::default();
+                        item.attention_icon = Default::default();
+                        item.overlay_icon = Default::default();
+                    }
+                }
+                let mut effects = Effects::default();
+                app.update(Message::Tray(T::Observed(Ok(snapshot))), &mut effects);
+                for task in std::mem::take(&mut effects.tasks) {
+                    app.update(task.run(), &mut effects);
+                }
+                let tree = app.view(&ViewContext {
+                    surface: "bar",
+                    instance: None,
+                    width,
+                    height,
+                    now,
+                    density: lucent_api::Density::ONE,
+                });
+                let mut input = Interaction::default();
+                let initial = layout.build(&tree, width, height, &input, now);
+                if name == "tray-bar-hover" {
+                    let hit = initial
+                        .hits
+                        .iter()
+                        .find(|hit| hit.id == "bar-tray-item-1")
+                        .expect("wide bar has a tray control");
+                    input.motion(
+                        &initial,
+                        hit.rect.x + hit.rect.w / 2.,
+                        hit.rect.y + hit.rect.h / 2.,
+                        0.,
+                    );
+                }
+                layout.build(&tree, width, height, &input, now)
             } else if name.starts_with("tray-") {
                 use crate::tray::{
                     Message as T,

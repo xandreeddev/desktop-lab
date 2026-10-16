@@ -1,4 +1,5 @@
 //! Layout, hit testing and retained interaction state for declarative components.
+mod pointer;
 use lucent_api::*;
 mod scroll;
 pub use scroll::{FocusClip, ScrollHit};
@@ -63,6 +64,9 @@ pub struct Hit<M> {
     pub clip: Clip,
     pub radius: f32,
     pub click: Option<M>,
+    pub secondary_click: Option<M>,
+    pub middle_click: Option<M>,
+    pub wheel: Option<WheelCallback<M>>,
     pub submit: Option<M>,
     pub hover: Option<M>,
     pub input: Option<InputCallback<M>>,
@@ -396,6 +400,9 @@ impl Layout {
             None
         };
         let interactive = e.click.is_some()
+            || e.secondary_click.is_some()
+            || e.middle_click.is_some()
+            || e.wheel.is_some()
             || e.input.is_some()
             || e.edit.is_some()
             || e.text_edit.is_some()
@@ -407,6 +414,8 @@ impl Layout {
             let mut color = e.style.background;
             if e.style.hover_feedback
                 && (e.click.is_some()
+                    || e.secondary_click.is_some()
+                    || e.middle_click.is_some()
                     || e.input.is_some()
                     || e.edit.is_some()
                     || e.text_edit.is_some()
@@ -452,6 +461,9 @@ impl Layout {
                 clip: clip.clone(),
                 radius: e.style.radius,
                 click: e.click.clone(),
+                secondary_click: e.secondary_click.clone(),
+                middle_click: e.middle_click.clone(),
+                wheel: e.wheel.clone(),
                 submit: e.submit.clone(),
                 hover: e.hover.clone(),
                 input: e.input.clone(),
@@ -484,6 +496,7 @@ impl Layout {
                 hover_transition: e.style.hover_transition,
                 tab_stop: e.style.tab_stop
                     && (e.click.is_some()
+                        || e.secondary_click.is_some()
                         || e.input.is_some()
                         || e.edit.is_some()
                         || e.text_edit.is_some()
@@ -804,6 +817,7 @@ pub struct Interaction<M> {
     pub hovered: Option<String>,
     pub focus_visible: bool,
     press: Option<Press<M>>,
+    alternate_press: Option<pointer::AlternatePress<M>>,
     hover_transition: Transition,
     motions: BTreeMap<String, Motion>,
     select_all: bool,
@@ -819,6 +833,7 @@ impl<M> Default for Interaction<M> {
             focus_visible: false,
             hover_transition: Transition::default(),
             press: None,
+            alternate_press: None,
             motions: BTreeMap::new(),
             select_all: false,
             input_buffer: None,
@@ -829,6 +844,7 @@ impl<M> Default for Interaction<M> {
 }
 impl<M: Clone> Interaction<M> {
     pub fn synchronize(&mut self, scene: &Scene<M>) {
+        self.synchronize_buttons(scene);
         if self.press.as_ref().is_some_and(|press| {
             press.hit.parts.is_some()
                 && !scene.hits.iter().any(|hit| {
@@ -929,6 +945,7 @@ impl<M: Clone> Interaction<M> {
     }
     /// A surface leave ends hover without fabricating a pointer position or dragging.
     pub fn leave(&mut self, now: f64) {
+        self.alternate_press = None;
         if let Some(old) = self.hovered.take() {
             self.motions.entry(old).or_insert(Motion::fixed(1.)).target(
                 0.,
@@ -939,6 +956,7 @@ impl<M: Clone> Interaction<M> {
         }
     }
     pub fn motion(&mut self, scene: &Scene<M>, x: f32, y: f32, now: f64) -> Vec<M> {
+        self.move_buttons(x, y);
         let mut out = vec![];
         let hit = scene.hits.iter().rev().find(|h| h.contains(x, y));
         let id = hit.map(|h| h.id.clone());
@@ -1112,7 +1130,29 @@ impl<M: Clone> Interaction<M> {
     /// A wheel event is consumed by the deepest scroll viewport under the
     /// pointer, chaining outward at its limits. Some(empty) still consumes it.
     pub fn scroll(&mut self, scene: &Scene<M>, x: f32, y: f32, lines: f64) -> Option<Vec<M>> {
+        self.wheel(
+            scene,
+            x,
+            y,
+            WheelEvent {
+                horizontal: 0.,
+                vertical: lines,
+            },
+        )
+    }
+    pub fn wheel(&mut self, scene: &Scene<M>, x: f32, y: f32, event: WheelEvent) -> Option<Vec<M>> {
         let hit = scene.hits.iter().rev().find(|h| h.contains(x, y))?;
+        if !event.horizontal.is_finite() || !event.vertical.is_finite() {
+            return Some(vec![]);
+        }
+        if let Some(callback) = &hit.wheel {
+            return Some(if event == WheelEvent::default() {
+                vec![]
+            } else {
+                vec![callback(event)]
+            });
+        }
+        let lines = event.vertical;
         // Follow this hit's ancestry, never an unrelated viewport underneath it.
         let mut handled = false;
         for scroll in hit.scroll.iter().chain(hit.scroll_ancestors.iter().rev()) {
@@ -1132,6 +1172,15 @@ impl<M: Clone> Interaction<M> {
     }
     pub fn key(&mut self, scene: &Scene<M>, key: &Key) -> Vec<M> {
         self.focus_visible = true;
+        if matches!(key.unmodified(), Key::ContextMenu) {
+            return scene
+                .hits
+                .iter()
+                .find(|hit| Some(&hit.id) == self.focus.as_ref())
+                .and_then(|hit| hit.secondary_click.clone())
+                .into_iter()
+                .collect();
+        }
         let key = if scene
             .hits
             .iter()
@@ -1457,6 +1506,9 @@ mod tests {
             radius: 20.,
             click: None,
             hover: None,
+            secondary_click: None,
+            middle_click: None,
+            wheel: None,
             submit: None,
             input: None,
             edit: None,
@@ -1485,6 +1537,9 @@ mod tests {
             radius: 0.,
             click: None,
             hover: None,
+            secondary_click: None,
+            middle_click: None,
+            wheel: None,
             submit: None,
             input: Some(Arc::new(|s: String| s)),
             edit: None,
@@ -1541,6 +1596,9 @@ mod tests {
             radius: 0.,
             click: Some(1),
             hover: None,
+            secondary_click: None,
+            middle_click: None,
+            wheel: None,
             submit: None,
             input: None,
             edit: None,

@@ -1454,9 +1454,11 @@ impl Component for Desktop {
                 }
             }
             Message::Tray(message) => {
-                let opening = matches!(message, crate::tray::Message::Open)
-                    || matches!(message, crate::tray::Message::Toggle) && !self.tray.open();
+                let before = self.tray.open();
+                effects.delegate(|child| self.tray.update(message, child), Message::Tray);
+                let opening = self.tray.open() && !before;
                 if opening {
+                    self.update_live_wallpaper(crate::live_wallpaper::Message::Close, effects);
                     self.update_launcher(launcher::Message::Close, effects);
                     effects.delegate(
                         |child| self.power.update(crate::power::Message::Close, child),
@@ -1478,7 +1480,6 @@ impl Component for Desktop {
                         Message::Bluetooth,
                     );
                 }
-                effects.delegate(|child| self.tray.update(message, child), Message::Tray);
             }
             Message::Power(message) => {
                 if let crate::power::Message::Observed(result) = &message {
