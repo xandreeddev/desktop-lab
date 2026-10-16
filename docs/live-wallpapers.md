@@ -242,6 +242,18 @@ It uses one synthetic MP4 and a test-owned terminal to exercise fullscreen,
 workspace visibility, manual pause, the native policy toggles and restart.
 It skips resource benchmarks and restores the caller's exact preferences,
 wallpaper, exports, workspace/focus and idle policy through the existing checkpoint.
+The native Hyprland 0.56.2 VM passed this check on implementation source
+`faec272e21fe301284f6212a59b7de84cc8752aa`: visible fullscreen stopped the
+decoder and background submissions, a fullscreen window on a hidden workspace
+did not pause playback, and leaving fullscreen preserved manual pause or resumed
+an unpaused profile. Keyboard changes to both policy controls survived restart.
+The original workspace/focus, exact preferences, wallpaper, theme/login exports
+and idle policy were restored, and the test-owned window/assets were removed.
+See the [policy VM report](../reports/measurements/lucent-live-wallpaper-policy.json)
+for the implementation and harness identities. This was one 1920×1080 output
+using software Vulkan, without physical battery transitions or new resource
+benchmarks. Native multi-output behavior and physical power/pacing remain open.
+
 A software-Vulkan test verifies real changing pixels, one reused GPU texture,
 no upload for a repeated revision and replacement on dimension changes.
 
@@ -268,4 +280,4 @@ RSS / 373.38 MiB peak and 113.616% of one logical CPU core. That source predates
 the conversion/coverage changes. It exceeds the 300 MiB target and supersedes
 any inference that the small synthetic sample proved full-resolution efficiency.
 The current optimization still needs a matching native before/after measurement;
-hardware decoding, physical-GPU pacing and power-aware playback remain open.
+hardware decoding, physical-GPU pacing and measured power savings remain open.

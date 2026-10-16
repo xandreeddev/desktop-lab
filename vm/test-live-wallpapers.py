@@ -346,14 +346,20 @@ shutil.rmtree(scratch)
 '''
 
 
-def check_playback_policy(name, monitor):
+def check_playback_policy(name, monitor, checks):
     """Exercise real fullscreen observations and native preference controls.
 
     Only the test-owned terminal is closed. The caller's outer checkpoint owns
     exact settings, wallpaper, exports and idle-policy restoration.
     """
-    workspace = monitor['activeWorkspace']
-    original_workspace = workspace.get('address') or str(workspace.get('id', ''))
+    def workspace_selector(workspace):
+        if workspace.get('address'):
+            return workspace['address']
+        if workspace.get('id', 0) > 0:
+            return str(workspace['id'])
+        return 'name:' + workspace['name'] if workspace.get('name') else ''
+
+    original_workspace = workspace_selector(monitor['activeWorkspace'])
     require(bool(original_workspace), 'original_workspace_identity')
     special = monitor.get('specialWorkspace', {})
     require(not special.get('address') and special.get('id', 0) == 0,
@@ -362,11 +368,30 @@ def check_playback_policy(name, monitor):
     marker = 'lucent-wallpaper-policy-' + str(time.monotonic_ns())
     test_workspace = 'name:' + marker
     terminal_pid, address = None, None
-    checks = {}
 
-    def dispatch(*args):
-        require(session('hyprctl', 'dispatch', *args).strip() == 'ok',
-                'native_policy_dispatch')
+    def dispatch(action, value):
+        # Hyprland's Lua session accepts a dispatcher expression. Native names
+        # remain quoted values, never source fragments; JSON quoting matches Lua
+        # for these control-free strings when Unicode is kept verbatim.
+        require(all(ord(c) >= 32 and ord(c) != 127 for c in value), 'policy_selector_controls')
+        literal = json.dumps(value, ensure_ascii=False)
+        if action == 'workspace':
+            expression = 'hl.dsp.focus({ workspace = ' + literal + ' })'
+        elif action == 'focuswindow':
+            expression = 'hl.dsp.focus({ window = ' + literal + ' })'
+        elif action == 'closewindow':
+            expression = 'hl.dsp.window.close({ window = ' + literal + ' })'
+        elif action == 'fullscreen':
+            require(value in ('0', '2'), 'policy_fullscreen_mode')
+            operation = 'set' if value == '2' else 'unset'
+            expression = 'hl.dsp.window.fullscreen({ mode = "fullscreen", action = "' + operation + '" })'
+        else:
+            raise CheckFailure('unknown_policy_dispatch')
+        try:
+            response = session('hyprctl', 'dispatch', expression)
+        except CheckFailure:
+            raise CheckFailure('native_policy_dispatch_' + action) from None
+        require(response.strip() == 'ok', 'native_policy_dispatch_' + action)
 
     def terminal():
         return next((c for c in json.loads(session('hyprctl', '-j', 'clients'))
@@ -376,10 +401,11 @@ def check_playback_policy(name, monitor):
         outputs = client()['live_wallpaper']['outputs']
         return next((o['pause_reason'] for o in outputs if o['monitor'] == monitor['name']), None)
 
-    def playing():
+    def playing(*, visible=True):
         before = background_frames()
         eventually(lambda: client()['live_wallpaper']['running'] == 1
-                   and pause_reason() is None and background_frames() > before + 2,
+                   and pause_reason() is None
+                   and (not visible or background_frames() > before + 2),
                    'policy_allows_native_frame_advance')
 
     def paused(reason):
@@ -416,7 +442,7 @@ print(p.pid)
         playing()
         preferences = read_settings()['live_wallpapers']
         require(terminal()['fullscreen'] == 0, 'test_terminal_initially_windowed')
-        dispatch('fullscreen', '0')
+        dispatch('fullscreen', '2')
         eventually(lambda: terminal()['fullscreen'] == 2, 'test_terminal_fullscreen')
         paused('fullscreen')
         require(read_settings()['live_wallpapers'] == preferences,
@@ -441,10 +467,12 @@ print(p.pid)
         cli('wallpaper', 'live', 'resume')
         playing()
 
-        dispatch('fullscreen', '0')
+        dispatch('fullscreen', '2')
         paused('fullscreen')
         policy_control('live-policy-fullscreen', 'pause_when_fullscreen', False)
-        playing()
+        # A compositor may withhold callbacks for covered background surfaces
+        # even when the user explicitly keeps the decoder running.
+        playing(visible=False)
         policy_control('live-policy-battery', 'pause_on_battery', False)
         preferences = read_settings()['live_wallpapers']
         session('systemctl', '--user', 'restart', 'lucent.service')
@@ -452,7 +480,7 @@ print(p.pid)
                    and read_settings()['live_wallpapers'] == preferences,
                    'policy_preferences_survive_restart', timeout=45)
         require(terminal()['fullscreen'] == 2, 'fullscreen_preserved_across_shell_restart')
-        playing()
+        playing(visible=False)
         checks['native_policy_controls_and_restart_preserve_opt_outs'] = True
         policy_control('live-policy-fullscreen', 'pause_when_fullscreen', True)
         paused('fullscreen')
@@ -460,7 +488,6 @@ print(p.pid)
         dispatch('fullscreen', '0')
         playing()
         checks['leaving_fullscreen_resumes_unpaused_profile'] = True
-        return checks
     finally:
         try:
             owned = terminal() if terminal_pid is not None else None
@@ -468,9 +495,15 @@ print(p.pid)
                 dispatch('closewindow', 'address:' + owned['address'])
         finally:
             dispatch('workspace', original_workspace)
+            eventually(lambda: workspace_selector(json.loads(session('hyprctl', '-j', 'activeworkspace')))
+                       == original_workspace, 'policy_original_workspace_restored')
             if focused and any(c['address'] == focused
                                for c in json.loads(session('hyprctl', '-j', 'clients'))):
                 dispatch('focuswindow', 'address:' + focused)
+                eventually(lambda: json.loads(session('hyprctl', '-j', 'activewindow')).get('address')
+                           == focused, 'policy_original_window_focus_restored')
+            eventually(lambda: terminal() is None, 'policy_test_window_closed')
+            checks['workspace_focus_and_test_window_restored'] = True
 
 
 def main():
@@ -577,7 +610,7 @@ t=p.with_name('desktop.live-test.new'); t.write_text(json.dumps(d)); t.replace(p
             report['checks'][extension + '_native_import_and_changing_pixels'] = True
             if args.policy_only:
                 phase = 'native_playback_policy'
-                report['checks'].update(check_playback_policy(name, monitor))
+                check_playback_policy(name, monitor, report['checks'])
                 continue
             if extension == 'mp4':
                 print('Measuring native 15 FPS MP4 playback for 120 seconds.', flush=True)
