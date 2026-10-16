@@ -1,0 +1,74 @@
+{
+  "status": "native_single_output_secure_lock_checks_passed",
+  "tested_implementation_commit": "00f3e8721d054503d7e7d0878c8e6cc58b59dba8",
+  "harness": {
+    "path": "vm/test-live-wallpapers.py",
+    "mode": "--lock-only",
+    "sha256": "77e82daa6faca85752223937fade48a3a659c0e269497fe4abc269cf5dbfca5f"
+  },
+  "binaries": {
+    "lucent-desktop": {
+      "sha256": "14bcacd2aa09fbce855ae939f619c47f17f757218d22da17b4631bde800cb50c",
+      "bytes": 20436392
+    }
+  },
+  "running_binary_hash_verified": true,
+  "checks": {
+    "synthetic_mp4_webm_gif_encoded": true,
+    "native_ordinary_field_undo_and_autofocus": true,
+    "native_path_edit_submit_and_fps": true,
+    "mp4_native_import_and_changing_pixels": true,
+    "secure_lock_stops_decoder_and_background_redraws": true,
+    "desktop_restart_observes_existing_lock": true,
+    "authenticated_unlock_resumes_unpaused_profile": true,
+    "authenticated_unlock_preserves_manual_pause": true,
+    "secure_session_left_unlocked": true,
+    "native_panel_escape": true
+  },
+  "restoration": {
+    "selected_snapshot_checkpoint": true,
+    "public_wallpaper_transaction": true,
+    "exact_files_replaced_while_stopped": true,
+    "exact_settings_wallpaper_theme_and_login_exports": true,
+    "original_idle_policy": true,
+    "test_owned_assets_removed": true
+  },
+  "environment": {
+    "virtualization": "KVM",
+    "vcpus": 4,
+    "memory_mib": 3072,
+    "display_pixels": [
+      1920,
+      1080
+    ],
+    "scale": 1,
+    "compositor": "Hyprland 0.56.2",
+    "compositor_commit": "efb50993780079460b0cbed1363e2166a2de1d9f",
+    "renderer": "Vulkan / llvmpipe (LLVM 22.1.8), Mesa 26.2.2",
+    "media_pixels": [
+      160,
+      90
+    ],
+    "media_fps": 15
+  },
+  "local_checks": {
+    "regular_rust_tests_passed": 517,
+    "python_tests_passed": 93,
+    "strict_format_clippy_and_all_targets": true,
+    "both_site_prefixes_and_links": true,
+    "visual_baselines_changed": false
+  },
+  "new_resource_or_power_measurements": false,
+  "remaining_acceptance": [
+    "Physical-session and simultaneous native multi-output lock/suspend/reconnect behavior.",
+    "Secure-client poster display and broader authentication/denial/recovery audit.",
+    "Full-resolution video remains above the 300 MiB RSS target; physical-GPU pacing, hardware decode and measured power savings remain open.",
+    "Final-head CI and merge."
+  ],
+  "privacy": "Only booleans and version/workload metadata are public; private test credentials, wallpaper paths and captures are excluded.",
+  "separate_resource_report": "reports/measurements/lucent-current-video-resources.json",
+  "validation_followup": {
+    "network_fixture": "CI exposed a test assuming a Connected device implied the manager had already selected its primary connection. The fixture now establishes an intermediate Connected/no-primary state, then waits for a primary observation before asserting its identity. Production network behavior is unchanged.",
+    "network_suite_and_ten_repeated_private_dbus_runs_passed": true
+  }
+}

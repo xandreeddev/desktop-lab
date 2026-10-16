@@ -272,7 +272,14 @@ precedence. A focused native check is available as
 It uses the existing guarded native keyboard helper for authenticated unlock;
 the file must be private to its owner. It also restarts the desktop while the
 independent secure locker remains active and restores the normal desktop through
-the existing checkpoint. Native acceptance of this path is pending.
+the existing checkpoint. On source `00f3e8721d054503d7e7d0878c8e6cc58b59dba8`,
+the single-output VM passed actual secure lock, zero decoder/background redraws
+while locked, desktop restart under an existing lock, authenticated unlock with
+resumed playback, and a second lock/unlock preserving manual pause. The session
+was left unlocked and exact settings, wallpaper, theme/login exports and idle
+policy were restored. See the [native lock report](../reports/measurements/lucent-live-wallpaper-lock.json).
+This does not establish physical-session/multi-output behavior or the broader
+authentication and recovery audit.
 
 A focused VM check is available as `python3 vm/test-live-wallpapers.py --policy-only`.
 It uses one synthetic MP4 and a test-owned terminal to exercise fullscreen,
@@ -316,5 +323,20 @@ A later 120-second full-resolution workload (1280×800 pixel-landscape video at
 RSS / 373.38 MiB peak and 113.616% of one logical CPU core. That source predates
 the conversion/coverage changes. It exceeds the 300 MiB target and supersedes
 any inference that the small synthetic sample proved full-resolution efficiency.
-The current optimization still needs a matching native before/after measurement;
-hardware decoding, physical-GPU pacing and measured power savings remain open.
+Current source `00f3e8721d054503d7e7d0878c8e6cc58b59dba8` has two new
+120-second samples with profiling disabled on the same output/media dimensions:
+
+| Workload | Mean RSS | Peak RSS | CPU, one logical core |
+| --- | ---: | ---: | ---: |
+| Settled static desktop | 242.34 MiB | 247.00 MiB | 1.225% |
+| 1280×800 H.264 loop, 15 FPS | 348.55 MiB | 348.88 MiB | 80.008% |
+
+Playback continued through the interval, with 1808 background submissions.
+The static sample meets the 300 MiB RSS target; the full-resolution video still
+exceeds it, and static idle CPU is above the 1% target. See the
+[current resource report](../reports/measurements/lucent-current-video-resources.json)
+for the binary, workload, measurement procedure and verified exact restoration.
+These are current measurements, not a controlled comparison with older binaries.
+Software rendering contributes to process CPU/RSS; GPU allocations and
+physical-GPU pacing/power remain unmeasured. Hardware decoding and a matching
+before/after optimization experiment remain open.

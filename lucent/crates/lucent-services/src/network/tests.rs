@@ -617,8 +617,21 @@ fn real_dbus_observation_controls_raw_ssids_hidden_join_and_service_acknowledgem
             .is_some_and(|v| v.state == NetworkConnectionState::Connecting)
     });
     assert_ne!(connecting.devices[0].state, NetworkDeviceState::Connected);
+    // Device state and the manager's primary connection are separate native
+    // observations. Establish the intermediate state instead of assuming the
+    // first Connected snapshot is already the manager's final selection.
+    service.state.lock().unwrap().state = 100;
+    service.changed(DEV, DEVICE);
+    let device_connected = watch.until(|v| v.devices[0].state == NetworkDeviceState::Connected);
+    assert_eq!(device_connected.primary_connection, None);
+    assert_eq!(
+        device_connected.connections[0].state,
+        NetworkConnectionState::Connecting
+    );
     service.connected();
-    let connected = watch.until(|v| v.devices[0].state == NetworkDeviceState::Connected);
+    let connected = watch.until(|v| {
+        v.devices[0].state == NetworkDeviceState::Connected && v.primary_connection.is_some()
+    });
     assert_eq!(
         connected.primary_connection,
         Some(connected.connections[0].id)
