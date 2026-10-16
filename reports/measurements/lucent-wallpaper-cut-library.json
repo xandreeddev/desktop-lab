@@ -1,0 +1,123 @@
+{
+  "status": "native_single_output_vm_checks_passed",
+  "tested_implementation_commit": "8b26f6d4ae5fa92ffaa0cfc4455e904f36f3f5ce",
+  "binaries": {
+    "lucent-desktop": {
+      "sha256": "2bb7448a4dc952e774545d349e3cb71c56425be18d340be39978e7c6e4eeffba",
+      "bytes": 20476712
+    }
+  },
+  "running_binary_hash_verified": true,
+  "environment": {
+    "virtualization": "KVM",
+    "vcpus": 4,
+    "memory_mib": 3072,
+    "output": {
+      "width": 1920,
+      "height": 1080,
+      "scale": 1
+    },
+    "renderer": "Vulkan / llvmpipe (LLVM 22.1.8), Mesa 26.2.2"
+  },
+  "harnesses": [
+    {
+      "path": "vm/test-wallpaper-cut.py",
+      "sha256": "a6239635368a1fd5ce80e9a29f608f40744379ee8fb4eb8083b3c4628f5852f8"
+    },
+    {
+      "path": "vm/test-live-library.py",
+      "sha256": "4d74ef42c0a3e01bf00c5103ea486d1a601ffa201e8ddfef74a8a4f87bd3c758"
+    }
+  ],
+  "cut_checks": {
+    "red-to-blue_opaque_spatial_cut": true,
+    "blue-to-red_opaque_spatial_cut": true,
+    "selector_open_stationary_diagonal_cut": true,
+    "selector_close_stationary_diagonal_cut": true
+  },
+  "cut_recordings": {
+    "red-to-blue": {
+      "frames": 110,
+      "diagonal_frames": 10,
+      "stationary_bounds_samples": 0
+    },
+    "blue-to-red": {
+      "frames": 109,
+      "diagonal_frames": 11,
+      "stationary_bounds_samples": 0
+    },
+    "selector-open": {
+      "frames": 111,
+      "diagonal_frames": 8,
+      "stationary_bounds_samples": 51
+    },
+    "selector-close": {
+      "frames": 110,
+      "diagonal_frames": 11,
+      "stationary_bounds_samples": 14
+    }
+  },
+  "library_checks": {
+    "native_wallpapers_live_route_and_library": true,
+    "native_first_submission_then_diagonal_cut_settle": true,
+    "both_discovered_sample_rows_import_and_save": true,
+    "both_sample_producers_submit_advancing_background_frames": true
+  },
+  "samples": [
+    {
+      "filename": "moonlit-lake.mp4",
+      "saved_source_matches": true,
+      "producer_running": true,
+      "background_frames_advanced": 12
+    },
+    {
+      "filename": "amber-lake.mp4",
+      "saved_source_matches": true,
+      "producer_running": true,
+      "background_frames_advanced": 12
+    }
+  ],
+  "restoration": {
+    "cut": {
+      "selected_snapshot_checkpoint": true,
+      "original_wallpaper_transaction": true,
+      "exact_files_replaced_while_stopped": true,
+      "exact_settings_wallpaper_theme_login_exports": true,
+      "bar_visibility": true,
+      "idle_policy": true,
+      "workspace_and_focus": true,
+      "test_owned_assets_removed": true
+    },
+    "library": {
+      "selected_snapshot_checkpoint": true,
+      "original_wallpaper_transaction": true,
+      "exact_files_replaced_while_stopped": true,
+      "exact_settings_wallpaper_theme_login_exports": true,
+      "bar_visibility": true,
+      "idle_policy": true,
+      "workspace_and_focus": true,
+      "new_test_owned_assets_removed": true
+    }
+  },
+  "local_validation": {
+    "workspace_tests_passed": 563,
+    "python_tests_passed": 94,
+    "strict_fmt_and_clippy": true,
+    "generated_tokens_verified": 548,
+    "astro_checks_both_base_path_builds_and_links": true,
+    "generic_cut_gpu_empty_full_endpoints_1x_2x": true,
+    "transparent_cut_gpu_interior_1x_2x": true,
+    "reviewed_affected_visual_references": 76
+  },
+  "measurement_scope": "Native compositor recordings distinguish simultaneous old/new opaque pixels across the spatial diagonal from a crossfade. Counts do not establish GPU timings or hardware animation smoothness. Library checks QMP-click both installed rows among existing local files and verify saved profiles plus advancing background submissions. Private recordings and original preferences are not published. The transparency regression checks exact interior composition outside the existing outer solid-fill antialias fringe.",
+  "current_resource_or_power_measurements": false,
+  "remaining_acceptance": [
+    "Physical-GPU and simultaneous multi-output pacing/scaling/hotplug.",
+    "Current full-resolution CPU/RSS/GPU-memory and power measurements.",
+    "Hardware decode; playback remains CPU FFmpeg."
+  ],
+  "known_library_limits": [
+    "Local nonrecursive ~/Videos/Wallpapers discovery; 1024 directory entries inspected and 32 choices returned.",
+    "Switching different sources still creates owned imports under the existing 32-asset admission limit; clicking the active source is a no-op."
+  ]
+}

@@ -384,3 +384,22 @@ Actual compositor captures also verify intermediate red/blue fade pixels and
 outgoing-image retirement in both change directions. Both the resource and
 pixel checks restore exact settings, wallpaper, exports and idle policy. See
 the [image lifetime report](../reports/measurements/lucent-image-lifetime.json).
+
+## Diagonal cut and local library acceptance
+
+Implementation `8b26f6d4ae5fa92ffaa0cfc4455e904f36f3f5ce` passed
+`python3 vm/test-wallpaper-cut.py` and `python3 vm/test-live-library.py` on the
+1920×1080, single-output software-Vulkan VM. Actual compositor recordings show
+simultaneous old/new opaque pixels on opposite sides of the cut in both change
+directions. Selector opening and closing show the same spatial cut while their
+layout and native extent remain stationary. These replace the historical fade
+behavior described in the earlier image-lifetime measurements.
+
+Native pointer clicks through **Wallpapers → Live** imported both bundled
+samples, saved their exact sources and started producers with advancing
+background submissions. Both checks restored exact preferences, wallpaper,
+theme/login exports, workspace/focus, bar visibility and idle policy; only new
+test-owned imports were removed. The two source videos remain in the library.
+See the [cut and library report](../reports/measurements/lucent-wallpaper-cut-library.json).
+This checks interaction and compositor pixels, without claiming new CPU/RSS
+benchmarks, hardware-GPU smoothness or multi-output acceptance.
