@@ -179,6 +179,11 @@ impl Default for PlaybackOptions {
     }
 }
 pub trait WallpaperPlaybackPort: Send + Sync {
+    /// Discover up to 32 local media sources without decoding or selecting them.
+    /// A source still needs `prepare` before it can become a saved preference.
+    fn library(&self) -> Result<Vec<Wallpaper>> {
+        Ok(vec![])
+    }
     /// Copy a local media file to owned immutable storage, validate real decoding
     /// and create a still poster before admitting a new wallpaper preference.
     fn prepare(&self, source: &Wallpaper) -> Result<LiveWallpaperAsset>;

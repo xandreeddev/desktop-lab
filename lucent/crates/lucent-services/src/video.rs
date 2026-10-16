@@ -15,16 +15,23 @@ use std::{
 };
 const SOURCE_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_ASSETS: usize = 32;
+const LIBRARY_ENTRIES: usize = 1024;
 static NEXT: AtomicU64 = AtomicU64::new(1);
 static INIT: OnceLock<bool> = OnceLock::new();
 #[derive(Clone)]
 pub struct NativeVideoWallpapers {
     pub state: PathBuf,
+    /// Non-recursive user library; discovery never imports or decodes a file.
+    pub library: PathBuf,
 }
 impl Default for NativeVideoWallpapers {
     fn default() -> Self {
         Self {
             state: crate::state_directory().join("live-wallpapers"),
+            library: std::env::var_os("HOME")
+                .map(PathBuf::from)
+                .unwrap_or_default()
+                .join("Videos/Wallpapers"),
         }
     }
 }
@@ -91,6 +98,60 @@ impl StopSignal for Never {
     }
 }
 impl WallpaperPlaybackPort for NativeVideoWallpapers {
+    fn library(&self) -> Result<Vec<Wallpaper>> {
+        if !self.library.is_absolute() {
+            return Err(DomainError::Unavailable(
+                "Live wallpaper library is unavailable".into(),
+            ));
+        }
+        let entries = match fs::read_dir(&self.library) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
+            Err(_) => {
+                return Err(DomainError::Unavailable(
+                    "Live wallpaper library could not be read".into(),
+                ));
+            }
+        };
+        let mut sources = Vec::new();
+        for entry in entries.take(LIBRARY_ENTRIES).flatten() {
+            if !entry.file_type().is_ok_and(|kind| kind.is_file()) {
+                continue;
+            }
+            let path = entry.path();
+            let extension = path
+                .extension()
+                .and_then(|part| part.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            if !matches!(extension.as_str(), "mp4" | "webm" | "gif")
+                || !entry
+                    .metadata()
+                    .is_ok_and(|metadata| metadata.len() > 0 && metadata.len() <= SOURCE_BYTES)
+            {
+                continue;
+            }
+            let Some(path_text) = path.to_str() else {
+                continue;
+            };
+            let name = path
+                .file_stem()
+                .and_then(|part| part.to_str())
+                .unwrap_or("Live wallpaper")
+                .replace(['_', '-'], " ")
+                .chars()
+                .filter(|character| !character.is_control())
+                .take(64)
+                .collect();
+            sources.push(Wallpaper {
+                path: path_text.into(),
+                name,
+            });
+        }
+        sources.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.path.cmp(&b.path)));
+        sources.truncate(MAX_ASSETS);
+        Ok(sources)
+    }
     fn prepare(&self, source: &Wallpaper) -> Result<LiveWallpaperAsset> {
         let file = Path::new(&source.path);
         valid_file(file)?;

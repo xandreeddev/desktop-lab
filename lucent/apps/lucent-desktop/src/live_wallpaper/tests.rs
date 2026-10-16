@@ -65,6 +65,387 @@ fn controller() -> LiveWallpaper {
     LiveWallpaper::new(adapters.playback, adapters.assets)
 }
 #[test]
+fn library_refresh_is_worker_owned_and_retires_stale_and_closed_deliveries() {
+    let mut controller = controller();
+    let mut effects = Effects::default();
+    controller.update(Message::Open, &mut effects);
+    assert!(controller.library_loading);
+    let first = effects.tasks.pop().unwrap();
+    assert_eq!(first.queue, crate::work::APPEARANCE);
+    let first_revision = controller.library_revision;
+    controller.update(Message::RefreshLibrary, &mut effects);
+    assert!(first.cancellation.cancelled());
+    let second = effects.tasks.pop().unwrap();
+    let revision = controller.library_revision;
+    let source = Wallpaper {
+        path: "/media/moon-lake.mp4".into(),
+        name: "Moon lake".into(),
+    };
+    controller.update(
+        Message::LibraryLoaded(first_revision, Ok(vec![source.clone()])),
+        &mut effects,
+    );
+    assert!(controller.library_loading);
+    assert!(controller.library.is_empty());
+    controller.update(
+        Message::LibraryLoaded(revision, Ok(vec![source.clone()])),
+        &mut effects,
+    );
+    assert!(!controller.library_loading);
+    assert_eq!(controller.library.as_slice(), std::slice::from_ref(&source));
+    controller.update(Message::RefreshLibrary, &mut effects);
+    let pending = effects.tasks.pop().unwrap();
+    let revision = controller.library_revision;
+    controller.update(Message::Close, &mut effects);
+    assert!(pending.cancellation.cancelled());
+    controller.update(Message::LibraryLoaded(revision, Ok(vec![])), &mut effects);
+    assert_eq!(controller.library, [source]);
+    assert!(!controller.library_loading);
+    controller.update(second.run(), &mut effects);
+    assert_eq!(controller.library.len(), 1);
+}
+
+#[test]
+fn library_task_rejection_keeps_last_good_sources_and_explicit_refresh_recovers() {
+    let mut controller = controller();
+    let mut effects = Effects::default();
+    controller.update(Message::Open, &mut effects);
+    let mut pending = effects.tasks.pop().unwrap();
+    controller.library.push(Wallpaper {
+        path: "/media/moon-lake.mp4".into(),
+        name: "Moon lake".into(),
+    });
+    let rejected = pending.take_failure_handler().unwrap()(lucent_api::RuntimeFailure {
+        source: "appearance queue".into(),
+        reason: "not admitted".into(),
+    });
+    controller.update(rejected, &mut effects);
+    assert!(!controller.library_loading);
+    assert!(controller.library_error.contains("not admitted"));
+    assert_eq!(controller.library.len(), 1);
+    controller.update(Message::RefreshLibrary, &mut effects);
+    let pending = effects.tasks.pop().unwrap();
+    controller.update(pending.run(), &mut effects);
+    assert!(!controller.library_loading);
+    assert!(controller.library_error.is_empty());
+    assert!(controller.library.is_empty());
+}
+
+fn library_scene(
+    controller: &LiveWallpaper,
+    settings: &LiveWallpapers,
+) -> lucent_ui::Scene<Message> {
+    use lucent_api::Density;
+    use lucent_ui::{Interaction, Layout};
+    let font = fontdue::Font::from_bytes(
+        include_bytes!("../../assets/LucentSans.ttf") as &[u8],
+        Default::default(),
+    )
+    .unwrap();
+    let context = lucent_api::ViewContext {
+        surface: "live-wallpaper",
+        instance: None,
+        width: 960.,
+        height: 800.,
+        now: 1.,
+        density: Density::ONE,
+    };
+    let theme = lucent_design::Theme::new(false);
+    let tree = theme.apply(controller.view(
+        &context,
+        settings,
+        &[],
+        theme,
+        SaveState {
+            status: crate::persistence::Status::Saved,
+            error: "",
+            writable: true,
+        },
+    ));
+    Layout::new(Arc::new(vec![font])).build(&tree, 960., 800., &Interaction::default(), 1.)
+}
+
+#[test]
+fn visible_library_choice_uses_the_existing_validated_import_for_its_target() {
+    use lucent_ui::Interaction;
+    let mut controller = controller();
+    controller.assets = Arc::new(Posters(Arc::new(
+        ImageData::from_rgba("library-poster", 1, 1, vec![255; 4]).unwrap(),
+    )));
+    let mut effects = Effects::default();
+    controller.update(Message::Open, &mut effects);
+    controller.update(Message::Frame(0.), &mut effects);
+    let target = LiveWallpaperTarget::Monitor(MonitorId::new("DEMO-1").unwrap());
+    controller.target = target.clone();
+    let source = Wallpaper {
+        path: "/media/moon-lake.mp4".into(),
+        name: "Moon lake".into(),
+    };
+    controller.update(
+        Message::LibraryLoaded(controller.library_revision, Ok(vec![source.clone()])),
+        &mut effects,
+    );
+    let mut input = Interaction::default();
+    let scene = library_scene(&controller, &LiveWallpapers::default());
+    let hit = scene
+        .hits
+        .iter()
+        .find(|hit| hit.id == "live-library-0")
+        .unwrap();
+    let (x, y) = (hit.rect.x + hit.rect.w / 2., hit.rect.y + hit.rect.h / 2.);
+    assert!(
+        hit.contains(x, y),
+        "the library option must be visible on opening"
+    );
+    assert!(input.press(&scene, x, y).is_none());
+    let message = input.release(x, y).unwrap();
+    assert!(
+        matches!(&message, Message::ImportPath(captured, path) if captured == &target && path == &source.path)
+    );
+    assert!(
+        matches!(controller.update(message, &mut effects), Some(Intent::ImportStarted(captured, _)) if captured == target)
+    );
+    let prepared = effects.tasks.pop().unwrap().run();
+    assert!(matches!(prepared, Message::Prepared(_, Ok((asset, _))) if asset.source == source));
+}
+
+#[test]
+fn library_choices_keep_the_active_profile_and_show_busy_and_failure_status_above_the_rows() {
+    use lucent_ui::{Interaction, Paint, Scene};
+    let mut controller = controller();
+    let mut effects = Effects::default();
+    controller.update(Message::Open, &mut effects);
+    controller.update(Message::Frame(0.), &mut effects);
+    let source = Wallpaper {
+        path: "/media/moon-lake.mp4".into(),
+        name: "Moon lake".into(),
+    };
+    let other = Wallpaper {
+        path: "/media/amber-lake.mp4".into(),
+        name: "Amber lake".into(),
+    };
+    controller.update(
+        Message::LibraryLoaded(
+            controller.library_revision,
+            Ok(vec![source.clone(), other.clone()]),
+        ),
+        &mut effects,
+    );
+    effects.tasks.clear();
+    let mut profile = setting("/owned/moon-lake.mp4");
+    profile.asset.source = source.clone();
+    profile.fps = WallpaperFps::new(15).unwrap();
+    let settings = LiveWallpapers {
+        default: Some(profile.clone()),
+        ..Default::default()
+    };
+    let click = |scene: &Scene<Message>, id: &str| {
+        let hit = scene.hits.iter().find(|hit| hit.id == id).unwrap();
+        let (x, y) = (hit.rect.x + hit.rect.w / 2., hit.rect.y + hit.rect.h / 2.);
+        assert!(hit.contains(x, y));
+        let mut input = Interaction::default();
+        assert!(input.press(scene, x, y).is_none());
+        input.release(x, y).unwrap()
+    };
+    let scene = library_scene(&controller, &settings);
+    let message = click(&scene, "live-library-0");
+    assert!(matches!(message, Message::Ignore));
+    assert!(controller.update(message, &mut effects).is_none());
+    assert!(effects.tasks.is_empty());
+    assert!(controller.importing.is_none());
+    assert_eq!(settings.default.as_ref(), Some(&profile));
+    let message = click(&scene, "live-library-1");
+    let Some(Intent::ImportStarted(_, revision)) = controller.update(message, &mut effects) else {
+        panic!("the different library source must be selectable");
+    };
+    let busy = library_scene(&controller, &settings);
+    let first_row = busy
+        .hits
+        .iter()
+        .find(|hit| hit.id == "live-library-0")
+        .unwrap();
+    assert!(busy.paint.iter().any(|paint| matches!(paint,
+        Paint::Text { text, rect, clip, .. } if text == "Importing and decoding…"
+            && rect.y < first_row.rect.y && rect.y >= clip.bounds.y
+            && rect.y + rect.h <= clip.bounds.y + clip.bounds.h
+    )));
+    assert!(
+        busy.hits
+            .iter()
+            .filter(|hit| hit.id.starts_with("live-library-") && hit.id != "live-library-refresh")
+            .all(|hit| !hit.tab_stop)
+    );
+    let task_count = effects.tasks.len();
+    let message = click(&busy, "live-library-1");
+    assert!(matches!(message, Message::Ignore));
+    assert!(controller.update(message, &mut effects).is_none());
+    assert!(
+        controller
+            .update(
+                Message::ImportPath(LiveWallpaperTarget::Default, source.path),
+                &mut effects
+            )
+            .is_none()
+    );
+    assert_eq!(controller.importing.as_ref().unwrap().revision, revision);
+    assert_eq!(effects.tasks.len(), task_count);
+    assert!(controller.error.is_empty());
+    controller.update(
+        Message::Prepared(
+            revision,
+            Err(DomainError::Failed("fixture decode failed".into())),
+        ),
+        &mut effects,
+    );
+    let failed = library_scene(&controller, &settings);
+    let first_row = failed
+        .hits
+        .iter()
+        .find(|hit| hit.id == "live-library-0")
+        .unwrap();
+    assert!(failed.paint.iter().any(|paint| matches!(paint,
+        Paint::Text { text, rect, clip, .. } if text.contains("fixture decode failed")
+            && rect.y < first_row.rect.y && rect.y >= clip.bounds.y
+            && rect.y + rect.h <= clip.bounds.y + clip.bounds.h
+    )));
+    assert_eq!(settings.default.as_ref(), Some(&profile));
+}
+
+#[test]
+fn selector_reveal_waits_for_its_first_submission_then_keeps_the_full_duration() {
+    let mut controller = controller();
+    let mut effects = Effects {
+        now: 5.,
+        ..Effects::default()
+    };
+    controller.update(Message::Open, &mut effects);
+    assert_eq!(controller.awaiting_first_frame, Some(5.));
+    assert_eq!(controller.motion.value(100.), 0.);
+    effects.redraw.clear();
+    effects.now = 100.;
+    controller.update(Message::Frame(4.), &mut effects);
+    assert_eq!(controller.awaiting_first_frame, Some(5.));
+    assert!(
+        effects.redraw.is_empty(),
+        "a stale submission cannot start this reveal"
+    );
+    controller.update(Message::Frame(5.), &mut effects);
+    assert!(controller.awaiting_first_frame.is_none());
+    assert!(effects.redraw.contains("live-wallpaper"));
+    assert_eq!(controller.motion.value(100.), 0.);
+    let duration = lucent_design::motion::WALLPAPER_REVEAL;
+    let middle = controller.motion.value(100. + duration / 2.);
+    assert!(middle > 0. && middle < 1.);
+    assert!(controller.motion.active(100. + duration / 2.));
+    assert_eq!(controller.motion.value(100. + duration), 1.);
+    assert!(!controller.motion.active(100. + duration));
+    effects.redraw.clear();
+    controller.update(Message::Frame(100. + duration), &mut effects);
+    assert!(
+        effects.redraw.is_empty(),
+        "a settled selector must not repaint continuously"
+    );
+}
+
+#[test]
+fn closing_before_the_first_frame_retires_the_gate_and_late_frames_cannot_reopen_it() {
+    let mut controller = controller();
+    let mut effects = Effects::default();
+    controller.update(Message::Open, &mut effects);
+    controller.update(Message::Close, &mut effects);
+    assert!(controller.awaiting_first_frame.is_none());
+    effects.now = 10.;
+    controller.update(Message::Frame(0.), &mut effects);
+    assert!(!controller.mounted);
+    assert!(!controller.open);
+    assert_eq!(controller.motion.target_value(), 0.);
+    controller.update(Message::Open, &mut effects);
+    assert_eq!(controller.awaiting_first_frame, Some(10.));
+    controller.update(Message::Frame(1.), &mut effects);
+    assert_eq!(controller.awaiting_first_frame, Some(10.));
+    assert_eq!(controller.motion.value(20.), 0.);
+}
+
+#[test]
+fn unseen_mounted_reopen_waits_for_a_new_submission_instead_of_consuming_its_reveal() {
+    let mut controller = controller();
+    let mut effects = Effects {
+        now: 10.,
+        ..Effects::default()
+    };
+    controller.update(Message::Open, &mut effects);
+    controller.update(Message::Close, &mut effects);
+    assert!(controller.mounted);
+    assert!(!controller.first_frame_submitted);
+    effects.now = 12.;
+    controller.update(Message::Open, &mut effects);
+    assert_eq!(controller.awaiting_first_frame, Some(12.));
+    assert_eq!(controller.motion.value(100.), 0.);
+    effects.now = 100.;
+    controller.update(Message::Frame(10.), &mut effects);
+    assert_eq!(controller.awaiting_first_frame, Some(12.));
+    controller.update(Message::Frame(12.), &mut effects);
+    assert!(controller.first_frame_submitted);
+    assert!(controller.awaiting_first_frame.is_none());
+    assert_eq!(controller.motion.value(100.), 0.);
+    assert_eq!(
+        controller
+            .motion
+            .value(100. + lucent_design::motion::WALLPAPER_REVEAL),
+        1.
+    );
+}
+
+#[test]
+fn mounted_selector_reverses_without_a_jump_and_repeated_open_preserves_progress() {
+    let mut controller = controller();
+    let mut effects = Effects::default();
+    controller.update(Message::Open, &mut effects);
+    controller.update(Message::Frame(0.), &mut effects);
+    let duration = lucent_design::motion::WALLPAPER_REVEAL;
+    effects.now = duration / 2.;
+    let opened = controller.motion.value(effects.now);
+    controller.update(Message::Close, &mut effects);
+    assert_eq!(controller.motion.value(effects.now), opened);
+    effects.now += duration / 4.;
+    let closing = controller.motion.value(effects.now);
+    assert!(closing > 0. && closing < opened);
+    controller.update(Message::Open, &mut effects);
+    assert!(controller.awaiting_first_frame.is_none());
+    assert_eq!(controller.motion.value(effects.now), closing);
+    let revision = controller.library_revision;
+    let task_count = effects.tasks.len();
+    effects.now += duration / 4.;
+    let opening = controller.motion.value(effects.now);
+    assert!(opening > closing && opening < 1.);
+    controller.scroll = 64.;
+    controller.update(Message::Open, &mut effects);
+    assert_eq!(controller.motion.value(effects.now), opening);
+    assert_eq!(controller.library_revision, revision);
+    assert_eq!(effects.tasks.len(), task_count);
+    assert_eq!(controller.scroll, 64.);
+}
+
+#[test]
+fn selector_close_cleanup_uses_the_time_of_the_rendered_view() {
+    let mut controller = controller();
+    let mut effects = Effects::default();
+    controller.update(Message::Open, &mut effects);
+    controller.update(Message::Frame(0.), &mut effects);
+    let duration = lucent_design::motion::WALLPAPER_REVEAL;
+    effects.now = duration;
+    controller.update(Message::Close, &mut effects);
+    effects.now = 100.;
+    controller.update(Message::Frame(duration * 1.5), &mut effects);
+    assert!(
+        controller.mounted,
+        "a slowly submitted partial close must retain its surface"
+    );
+    controller.update(Message::Frame(duration * 2.), &mut effects);
+    assert!(!controller.mounted);
+}
+
+#[test]
 fn shared_streams_pause_without_workers_and_hotplug_rejects_old_frames() {
     let mut controller = controller();
     let id = MonitorId::new("DEMO-1").unwrap();
@@ -139,6 +520,7 @@ fn per_monitor_disable_overrides_default_and_frame_submission_never_creates_an_i
     assert!(controller.players.is_empty());
     let mut effects = Effects::default();
     controller.update(Message::Open, &mut effects);
+    controller.update(Message::Frame(0.), &mut effects);
     effects.redraw.clear();
     effects.now = 1.;
     controller.update(Message::Frame(1.), &mut effects);

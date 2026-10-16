@@ -101,6 +101,7 @@ pub(crate) fn gutter(style: ScrollStyle, width: f32) -> f32 {
 pub struct FocusClip {
     pub rect: Rect,
     pub radius: f32,
+    pub diagonal_reveal: Option<f32>,
     pub scroll_depth: usize,
 }
 
@@ -172,6 +173,9 @@ pub(crate) fn reveal<'a, M>(
         let mut bounds = clip.rect;
         bounds.y -= deltas.iter().take(clip.scroll_depth).sum::<f32>();
         projected = projected.with_rounded(bounds, clip.radius);
+        if let Some(progress) = clip.diagonal_reveal {
+            projected = projected.with_diagonal_reveal(bounds, progress);
+        }
     }
     hit_visible(&projected, hit, target).then_some(changes)
 }
@@ -326,6 +330,39 @@ mod tests {
         assert_eq!(input.focus.as_deref(), Some("row-4"));
         input.key(&scene, &Key::Tab);
         assert_eq!(input.focus.as_deref(), Some("outer")); // clipped child is not reachable
+    }
+
+    #[test]
+    fn keyboard_scroll_projection_preserves_diagonal_ancestors() {
+        let layout = Layout::new(Arc::new(vec![]));
+        let content = Element::stack(vec![
+            Element::empty()
+                .size(16., 16.)
+                .at(4., 4.)
+                .on_click(Message::Click(1))
+                .id("reachable"),
+            Element::empty()
+                .size(16., 16.)
+                .at(60., 100.)
+                .on_click(Message::Click(2))
+                .id("masked"),
+        ])
+        .size(80., 140.);
+        let root = Element::scroll(ScrollSpec::new(0., 16.).unwrap(), content, |event| {
+            Message::Scroll(event.offset)
+        })
+        .size(80., 60.)
+        .diagonal_reveal(0.25)
+        .id("viewport");
+        let mut input = Interaction::default();
+        let scene = layout.build(&root, 80., 60., &input, 0.);
+        input.synchronize(&scene);
+        input.key(&scene, &Key::Tab);
+        assert_eq!(input.focus.as_deref(), Some("viewport"));
+        input.key(&scene, &Key::Tab);
+        assert_eq!(input.focus.as_deref(), Some("reachable"));
+        assert!(input.key(&scene, &Key::Tab).is_empty());
+        assert_eq!(input.focus.as_deref(), Some("viewport"));
     }
 
     #[test]

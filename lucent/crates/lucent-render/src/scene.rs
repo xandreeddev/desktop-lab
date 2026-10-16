@@ -1,6 +1,6 @@
 //! Backend input validation and geometry-buffer sizing. No client layout policy.
 use crate::{Error, raster};
-use lucent_api::{Color, Rect};
+use lucent_api::{ClipShape, Color, Rect};
 use lucent_ui::Paint;
 
 pub(super) const INSTANCE_BYTES: u64 = 96;
@@ -168,9 +168,24 @@ pub(super) fn validate(
             rect(bounds)?;
             rect(clip.bounds)?;
             color(shade)?;
-            for rounded in clip.shapes() {
-                rect(rounded.rect)?;
-                positive(rounded.radius)?;
+            for shape in clip.shapes() {
+                match shape {
+                    ClipShape::Rounded(rounded) => {
+                        rect(rounded.rect)?;
+                        positive(rounded.radius)?;
+                    }
+                    ClipShape::Diagonal(diagonal) => {
+                        rect(diagonal.rect)?;
+                        scalar(diagonal.rect.w + diagonal.rect.h)?;
+                        if !diagonal.progress().is_finite()
+                            || !(0. ..=1.).contains(&diagonal.progress())
+                        {
+                            return Err(
+                                "diagonal clip progress exceeds its normalized range".into()
+                            );
+                        }
+                    }
+                }
             }
             Ok(clip.shapes().len())
         };
@@ -262,6 +277,38 @@ mod tests {
             color: Color::hex(0xffffff),
         };
         assert!(validate(&[shape], 1., &[], &limits, 1, 1).is_err());
+    }
+
+    #[test]
+    fn diagonal_clips_share_shape_storage_and_geometry_validation() {
+        let bounds = Rect::new(0., 0., 16., 16.);
+        let paint = |clip| Paint::Shape {
+            rect: bounds,
+            clip,
+            radius: 0.,
+            color: Color::hex(0xffffff),
+        };
+        let clip = lucent_api::Clip::from(bounds)
+            .with_rounded(bounds, 2.)
+            .with_diagonal_reveal(bounds, 0.5);
+        let geometry = validate(
+            &[paint(clip.clone())],
+            1.,
+            &[],
+            &wgpu::Limits::default(),
+            1,
+            1,
+        )
+        .unwrap();
+        assert_eq!(geometry.clip_count, 2);
+        let bounded = wgpu::Limits {
+            max_storage_buffer_binding_size: CLIP_BYTES,
+            ..Default::default()
+        };
+        assert!(validate(&[paint(clip)], 1., &[], &bounded, 1, 1).is_err());
+        let invalid = lucent_api::Clip::from(bounds)
+            .with_diagonal_reveal(Rect::new(f32::NAN, 0., 16., 16.), 0.5);
+        assert!(validate(&[paint(invalid)], 1., &[], &wgpu::Limits::default(), 1, 1).is_err());
     }
 
     #[test]

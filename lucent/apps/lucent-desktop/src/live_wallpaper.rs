@@ -24,6 +24,8 @@ pub enum Message {
     Open,
     Close,
     Ignore,
+    RefreshLibrary,
+    LibraryLoaded(u64, Result<Vec<Wallpaper>>),
     EditPath(TextEdit),
     Target(LiveWallpaperTarget),
     Import(LiveWallpaperTarget),
@@ -120,6 +122,8 @@ pub struct LiveWallpaper {
     pub scroll: f32,
     pub mounted: bool,
     pub motion: lucent_api::Motion,
+    awaiting_first_frame: Option<f64>,
+    first_frame_submitted: bool,
     importing: Option<Import>,
     revision: u64,
     players: BTreeMap<String, Player>,
@@ -128,6 +132,11 @@ pub struct LiveWallpaper {
     adapter: Arc<dyn WallpaperPlaybackPort>,
     assets: Arc<dyn AssetPort>,
     import_cancel: Cancellation,
+    library: Vec<Wallpaper>,
+    library_loading: bool,
+    library_error: String,
+    library_revision: u64,
+    library_cancel: Cancellation,
     prepared: BTreeMap<String, Arc<ImageData>>,
 }
 impl LiveWallpaper {
@@ -141,6 +150,8 @@ impl LiveWallpaper {
             scroll: 0.,
             mounted: false,
             motion: lucent_api::Motion::fixed(0.),
+            awaiting_first_frame: None,
+            first_frame_submitted: false,
             importing: None,
             revision: 0,
             players: BTreeMap::new(),
@@ -149,6 +160,11 @@ impl LiveWallpaper {
             adapter,
             assets,
             import_cancel: Cancellation::default(),
+            library: vec![],
+            library_loading: false,
+            library_error: String::new(),
+            library_revision: 0,
+            library_cancel: Cancellation::default(),
             prepared: BTreeMap::new(),
         }
     }
@@ -354,17 +370,65 @@ impl LiveWallpaper {
         match message {
             Message::Ignore => return None,
             Message::Open => {
+                if self.open {
+                    return None;
+                }
                 self.open = true;
+                if self.mounted && self.first_frame_submitted {
+                    // A closing surface is already submitted. Reverse its
+                    // current visible progress without resetting to zero.
+                    self.motion.target(
+                        1.,
+                        effects.now,
+                        lucent_design::motion::WALLPAPER_REVEAL,
+                        lucent_design::motion::CUT,
+                    );
+                } else {
+                    // Rendering or waiting for the first compositor callback
+                    // must not consume the selector's reveal duration.
+                    self.motion = lucent_api::Motion::fixed(0.);
+                    self.awaiting_first_frame = Some(effects.now);
+                    self.first_frame_submitted = false;
+                }
                 self.mounted = true;
-                self.motion.target(
-                    1.,
-                    effects.now,
-                    lucent_design::motion::PANEL,
-                    lucent_design::motion::SPATIAL,
-                );
                 self.scroll = 0.;
+                self.refresh_library(effects);
+            }
+            Message::RefreshLibrary => {
+                if self.open {
+                    self.refresh_library(effects);
+                }
+            }
+            Message::LibraryLoaded(revision, result) => {
+                if !self.open || !self.library_loading || revision != self.library_revision {
+                    return None;
+                }
+                self.library_loading = false;
+                match result {
+                    Ok(mut library) => {
+                        library.truncate(32);
+                        self.library = library;
+                        self.library_error.clear();
+                    }
+                    Err(error) => self.library_error = error.to_string(),
+                }
             }
             Message::Frame(now) => {
+                if let Some(opened_at) = self.awaiting_first_frame {
+                    if now < opened_at {
+                        return None;
+                    }
+                    self.awaiting_first_frame = None;
+                    self.first_frame_submitted = true;
+                    self.motion.target(
+                        1.,
+                        effects.now.max(now),
+                        lucent_design::motion::WALLPAPER_REVEAL,
+                        lucent_design::motion::CUT,
+                    );
+                    effects.redraw("live-wallpaper");
+                    return None;
+                }
                 if !self.open && self.mounted && !self.motion.active(now) {
                     self.mounted = false;
                     effects.redraw("live-wallpaper");
@@ -378,14 +442,17 @@ impl LiveWallpaper {
             }
             Message::Close => {
                 self.open = false;
+                self.awaiting_first_frame = None;
                 self.motion.target(
                     0.,
                     effects.now,
-                    lucent_design::motion::PANEL,
-                    lucent_design::motion::SPATIAL,
+                    lucent_design::motion::WALLPAPER_REVEAL,
+                    lucent_design::motion::CUT,
                 );
                 self.field.cancel();
                 self.retire_import();
+                self.library_cancel.cancel();
+                self.library_loading = false;
             }
             Message::EditPath(edit) => {
                 if let Err(error) = self.field.update(
@@ -408,7 +475,7 @@ impl LiveWallpaper {
             }
             Message::ImportPath(target, path) => {
                 if self.importing.is_some() {
-                    self.error = "A media import is already running".into();
+                    return None;
                 } else {
                     self.revision = self.revision.wrapping_add(1);
                     let revision = self.revision;
@@ -420,6 +487,11 @@ impl LiveWallpaper {
                     self.import_cancel = Cancellation::default();
                     let adapter = self.adapter.clone();
                     let assets = self.assets.clone();
+                    let name = self
+                        .library
+                        .iter()
+                        .find(|source| source.path == path)
+                        .map_or_else(|| "Live wallpaper".into(), |source| source.name.clone());
                     effects.task_cancellable_on_with_failure(
                         crate::work::APPEARANCE,
                         self.import_cancel.clone(),
@@ -427,10 +499,7 @@ impl LiveWallpaper {
                             Message::Prepared(
                                 revision,
                                 (|| {
-                                    let source = Wallpaper {
-                                        path,
-                                        name: "Live wallpaper".into(),
-                                    };
+                                    let source = Wallpaper { path, name };
                                     let asset = adapter.prepare(&source)?;
                                     let preview = assets.background(&asset.poster.path, None)?;
                                     Ok((asset, preview))
@@ -560,6 +629,27 @@ impl LiveWallpaper {
         }
         effects.redraw("live-wallpaper");
         None
+    }
+    fn refresh_library(&mut self, effects: &mut Effects<Message>) {
+        self.library_cancel.cancel();
+        let Some(revision) = self.library_revision.checked_add(1) else {
+            self.library_loading = false;
+            self.library_error = "Live wallpaper library request limit reached".into();
+            return;
+        };
+        self.library_revision = revision;
+        self.library_loading = true;
+        self.library_error.clear();
+        self.library_cancel = Cancellation::default();
+        let adapter = self.adapter.clone();
+        effects.task_cancellable_on_with_failure(
+            crate::work::APPEARANCE,
+            self.library_cancel.clone(),
+            move || Message::LibraryLoaded(revision, adapter.library()),
+            move |failure| {
+                Message::LibraryLoaded(revision, Err(DomainError::Failed(failure.to_string())))
+            },
+        );
     }
     fn retire_import(&mut self) {
         self.import_cancel.cancel();
@@ -694,7 +784,7 @@ impl LiveWallpaper {
                 .filter_map(|player| player.frame.as_ref())
                 .chain(self.routes.values().filter_map(|route| route.held.as_ref())),
         );
-        serde_json::json!({"open":self.open,"importing":self.importing.is_some(),"players":self.players.len(),"running":self.players.values().filter(|p|p.running&&p.error.is_empty()).count(),"retained_frame_bytes":retained.bytes,"error":self.status(),"outputs":self.routes.iter().map(|(target,route)| serde_json::json!({"monitor":target.monitor().map(MonitorId::as_str),"pause_reason":route.pause})).collect::<Vec<_>>()})
+        serde_json::json!({"open":self.open,"awaiting_first_frame":self.awaiting_first_frame.is_some(),"importing":self.importing.is_some(),"library_loading":self.library_loading,"library_count":self.library.len(),"library_error":self.library_error,"players":self.players.len(),"running":self.players.values().filter(|p|p.running&&p.error.is_empty()).count(),"retained_frame_bytes":retained.bytes,"error":self.status(),"outputs":self.routes.iter().map(|(target,route)| serde_json::json!({"monitor":target.monitor().map(MonitorId::as_str),"pause_reason":route.pause})).collect::<Vec<_>>()})
     }
 }
 #[cfg(test)]

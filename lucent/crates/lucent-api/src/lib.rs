@@ -21,7 +21,7 @@ pub use scroll::{ScrollEvent, ScrollSpec, ScrollStyle};
 mod slider;
 pub use slider::{SliderEvent, SliderSpec, SliderStyle};
 mod clip;
-pub use clip::{Clip, RoundedRect};
+pub use clip::{Clip, ClipShape, DiagonalReveal, RoundedRect};
 mod image;
 pub use image::{
     ImageData, ImageError, ImageFormat, ImageLevel, ImageLifetime, ImageStream, reduce_alpha,
@@ -171,6 +171,8 @@ pub struct Style {
     /// Suppresses this subtree's paint without removing layout or input hits.
     pub paint: bool,
     pub clip: bool,
+    /// Optional normalized top-left to bottom-right reveal of this subtree.
+    pub diagonal_reveal: Option<f32>,
     pub shadow: Option<Shadow>,
     /// Tint and strength of the hover state layer; transparent disables it.
     pub hover_color: Color,
@@ -213,6 +215,7 @@ impl Default for Style {
             opacity: 1.,
             paint: true,
             clip: false,
+            diagonal_reveal: None,
             shadow: None,
             hover_color: Color::TRANSPARENT,
             hover_feedback: true,
@@ -561,6 +564,15 @@ impl<M> Element<M> {
     }
     pub fn clip(mut self) -> Self {
         self.style.clip = true;
+        self
+    }
+    /// Reveal this element and its descendants behind a moving diagonal cut.
+    /// The cut includes local points where `x + y <= progress * (w + h)`.
+    /// Zero is empty and one is fully visible; finite values are clamped and
+    /// non-finite values reveal nothing. Layout and animation timing stay owned
+    /// by the caller; paint, pointer hits and native input regions share the cut.
+    pub fn diagonal_reveal(mut self, progress: f32) -> Self {
+        self.style.diagonal_reveal = Some(clip::normalize_reveal(progress));
         self
     }
     pub fn shadow(mut self) -> Self {

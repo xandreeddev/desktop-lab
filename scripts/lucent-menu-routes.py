@@ -69,6 +69,12 @@ def native_defaults(defaults):
     for key, fields in overrides.items():
         if key in result or key == 'root':
             result[key] = result.get(key, {}) | fields
+    # Lucent owns this additional route; user extensions are merged afterwards.
+    result['style.live-wallpaper'] = {
+        'label': 'Live wallpapers', 'parent': 'style',
+        'description': 'Choose a local video or animated GIF loop',
+        'action': ['lucent-cli', 'wallpaper', 'live', 'open'],
+    }
     return result
 
 

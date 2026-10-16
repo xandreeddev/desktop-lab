@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "license": "MIT (repository LICENSE)",
+  "provenance": {
+    "artwork": "Original project artwork generated with the built-in image generation tool; original prompt archived in art-prompt.txt.",
+    "source_artwork_sha256": "a9901f2972d4a4411045c8019360345111e2746c507793fdf21e162e5d349588",
+    "source_loop_sha256": "3ce9f741f63c59b9958ae653b2c5911a921fa9b3f95c8dd5a878db5652bc1a20",
+    "source_motion": "Static camera and terrain; localized horizontal water ripple, nearest sampling, sinusoidal 12-second phase.",
+    "endpoint_treatment": "Blend the original decoded loop against its first frame with sin(PI*N/180)^2 motion weight; N is the 1-based blend frame number. Preserve matched endpoints using lossless H.264 yuv420p encoding.",
+    "amber_derivation": "Constant colorchannelmixer and saturation/gamma grade of the endpoint-treated Moonlit Lake; reproduction command in README.md."
+  },
+  "samples": [
+    {
+      "filename": "moonlit-lake.mp4",
+      "title": "Moonlit Lake",
+      "description": "Cool moonlit pixel landscape with localized periodic water ripples and matched loop endpoints.",
+      "sha256": "31d89e9bad8bf10eaf3b6e33c95a9bd7bce460308334977fa50b06ebf6bb68ac",
+      "bytes": 961650,
+      "width": 1280,
+      "height": 800,
+      "fps": 15,
+      "frames": 180,
+      "duration_seconds": 12,
+      "audio": false,
+      "codec": "h264",
+      "profile": "High 4:4:4 Predictive",
+      "pixel_format": "yuv420p"
+    },
+    {
+      "filename": "amber-lake.mp4",
+      "title": "Amber Lake",
+      "description": "Constant warm dusk color grade of Moonlit Lake, retaining its localized water motion and matched loop endpoints.",
+      "sha256": "986131834f5122b5bd08ee9af75feb2d6a3a227c232847f693a96288d2136ae3",
+      "bytes": 1084946,
+      "width": 1280,
+      "height": 800,
+      "fps": 15,
+      "frames": 180,
+      "duration_seconds": 12,
+      "audio": false,
+      "codec": "h264",
+      "profile": "High 4:4:4 Predictive",
+      "pixel_format": "yuv420p"
+    }
+  ]
+}

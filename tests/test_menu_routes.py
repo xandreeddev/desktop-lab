@@ -87,6 +87,16 @@ class MenuRoutes(unittest.TestCase):
         self.assertEqual(model.items['custom']['action'], 'omarchy-theme-bg-switcher')
         self.assertEqual(defaults['style.background']['action'], ['lucent-cli', 'wallpapers', 'open'])
 
+    def test_live_wallpaper_route_is_visible_and_preserves_user_extensions(self):
+        defaults = routes.native_defaults({'style': {'label': 'Style'}})
+        model = routes.Model(defaults, {})
+        rows = model.rows('style', lambda command, default: default)
+        self.assertEqual([row['label'] for row in rows], ['Live wallpapers'])
+        self.assertEqual(model.items['style.live-wallpaper']['action'],
+                         ['lucent-cli', 'wallpaper', 'live', 'open'])
+        custom = routes.Model(defaults, {'style.live-wallpaper': {'action': ['custom-player']}})
+        self.assertEqual(custom.items['style.live-wallpaper']['action'], ['custom-player'])
+
     def test_failed_availability_check_stops_navigation(self):
         with patch.object(routes.subprocess, 'run', side_effect=routes.subprocess.TimeoutExpired('fixture', 2)):
             with self.assertRaisesRegex(ValueError, 'timed out'):

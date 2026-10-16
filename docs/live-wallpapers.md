@@ -19,7 +19,21 @@ Download a clip from [Pixabay](https://pixabay.com/videos/search/wallpaper/) or
 existing local video/GIF. Start with a short loop at a resolution suitable for
 your display. A still image from Wallhaven is still a static wallpaper.
 
-Open the launcher, select Commands and choose **Live wallpapers**, or run:
+Open **Wallpapers → Live**, **Style → Live wallpapers** in the native menu,
+or **Commands → Live wallpapers**. The picker lists local MP4, WebM and GIF
+files from `~/Videos/Wallpapers`; choose an option to import and play it. Use
+**Refresh** after adding files. Discovery runs on a service worker, keeps the last
+good list on errors and is bounded to 32 choices. The path field remains available
+for media elsewhere.
+
+Two original pixel-landscape loops are included: **Moonlit Lake** and **Amber Lake**.
+They keep the terrain and camera still while water moves. Install the samples with
+`python3 scripts/install-live-wallpaper-samples.py`, then refresh the picker.
+Their decoded first/last frames match exactly; see
+[asset provenance and measurements](../assets/live-wallpapers/README.md).
+The installer does not activate a wallpaper or change preferences.
+
+CLI equivalents:
 
 ```sh
 lucent-cli wallpaper live open
@@ -52,7 +66,7 @@ Changing its FPS retains that frame. A restored paused profile prepares its
 poster once and starts no decoder. Decode failures retain the last good image and offer **Retry playback** for the
 selected profile. Save progress/errors and **Retry save** use the root persistence
 coordinator; changing a control does not claim that storage has finished. Opening
-the panel focuses its path field, Escape or an outside click closes it, and
+the panel focuses its library controls, Escape or an outside click closes it, and
 ordinary inputs support the shared editing/undo contract. The native settings
 panel uses existing semantic colors,
 spacing, radii, typography, scrolling and frame-paced motion.
@@ -95,10 +109,10 @@ retires its pending import, so a late result cannot turn playback back on.
 ## Source changes and animation
 
 The desktop owns a `BackgroundPresentation` for each current output surface.
-A newly prepared source queues a crossfade using the shared `motion.panel`
-timeline (500 ms) and deceleration curve. The timeline starts after the first
+A newly prepared source queues a diagonal cut using the shared
+`motion.wallpaper_reveal` timeline (850 ms) and `motion.cut` curve. The timeline starts after the first
 background frame for that selection submits. Waiting for a compositor callback
-or rendering that first frame does not consume the fade duration. Completion
+or rendering that first frame does not consume the reveal duration. Completion
 uses the time sampled by the final rendered view, not its later submission time;
 a slow partial frame cannot retire the old image early. Submission is not a
 scanout acknowledgement, and slow rendering can still reduce intermediate frames.
@@ -112,12 +126,21 @@ stream texture that subsequent frames update. This matters when another output
 still uses that stream. Each presentation retains one current and at most one
 outgoing image; a submitted final frame releases the outgoing reference and
 requests a cleanup redraw. Disconnected or replaced output generations retire
-their presentation state. No second decoder is started for a fade.
+their presentation state. No second decoder is started for a transition.
 
 A rapid third selection keeps the dominant previous image, rather than
 allocating a GPU screenshot of the intermediate mixture. This bounds retained
-images but does not preserve that interrupted mixture exactly. The fade uses
-ordinary source-over compositing and is intended for opaque wallpapers.
+images but does not preserve that interrupted mixture exactly. The incoming
+image remains opaque on the revealed side; the old image stays visible ahead of
+the diagonal edge. The SDK's `Element::diagonal_reveal(progress)` clips both paint
+and input consistently, with antialiasing in the Vulkan shader. No extra render
+target or full-screen screenshot is allocated for the cut.
+
+The live selector uses the same clip at stationary panel bounds, opening and
+closing in opposite directions. New mounts wait for their first submitted frame
+before starting the timeline, so native allocation time does not consume the
+opening. Closing and reopening midway reverses continuously. The runtime paces
+changing frames through compositor callbacks and stops redrawing when settled.
 Prepared-image byte counters are not process RSS or a GPU memory total.
 
 ## Preferences and resource limits
