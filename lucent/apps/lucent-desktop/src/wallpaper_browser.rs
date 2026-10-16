@@ -182,36 +182,35 @@ impl Browser {
             },
         )]
     }
-    pub fn sources(&self, width: f32, theme: Theme) -> Element<Message> {
-        Element::row(
-            [
-                (None, "Local"),
-                (Some(WallpaperProvider::Wallhaven), "Wallhaven"),
-                (Some(WallpaperProvider::AlphaCoders), "Alpha Coders"),
-            ]
-            .into_iter()
-            .map(|(source, label)| {
-                theme
-                    .button(label, Message::Source(source))
-                    .size((width - space::SM * 2.) / 3., t::SOURCE_HEIGHT)
-                    .padding_xy(space::SM, space::XS)
-                    .font(font::CAPTION)
-                    .background(if self.source == source {
-                        theme.primary
-                    } else {
-                        theme.surface_container
-                    })
-                    .color(if self.source == source {
-                        theme.on_primary
-                    } else {
-                        theme.on_surface
-                    })
-                    .id(format!("source-{}", source.map_or("local", |s| s.id())))
-            })
-            .collect(),
-        )
-        .gap(space::SM)
-        .size(width, t::SOURCE_HEIGHT)
+    /// Static-provider choices, composed with the live-library entry by the launcher.
+    pub fn source_choices(&self, theme: Theme) -> Vec<Element<Message>> {
+        [
+            (None, "Local"),
+            (Some(WallpaperProvider::Wallhaven), "Wallhaven"),
+            (Some(WallpaperProvider::AlphaCoders), "Alpha"),
+        ]
+        .into_iter()
+        .map(|(source, label)| {
+            theme
+                .button(label, Message::Source(source))
+                .height(Length::Fixed(t::SOURCE_HEIGHT))
+                .width(Length::Fill)
+                .padding_xy(space::SM, space::XS)
+                .font(font::CAPTION)
+                .background(if self.source == source {
+                    theme.primary
+                } else {
+                    theme.surface_container
+                })
+                .color(if self.source == source {
+                    theme.on_primary
+                } else {
+                    theme.on_surface
+                })
+                .clip()
+                .id(format!("source-{}", source.map_or("local", |s| s.id())))
+        })
+        .collect()
     }
     pub fn view(&self, width: f32, height: f32, theme: Theme) -> Element<Message> {
         let compact = height < t::CARD_HEIGHT + t::SEARCH_HEIGHT + t::FOOTER_HEIGHT * 2.;

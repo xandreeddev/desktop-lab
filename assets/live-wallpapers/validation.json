@@ -1,0 +1,51 @@
+{
+  "method": "FFprobe stream metadata; complete FFmpeg streaming decode reduced with nearest sampling to 320x200 gray8 for frame differences; full-resolution framemd5 for endpoint identity. Decoder/filter threads limited to one; at most three reduced frames retained.",
+  "difference_units": "Mean absolute gray8 intensity difference on a 0\u2013255 scale; spatial crop bounds are in the 320x200 analysis image.",
+  "limitations": "Identical decoded endpoint hashes establish the encoded wrap has no pixel discontinuity. This does not establish GPU playback, uninterrupted presentation timing, or perceptual quality on every display.",
+  "samples": [
+    {
+      "filename": "moonlit-lake.mp4",
+      "decoded_frames": 180,
+      "analysis_dimensions": [
+        320,
+        200
+      ],
+      "neighbor_delta_mean": 0.004533,
+      "neighbor_delta_median": 0.003687,
+      "neighbor_delta_max": 0.051234,
+      "neighbor_delta_min": 7.8e-05,
+      "seam_delta_last_to_first": 0.0,
+      "seam_to_mean_neighbor_ratio": 0.0,
+      "changing_neighbor_pairs": 179,
+      "neighbor_pairs": 179,
+      "changed_pixels_mean_fraction": 0.003059,
+      "upper_110_rows_delta_mean": 0.000213,
+      "lower_80_rows_delta_mean": 0.011006,
+      "decoded_first_frame_md5": "a70521d33a40cf2f46e659b295fbeb51",
+      "decoded_last_frame_md5": "a70521d33a40cf2f46e659b295fbeb51",
+      "decoded_endpoint_frames_identical": true
+    },
+    {
+      "filename": "amber-lake.mp4",
+      "decoded_frames": 180,
+      "analysis_dimensions": [
+        320,
+        200
+      ],
+      "neighbor_delta_mean": 0.005487,
+      "neighbor_delta_median": 0.004422,
+      "neighbor_delta_max": 0.065203,
+      "neighbor_delta_min": 9.4e-05,
+      "seam_delta_last_to_first": 0.0,
+      "seam_to_mean_neighbor_ratio": 0.0,
+      "changing_neighbor_pairs": 179,
+      "neighbor_pairs": 179,
+      "changed_pixels_mean_fraction": 0.003035,
+      "upper_110_rows_delta_mean": 0.000282,
+      "lower_80_rows_delta_mean": 0.013286,
+      "decoded_first_frame_md5": "1004007bb92b565f4ce47ef4cfc2a839",
+      "decoded_last_frame_md5": "1004007bb92b565f4ce47ef4cfc2a839",
+      "decoded_endpoint_frames_identical": true
+    }
+  ]
+}

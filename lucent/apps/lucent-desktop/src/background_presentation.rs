@@ -125,10 +125,21 @@ impl BackgroundPresentation {
             layers.push(background);
         }
         if let Some(outgoing) = &self.outgoing {
-            // Source-over opacity mixes opaque wallpaper pixels while retaining
-            // the old image beneath the arriving frame. No shader/codec policy.
+            // Revealed transparent pixels belong to the new wallpaper's
+            // fallback, rather than the old image. Clip that composition as
+            // one subtree so revealed interior pixels no longer borrow it.
+            // Opaque media keeps the single-image presentation fast path.
             layers.push(image(outgoing));
-            layers.push(image(&current.image).opacity(self.reveal.value(now)));
+            let incoming = if current.image.is_opaque() {
+                image(&current.image)
+            } else {
+                Element::stack(vec![
+                    Element::empty().fill().background(fallback),
+                    image(&current.image),
+                ])
+                .fill()
+            };
+            layers.push(incoming.diagonal_reveal(self.reveal.value(now)));
         } else {
             layers.push(image(&current.image));
         }
@@ -153,8 +164,8 @@ impl BackgroundPresentation {
             reveal.target(
                 1.,
                 submitted_at.max(sampled_at),
-                motion::PANEL,
-                motion::DECELERATE,
+                motion::WALLPAPER_REVEAL,
+                motion::CUT,
             );
             self.reveal = Reveal::Running(reveal);
             return true;
@@ -209,9 +220,14 @@ mod tests {
         Some(Source::Static(key.into()))
     }
 
-    fn top_opacity(presentation: &BackgroundPresentation, now: f64) -> f32 {
+    fn top_progress(presentation: &BackgroundPresentation, now: f64) -> f32 {
         let view: Element<()> = presentation.view(now, Color::hex(0));
-        view.children.last().unwrap().style.opacity
+        view.children
+            .last()
+            .unwrap()
+            .style
+            .diagonal_reveal
+            .unwrap_or(1.)
     }
 
     #[test]
@@ -284,7 +300,7 @@ mod tests {
                 instance,
                 event: Box::new(Event::FrameSubmitted {
                     surface: "background",
-                    now: 11. + motion::PANEL,
+                    now: 11. + motion::WALLPAPER_REVEAL,
                     width: 1280.,
                     height: 800.,
                 }),
@@ -311,7 +327,7 @@ mod tests {
         let first = image("first", [255, 0, 0, 255]);
         assert!(presentation.reconcile(source("first"), Some(first.clone()), 0.));
         assert!(!presentation.active(0.));
-        assert_eq!(top_opacity(&presentation, 0.), 1.);
+        assert_eq!(top_progress(&presentation, 0.), 1.);
         assert!(!presentation.reconcile(source("missing"), None, 1.));
         assert_eq!(
             presentation.current.as_ref().unwrap().image.cache_id(),
@@ -328,34 +344,43 @@ mod tests {
         presentation.reconcile(source("old"), Some(old.clone()), 0.);
         presentation.reconcile(source("new"), Some(new.clone()), 1.);
         assert!(presentation.active(1.));
-        assert_eq!(top_opacity(&presentation, 1.), 0.);
+        assert_eq!(top_progress(&presentation, 1.), 0.);
         assert!(presentation.presented(1., 1.));
-        let middle = top_opacity(&presentation, 1. + motion::PANEL / 2.);
+        let middle = top_progress(&presentation, 1. + motion::WALLPAPER_REVEAL / 2.);
         assert!(middle > 0. && middle < 1.);
-        let view: Element<()> = presentation.view(1. + motion::PANEL / 2., Color::hex(0));
+        let view: Element<()> =
+            presentation.view(1. + motion::WALLPAPER_REVEAL / 2., Color::hex(0));
         assert!(
             matches!(&view.children[0].kind, Kind::Image(image) if image.cache_id()==old.cache_id())
         );
         assert!(
             matches!(&view.children[1].kind, Kind::Image(image) if image.cache_id()==new.cache_id())
         );
-        assert!(!presentation.presented(1. + motion::PANEL / 2., 1. + motion::PANEL / 2.));
-        assert!(!presentation.active(1. + motion::PANEL));
-        assert_eq!(top_opacity(&presentation, 1. + motion::PANEL), 1.);
+        assert!(!presentation.presented(
+            1. + motion::WALLPAPER_REVEAL / 2.,
+            1. + motion::WALLPAPER_REVEAL / 2.
+        ));
+        assert!(!presentation.active(1. + motion::WALLPAPER_REVEAL));
+        assert_eq!(
+            top_progress(&presentation, 1. + motion::WALLPAPER_REVEAL),
+            1.
+        );
         assert_eq!(presentation.inspect()["retained_images"], 2);
-        assert!(presentation.presented(1. + motion::PANEL, 1. + motion::PANEL));
+        assert!(
+            presentation.presented(1. + motion::WALLPAPER_REVEAL, 1. + motion::WALLPAPER_REVEAL)
+        );
         assert_eq!(presentation.inspect()["retained_images"], 1);
         assert!(!presentation.presented(2., 2.));
     }
 
     #[test]
-    fn delayed_first_submission_does_not_consume_the_fade_duration() {
+    fn delayed_first_submission_does_not_consume_the_reveal_duration() {
         let mut presentation = BackgroundPresentation::default();
         presentation.reconcile(source("old"), Some(image("old", [255, 0, 0, 255])), 0.);
         presentation.reconcile(source("new"), Some(image("new", [0, 0, 255, 255])), 1.);
 
         // Even a long wait for the next frame keeps the old pixels visible.
-        assert_eq!(top_opacity(&presentation, 10.), 0.);
+        assert_eq!(top_progress(&presentation, 10.), 0.);
         assert!(presentation.active(10.));
         assert!(
             !presentation.presented(0., 11.),
@@ -363,28 +388,28 @@ mod tests {
         );
         assert_eq!(presentation.inspect()["awaiting_first_frame"], true);
         assert!(presentation.presented(10., 11.));
-        assert_eq!(top_opacity(&presentation, 11.), 0.);
+        assert_eq!(top_progress(&presentation, 11.), 0.);
         assert_eq!(presentation.inspect()["awaiting_first_frame"], false);
 
-        let sampled = 11. + motion::PANEL / 2.;
-        let opacity = top_opacity(&presentation, sampled);
-        assert!(opacity > 0. && opacity < 1.);
-        // Submitting a partially faded view late must not release its underlay.
+        let sampled = 11. + motion::WALLPAPER_REVEAL / 2.;
+        let progress = top_progress(&presentation, sampled);
+        assert!(progress > 0. && progress < 1.);
+        // Submitting a partially revealed view late must not release its underlay.
         assert!(!presentation.presented(sampled, 20.));
         assert_eq!(presentation.inspect()["retained_images"], 2);
         assert_eq!(
-            top_opacity(&presentation, sampled),
-            opacity,
+            top_progress(&presentation, sampled),
+            progress,
             "submission does not restart the timeline"
         );
-        assert_eq!(top_opacity(&presentation, 20.), 1.);
+        assert_eq!(top_progress(&presentation, 20.), 1.);
         assert!(presentation.presented(20., 21.));
         assert_eq!(presentation.inspect()["retained_images"], 1);
         assert!(!presentation.active(21.));
     }
 
     #[test]
-    fn streamed_revisions_replace_pixels_without_restarting_a_source_fade() {
+    fn streamed_revisions_replace_pixels_without_restarting_a_source_reveal() {
         let mut presentation = BackgroundPresentation::default();
         let stream = ImageStream::new();
         let frame = |color| Arc::new(stream.frame_rgba(1, 1, vec![color, 0, 0, 255]).unwrap());
@@ -392,10 +417,10 @@ mod tests {
         let live = Some(Source::Live("media".into()));
         presentation.reconcile(live.clone(), Some(frame(10)), 1.);
         presentation.presented(1., 1.);
-        let before = top_opacity(&presentation, 1.2);
+        let before = top_progress(&presentation, 1.2);
         presentation.reconcile(live.clone(), Some(frame(20)), 1.2);
-        assert_eq!(top_opacity(&presentation, 1.2), before);
-        presentation.presented(1. + motion::PANEL, 1. + motion::PANEL);
+        assert_eq!(top_progress(&presentation, 1.2), before);
+        presentation.presented(1. + motion::WALLPAPER_REVEAL, 1. + motion::WALLPAPER_REVEAL);
         assert!(presentation.reconcile(live, Some(frame(30)), 2.));
         assert!(!presentation.active(2.));
         assert_eq!(presentation.inspect()["retained_images"], 1);
@@ -423,15 +448,15 @@ mod tests {
         assert_eq!(
             layers(&presentation),
             3,
-            "outgoing transparency needs fallback through the fade"
+            "outgoing transparency needs fallback through the reveal"
         );
-        presentation.presented(2. + motion::PANEL, 2. + motion::PANEL);
+        presentation.presented(2. + motion::WALLPAPER_REVEAL, 2. + motion::WALLPAPER_REVEAL);
         assert_eq!(layers(&presentation), 1);
     }
 
     #[test]
     #[ignore = "requires Vulkan; run explicitly with --ignored"]
-    fn background_coverage_optimization_preserves_pixels_and_fades() {
+    fn background_coverage_optimization_preserves_pixels_and_reveals() {
         use lucent_ui::{Interaction, Layout};
         let fonts = Arc::new(vec![]);
         let layout = Layout::new(fonts.clone());
@@ -451,15 +476,26 @@ mod tests {
                     lucent_api::Density::new(3, 2).unwrap(),
                     lucent_api::Density::integer(2).unwrap(),
                 ] {
-                    for now in [1., 1. + motion::PANEL / 2., 1. + motion::PANEL] {
+                    for now in [
+                        1.,
+                        1. + motion::WALLPAPER_REVEAL / 2.,
+                        1. + motion::WALLPAPER_REVEAL,
+                    ] {
                         let optimized: Element<()> = presentation.view(now, fallback);
+                        let incoming = Element::image(new.clone()).cover().fill();
+                        let incoming = if new.is_opaque() {
+                            incoming
+                        } else {
+                            Element::stack(vec![
+                                Element::empty().fill().background(fallback),
+                                incoming,
+                            ])
+                            .fill()
+                        };
                         let reference: Element<()> = Element::stack(vec![
                             Element::empty().fill().background(fallback),
                             Element::image(old.clone()).cover().fill(),
-                            Element::image(new.clone())
-                                .cover()
-                                .fill()
-                                .opacity(presentation.reveal.value(now).clamp(0., 1.)),
+                            incoming.diagonal_reveal(presentation.reveal.value(now)),
                         ])
                         .fill();
                         let expected =
@@ -477,7 +513,8 @@ mod tests {
                         );
                     }
                 }
-                presentation.presented(1. + motion::PANEL, 1. + motion::PANEL);
+                presentation
+                    .presented(1. + motion::WALLPAPER_REVEAL, 1. + motion::WALLPAPER_REVEAL);
                 let optimized: Element<()> = presentation.view(2., fallback);
                 let reference: Element<()> = Element::stack(vec![
                     Element::empty().fill().background(fallback),
@@ -491,6 +528,88 @@ mod tests {
                     canvas.snapshot(31, 17, 1, &expected.paint).unwrap()
                 );
                 assert_eq!(actual.paint.len(), if new_alpha == 255 { 1 } else { 2 });
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "requires Vulkan; run explicitly with --ignored"]
+    fn background_coverage_optimization_revealed_transparency_matches_settled_pixels() {
+        use lucent_ui::{Interaction, Layout};
+        let fonts = Arc::new(vec![]);
+        let layout = Layout::new(fonts.clone());
+        let gpu = lucent_render::Gpu::headless(fonts).unwrap();
+        let mut canvas = lucent_render::Canvas::new(gpu);
+        let fallback = Color::hex(0x18344f);
+        for alpha in [0, 127] {
+            for scale in [1, 2] {
+                let mut presentation = BackgroundPresentation::default();
+                presentation.reconcile(source("old"), Some(image("old", [200, 60, 90, 255])), 0.);
+                let snapshot = |canvas: &mut lucent_render::Canvas,
+                                presentation: &BackgroundPresentation,
+                                now| {
+                    let tree: Element<()> = presentation.view(now, fallback);
+                    let scene = layout.build(&tree, 31., 17., &Interaction::default(), now);
+                    canvas.snapshot(31, 17, scale, &scene.paint).unwrap()
+                };
+                let old = snapshot(&mut canvas, &presentation, 0.);
+                presentation.reconcile(
+                    source("new"),
+                    Some(image("new", [20, 150, 100, alpha])),
+                    1.,
+                );
+                presentation.presented(1., 1.);
+                let middle_at = 1. + motion::WALLPAPER_REVEAL * 0.4;
+                let progress = presentation.reveal.value(middle_at);
+                let middle = snapshot(&mut canvas, &presentation, middle_at);
+                let completed_at = 1. + motion::WALLPAPER_REVEAL;
+                let completed = snapshot(&mut canvas, &presentation, completed_at);
+                assert!(presentation.presented(completed_at, completed_at));
+                let settled = snapshot(&mut canvas, &presentation, completed_at);
+                let mut revealed = 0;
+                let mut retained = 0;
+                let width = 31 * scale;
+                let height = 17 * scale;
+                for (index, actual) in middle.as_chunks::<4>().0.iter().enumerate() {
+                    let x = (index as u32 % width) as f32 + 0.5;
+                    let y = (index as u32 / width) as f32 + 0.5;
+                    // Plain solid fills already antialias the target's outer
+                    // edges, whereas axis-aligned images retain opaque edge
+                    // pixels. That independent renderer behavior can expose
+                    // the old underlay inside the outer fine-derivative fringe.
+                    // Check exact compositing outside that two-physical-pixel
+                    // neighborhood; the generic reveal endpoint test still
+                    // compares every pixel for identical paint compositions.
+                    if x < 2. || y < 2. || x > width as f32 - 2. || y > height as f32 - 2. {
+                        continue;
+                    }
+                    assert_eq!(
+                        completed.as_chunks::<4>().0[index],
+                        settled.as_chunks::<4>().0[index],
+                        "outgoing retirement must preserve interior pixels at {index}, alpha {alpha}, {scale}x"
+                    );
+                    let distance = x + y - progress * 48. * scale as f32;
+                    if distance < -2. {
+                        assert_eq!(
+                            *actual,
+                            settled.as_chunks::<4>().0[index],
+                            "revealed transparency at {index}, alpha {alpha}, {scale}x"
+                        );
+                        revealed += 1;
+                    } else if distance > 2. {
+                        assert_eq!(
+                            *actual,
+                            old.as_chunks::<4>().0[index],
+                            "retained old pixels at {index}, alpha {alpha}, {scale}x"
+                        );
+                        retained += 1;
+                    }
+                }
+                assert!(
+                    revealed > 0 && retained > 0,
+                    "both sides of the cut must be exercised"
+                );
+                assert_eq!(presentation.inspect()["retained_images"], 1);
             }
         }
     }
@@ -545,7 +664,7 @@ mod tests {
         assert_eq!(presentation.inspect()["retained_images"], 1);
         presentation.reconcile(source("static"), Some(image("still", [30, 0, 0, 255])), 2.);
         // A frozen outgoing snapshot has independent GPU identity, so returning
-        // to the still-active stream can fade safely without texture aliasing.
+        // to the still-active stream can transition safely without texture aliasing.
         presentation.reconcile(Some(Source::Live("first".into())), Some(frame(40)), 2.001);
         assert!(presentation.active(2.001));
         assert_eq!(presentation.inspect()["retained_images"], 2);
@@ -570,7 +689,7 @@ mod tests {
         assert!(left.active(1.));
         assert!(!right.active(1.));
         left.presented(1., 1.);
-        left.presented(1. + motion::PANEL, 1. + motion::PANEL);
+        left.presented(1. + motion::WALLPAPER_REVEAL, 1. + motion::WALLPAPER_REVEAL);
         assert_eq!(left.inspect()["retained_images"], 1);
         assert_eq!(right.inspect()["retained_images"], 1);
     }

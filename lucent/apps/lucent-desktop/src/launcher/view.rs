@@ -204,11 +204,31 @@ impl View<'_> {
             }
             Mode::Wallpapers => {
                 let source_height = component::wallpaper_browser::SOURCE_HEIGHT;
+                let mut sources: Vec<_> = self
+                    .input
+                    .browser
+                    .source_choices(self.theme())
+                    .into_iter()
+                    .map(|choice| choice.map(|message| Message::Request(Intent::Browser(message))))
+                    .collect();
+                sources.push(
+                    self.theme()
+                        .button(
+                            "Live",
+                            Message::Request(Intent::Action(
+                                crate::actions::Action::LiveWallpapers,
+                            )),
+                        )
+                        .height(Length::Fixed(source_height))
+                        .width(Length::Fill)
+                        .padding_xy(space::SM, space::XS)
+                        .font(font::CAPTION)
+                        .id("source-live"),
+                );
                 elements.push(
-                    self.input
-                        .browser
-                        .sources(width, self.theme())
-                        .map(|message| Message::Request(Intent::Browser(message)))
+                    Element::row(sources)
+                        .gap(space::SM)
+                        .size(width, source_height)
                         .at(0., body_y),
                 );
                 let remaining = body_h - source_height - layout::SECTION_GAP;

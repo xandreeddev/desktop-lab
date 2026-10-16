@@ -46,7 +46,14 @@ fn round_distance(point:vec2<f32>,rect:vec4<f32>,requested_radius:f32)->f32 {
     var clip_distance=-1e6;
     for(var i=0u;i<v.clip_range.y;i+=1u) {
         let shape=clips[v.clip_range.x+i];
-        clip_distance=max(clip_distance,round_distance(point,shape.rect,shape.params.x));
+        var distance=round_distance(point,shape.rect,shape.params.x);
+        if shape.params.y>0.5 {
+            let local=point-shape.rect.xy;
+            // Logical signed distance to the generic x+y reveal boundary.
+            // Keep derivatives and image sampling outside discard branches.
+            distance=(local.x+local.y-shape.params.x*(shape.rect.z+shape.rect.w))*inverseSqrt(2.0);
+        }
+        clip_distance=max(clip_distance,distance);
     }
     let clip_aa=max(fwidthFine(clip_distance),0.3);
     coverage=min(coverage,1.0-smoothstep(-clip_aa,clip_aa,clip_distance));

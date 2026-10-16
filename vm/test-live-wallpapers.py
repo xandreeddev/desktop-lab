@@ -649,8 +649,8 @@ t=p.with_name('desktop.live-test.new'); t.write_text(json.dumps(d)); t.replace(p
             if extension == 'mp4':
                 cli('wallpaper', 'live', 'open')
                 eventually(lambda: client()['live_wallpaper']['open'], 'native_live_panel_open')
-                eventually(lambda: find_surface(inspect(), 'live-wallpaper').get('focus') == 'live-path',
-                           'native_live_panel_autofocus')
+                eventually(lambda: find_surface(inspect(), 'live-wallpaper').get('focus') == 'live-library-refresh',
+                           'native_live_library_autofocus')
                 click(name, monitor, 'live-path')
                 key(name, 29, 30)
                 type_ascii(name, fixture)
@@ -729,9 +729,10 @@ t=p.with_name('desktop.live-test.new'); t.write_text(json.dumps(d)); t.replace(p
                 committed, selected = read_settings(), client()['wallpaper']
                 committed_digest = settings_digest()
                 cli('wallpaper', 'live', 'open')
-                eventually(lambda: client()['live_wallpaper']['open']
-                           and find_surface(inspect(), 'live-wallpaper').get('focus') == 'live-path',
-                           'native_invalid_import_autofocus')
+                eventually(lambda: client()['live_wallpaper']['open'], 'native_invalid_import_panel')
+                click(name, monitor, 'live-path')
+                eventually(lambda: find_surface(inspect(), 'live-wallpaper').get('focus') == 'live-path',
+                           'native_invalid_import_path_focus')
                 key(name, 29, 30)
                 type_ascii(name, scratch + '/invalid.mp4')
                 key(name, 29, 44)  # Undo the latest typing group.

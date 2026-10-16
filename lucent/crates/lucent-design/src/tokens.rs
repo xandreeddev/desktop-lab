@@ -97,6 +97,8 @@ pub mod motion {
     pub const HOVER: f64 = 0.16;
     pub const SPATIAL: [f32; 4] = [0.38, 1.0, 0.22, 1.0];
     pub const DECELERATE: [f32; 4] = [0.05, 0.7, 0.1, 1.0];
+    pub const WALLPAPER_REVEAL: f64 = 0.85;
+    pub const CUT: [f32; 4] = [0.4, 0.0, 0.2, 1.0];
 }
 pub mod theme {
     pub mod dark {

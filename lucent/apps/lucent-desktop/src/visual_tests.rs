@@ -127,6 +127,68 @@ impl crate::ports::AssetPort for UnavailablePreviews {
         self.0.background(path, target)
     }
 }
+struct FixturePlaybackLibrary(Arc<dyn lucent_domain::WallpaperPlaybackPort>);
+impl lucent_domain::WallpaperPlaybackPort for FixturePlaybackLibrary {
+    fn library(&self) -> lucent_domain::Result<Vec<lucent_domain::Wallpaper>> {
+        Ok([
+            ("amber-lake.mp4", "Amber Lake"),
+            ("moonlit-lake.mp4", "Moonlit Lake"),
+        ]
+        .into_iter()
+        .map(|(file, name)| lucent_domain::Wallpaper {
+            path: format!("/media/{file}"),
+            name: name.into(),
+        })
+        .collect())
+    }
+    fn prepare(
+        &self,
+        source: &lucent_domain::Wallpaper,
+    ) -> lucent_domain::Result<lucent_domain::LiveWallpaperAsset> {
+        self.0.prepare(source)
+    }
+    fn play(
+        &self,
+        asset: &lucent_domain::LiveWallpaperAsset,
+        options: lucent_domain::PlaybackOptions,
+        emit: &mut dyn FnMut(lucent_domain::Result<lucent_domain::MediaFrame>) -> bool,
+        stop: Arc<dyn lucent_domain::StopSignal>,
+    ) {
+        self.0.play(asset, options, emit, stop);
+    }
+}
+fn install_live_library_fixture(app: &mut Desktop) {
+    app.live_wallpaper = crate::live_wallpaper::LiveWallpaper::new(
+        Arc::new(FixturePlaybackLibrary(app.adapters.playback.clone())),
+        app.adapters.assets.clone(),
+    );
+    app.settings_writable = true;
+}
+/// Offscreen fixtures execute their injected metadata task and acknowledge the
+/// zero-progress frame. Native acceptance separately verifies real submissions.
+fn open_live_fixture(app: &mut Desktop) {
+    let mut effects = Effects::default();
+    app.update(
+        Message::LiveWallpaper(crate::live_wallpaper::Message::Open),
+        &mut effects,
+    );
+    for task in std::mem::take(&mut effects.tasks) {
+        app.update(task.run(), &mut effects);
+    }
+    assert!(
+        effects.tasks.is_empty(),
+        "opening metadata must not schedule more work"
+    );
+    let message = app
+        .event(Event::FrameSubmitted {
+            surface: "live-wallpaper",
+            width: app.viewport.0,
+            height: app.viewport.1,
+            now: 0.,
+        })
+        .expect("live selector handles its first submitted frame");
+    app.update(message, &mut effects);
+}
 /// The offscreen canvas is immediately available at the requested full size.
 /// Native tests separately exercise the asynchronous configure/submission path.
 fn resize_fixture(app: &mut Desktop, width: f32, height: f32) {
@@ -1363,6 +1425,16 @@ fn visual_regressions() {
             ("monitor-bar-special-right", Mode::Apps, 0, 0, "", 1., 960.),
             ("live-wallpaper", Mode::Apps, 0, 0, "", 1., 960.),
             ("live-wallpaper-narrow", Mode::Apps, 0, 0, "", 1., 390.),
+            ("live-wallpaper-library", Mode::Apps, 0, 0, "", 1., 960.),
+            (
+                "live-wallpaper-library-narrow",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
             ("live-wallpaper-opening", Mode::Apps, 0, 0, "", 0.08, 960.),
             ("live-wallpaper-selected", Mode::Apps, 0, 0, "", 1., 960.),
             (
@@ -1592,10 +1664,7 @@ fn visual_regressions() {
                         "notifications"
                     }
                     "panel-host-live-wallpaper" => {
-                        app.update(
-                            Message::LiveWallpaper(crate::live_wallpaper::Message::Open),
-                            &mut Effects::default(),
-                        );
+                        open_live_fixture(&mut app);
                         "live-wallpaper"
                     }
                     _ => "dock",
@@ -2577,6 +2646,9 @@ fn visual_regressions() {
                 };
                 layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
             } else if name.starts_with("live-wallpaper") {
+                if name.contains("library") {
+                    install_live_library_fixture(&mut app);
+                }
                 if name.contains("selected")
                     || name.contains("monitor")
                     || name.contains("paused")
@@ -2642,10 +2714,7 @@ fn visual_regressions() {
                             lucent_domain::LiveWallpaperTarget::Monitor(monitor);
                     }
                 }
-                app.update(
-                    Message::LiveWallpaper(crate::live_wallpaper::Message::Open),
-                    &mut Effects::default(),
-                );
+                open_live_fixture(&mut app);
                 if name.contains("policy") || name.contains("save-error") || name.contains("paused")
                 {
                     app.live_wallpaper.scroll = 10000.;
@@ -2858,6 +2927,10 @@ fn visual_regressions() {
             if name.starts_with("live-wallpaper-policy") {
                 assert_visible("live-policy-battery");
                 assert_visible("live-policy-fullscreen");
+            }
+            if name.starts_with("live-wallpaper-library") {
+                assert_visible("live-library-0");
+                assert_visible("live-library-1");
             }
             if name == "live-wallpaper-save-error" {
                 assert_visible("live-save-retry");
@@ -3451,6 +3524,7 @@ fn online_browser_controls_and_selected_result_fit_at_small_and_large_sizes() {
             "source-local",
             "source-wallhaven",
             "source-alpha-coders",
+            "source-live",
             "wallpaper-search",
             "wallpaper-search-submit",
             "download-theme",
@@ -3476,6 +3550,49 @@ fn online_browser_controls_and_selected_result_fit_at_small_and_large_sizes() {
         }
     }
 }
+#[test]
+fn wallpaper_live_source_routes_a_typed_action_and_opens_the_native_selector() {
+    for width in [390., 960.] {
+        for online in [false, true] {
+            let mut app = fixture(0, false);
+            resize_fixture(&mut app, width, 580.);
+            app.update(
+                Message::Launcher(launcher::Message::Mode(Mode::Wallpapers)),
+                &mut Effects::default(),
+            );
+            if online {
+                online_fixture(&mut app);
+            }
+            let before = serde_json::to_value(&app.settings).unwrap();
+            let layout = Layout::new(fonts(&app));
+            let mut input = Interaction::default();
+            let rendered = scene(&app, &layout, &mut input, 1.);
+            let hit = rendered
+                .hits
+                .iter()
+                .find(|hit| hit.id == "source-live")
+                .unwrap();
+            assert!(fully_visible(hit.rect, hit.clip.bounds));
+            let (x, y) = (hit.rect.x + hit.rect.w / 2., hit.rect.y + hit.rect.h / 2.);
+            assert!(hit.contains(x, y));
+            assert!(input.press(&rendered, x, y).is_none());
+            let message = input
+                .release(x, y)
+                .expect("live source is an actionable button");
+            assert!(matches!(
+                &message,
+                Message::Launcher(launcher::Message::Request(launcher::Intent::Action(
+                    crate::actions::Action::LiveWallpapers
+                )))
+            ));
+            app.update(message, &mut Effects::default());
+            assert!(app.live_wallpaper.open);
+            assert!(!app.launcher.open());
+            assert_eq!(serde_json::to_value(&app.settings).unwrap(), before);
+        }
+    }
+}
+
 #[test]
 fn palette_library_and_failed_download_preserve_user_intent() {
     let mut app = fixture(0, false);

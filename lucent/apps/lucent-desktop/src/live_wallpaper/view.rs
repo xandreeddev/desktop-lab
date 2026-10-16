@@ -43,6 +43,63 @@ impl LiveWallpaper {
             label("Local MP4, WebM or animated GIF · muted, looped playback")
                 .width(Length::Fill)
                 .wrap(component::live_wallpaper::STATUS_LINES as usize),
+            Element::row(vec![
+                label("Local library").width(Length::Fill),
+                button("Refresh", Message::RefreshLibrary)
+                    .autofocus()
+                    .id("live-library-refresh"),
+            ])
+            .gap(space::SM),
+        ];
+        if self.importing.is_some() {
+            children.push(theme.status_text("Importing and decoding…", false));
+        } else if !self.error.is_empty() {
+            children.push(
+                theme
+                    .status_text(&self.error, true)
+                    .wrap(component::live_wallpaper::STATUS_LINES as usize),
+            );
+        }
+        if self.library_loading {
+            children.push(theme.status_text("Looking for local loops…", false));
+        } else if !self.library_error.is_empty() {
+            children.push(
+                theme
+                    .status_text(&self.library_error, true)
+                    .wrap(component::live_wallpaper::STATUS_LINES as usize),
+            );
+        } else if self.library.is_empty() {
+            children.push(
+                theme
+                    .status_text("Add clips to ~/Videos/Wallpapers, then Refresh", false)
+                    .wrap(component::live_wallpaper::STATUS_LINES as usize),
+            );
+        }
+        for (index, source) in self.library.iter().enumerate() {
+            let active = selected
+                .is_some_and(|profile| profile.enabled && profile.asset.source.path == source.path);
+            let row = if save.writable {
+                let choice = theme.choice_button(
+                    &source.name,
+                    if active || self.importing.is_some() {
+                        Message::Ignore
+                    } else {
+                        Message::ImportPath(self.target.clone(), source.path.clone())
+                    },
+                    active,
+                );
+                if self.importing.is_some() {
+                    choice.hover_feedback(false).tab_stop(false)
+                } else {
+                    choice
+                }
+            } else {
+                label(&source.name)
+            };
+            children.push(row.width(Length::Fill).id(format!("live-library-{index}")));
+        }
+        children.extend([
+            label("Or import another local file"),
             theme
                 .text_input(
                     self.path.clone(),
@@ -51,10 +108,9 @@ impl LiveWallpaper {
                     Message::EditPath,
                 )
                 .on_submit(Message::Import(self.target.clone()))
-                .autofocus()
                 .id("live-path"),
             Element::column(targets).gap(space::SM),
-        ];
+        ]);
         if save.writable {
             children.push(
                 button("Import wallpaper", Message::Import(self.target.clone())).id("live-import"),
@@ -220,9 +276,7 @@ impl LiveWallpaper {
                 .on_click(Message::Close)
                 .tab_stop(false)
                 .id("live-backdrop"),
-            panel
-                .opacity(amount)
-                .at(bounds.x, bounds.y + space::LG * (1. - amount)),
+            panel.diagonal_reveal(amount).at(bounds.x, bounds.y),
         ])
         .fill()
         .background(Color::TRANSPARENT)

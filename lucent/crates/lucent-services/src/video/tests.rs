@@ -36,6 +36,68 @@ impl Drop for Directory {
         let _ = fs::remove_dir_all(&self.0);
     }
 }
+#[test]
+fn local_library_lists_bounded_regular_media_without_decoding_or_importing() {
+    let root = Directory::new();
+    let library = root.0.join("library");
+    fs::create_dir(&library).unwrap();
+    for name in ["Moon_lake.MP4", "Animated.gif", "Zebra.webm"] {
+        fs::write(library.join(name), b"not decoded by discovery").unwrap();
+    }
+    for name in ["still.png", "notes.txt", "empty.mp4"] {
+        fs::write(library.join(name), b"").unwrap();
+    }
+    fs::create_dir(library.join("nested.mp4")).unwrap();
+    fs::write(library.join("nested.mp4/hidden.mp4"), b"nested").unwrap();
+    std::os::unix::fs::symlink(library.join("Moon_lake.MP4"), library.join("alias.mp4")).unwrap();
+    fs::File::create(library.join("too-big.mp4"))
+        .unwrap()
+        .set_len(SOURCE_BYTES + 1)
+        .unwrap();
+    let adapter = NativeVideoWallpapers {
+        state: root.0.join("store"),
+        library: library.clone(),
+    };
+    let sources = adapter.library().unwrap();
+    assert_eq!(
+        sources
+            .iter()
+            .map(|source| source.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Animated", "Moon lake", "Zebra"]
+    );
+    assert!(
+        sources
+            .iter()
+            .all(|source| Path::new(&source.path).parent() == Some(library.as_path()))
+    );
+    assert!(
+        !adapter.state.exists(),
+        "discovery must not import or create storage"
+    );
+    for number in 0..64 {
+        fs::write(library.join(format!("loop-{number:02}.mp4")), b"candidate").unwrap();
+    }
+    let sources = adapter.library().unwrap();
+    assert_eq!(sources.len(), MAX_ASSETS);
+    assert!(sources.windows(2).all(|pair| pair[0].name <= pair[1].name));
+}
+
+#[test]
+fn missing_library_is_empty_but_invalid_or_unreadable_library_is_an_error() {
+    let root = Directory::new();
+    let mut adapter = NativeVideoWallpapers {
+        state: root.0.join("store"),
+        library: root.0.join("missing"),
+    };
+    assert!(adapter.library().unwrap().is_empty());
+    adapter.library = PathBuf::from("relative-library");
+    assert!(adapter.library().is_err());
+    adapter.library = root.0.join("not-a-directory");
+    fs::write(&adapter.library, b"file").unwrap();
+    assert!(adapter.library().is_err());
+}
+
 struct Stop(AtomicBool);
 impl StopSignal for Stop {
     fn cancelled(&self) -> bool {
@@ -92,6 +154,7 @@ fn video_native_mp4_webm_and_gif_import_and_decode_through_the_real_port() {
         let file = fixture(&root.0, extension);
         let adapter = NativeVideoWallpapers {
             state: root.0.join("store"),
+            library: root.0.clone(),
         };
         let asset = adapter
             .prepare(&Wallpaper {
@@ -130,6 +193,7 @@ fn video_native_loop_cancellation_and_metadata_rejection_preserve_storage() {
     let file = fixture(&root.0, "mp4");
     let adapter = NativeVideoWallpapers {
         state: root.0.join("store"),
+        library: root.0.clone(),
     };
     let asset = adapter
         .prepare(&Wallpaper {
@@ -226,6 +290,7 @@ fn video_native_reused_conversion_preserves_retained_frame_bytes_and_odd_row_str
     assert!(encoder.wait_with_output().unwrap().status.success());
     let adapter = NativeVideoWallpapers {
         state: root.0.join("store"),
+        library: root.0.clone(),
     };
     let asset = adapter
         .prepare(&Wallpaper {

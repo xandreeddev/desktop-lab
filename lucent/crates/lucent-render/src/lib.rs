@@ -463,7 +463,7 @@ impl Canvas {
             mapped_at_creation: false,
         });
         let clips = gpu.device.create_buffer(&BufferDescriptor {
-            label: Some("rounded clip chain"),
+            label: Some("shape clip chain"),
             size: scene::CLIP_BYTES,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -673,17 +673,25 @@ impl Canvas {
             }
             let clip_start = clip_records.len() / scene::CLIP_BYTES as usize;
             for shape in clip.shapes() {
+                let (rect, parameters) = match shape {
+                    lucent_api::ClipShape::Rounded(shape) => {
+                        (shape.rect, [shape.radius, 0., 0., 0.])
+                    }
+                    lucent_api::ClipShape::Diagonal(shape) => {
+                        (shape.rect, [shape.progress(), 1., 0., 0.])
+                    }
+                };
                 append_record(
                     &mut clip_records,
                     &[
-                        shape.rect.x,
-                        shape.rect.y,
-                        shape.rect.w,
-                        shape.rect.h,
-                        shape.radius,
-                        0.,
-                        0.,
-                        0.,
+                        rect.x,
+                        rect.y,
+                        rect.w,
+                        rect.h,
+                        parameters[0],
+                        parameters[1],
+                        parameters[2],
+                        parameters[3],
                     ],
                 );
             }
@@ -790,7 +798,7 @@ impl Canvas {
         if clips.len() / scene::CLIP_BYTES as usize > self.clip_capacity {
             self.clip_capacity = geometry.clips.capacity;
             self.clips = self.gpu.device.create_buffer(&BufferDescriptor {
-                label: Some("rounded clip chain"),
+                label: Some("shape clip chain"),
                 size: geometry.clips.bytes,
                 usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
                 mapped_at_creation: false,
@@ -1471,6 +1479,81 @@ mod clipping_tests {
     use super::*;
     use lucent_api::{Color, Element, ImageData};
     use lucent_ui::{Interaction, Layout};
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn diagonal_reveal_preserves_rounded_pixels_and_exact_endpoints_at_both_densities() {
+        let fonts = Arc::new(vec![]);
+        let gpu = Gpu::headless(fonts.clone()).unwrap();
+        let layout = Layout::new(fonts);
+        let mut canvas = Canvas::new(gpu);
+        let image = Arc::new(
+            ImageData::from_rgba("diagonal pixels", 1, 1, vec![220, 80, 40, 255]).unwrap(),
+        );
+        let tree = |progress| {
+            let image = Element::<()>::image(image.clone())
+                .size(49., 35.)
+                .at(7., 5.)
+                .radius(8.)
+                .clip();
+            let image = match progress {
+                Some(progress) => image.diagonal_reveal(progress),
+                None => image,
+            };
+            Element::stack(vec![image]).fill()
+        };
+        for scale in [1, 2] {
+            let snapshot = |canvas: &mut Canvas, progress| {
+                let scene = layout.build(&tree(progress), 67., 51., &Interaction::default(), 0.);
+                canvas.snapshot(67, 51, scale, &scene.paint).unwrap()
+            };
+            let full = snapshot(&mut canvas, None);
+            assert_eq!(snapshot(&mut canvas, Some(1.)), full, "full at {scale}x");
+            assert!(
+                snapshot(&mut canvas, Some(0.))
+                    .iter()
+                    .all(|byte| *byte == 0)
+            );
+            for progress in [0.2, 0.5, 0.8] {
+                let pixels = snapshot(&mut canvas, Some(progress));
+                let width = 67 * scale;
+                let mut antialiased = false;
+                for (index, (actual, original)) in pixels
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .zip(full.as_chunks::<4>().0)
+                    .enumerate()
+                {
+                    let x = (index as u32 % width) as f32 + 0.5;
+                    let y = (index as u32 / width) as f32 + 0.5;
+                    let local = (x / scale as f32 - 7.) + (y / scale as f32 - 5.);
+                    let distance = (local - progress * 84.) * scale as f32;
+                    // The diagonal and rounded distances share a 2x2 fine
+                    // derivative quad. At their intersection the combined AA
+                    // fringe can change even when this sample is just beyond
+                    // the diagonal's own fringe. Assert exact pixels outside
+                    // that full neighborhood; endpoints above stay exact over
+                    // every pixel, including their rounded boundaries.
+                    if distance < -4. {
+                        assert_eq!(actual, original, "visible at {index}, {scale}x, {progress}");
+                    } else if distance > 4. {
+                        assert_eq!(*actual, [0; 4], "masked at {index}, {scale}x, {progress}");
+                    } else if original[3] == 255 && actual[3] > 0 && actual[3] < 255 {
+                        antialiased = true;
+                    }
+                    assert!(
+                        actual[3] <= original[3],
+                        "reveal cannot expand rounded ancestors"
+                    );
+                }
+                assert!(
+                    antialiased,
+                    "diagonal edge needs pixel coverage at {scale}x, {progress}"
+                );
+            }
+        }
+    }
 
     #[test]
     #[ignore = "requires a Vulkan driver"]

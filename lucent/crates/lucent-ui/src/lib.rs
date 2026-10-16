@@ -310,6 +310,7 @@ impl Layout {
             &Arc::from([FocusClip {
                 rect,
                 radius: 0.,
+                diagonal_reveal: None,
                 scroll_depth: 0,
             }]),
             "root",
@@ -339,6 +340,20 @@ impl Layout {
         if alpha <= 0.001 {
             return;
         }
+        // Keep ordinarily clipped/offscreen descendants in the hit tree:
+        // keyboard traversal may scroll them into view before another frame.
+        // An explicitly empty reveal, however, intentionally hides its whole
+        // subtree regardless of any scroll projection.
+        if e.style
+            .diagonal_reveal
+            .is_some_and(|progress| !progress.is_finite() || progress <= 0.)
+        {
+            return;
+        }
+        let clip = match e.style.diagonal_reveal {
+            Some(progress) => clip.with_diagonal_reveal(rect, progress),
+            None => clip,
+        };
         let paint_start = scene.paint.len();
         let own_clip = if e.style.clip {
             clip.with_rounded(rect, e.style.radius)
@@ -373,11 +388,12 @@ impl Layout {
             None
         };
         let mut child_focus_clips = focus_clips.clone();
-        if e.style.clip {
+        if e.style.clip || e.style.diagonal_reveal.is_some() {
             let mut clips = focus_clips.to_vec();
             clips.push(FocusClip {
                 rect,
-                radius: e.style.radius,
+                radius: if e.style.clip { e.style.radius } else { 0. },
+                diagonal_reveal: e.style.diagonal_reveal,
                 scroll_depth: scrolls.len(),
             });
             child_focus_clips = clips.into();
@@ -634,6 +650,7 @@ impl Layout {
                 clips.push(FocusClip {
                     rect: Rect::new(inner.x, inner.y, width, inner.h),
                     radius: 0.,
+                    diagonal_reveal: None,
                     scroll_depth: scrolls.len(),
                 });
                 child_focus_clips = clips.into();
@@ -1526,6 +1543,64 @@ mod tests {
         };
         assert!(!h.contains(1., 1.));
         assert!(h.contains(50., 50.));
+    }
+    #[test]
+    fn diagonal_reveal_shares_paint_hit_regions_and_keyboard_visibility() {
+        let layout = Layout::new(Arc::new(vec![]));
+        let tree = |progress| {
+            Element::stack(vec![
+                Element::empty()
+                    .size(16., 16.)
+                    .at(4., 4.)
+                    .background(Color::hex(0xffffff))
+                    .on_click(1)
+                    .id("shown"),
+                Element::empty()
+                    .size(16., 16.)
+                    .at(60., 36.)
+                    .background(Color::hex(0xffffff))
+                    .on_click(2)
+                    .id("hidden"),
+            ])
+            .size(80., 60.)
+            .background(Color::hex(0x102030))
+            .radius(24.)
+            .clip()
+            .diagonal_reveal(progress)
+        };
+        let mut input = Interaction::default();
+        let scene = layout.build(&tree(0.5), 80., 60., &input, 0.);
+        assert_eq!(scene.hits[0].rect, Rect::new(4., 4., 16., 16.));
+        assert!(scene.hits[0].contains(12., 12.));
+        assert!(!scene.hits[1].contains(68., 44.));
+        assert!(
+            !scene.hits[0].contains(4.5, 4.5),
+            "rounded ancestor remains"
+        );
+        for (hit, region) in scene.hits.iter().zip(&scene.regions) {
+            for y in 0..60 {
+                for x in 0..80 {
+                    let point = (x as f32 + 0.5, y as f32 + 0.5);
+                    assert_eq!(
+                        hit.contains(point.0, point.1),
+                        region.contains(point.0, point.1)
+                    );
+                }
+            }
+        }
+        input.synchronize(&scene);
+        input.key(&scene, &Key::Tab);
+        assert_eq!(input.focus.as_deref(), Some("shown"));
+        input.key(&scene, &Key::Tab);
+        assert_eq!(input.focus.as_deref(), Some("shown"));
+        let empty = layout.build(&tree(0.), 80., 60., &input, 0.);
+        assert!(empty.paint.is_empty() && empty.hits.is_empty() && empty.regions.is_empty());
+        let full = layout.build(&tree(1.), 80., 60., &input, 0.);
+        assert_eq!(
+            full.hits[0].rect, scene.hits[0].rect,
+            "mask never changes layout"
+        );
+        assert!(full.hits[1].contains(68., 44.));
     }
     #[test]
     fn typing_between_frame_callbacks_preserves_every_character() {

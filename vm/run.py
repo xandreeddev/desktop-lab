@@ -81,7 +81,7 @@ def main():
     if args.sync:
         with tempfile.NamedTemporaryFile(suffix='.tar.gz') as temp:
             with tarfile.open(temp.name, 'w:gz') as tf:
-                for name in ('scripts', 'configs', 'manifests', 'patches', 'lucent', 'packaging', 'design', 'site',
+                for name in ('scripts', 'configs', 'manifests', 'patches', 'lucent', 'packaging', 'design', 'site', 'assets',
                              'README.md', 'LICENSE', 'docs', 'tests', 'reports'):
                     path = lab.ROOT / name
                     if path.exists():
