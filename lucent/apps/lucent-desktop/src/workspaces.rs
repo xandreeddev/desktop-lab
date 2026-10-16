@@ -240,6 +240,7 @@ mod tests {
                 focused: true,
                 active_workspace: Some(named.clone()),
                 special_workspace: Some(special.clone()),
+                has_fullscreen_window: false,
             }],
             ..Default::default()
         };
@@ -279,12 +280,14 @@ mod tests {
                     focused: true,
                     active_workspace: Some(WorkspaceRef::numbered(9).unwrap()),
                     special_workspace: None,
+                    has_fullscreen_window: false,
                 },
                 CompositorMonitor {
                     id: right.clone(),
                     focused: false,
                     active_workspace: Some(WorkspaceRef::numbered(2).unwrap()),
                     special_workspace: Some(WorkspaceRef::special("notes").unwrap()),
+                    has_fullscreen_window: false,
                 },
             ],
         };

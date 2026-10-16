@@ -33,7 +33,7 @@ lucent-cli wallpaper live off
 ```
 
 The native panel accepts a local path with ordinary keyboard selection, editing
-and clipboard behavior. **Import and play** copies the source to private owned
+and clipboard behavior. **Import wallpaper** copies the source to private owned
 storage, actually decodes it and creates a PNG poster before a preference is
 accepted. An invalid file does not replace the current configuration. The source
 is preserved. Closing the panel cancels pending delivery; already-running native
@@ -56,6 +56,23 @@ the panel focuses its path field, Escape or an outside click closes it, and
 ordinary inputs support the shared editing/undo contract. The native settings
 panel uses existing semantic colors,
 spacing, radii, typography, scrolling and frame-paced motion.
+
+**Pause on battery** and **Pause in fullscreen** are enabled by
+default and can be switched off independently in this panel. Automatic pauses
+do not modify either manual pause preference. Returning to AC power or leaving
+fullscreen resumes playback only when no other pause still applies. The status
+names the reason for the selected display. A shared default may still show
+**Playing** when another display is using it.
+
+Fullscreen is evaluated on each output's visible workspace. Maximized windows,
+client-only fullscreen hints and windows on hidden workspaces do not pause it.
+When two outputs share a stream, the covered output freezes its own image and
+receives no further frame redraws; the visible output keeps the single decoder
+running. Once every consumer is paused, the decoder subscription stops. A
+resumed decoder restarts its loop rather than seeking to its previous timestamp.
+Unavailable battery/compositor observations clear those automatic reasons;
+they are not treated as proof of battery power or fullscreen. A known sleep
+pause remains in effect until a successful power observation reports resume.
 
 The default live import also supplies its validated poster to the normal static
 wallpaper transaction. That gives secure/session clients a still background and
@@ -99,9 +116,20 @@ Prepared-image byte counters are not process RSS or a GPU memory total.
 ## Preferences and resource limits
 
 `desktop.json` stores `live_wallpapers` with `default`, `monitors` and a global
-`paused` flag. A selected profile contains an owned `asset`, validated `fps`,
+`paused` flag and a `policy` object. A selected profile contains an owned `asset`, validated `fps`,
 `paused` and `enabled`. Existing settings without these keys continue to load.
 The root persistence coordinator remains the only writer.
+
+```json
+"policy": {
+  "pause_on_battery": true,
+  "pause_when_fullscreen": true
+}
+```
+
+This object belongs inside `live_wallpapers`. Existing configurations without it
+receive the defaults; explicit `false` values survive save/restart. Runtime pause
+reasons and fullscreen output observations are never written to `desktop.json`.
 
 FPS can be 1–60; the panel provides 15/30/60 presets and the initial value is 30.
 A cap skips excess/late decoded frames; it does not synthesize intermediate
@@ -109,7 +137,8 @@ frames or increase a source's frame rate. Shared identical media/FPS profiles us
 one producer. Different source profiles have separate playback timelines.
 Disconnected outputs acquire no decoder, and observation of a known sleep
 transition suspends playback. Explicit pause is always available. Automatic
-lock/fullscreen/battery policies remain further work.
+secure-lock detection remains further work; the fullscreen policy is not a lock
+detector and never authorizes an unlock.
 
 Initial envelopes:
 
@@ -121,6 +150,8 @@ Initial envelopes:
 - One latest mailbox frame and one wake notice per producer. A slow UI does not
   queue a sequence of full video frames.
 - One immutable current frame per player and one reusable GPU stream texture.
+  An automatically paused output can retain one additional immutable frame with
+  a static GPU identity while another output advances their shared stream.
   Static image mip preparation and cache policy remain available separately.
 
 These are admission/lifetime limits, not a total process/GPU memory guarantee.
@@ -160,6 +191,24 @@ allocation when dimensions match; a dimension change replaces that resource.
 Per-frame mip generation is omitted. Already submitted work keeps its native
 resource lifetime. The renderer has no wallpaper or codec policy.
 
+`WallpaperPlaybackPolicy`, `WallpaperPlaybackContext` and `WallpaperPauseReason`
+are domain values. The pure `wallpaper_pause_reason` use case applies explicit
+pause, sleep, battery and per-output fullscreen precedence without I/O. The
+existing `PowerPort` and `CompositorPort` observations supply facts. The Hyprland
+adapter normalizes its internal fullscreen mode, mapped/hidden flags, monitor
+identity and visible workspace; its socket event triggers a fresh snapshot,
+not a boolean toggle. Repeated fullscreen events therefore cannot accidentally
+resume a paused output. See the upstream [IPC event contract](https://wiki.hypr.land/IPC/),
+[command serialization](https://github.com/hyprwm/Hyprland/blob/main/src/ipc/s1/Commands.cpp)
+and [fullscreen modes](https://github.com/hyprwm/Hyprland/blob/main/src/managers/fullscreen/FullscreenTypes.hpp).
+
+The root joins observations into the transient context. The child coordinator
+owns per-output presentation routes and shared producer lifetimes. A paused
+route uses `ImageData::snapshot()` so future writes to a peer's stream texture
+cannot change its frozen pixels. Policy controls emit typed intents through
+`change_live_wallpaper`, and the existing persistence coordinator saves only
+the changed preferences. No compositor, D-Bus or codec operation runs in a view.
+
 The decoder reuses one private RGBA conversion buffer for each playback pass.
 Each delivered frame still receives owned bytes: reusing conversion scratch
 cannot mutate an image retained by a surface, a transition or another output.
@@ -183,6 +232,16 @@ this exact native adapter. Tests cover actual pixels, frame counts/timestamps,
 loop cancellation, failed import cleanup and foreign asset rejection. Client
 checks cover sharing, pause without a producer, disconnected outputs, stale
 messages, bounded latest-frame delivery and preservation of the last good image.
+Policy tests exercise saved-setting migration/opt-outs, manual-pause precedence,
+power observations and disconnect/recovery, shared stream pause/resume, static
+image identity and per-output redraw routing. An owned Unix-socket fixture sends
+fragmented and repeated fullscreen events through the actual Hyprland adapter.
+These checks do not establish physical-battery or native multi-output acceptance.
+A focused VM check is available as `python3 vm/test-live-wallpapers.py --policy-only`.
+It uses one synthetic MP4 and a test-owned terminal to exercise fullscreen,
+workspace visibility, manual pause, the native policy toggles and restart.
+It skips resource benchmarks and restores the caller's exact preferences,
+wallpaper, exports, workspace/focus and idle policy through the existing checkpoint.
 A software-Vulkan test verifies real changing pixels, one reused GPU texture,
 no upload for a repeated revision and replacement on dimension changes.
 

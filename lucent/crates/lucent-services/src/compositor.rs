@@ -142,7 +142,7 @@ fn decode_snapshot(
     clients: &Value,
     raw_monitors: &Value,
 ) -> CompositorSnapshot {
-    let monitors = decode_monitors(raw_monitors);
+    let monitors = decode_monitors(raw_monitors, clients);
     let mut workspaces = std::collections::BTreeMap::new();
     let mut ambiguous = std::collections::BTreeSet::new();
     for value in ws.as_array().into_iter().flatten() {
@@ -298,7 +298,7 @@ fn workspace_request(command: WorkspaceCommand) -> Result<String> {
         )),
     }
 }
-fn decode_monitors(raw: &Value) -> Vec<CompositorMonitor> {
+fn decode_monitors(raw: &Value, clients: &Value) -> Vec<CompositorMonitor> {
     let mut result = std::collections::BTreeMap::new();
     let mut ambiguous = std::collections::BTreeSet::new();
     for value in raw.as_array().into_iter().flatten() {
@@ -312,11 +312,31 @@ fn decode_monitors(raw: &Value) -> Vec<CompositorMonitor> {
             continue;
         };
         let workspace = |key: &str| decode_workspace_ref(&value[key]);
+        let active_workspace = workspace("activeWorkspace");
+        let special_workspace = workspace("specialWorkspace");
+        let visible_workspace = special_workspace.as_ref().or(active_workspace.as_ref());
+        // Hyprland's internal fullscreen mode 2 covers the output. Mode 1 is
+        // maximized; fullscreenClient is the state advertised to the app, not
+        // proof that the compositor actually fullscreened it. Never infer a
+        // visible fullscreen window from focus alone or another workspace.
+        let has_fullscreen_window = value["id"].as_u64().is_some_and(|native_id| {
+            visible_workspace.is_some_and(|visible| {
+                clients.as_array().into_iter().flatten().any(|client| {
+                    client["monitor"].as_u64() == Some(native_id)
+                        && client["mapped"].as_bool() == Some(true)
+                        && client["hidden"].as_bool() == Some(false)
+                        && client["visible"].as_bool() != Some(false)
+                        && client["fullscreen"].as_u64() == Some(2)
+                        && decode_workspace_ref(&client["workspace"]).as_ref() == Some(visible)
+                })
+            })
+        });
         let monitor = CompositorMonitor {
             id: id.clone(),
             focused: value["focused"].as_bool().unwrap_or(false),
-            active_workspace: workspace("activeWorkspace"),
-            special_workspace: workspace("specialWorkspace"),
+            active_workspace,
+            special_workspace,
+            has_fullscreen_window,
         };
         if result.insert(id.clone(), monitor).is_some() {
             ambiguous.insert(id);
@@ -331,6 +351,48 @@ mod protocol_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn fullscreen_uses_internal_mode_on_the_visible_workspace_of_the_correct_output() {
+        let mut monitors = serde_json::json!([
+            {"id":0,"name":"DP-1","focused":false,"activeWorkspace":{"id":1},"specialWorkspace":{"id":0}},
+            {"id":1,"name":"DP-2","focused":true,"activeWorkspace":{"id":2},"specialWorkspace":{"id":0}}
+        ]);
+        let mut clients = serde_json::json!([
+            {"monitor":0,"mapped":true,"hidden":false,"visible":true,"fullscreen":2,"fullscreenClient":0,"workspace":{"id":1}}
+        ]);
+        let fullscreen = |monitors: &Value, clients: &Value| {
+            decode_monitors(monitors, clients)
+                .into_iter()
+                .filter(|m| m.has_fullscreen_window)
+                .map(|m| m.id.as_str().to_owned())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(fullscreen(&monitors, &clients), ["DP-1"]);
+        for mode in [0, 1, 9] {
+            clients[0]["fullscreen"] = mode.into();
+            clients[0]["fullscreenClient"] = 2.into();
+            assert!(fullscreen(&monitors, &clients).is_empty());
+        }
+        clients[0]["fullscreen"] = 2.into();
+        clients[0]["workspace"] = serde_json::json!({"id":3});
+        assert!(fullscreen(&monitors, &clients).is_empty());
+        clients[0]["workspace"] = serde_json::json!({"id":1});
+        for (field, value) in [("mapped", false), ("hidden", true), ("visible", false)] {
+            let before = clients[0][field].clone();
+            clients[0][field] = value.into();
+            assert!(fullscreen(&monitors, &clients).is_empty());
+            clients[0][field] = before;
+        }
+        // A special workspace is the visible foreground, not a reason to count
+        // a fullscreen app on the normal workspace behind it.
+        monitors[0]["specialWorkspace"] =
+            serde_json::json!({"address":"special:notes","type":"special"});
+        assert!(fullscreen(&monitors, &clients).is_empty());
+        clients[0]["workspace"] = serde_json::json!({"id":-99,"name":"special:notes"});
+        assert_eq!(fullscreen(&monitors, &clients), ["DP-1"]);
+        clients[0]["monitor"] = 1.into();
+        assert!(fullscreen(&monitors, &clients).is_empty());
+    }
     #[test]
     fn modern_and_legacy_workspace_identity_agree_and_display_names_are_not_authority() {
         let values = [
@@ -442,12 +504,15 @@ mod tests {
     }
     #[test]
     fn monitor_metadata_preserves_numbered_and_named_workspace_references() {
-        let monitors = decode_monitors(&serde_json::json!([
-            {"name":"DP-1","focused":true,"activeWorkspace":{"id":9,"name":"Work"},"specialWorkspace":{"id":0,"name":""}},
-            {"name":"DP-2","focused":false,"activeWorkspace":{"address":"name:Writing","name":"Displayed title"},"specialWorkspace":{"address":"special:notes","name":"Notes"}},
-            {"name":"disabled","focused":true,"disabled":true},
-            {"name":"bad\nname","focused":true}
-        ]));
+        let monitors = decode_monitors(
+            &serde_json::json!([
+                {"name":"DP-1","focused":true,"activeWorkspace":{"id":9,"name":"Work"},"specialWorkspace":{"id":0,"name":""}},
+                {"name":"DP-2","focused":false,"activeWorkspace":{"address":"name:Writing","name":"Displayed title"},"specialWorkspace":{"address":"special:notes","name":"Notes"}},
+                {"name":"disabled","focused":true,"disabled":true},
+                {"name":"bad\nname","focused":true}
+            ]),
+            &serde_json::json!([]),
+        );
         assert_eq!(monitors.len(), 2);
         assert_eq!(
             monitors[0].active_workspace.as_ref().unwrap().number(),
@@ -472,13 +537,15 @@ mod tests {
     fn duplicate_names_and_ambiguous_focus_do_not_select_an_output() {
         assert!(
             decode_monitors(
-                &serde_json::json!([{"name":"DP-1","focused":true},{"name":"DP-1","focused":true}])
+                &serde_json::json!([{"name":"DP-1","focused":true},{"name":"DP-1","focused":true}]),
+                &serde_json::json!([]),
             )
             .is_empty()
         );
         let snapshot = CompositorSnapshot {
             monitors: decode_monitors(
                 &serde_json::json!([{"name":"DP-1","focused":true},{"name":"DP-2","focused":true}]),
+                &serde_json::json!([]),
             ),
             ..Default::default()
         };

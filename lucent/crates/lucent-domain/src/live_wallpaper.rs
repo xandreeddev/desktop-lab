@@ -1,7 +1,11 @@
 //! Live wallpaper preferences and media data; no codec, GPU or filesystem types.
 use crate::{DomainError, MonitorId, Result, StopSignal, Wallpaper};
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+    time::Duration,
+};
 /// A saved default or a monitor override, captured when a control is created.
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LiveWallpaperTarget {
@@ -75,6 +79,44 @@ pub struct LiveWallpapers {
     pub default: Option<LiveWallpaperSettings>,
     pub monitors: BTreeMap<MonitorId, LiveWallpaperSettings>,
     pub paused: bool,
+    pub policy: WallpaperPlaybackPolicy,
+}
+/// Saved preferences, separate from transient observations and explicit pause.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WallpaperPlaybackPolicy {
+    pub pause_on_battery: bool,
+    pub pause_when_fullscreen: bool,
+}
+impl Default for WallpaperPlaybackPolicy {
+    fn default() -> Self {
+        Self {
+            pause_on_battery: true,
+            pause_when_fullscreen: true,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WallpaperPauseCondition {
+    Battery,
+    Fullscreen,
+}
+/// Current observations only; never persisted with the user's preferences.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct WallpaperPlaybackContext {
+    pub preparing_for_sleep: bool,
+    /// None means unavailable, not a claim that AC power is connected.
+    pub on_battery: Option<bool>,
+    pub fullscreen_monitors: BTreeSet<MonitorId>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WallpaperPauseReason {
+    All,
+    Profile,
+    Sleep,
+    Battery,
+    Fullscreen,
 }
 impl LiveWallpapers {
     /// A disabled override still wins over the default.

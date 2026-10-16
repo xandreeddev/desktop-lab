@@ -191,6 +191,7 @@ mod tests {
                 focused: true,
                 active_workspace: Some(lucent_domain::WorkspaceRef::numbered(9).unwrap()),
                 special_workspace: None,
+                has_fullscreen_window: false,
             }],
             ..Default::default()
         }

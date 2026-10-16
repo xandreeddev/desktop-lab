@@ -8,6 +8,7 @@ Private rollback data remains in guest /tmp until restoration succeeds. Reports
 and captures stay under ignored reports/local; stdout contains only sanitized
 booleans/counts. Requires one display at origin, ffmpeg and grim in the guest.
 """
+import argparse
 import json
 from pathlib import Path
 import shlex
@@ -345,7 +346,138 @@ shutil.rmtree(scratch)
 '''
 
 
+def check_playback_policy(name, monitor):
+    """Exercise real fullscreen observations and native preference controls.
+
+    Only the test-owned terminal is closed. The caller's outer checkpoint owns
+    exact settings, wallpaper, exports and idle-policy restoration.
+    """
+    workspace = monitor['activeWorkspace']
+    original_workspace = workspace.get('address') or str(workspace.get('id', ''))
+    require(bool(original_workspace), 'original_workspace_identity')
+    special = monitor.get('specialWorkspace', {})
+    require(not special.get('address') and special.get('id', 0) == 0,
+            'policy_test_requires_ordinary_workspace')
+    focused = json.loads(session('hyprctl', '-j', 'activewindow')).get('address')
+    marker = 'lucent-wallpaper-policy-' + str(time.monotonic_ns())
+    test_workspace = 'name:' + marker
+    terminal_pid, address = None, None
+    checks = {}
+
+    def dispatch(*args):
+        require(session('hyprctl', 'dispatch', *args).strip() == 'ok',
+                'native_policy_dispatch')
+
+    def terminal():
+        return next((c for c in json.loads(session('hyprctl', '-j', 'clients'))
+                     if c.get('class') == marker and c.get('pid') == terminal_pid), None)
+
+    def pause_reason():
+        outputs = client()['live_wallpaper']['outputs']
+        return next((o['pause_reason'] for o in outputs if o['monitor'] == monitor['name']), None)
+
+    def playing():
+        before = background_frames()
+        eventually(lambda: client()['live_wallpaper']['running'] == 1
+                   and pause_reason() is None and background_frames() > before + 2,
+                   'policy_allows_native_frame_advance')
+
+    def paused(reason):
+        eventually(lambda: client()['live_wallpaper']['running'] == 0
+                   and pause_reason() == reason, 'native_policy_pause_reason')
+        time.sleep(.7)  # Allow an already-submitted frame/crossfade to retire.
+        frames = background_frames()
+        time.sleep(1.1)
+        require(background_frames() == frames, 'automatic_pause_kept_rendering')
+
+    def policy_control(identifier, key_name, enabled):
+        cli('wallpaper', 'live', 'open')
+        eventually(lambda: client()['live_wallpaper']['open'], 'policy_panel_open')
+        if read_settings()['live_wallpapers']['policy'][key_name] != enabled:
+            focus(name, identifier)
+            key(name, 28)
+        eventually(lambda: saved()
+                   and read_settings()['live_wallpapers']['policy'][key_name] == enabled,
+                   'native_policy_control_saved')
+        key(name, 1)
+        eventually(lambda: not client()['live_wallpaper']['open'], 'policy_panel_closed')
+
+    try:
+        dispatch('workspace', test_workspace)
+        terminal_pid = int(session('python3', '-c', '''import subprocess, sys
+p=subprocess.Popen(['foot','--app-id='+sys.argv[1],'--title=Lucent wallpaper policy test',
+                    'sleep','300'],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL,start_new_session=True)
+print(p.pid)
+''', marker).strip())
+        eventually(lambda: terminal() is not None and terminal()['mapped'], 'policy_terminal_mapped')
+        address = terminal()['address']
+        dispatch('focuswindow', 'address:' + address)
+        playing()
+        preferences = read_settings()['live_wallpapers']
+        require(terminal()['fullscreen'] == 0, 'test_terminal_initially_windowed')
+        dispatch('fullscreen', '0')
+        eventually(lambda: terminal()['fullscreen'] == 2, 'test_terminal_fullscreen')
+        paused('fullscreen')
+        require(read_settings()['live_wallpapers'] == preferences,
+                'fullscreen_observation_changed_preferences')
+        checks['visible_fullscreen_stops_decoder_and_redraws'] = True
+
+        dispatch('workspace', original_workspace)
+        playing()
+        require(terminal()['fullscreen'] == 2, 'hidden_terminal_stays_fullscreen')
+        checks['fullscreen_on_hidden_workspace_does_not_pause'] = True
+        dispatch('workspace', test_workspace)
+        paused('fullscreen')
+
+        cli('wallpaper', 'live', 'pause')
+        eventually(lambda: saved(), 'manual_pause_saved')
+        dispatch('focuswindow', 'address:' + address)
+        dispatch('fullscreen', '0')
+        eventually(lambda: terminal()['fullscreen'] == 0, 'test_terminal_windowed')
+        paused('profile')
+        require(read_settings()['live_wallpapers']['default']['paused'], 'manual_pause_retained')
+        checks['leaving_fullscreen_preserves_manual_pause'] = True
+        cli('wallpaper', 'live', 'resume')
+        playing()
+
+        dispatch('fullscreen', '0')
+        paused('fullscreen')
+        policy_control('live-policy-fullscreen', 'pause_when_fullscreen', False)
+        playing()
+        policy_control('live-policy-battery', 'pause_on_battery', False)
+        preferences = read_settings()['live_wallpapers']
+        session('systemctl', '--user', 'restart', 'lucent.service')
+        eventually(lambda: client()['background_ready'] and saved()
+                   and read_settings()['live_wallpapers'] == preferences,
+                   'policy_preferences_survive_restart', timeout=45)
+        require(terminal()['fullscreen'] == 2, 'fullscreen_preserved_across_shell_restart')
+        playing()
+        checks['native_policy_controls_and_restart_preserve_opt_outs'] = True
+        policy_control('live-policy-fullscreen', 'pause_when_fullscreen', True)
+        paused('fullscreen')
+        dispatch('focuswindow', 'address:' + address)
+        dispatch('fullscreen', '0')
+        playing()
+        checks['leaving_fullscreen_resumes_unpaused_profile'] = True
+        return checks
+    finally:
+        try:
+            owned = terminal() if terminal_pid is not None else None
+            if owned is not None:
+                dispatch('closewindow', 'address:' + owned['address'])
+        finally:
+            dispatch('workspace', original_workspace)
+            if focused and any(c['address'] == focused
+                               for c in json.loads(session('hyprctl', '-j', 'clients'))):
+                dispatch('focuswindow', 'address:' + focused)
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--policy-only', action='store_true',
+                        help='Test fullscreen/manual pause and native policy controls with one MP4; skip resource benchmarks.')
+    args = parser.parse_args()
     report_dir = lab.ROOT / 'reports/local' / ('live-wallpapers-' + time.strftime('%Y%m%d-%H%M%S'))
     report_dir.mkdir(parents=True, exist_ok=False)
     report = {'checks': {}, 'restoration': {}, 'captures': 0, 'passed': False}
@@ -388,9 +520,10 @@ t=p.with_name('desktop.live-test.new'); t.write_text(json.dumps(d)); t.replace(p
         session('systemctl', '--user', 'start', 'lucent.service')
         eventually(lambda: client()['background_ready'] and client()['live_wallpaper']['players'] == 0,
                    'isolated_desktop_ready')
-        print('Measuring the static baseline for 120 seconds.', flush=True)
-        report['resources'] = {'static': measure_resources(scratch, 'static-resources')}
-        for extension in ('mp4', 'webm', 'gif'):
+        if not args.policy_only:
+            print('Measuring the static baseline for 120 seconds.', flush=True)
+            report['resources'] = {'static': measure_resources(scratch, 'static-resources')}
+        for extension in (('mp4',) if args.policy_only else ('mp4', 'webm', 'gif')):
             phase = 'native_' + extension + '_playback'
             fixture = scratch + '/fixture.' + extension
             if extension == 'mp4':
@@ -442,6 +575,10 @@ t=p.with_name('desktop.live-test.new'); t.write_text(json.dumps(d)); t.replace(p
             eventually(lambda: background_frames() > before + 2, 'rendered_background_frame_advance')
             changing_samples = verify_colors(scratch, report_dir, captures)
             report['checks'][extension + '_native_import_and_changing_pixels'] = True
+            if args.policy_only:
+                phase = 'native_playback_policy'
+                report['checks'].update(check_playback_policy(name, monitor))
+                continue
             if extension == 'mp4':
                 print('Measuring native 15 FPS MP4 playback for 120 seconds.', flush=True)
                 report['resources']['mp4_15_fps'] = measure_resources(scratch, 'live-resources')

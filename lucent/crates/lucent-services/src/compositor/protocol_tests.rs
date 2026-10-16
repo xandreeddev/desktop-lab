@@ -171,3 +171,70 @@ fn workspace_actions_use_owned_native_connection_and_invalid_kinds_send_nothing(
         ]
     );
 }
+
+#[test]
+fn fullscreen_events_refresh_observations_and_duplicate_events_do_not_toggle_state() {
+    let directory = Directory(std::env::temp_dir().join(format!(
+        "lucent-compositor-fullscreen-{}",
+        std::process::id()
+    )));
+    std::fs::create_dir(&directory.0).unwrap();
+    let commands = UnixListener::bind(directory.0.join(".socket.sock")).unwrap();
+    let events = UnixListener::bind(directory.0.join(".socket2.sock")).unwrap();
+    commands.set_nonblocking(true).unwrap();
+    events.set_nonblocking(true).unwrap();
+    let server = thread::spawn(move || {
+        let mut stream = accept(&events);
+        for phase in 0..4 {
+            for _ in 0..5 {
+                let mut peer = accept(&commands);
+                peer.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                let mut buffer = [0; 128];
+                let n = peer.read(&mut buffer).unwrap();
+                let response = match std::str::from_utf8(&buffer[..n]).unwrap() {
+                    "j/activeworkspace" => serde_json::json!({"id":9}),
+                    "j/activewindow" => serde_json::json!({}),
+                    "j/workspaces" => serde_json::json!([{"id":9,"name":"Work","windows":1}]),
+                    "j/clients" => {
+                        serde_json::json!([{"monitor":0,"mapped":true,"hidden":false,"visible":true,"workspace":{"id":9},"fullscreen":if phase==1||phase==2 {2}else{0}}])
+                    }
+                    "j/monitors" => {
+                        serde_json::json!([{"id":0,"name":"DP-1","focused":true,"activeWorkspace":{"id":9},"specialWorkspace":{"id":0}}])
+                    }
+                    _ => panic!("Unexpected owned query"),
+                };
+                peer.write_all(response.to_string().as_bytes()).unwrap();
+            }
+            match phase {
+                0 => {
+                    stream.write_all(b"full").unwrap();
+                    thread::sleep(Duration::from_millis(320));
+                    stream.write_all(b"screen>>1\n").unwrap();
+                }
+                1 => stream.write_all(b"fullscreen>>1\n").unwrap(),
+                2 => stream.write_all(b"fullscreen>>0\n").unwrap(),
+                _ => {}
+            }
+        }
+    });
+    let adapter = Hyprland {
+        base: directory.0.clone(),
+    };
+    let stop = Stop(AtomicBool::new(false));
+    let mut snapshots = vec![];
+    adapter.watch(
+        &mut |snapshot| {
+            if snapshot.is_err() || snapshots.len() == 3 {
+                stop.0.store(true, Ordering::Release);
+            }
+            snapshots.push(snapshot);
+        },
+        &stop,
+    );
+    server.join().unwrap();
+    let observed: Vec<_> = snapshots
+        .into_iter()
+        .map(|snapshot| snapshot.unwrap().monitors[0].has_fullscreen_window)
+        .collect();
+    assert_eq!(observed, [false, true, true, false]);
+}

@@ -100,7 +100,7 @@ pub struct Desktop {
     pending_live_default: Option<(u64, u64)>,
     live_poster_intent: Option<u64>,
     pub display_catalog_seen: bool,
-    pub live_suspended: bool,
+    pub wallpaper_context: WallpaperPlaybackContext,
     pub notifications: crate::notifications::Center,
     pub osd: crate::osd::Osd,
     pub bar_visible: bool,
@@ -152,7 +152,7 @@ impl Desktop {
             pending_live_default: None,
             live_poster_intent: None,
             display_catalog_seen: false,
-            live_suspended: false,
+            wallpaper_context: WallpaperPlaybackContext::default(),
             osd: Default::default(),
             bar_visible: true,
             theme_error: String::new(),
@@ -243,6 +243,7 @@ impl Desktop {
                     | Live::ImportPath(..)
                     | Live::Pause(..)
                     | Live::PauseAll(_)
+                    | Live::Policy(..)
                     | Live::Off(_)
                     | Live::Rate(..)
                     | Live::Inherit(_)
@@ -328,6 +329,7 @@ impl Desktop {
                         Intent::Apply(target, value) => Change::Apply(target, value),
                         Intent::Pause(target, value) => Change::Pause(target, value),
                         Intent::PauseAll(value) => Change::PauseAll(value),
+                        Intent::Policy(condition, value) => Change::Policy(condition, value),
                         Intent::Off(target) => Change::Off(target),
                         Intent::Rate(target, value) => Change::Rate(target, value),
                         Intent::Inherit(id) => Change::Inherit(id),
@@ -382,7 +384,7 @@ impl Desktop {
             &self.settings.live_wallpapers,
             &monitors,
             self.display_catalog_seen,
-            self.live_suspended,
+            &self.wallpaper_context,
         );
     }
     fn reconcile_backgrounds(&mut self, effects: &mut Effects<Message>) {
@@ -1284,6 +1286,16 @@ impl Component for Desktop {
             }
             Message::Compositor(result) => match result {
                 Ok(value) => {
+                    let fullscreen = value
+                        .monitors
+                        .iter()
+                        .filter(|monitor| monitor.has_fullscreen_window)
+                        .map(|monitor| monitor.id.clone())
+                        .collect();
+                    if self.wallpaper_context.fullscreen_monitors != fullscreen {
+                        self.wallpaper_context.fullscreen_monitors = fullscreen;
+                        effects.redraw("live-wallpaper");
+                    }
                     let recovered = !self.compositor_available;
                     let focus_changed =
                         recovered || self.compositor.focused_monitor() != value.focused_monitor();
@@ -1308,6 +1320,10 @@ impl Component for Desktop {
                     }
                 }
                 Err(e) => {
+                    if !self.wallpaper_context.fullscreen_monitors.is_empty() {
+                        self.wallpaper_context.fullscreen_monitors.clear();
+                        effects.redraw("live-wallpaper");
+                    }
                     self.compositor_available = false;
                     self.compositor_error = e.to_string();
                     self.monitors.pending_focus = None;
@@ -1453,8 +1469,31 @@ impl Component for Desktop {
                 effects.delegate(|child| self.tray.update(message, child), Message::Tray);
             }
             Message::Power(message) => {
-                if let crate::power::Message::Observed(Ok(snapshot)) = &message {
-                    self.live_suspended = snapshot.preparing_for_sleep;
+                if let crate::power::Message::Observed(result) = &message {
+                    let before = (
+                        self.wallpaper_context.preparing_for_sleep,
+                        self.wallpaper_context.on_battery,
+                    );
+                    self.wallpaper_context.on_battery = match result {
+                        Ok(snapshot) => {
+                            self.wallpaper_context.preparing_for_sleep =
+                                snapshot.preparing_for_sleep;
+                            match &snapshot.battery {
+                                PowerCapability::Ready(Some(battery)) => Some(battery.on_battery),
+                                PowerCapability::Ready(None) => Some(false),
+                                PowerCapability::Unavailable(_) => None,
+                            }
+                        }
+                        Err(_) => None,
+                    };
+                    if before
+                        != (
+                            self.wallpaper_context.preparing_for_sleep,
+                            self.wallpaper_context.on_battery,
+                        )
+                    {
+                        effects.redraw("live-wallpaper");
+                    }
                 }
                 let opening = matches!(message, crate::power::Message::Open)
                     || matches!(message, crate::power::Message::Toggle) && !self.power.open();

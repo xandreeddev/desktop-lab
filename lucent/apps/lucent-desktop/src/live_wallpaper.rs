@@ -32,6 +32,7 @@ pub enum Message {
     Wake(String, u64),
     Pause(LiveWallpaperTarget, bool),
     PauseAll(bool),
+    Policy(WallpaperPauseCondition, bool),
     Off(LiveWallpaperTarget),
     Rate(LiveWallpaperTarget, WallpaperFps),
     Inherit(MonitorId),
@@ -46,6 +47,7 @@ pub enum Intent {
     Apply(LiveWallpaperTarget, LiveWallpaperSettings),
     Pause(LiveWallpaperTarget, bool),
     PauseAll(bool),
+    Policy(WallpaperPauseCondition, bool),
     Off(LiveWallpaperTarget),
     Rate(LiveWallpaperTarget, WallpaperFps),
     Inherit(MonitorId),
@@ -91,6 +93,20 @@ struct Player {
     running: bool,
     error: String,
 }
+struct Route {
+    key: String,
+    pause: Option<WallpaperPauseReason>,
+    /// A static GPU identity is essential when another output still updates
+    /// the shared stream texture. Pixels remain shared immutable storage.
+    held: Option<Arc<ImageData>>,
+}
+fn frozen_frame(frame: &Arc<ImageData>) -> Arc<ImageData> {
+    if frame.stream_revision().is_some() {
+        Arc::new(frame.snapshot())
+    } else {
+        frame.clone()
+    }
+}
 struct Import {
     revision: u64,
     target: LiveWallpaperTarget,
@@ -107,7 +123,7 @@ pub struct LiveWallpaper {
     importing: Option<Import>,
     revision: u64,
     players: BTreeMap<String, Player>,
-    routes: BTreeMap<LiveWallpaperTarget, String>,
+    routes: BTreeMap<LiveWallpaperTarget, Route>,
     default_key: Option<String>,
     adapter: Arc<dyn WallpaperPlaybackPort>,
     assets: Arc<dyn AssetPort>,
@@ -138,29 +154,26 @@ impl LiveWallpaper {
     }
     #[cfg(test)]
     pub fn frame(&self, monitor: Option<&MonitorId>) -> Option<&Arc<ImageData>> {
-        self.routes
-            .get(
-                &monitor
-                    .cloned()
-                    .map_or(LiveWallpaperTarget::Default, LiveWallpaperTarget::Monitor),
-            )
-            .and_then(|key| self.players.get(key))
-            .and_then(|p| p.frame.as_ref())
+        self.frame_source(monitor).map(|(_, frame)| frame)
     }
     /// Selected asset identity paired with the actual prepared frame.
     pub fn frame_source(&self, monitor: Option<&MonitorId>) -> Option<(&str, &Arc<ImageData>)> {
         let target = monitor
             .cloned()
             .map_or(LiveWallpaperTarget::Default, LiveWallpaperTarget::Monitor);
-        let player = self.players.get(self.routes.get(&target)?)?;
-        Some((player.asset.path.as_str(), player.frame.as_ref()?))
+        let route = self.routes.get(&target)?;
+        let player = self.players.get(&route.key)?;
+        Some((
+            player.asset.path.as_str(),
+            route.held.as_ref().or(player.frame.as_ref())?,
+        ))
     }
     pub fn reconcile(
         &mut self,
         settings: &LiveWallpapers,
         monitors: &[MonitorId],
         outputs_known: bool,
-        suspended: bool,
+        context: &WallpaperPlaybackContext,
     ) {
         let targets: Vec<_> = if monitors.is_empty() && !outputs_known {
             vec![LiveWallpaperTarget::Default]
@@ -171,7 +184,7 @@ impl LiveWallpaper {
                 .map(LiveWallpaperTarget::Monitor)
                 .collect()
         };
-        let mut wanted = BTreeMap::new();
+        let mut wanted: BTreeMap<String, (LiveWallpaperSettings, bool)> = BTreeMap::new();
         let mut routes = BTreeMap::new();
         let mut seeds = BTreeMap::new();
         for target in targets {
@@ -183,20 +196,33 @@ impl LiveWallpaper {
                     setting.fps.value(),
                     setting.paused
                 );
-                if let Some(previous) = self
-                    .routes
-                    .get(&target)
-                    .and_then(|key| self.players.get(key))
-                    && previous.asset.path == setting.asset.path
-                    && let Some(frame) = &previous.frame
-                {
+                let pause = lucent_usecases::live_wallpaper::wallpaper_pause_reason(
+                    settings, setting, &target, context,
+                );
+                let previous = self.routes.get(&target).and_then(|route| {
+                    let player = self.players.get(&route.key)?;
+                    (player.asset.path == setting.asset.path)
+                        .then(|| route.held.as_ref().or(player.frame.as_ref()))
+                        .flatten()
+                });
+                if let Some(frame) = previous {
                     seeds.entry(key.clone()).or_insert_with(|| frame.clone());
                 }
-                routes.insert(target, key.clone());
-                wanted.entry(key).or_insert((
-                    setting.clone(),
-                    !settings.paused && !setting.paused && !suspended,
-                ));
+                let held = pause.and_then(|_| previous.map(frozen_frame));
+                routes.insert(
+                    target,
+                    Route {
+                        key: key.clone(),
+                        pause,
+                        held,
+                    },
+                );
+                // One visible output is enough to keep a shared decoder alive.
+                // Covered outputs retain their own frozen presentation frame.
+                wanted
+                    .entry(key)
+                    .and_modify(|(_, running)| *running |= pause.is_none())
+                    .or_insert((setting.clone(), pause.is_none()));
             }
         }
         // A changed FPS/pause profile retires its producer identity, but keeps
@@ -457,12 +483,21 @@ impl LiveWallpaper {
                         .take();
                     match item {
                         Some(Delivery::Frame(image)) => {
-                            player.frame = Some(image);
+                            player.frame = Some(image.clone());
                             return Some(Intent::FrameChanged(
                                 self.routes
-                                    .iter()
-                                    .filter(|(_, route)| *route == &key)
-                                    .map(|(target, _)| target.clone())
+                                    .iter_mut()
+                                    .filter(|(_, route)| route.key == key)
+                                    .filter_map(|(target, route)| {
+                                        if route.pause.is_none() {
+                                            Some(target.clone())
+                                        } else if route.held.is_none() {
+                                            route.held = Some(frozen_frame(&image));
+                                            Some(target.clone())
+                                        } else {
+                                            None
+                                        }
+                                    })
                                     .collect(),
                             ));
                         }
@@ -478,6 +513,10 @@ impl LiveWallpaper {
             Message::PauseAll(value) => {
                 self.error.clear();
                 return Some(Intent::PauseAll(value));
+            }
+            Message::Policy(condition, value) => {
+                self.error.clear();
+                return Some(Intent::Policy(condition, value));
             }
             Message::Off(target) => {
                 self.cancel_import(&target);
@@ -538,7 +577,9 @@ impl LiveWallpaper {
     fn route_key(&self, target: &LiveWallpaperTarget) -> Option<String> {
         match target {
             LiveWallpaperTarget::Default => self.default_key.clone(),
-            LiveWallpaperTarget::Monitor(_) => self.routes.get(target).cloned(),
+            LiveWallpaperTarget::Monitor(_) => {
+                self.routes.get(target).map(|route| route.key.clone())
+            }
         }
     }
     fn selected_player(
@@ -593,6 +634,29 @@ impl LiveWallpaper {
             if selected.paused {
                 return "Paused";
             }
+            let pause = self
+                .routes
+                .get(target)
+                .and_then(|route| route.pause)
+                .or_else(|| {
+                    if matches!(target, LiveWallpaperTarget::Default) && !player.running {
+                        self.routes
+                            .values()
+                            .find(|route| self.default_key.as_ref() == Some(&route.key))
+                            .and_then(|route| route.pause)
+                    } else {
+                        None
+                    }
+                });
+            if let Some(reason) = pause {
+                return match reason {
+                    WallpaperPauseReason::All => "All live wallpapers are paused",
+                    WallpaperPauseReason::Profile => "Paused",
+                    WallpaperPauseReason::Sleep => "Paused for system sleep",
+                    WallpaperPauseReason::Battery => "Paused on battery power",
+                    WallpaperPauseReason::Fullscreen => "Paused behind a fullscreen app",
+                };
+            }
             return if player.running {
                 "Playing"
             } else {
@@ -623,9 +687,10 @@ impl LiveWallpaper {
         let retained = crate::previews::usage(
             self.players
                 .values()
-                .filter_map(|player| player.frame.as_ref()),
+                .filter_map(|player| player.frame.as_ref())
+                .chain(self.routes.values().filter_map(|route| route.held.as_ref())),
         );
-        serde_json::json!({"open":self.open,"importing":self.importing.is_some(),"players":self.players.len(),"running":self.players.values().filter(|p|p.running&&p.error.is_empty()).count(),"retained_frame_bytes":retained.bytes,"error":self.status()})
+        serde_json::json!({"open":self.open,"importing":self.importing.is_some(),"players":self.players.len(),"running":self.players.values().filter(|p|p.running&&p.error.is_empty()).count(),"retained_frame_bytes":retained.bytes,"error":self.status(),"outputs":self.routes.iter().map(|(target,route)| serde_json::json!({"monitor":target.monitor().map(MonitorId::as_str),"pause_reason":route.pause})).collect::<Vec<_>>()})
     }
 }
 #[cfg(test)]
