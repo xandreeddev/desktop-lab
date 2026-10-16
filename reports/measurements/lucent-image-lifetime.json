@@ -1,0 +1,172 @@
+{
+  "status": "native_behavior_verified_video_resource_target_not_met",
+  "tested_implementation_commit": "8e06cfc1ab9129b569a7d7ea2ddd5bb1ec2699b4",
+  "binaries": {
+    "lucent-desktop": {
+      "sha256": "ed66d6b38d75918679c1a683cdab40b623a89913133461bcf782eb681cec766f",
+      "bytes": 20442152
+    }
+  },
+  "implementation": [
+    "ImageLifetime weakly observes immutable pixel storage without retaining pixels; value clones and frozen snapshots share its lifetime.",
+    "Renderer cache maintenance retires expired unpinned image textures even below its reuse budget. Canvases keep active GPU resources pinned; stream uploads refresh the observed frame lifetime.",
+    "Domain ports, adapters, decoding, wallpaper selection, design tokens, image density and motion durations are unchanged. Cleanup adds no idle polling."
+  ],
+  "local_validation": {
+    "regular_rust_tests_passed": 519,
+    "strict_format_clippy_and_all_targets": true,
+    "python_tests_passed": 93,
+    "both_site_prefixes_and_links": true,
+    "focused_vulkan_checks": [
+      "renderer_surface_resources",
+      "frozen_stream_snapshot_keeps_pixels",
+      "streamed_images_reuse",
+      "background_coverage_optimization"
+    ],
+    "visual_baselines_changed": false
+  },
+  "native_pixels": {
+    "checks": {
+      "red_to_blue_intermediate_blend": true,
+      "red_to_blue_pending_then_retired": true,
+      "blue_to_red_intermediate_blend": true,
+      "blue_to_red_pending_then_retired": true
+    },
+    "samples_per_direction": [
+      10,
+      10
+    ],
+    "restoration": {
+      "selected_snapshot_checkpoint": true,
+      "public_wallpaper_transaction": true,
+      "exact_files_replaced_while_stopped": true,
+      "exact_settings_wallpaper_theme_and_login_exports": true,
+      "original_idle_policy": true,
+      "test_owned_assets_removed": true
+    },
+    "scope": "Native compositor captures of temporary red/blue fixtures verify intermediate blends and outgoing-image retirement in both directions. Instrumented captures are not a smoothness benchmark."
+  },
+  "resources": {
+    "reference_report": "reports/measurements/lucent-current-video-resources.json",
+    "reference_implementation_commit": "00f3e8721d054503d7e7d0878c8e6cc58b59dba8",
+    "before": {
+      "static": {
+        "duration_seconds": 120.0,
+        "process": "lucent-desktop",
+        "cpu_percent_one_core": 1.225,
+        "rss_mib_mean": 242.34,
+        "rss_mib_max": 247.0,
+        "scope": "main process CPU and resident mappings; child processes excluded; mapped driver/software-GPU memory may contribute to RSS",
+        "gpu_memory": "not measured",
+        "virtualization": "kvm"
+      },
+      "video": {
+        "duration_seconds": 120.0,
+        "process": "lucent-desktop",
+        "cpu_percent_one_core": 80.008,
+        "rss_mib_mean": 348.55,
+        "rss_mib_max": 348.88,
+        "scope": "main process CPU and resident mappings; child processes excluded; mapped driver/software-GPU memory may contribute to RSS",
+        "gpu_memory": "not measured",
+        "virtualization": "kvm"
+      }
+    },
+    "after": {
+      "static": {
+        "duration_seconds": 120.001,
+        "process": "lucent-desktop",
+        "cpu_percent_one_core": 1.05,
+        "rss_mib_mean": 242.33,
+        "rss_mib_max": 247.02,
+        "scope": "main process CPU and resident mappings; child processes excluded; mapped driver/software-GPU memory may contribute to RSS",
+        "gpu_memory": "not measured",
+        "virtualization": "kvm"
+      },
+      "video": {
+        "duration_seconds": 120.002,
+        "process": "lucent-desktop",
+        "cpu_percent_one_core": 86.074,
+        "rss_mib_mean": 333.1,
+        "rss_mib_max": 333.39,
+        "scope": "main process CPU and resident mappings; child processes excluded; mapped driver/software-GPU memory may contribute to RSS",
+        "gpu_memory": "not measured",
+        "virtualization": "kvm"
+      }
+    },
+    "workload": {
+      "display_pixels": [
+        1920,
+        1080
+      ],
+      "media_pixels": [
+        1280,
+        800
+      ],
+      "source_duration_seconds": 12,
+      "media_fps": 15,
+      "source_bytes": 515319,
+      "renderer": "Vulkan / llvmpipe (LLVM 22.1.8), Mesa 26.2.2",
+      "visible_widget_count": 5,
+      "sample_seconds": 120,
+      "comparison": "One same-workload run per implementation on the same software-Vulkan VM; not repeated statistical trials or a physical-GPU benchmark.",
+      "vcpus": 4,
+      "vm_memory_mib": 3072,
+      "scale": 1,
+      "compositor": "Hyprland 0.56.2",
+      "hardware_decode": false,
+      "frame_profiling": false
+    },
+    "after_static_gpu_cache": {
+      "active_payload_bytes": 13951727,
+      "entries": 93,
+      "evictions": 0,
+      "hits": 2296,
+      "misses": 93,
+      "payload_bytes": 14044030,
+      "reuse_budget_bytes": 67108864
+    },
+    "after_video_gpu_cache": {
+      "active_payload_bytes": 5467816,
+      "entries": 136,
+      "evictions": 2,
+      "hits": 7152,
+      "misses": 138,
+      "payload_bytes": 5702394,
+      "reuse_budget_bytes": 67108864
+    },
+    "background_submissions_during_video_sample": 1809,
+    "retained_video_frame_bytes": 4096000,
+    "restoration": {
+      "selected_snapshot_checkpoint": true,
+      "public_wallpaper_transaction": true,
+      "exact_files_replaced_while_stopped": true,
+      "exact_settings_wallpaper_theme_and_login_exports": true,
+      "original_idle_policy": true,
+      "test_owned_assets_removed": true
+    }
+  },
+  "assessment": {
+    "video_peak_change_mib": -15.49,
+    "video_peak_within_300_mib": false,
+    "static_peak_within_300_mib": true,
+    "static_idle_cpu_within_one_percent": false,
+    "cpu_scope": "The video sample increased from 80.008% to 86.074% of one logical core. This change establishes lower retained texture payload and a lower observed RSS sample, not a CPU/pacing improvement."
+  },
+  "measurement_script": {
+    "path": "scripts/benchmark.py",
+    "sha256": "e58e459b23c25e67a6a2ccfbe47be1bff11827701c914a9c313eb60d6e3ee99d",
+    "procedure": [
+      "Use the recorded build on one 1920x1080 output at scale 1, with profiling disabled and the five existing widgets visible.",
+      "Sample the settled static desktop after a service restart.",
+      "Import a copy of the 1280x800 H.264 landscape loop, set 15 FPS with native controls, close the panel and warm playback for five seconds before the second sample.",
+      "Verify the decoder remains active and background submissions advance through the sample; restore exact settings, wallpaper, exports and idle policy."
+    ]
+  },
+  "remaining": [
+    "Video still exceeds 300 MiB RSS; static idle CPU is slightly above 1% in this sample.",
+    "Repeated hardware measurements, decoder/allocator/driver attribution, GPU allocations and physical-GPU pacing/power remain open.",
+    "Simultaneous native multi-output/suspend/reconnect and broader secure-session recovery acceptance remain open.",
+    "Final evidence-head CI and authorized merge."
+  ],
+  "privacy": "No personal wallpaper pixels, source paths or credentials are included."
+}

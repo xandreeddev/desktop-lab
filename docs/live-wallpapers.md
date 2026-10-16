@@ -331,7 +331,7 @@ A later 120-second full-resolution workload (1280×800 pixel-landscape video at
 RSS / 373.38 MiB peak and 113.616% of one logical CPU core. That source predates
 the conversion/coverage changes. It exceeds the 300 MiB target and supersedes
 any inference that the small synthetic sample proved full-resolution efficiency.
-Current source `00f3e8721d054503d7e7d0878c8e6cc58b59dba8` has two new
+Reference source `00f3e8721d054503d7e7d0878c8e6cc58b59dba8` has two
 120-second samples with profiling disabled on the same output/media dimensions:
 
 | Workload | Mean RSS | Peak RSS | CPU, one logical core |
@@ -344,7 +344,20 @@ The static sample meets the 300 MiB RSS target; the full-resolution video still
 exceeds it, and static idle CPU is above the 1% target. See the
 [current resource report](../reports/measurements/lucent-current-video-resources.json)
 for the binary, workload, measurement procedure and verified exact restoration.
-These are current measurements, not a controlled comparison with older binaries.
+Those reference measurements did not themselves establish an improvement over older binaries.
 Software rendering contributes to process CPU/RSS; GPU allocations and
-physical-GPU pacing/power remain unmeasured. Hardware decoding and a matching
-before/after optimization experiment remain open.
+physical-GPU pacing/power remain unmeasured. Hardware decoding remains open.
+
+Source `8e06cfc1ab9129b569a7d7ea2ddd5bb1ec2699b4` adds weak image-storage
+lifetime observation in the framework cache. Repeating the same two 120-second
+workloads gives 242.33 MiB mean / 247.02 MiB peak static, and 333.10 MiB mean /
+333.39 MiB peak video. The observed video peak is 15.49 MiB lower but still
+exceeds 300 MiB. Video CPU is higher in this sample: 86.074% of one core,
+compared with 80.008%; static is 1.050%. This is one run per implementation on
+software Vulkan, not repeated trials or a CPU/pacing improvement claim.
+After playback, the GPU cache reports 5,702,394 payload bytes, of which
+5,467,816 are pinned by active draws; these exclude native buffer/driver memory.
+Actual compositor captures also verify intermediate red/blue fade pixels and
+outgoing-image retirement in both change directions. Both the resource and
+pixel checks restore exact settings, wallpaper, exports and idle policy. See
+the [image lifetime report](../reports/measurements/lucent-image-lifetime.json).
