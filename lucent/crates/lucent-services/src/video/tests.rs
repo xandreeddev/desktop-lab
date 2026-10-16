@@ -182,3 +182,78 @@ fn video_native_loop_cancellation_and_metadata_rejection_preserve_storage() {
         "failed preparation removes only its candidate"
     );
 }
+
+#[test]
+fn video_native_reused_conversion_preserves_retained_frame_bytes_and_odd_row_stride() {
+    let root = Directory::new();
+    let file = root.0.join("colors.mp4");
+    let mut encoder = Command::new("ffmpeg")
+        .args([
+            "-v",
+            "error",
+            "-nostdin",
+            "-threads",
+            "1",
+            "-f",
+            "rawvideo",
+            "-pixel_format",
+            "rgba",
+            "-video_size",
+            "17x13",
+            "-framerate",
+            "10",
+            "-i",
+            "pipe:0",
+            "-c:v",
+            "libx264rgb",
+            "-crf",
+            "0",
+            "-threads",
+            "1",
+        ])
+        .arg(&file)
+        .stdin(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let colors = [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255]];
+    {
+        let mut input = encoder.stdin.take().unwrap();
+        for color in colors {
+            input.write_all(&color.repeat(17 * 13)).unwrap();
+        }
+    }
+    assert!(encoder.wait_with_output().unwrap().status.success());
+    let adapter = NativeVideoWallpapers {
+        state: root.0.join("store"),
+    };
+    let asset = adapter
+        .prepare(&Wallpaper {
+            path: file.to_string_lossy().into(),
+            name: "Colors".into(),
+        })
+        .unwrap();
+    let mut retained = vec![];
+    adapter.play(
+        &asset,
+        PlaybackOptions {
+            looping: false,
+            ..Default::default()
+        },
+        &mut |frame| {
+            retained.push(frame.unwrap());
+            true
+        },
+        Arc::new(Never),
+    );
+    assert_eq!(retained.len(), colors.len());
+    for (frame, expected) in retained.into_iter().zip(colors) {
+        let (width, height, pixels) = frame.into_rgba();
+        assert_eq!((width, height), (17, 13));
+        assert_eq!(
+            pixels,
+            expected.repeat(17 * 13),
+            "later conversion must not mutate a retained frame or copy row padding"
+        );
+    }
+}

@@ -96,18 +96,23 @@ impl BackgroundPresentation {
             return background;
         };
         let image = |image: &Arc<ImageData>| Element::image(image.clone()).cover().fill();
+        let mut layers = Vec::with_capacity(3);
+        // The cover image spans this surface. Omit the solid underlay only
+        // when the bottom image proves full coverage; transparent media and
+        // a transparent outgoing frame still need the theme fallback.
+        let base = self.outgoing.as_ref().unwrap_or(&current.image);
+        if !base.is_opaque() {
+            layers.push(background);
+        }
         if let Some(outgoing) = &self.outgoing {
             // Source-over opacity mixes opaque wallpaper pixels while retaining
             // the old image beneath the arriving frame. No shader/codec policy.
-            Element::stack(vec![
-                background,
-                image(outgoing),
-                image(&current.image).opacity(self.reveal.value(now).clamp(0., 1.)),
-            ])
-            .fill()
+            layers.push(image(outgoing));
+            layers.push(image(&current.image).opacity(self.reveal.value(now).clamp(0., 1.)));
         } else {
-            Element::stack(vec![background, image(&current.image)]).fill()
+            layers.push(image(&current.image));
         }
+        Element::stack(layers).fill()
     }
 
     pub fn active(&self, now: f64) -> bool {
@@ -266,10 +271,10 @@ mod tests {
         assert!(middle > 0. && middle < 1.);
         let view: Element<()> = presentation.view(1. + motion::PANEL / 2., Color::hex(0));
         assert!(
-            matches!(&view.children[1].kind, Kind::Image(image) if image.cache_id()==old.cache_id())
+            matches!(&view.children[0].kind, Kind::Image(image) if image.cache_id()==old.cache_id())
         );
         assert!(
-            matches!(&view.children[2].kind, Kind::Image(image) if image.cache_id()==new.cache_id())
+            matches!(&view.children[1].kind, Kind::Image(image) if image.cache_id()==new.cache_id())
         );
         assert!(!presentation.presented(1. + motion::PANEL / 2.));
         assert!(!presentation.active(1. + motion::PANEL));
@@ -295,6 +300,98 @@ mod tests {
         assert!(presentation.reconcile(live, Some(frame(30)), 2.));
         assert!(!presentation.active(2.));
         assert_eq!(presentation.inspect()["retained_images"], 1);
+    }
+
+    #[test]
+    fn fallback_follows_coverage_of_the_current_bottom_image() {
+        let mut presentation = BackgroundPresentation::default();
+        let stream = ImageStream::new();
+        let frame = |alpha| Arc::new(stream.frame_rgba(1, 1, vec![40, 80, 120, alpha]).unwrap());
+        let layers = |p: &BackgroundPresentation| {
+            let tree: Element<()> = p.view(0., Color::hex(0));
+            tree.children.len()
+        };
+        presentation.reconcile(source("live"), Some(frame(255)), 0.);
+        assert_eq!(layers(&presentation), 1);
+        presentation.reconcile(source("live"), Some(frame(100)), 1.);
+        assert_eq!(
+            layers(&presentation),
+            2,
+            "a transparent revision restores fallback"
+        );
+        presentation.reconcile(source("opaque"), Some(image("opaque", [255; 4])), 2.);
+        assert_eq!(
+            layers(&presentation),
+            3,
+            "outgoing transparency needs fallback through the fade"
+        );
+        presentation.presented(2. + motion::PANEL);
+        assert_eq!(layers(&presentation), 1);
+    }
+
+    #[test]
+    #[ignore = "requires Vulkan; run explicitly with --ignored"]
+    fn background_coverage_optimization_preserves_pixels_and_fades() {
+        use lucent_ui::{Interaction, Layout};
+        let fonts = Arc::new(vec![]);
+        let layout = Layout::new(fonts.clone());
+        let gpu = lucent_render::Gpu::headless(fonts).unwrap();
+        let mut canvas = lucent_render::Canvas::new(gpu);
+        let fallback = Color::hex(0x18344f);
+        for old_alpha in [0, 127, 255] {
+            for new_alpha in [0, 127, 255] {
+                let old = image("old", [200, 60, 90, old_alpha]);
+                let new = image("new", [20, 150, 100, new_alpha]);
+                let mut presentation = BackgroundPresentation::default();
+                presentation.reconcile(source("old"), Some(old.clone()), 0.);
+                presentation.reconcile(source("new"), Some(new.clone()), 1.);
+                for density in [
+                    lucent_api::Density::ONE,
+                    lucent_api::Density::new(3, 2).unwrap(),
+                    lucent_api::Density::integer(2).unwrap(),
+                ] {
+                    for now in [1., 1. + motion::PANEL / 2., 1. + motion::PANEL] {
+                        let optimized: Element<()> = presentation.view(now, fallback);
+                        let reference: Element<()> = Element::stack(vec![
+                            Element::empty().fill().background(fallback),
+                            Element::image(old.clone()).cover().fill(),
+                            Element::image(new.clone())
+                                .cover()
+                                .fill()
+                                .opacity(presentation.reveal.value(now).clamp(0., 1.)),
+                        ])
+                        .fill();
+                        let expected =
+                            layout.build(&reference, 31., 17., &Interaction::default(), now);
+                        let actual =
+                            layout.build(&optimized, 31., 17., &Interaction::default(), now);
+                        assert_eq!(
+                            canvas
+                                .snapshot_scaled(31, 17, density, &actual.paint)
+                                .unwrap(),
+                            canvas
+                                .snapshot_scaled(31, 17, density, &expected.paint)
+                                .unwrap(),
+                            "alpha {old_alpha}/{new_alpha}, density {density:?}, time {now}"
+                        );
+                    }
+                }
+                presentation.presented(1. + motion::PANEL);
+                let optimized: Element<()> = presentation.view(2., fallback);
+                let reference: Element<()> = Element::stack(vec![
+                    Element::empty().fill().background(fallback),
+                    Element::image(new).cover().fill(),
+                ])
+                .fill();
+                let actual = layout.build(&optimized, 31., 17., &Interaction::default(), 2.);
+                let expected = layout.build(&reference, 31., 17., &Interaction::default(), 2.);
+                assert_eq!(
+                    canvas.snapshot(31, 17, 1, &actual.paint).unwrap(),
+                    canvas.snapshot(31, 17, 1, &expected.paint).unwrap()
+                );
+                assert_eq!(actual.paint.len(), if new_alpha == 255 { 1 } else { 2 });
+            }
+        }
     }
 
     #[test]

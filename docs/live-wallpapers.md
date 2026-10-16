@@ -154,6 +154,17 @@ allocation when dimensions match; a dimension change replaces that resource.
 Per-frame mip generation is omitted. Already submitted work keeps its native
 resource lifetime. The renderer has no wallpaper or codec policy.
 
+The decoder reuses one private RGBA conversion buffer for each playback pass.
+Each delivered frame still receives owned bytes: reusing conversion scratch
+cannot mutate an image retained by a surface, a transition or another output.
+The image preparation worker also records whether every pixel is opaque during
+its existing alpha pass. `ImageData::is_opaque()` reads that prepared fact without
+scanning pixels on the UI thread. The background client omits its solid fallback
+under an opaque cover image; transparent media and fades with transparent outgoing
+content retain that fallback. Dimensions, frame rate, filtering and motion tokens
+are unchanged. This removes a repeated allocation and an unnecessary full-screen
+draw; it does not establish a process-memory or frame-time improvement by itself.
+
 Only new content marks a background dirty. Panel `FrameSubmitted` bookkeeping
 does not request another paint when settled. Frame callbacks pace submissions;
 they do not cause idle surfaces to repaint continuously. Codec timestamps and the
@@ -185,3 +196,11 @@ to those values. GPU allocations were not measured separately. Both tested
 process peaks fit the 300 MiB allowance. Full-resolution media, actual secure-client
 presentation, multi-output/reconnect/suspend and physical-GPU pacing/power remain
 separate acceptance; these synthetic samples do not establish them.
+
+A later 120-second full-resolution workload (1280×800 pixel-landscape video at
+15 FPS, displayed at 1920×1080 using software Vulkan) measured 373.35 MiB mean
+RSS / 373.38 MiB peak and 113.616% of one logical CPU core. That source predates
+the conversion/coverage changes. It exceeds the 300 MiB target and supersedes
+any inference that the small synthetic sample proved full-resolution efficiency.
+The current optimization still needs a matching native before/after measurement;
+hardware decoding, physical-GPU pacing and power-aware playback remain open.
