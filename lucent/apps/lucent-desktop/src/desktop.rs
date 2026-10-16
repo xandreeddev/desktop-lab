@@ -2420,6 +2420,22 @@ impl api::Application for Desktop {
                 crate::live_wallpaper::Message::Off(LiveWallpaperTarget::Default),
             )));
         }
+        if let Some(value) = command.strip_prefix("wallpaper live rate ") {
+            let rate = if value == "source" {
+                WallpaperFrameRate::Source
+            } else {
+                WallpaperFps::new(
+                    value
+                        .parse::<u8>()
+                        .map_err(|_| "Use wallpaper live rate source|1..60")?,
+                )
+                .map_err(|error| error.to_string())?
+                .into()
+            };
+            return Ok(Some(Message::LiveWallpaper(
+                crate::live_wallpaper::Message::Rate(LiveWallpaperTarget::Default, rate),
+            )));
+        }
         if let Some(path) = command.strip_prefix("wallpaper live play ") {
             if !self.settings_writable {
                 return Err("Settings are not ready for saving".into());

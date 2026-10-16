@@ -79,6 +79,51 @@ impl SettingsPort for JsonSettings {
 mod settings_tests {
     use super::*;
     #[test]
+    fn live_frame_rate_preserves_numeric_preferences_and_explicit_source_mode() {
+        for fps in [1, 15, 30, 60] {
+            let rate = WallpaperFrameRate::Capped(WallpaperFps::new(fps).unwrap());
+            assert_eq!(serde_json::to_string(&rate).unwrap(), fps.to_string());
+            assert_eq!(
+                serde_json::from_str::<WallpaperFrameRate>(&fps.to_string()).unwrap(),
+                rate
+            );
+        }
+        assert_eq!(
+            serde_json::to_string(&WallpaperFrameRate::Source).unwrap(),
+            "\"source\""
+        );
+        assert_eq!(
+            serde_json::from_str::<WallpaperFrameRate>("\"source\"").unwrap(),
+            WallpaperFrameRate::Source
+        );
+        for value in [
+            "0", "61", "256", "-1", "30.5", "null", "{}", "\"auto\"", "\"60\"",
+        ] {
+            assert!(
+                serde_json::from_str::<WallpaperFrameRate>(value).is_err(),
+                "accepted invalid rate {value}"
+            );
+        }
+    }
+
+    #[test]
+    fn missing_profile_frame_rate_follows_source_without_rewriting_existing_cap() {
+        let mut value = serde_json::json!({
+            "asset": {
+                "source": { "path": "/media/scene.mp4", "name": "Scene" },
+                "path": "/owned/source.mp4",
+                "poster": { "path": "/owned/poster.png", "name": "Scene" }
+            }
+        });
+        let profile: LiveWallpaperSettings = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(profile.fps, WallpaperFrameRate::Source);
+        value["fps"] = serde_json::json!(30);
+        let profile: LiveWallpaperSettings = serde_json::from_value(value).unwrap();
+        assert_eq!(profile.fps.cap().unwrap().value(), 30);
+        assert_eq!(serde_json::to_value(profile).unwrap()["fps"], 30);
+    }
+
+    #[test]
     fn monitor_layouts_round_trip_legacy_keys_and_reject_invalid_saved_identities() {
         let legacy=br#"{"version":1,"positions":{"clock":{"x":32,"y":48}},"visible_widgets":["clock"],"notes":"Shared"}"#;
         let mut settings: DesktopSettings = serde_json::from_slice(legacy).unwrap();

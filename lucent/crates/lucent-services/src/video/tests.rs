@@ -1,21 +1,156 @@
 use super::*;
 #[test]
-fn video_clock_caps_rate_without_dropping_regular_rounded_timestamps() {
-    let mut clock = FrameClock::new(30);
-    let mut count = 0;
-    for n in 0..30 {
-        let t = Duration::from_micros(n * 1_000_000 / 30);
-        count += usize::from(clock.accept(t, t));
+fn video_source_clock_preserves_actual_integer_and_fractional_cadences() {
+    for fps in [15u32, 24, 30, 60, 120] {
+        let mut clock = FrameClock::new(WallpaperFrameRate::Source);
+        let hold = Duration::from_secs_f64(1. / f64::from(fps));
+        let mut count = 0;
+        for n in 0..fps {
+            let timestamp = Duration::from_micros(u64::from(n) * 1_000_000 / u64::from(fps));
+            count += usize::from(clock.accept(timestamp, timestamp, hold));
+        }
+        assert_eq!(count, fps as usize);
     }
-    assert_eq!(count, 30);
-    let mut clock = FrameClock::new(30);
-    let mut count = 0;
-    for n in 0..60 {
-        let t = Duration::from_micros(n * 1_000_000 / 60);
-        count += usize::from(clock.accept(t, t));
+    let mut clock = FrameClock::new(WallpaperFrameRate::Source);
+    let hold = Duration::from_secs_f64(1001. / 60_000.);
+    for n in 0..600 {
+        let timestamp = Duration::from_secs_f64(f64::from(n) * 1001. / 60_000.);
+        assert!(
+            clock.accept(timestamp, timestamp, hold),
+            "dropped frame {n}"
+        );
     }
-    assert_eq!(count, 30);
-    assert!(!clock.accept(Duration::from_secs(1), Duration::from_secs(2)));
+}
+#[test]
+fn video_cap_is_anchored_without_rounding_down_to_a_divisor_or_upsampling() {
+    for (source, cap, expected) in [
+        (30u32, 30u8, 30usize),
+        (60, 30, 30),
+        (30, 24, 24),
+        (15, 60, 15),
+        (120, 60, 60),
+    ] {
+        let mut clock = FrameClock::new(WallpaperFps::new(cap).unwrap().into());
+        let hold = Duration::from_secs_f64(1. / f64::from(source));
+        let mut count = 0;
+        for n in 0..source {
+            let timestamp = Duration::from_micros(u64::from(n) * 1_000_000 / u64::from(source));
+            count += usize::from(clock.accept(timestamp, timestamp, hold));
+        }
+        assert_eq!(count, expected, "{source} source capped at {cap}");
+    }
+    let mut clock = FrameClock::new(WallpaperFps::new(30).unwrap().into());
+    let hold = Duration::from_secs_f64(1001. / 60_000.);
+    let count = (0..600)
+        .filter(|n| {
+            let timestamp = Duration::from_secs_f64(f64::from(*n) * 1001. / 60_000.);
+            clock.accept(timestamp, timestamp, hold)
+        })
+        .count();
+    assert_eq!(count, 300, "59.94 FPS must retain the cap's phase");
+}
+#[test]
+fn video_source_clock_preserves_variable_intervals_and_drops_stale_or_repeated_frames() {
+    let mut clock = FrameClock::new(WallpaperFrameRate::Source);
+    for millis in [0, 10, 90, 600, 601] {
+        let timestamp = Duration::from_millis(millis);
+        assert!(clock.accept(timestamp, timestamp, Duration::from_millis(10)));
+    }
+    assert!(!clock.accept(
+        Duration::from_millis(601),
+        Duration::from_millis(601),
+        Duration::from_millis(10)
+    ));
+    assert!(!clock.accept(
+        Duration::from_millis(600),
+        Duration::from_millis(601),
+        Duration::from_millis(10)
+    ));
+    assert!(!clock.accept(
+        Duration::from_millis(620),
+        Duration::from_millis(700),
+        Duration::from_millis(16)
+    ));
+    assert!(clock.accept(
+        Duration::from_millis(710),
+        Duration::from_millis(710),
+        Duration::from_millis(16)
+    ));
+
+    let mut clock = FrameClock::new(WallpaperFps::new(30).unwrap().into());
+    assert!(clock.accept(Duration::ZERO, Duration::ZERO, Duration::from_secs(1)));
+    assert!(
+        clock.accept(
+            Duration::from_secs(1),
+            Duration::from_millis(1500),
+            Duration::from_secs(1)
+        ),
+        "a VFR frame that still covers media time must not use the cap interval as its expiry"
+    );
+    assert!(!clock.accept(
+        Duration::from_secs(2),
+        Duration::from_secs(4),
+        Duration::from_secs(1)
+    ));
+    assert!(
+        clock.accept(
+            Duration::from_secs(4),
+            Duration::from_secs(4),
+            Duration::from_secs(1)
+        ),
+        "late frames must be skipped without a burst of obsolete deliveries"
+    );
+}
+#[test]
+fn video_timeline_uses_pts_and_frame_duration_for_variable_rate_and_missing_timestamps() {
+    let mut timeline = PresentationTimeline::new(0.001, 30.);
+    for (pts, duration, expected) in [
+        (100_000, 20, 0),
+        (100_020, 200, 20),
+        (100_220, 10, 220),
+        (100_230, 50, 230),
+    ] {
+        let (timestamp, hold) = timeline.frame(Some(pts), duration).unwrap();
+        assert_eq!(timestamp, Duration::from_millis(expected));
+        assert_eq!(hold, Duration::from_millis(duration as u64));
+    }
+    let (timestamp, _) = timeline.frame(None, 10).unwrap();
+    assert_eq!(
+        timestamp,
+        Duration::from_millis(280),
+        "missing PTS must continue from the previous source duration, even with a nonzero starting PTS"
+    );
+
+    let mut timeline = PresentationTimeline::new(0.001, 30.);
+    assert_eq!(timeline.frame(None, 50).unwrap().0, Duration::ZERO);
+    assert_eq!(
+        timeline.frame(Some(100_000), 25).unwrap().0,
+        Duration::from_millis(50)
+    );
+    assert_eq!(
+        timeline.frame(Some(100_025), 25).unwrap().0,
+        Duration::from_millis(75)
+    );
+}
+#[test]
+fn video_timeline_fallback_preserves_fractional_rate_and_rejects_unbounded_time() {
+    let mut timeline = PresentationTimeline::new(f64::NAN, 60_000. / 1001.);
+    for n in 0..600 {
+        let (timestamp, _) = timeline.frame(None, 0).unwrap();
+        let expected = Duration::from_secs_f64(f64::from(n) * 1001. / 60_000.);
+        assert!(timestamp.abs_diff(expected) < Duration::from_micros(1));
+    }
+    for invalid_rate in [0., -1., f64::NAN, f64::INFINITY] {
+        let mut timeline = PresentationTimeline::new(0., invalid_rate);
+        assert_eq!(timeline.frame(None, 0).unwrap().0, Duration::ZERO);
+        assert_eq!(
+            timeline.frame(None, 0).unwrap().0,
+            Duration::from_secs_f64(1. / 30.)
+        );
+    }
+    let mut timeline = PresentationTimeline::new(1., 30.);
+    assert_eq!(timeline.frame(Some(0), 0).unwrap().0, Duration::ZERO);
+    assert!(timeline.frame(Some(86_401), 0).is_err());
 }
 
 use std::{process::Command, sync::atomic::AtomicBool};

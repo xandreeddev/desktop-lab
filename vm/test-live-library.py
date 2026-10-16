@@ -5,6 +5,9 @@ Requires an unlocked single-output Lucent VM, closed panels, writable settings,
 and the bundled Moonlit/Amber samples already in ~/Videos/Wallpapers. Installs
 nothing. QMP clicks Wallpapers -> Live and each discovered library row; native
 background submissions establish playback after the poster transition settles.
+Both imports must default to their source frame rate. Native Tab-revealed FPS
+controls and the rate CLI change only the default profile's frame policy; an
+explicit source policy and advancing frames must survive one service restart.
 No screen recording, benchmark, credentials, external provider or lock action.
 
 The original wallpaper snapshot is checkpointed before temporary imports. Exact
@@ -194,6 +197,71 @@ def open_library(name, monitor, count):
     time.sleep(.85)  # Native first submission precedes the 850 ms diagonal reveal.
 
 
+def without_default_rate(settings):
+    """Compare all saved preferences while permitting only this profile's FPS."""
+    value = dict(settings)
+    live = dict(value['live_wallpapers'])
+    profile = dict(live['default'])
+    profile.pop('fps', None)
+    live['default'] = profile
+    value['live_wallpapers'] = live
+    return value
+
+
+def source_rate_acceptance(name, monitor, count, report):
+    committed = h['read_settings']()
+    wallpaper = client()['wallpaper']
+    require(committed['live_wallpapers']['default']['fps'] == 'source',
+            'first_sample_defaults_to_source_rate')
+
+    def check_rate(rate, label):
+        eventually(lambda: h['saved']()
+                   and h['read_settings']()['live_wallpapers']['default']['fps'] == rate,
+                   label + '_persisted')
+        observed = h['read_settings']()
+        # This includes the asset, enabled/paused/power policies, monitor
+        # profiles, static wallpaper and every unrelated desktop preference.
+        require(without_default_rate(observed) == without_default_rate(committed)
+                and client()['wallpaper'] == wallpaper,
+                label + '_preserves_asset_policy_pause_and_other_preferences')
+
+    open_library(name, monitor, count)
+    reveal(name, 'live-fps-15')
+    click(name, monitor, 'live-wallpaper', 'live-fps-15')
+    check_rate(15, 'native_15_fps_cap')
+    reveal(name, 'live-fps-source')
+    click(name, monitor, 'live-wallpaper', 'live-fps-source')
+    check_rate('source', 'native_source_frame_rate')
+    h['key'](name, 1)
+    eventually(lambda: not client()['live_wallpaper']['open'], 'native_rate_panel_escape')
+    time.sleep(.85)
+    report['checks']['native_tab_reveal_and_click_15_then_source'] = True
+
+    cli('wallpaper', 'live', 'rate', '60')
+    check_rate(60, 'cli_60_fps_cap')
+    cli('wallpaper', 'live', 'rate', 'source')
+    check_rate('source', 'cli_source_frame_rate')
+    require(h['read_settings']() == committed, 'source_rate_returns_exact_saved_preferences')
+    report['checks']['cli_60_then_source_preserves_other_preferences'] = True
+
+    session('systemctl', '--user', 'restart', 'lucent.service')
+    eventually(lambda: client()['background_ready'] and h['saved']()
+               and client()['live_wallpaper']['players'] == 1
+               and client()['live_wallpaper']['running'] == 1
+               and client()['live_wallpaper']['retained_frame_bytes'] > 0
+               and all(item['pause_reason'] is None
+                       for item in client()['live_wallpaper']['outputs'])
+               and h['read_settings']() == committed
+               and client()['wallpaper'] == wallpaper,
+               'explicit_source_rate_and_selection_survive_restart', timeout=45)
+    first = h['background_frames']()
+    eventually(lambda: h['background_frames']() > first + 3,
+               'source_rate_restart_native_frames_advance')
+    report['source_restart_background_frames_advanced'] = h['background_frames']() - first
+    report['checks']['explicit_source_rate_survives_restart_with_advancing_frames'] = True
+    report['checks']['rate_changes_preserve_asset_pause_policy_and_unrelated_preferences'] = True
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build-report', type=Path,
@@ -257,7 +325,7 @@ def main():
                    'isolated_desktop_ready')
         name = lab.inventory()['vms']['lucent']['name']
         previous_asset = None
-        for sample in library['samples']:
+        for index, sample in enumerate(library['samples']):
             phase = 'native_' + sample['filename'].removesuffix('.mp4')
             open_library(name, monitor, library['count'])
             identifier = 'live-library-' + str(sample['index'])
@@ -267,7 +335,9 @@ def main():
                        and (h['read_settings']()['live_wallpapers']['default'] or {})
                        .get('asset', {}).get('source', {}).get('path') == sample['path'],
                        'native_sample_import_and_save', timeout=45)
-            asset = h['read_settings']()['live_wallpapers']['default']['asset']
+            profile = h['read_settings']()['live_wallpapers']['default']
+            require(profile['fps'] == 'source', 'new_sample_profile_defaults_to_source_rate')
+            asset = profile['asset']
             require(asset['path'] != previous_asset, 'new_sample_producer_asset')
             previous_asset = asset['path']
             eventually(lambda: not client()['wallpaper_busy'] and client()['background_ready']
@@ -291,10 +361,15 @@ def main():
                     'sample_saved_profile_stays_selected')
             report['samples'].append({'filename': sample['filename'], 'library_index': sample['index'],
                                       'saved_source_matches': True, 'producer_running': True,
+                                      'saved_frame_rate': 'source',
                                       'background_frames_advanced': last - first})
+            if index == 0:
+                phase = 'native_and_cli_source_frame_rate'
+                source_rate_acceptance(name, monitor, library['count'], report)
         report['checks']['native_wallpapers_live_route_and_library'] = True
         report['checks']['native_first_submission_then_diagonal_cut_settle'] = True
         report['checks']['both_discovered_sample_rows_import_and_save'] = True
+        report['checks']['both_new_sample_profiles_default_to_source_frame_rate'] = True
         report['checks']['both_sample_producers_submit_advancing_background_frames'] = True
         report['passed'] = len(report['samples']) == 2 and all(report['checks'].values())
     except BaseException as error:

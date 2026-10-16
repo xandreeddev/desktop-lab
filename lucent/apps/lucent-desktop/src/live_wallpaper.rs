@@ -36,7 +36,7 @@ pub enum Message {
     PauseAll(bool),
     Policy(WallpaperPauseCondition, bool),
     Off(LiveWallpaperTarget),
-    Rate(LiveWallpaperTarget, WallpaperFps),
+    Rate(LiveWallpaperTarget, WallpaperFrameRate),
     Inherit(MonitorId),
     Retry(LiveWallpaperTarget),
     RetrySave,
@@ -51,7 +51,7 @@ pub enum Intent {
     PauseAll(bool),
     Policy(WallpaperPauseCondition, bool),
     Off(LiveWallpaperTarget),
-    Rate(LiveWallpaperTarget, WallpaperFps),
+    Rate(LiveWallpaperTarget, WallpaperFrameRate),
     Inherit(MonitorId),
     RetrySave,
     FrameChanged(Vec<LiveWallpaperTarget>),
@@ -89,7 +89,7 @@ impl Mailbox {
 struct Player {
     revision: u64,
     asset: LiveWallpaperAsset,
-    fps: WallpaperFps,
+    fps: WallpaperFrameRate,
     mailbox: Arc<Mutex<Mailbox>>,
     frame: Option<Arc<ImageData>>,
     running: bool,
@@ -206,12 +206,7 @@ impl LiveWallpaper {
         for target in targets {
             let selected = settings.selected(&target);
             if let Some(setting) = selected.filter(|s| s.enabled) {
-                let key = format!(
-                    "{}:{}:{}",
-                    setting.asset.path,
-                    setting.fps.value(),
-                    setting.paused
-                );
+                let key = format!("{}:{}:{}", setting.asset.path, setting.fps, setting.paused);
                 let pause = lucent_usecases::live_wallpaper::wallpaper_pause_reason(
                     settings, setting, &target, context,
                 );
@@ -289,14 +284,7 @@ impl LiveWallpaper {
             .default
             .as_ref()
             .filter(|profile| profile.enabled)
-            .map(|profile| {
-                format!(
-                    "{}:{}:{}",
-                    profile.asset.path,
-                    profile.fps.value(),
-                    profile.paused
-                )
-            });
+            .map(|profile| format!("{}:{}:{}", profile.asset.path, profile.fps, profile.paused));
         self.prepared.clear();
     }
     pub fn has_outputs(&self) -> bool {
@@ -535,7 +523,7 @@ impl LiveWallpaper {
                             target,
                             LiveWallpaperSettings {
                                 asset,
-                                fps: WallpaperFps::default(),
+                                fps: WallpaperFrameRate::default(),
                                 paused: false,
                                 enabled: true,
                             },
@@ -686,9 +674,7 @@ impl LiveWallpaper {
         let selected = settings.selected(target)?;
         let key = format!(
             "{}:{}:{}",
-            selected.asset.path,
-            selected.fps.value(),
-            selected.paused
+            selected.asset.path, selected.fps, selected.paused
         );
         self.players.get(&key)
     }
