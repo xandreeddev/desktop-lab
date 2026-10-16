@@ -85,7 +85,7 @@
   --motion-exit: 190ms;
   --motion-selection: 350ms;
   --motion-hover: 160ms;
-  --motion-spatial: cubic-bezier(0.38, 1.21, 0.22, 1);
+  --motion-spatial: cubic-bezier(0.38, 1, 0.22, 1);
   --motion-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
   --theme-dark-surface: var(--palette-navy-700);
   --theme-dark-surface-container: var(--palette-cyan-700);
