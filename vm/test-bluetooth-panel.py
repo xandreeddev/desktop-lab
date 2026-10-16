@@ -8,6 +8,7 @@ unavailable; neither state proves controller/pairing/profile acceptance.
 import importlib.util
 import json
 from pathlib import Path
+from native_surfaces import active_surfaces, find_surface, role
 
 spec = importlib.util.spec_from_file_location('bluetooth_input', Path(__file__).with_name('test-framework.py'))
 v = importlib.util.module_from_spec(spec)
@@ -19,12 +20,12 @@ def state():
 
 
 def panel():
-    return next(s for s in v.inspect()['surfaces'] if s['id'] == 'bluetooth')
+    return find_surface(v.inspect(), 'bluetooth')
 
 
 def main():
     before = v.inspect()
-    if any(s['id'] != 'bluetooth' and s['pointer_input'] == 'all' for s in before['surfaces']):
+    if any(role(s) != 'bluetooth' and s['pointer_input'] == 'all' for s in active_surfaces(before)):
         raise SystemExit('Close other modal panels before the native input test')
     original_open = before['client']['bluetooth']['open']
     checks = {}
@@ -34,7 +35,7 @@ def main():
         v.click('bar-bluetooth')
         v.eventually(lambda: state()['open'] and panel()['frames'] > 0, 'Bar did not open native Bluetooth')
         assert panel()['pointer_input'] == 'all'
-        assert v.layer_geometry('bluetooth')['namespace'] == 'lucent-bluetooth'
+        assert v.layer_geometry('bluetooth')['namespace'] == 'lucent-' + panel()['id']
         checks.update(bar_pointer_open=True, actual_native_layer=True, pointer_region=True,
                       observed_state=state()['status'], controllers=state()['controllers'])
         v.screenshot('bluetooth-native-panel.png')

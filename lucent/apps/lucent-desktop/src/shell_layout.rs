@@ -61,6 +61,26 @@ pub fn tray_panel(viewport: (f32, f32)) -> Rect {
     use lucent_design::component::tray;
     control_panel(viewport, (tray::WIDTH, tray::HEIGHT))
 }
+pub fn live_wallpaper_panel(viewport: (f32, f32)) -> Rect {
+    use lucent_design::component::live_wallpaper as live;
+    let width = floor(
+        live::PANEL_WIDTH.min((viewport.0 - 2. * layout::SHELL_INSET).max(0.)),
+        layout::SHELL_STEP,
+    );
+    let height = floor(
+        live::PANEL_HEIGHT.min((viewport.1 - panel::BAR_HEIGHT - 2. * layout::SHELL_INSET).max(0.)),
+        layout::SHELL_STEP,
+    );
+    Rect::new(
+        floor((viewport.0 - width) / 2., layout::SHELL_STEP),
+        floor(
+            panel::BAR_HEIGHT + (viewport.1 - panel::BAR_HEIGHT - height) / 2.,
+            layout::SHELL_STEP,
+        ),
+        width,
+        height,
+    )
+}
 fn control_panel(viewport: (f32, f32), size: (f32, f32)) -> Rect {
     let width = floor(
         size.0.min(viewport.0 - layout::SHELL_INSET * 2.),

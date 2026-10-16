@@ -11,6 +11,7 @@ import ast
 import importlib.util
 import json
 from pathlib import Path
+from native_surfaces import active_surfaces, find_surface, role
 import runpy
 import shlex
 import subprocess
@@ -28,7 +29,7 @@ def state():
 
 
 def panel():
-    return next(s for s in v.inspect()['surfaces'] if s['id'] == 'network')
+    return find_surface(v.inspect(), 'network')
 
 
 def click(identifier):
@@ -47,7 +48,7 @@ def enter(value, field):
     v.eventually(lambda: panel()['focus'] == field, 'Expected input is not focused')
     assert state()['open'] and panel()['pointer_input'] == 'all'
     assert v.session('omarchy-shell', 'lock', 'isLocked').strip() == 'false'
-    assert v.layer_geometry('network')['namespace'] == 'lucent-network'
+    assert v.layer_geometry('network')['namespace'] == 'lucent-' + panel()['id']
     mapping = {}
     for node in ast.walk(ast.parse(Path(__file__).with_name('run.py').read_text())):
         if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) and node.targets[0].id in ('normal','shifted','codes'):
@@ -153,7 +154,7 @@ def main():
         click('network-wifi');v.eventually(lambda:not state()['wifi_enabled'],'Radio off not observed')
         click('network-wifi');v.eventually(lambda:state()['wifi_enabled'],'Radio on not observed')
         v.session('omarchy-shell','shell','hide');v.eventually(lambda:not state()['open'],'Compatibility hide failed')
-        v.eventually(lambda:not any(s['id']=='network' for s in v.inspect()['surfaces']),'Closed overlay did not unmount')
+        v.eventually(lambda:not any(role(s)=='network' for s in active_surfaces(v.inspect())),'Closed overlay did not unmount')
         v.session('omarchy-shell','shell','summon','omarchy.network');v.eventually(lambda:state()['open'],'Compatibility summon failed')
         v.key(1);v.eventually(lambda:not state()['open'],'Escape failed to close network panel')
         checks += ['wifi_radio_changes','compatibility_and_escape_release_surface']

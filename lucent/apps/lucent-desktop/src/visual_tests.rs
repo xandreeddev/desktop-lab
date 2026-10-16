@@ -1253,6 +1253,10 @@ fn visual_regressions() {
             ),
             ("palette-ocean", Mode::Themes, 9, 2, "", 1., 640.),
             ("icon-catalog", Mode::Apps, 9, 0, "", 1., 640.),
+            ("panel-host-launcher", Mode::Apps, 9, 0, "", 1., 1280.),
+            ("panel-host-audio", Mode::Apps, 9, 0, "", 1., 1280.),
+            ("panel-host-notifications", Mode::Apps, 9, 0, "", 1., 1280.),
+            ("panel-host-live-wallpaper", Mode::Apps, 9, 0, "", 1., 1280.),
             ("bar", Mode::Apps, 9, 0, "", 1., 1280.),
             ("bar-dense", Mode::Apps, 9, 0, "", 1., 1920.),
             ("bar-narrow", Mode::Apps, 9, 0, "", 1., 390.),
@@ -1518,6 +1522,9 @@ fn visual_regressions() {
                 580.
             };
             let mut app = fixture(count, light);
+            // Component references isolate their content; dedicated panel-host
+            // fixtures cover the composed native bar/panel presentation.
+            app.bar_visible = name.starts_with("panel-host-");
             let preference = match name {
                 "launcher-size-small" => crate::shell_layout::LAUNCHER_PRESETS[0].1,
                 "launcher-size-large" => crate::shell_layout::LAUNCHER_PRESETS[2].1,
@@ -1568,7 +1575,41 @@ fn visual_regressions() {
             if name == "palette-ocean" {
                 app.settings.palette = Some(lucent_design::palettes()[2].clone());
             }
-            let scene = if name.starts_with("text-") {
+            let scene = if name.starts_with("panel-host-") {
+                let role = match name {
+                    "panel-host-audio" => {
+                        app.update(
+                            Message::Audio(crate::audio::Message::Open),
+                            &mut Effects::default(),
+                        );
+                        "audio"
+                    }
+                    "panel-host-notifications" => {
+                        app.update(
+                            Message::Notifications(crate::notifications::Message::Show),
+                            &mut Effects::default(),
+                        );
+                        "notifications"
+                    }
+                    "panel-host-live-wallpaper" => {
+                        app.update(
+                            Message::LiveWallpaper(crate::live_wallpaper::Message::Open),
+                            &mut Effects::default(),
+                        );
+                        "live-wallpaper"
+                    }
+                    _ => "dock",
+                };
+                let cx = ViewContext {
+                    surface: role,
+                    instance: None,
+                    width,
+                    height,
+                    now,
+                    density: Density::ONE,
+                };
+                layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
+            } else if name.starts_with("text-") {
                 let mut value = if name == "text-grapheme-selection" {
                     "Café e\u{301}".to_string()
                 } else if name == "text-scrolled-selection" {
@@ -3210,6 +3251,10 @@ fn settled_shell_geometry_obeys_grid_and_contains_its_controls() {
 fn bar_capsules_share_grid_do_not_overlap_and_keep_active_workspace_visible() {
     use lucent_design::{component, layout as grid};
     let mut app = fixture(0, false);
+    app.update(
+        Message::Launcher(launcher::Message::Close),
+        &mut Effects::default(),
+    );
     let layout = Layout::new(fonts(&app));
     let surface = app.surfaces().into_iter().find(|s| s.id == "bar").unwrap();
     // The compositor owns the gap below the visible capsules. Reserving that

@@ -82,7 +82,11 @@ def suite():
                    'fixture_registered_and_visible')
         require(state()['registration_errors'] == 0, 'non_replacing_registration')
         item = bar_items()[0]
+        cli('launcher', 'open')
         action(item, 'left', 'activate')
+        require(inspect()['client']['launcher'], 'bar_activation_preserves_launcher')
+        results['bar_reachable_with_launcher_open'] = True
+        cli('launcher', 'close')
         action(item, 'middle', 'secondary')
         action(item, 'wheel-up', 'scroll')
         action(item, 'wheel-down', 'scroll')
