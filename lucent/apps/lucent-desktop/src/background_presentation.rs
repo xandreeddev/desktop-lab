@@ -17,10 +17,32 @@ struct Current {
     image: Arc<ImageData>,
 }
 
+enum Reveal {
+    Settled,
+    AwaitingSubmission { selected_at: f64 },
+    Running(Motion),
+}
+impl Reveal {
+    fn value(&self, now: f64) -> f32 {
+        match self {
+            Self::Settled => 1.,
+            Self::AwaitingSubmission { .. } => 0.,
+            Self::Running(motion) => motion.value(now).clamp(0., 1.),
+        }
+    }
+    fn active(&self, now: f64) -> bool {
+        match self {
+            Self::Settled => false,
+            Self::AwaitingSubmission { .. } => true,
+            Self::Running(motion) => motion.active(now),
+        }
+    }
+}
+
 pub struct BackgroundPresentation {
     current: Option<Current>,
     outgoing: Option<Arc<ImageData>>,
-    reveal: Motion,
+    reveal: Reveal,
 }
 
 impl Default for BackgroundPresentation {
@@ -28,7 +50,7 @@ impl Default for BackgroundPresentation {
         Self {
             current: None,
             outgoing: None,
-            reveal: Motion::fixed(1.),
+            reveal: Reveal::Settled,
         }
     }
 }
@@ -60,7 +82,7 @@ impl BackgroundPresentation {
                 .is_some_and(|old| same_stream(old, &image))
             {
                 self.outgoing = None;
-                self.reveal = Motion::fixed(1.);
+                self.reveal = Reveal::Settled;
             }
             self.current = Some(Current { source, image });
             return changed;
@@ -76,15 +98,13 @@ impl BackgroundPresentation {
         };
         if outgoing.cache_id() == image.cache_id() || same_stream(&outgoing, &image) {
             self.outgoing = None;
-            self.reveal = Motion::fixed(1.);
+            self.reveal = Reveal::Settled;
         } else {
             // A different output may still consume this live stream. Give the
             // frozen outgoing frame independent GPU identity without copying
             // its immutable CPU pixels or making the UI prepare mip levels.
             self.outgoing = Some(Arc::new(outgoing.snapshot()));
-            self.reveal = Motion::fixed(0.);
-            self.reveal
-                .target(1., now, motion::PANEL, motion::DECELERATE);
+            self.reveal = Reveal::AwaitingSubmission { selected_at: now };
         }
         self.current = Some(Current { source, image });
         true
@@ -108,7 +128,7 @@ impl BackgroundPresentation {
             // Source-over opacity mixes opaque wallpaper pixels while retaining
             // the old image beneath the arriving frame. No shader/codec policy.
             layers.push(image(outgoing));
-            layers.push(image(&current.image).opacity(self.reveal.value(now).clamp(0., 1.)));
+            layers.push(image(&current.image).opacity(self.reveal.value(now)));
         } else {
             layers.push(image(&current.image));
         }
@@ -119,12 +139,29 @@ impl BackgroundPresentation {
         self.outgoing.is_some() && self.reveal.active(now)
     }
 
-    /// Release the outgoing frame only after the fully revealed frame submits.
-    /// A successful submission is not a compositor scanout acknowledgement.
-    pub fn presented(&mut self, now: f64) -> bool {
-        if self.outgoing.is_some() && !self.reveal.active(now) {
+    /// Start only after a frame for this selection submits. Time spent waiting
+    /// for a compositor callback or rendering its first frame is not animation
+    /// time. Completion uses the sampled view time, so a slow submission cannot
+    /// retire the outgoing image before a fully revealed frame was rendered.
+    /// Neither timestamp is a compositor scanout acknowledgement.
+    pub fn presented(&mut self, sampled_at: f64, submitted_at: f64) -> bool {
+        if let Reveal::AwaitingSubmission { selected_at } = self.reveal {
+            if sampled_at < selected_at {
+                return false;
+            }
+            let mut reveal = Motion::fixed(0.);
+            reveal.target(
+                1.,
+                submitted_at.max(sampled_at),
+                motion::PANEL,
+                motion::DECELERATE,
+            );
+            self.reveal = Reveal::Running(reveal);
+            return true;
+        }
+        if self.outgoing.is_some() && !self.reveal.active(sampled_at) {
             self.outgoing = None;
-            self.reveal = Motion::fixed(1.);
+            self.reveal = Reveal::Settled;
             true
         } else {
             false
@@ -147,6 +184,7 @@ impl BackgroundPresentation {
             "retained_images": images.len(),
             "retained_frame_bytes": images.iter().map(|image|image.bytes()).sum::<usize>(),
             "transition_pending": self.outgoing.is_some(),
+            "awaiting_first_frame": matches!(self.reveal, Reveal::AwaitingSubmission { .. }),
         })
     }
 }
@@ -216,13 +254,37 @@ mod tests {
         let address = SurfaceAddress::new("background").instance(instance.clone());
         assert!(app.animating_instance(&address, 0.));
         assert!(!app.animating_instance(&SurfaceAddress::new("background"), 0.));
-        // Exact scoped submission releases the old snapshot without selecting a monitor.
+        // Only the exact output's first submission starts its timeline.
+        let message = app
+            .event(Event::Scoped {
+                instance: instance.clone(),
+                event: Box::new(Event::FrameSubmitted {
+                    surface: "background",
+                    now: 10.,
+                    width: 1280.,
+                    height: 800.,
+                }),
+            })
+            .unwrap();
+        app.update(
+            message,
+            &mut Effects {
+                now: 11.,
+                ..Effects::default()
+            },
+        );
+        let report: serde_json::Value = serde_json::from_str(&app.inspect()).unwrap();
+        assert_eq!(
+            report["background_transitions"][0]["presentation"]["retained_images"],
+            2
+        );
+        assert!(app.animating_instance(&address, 11.));
         let message = app
             .event(Event::Scoped {
                 instance,
                 event: Box::new(Event::FrameSubmitted {
                     surface: "background",
-                    now: 10.,
+                    now: 11. + motion::PANEL,
                     width: 1280.,
                     height: 800.,
                 }),
@@ -267,6 +329,7 @@ mod tests {
         presentation.reconcile(source("new"), Some(new.clone()), 1.);
         assert!(presentation.active(1.));
         assert_eq!(top_opacity(&presentation, 1.), 0.);
+        assert!(presentation.presented(1., 1.));
         let middle = top_opacity(&presentation, 1. + motion::PANEL / 2.);
         assert!(middle > 0. && middle < 1.);
         let view: Element<()> = presentation.view(1. + motion::PANEL / 2., Color::hex(0));
@@ -276,13 +339,48 @@ mod tests {
         assert!(
             matches!(&view.children[1].kind, Kind::Image(image) if image.cache_id()==new.cache_id())
         );
-        assert!(!presentation.presented(1. + motion::PANEL / 2.));
+        assert!(!presentation.presented(1. + motion::PANEL / 2., 1. + motion::PANEL / 2.));
         assert!(!presentation.active(1. + motion::PANEL));
         assert_eq!(top_opacity(&presentation, 1. + motion::PANEL), 1.);
         assert_eq!(presentation.inspect()["retained_images"], 2);
-        assert!(presentation.presented(1. + motion::PANEL));
+        assert!(presentation.presented(1. + motion::PANEL, 1. + motion::PANEL));
         assert_eq!(presentation.inspect()["retained_images"], 1);
-        assert!(!presentation.presented(2.));
+        assert!(!presentation.presented(2., 2.));
+    }
+
+    #[test]
+    fn delayed_first_submission_does_not_consume_the_fade_duration() {
+        let mut presentation = BackgroundPresentation::default();
+        presentation.reconcile(source("old"), Some(image("old", [255, 0, 0, 255])), 0.);
+        presentation.reconcile(source("new"), Some(image("new", [0, 0, 255, 255])), 1.);
+
+        // Even a long wait for the next frame keeps the old pixels visible.
+        assert_eq!(top_opacity(&presentation, 10.), 0.);
+        assert!(presentation.active(10.));
+        assert!(
+            !presentation.presented(0., 11.),
+            "an older view cannot start this selection"
+        );
+        assert_eq!(presentation.inspect()["awaiting_first_frame"], true);
+        assert!(presentation.presented(10., 11.));
+        assert_eq!(top_opacity(&presentation, 11.), 0.);
+        assert_eq!(presentation.inspect()["awaiting_first_frame"], false);
+
+        let sampled = 11. + motion::PANEL / 2.;
+        let opacity = top_opacity(&presentation, sampled);
+        assert!(opacity > 0. && opacity < 1.);
+        // Submitting a partially faded view late must not release its underlay.
+        assert!(!presentation.presented(sampled, 20.));
+        assert_eq!(presentation.inspect()["retained_images"], 2);
+        assert_eq!(
+            top_opacity(&presentation, sampled),
+            opacity,
+            "submission does not restart the timeline"
+        );
+        assert_eq!(top_opacity(&presentation, 20.), 1.);
+        assert!(presentation.presented(20., 21.));
+        assert_eq!(presentation.inspect()["retained_images"], 1);
+        assert!(!presentation.active(21.));
     }
 
     #[test]
@@ -293,10 +391,11 @@ mod tests {
         presentation.reconcile(source("old"), Some(image("old", [0, 0, 255, 255])), 0.);
         let live = Some(Source::Live("media".into()));
         presentation.reconcile(live.clone(), Some(frame(10)), 1.);
+        presentation.presented(1., 1.);
         let before = top_opacity(&presentation, 1.2);
         presentation.reconcile(live.clone(), Some(frame(20)), 1.2);
         assert_eq!(top_opacity(&presentation, 1.2), before);
-        presentation.presented(1. + motion::PANEL);
+        presentation.presented(1. + motion::PANEL, 1. + motion::PANEL);
         assert!(presentation.reconcile(live, Some(frame(30)), 2.));
         assert!(!presentation.active(2.));
         assert_eq!(presentation.inspect()["retained_images"], 1);
@@ -320,12 +419,13 @@ mod tests {
             "a transparent revision restores fallback"
         );
         presentation.reconcile(source("opaque"), Some(image("opaque", [255; 4])), 2.);
+        presentation.presented(2., 2.);
         assert_eq!(
             layers(&presentation),
             3,
             "outgoing transparency needs fallback through the fade"
         );
-        presentation.presented(2. + motion::PANEL);
+        presentation.presented(2. + motion::PANEL, 2. + motion::PANEL);
         assert_eq!(layers(&presentation), 1);
     }
 
@@ -345,6 +445,7 @@ mod tests {
                 let mut presentation = BackgroundPresentation::default();
                 presentation.reconcile(source("old"), Some(old.clone()), 0.);
                 presentation.reconcile(source("new"), Some(new.clone()), 1.);
+                presentation.presented(1., 1.);
                 for density in [
                     lucent_api::Density::ONE,
                     lucent_api::Density::new(3, 2).unwrap(),
@@ -376,7 +477,7 @@ mod tests {
                         );
                     }
                 }
-                presentation.presented(1. + motion::PANEL);
+                presentation.presented(1. + motion::PANEL, 1. + motion::PANEL);
                 let optimized: Element<()> = presentation.view(2., fallback);
                 let reference: Element<()> = Element::stack(vec![
                     Element::empty().fill().background(fallback),
@@ -411,6 +512,7 @@ mod tests {
         let old = image("old", [10, 0, 0, 255]);
         presentation.reconcile(source("old"), Some(old.clone()), 0.);
         presentation.reconcile(source("middle"), Some(image("middle", [20, 0, 0, 255])), 1.);
+        presentation.presented(1., 1.);
         presentation.reconcile(
             source("latest"),
             Some(image("latest", [30, 0, 0, 255])),
@@ -467,7 +569,8 @@ mod tests {
         left.reconcile(source("left"), Some(image("left", [20, 0, 0, 255])), 1.);
         assert!(left.active(1.));
         assert!(!right.active(1.));
-        left.presented(1. + motion::PANEL);
+        left.presented(1., 1.);
+        left.presented(1. + motion::PANEL, 1. + motion::PANEL);
         assert_eq!(left.inspect()["retained_images"], 1);
         assert_eq!(right.inspect()["retained_images"], 1);
     }
