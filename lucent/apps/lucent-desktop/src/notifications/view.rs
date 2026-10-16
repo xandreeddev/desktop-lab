@@ -353,6 +353,10 @@ impl Center {
                 .background(t.surface)
                 .shadow()
                 .clip()
+                .on_click(Message::Ignore)
+                .hover_feedback(false)
+                .tab_stop(false)
+                .id("notification-history-panel")
         } else {
             let room = (cx.height - top - token::MARGIN).max(0.);
             let rich = self

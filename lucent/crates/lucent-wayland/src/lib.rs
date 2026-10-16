@@ -410,7 +410,7 @@ impl<A: Application> State<A> {
             "one_color_buffer_per_surface_bytes": self.surfaces.values().map(|s| s.renderer.single_surface_buffer_bytes()).sum::<u64>(),
             "scope":"Prepared image payloads referenced by current scenes only; app caches excluded. GPU buffer values are requested payloads, not driver allocations. Actual surface buffer counts and total GPU memory are unknown."
         }));
-        let mut result = serde_json::json!({"profile_memory":profile_memory,"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id.to_string(),"role":s.spec.id,"instance":s.spec.instance.as_ref().map(api::SurfaceInstance::as_str),"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"density":s.density().factor(),"buffer_scale":if s.fractional.is_some(){1}else{s.scale},"buffer_width":s.density().physical_size(s.width,s.height).ok().map(|size|size.0),"buffer_height":s.density().physical_size(s.width,s.height).ok().map(|size|size.1),"frames":s.renderer.frames,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"frame_profiles":s.profiles.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)});
+        let mut result = serde_json::json!({"profile_memory":profile_memory,"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id.to_string(),"role":s.spec.id,"instance":s.spec.instance.as_ref().map(api::SurfaceInstance::as_str),"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"keyboard":match s.spec.keyboard { api::Keyboard::None=>"none", api::Keyboard::OnDemand=>"on-demand", api::Keyboard::Exclusive=>"exclusive" },"pointer_input":s.spec.pointer_input.name(),"pointer_insets":match s.spec.pointer_input { api::PointerInput::Inset { top, right, bottom, left } => Some([top, right, bottom, left]), _ => None },"width":s.width,"height":s.height,"scale":s.scale,"density":s.density().factor(),"buffer_scale":if s.fractional.is_some(){1}else{s.scale},"buffer_width":s.density().physical_size(s.width,s.height).ok().map(|size|size.0),"buffer_height":s.density().physical_size(s.width,s.height).ok().map(|size|size.1),"frames":s.renderer.frames,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"frame_profiles":s.profiles.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)});
         result["outputs"]=serde_json::json!(self.output_bindings.iter().map(|(info,_)|serde_json::json!({"global":info.global,"name":info.name.as_ref().map(api::OutputName::as_str),"logical_size":info.logical_size,"integer_scale":info.integer_scale})).collect::<Vec<_>>());
         result["closed_named_surfaces"] = serde_json::json!(
             self.closed_targets
@@ -992,6 +992,22 @@ fn pointer_regions<M>(
         api::PointerInput::None => vec![],
         api::PointerInput::Content => scene.regions.clone(),
         api::PointerInput::All => vec![api::Rect::new(0., 0., width as f32, height as f32).into()],
+        api::PointerInput::Inset {
+            top,
+            right,
+            bottom,
+            left,
+        } => {
+            let x = left.min(width);
+            let y = top.min(height);
+            let w = width.saturating_sub(right).saturating_sub(x);
+            let h = height.saturating_sub(bottom).saturating_sub(y);
+            if w == 0 || h == 0 {
+                vec![]
+            } else {
+                vec![api::Rect::new(x as f32, y as f32, w as f32, h as f32).into()]
+            }
+        }
     }
 }
 
@@ -1013,6 +1029,56 @@ mod surface_tests {
             pointer_regions(api::PointerInput::All, 320, 240, &scene),
             [api::Clip::from(api::Rect::new(0., 0., 320., 240.))]
         );
+    }
+
+    #[test]
+    fn inset_pointer_regions_follow_logical_extent_and_never_overflow() {
+        let scene: Scene<()> = Scene::default();
+        let policy = api::PointerInput::Inset {
+            top: 48,
+            right: 12,
+            bottom: 20,
+            left: 8,
+        };
+        assert_eq!(
+            pointer_regions(policy, 320, 240, &scene),
+            [api::Clip::from(api::Rect::new(8., 48., 300., 172.))]
+        );
+        assert_eq!(
+            pointer_regions(policy, 640, 480, &scene),
+            [api::Clip::from(api::Rect::new(8., 48., 620., 412.))]
+        );
+        for (width, height) in [(0, 240), (320, 0), (20, 240), (320, 68)] {
+            assert!(pointer_regions(policy, width, height, &scene).is_empty());
+        }
+        for policy in [
+            api::PointerInput::Inset {
+                top: u32::MAX,
+                right: 0,
+                bottom: 0,
+                left: 0,
+            },
+            api::PointerInput::Inset {
+                top: 0,
+                right: u32::MAX,
+                bottom: 0,
+                left: 0,
+            },
+            api::PointerInput::Inset {
+                top: 0,
+                right: 0,
+                bottom: u32::MAX,
+                left: 0,
+            },
+            api::PointerInput::Inset {
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: u32::MAX,
+            },
+        ] {
+            assert!(pointer_regions(policy, 320, 240, &scene).is_empty());
+        }
     }
 }
 

@@ -11,6 +11,7 @@ use lucent_usecases::notifications::body::{BodyBlock, NotificationBody, notifica
 use std::sync::Arc;
 #[derive(Clone)]
 pub enum Message {
+    Ignore,
     Snapshot(lucent_domain::Result<NotificationSnapshot>),
     Toggle,
     Hide,
@@ -79,6 +80,9 @@ impl Center {
     pub fn history_open(&self) -> bool {
         self.history_open
     }
+    pub fn history_closing(&self) -> bool {
+        self.closing
+    }
     pub fn artwork_inspection(&self) -> serde_json::Value {
         self.artwork.inspect()
     }
@@ -120,6 +124,7 @@ impl Component for Center {
     fn update(&mut self, message: Message, e: &mut Effects<Message>) {
         let adapter = self.adapter.clone();
         match message {
+            Message::Ignore => (),
             Message::Artwork(revision, images) => self.artwork.complete(revision, images, e),
             Message::RetryArtwork => self.refresh_artwork(true, e),
             Message::Snapshot(Ok(value)) => {

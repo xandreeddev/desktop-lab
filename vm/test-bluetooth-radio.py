@@ -10,6 +10,7 @@ import argparse
 import importlib.util
 import json
 from pathlib import Path
+from native_surfaces import active_surfaces, role
 import shlex
 import subprocess
 
@@ -60,7 +61,7 @@ def require_fixture(directory, login_file):
         raise SystemExit('This input harness requires the prepared single 1920x1080 scale-1 output')
     v.eventually(lambda: state()['controllers'] == 2, 'Native controller snapshot did not arrive')
     before = v.inspect()
-    if any(s['id'] != 'bluetooth' and s['pointer_input'] == 'all' for s in before['surfaces']):
+    if any(role(s) != 'bluetooth' and s['pointer_input'] in ('all', 'inset') for s in active_surfaces(before)):
         raise SystemExit('Close other modal panels before native Bluetooth acceptance')
     if any(property_value(path, 'Discovering') for path in PATHS):
         raise SystemExit('An existing discovery session is not part of this check')
@@ -86,7 +87,7 @@ def main():
         v.click('bluetooth-tab-devices')
         # The native controller list follows the sorted snapshot. IDs are opaque
         # runtime handles; never equate their numeric values with HCI indices.
-        controls = [h['id'] for s in v.inspect()['surfaces'] if s['id'] == 'bluetooth'
+        controls = [h['id'] for s in active_surfaces(v.inspect()) if role(s) == 'bluetooth'
                     for h in s['hits'] if h['id'].startswith('bluetooth-controller-')]
         assert len(controls) == 2
         v.click(controls[0])

@@ -191,10 +191,8 @@ impl LiveWallpaper {
             children
                 .push(button("Retry saving preferences", Message::RetrySave).id("live-save-retry"));
         }
-        let width =
-            component::live_wallpaper::PANEL_WIDTH.min((cx.width - space::LG * 2.).max(space::LG));
-        let height = component::live_wallpaper::PANEL_HEIGHT
-            .min((cx.height - space::LG * 2.).max(space::LG));
+        let bounds = crate::shell_layout::live_wallpaper_panel((cx.width, cx.height));
+        let (width, height) = (bounds.w, bounds.h);
         let panel = Element::column(children)
             .gap(space::MD)
             .padding(space::LG)
@@ -222,10 +220,9 @@ impl LiveWallpaper {
                 .on_click(Message::Close)
                 .tab_stop(false)
                 .id("live-backdrop"),
-            panel.opacity(amount).at(
-                (cx.width - width) / 2.,
-                (cx.height - height) / 2. + space::LG * (1. - amount),
-            ),
+            panel
+                .opacity(amount)
+                .at(bounds.x, bounds.y + space::LG * (1. - amount)),
         ])
         .fill()
         .background(Color::TRANSPARENT)

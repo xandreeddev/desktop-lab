@@ -86,10 +86,10 @@ per axis. Changing targets discards the old pending demand. Closing, retirement
 and failure discard unsent work; accepted native actions cannot be undone.
 Late failures cannot reopen a dismissed panel. At the component-routing level,
 direct activation does not close other panels; actually opening a tray
-menu/error panel does. An open launcher has a full-screen outside-click region
-that can consume the first pointer click on the bar to dismiss the launcher.
-The native gesture harness starts with overlays closed; changing that overlay
-interaction policy is separate work.
+menu/error panel does. Ordinary overlays now leave the bar outside their native input region. A
+primary tray action can be received while the launcher remains open; a tray
+menu takes the foreground. See [panel flow](panel-flow.md) for input ownership
+and the separate native acceptance of this behavior.
 
 Menus use `AboutToShow`, `GetLayout` and `Event` from
 [DBusMenu](https://docs.rs/dbusmenu-zbus/latest/src/dbusmenu_zbus/dbusmenu.rs.html).

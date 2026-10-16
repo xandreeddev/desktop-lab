@@ -2,10 +2,12 @@ use crate::actions::Action;
 use crate::adapters::{DesktopAdapters, WatchStop};
 use crate::launcher::Mode;
 use crate::launcher::{self, Launcher};
+mod panels;
 use crate::widgets::{self, catalog::WIDGETS};
 use lucent_api::{self as api, *};
 use lucent_design::{component::panel, motion};
 use lucent_domain::{self as domain, *};
+use panels::Panel;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 #[derive(Clone)]
@@ -286,11 +288,13 @@ impl Desktop {
             Live::Prepared(..) | Live::Close | Live::Off(LiveWallpaperTarget::Default)
         );
         let is_frame = matches!(&message, Live::Wake(..) | Live::Frame(_));
+        let was_open = self.live_wallpaper.open;
         let mut intent = None;
         effects.delegate(
             |child| intent = self.live_wallpaper.update(message, child),
             Message::LiveWallpaper,
         );
+        self.panel_opened(Panel::LiveWallpaper, was_open, effects);
         if let Some(intent) = intent {
             match intent {
                 Intent::ImportStarted(LiveWallpaperTarget::Default, revision) => {
@@ -616,6 +620,7 @@ impl Desktop {
         self.launcher.reconcile(self.launcher_geometry(), now);
     }
     fn update_launcher(&mut self, message: launcher::Message, effects: &mut Effects<Message>) {
+        let was_open = self.launcher.open();
         let palettes = if self.launcher.mode() == Mode::Themes
             || matches!(message, launcher::Message::Mode(Mode::Themes))
         {
@@ -647,27 +652,7 @@ impl Desktop {
             Message::Launcher,
         );
         self.update_dock(crate::dock::Message::Forced(self.launcher.open()), effects);
-        if self.launcher.open() {
-            effects.delegate(
-                |child| self.power.update(crate::power::Message::Close, child),
-                Message::Power,
-            );
-            effects.delegate(
-                |child| {
-                    self.bluetooth
-                        .update(crate::bluetooth::Message::Close, child)
-                },
-                Message::Bluetooth,
-            );
-            effects.delegate(
-                |child| self.network.update(crate::network::Message::Close, child),
-                Message::Network,
-            );
-            effects.delegate(
-                |child| self.audio.update(crate::audio::Message::Close, child),
-                Message::Audio,
-            );
-        }
+        self.panel_opened(Panel::Launcher, was_open, effects);
         if let Some(intent) = intent {
             use launcher::Intent;
             let message = match intent {
@@ -1023,26 +1008,6 @@ impl Component for Desktop {
     }
     fn update(&mut self, message: Message, effects: &mut Effects<Message>) {
         let now = effects.now;
-        let other_panel = match &message {
-            Message::Power(crate::power::Message::Open)
-            | Message::Network(crate::network::Message::Open)
-            | Message::Bluetooth(crate::bluetooth::Message::Open)
-            | Message::Audio(crate::audio::Message::Open)
-            | Message::Launcher(launcher::Message::Mode(_)) => true,
-            Message::Power(crate::power::Message::Toggle) => !self.power.open(),
-            Message::Network(crate::network::Message::Toggle) => !self.network.open(),
-            Message::Bluetooth(crate::bluetooth::Message::Toggle) => !self.bluetooth.open(),
-            Message::Audio(crate::audio::Message::Toggle) => !self.audio.open(),
-            Message::Launcher(launcher::Message::Toggle) => !self.launcher.open(),
-            _ => false,
-        };
-        if other_panel {
-            self.update_live_wallpaper(crate::live_wallpaper::Message::Close, effects);
-            effects.delegate(
-                |child| self.tray.update(crate::tray::Message::Close, child),
-                Message::Tray,
-            );
-        }
         match message {
             Message::Ignore => {}
             Message::BackgroundPresented(instance, now) => {
@@ -1150,10 +1115,14 @@ impl Component for Desktop {
                     }
                 }
             }
-            Message::Notifications(message) => effects.delegate(
-                |e| self.notifications.update(message, e),
-                Message::Notifications,
-            ),
+            Message::Notifications(message) => {
+                let was_open = self.notifications.history_open();
+                effects.delegate(
+                    |child| self.notifications.update(message, child),
+                    Message::Notifications,
+                );
+                self.panel_opened(Panel::Notifications, was_open, effects);
+            }
             Message::Loaded(settings, wallpapers, current_wallpaper) => {
                 self.monitors.cancel_interactions();
                 self.update_widgets(widgets::Message::CancelDrags, effects);
@@ -1383,103 +1352,30 @@ impl Component for Desktop {
             }
             Message::System(Err(_)) => {}
             Message::Audio(message) => {
-                let opening = matches!(message, crate::audio::Message::Open)
-                    || matches!(message, crate::audio::Message::Toggle) && !self.audio.open();
-                if opening {
-                    effects.delegate(
-                        |child| self.power.update(crate::power::Message::Close, child),
-                        Message::Power,
-                    );
-                    effects.delegate(
-                        |child| {
-                            self.bluetooth
-                                .update(crate::bluetooth::Message::Close, child)
-                        },
-                        Message::Bluetooth,
-                    );
-                    self.update_launcher(launcher::Message::Close, effects);
-                    effects.delegate(
-                        |child| self.network.update(crate::network::Message::Close, child),
-                        Message::Network,
-                    );
-                }
+                let was_open = self.audio.open();
                 effects.delegate(|child| self.audio.update(message, child), Message::Audio);
+                self.panel_opened(Panel::Audio, was_open, effects);
             }
             Message::Network(message) => {
-                let opening = matches!(message, crate::network::Message::Open)
-                    || matches!(message, crate::network::Message::Toggle) && !self.network.open();
-                if opening {
-                    effects.delegate(
-                        |child| self.power.update(crate::power::Message::Close, child),
-                        Message::Power,
-                    );
-                    effects.delegate(
-                        |child| {
-                            self.bluetooth
-                                .update(crate::bluetooth::Message::Close, child)
-                        },
-                        Message::Bluetooth,
-                    );
-                    self.update_launcher(launcher::Message::Close, effects);
-                    effects.delegate(
-                        |child| self.audio.update(crate::audio::Message::Close, child),
-                        Message::Audio,
-                    );
-                }
+                let was_open = self.network.open();
                 effects.delegate(
                     |child| self.network.update(message, child),
                     Message::Network,
                 );
+                self.panel_opened(Panel::Network, was_open, effects);
             }
             Message::Bluetooth(message) => {
-                let before = self.bluetooth.open();
+                let was_open = self.bluetooth.open();
                 effects.delegate(
                     |child| self.bluetooth.update(message, child),
                     Message::Bluetooth,
                 );
-                if self.bluetooth.open() && !before {
-                    effects.delegate(
-                        |child| self.power.update(crate::power::Message::Close, child),
-                        Message::Power,
-                    );
-                    self.update_launcher(launcher::Message::Close, effects);
-                    effects.delegate(
-                        |child| self.audio.update(crate::audio::Message::Close, child),
-                        Message::Audio,
-                    );
-                    effects.delegate(
-                        |child| self.network.update(crate::network::Message::Close, child),
-                        Message::Network,
-                    );
-                }
+                self.panel_opened(Panel::Bluetooth, was_open, effects);
             }
             Message::Tray(message) => {
-                let before = self.tray.open();
+                let was_open = self.tray.open();
                 effects.delegate(|child| self.tray.update(message, child), Message::Tray);
-                let opening = self.tray.open() && !before;
-                if opening {
-                    self.update_live_wallpaper(crate::live_wallpaper::Message::Close, effects);
-                    self.update_launcher(launcher::Message::Close, effects);
-                    effects.delegate(
-                        |child| self.power.update(crate::power::Message::Close, child),
-                        Message::Power,
-                    );
-                    effects.delegate(
-                        |child| self.audio.update(crate::audio::Message::Close, child),
-                        Message::Audio,
-                    );
-                    effects.delegate(
-                        |child| self.network.update(crate::network::Message::Close, child),
-                        Message::Network,
-                    );
-                    effects.delegate(
-                        |child| {
-                            self.bluetooth
-                                .update(crate::bluetooth::Message::Close, child)
-                        },
-                        Message::Bluetooth,
-                    );
-                }
+                self.panel_opened(Panel::Tray, was_open, effects);
             }
             Message::Power(message) => {
                 if let crate::power::Message::Observed(result) = &message {
@@ -1508,27 +1404,9 @@ impl Component for Desktop {
                         effects.redraw("live-wallpaper");
                     }
                 }
-                let opening = matches!(message, crate::power::Message::Open)
-                    || matches!(message, crate::power::Message::Toggle) && !self.power.open();
-                if opening {
-                    self.update_launcher(launcher::Message::Close, effects);
-                    effects.delegate(
-                        |child| self.audio.update(crate::audio::Message::Close, child),
-                        Message::Audio,
-                    );
-                    effects.delegate(
-                        |child| self.network.update(crate::network::Message::Close, child),
-                        Message::Network,
-                    );
-                    effects.delegate(
-                        |child| {
-                            self.bluetooth
-                                .update(crate::bluetooth::Message::Close, child)
-                        },
-                        Message::Bluetooth,
-                    );
-                }
+                let was_open = self.power.open();
                 effects.delegate(|child| self.power.update(message, child), Message::Power);
+                self.panel_opened(Panel::Power, was_open, effects);
             }
             Message::Media(result) => {
                 let value = result.unwrap_or_default();
@@ -1550,35 +1428,7 @@ impl Component for Desktop {
                 self.launch(&id, prefer, effects);
                 self.update_launcher(launcher::Message::Close, effects);
             }
-            Message::LiveWallpaper(message) => {
-                if matches!(message, crate::live_wallpaper::Message::Open) {
-                    self.update_launcher(launcher::Message::Close, effects);
-                    effects.delegate(
-                        |child| self.audio.update(crate::audio::Message::Close, child),
-                        Message::Audio,
-                    );
-                    effects.delegate(
-                        |child| self.network.update(crate::network::Message::Close, child),
-                        Message::Network,
-                    );
-                    effects.delegate(
-                        |child| {
-                            self.bluetooth
-                                .update(crate::bluetooth::Message::Close, child)
-                        },
-                        Message::Bluetooth,
-                    );
-                    effects.delegate(
-                        |child| self.power.update(crate::power::Message::Close, child),
-                        Message::Power,
-                    );
-                    effects.delegate(
-                        |child| self.tray.update(crate::tray::Message::Close, child),
-                        Message::Tray,
-                    );
-                }
-                self.update_live_wallpaper(message, effects)
-            }
+            Message::LiveWallpaper(message) => self.update_live_wallpaper(message, effects),
             Message::Workspace(command) => {
                 // Retained named/special tree actions cannot invent a stale
                 // observed destination. Numbered shortcuts remain client policy.
@@ -1884,7 +1734,7 @@ impl api::Application for Desktop {
                 },
                 visible: self.live_wallpaper.mounted,
                 pointer_input: if self.live_wallpaper.open {
-                    PointerInput::All
+                    self.panel_pointer_input()
                 } else {
                     PointerInput::None
                 },
@@ -1907,7 +1757,7 @@ impl api::Application for Desktop {
                 },
                 visible: self.tray.visible(),
                 pointer_input: if self.tray.open() {
-                    PointerInput::All
+                    self.panel_pointer_input()
                 } else {
                     PointerInput::None
                 },
@@ -1930,7 +1780,7 @@ impl api::Application for Desktop {
                 },
                 visible: self.power.visible(),
                 pointer_input: if self.power.open() {
-                    PointerInput::All
+                    self.panel_pointer_input()
                 } else {
                     PointerInput::None
                 },
@@ -1953,7 +1803,7 @@ impl api::Application for Desktop {
                 },
                 visible: self.bluetooth.visible(),
                 pointer_input: if self.bluetooth.open() {
-                    PointerInput::All
+                    self.panel_pointer_input()
                 } else {
                     PointerInput::None
                 },
@@ -1976,7 +1826,7 @@ impl api::Application for Desktop {
                 },
                 visible: self.network.visible(),
                 pointer_input: if self.network.open() {
-                    PointerInput::All
+                    self.panel_pointer_input()
                 } else {
                     PointerInput::None
                 },
@@ -1999,9 +1849,9 @@ impl api::Application for Desktop {
                 },
                 visible: self.audio.visible(),
                 pointer_input: if self.audio.open() {
-                    PointerInput::All
+                    self.panel_pointer_input()
                 } else {
-                    PointerInput::Content
+                    PointerInput::None
                 },
             },
             SurfaceSpec {
@@ -2045,9 +1895,21 @@ impl api::Application for Desktop {
                 width: 0,
                 height: 0,
                 exclusive_zone: -1,
-                keyboard: Keyboard::OnDemand,
+                keyboard: if self.notifications.history_open() {
+                    Keyboard::Exclusive
+                } else if self.notifications.history_closing() {
+                    Keyboard::None
+                } else {
+                    Keyboard::OnDemand
+                },
                 visible: self.notifications.visible(),
-                pointer_input: lucent_api::PointerInput::Content,
+                pointer_input: if self.notifications.history_open() {
+                    self.panel_pointer_input()
+                } else if self.notifications.history_closing() {
+                    PointerInput::None
+                } else {
+                    PointerInput::Content
+                },
             },
             SurfaceSpec {
                 id: "bar",
@@ -2105,7 +1967,7 @@ impl api::Application for Desktop {
                 },
                 visible: true,
                 pointer_input: if self.launcher.open() {
-                    PointerInput::All
+                    self.panel_pointer_input()
                 } else {
                     PointerInput::Content
                 },
@@ -2399,6 +2261,11 @@ impl api::Application for Desktop {
             } if self.notifications.settled(now) => Some(Message::Notifications(
                 crate::notifications::Message::Settled,
             )),
+            Event::Outside {
+                surface: "notifications",
+            } if self.notifications.history_open() => {
+                Some(Message::Notifications(crate::notifications::Message::Hide))
+            }
             Event::Key {
                 surface: "notifications",
                 key: Key::Escape,
@@ -2511,6 +2378,11 @@ impl api::Application for Desktop {
         if command == "wallpaper live open" {
             return Ok(Some(Message::LiveWallpaper(
                 crate::live_wallpaper::Message::Open,
+            )));
+        }
+        if command == "wallpaper live close" {
+            return Ok(Some(Message::LiveWallpaper(
+                crate::live_wallpaper::Message::Close,
             )));
         }
         if command == "wallpaper live pause-all" || command == "wallpaper live resume-all" {
@@ -2750,6 +2622,7 @@ impl api::Application for Desktop {
             "notifications invoke-last" => Message::Notifications(crate::notifications::Message::InvokeLast),
             "notifications retry-images" => Message::Notifications(crate::notifications::Message::RetryArtwork),
             "notifications show" => Message::Notifications(crate::notifications::Message::Show),
+            "notifications hide" | "notifications close" => Message::Notifications(crate::notifications::Message::Hide),
             "notifications dnd" => Message::Notifications(crate::notifications::Message::Dnd),
             "theme light" => Message::Theme(true),
             "theme dark" => Message::Theme(false),
