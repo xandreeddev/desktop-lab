@@ -62,9 +62,14 @@ impl<T> ResourceCache<T> {
             },
         );
     }
-    /// Active scenes may exceed the reuse budget. Evicting their resources would
-    /// cause upload thrashing, so the excess is explicitly exposed in stats().
-    pub fn trim(&mut self) {
+    /// Retire unused resources whose source no longer exists, even below budget.
+    /// Active scenes stay pinned regardless of source lifetime or budget;
+    /// evicting those resources would cause cross-surface upload thrashing.
+    pub fn trim(&mut self, reusable: impl Fn(&T) -> bool) {
+        let before = self.entries.len();
+        self.entries
+            .retain(|_, entry| Rc::strong_count(&entry.resource) > 1 || reusable(&entry.resource));
+        self.evictions += (before - self.entries.len()) as u64;
         let mut bytes = self.entries.values().map(|entry| entry.bytes).sum::<u64>();
         while bytes > self.budget_bytes || self.entries.len() > self.entry_limit {
             let oldest = self
@@ -108,12 +113,12 @@ mod tests {
         cache.insert("wallpaper".into(), wallpaper.clone(), 85);
         let bar = Rc::new("bar");
         cache.insert("bar".into(), bar.clone(), 2);
-        cache.trim();
+        cache.trim(|_| true);
         assert!(Rc::ptr_eq(&cache.get("wallpaper").unwrap(), &wallpaper));
         assert_eq!(cache.stats().active_bytes, 87);
         assert_eq!(cache.stats().evictions, 0);
         drop(wallpaper);
-        cache.trim();
+        cache.trim(|_| true);
         assert!(cache.get("wallpaper").is_none());
         assert!(Rc::ptr_eq(&cache.get("bar").unwrap(), &bar));
         assert_eq!(cache.stats().bytes, 2);
@@ -126,10 +131,30 @@ mod tests {
         }
         drop(cache.get("a"));
         cache.insert("c".into(), Rc::new("c"), 10);
-        cache.trim();
+        cache.trim(|_| true);
         assert!(cache.get("b").is_none());
         assert!(cache.get("a").is_some());
         assert!(cache.get("c").is_some());
         assert_eq!(cache.stats().evictions, 1);
+    }
+    #[test]
+    fn expired_sources_retire_below_budget_only_after_all_draws_release_them() {
+        use std::cell::Cell;
+        let mut cache = ResourceCache::new(100, 10);
+        let image = Rc::new(Cell::new(true));
+        let second_surface = image.clone();
+        cache.insert("image".into(), image.clone(), 20);
+        cache.insert("reusable".into(), Rc::new(Cell::new(true)), 10);
+        image.set(false);
+        drop(image);
+        cache.trim(Cell::get);
+        assert_eq!(cache.stats().active_bytes, 20);
+        assert_eq!(cache.stats().evictions, 0);
+        drop(second_surface);
+        cache.trim(Cell::get);
+        assert_eq!(cache.stats().bytes, 10);
+        assert_eq!(cache.stats().evictions, 1);
+        assert!(cache.get("image").is_none());
+        assert!(cache.get("reusable").is_some());
     }
 }

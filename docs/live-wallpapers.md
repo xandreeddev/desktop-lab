@@ -239,6 +239,14 @@ the changed preferences. No compositor, D-Bus or codec operation runs in a view.
 The decoder reuses one private RGBA conversion buffer for each playback pass.
 Each delivered frame still receives owned bytes: reusing conversion scratch
 cannot mutate an image retained by a surface, a transition or another output.
+The renderer observes prepared image storage weakly through the generic
+`ImageData::lifetime()` API. Once every CPU consumer has released those pixels
+and no canvas pins the texture, existing cache maintenance can retire it even
+below the reuse budget. Value clones and frozen transition snapshots share the
+same pixel lifetime; each stream upload supplies its new frame's lifetime.
+This avoids retaining unreachable image textures without changing decode,
+wallpaper policy, output density or animation. It adds no idle polling and does
+not establish how much memory a driver or allocator returns to the process.
 The image preparation worker also records whether every pixel is opaque during
 its existing alpha pass. `ImageData::is_opaque()` reads that prepared fact without
 scanning pixels on the UI thread. The background client omits its solid fallback

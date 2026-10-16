@@ -29,9 +29,18 @@ struct TextureResource {
     height: f32,
     _texture: Texture,
     revision: Cell<u64>,
+    image_lifetime: RefCell<Option<lucent_api::ImageLifetime>>,
     bytes: u64,
     /// Logical left bearing for text masks; ordinary image resources use zero.
     text_origin_x: f32,
+}
+impl TextureResource {
+    fn reusable(&self) -> bool {
+        self.image_lifetime
+            .borrow()
+            .as_ref()
+            .is_none_or(lucent_api::ImageLifetime::is_alive)
+    }
 }
 /// One GPU device is shared by all native surfaces in an application.
 pub struct Gpu {
@@ -273,6 +282,7 @@ impl Gpu {
             height: height as f32,
             _texture: texture,
             revision: Cell::new(0),
+            image_lifetime: RefCell::new(None),
             bytes: levels.iter().map(|level| level.pixels.len() as u64).sum(),
             text_origin_x: 0.,
         });
@@ -335,6 +345,7 @@ impl Gpu {
                             },
                         );
                         texture.revision.set(revision);
+                        *texture.image_lifetime.borrow_mut() = Some(data.lifetime());
                         if enabled {
                             profile.texture_upload += profiling::elapsed(started);
                             profile.texture_upload_bytes += data.bytes() as u64;
@@ -352,6 +363,7 @@ impl Gpu {
             profile.image_misses += 1;
         }
         let texture = self.texture(data.levels(), data.format(), profile, enabled);
+        *texture.image_lifetime.borrow_mut() = Some(data.lifetime());
         if let Some((_, revision)) = streamed {
             texture.revision.set(revision);
         }
@@ -762,7 +774,7 @@ impl Canvas {
             Err(error) => {
                 // Partially prepared resources have dropped their temporary
                 // references; current scenes remain pinned in their canvases.
-                self.gpu.cache.borrow_mut().trim();
+                self.gpu.cache.borrow_mut().trim(TextureResource::reusable);
                 return Err(error);
             }
         };
@@ -847,7 +859,7 @@ impl Canvas {
         // Keep each surface's current scene resident, including while other
         // surfaces redraw. Replacing the scene releases its obsolete references.
         self.resources = textures;
-        self.gpu.cache.borrow_mut().trim();
+        self.gpu.cache.borrow_mut().trim(TextureResource::reusable);
         profile.retire = profiling::elapsed(started);
         self.last_profile = self.profiling.then_some(profile);
         Ok(())
@@ -951,7 +963,7 @@ impl Canvas {
 impl Drop for Canvas {
     fn drop(&mut self) {
         self.resources.clear();
-        self.gpu.cache.borrow_mut().trim();
+        self.gpu.cache.borrow_mut().trim(TextureResource::reusable);
     }
 }
 
@@ -1320,6 +1332,82 @@ mod resource_tests {
             2,
             "changed pixels reused a stale filename-based texture"
         );
+    }
+
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn renderer_surface_resources_follow_pixel_lifetime_across_clones_and_streams() {
+        let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
+        let mut left = Canvas::new(gpu.clone());
+        let mut right = Canvas::new(gpu.clone());
+        left.profiling = true;
+        let rect = Rect::new(0., 0., 8., 8.);
+        let paint = |data| {
+            [Paint::Image {
+                rect,
+                clip: rect.into(),
+                data,
+                uv: Rect::new(0., 0., 1., 1.),
+                radius: 0.,
+                opacity: 1.,
+                tint: Color::hex(0xffffff),
+            }]
+        };
+        let image = ImageData::from_rgba("lifetime", 2, 2, [80, 40, 20, 255].repeat(4)).unwrap();
+        let clone = image.clone();
+        let lifetime = image.lifetime();
+        let original = paint(Arc::new(image));
+        let expected = left.snapshot(8, 8, 1, &original).unwrap();
+        right.snapshot(8, 8, 1, &original).unwrap();
+        drop(original);
+        left.snapshot(8, 8, 1, &[]).unwrap();
+        right.snapshot(8, 8, 1, &[]).unwrap();
+        assert_eq!(gpu.cache_stats().active_bytes, 0);
+        assert_eq!(
+            gpu.cache_stats().entries,
+            1,
+            "a value clone can still reuse the image"
+        );
+
+        let alias = paint(Arc::new(clone));
+        assert_eq!(left.snapshot(8, 8, 1, &alias).unwrap(), expected);
+        assert_eq!(left.last_profile.unwrap().resources.texture_upload_bytes, 0);
+        drop(alias);
+        assert!(!lifetime.is_alive(), "the cache must not retain CPU pixels");
+        right.snapshot(8, 8, 1, &[]).unwrap();
+        assert_eq!(
+            gpu.cache_stats().entries,
+            1,
+            "left's current draw remains pinned"
+        );
+        left.snapshot(8, 8, 1, &[]).unwrap();
+        assert_eq!(gpu.cache_stats().entries, 0);
+        assert_eq!(gpu.cache_stats().bytes, 0);
+        assert_eq!(gpu.cache_stats().evictions, 1);
+
+        let stream = lucent_api::ImageStream::new();
+        let first = paint(Arc::new(
+            stream.frame_rgba(2, 1, [255, 0, 0, 255].repeat(2)).unwrap(),
+        ));
+        left.snapshot(8, 8, 1, &first).unwrap();
+        drop(first);
+        let next = paint(Arc::new(
+            stream.frame_rgba(2, 1, [0, 0, 255, 255].repeat(2)).unwrap(),
+        ));
+        let blue = left.snapshot(8, 8, 1, &next).unwrap();
+        assert_eq!(left.last_profile.unwrap().resources.image_misses, 0);
+        left.snapshot(8, 8, 1, &[]).unwrap();
+        assert_eq!(
+            gpu.cache_stats().entries,
+            1,
+            "reuse observes the latest frame's lifetime"
+        );
+        assert_eq!(left.snapshot(8, 8, 1, &next).unwrap(), blue);
+        assert_eq!(left.last_profile.unwrap().resources.texture_upload_bytes, 0);
+        drop(next);
+        left.snapshot(8, 8, 1, &[]).unwrap();
+        assert_eq!(gpu.cache_stats().entries, 0);
+        assert_eq!(gpu.cache_stats().evictions, 2);
     }
 
     #[test]
