@@ -24,7 +24,8 @@ mod clip;
 pub use clip::{Clip, RoundedRect};
 mod image;
 pub use image::{
-    ImageData, ImageError, ImageFormat, ImageLevel, ImageStream, reduce_alpha, reduce_premultiplied,
+    ImageData, ImageError, ImageFormat, ImageLevel, ImageLifetime, ImageStream, reduce_alpha,
+    reduce_premultiplied,
 };
 use std::{
     collections::BTreeSet,

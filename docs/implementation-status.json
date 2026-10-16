@@ -86,7 +86,8 @@
         "GPU tests passed for cross-surface residency, release and same-name asset replacement",
         "78 Rust tests, 48 Python tests and 148 visual comparisons passed",
         "Native VM launcher, shell restart and secure lock/unlock passed",
-        "Format-aware immutable Alpha8 images/mips and R8 textures preserve RGBA coverage while storing one channel. Text keeps 2x supersampling. Six final resource/pixel checks pass on each driver, 248 Rust tests pass, and all 248 existing visual references pass on the final allocation checkpoint (hardware locally, software in CI). The memory preference is a hint, not a budget. See reports/measurements/lucent-icon-masks.json."
+        "Format-aware immutable Alpha8 images/mips and R8 textures preserve RGBA coverage while storing one channel. Text keeps 2x supersampling. Six final resource/pixel checks pass on each driver, 248 Rust tests pass, and all 248 existing visual references pass on the final allocation checkpoint (hardware locally, software in CI). The memory preference is a hint, not a budget. See reports/measurements/lucent-icon-masks.json.",
+        "Source 8e06cfc1ab9129b569a7d7ea2ddd5bb1ec2699b4 adds generic ImageLifetime observation and retires expired unpinned textures without idle polling or changing density/motion. 519 regular Rust tests, strict Clippy, 93 Python checks and focused Vulkan shared-resource/frozen-stream/fade checks pass. Native red/blue wallpaper changes preserve intermediate blends and retire outgoing images with exact restoration. In matching 120-second software-Vulkan samples, static peak is 247.02 MiB and 1280x800 video at 15 FPS peaks at 333.39 MiB versus 348.88 MiB before; video still exceeds 300 MiB. Video CPU is higher in this one-run comparison (86.074% versus 80.008% of one core). See reports/measurements/lucent-image-lifetime.json."
       ]
     },
     {
@@ -459,7 +460,8 @@
         "Source 63a4518b5140f7082f4bc3fed0ef8b5d5c1ea64c passes updated native autofocus, keyboard undo/redo, explicit pause-all preservation across imports, MP4/WebM/GIF pixels, profile pause/resume, FPS, invalid-media recovery and restart with exact rollback. Two 120-second software-Vulkan samples peak at 233.70 MiB static and 260.12 MiB during synthetic 160x90 MP4 playback at 15 FPS on a 1280x800 output. CPU is 1.067% and 69.891% of one core; GPU allocations and physical-GPU pacing are not measured. See reports/measurements/lucent-live-wallpaper-vm.json.",
         "Source faec272e21fe301284f6212a59b7de84cc8752aa passes native single-output fullscreen pause with zero decoder/background redraw demand, hidden-workspace playback, manual-pause precedence, keyboard policy toggles and restart persistence. Exact settings, wallpaper, exports, workspace/focus and idle policy are restored; test-owned windows/assets are removed. Battery and shared-output behavior have owned-fixture coverage; physical battery/native multi-output/resource acceptance remains open. See reports/measurements/lucent-live-wallpaper-policy.json.",
         "Source 00f3e8721d054503d7e7d0878c8e6cc58b59dba8 adds typed SessionPort lock observations and passes native secure lock, stopped decoding/background submissions, desktop restart under the independent locker, authenticated unlock/resume and manual-pause preservation. Exact wallpaper/settings/theme/login/idle state is restored and the session remains unlocked. Static wallpapers have no lock observer; observation failures preserve a known lock pause. See reports/measurements/lucent-live-wallpaper-lock.json. Physical sessions, native multi-output and broader security/recovery acceptance remain open.",
-        "Current source 00f3e8721d054503d7e7d0878c8e6cc58b59dba8 has two new 120-second samples on one 1920x1080 software-Vulkan output: static 242.34 MiB mean / 247.00 MiB peak and 1.225% of one CPU core; 1280x800 H.264 at 15 FPS 348.55 MiB mean / 348.88 MiB peak and 80.008% CPU. Playback submits 1808 background frames during the measured interval. Full-resolution video still exceeds the 300 MiB target. Exact desktop settings/wallpaper/exports/idle state are restored. See reports/measurements/lucent-current-video-resources.json; this is not a controlled comparison with historical binaries or a hardware/GPU-memory result."
+        "Current source 00f3e8721d054503d7e7d0878c8e6cc58b59dba8 has two new 120-second samples on one 1920x1080 software-Vulkan output: static 242.34 MiB mean / 247.00 MiB peak and 1.225% of one CPU core; 1280x800 H.264 at 15 FPS 348.55 MiB mean / 348.88 MiB peak and 80.008% CPU. Playback submits 1808 background frames during the measured interval. Full-resolution video still exceeds the 300 MiB target. Exact desktop settings/wallpaper/exports/idle state are restored. See reports/measurements/lucent-current-video-resources.json; this is not a controlled comparison with historical binaries or a hardware/GPU-memory result.",
+        "Source 8e06cfc1ab9129b569a7d7ea2ddd5bb1ec2699b4 adds generic ImageLifetime observation and retires expired unpinned textures without idle polling or changing density/motion. 519 regular Rust tests, strict Clippy, 93 Python checks and focused Vulkan shared-resource/frozen-stream/fade checks pass. Native red/blue wallpaper changes preserve intermediate blends and retire outgoing images with exact restoration. In matching 120-second software-Vulkan samples, static peak is 247.02 MiB and 1280x800 video at 15 FPS peaks at 333.39 MiB versus 348.88 MiB before; video still exceeds 300 MiB. Video CPU is higher in this one-run comparison (86.074% versus 80.008% of one core). See reports/measurements/lucent-image-lifetime.json."
       ]
     }
   ],
@@ -1634,6 +1636,25 @@
         "Physical-session and simultaneous native multi-output lock/suspend/reconnect behavior.",
         "Secure-client poster display and broader authentication/denial/recovery audit.",
         "Full-resolution video RSS remains above 300 MiB; hardware decoding, physical-GPU pacing and measured power savings remain open.",
+        "Final evidence-head CI and authorized merge."
+      ]
+    },
+    {
+      "milestone": "image-resource-lifetime-native-vm",
+      "source_commit": "8e06cfc1ab9129b569a7d7ea2ddd5bb1ec2699b4",
+      "report": "reports/measurements/lucent-image-lifetime.json",
+      "status": "native_behavior_verified_video_resource_target_not_met",
+      "checks": [
+        "Weak pixel-storage lifetime handles value clones and frozen snapshots without retaining CPU pixels; active canvas references remain authoritative.",
+        "519 Rust tests, strict formatting/Clippy/all-targets, 93 Python checks, focused Vulkan resource/stream/fade tests and both site URL prefixes pass.",
+        "Native compositor captures show intermediate wallpaper blend pixels and completed image retirement in both directions. Exact settings, wallpaper, exports and idle policy are restored.",
+        "Same-workload 120-second resource samples record 247.02 MiB static peak and 333.39 MiB video peak. Video remains above 300 MiB; CPU did not improve in this sample.",
+        "Preceding PR #64 passed all six checks and merged as 79657d1ae75e43c4870f5b259f62adef0e6be2d6; its Pages deployment succeeded."
+      ],
+      "pending": [
+        "Video still exceeds 300 MiB RSS; static idle CPU is slightly above 1% in this sample.",
+        "Repeated hardware measurements, decoder/allocator/driver attribution, GPU allocations and physical-GPU pacing/power remain open.",
+        "Simultaneous native multi-output/suspend/reconnect and broader secure-session recovery acceptance remain open.",
         "Final evidence-head CI and authorized merge."
       ]
     }

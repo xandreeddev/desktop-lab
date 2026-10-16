@@ -1,6 +1,6 @@
 //! Immutable presentation images, prepared before entering the UI event loop.
 use std::sync::{
-    Arc,
+    Arc, Weak,
     atomic::{AtomicU64, Ordering},
 };
 
@@ -52,6 +52,19 @@ pub struct ImageData {
     pub key: String,
     aspect_size: (u32, u32),
     prepared: Arc<Prepared>,
+}
+/// A weak observation of an immutable image's pixel allocation. It retains no
+/// pixels and grants no access to them. Clones and frozen snapshots share the
+/// allocation's lifetime, independently of their outer `Arc<ImageData>` values.
+#[derive(Clone, Debug)]
+pub struct ImageLifetime(Weak<[ImageLevel]>);
+impl ImageLifetime {
+    /// Whether a consumer still owns these pixels. A true observation can
+    /// become false concurrently; false is final. Resource caches must also
+    /// preserve their own active draw references before retiring a texture.
+    pub fn is_alive(&self) -> bool {
+        self.0.strong_count() > 0
+    }
 }
 /// One generic streamed image resource, independent of media/OS policy. Each
 /// prepared frame is immutable; the renderer may reuse its GPU allocation when
@@ -276,6 +289,11 @@ impl ImageData {
     pub fn cache_id(&self) -> u64 {
         self.prepared.id
     }
+    /// Observe storage lifetime without keeping pixels resident. Renderer
+    /// caches use this to retire unused textures that can no longer be reused.
+    pub fn lifetime(&self) -> ImageLifetime {
+        ImageLifetime(Arc::downgrade(&self.prepared.levels))
+    }
     /// Stable GPU resource identity and immutable content revision for a stream.
     pub fn stream_revision(&self) -> Option<(u64, u64)> {
         self.prepared.stream
@@ -386,6 +404,40 @@ fn reduce(bytes: &[u8], width: u32, height: u32, format: ImageFormat) -> (Vec<u8
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn weak_lifetime_tracks_shared_pixels_without_retaining_them() {
+        let stream = ImageStream::new();
+        let frame = stream.frame_rgba(4, 2, vec![255; 32]).unwrap();
+        let lifetime = frame.lifetime();
+        let clone = frame.clone();
+        let snapshot = frame.snapshot();
+        assert_eq!(frame.pixels().as_ptr(), snapshot.pixels().as_ptr());
+        drop(frame);
+        assert!(lifetime.is_alive());
+        drop(clone);
+        assert!(
+            lifetime.is_alive(),
+            "a frozen snapshot still owns the pixels"
+        );
+        drop(snapshot);
+        assert!(!lifetime.is_alive());
+        let next = stream.frame_rgba(4, 2, vec![128; 32]).unwrap();
+        assert!(next.lifetime().is_alive());
+        assert!(
+            !lifetime.is_alive(),
+            "another revision cannot revive old pixels"
+        );
+
+        let original = ImageData::from_rgba("still", 4, 2, vec![255; 32]).unwrap();
+        let lifetime = original.lifetime();
+        let smaller = original.downsample(2);
+        drop(original);
+        assert!(
+            !lifetime.is_alive(),
+            "a copied mip chain has independent storage"
+        );
+        assert!(smaller.lifetime().is_alive());
+    }
     #[test]
     fn alpha_storage_preserves_every_rgba_mip_and_owns_trimmed_pixels() {
         for (width, height) in [(1, 1), (3, 1), (1, 7), (65, 37)] {
