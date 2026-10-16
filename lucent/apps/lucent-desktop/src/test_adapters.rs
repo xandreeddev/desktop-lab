@@ -105,6 +105,9 @@ impl WallpaperPort for Fake {
     }
 }
 impl SessionPort for Fake {
+    fn watch_lock(&self, emit: &mut dyn FnMut(Result<SessionLockState>), _: &dyn StopSignal) {
+        emit(Ok(SessionLockState::Unlocked));
+    }
     fn lock(&self) -> Result<()> {
         self.calls.lock().unwrap().push("lock");
         Ok(())

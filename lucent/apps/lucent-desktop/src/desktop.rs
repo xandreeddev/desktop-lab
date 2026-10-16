@@ -26,6 +26,7 @@ pub enum Message {
     Previews(crate::previews::Message),
     WallpaperSelection(crate::wallpaper_selection::Message),
     Compositor(domain::Result<CompositorSnapshot>),
+    SessionLock(domain::Result<SessionLockState>),
     Clock(ClockSnapshot),
     System(domain::Result<SystemSnapshot>),
     Audio(crate::audio::Message),
@@ -1284,6 +1285,17 @@ impl Component for Desktop {
                     _ => {}
                 }
             }
+            Message::SessionLock(result) => {
+                // An observation error cannot establish an unlock. Retain a
+                // known lock pause until the adapter observes an unlocked session.
+                if let Ok(state) = result {
+                    let locked = state == SessionLockState::Locked;
+                    if self.wallpaper_context.session_locked != locked {
+                        self.wallpaper_context.session_locked = locked;
+                        effects.redraw("live-wallpaper");
+                    }
+                }
+            }
             Message::Compositor(result) => match result {
                 Ok(value) => {
                     let fullscreen = value
@@ -2304,6 +2316,15 @@ impl api::Application for Desktop {
             s.push(Subscription::stream("compositor", move |out, cancel| {
                 compositor.watch(
                     &mut |event| out.send(Message::Compositor(event)),
+                    &WatchStop(cancel),
+                );
+            }));
+        }
+        if self.live_wallpaper.has_outputs() {
+            let session = self.adapters.session.clone();
+            s.push(Subscription::stream("session-lock", move |out, cancel| {
+                session.watch_lock(
+                    &mut |state| out.send(Message::SessionLock(state)),
                     &WatchStop(cancel),
                 );
             }));

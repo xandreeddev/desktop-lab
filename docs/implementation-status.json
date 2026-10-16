@@ -450,13 +450,16 @@
         "Latest-frame delivery GPU reuse cancellation and disconnected-output lifetime remain bounded",
         "Actual graphical input playback reconnect sleep and secure poster export are verified",
         "Current media RSS frame pacing idle and power measurements have workload/hardware evidence",
-        "Automatic battery/fullscreen pauses preserve manual preferences and independent per-output presentation"
+        "Automatic battery/fullscreen pauses preserve manual preferences and independent per-output presentation",
+        "Observed secure session locks stop live decoding; authenticated unlock preserves manual pause and observation failures cannot establish an unlock"
       ],
       "evidence": [
         "Source e05576c24fbafd82cc4f5c89dcebd49472fbda4b implements the complete native media path and client controls; native fixtures, client lifetime checks and software Vulkan texture checks pass. Graphical acceptance and current resource/pacing measurements remain deferred. See reports/measurements/lucent-native-media-and-activation.json.",
         "Recorded source eb3f5cbfd6498844b567a5274d0a0ca7a44c50d2 passes single-output native VM MP4/WebM/GIF imports and changing captured background pixels, keyboard path submission/FPS selection, Escape, pause/resume, invalid-import preservation and restart persistence. Exact settings, selected wallpaper, theme/login exports, idle policy and test-owned asset cleanup are restored. See reports/measurements/lucent-live-wallpaper-baseline-vm.json. This establishes the baseline native path, not later daily-control changes, multi-output/hardware/secure-session acceptance or current RSS/pacing.",
         "Source 63a4518b5140f7082f4bc3fed0ef8b5d5c1ea64c passes updated native autofocus, keyboard undo/redo, explicit pause-all preservation across imports, MP4/WebM/GIF pixels, profile pause/resume, FPS, invalid-media recovery and restart with exact rollback. Two 120-second software-Vulkan samples peak at 233.70 MiB static and 260.12 MiB during synthetic 160x90 MP4 playback at 15 FPS on a 1280x800 output. CPU is 1.067% and 69.891% of one core; GPU allocations and physical-GPU pacing are not measured. See reports/measurements/lucent-live-wallpaper-vm.json.",
-        "Source faec272e21fe301284f6212a59b7de84cc8752aa passes native single-output fullscreen pause with zero decoder/background redraw demand, hidden-workspace playback, manual-pause precedence, keyboard policy toggles and restart persistence. Exact settings, wallpaper, exports, workspace/focus and idle policy are restored; test-owned windows/assets are removed. Battery and shared-output behavior have owned-fixture coverage; physical battery/native multi-output/resource acceptance remains open. See reports/measurements/lucent-live-wallpaper-policy.json."
+        "Source faec272e21fe301284f6212a59b7de84cc8752aa passes native single-output fullscreen pause with zero decoder/background redraw demand, hidden-workspace playback, manual-pause precedence, keyboard policy toggles and restart persistence. Exact settings, wallpaper, exports, workspace/focus and idle policy are restored; test-owned windows/assets are removed. Battery and shared-output behavior have owned-fixture coverage; physical battery/native multi-output/resource acceptance remains open. See reports/measurements/lucent-live-wallpaper-policy.json.",
+        "Source 00f3e8721d054503d7e7d0878c8e6cc58b59dba8 adds typed SessionPort lock observations and passes native secure lock, stopped decoding/background submissions, desktop restart under the independent locker, authenticated unlock/resume and manual-pause preservation. Exact wallpaper/settings/theme/login/idle state is restored and the session remains unlocked. Static wallpapers have no lock observer; observation failures preserve a known lock pause. See reports/measurements/lucent-live-wallpaper-lock.json. Physical sessions, native multi-output and broader security/recovery acceptance remain open.",
+        "Current source 00f3e8721d054503d7e7d0878c8e6cc58b59dba8 has two new 120-second samples on one 1920x1080 software-Vulkan output: static 242.34 MiB mean / 247.00 MiB peak and 1.225% of one CPU core; 1280x800 H.264 at 15 FPS 348.55 MiB mean / 348.88 MiB peak and 80.008% CPU. Playback submits 1808 background frames during the measured interval. Full-resolution video still exceeds the 300 MiB target. Exact desktop settings/wallpaper/exports/idle state are restored. See reports/measurements/lucent-current-video-resources.json; this is not a controlled comparison with historical binaries or a hardware/GPU-memory result."
       ]
     }
   ],
@@ -1611,6 +1614,26 @@
         "Native simultaneous multi-output sharing, freezing and hotplug/suspend behavior.",
         "Automatic secure-lock pausing and secure-client poster display acceptance.",
         "Full-resolution RSS against the 300 MiB target, hardware decode and physical-GPU frame pacing.",
+        "Final evidence-head CI and authorized merge."
+      ]
+    },
+    {
+      "milestone": "live-wallpaper-secure-lock-native-vm-acceptance",
+      "source_commit": "00f3e8721d054503d7e7d0878c8e6cc58b59dba8",
+      "report": "reports/measurements/lucent-live-wallpaper-lock.json",
+      "status": "native_single_output_secure_lock_checks_passed",
+      "checks": [
+        "517 Rust workspace tests, strict formatting/Clippy/all-targets, 93 Python checks and both Astro URL prefixes pass locally. No visual baseline/tolerance changes.",
+        "The domain SessionPort reports typed lock observations; the Hyprland adapter owns bounded queries and unavailable-state decoding. A pure wallpaper use case chooses the reason. Client subscription lifetime excludes static wallpapers and retains unlock observation while paused.",
+        "Actual VM secure lock stops the decoder/background redraws; desktop restart under the independent locker keeps playback paused. Authenticated unlock resumes an unpaused profile and preserves manual pause.",
+        "Exact settings, wallpaper, theme/login exports and idle policy are restored. Native credentials and captures stay private; the session is left unlocked.",
+        "Two current 120-second process measurements are recorded separately in reports/measurements/lucent-current-video-resources.json. Static peak is 247.00 MiB; full-resolution video peak is 348.88 MiB and still exceeds the 300 MiB target.",
+        "A CI network-fixture timing assumption was corrected with an explicit intermediate device-connected/no-primary state. The network suite and ten repeated actual private-D-Bus runs pass; production network behavior is unchanged."
+      ],
+      "pending": [
+        "Physical-session and simultaneous native multi-output lock/suspend/reconnect behavior.",
+        "Secure-client poster display and broader authentication/denial/recovery audit.",
+        "Full-resolution video RSS remains above 300 MiB; hardware decoding, physical-GPU pacing and measured power savings remain open.",
         "Final evidence-head CI and authorized merge."
       ]
     }

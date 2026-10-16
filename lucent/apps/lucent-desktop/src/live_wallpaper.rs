@@ -283,6 +283,9 @@ impl LiveWallpaper {
             });
         self.prepared.clear();
     }
+    pub fn has_outputs(&self) -> bool {
+        !self.routes.is_empty()
+    }
     pub fn subscriptions(&self) -> Vec<Subscription<Message>> {
         self.players
             .iter()
@@ -653,6 +656,7 @@ impl LiveWallpaper {
                     WallpaperPauseReason::All => "All live wallpapers are paused",
                     WallpaperPauseReason::Profile => "Paused",
                     WallpaperPauseReason::Sleep => "Paused for system sleep",
+                    WallpaperPauseReason::SessionLock => "Paused while the session is locked",
                     WallpaperPauseReason::Battery => "Paused on battery power",
                     WallpaperPauseReason::Fullscreen => "Paused behind a fullscreen app",
                 };

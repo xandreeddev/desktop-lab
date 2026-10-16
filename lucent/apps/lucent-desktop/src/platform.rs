@@ -4,6 +4,7 @@ use lucent_api::ImageData;
 use lucent_domain::*;
 use lucent_services::{
     JsonSettings, applications::XdgApplications, compositor::Hyprland, desktop_adapters::*, images,
+    session::LucentSession,
 };
 use std::{collections::BTreeMap, sync::Arc};
 pub fn desktop_adapters() -> DesktopAdapters {

@@ -1,3 +1,4 @@
+mod session_lock;
 mod wire;
 use lucent_domain::*;
 use serde_json::Value;

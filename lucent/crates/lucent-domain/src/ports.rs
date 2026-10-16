@@ -35,6 +35,16 @@ pub trait WallpaperPort: Send + Sync {
     fn commit(&self, asset: &WallpaperAsset) -> Result<()>;
     fn discard(&self, asset: &WallpaperAsset) -> Result<()>;
 }
+/// Advisory observation for background work. It never grants authentication or
+/// permission to release a secure session lock.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SessionLockState {
+    Locked,
+    Unlocked,
+}
 pub trait SessionPort: Send + Sync {
     fn lock(&self) -> Result<()>;
+    /// Report changes and observation failures until cancelled. A failed read
+    /// does not establish that a previously locked session is now unlocked.
+    fn watch_lock(&self, emit: &mut dyn FnMut(Result<SessionLockState>), stop: &dyn StopSignal);
 }

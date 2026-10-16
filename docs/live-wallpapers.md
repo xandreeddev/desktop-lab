@@ -74,6 +74,13 @@ Unavailable battery/compositor observations clear those automatic reasons;
 they are not treated as proof of battery power or fullscreen. A known sleep
 pause remains in effect until a successful power observation reports resume.
 
+An observed secure session lock also pauses every live output. This automatic
+reason is always enabled; it does not change the manual pause controls. The
+client retains a known lock pause across unavailable observations and resumes
+only after an explicit unlocked observation, when no other pause applies.
+An initial unavailable observation does not establish that the session is locked.
+Locking and unlocking still belong to the secure locker and compositor protocol.
+
 The default live import also supplies its validated poster to the normal static
 wallpaper transaction. That gives secure/session clients a still background and
 retains ordinary image/theme export behavior. Export failure stays visible through
@@ -136,9 +143,9 @@ A cap skips excess/late decoded frames; it does not synthesize intermediate
 frames or increase a source's frame rate. Shared identical media/FPS profiles use
 one producer. Different source profiles have separate playback timelines.
 Disconnected outputs acquire no decoder, and observation of a known sleep
-transition suspends playback. Explicit pause is always available. Automatic
-secure-lock detection remains further work; the fullscreen policy is not a lock
-detector and never authorizes an unlock.
+transition suspends playback. Explicit pause is always available. Session lock
+observation supplies its own pause reason; fullscreen is not used as a lock
+detector. No wallpaper observation ever authorizes an unlock.
 
 Initial envelopes:
 
@@ -193,7 +200,7 @@ resource lifetime. The renderer has no wallpaper or codec policy.
 
 `WallpaperPlaybackPolicy`, `WallpaperPlaybackContext` and `WallpaperPauseReason`
 are domain values. The pure `wallpaper_pause_reason` use case applies explicit
-pause, sleep, battery and per-output fullscreen precedence without I/O. The
+pause, sleep, session lock, battery and per-output fullscreen precedence without I/O. The
 existing `PowerPort` and `CompositorPort` observations supply facts. The Hyprland
 adapter normalizes its internal fullscreen mode, mapped/hidden flags, monitor
 identity and visible workspace; its socket event triggers a fresh snapshot,
@@ -201,6 +208,26 @@ not a boolean toggle. Repeated fullscreen events therefore cannot accidentally
 resume a paused output. See the upstream [IPC event contract](https://wiki.hypr.land/IPC/),
 [command serialization](https://github.com/hyprwm/Hyprland/blob/main/src/ipc/s1/Commands.cpp)
 and [fullscreen modes](https://github.com/hyprwm/Hyprland/blob/main/src/managers/fullscreen/FullscreenTypes.hpp).
+
+The domain `SessionPort.watch_lock` reports `SessionLockState::Locked` or
+`Unlocked`, or an observation error. `LucentSession` implements it on a
+subscription worker. Its Hyprland adapter reads `j/monitors` through the existing
+bounded socket transport, with a two-second query deadline and one-second wait
+between reads. Identical observations emit no new client message. The client
+owns this subscription only while a live wallpaper has an output, including
+while paused; ordinary static wallpapers add no lock polling.
+
+The supported Hyprland revision has no lock-change IPC event. Its
+[`solitaryBlockedBy` serialization](https://github.com/hyprwm/Hyprland/blob/efb50993780079460b0cbed1363e2166a2de1d9f/src/debug/HyprCtl.cpp)
+includes `LOCK`, which reflects compositor lock state even after a locker exits.
+The [monitor check](https://github.com/hyprwm/Hyprland/blob/efb50993780079460b0cbed1363e2166a2de1d9f/src/output/Monitor.cpp)
+can return early when a workspace is missing: `WORKSPACE`, missing/malformed
+fields and unreadable outputs therefore cannot establish an unlock. A readable
+unlocked output can establish it; any explicit `LOCK` takes precedence. This
+adapter detail stays outside the domain, views and generic renderer. It provides
+advisory background-work policy, not authentication or permission to release a
+secure lock. Observation latency is separate from the compositor's immediate
+security boundary.
 
 The root joins observations into the transient context. The child coordinator
 owns per-output presentation routes and shared producer lifetimes. A paused
@@ -237,6 +264,23 @@ power observations and disconnect/recovery, shared stream pause/resume, static
 image identity and per-output redraw routing. An owned Unix-socket fixture sends
 fragmented and repeated fullscreen events through the actual Hyprland adapter.
 These checks do not establish physical-battery or native multi-output acceptance.
+Session-lock fixtures exercise actual owned sockets, repeated observations,
+unavailable/recovered state and cancellation. Client checks cover observer
+lifetime, preserved pixels, paused producer retirement and manual-pause
+precedence. A focused native check is available as
+`python3 vm/test-live-wallpapers.py --lock-only --login-file PRIVATE_LOGIN_FILE`.
+It uses the existing guarded native keyboard helper for authenticated unlock;
+the file must be private to its owner. It also restarts the desktop while the
+independent secure locker remains active and restores the normal desktop through
+the existing checkpoint. On source `00f3e8721d054503d7e7d0878c8e6cc58b59dba8`,
+the single-output VM passed actual secure lock, zero decoder/background redraws
+while locked, desktop restart under an existing lock, authenticated unlock with
+resumed playback, and a second lock/unlock preserving manual pause. The session
+was left unlocked and exact settings, wallpaper, theme/login exports and idle
+policy were restored. See the [native lock report](../reports/measurements/lucent-live-wallpaper-lock.json).
+This does not establish physical-session/multi-output behavior or the broader
+authentication and recovery audit.
+
 A focused VM check is available as `python3 vm/test-live-wallpapers.py --policy-only`.
 It uses one synthetic MP4 and a test-owned terminal to exercise fullscreen,
 workspace visibility, manual pause, the native policy toggles and restart.
@@ -279,5 +323,20 @@ A later 120-second full-resolution workload (1280×800 pixel-landscape video at
 RSS / 373.38 MiB peak and 113.616% of one logical CPU core. That source predates
 the conversion/coverage changes. It exceeds the 300 MiB target and supersedes
 any inference that the small synthetic sample proved full-resolution efficiency.
-The current optimization still needs a matching native before/after measurement;
-hardware decoding, physical-GPU pacing and measured power savings remain open.
+Current source `00f3e8721d054503d7e7d0878c8e6cc58b59dba8` has two new
+120-second samples with profiling disabled on the same output/media dimensions:
+
+| Workload | Mean RSS | Peak RSS | CPU, one logical core |
+| --- | ---: | ---: | ---: |
+| Settled static desktop | 242.34 MiB | 247.00 MiB | 1.225% |
+| 1280×800 H.264 loop, 15 FPS | 348.55 MiB | 348.88 MiB | 80.008% |
+
+Playback continued through the interval, with 1808 background submissions.
+The static sample meets the 300 MiB RSS target; the full-resolution video still
+exceeds it, and static idle CPU is above the 1% target. See the
+[current resource report](../reports/measurements/lucent-current-video-resources.json)
+for the binary, workload, measurement procedure and verified exact restoration.
+These are current measurements, not a controlled comparison with older binaries.
+Software rendering contributes to process CPU/RSS; GPU allocations and
+physical-GPU pacing/power remain unmeasured. Hardware decoding and a matching
+before/after optimization experiment remain open.
