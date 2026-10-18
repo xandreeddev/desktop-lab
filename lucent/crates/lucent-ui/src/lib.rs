@@ -1175,25 +1175,23 @@ impl<M: Clone> Interaction<M> {
                     text_anchor: hit
                         .text
                         .as_ref()
-                        .filter(|text| {
-                            scroll_grab.is_none()
-                                && (!text.is_multiline() || text.inner.contains(x, y))
-                        })
+                        .filter(|_| scroll_grab.is_none())
                         .and_then(|text| {
                             if modifiers.shift {
                                 Some(text.selection.anchor())
                             } else {
+                                let (x, y) = text_area::press_point(text, x, y);
                                 text.at_point(x, y)
                             }
                         }),
                     text_last: hit
                         .text
                         .as_ref()
-                        .filter(|text| {
-                            scroll_grab.is_none()
-                                && (!text.is_multiline() || text.inner.contains(x, y))
-                        })
-                        .and_then(|text| text.at_point(x, y)),
+                        .filter(|_| scroll_grab.is_none())
+                        .and_then(|text| {
+                            let (x, y) = text_area::press_point(text, x, y);
+                            text.at_point(x, y)
+                        }),
                     hit,
                     scroll_grab,
                     x,
@@ -1205,6 +1203,11 @@ impl<M: Clone> Interaction<M> {
             && let (Some(anchor), Some(caret), Some(callback)) =
                 (press.text_anchor, press.text_last, &press.hit.text_edit)
         {
+            let (x, y) = press
+                .hit
+                .text
+                .as_ref()
+                .map_or((x, y), |text| text_area::press_point(text, x, y));
             self.text_navigation = text_area::pointer_navigation(&press.hit, x, y, anchor);
             return Some(callback(TextEdit::Select { anchor, caret }));
         }
@@ -1225,6 +1228,13 @@ impl<M: Clone> Interaction<M> {
         if let (Some(anchor), Some(text), Some(callback)) =
             (p.text_anchor, &p.hit.text, &p.hit.text_edit)
         {
+            if text.is_multiline() && !p.moved && x == p.x && y == p.y {
+                // Revealing the pressed row can scroll underneath a stationary
+                // pointer. Mouse-up must keep that click's source position.
+                return p
+                    .text_last
+                    .map(|caret| callback(TextEdit::Select { anchor, caret }));
+            }
             self.text_navigation = text_area::pointer_navigation(&p.hit, x, y, anchor);
             return text
                 .at_point(x, y)

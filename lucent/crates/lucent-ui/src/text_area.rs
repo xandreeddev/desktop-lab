@@ -246,6 +246,18 @@ pub(super) fn at(hit: &TextHit, x: f32, y: f32) -> Option<(usize, usize)> {
         .min(area.rows.len() - 1);
     Some((area.rows[row].at(x - hit.inner.x), row))
 }
+/// Initial control padding selects the nearest visible text position. Captured
+/// dragging still uses unrestricted points so out-of-viewport motion can reveal.
+pub(super) fn press_point(text: &TextHit, x: f32, y: f32) -> (f32, f32) {
+    if !text.is_multiline() {
+        return (x, y);
+    }
+    let inner = text.inner;
+    (
+        x.clamp(inner.x, inner.x + inner.w),
+        y.clamp(inner.y, (inner.y + inner.h).next_down().max(inner.y)),
+    )
+}
 pub(super) fn pointer_navigation<M>(
     hit: &Hit<M>,
     x: f32,
@@ -1073,6 +1085,151 @@ mod regression_tests {
             gutter: 12.,
             ..Default::default()
         })
+    }
+    fn padded_scene(
+        layout: &Layout,
+        input: &mut Interaction<Message>,
+        value: &str,
+        selection: TextSelection,
+        offset: f32,
+    ) -> Scene<Message> {
+        let line_height = text::line_metrics(&layout.fonts[0], 20.).height;
+        let height = 2.5 * line_height + 16.;
+        let tree = tree(value, selection, offset, 200., 20.)
+            .height(Length::Fixed(height))
+            .padding_xy(16., 8.)
+            .radius(20.);
+        let scene = layout.build(&tree, 200., height, input, 0.);
+        input.synchronize(&scene);
+        scene
+    }
+    #[test]
+    fn padding_clicks_choose_nearest_visible_text_and_preserve_shift_anchor() {
+        let layout = layout();
+        let line_height = text::line_metrics(&layout.fonts[0], 20.).height;
+        let height = 2.5 * line_height + 16.;
+        let value = "first\nsecond\nthird\nfourth\nfifth\nsixth";
+        // One whole line has been scrolled away. Top padding must select the
+        // first visible row rather than reaching into that hidden previous row.
+        for (x, y, caret) in [
+            (16., 4., 6),
+            (4., 8. + line_height + 1., 13),
+            (196., 8. + line_height + 1., 18),
+            (174., 8. + line_height + 1., 18), // gutter beside the actual track
+            (16., height - 4., 19),
+        ] {
+            let mut input = Interaction::default();
+            let scene = padded_scene(
+                &layout,
+                &mut input,
+                value,
+                TextSelection::at_end(value),
+                line_height,
+            );
+            assert!(scene.hits[0].contains(x, y));
+            assert_eq!(
+                input.press(&scene, x, y),
+                Some(Message::Edit(TextEdit::Select {
+                    anchor: caret,
+                    caret,
+                }))
+            );
+            assert_eq!(input.focus.as_deref(), Some("area"));
+            assert_eq!(
+                input.release(x, y),
+                Some(Message::Edit(TextEdit::Select {
+                    anchor: caret,
+                    caret,
+                }))
+            );
+        }
+        let mut input = Interaction::default();
+        let mut selection = TextSelection::default();
+        let mut owned = value.to_owned();
+        selection
+            .apply(
+                &mut owned,
+                TextEdit::Select {
+                    anchor: 6,
+                    caret: 12,
+                },
+                8192,
+            )
+            .unwrap();
+        let scene = padded_scene(&layout, &mut input, value, selection, line_height);
+        assert_eq!(
+            input.press_with_modifiers(
+                &scene,
+                4.,
+                8. + line_height + 1.,
+                KeyModifiers {
+                    shift: true,
+                    ..Default::default()
+                }
+            ),
+            Some(Message::Edit(TextEdit::Select {
+                anchor: 6,
+                caret: 13
+            }))
+        );
+    }
+    #[test]
+    fn padding_selection_keeps_scrollbar_priority_and_rounded_hit_boundaries() {
+        let layout = layout();
+        let line_height = text::line_metrics(&layout.fonts[0], 20.).height;
+        let value = "first\nsecond\nthird\nfourth\nfifth\nsixth";
+        let mut input = Interaction::default();
+        let scene = padded_scene(
+            &layout,
+            &mut input,
+            value,
+            TextSelection::at_end(value),
+            line_height,
+        );
+        assert!(!scene.hits[0].contains(1., 1.));
+        assert!(input.press(&scene, 1., 1.).is_none());
+        assert!(input.press.is_none());
+        let scroll = scene.hits[0].scroll.as_ref().unwrap();
+        let x = scroll.thumb.x + scroll.thumb.w / 2.;
+        let y = scroll.thumb.y + scroll.thumb.h / 2.;
+        assert!(matches!(
+            input.press(&scene, x, y),
+            Some(Message::Scroll(_))
+        ));
+        assert!(input.press.as_ref().unwrap().text_anchor.is_none());
+        assert!(matches!(input.release(x, y), Some(Message::Scroll(_))));
+    }
+    #[test]
+    fn stationary_padding_release_keeps_pressed_caret_after_its_row_is_revealed() {
+        let layout = layout();
+        let line_height = text::line_metrics(&layout.fonts[0], 20.).height;
+        let height = 2.5 * line_height + 16.;
+        let mut value = "first\nsecond\nthird\nfourth\nfifth\nsixth".to_owned();
+        let mut selection = TextSelection::default();
+        let mut input = Interaction::default();
+        let previous = padded_scene(&layout, &mut input, &value, selection, line_height);
+        let (x, y) = (16., height - 4.);
+        let Some(Message::Edit(edit)) = input.press(&previous, x, y) else {
+            panic!("padding must position the caret");
+        };
+        selection.apply(&mut value, edit, 8192).unwrap();
+        assert_eq!(selection.caret(), 19);
+        let current = padded_scene(&layout, &mut input, &value, selection, line_height);
+        let reveal = input.text_caret_reveal(&previous, &current);
+        let [Message::Scroll(event)] = reveal.as_slice() else {
+            panic!("partially visible row must be revealed");
+        };
+        assert!(event.offset > line_height);
+        let _settled = padded_scene(&layout, &mut input, &value, selection, event.offset);
+        // Native mouse-up carries the same cached pointer coordinate; the
+        // content has moved underneath it, but this remains the original click.
+        assert_eq!(
+            input.release(x, y),
+            Some(Message::Edit(TextEdit::Select {
+                anchor: 19,
+                caret: 19,
+            }))
+        );
     }
     #[test]
     fn affinity_only_drag_updates_the_row_even_when_source_byte_is_identical() {
