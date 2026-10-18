@@ -1,5 +1,7 @@
 //! Application processes belong to independent user units, never the shell cgroup.
-use lucent_domain::{Application, ApplicationLaunch, DomainError, LaunchCommand, Result};
+use lucent_domain::{
+    Application, ApplicationAction, ApplicationLaunch, DomainError, LaunchCommand, Result,
+};
 
 pub(super) fn application(app: &Application) -> Result<()> {
     if let ApplicationLaunch::DesktopService { fallback } = &app.launch {
@@ -22,6 +24,44 @@ pub(super) fn application(app: &Application) -> Result<()> {
         .launch
         .command()
         .ok_or_else(|| DomainError::Invalid("Application launch is unavailable".into()))?;
+    executable_command(launch)
+}
+
+pub(super) fn action(app: &Application, action: &ApplicationAction) -> Result<()> {
+    let command = if matches!(action.launch, ApplicationLaunch::DesktopService { .. }) {
+        action_fallback(
+            action,
+            super::activation::activate_action(&app.id, &action.id, None),
+        )?
+    } else {
+        action.launch.command()
+    };
+    if let Some(command) = command {
+        executable_command(command)?;
+    }
+    Ok(())
+}
+
+fn action_fallback(
+    action: &ApplicationAction,
+    result: std::result::Result<(), super::activation::ActivationError>,
+) -> Result<Option<&LaunchCommand>> {
+    match result {
+        Ok(()) => Ok(None),
+        Err(super::activation::ActivationError::Unsupported) => {
+            action.launch.command().map(Some).ok_or_else(|| {
+                DomainError::Unavailable(
+                    "Application action has no available activation service".into(),
+                )
+            })
+        }
+        Err(super::activation::ActivationError::Failed) => Err(DomainError::Failed(
+            "Application action failed without starting another command".into(),
+        )),
+    }
+}
+
+fn executable_command(launch: &LaunchCommand) -> Result<()> {
     let terminal = if launch.terminal {
         Some(
             ["xdg-terminal-exec", "foot", "alacritty", "kitty"]
@@ -68,6 +108,7 @@ fn arguments(
         "--slice=app.slice",
         "--property=ExitType=cgroup",
         "--property=PartOf=graphical-session.target",
+        "--property=UnsetEnvironment=XDG_ACTIVATION_TOKEN DESKTOP_STARTUP_ID",
     ]
     .map(str::to_owned)
     .to_vec();
@@ -106,12 +147,47 @@ fn inherited_environment(name: &str) -> bool {
                 | "LISTEN_PID"
                 | "LISTEN_FDS"
                 | "LISTEN_FDNAMES"
+                | "XDG_ACTIVATION_TOKEN"
+                | "DESKTOP_STARTUP_ID"
         )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn action_fallback_uses_only_its_own_exec_and_never_repeats_uncertain_calls() {
+        use super::super::activation::ActivationError;
+        let command = LaunchCommand {
+            program: "/fixture-action".into(),
+            args: vec!["literal argument".into()],
+            directory: Some("/fixture directory".into()),
+            terminal: true,
+        };
+        let mut action = ApplicationAction {
+            id: lucent_domain::ApplicationActionId::new("New-Window").unwrap(),
+            name: "New window".into(),
+            icon: String::new(),
+            launch: ApplicationLaunch::DesktopService {
+                fallback: Some(command.clone()),
+            },
+        };
+        assert_eq!(action_fallback(&action, Ok(())).unwrap(), None);
+        assert_eq!(
+            action_fallback(&action, Err(ActivationError::Unsupported)).unwrap(),
+            Some(&command)
+        );
+        assert!(matches!(
+            action_fallback(&action, Err(ActivationError::Failed)),
+            Err(DomainError::Failed(_))
+        ));
+        action.launch = ApplicationLaunch::DesktopService { fallback: None };
+        assert!(matches!(
+            action_fallback(&action, Err(ActivationError::Unsupported)),
+            Err(DomainError::Unavailable(_))
+        ));
+    }
 
     #[test]
     fn uri_handler_receives_one_literal_target_after_the_unit_separator() {
@@ -142,12 +218,12 @@ mod tests {
             let mut app = Application {
                 id: lucent_domain::AppId::new("lucent-lifetime-fixture.desktop").unwrap(),
                 name: "Lifetime fixture".into(), description: String::new(), keywords: vec![],
-                icon: String::new(), startup_class: String::new(),
+                icon: String::new(), startup_class: String::new(), actions: vec![],
                 launch: lucent_domain::ApplicationLaunch::Command(LaunchCommand {
                     program: "/usr/bin/python3".into(), terminal: false,
                     directory: Some(directory.clone()),
                     args: vec!["-c".into(), r#"import json,os,pathlib,sys,time
-pathlib.Path('result.json').write_text(json.dumps({'pid':os.getpid(),'args':sys.argv[1:],'cwd':os.getcwd(),'value':os.environ.get('LUCENT_LAUNCH_VALUE'),'group':pathlib.Path('/proc/self/cgroup').read_text()}))
+pathlib.Path('result.json').write_text(json.dumps({'pid':os.getpid(),'args':sys.argv[1:],'cwd':os.getcwd(),'value':os.environ.get('LUCENT_LAUNCH_VALUE'),'tokens_absent':all(name not in os.environ for name in ('XDG_ACTIVATION_TOKEN','DESKTOP_STARTUP_ID')),'group':pathlib.Path('/proc/self/cgroup').read_text()}))
 time.sleep(30)"#.into(), "$HOME".into(), "%h".into(), "$(unused)".into(), "".into()],
                 }),
             };
@@ -206,6 +282,8 @@ time.sleep(30)"#.into(), "$HOME".into(), "%h".into(), "$(unused)".into(), "".int
             format!("--unit={unit}"),
             format!("--setenv=LUCENT_LAUNCH_FIXTURE={}", directory.display()),
             "--setenv=LUCENT_LAUNCH_VALUE=$HOME %h".into(),
+            "--setenv=XDG_ACTIVATION_TOKEN=lucent-owned-stale-fixture".into(),
+            "--setenv=DESKTOP_STARTUP_ID=lucent-owned-stale-fixture".into(),
             executable.to_string_lossy().into_owned(),
             "--exact".into(),
             TEST.into(),
@@ -231,6 +309,7 @@ time.sleep(30)"#.into(), "$HOME".into(), "%h".into(), "$(unused)".into(), "".int
             serde_json::json!(["$HOME", "%h", "$(unused)", ""])
         );
         assert_eq!(value["value"], "$HOME %h");
+        assert_eq!(value["tokens_absent"], true);
         assert_eq!(value["cwd"], directory.to_string_lossy().as_ref());
     }
 
@@ -255,6 +334,8 @@ time.sleep(30)"#.into(), "$HOME".into(), "%h".into(), "$(unused)".into(), "".int
                 "PATH",
                 "NOTIFY_SOCKET",
                 "LISTEN_FDS",
+                "XDG_ACTIVATION_TOKEN",
+                "DESKTOP_STARTUP_ID",
                 "BAD=NAME",
             ]
             .map(str::to_owned)
@@ -278,6 +359,13 @@ time.sleep(30)"#.into(), "$HOME".into(), "%h".into(), "$(unused)".into(), "".int
         assert!(args.contains(&"--service-type=exec".into()));
         assert!(args.contains(&"--working-directory=/tmp/a b".into()));
         assert!(args.contains(&"--setenv=WAYLAND_DISPLAY".into()));
+        // UnsetEnvironment also removes values inherited from the user manager;
+        // filtering --setenv imports alone would leave those ambient tokens.
+        assert!(args.contains(
+            &"--property=UnsetEnvironment=XDG_ACTIVATION_TOKEN DESKTOP_STARTUP_ID".into()
+        ));
+        assert!(!args.contains(&"--setenv=XDG_ACTIVATION_TOKEN".into()));
+        assert!(!args.contains(&"--setenv=DESKTOP_STARTUP_ID".into()));
         assert!(!args.iter().any(|arg| arg.contains("NOTIFY_SOCKET")
             || arg.contains("LISTEN_FDS")
             || arg.contains("BAD=NAME")));

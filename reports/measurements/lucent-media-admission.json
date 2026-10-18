@@ -1,0 +1,97 @@
+{
+  "milestone": "media-operation-admission-and-launcher-focus",
+  "date": "2026-10-18",
+  "status": "owned_native_media_and_supported_keyboard_subset_verified",
+  "binary_source_commit": "d2aed42199ed6b29f6eef214c1a6ee490658adc6",
+  "merged_pr": "https://github.com/xandreeddev/desktop-lab/pull/73",
+  "merge_commit": "39beeec50e9f14edd673c38bc7ced5c01519949b",
+  "environment": {
+    "guest": "Arch/Omarchy test VM",
+    "compositor": "Hyprland 0.56.2",
+    "renderer": "software Vulkan (llvmpipe)",
+    "display": {
+      "width": 1920,
+      "height": 1080,
+      "scale": 1
+    },
+    "vcpus": 4,
+    "memory_mib": 3072
+  },
+  "binaries": {
+    "lucent-desktop": {
+      "sha256": "fb751d84459c0630595e640de9199a58250ea9e460fe5d8beb5bbe612d2ff35e",
+      "bytes": 20814504
+    },
+    "lucent-cli": {
+      "sha256": "94d45e25be64d264203179b619f84c0f847e629227c9ed3a2b357c9a415ab881",
+      "bytes": 345400
+    }
+  },
+  "deployment": {
+    "running_binary_hash_verified": true,
+    "supervisor_stable": true,
+    "supervisor_observed_seconds": 36.016,
+    "settings_bytes_preserved": true,
+    "wallpaper_preserved": true,
+    "live_media_files_untouched": true
+  },
+  "post_acceptance_running_desktop_hash_rechecked": true,
+  "ordinary_input": {
+    "checks": {
+      "control_a_with_shift": true,
+      "control_u_with_shift": true,
+      "tested_alt_logo_chords_preserve_content_and_selection": true
+    },
+    "restoration": {
+      "launcher_open_and_query": true,
+      "caps_lock": true,
+      "settings_and_wallpaper": true
+    },
+    "passed": true,
+    "skipped_compositor_bound_chords": [
+      "control_logo_a",
+      "control_shift_logo_a"
+    ],
+    "skipped_caps_lock_cases": [
+      "control_a_caps",
+      "control_a_caps_shift",
+      "control_u_caps",
+      "control_u_caps_shift"
+    ],
+    "notes_load_error_acceptance": "pending_theme_and_login_export_checkpoint"
+  },
+  "native_media": {
+    "two_non_replacing_independent_owners": true,
+    "keyboard_pointer_selection_and_targeted_play_pause": true,
+    "owned_local_raster_artwork_prepared": true,
+    "compatibility_media_key_uses_shared_selection": true,
+    "release_only_seek_with_exact_track": true,
+    "track_retirement_and_same_uri_artwork": true,
+    "owner_retirement_and_stale_player_rejection": true,
+    "native_escape_dismissal": true,
+    "settings_and_wallpaper_preserved": true,
+    "owned_units_and_files_removed": true
+  },
+  "validation": {
+    "workspace_regular_tests": 614,
+    "workspace_ignored_tests": 75,
+    "owned_private_bus_media_scenarios": 9,
+    "python_tests": 95,
+    "software_vulkan_comparisons": 656,
+    "generated_tokens": 552,
+    "generated_app_icons": 58,
+    "astro_pages_per_prefix": 13,
+    "astro_links_assets_per_prefix": 488,
+    "required_exact_head_checks_passed": 6,
+    "format_and_strict_clippy_passed": true,
+    "baseline_or_tolerance_changes": false
+  },
+  "limits": [
+    "Native keyboard acceptance is explicitly a supported subset: four Caps-dependent cases and two compositor-bound chords were skipped without changing keyboard options/bindings.",
+    "Clipboard interoperability, corrected-cohort secure-client authentication, invalid/oversized stored-notes restart with theme-export restoration, physical inputs and multi-output/hardware acceptance remain open.",
+    "The MPRIS VM suite uses only two owned fixture players. Third-party player compatibility and changed artwork pixels are not established.",
+    "Nonblocking native admission and independent audio scheduling are verified by owned private-bus/injected effect tests; the VM suite does not measure cross-service volume latency.",
+    "No new CPU/RSS/frame-pacing/GPU-allocation benchmark is claimed; historical video memory still requires current matched measurement.",
+    "Other requirements remain open in docs/implementation-status.json; accessibility is deferred by user request."
+  ]
+}

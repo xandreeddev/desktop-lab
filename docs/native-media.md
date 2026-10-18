@@ -160,7 +160,9 @@ the user must act on current controls. Short media admission shares the existing
 controls lane with other brief control work; audio volume stays on the audio
 lane. Native media validation and method waiting live in the observing adapter,
 so a stalled player method does not occupy the volume lane. The framework still
-uses the same nine bounded workers; no media command worker was added.
+uses the same nine bounded workers; no media command worker was added. Existing
+application activation can still occupy the controls lane for up to five seconds,
+so media admission may wait behind that work; this does not block the audio lane.
 
 Private D-Bus protocol fixtures, pure policy tests, injected child tests and
 Vulkan visual checks are separate from actual player interoperability. A
@@ -174,9 +176,12 @@ interaction with two owned players in the test VM, including selected-player
 compatibility keys, release-only seeking and retirement rejection. Its six-client
 deployment preserved settings and wallpaper; see
 [the source-specific report](../reports/measurements/lucent-native-mpris.json).
-That release predates the operation-admission contract described above. Current
-source tests, current-binary VM acceptance and third-party interoperability are
-separate evidence; the report does not claim they have all passed.
+That release predates the operation-admission contract described above.
+Corrected source `d2aed42199e` subsequently passed the owned native media suite,
+reversible deployment and supported launcher-keyboard subset; see
+[its separate report](../reports/measurements/lucent-media-admission.json).
+Private-bus/injected checks prove admission/volume-lane separation. The VM suite
+does not measure cross-service latency or establish third-party interoperability.
 
 The native panel opens with `lucent-cli media open`, toggles with
 `lucent-cli media toggle` and closes with `lucent-cli media close`. Its surface role is `media-controls`; the desktop

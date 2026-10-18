@@ -1,0 +1,71 @@
+{
+  "milestone": "current-live-wallpaper-resource-baseline",
+  "date": "2026-10-18",
+  "status": "measured_exceeds_resource_and_frame_pacing_targets",
+  "binary_source_commit": "d2aed42199ed6b29f6eef214c1a6ee490658adc6",
+  "binary_sha256": "fb751d84459c0630595e640de9199a58250ea9e460fe5d8beb5bbe612d2ff35e",
+  "merged_pr": "https://github.com/xandreeddev/desktop-lab/pull/73",
+  "environment": {
+    "guest": "Arch/Omarchy KVM test VM",
+    "compositor": "Hyprland 0.56.2",
+    "renderer": "software Vulkan llvmpipe, Mesa 26.2.2, LLVM 22.1.8",
+    "vcpus": 4,
+    "configured_memory_mib": 3072,
+    "display": {"width": 1920, "height": 1080, "scale": 1},
+    "frame_profiling": false
+  },
+  "workload": {
+    "live_players_running": 1,
+    "source_codec": "h264",
+    "source_width": 3840,
+    "source_height": 2160,
+    "source_frame_rate": "60/1",
+    "playback_frame_rate_policy": "source",
+    "retained_live_rgba_bytes": 33177600,
+    "visible_widgets": ["calendar", "clock", "weather", "media", "system"],
+    "applications": 57,
+    "launcher_during_resource_sample": "closed"
+  },
+  "resources": {
+    "duration_seconds": 120.001,
+    "main_cpu_percent_one_logical_core": 250.132,
+    "service_cpu_percent_one_logical_core": 250.029,
+    "main_rss_mib_mean": 548.29,
+    "main_rss_mib_peak": 609.41,
+    "normal_desktop_rss_target_mib": 300,
+    "target_met": false,
+    "gpu_memory": "not_measured",
+    "gpu_cache_active_payload_bytes_after": 34547573,
+    "gpu_cache_total_payload_bytes_after": 35481673,
+    "prepared_client_asset_bytes_after": 14422774,
+    "after_sample_smaps_kib": {
+      "Rss": 593340, "Pss": 546666, "Pss_Anon": 378264,
+      "Pss_File": 77322, "Pss_Shmem": 91080, "Swap": 0
+    }
+  },
+  "submissions_during_resource_sample": {
+    "background": 2232, "bar": 2, "calendar": 26,
+    "clock": 26, "system": 26, "dock": 0
+  },
+  "warm_launcher_submission_intervals_ms": [
+    {"action": "open", "median": 48.67, "maximum": 94.16},
+    {"action": "close", "median": 45.25, "maximum": 98.97},
+    {"action": "open", "median": 32.98, "maximum": 81.7},
+    {"action": "close", "median": 35.33, "maximum": 80.32}
+  ],
+  "restart_to_background_ready_ms": 1140.92,
+  "preservation": {
+    "running_binary_hash_verified": true,
+    "settings_and_wallpaper_preserved": true,
+    "profiling_disabled": true
+  },
+  "limits": [
+    "One unprofiled software-rendered VM sample; no physical GPU, scanout, multi-output or statistical repeatability claim.",
+    "Live video is active. This is not an idle static-desktop sample; CPU percentages can exceed 100% across logical cores.",
+    "RSS includes mapped driver/software-GPU pages; prepared pixels, cache payload, decoder memory and total GPU allocation are different scopes.",
+    "Read-only native metadata confirms H.264 at 3840x2160 and 60/1 FPS with Source policy. The retained RGBA allocation equals 3840x2160x4 bytes on a 1920x1080 scale-1 output. Safe physical-cover conversion policy requires implementation and matched measurement before attributing all overhead.",
+    "Restart readiness includes SSH/polling overhead and establishes background readiness, not complete session startup.",
+    "Submission intervals do not measure GPU execution or scanout. The observed warm intervals do not establish refresh-rate animation quality.",
+    "No frame-rate, visual-density or animation reduction was made during measurement. The 300 MiB target remains unmet."
+  ]
+}

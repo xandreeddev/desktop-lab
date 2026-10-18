@@ -28,6 +28,7 @@ fn run() -> Result<()> {
     let mut seconds = 5u64;
     let mut list = false;
     let mut launch = None;
+    let mut action = None;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -53,9 +54,22 @@ fn run() -> Result<()> {
                     DomainError::Invalid("Application ID required".into())
                 })?)?);
             }
+            "--action" => {
+                i += 1;
+                let app = AppId::new(
+                    args.get(i)
+                        .ok_or_else(|| DomainError::Invalid("Application ID required".into()))?,
+                )?;
+                i += 1;
+                let id = ApplicationActionId::new(
+                    args.get(i)
+                        .ok_or_else(|| DomainError::Invalid("Action ID required".into()))?,
+                )?;
+                action = Some((app, id));
+            }
             _ => {
                 return Err(DomainError::Invalid(
-                    "application-service [--observe|--list|--launch ID] [--seconds 1..600] [--data-dir ABSOLUTE_ROOT]".into(),
+                    "application-service [--observe|--list|--launch ID|--action APP_ID ACTION_ID] [--seconds 1..600] [--data-dir ABSOLUTE_ROOT]".into(),
                 ));
             }
         }
@@ -66,6 +80,22 @@ fn run() -> Result<()> {
     } else {
         XdgApplications::with_source(roots, "Hyprland".into(), String::new())?
     };
+    if action.is_some() && (launch.is_some() || list) {
+        return Err(DomainError::Invalid(
+            "Choose one application operation".into(),
+        ));
+    }
+    if let Some((id, action)) = action {
+        let apps = source.discover()?;
+        let app = apps
+            .iter()
+            .find(|app| app.id == id)
+            .ok_or_else(|| DomainError::Invalid("Application is not installed".into()))?;
+        source.launch_action(app, &action)?;
+        // This is a native method/exec acknowledgement, not observed app state.
+        println!("{}", serde_json::json!({"action_acknowledged":true}));
+        return Ok(());
+    }
     if let Some(id) = launch {
         let apps = source.discover()?;
         let app = apps
@@ -80,7 +110,7 @@ fn run() -> Result<()> {
         let apps = source.discover()?;
         println!(
             "{}",
-            serde_json::json!({"items":apps.iter().map(|app|serde_json::json!({"id":app.id.as_str(),"name":app.name})).collect::<Vec<_>>()})
+            serde_json::json!({"items":apps.iter().map(|app|serde_json::json!({"id":app.id.as_str(),"name":app.name,"actions":app.actions.iter().map(|action|serde_json::json!({"id":action.id.as_str(),"name":action.name})).collect::<Vec<_>>()})).collect::<Vec<_>>()})
         );
         return Ok(());
     }
