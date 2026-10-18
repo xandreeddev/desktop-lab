@@ -35,6 +35,8 @@ Wallpaper decoding is a different feature with a different port; see
    scrolling and slider elements using semantic/component tokens. Views do no
    bus calls, file reads, downloads or image decoding. The bar and widget borrow
    the same selected-player presentation as the control panel.
+   Playback controls stay in a fixed footer while artwork, metadata and progress
+   scroll above them, so a small viewport keeps its transport actions visible.
 7. An observation invalidates the relevant client surfaces. Layout and paint
    run through the shared framework; Vulkan uploads prepared artwork and draws
    primitives. Compositor frame callbacks pace dirty surfaces. A stopped or
@@ -135,7 +137,10 @@ method from the owning observation callback.
 The desktop distinguishes loading, no players, unavailable observation,
 per-player errors, command failures and artwork failures. Retained last-good
 content is not current control authority. Reconnection creates fresh handles;
-the user must act on current controls.
+the user must act on current controls. Media and audio currently share one
+ordered effect lane; a stalled media method can delay a queued volume action
+until its bounded call returns. Rendering and the urgent session lane remain
+independent. Independent audio/media command scheduling remains follow-up work.
 
 Private D-Bus protocol fixtures, pure policy tests, injected child tests and
 Vulkan visual checks are separate from actual player interoperability. A

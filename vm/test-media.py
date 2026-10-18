@@ -221,6 +221,22 @@ def suite():
         results['keyboard_pointer_selection_and_targeted_play_pause'] = True
         results['owned_local_raster_artwork_prepared'] = True
 
+        # The retained distribution media shortcut must use the same selected
+        # player, rather than a global player's alphabetical/default ordering.
+        owned_selection('b')
+        a_plays, b_plays = count('a', 'play'), count('b', 'play')
+        session('omarchy-shell', 'media', 'playPause')
+        eventually(lambda: count('b', 'play') == b_plays + 1 and acknowledged(),
+                   'compatibility_media_key_targets_selected_player')
+        require(count('a', 'play') == a_plays, 'compatibility_does_not_retarget_other_player')
+        eventually(lambda: current_player('b')['status'] == 'playing', 'compatibility_play_observed')
+        b_pauses = count('b', 'pause')
+        session('omarchy-shell', 'media', 'playPause')
+        eventually(lambda: count('b', 'pause') == b_pauses + 1 and acknowledged(),
+                   'compatibility_pause_acknowledged')
+        eventually(lambda: current_player('b')['status'] == 'paused', 'compatibility_pause_observed')
+        results['compatibility_media_key_uses_shared_selection'] = True
+
         owned_selection('b')
         slider = slider_identifier()
         focus(name, slider)

@@ -27,6 +27,7 @@ impl Media {
     }
     pub fn view(&self, cx: &ViewContext, theme: Theme) -> Element<Message> {
         let mut content = vec![];
+        let mut controls = vec![];
         if !self.observation_error.is_empty() {
             content.push(
                 theme
@@ -124,7 +125,7 @@ impl Media {
                 } else {
                     self.control("Play", "media-play", MediaCommand::Play(player.id), theme)
                 };
-                content.push(
+                controls.push(
                     Element::row(vec![
                         self.control(
                             "Previous",
@@ -138,7 +139,7 @@ impl Media {
                     .width(Length::Fill)
                     .gap(space::SM),
                 );
-                content.push(
+                controls.push(
                     Element::row(vec![
                         self.control("Stop", "media-stop", MediaCommand::Stop(player.id), theme),
                         self.control(
@@ -176,7 +177,7 @@ impl Media {
                 Message::Scroll,
             )
             .id("media-scroll");
-        let panel = Element::column(vec![
+        let mut children = vec![
             Element::row(vec![
                 Element::text("Media")
                     .font(font::TITLE)
@@ -188,20 +189,29 @@ impl Media {
             .align(Align::Center)
             .gap(space::SM),
             body,
-        ])
-        .size(rect.w, rect.h)
-        .padding(space::XL)
-        .gap(space::MD)
-        .background(theme.surface)
-        .radius(radius::PANEL)
-        .shadow()
-        .clip()
-        .at(rect.x, rect.y - (1. - progress) * token::SLIDE_DISTANCE)
-        .opacity(progress)
-        .on_click(Message::Ignore)
-        .hover_feedback(false)
-        .tab_stop(false)
-        .id("media-panel");
+        ];
+        if !controls.is_empty() {
+            children.push(
+                Element::column(controls)
+                    .width(Length::Fill)
+                    .height(Length::Shrink)
+                    .gap(space::MD),
+            );
+        }
+        let panel = Element::column(children)
+            .size(rect.w, rect.h)
+            .padding(space::XL)
+            .gap(space::MD)
+            .background(theme.surface)
+            .radius(radius::PANEL)
+            .shadow()
+            .clip()
+            .at(rect.x, rect.y - (1. - progress) * token::SLIDE_DISTANCE)
+            .opacity(progress)
+            .on_click(Message::Ignore)
+            .hover_feedback(false)
+            .tab_stop(false)
+            .id("media-panel");
         Element::stack(vec![
             Element::empty()
                 .fill()
