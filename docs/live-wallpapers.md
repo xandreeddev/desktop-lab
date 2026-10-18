@@ -378,12 +378,28 @@ source timing. A real decoder with unknown initial format, missing-format
 rejection, odd-row ownership and repeated converter recreation cover scaler
 admission and lifetime. A tiny two-frame transparent GIF and descriptor checks cover
 source-sized alpha conversion, contrasting invisible RGB and premultiplied edge
-coverage. Native resize/density acceptance and compositor alpha-edge acceptance
-remain separate. Repeat the
-same full-resolution workload and source cadence when
-measuring RSS/PSS, retained/uploaded bytes and presented frames. No display-fit
-native performance sample or 300 MiB pass is claimed here; the historical
-measurements below retain their recorded source identities.
+coverage. Compositor alpha-edge and native multi-output acceptance remain
+separate.
+
+Source `83a02372ff7b3313931b475bc650521c6adb19ac` passes native smaller-output,
+2×/fractional-density and rapid-target replacement checks on the prepared VM.
+Fitted generations continue submitting frames without restarting the desktop.
+The original output, idle marker, exact settings, selected source and wallpaper
+are preserved. The earlier FFmpeg context assertion does not recur in this
+acceptance run; its original format arguments were not captured.
+
+The matched 120-second software-Vulkan comparison retains the same H.264
+3840×2160 60/1 clip, Source policy, 1920×1080/1× display, five widgets and
+57 applications. Mean RSS falls **519.77 → 375.36 MiB**, and peak RSS falls
+**577.04 → 380.61 MiB**. The retained RGBA frame falls **31.64 → 7.91 MiB**.
+Background submissions increase **2094 → 3242** over the sample, about
+**17.45 → 27.02 per second**. Main-process CPU increases
+**233.458% → 254.949% of one logical core** while processing more frames.
+This does **not** meet the 300 MiB target or establish 60 FPS delivery.
+Submissions are distinct from GPU completion and scanout. RSS includes mapped
+software-driver allocations; texture payload and smaps snapshots have narrower
+scopes. See [the complete measured comparison](../reports/measurements/lucent-live-display-fit.json).
+The historical measurements below retain their recorded source identities.
 
 Owned fixtures encode tiny synthetic MP4/WebM/GIF files and decode them through
 this exact native adapter. Tests cover actual pixels, frame counts/timestamps,
