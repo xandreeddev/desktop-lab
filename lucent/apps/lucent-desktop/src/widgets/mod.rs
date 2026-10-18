@@ -8,7 +8,7 @@ use lucent_api::{ClipboardTarget, DragEvent, Effects, TextEdit, TextFieldState};
 use lucent_design::component;
 #[cfg(test)]
 use lucent_domain::DesktopSettings;
-use lucent_domain::{FocusTimer, Placement, WidgetLayout, WidgetSize};
+use lucent_domain::{FocusTimer, NOTES_MAX_BYTES, Placement, WidgetLayout, WidgetSize};
 use std::collections::BTreeMap;
 pub use view::{Input, View};
 
@@ -332,7 +332,7 @@ impl Host {
                 match self.notes_field.update(
                     input.notes,
                     edit,
-                    8192,
+                    NOTES_MAX_BYTES,
                     match &input.instance {
                         Some(instance) => ClipboardTarget::new(surface, "notes-input")
                             .in_instance(instance.clone()),
@@ -792,5 +792,34 @@ mod tests {
             send(&mut host, &mut settings, Message::Media(crate::media::Message::Request(command)), 0).0,
             Some(Intent::Media(crate::media::Message::Request(actual))) if actual == command
         ));
+    }
+    #[test]
+    fn notes_editing_uses_the_same_byte_limit_as_saved_preferences() {
+        let mut host = Host::default();
+        let mut settings = DesktopSettings::default();
+        let admitted = "é".repeat(NOTES_MAX_BYTES / 2);
+        assert!(matches!(
+            send(
+                &mut host,
+                &mut settings,
+                Message::EditNotes(TextEdit::Replace(admitted.clone())),
+                0
+            )
+            .0,
+            Some(Intent::Save)
+        ));
+        assert!(lucent_usecases::validate_settings(&settings).is_ok());
+        assert!(matches!(
+            send(
+                &mut host,
+                &mut settings,
+                Message::EditNotes(TextEdit::Insert("é".into())),
+                0
+            )
+            .0,
+            Some(Intent::Error(_))
+        ));
+        assert_eq!(settings.notes, admitted);
+        assert!(lucent_usecases::validate_settings(&settings).is_ok());
     }
 }

@@ -315,6 +315,18 @@ impl Default for DockSettings {
         }
     }
 }
+/// UTF-8 byte admission shared by saved preferences and ordinary notes editing.
+pub const NOTES_MAX_BYTES: usize = 8192;
+pub fn validate_notes(value: &str) -> Result<()> {
+    if value.len() > NOTES_MAX_BYTES {
+        Err(DomainError::Invalid(format!(
+            "Notes exceed the {NOTES_MAX_BYTES}-byte limit"
+        )))
+    } else {
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DesktopSettings {

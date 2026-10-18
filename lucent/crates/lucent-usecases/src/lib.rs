@@ -137,6 +137,7 @@ pub fn ensure_monitor_layout(settings: &mut DesktopSettings, id: &MonitorId) -> 
     Ok(())
 }
 pub fn validate_settings(settings: &DesktopSettings) -> Result<()> {
+    validate_notes(&settings.notes)?;
     let live = &settings.live_wallpapers;
     if live.monitors.values().filter(|s| s.enabled).count()
         + usize::from(live.default.as_ref().is_some_and(|s| s.enabled))
@@ -193,6 +194,22 @@ pub fn validate_settings(settings: &DesktopSettings) -> Result<()> {
 mod tests {
     use super::*;
     use std::sync::Mutex;
+    #[test]
+    fn notes_admission_counts_utf8_bytes_and_rejects_invalid_saved_content() {
+        let mut settings = DesktopSettings {
+            notes: "é".repeat(NOTES_MAX_BYTES / 2),
+            ..Default::default()
+        };
+        assert_eq!(settings.notes.len(), NOTES_MAX_BYTES);
+        assert!(validate_settings(&settings).is_ok());
+        settings.notes.push('a');
+        assert!(validate_settings(&settings).is_err());
+        assert_eq!(settings.notes.len(), NOTES_MAX_BYTES + 1);
+        // The check never truncates stored content or modifies unrelated data.
+        settings.notes = "x".repeat(64 * 1024 + 1);
+        assert!(validate_settings(&settings).is_err());
+        assert_eq!(settings.notes.len(), 64 * 1024 + 1);
+    }
     #[test]
     fn monitor_profiles_copy_only_layout_and_preserve_other_profiles() {
         let mut settings = DesktopSettings {
