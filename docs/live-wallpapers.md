@@ -247,6 +247,8 @@ The last good immutable image remains visible while its replacement prepares;
 paused consumers keep their frozen pixels. This adds no decoder per output,
 worker, polling or redraw source. Source timestamps, frame-rate policy, bounded
 delivery and the existing reveal animation continue to govern playback.
+The replacement decoder starts at the beginning of the clip. Preserving the
+playhead across a target change requires a separate seek/resume contract.
 
 An output enlarged while paused keeps the exact pixels it previously froze;
 it cannot gain detail that those pixels no longer contain. An active shared
@@ -356,13 +358,16 @@ FPS cap schedule media frames independently of UI component motion.
 
 ## Evidence and remaining acceptance
 
-The display-fit implementation is awaiting workspace checks and native
-acceptance. Focused checks must cover odd source dimensions and aspect,
+The integrated display-fit source passes 662 regular Rust tests, strict Clippy,
+95 Python checks, generated tokens, three streamed-image GPU checks, 56 unchanged
+live-wallpaper visual comparisons and both documentation prefixes. Focused
+tests cover odd source dimensions and aspect,
 fractional density, differently shaped shared outputs, independent profiles,
 resize/hotplug generation retirement, retained paused pixels and unchanged
 source timing. A tiny two-frame transparent GIF and descriptor checks cover
 source-sized alpha conversion, contrasting invisible RGB and premultiplied edge
-coverage; actual compositor alpha-edge acceptance remains separate. Repeat the
+coverage. Native resize/density acceptance and compositor alpha-edge acceptance
+remain separate. Repeat the
 same full-resolution workload and source cadence when
 measuring RSS/PSS, retained/uploaded bytes and presented frames. No display-fit
 native performance sample or 300 MiB pass is claimed here; the historical

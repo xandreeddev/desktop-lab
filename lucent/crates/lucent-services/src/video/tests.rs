@@ -490,7 +490,7 @@ fn video_native_transparent_gif_fit_keeps_premultiplied_coverage_without_color_f
             assert_eq!((width, height), (4, 2),
                 "alpha-capable conversion must preserve pixels before premultiplied GPU filtering");
             assert_eq!(aspect, (4, 2));
-            for row in rgba.chunks_exact(4 * 4) {
+            for row in rgba.as_chunks::<{ 4 * 4 }>().0 {
                 assert_eq!(&row[..8], &[255, 0, 0, 255, 255, 0, 0, 255]);
                 assert_eq!(row[11], 0);
                 assert_eq!(row[15], 0);

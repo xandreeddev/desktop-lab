@@ -1,0 +1,88 @@
+{
+  "milestone": "application-desktop-actions-and-native-dock-lifetime",
+  "date": "2026-10-18",
+  "status": "owned_native_actions_and_lifecycle_verified",
+  "binary_source_commit": "73577a4cbf7aba68ee1c40b1280c27e738a5e820",
+  "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/74",
+  "environment": {
+    "guest": "Arch/Omarchy KVM VM",
+    "compositor": "Hyprland 0.56.2",
+    "renderer": "software Vulkan llvmpipe",
+    "vcpus": 4,
+    "memory_mib": 3072,
+    "display": {
+      "width": 1920,
+      "height": 1080,
+      "scale": 1
+    }
+  },
+  "binaries": {
+    "lucent-desktop": {
+      "sha256": "72629dca7eb293222cc117be3a40347acacae9f03b36c069638d62b22287cf8d",
+      "bytes": 20915368
+    },
+    "lucent-cli": {
+      "sha256": "94d45e25be64d264203179b619f84c0f847e629227c9ed3a2b357c9a415ab881",
+      "bytes": 345400
+    }
+  },
+  "deployment": {
+    "running_binary_hash_verified": true,
+    "supervisor_stable": true,
+    "supervisor_observed_seconds": 36.009,
+    "settings_bytes_preserved": true,
+    "wallpaper_preserved": true
+  },
+  "native_checks": {
+    "two_owned_entries_and_non_replacing_native_owner": true,
+    "back_escape_and_query_selection_preserved": true,
+    "keyboard_action_and_literal_argv": true,
+    "stationary_cursor_reopen_keeps_search_focus": true,
+    "secondary_click_pointer_action_and_up_down": true,
+    "changed_removed_action_and_removed_entry_retire_press_and_ipc": true,
+    "native_activate_action_exact_name_and_empty_wire_arguments": true,
+    "native_denial_has_error_without_action_or_primary_fallback": true
+  },
+  "native_counts": {
+    "literal_exec": 1,
+    "other_exec": 1,
+    "native_action": 1,
+    "native_denied": 1,
+    "fallback_exec": 0,
+    "primary_launch": 0
+  },
+  "cleanup": {
+    "launcher_closed_empty": true,
+    "owned_unit_retired": true,
+    "owned_entries_removed": true,
+    "settings_and_wallpaper_preserved": true,
+    "owned_scratch_removed": true
+  },
+  "native_motion": {
+    "cycles": 5,
+    "captured_frames": 710,
+    "misplaced_frames": 0,
+    "settings_and_wallpaper_preserved": true,
+    "retiring_native_surfaces_after_settle": 0,
+    "scope": "Five real compositor capture cycles; compact-at-top pixel heuristic, not complete frame pacing or scanout latency"
+  },
+  "validation": {
+    "workspace_regular_tests": 649,
+    "workspace_ignored_tests": 75,
+    "python_tests": 95,
+    "focused_software_vulkan_comparisons": 48,
+    "astro_pages_per_prefix": 13,
+    "astro_links_assets_per_prefix": 488,
+    "format_and_strict_clippy_passed": true,
+    "baseline_or_tolerance_changes": false,
+    "required_exact_head_checks_passed": 6,
+    "ci_software_vulkan_comparisons": 664
+  },
+  "limits": [
+    "Native acceptance uses two uniquely owned desktop entries and a non-replacing native application fixture, not third-party application interoperability.",
+    "The stationary-cursor case retains the physical search position across compact/full reopening; it does not manufacture a pointer excursion to obtain Motion.",
+    "Native motion detects the compact-at-top pixel signature across five real capture cycles; it does not measure scanout latency, dropped frames or hardware animation quality.",
+    "Layer recreation supports ordinary non-reserving surfaces only; positive exclusive zones need a defined native-tested reservation transfer. Session-lock clients reject recreation before executing effects.",
+    "Native activation still uses a five-second synchronous deadline on the controls queue; fresh activation tokens, URI/file targets, action-specific prepared icons and broader hardware/secure-client acceptance remain open."
+  ]
+}
