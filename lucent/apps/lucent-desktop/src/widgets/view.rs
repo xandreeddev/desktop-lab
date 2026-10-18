@@ -1,10 +1,10 @@
 //! Widget presentation borrows snapshots and prepared artwork, never the desktop root.
 use super::{Host, Message, surfaces, widget_size};
-use crate::{actions::Action, artwork::Artwork, persistence::Status};
+use crate::{artwork::Artwork, persistence::Status};
 use lucent_api::*;
 use lucent_design::*;
 use lucent_domain::{
-    ClockSnapshot, Date, MediaSnapshot, SystemSnapshot, TimerPhase, WeatherSnapshot, WidgetLayout,
+    ClockSnapshot, Date, SystemSnapshot, TimerPhase, WeatherSnapshot, WidgetLayout,
 };
 
 #[derive(Clone, Copy)]
@@ -15,7 +15,7 @@ pub struct Input<'a> {
     pub clock: &'a ClockSnapshot,
     pub system: &'a SystemSnapshot,
     pub network_status: &'a str,
-    pub media: &'a MediaSnapshot,
+    pub media: &'a crate::media::Media,
     pub weather: Option<&'a WeatherSnapshot>,
 }
 pub struct View<'a> {
@@ -406,9 +406,9 @@ pub(super) fn weather(d: &View<'_>, _: &ViewContext) -> Element<Message> {
 
 pub(super) fn media(d: &View<'_>, _: &ViewContext) -> Element<Message> {
     let artwork = d
-        .artwork
-        .images
-        .get(&d.input.media.art_url)
+        .input
+        .media
+        .artwork()
         .cloned()
         .map(Element::image)
         .unwrap_or_else(|| {
@@ -418,15 +418,35 @@ pub(super) fn media(d: &View<'_>, _: &ViewContext) -> Element<Message> {
             )])
             .background(d.surface_color())
         });
-    let title = if d.input.media.title.is_empty() {
-        "Nothing playing"
-    } else {
-        &d.input.media.title
+    let title = d.input.media.label();
+    let progress = d
+        .input
+        .media
+        .progress()
+        .map_or(0., |(fraction, _, _)| fraction);
+    let command = |which: &str| {
+        let player = d.input.media.selected()?;
+        match which {
+            "previous" => Some(lucent_domain::MediaCommand::Previous(player.id)),
+            "next" => Some(lucent_domain::MediaCommand::Next(player.id)),
+            _ => d.input.media.toggle_command(),
+        }
     };
-    let progress = if d.input.media.length == 0 {
-        0.
-    } else {
-        (d.input.media.position as f32 / d.input.media.length as f32).clamp(0., 1.)
+    let button = |id: &str, icon: &str, command: Option<lucent_domain::MediaCommand>| {
+        if let Some(command) = command.filter(|command| d.input.media.command_available(command)) {
+            d.icon_button(
+                id,
+                icon,
+                Message::Media(crate::media::Message::Request(command)),
+            )
+        } else {
+            d.icon(icon, lucent_design::icon::SMALL)
+                .size(
+                    component::icon_button::EXTENT,
+                    component::icon_button::EXTENT,
+                )
+                .opacity(opacity::DISABLED)
+        }
     };
     Element::stack(vec![
         artwork
@@ -435,14 +455,16 @@ pub(super) fn media(d: &View<'_>, _: &ViewContext) -> Element<Message> {
                 component::media::ARTWORK_HEIGHT,
             )
             .at(component::media::INSET, component::media::INSET)
-            .radius(radius::CARD),
+            .radius(radius::CARD)
+            .on_click(Message::Media(crate::media::Message::Open))
+            .id("media-open"),
         d.label(title, font::HEADING)
             .size(
                 component::media::CONTENT_WIDTH,
                 component::media::TITLE_HEIGHT,
             )
             .at(component::media::INSET, component::media::TITLE_TOP),
-        d.label(&d.input.media.artist, font::SMALL)
+        d.label(d.input.media.artist(), font::SMALL)
             .size(
                 component::media::CONTENT_WIDTH,
                 component::media::ARTIST_HEIGHT,
@@ -465,23 +487,22 @@ pub(super) fn media(d: &View<'_>, _: &ViewContext) -> Element<Message> {
             .at(component::media::INSET, component::media::PROGRESS_TOP)
             .radius(radius::INDICATOR)
             .background(d.accent()),
-        d.icon_button(
-            "media-previous",
-            "previous",
-            Message::Action(Action::Previous),
-        )
-        .at(
+        button("media-previous", "previous", command("previous")).at(
             component::media::PREVIOUS_LEFT,
             component::media::NAVIGATION_TOP,
         ),
-        d.icon_button(
+        button(
             "media-play",
-            if d.input.media.playing {
+            if d.input
+                .media
+                .playback()
+                .is_some_and(|playback| playback.status == lucent_domain::PlaybackStatus::Playing)
+            {
                 "pause"
             } else {
                 "play"
             },
-            Message::Action(Action::PlayPause),
+            command("toggle"),
         )
         .size(component::media::PLAY_WIDTH, component::media::PLAY_HEIGHT)
         .padding(space::MD)
@@ -489,11 +510,10 @@ pub(super) fn media(d: &View<'_>, _: &ViewContext) -> Element<Message> {
         .background(d.accent())
         .tint(d.theme().on_primary)
         .at(component::media::PLAY_LEFT, component::media::PLAY_TOP),
-        d.icon_button("media-next", "next", Message::Action(Action::Next))
-            .at(
-                component::media::NEXT_LEFT,
-                component::media::NAVIGATION_TOP,
-            ),
+        button("media-next", "next", command("next")).at(
+            component::media::NEXT_LEFT,
+            component::media::NAVIGATION_TOP,
+        ),
     ])
     .fill()
 }

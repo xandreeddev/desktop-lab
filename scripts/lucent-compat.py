@@ -27,7 +27,7 @@ def launch(script,*args):
 
 def panel(name,toggle=False):
     if name.startswith('omarchy.'): name=name.removeprefix('omarchy.')
-    if name in ('audio','network','bluetooth','power'): return cli(name,'toggle' if toggle else 'open')
+    if name in ('audio','media','network','bluetooth','power'): return cli(name,'toggle' if toggle else 'open')
     if name in ('weather','clock'): return cli('widget','weather' if name=='weather' else 'calendar','show')
     if name in ('speedtest','disk-speedtest'):
         command='omarchy-network-speedtest' if name=='speedtest' else 'omarchy-disk-speedtest'
@@ -69,6 +69,7 @@ def shell(args):
             raise ValueError('No Lucent panel at this position')
         if method=='hide':
             cli('audio','close')
+            cli('media','close')
             cli('network','close')
             # Other compatibility panels still use the native picker.
             import menu_routes
@@ -90,8 +91,7 @@ def shell(args):
             return 'ok'
         if method in routes: return cli('notifications',routes[method],*args)
     if target=='media' and method in ('next','previous','playPause'):
-        subprocess.run(['playerctl',{'playPause':'play-pause'}.get(method,method)],check=True)
-        return 'ok'
+        return cli('media',{'playPause':'play-pause'}.get(method,method))
     if target=='lock':
         if method=='isLocked':
             return str(subprocess.run(['omarchy-hyprland-session-locked'],stdout=subprocess.DEVNULL,check=False).returncode==0).lower()

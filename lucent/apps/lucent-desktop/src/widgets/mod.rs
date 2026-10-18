@@ -4,7 +4,6 @@ pub mod catalog;
 mod sizing;
 pub mod surfaces;
 mod view;
-use crate::actions::Action;
 use lucent_api::{ClipboardTarget, DragEvent, Effects, TextEdit, TextFieldState};
 use lucent_design::component;
 #[cfg(test)]
@@ -32,12 +31,12 @@ pub enum Message {
     ResetLayout,
     /// Cancel capture before its output or loaded configuration changes.
     CancelDrags,
-    Action(Action),
+    Media(crate::media::Message),
 }
 pub enum Intent {
     Save,
     RetrySave,
-    Action(Action),
+    Media(crate::media::Message),
     Error(lucent_domain::DomainError),
 }
 /// Preferences remain in the root aggregate. The child borrows them for this
@@ -322,6 +321,7 @@ impl Host {
                 effects.redraw("widgets");
                 None
             }
+            Message::Media(message) => Some(Intent::Media(message)),
             Message::EditNotes(edit) => {
                 effects.redraw("widgets");
                 let surface = self
@@ -382,7 +382,6 @@ impl Host {
                 effects.redraw("widgets");
                 None
             }
-            Message::Action(action) => Some(Intent::Action(action)),
             Message::RetrySave => Some(Intent::RetrySave),
         }
     }
@@ -787,9 +786,11 @@ mod tests {
             Some(Intent::Save)
         ));
         assert_eq!(settings.notes, "Hello");
+        let command =
+            lucent_domain::MediaCommand::Next(lucent_domain::MediaPlayerId::new(1).unwrap());
         assert!(matches!(
-            send(&mut host, &mut settings, Message::Action(Action::Next), 0).0,
-            Some(Intent::Action(Action::Next))
+            send(&mut host, &mut settings, Message::Media(crate::media::Message::Request(command)), 0).0,
+            Some(Intent::Media(crate::media::Message::Request(actual))) if actual == command
         ));
     }
 }

@@ -45,6 +45,10 @@ pub fn audio_panel(viewport: (f32, f32)) -> Rect {
     use lucent_design::component::audio;
     control_panel(viewport, (audio::WIDTH, audio::HEIGHT))
 }
+pub fn media_panel(viewport: (f32, f32)) -> Rect {
+    use lucent_design::component::media_panel;
+    control_panel(viewport, (media_panel::WIDTH, media_panel::HEIGHT))
+}
 pub fn network_panel(viewport: (f32, f32)) -> Rect {
     use lucent_design::component::network;
     control_panel(viewport, (network::WIDTH, network::HEIGHT))

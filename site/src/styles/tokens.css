@@ -478,6 +478,10 @@
   --component-live-wallpaper-input-height: var(--component-input-height);
   --component-live-wallpaper-panel-height: 560px;
   --component-live-wallpaper-status-lines: var(--component-power-status-lines);
+  --component-media-panel-width: var(--component-audio-width);
+  --component-media-panel-height: var(--component-audio-height);
+  --component-media-panel-artwork: 168px;
+  --component-media-panel-slide-distance: var(--component-audio-slide-distance);
   --icon-tiny: 16px;
   --icon-small: 17px;
   --icon-compact: 18px;

@@ -10,6 +10,7 @@ mod desktop;
 mod dock;
 mod launcher;
 mod live_wallpaper;
+mod media;
 mod monitors;
 mod network;
 mod notifications;

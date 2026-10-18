@@ -187,6 +187,25 @@ class Boundaries(unittest.TestCase):
         self.assertNotIn('lucent-wayland', reachable(self.graph, 'tray-service'))
         self.assertNotIn('lucent-render', reachable(self.graph, 'tray-service'))
 
+    def test_media_adapter_child_and_consumer_preserve_boundaries(self):
+        # Artwork transport lives in images/media.rs; the MPRIS core uses
+        # its native protocol rather than a process or filesystem fallback.
+        self.assert_no_platform_operations(
+            sources(ROOT / 'lucent/crates/lucent-services/src/media', ('tests.rs',)),
+            ('crate::command', 'command_with_timeout', 'playerctl',
+             'lucent_desktop', 'lucent_design', 'lucent_wayland', 'lucent_render'))
+        root = ROOT / 'lucent/apps/lucent-desktop/src'
+        paths = [root / 'media.rs', *sources(root / 'media')]
+        self.assert_no_platform_operations(paths,
+            ('crate::desktop', 'crate::adapters', 'crate::platform',
+             'lucent_services', 'lucent_wayland', 'lucent_render'))
+        for path in paths:
+            self.assertNotRegex(path.read_text(), r'\b(?:Desktop|DesktopAdapters)\b', str(path))
+        self.assertEqual(self.graph['media-service'] & self.graph.keys(),
+                         {'lucent-domain', 'lucent-services'})
+        self.assertTrue(reachable(self.graph, 'media-service').isdisjoint(
+            {'lucent-desktop', 'lucent-design', 'lucent-wayland', 'lucent-render'}))
+
     def test_live_wallpaper_client_and_decoder_preserve_domain_engine_boundaries(self):
         self.assert_no_platform_operations([ROOT/'lucent/apps/lucent-desktop/src/live_wallpaper.rs', *sources(ROOT/'lucent/apps/lucent-desktop/src/live_wallpaper', ('tests.rs',))],
                                            ('crate::desktop', 'crate::adapters', 'crate::platform', 'lucent_services', 'ffmpeg_next'))

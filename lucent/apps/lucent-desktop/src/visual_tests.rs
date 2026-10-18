@@ -1488,6 +1488,11 @@ fn visual_regressions() {
             ("notes-failed", Mode::Apps, 0, 0, "", 1., 390.),
             ("notes-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("menu-submenu", Mode::Apps, 0, 0, "", 1., 640.),
+            ("media-loading", Mode::Apps, 0, 0, "", 1., 640.),
+            ("media-empty", Mode::Apps, 0, 0, "", 1., 390.),
+            ("media-playing", Mode::Apps, 0, 0, "", 1., 640.),
+            ("media-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
+            ("media-paused", Mode::Apps, 0, 0, "", 1., 390.),
             ("audio-loading", Mode::Apps, 0, 0, "", 1., 640.),
             ("tray-loading", Mode::Apps, 0, 0, "", 1., 640.),
             ("tray-bar-wide", Mode::Apps, 0, 0, "", 1., 1920.),
@@ -2405,6 +2410,47 @@ fn visual_regressions() {
                 let mut input = Interaction::default();
                 input.synchronize(&layout.build(&tree, width, height, &input, now));
                 layout.build(&tree, width, height, &input, now)
+            } else if name.starts_with("media-") {
+                use crate::media::Message as MediaMessage;
+                app.update(Message::Media(MediaMessage::Open), &mut Effects::default());
+                if name != "media-loading" {
+                    let mut snapshot = if name == "media-empty" {
+                        lucent_domain::MediaSnapshot::default()
+                    } else {
+                        crate::media::fixture()
+                    };
+                    if name == "media-paused"
+                        && let lucent_domain::MediaPlayerState::Ready(playback) =
+                            &mut snapshot.players[0].state
+                    {
+                        playback.status = lucent_domain::PlaybackStatus::Paused;
+                    }
+                    app.update(
+                        Message::Media(MediaMessage::Observed(Ok(snapshot))),
+                        &mut Effects::default(),
+                    );
+                    if name == "media-unavailable" {
+                        app.update(
+                            Message::Media(MediaMessage::Observed(Err(
+                                lucent_domain::DomainError::Unavailable(
+                                    "Session bus disconnected".into(),
+                                ),
+                            ))),
+                            &mut Effects::default(),
+                        );
+                    }
+                }
+                let tree = app.view(&ViewContext {
+                    surface: "media-controls",
+                    instance: None,
+                    width,
+                    height,
+                    now,
+                    density: lucent_api::Density::ONE,
+                });
+                let mut input = Interaction::default();
+                input.synchronize(&layout.build(&tree, width, height, &input, now));
+                layout.build(&tree, width, height, &input, now)
             } else if name.starts_with("audio-") {
                 use crate::audio::{Message as AudioMessage, panel::Tab};
                 app.update(Message::Audio(AudioMessage::Open), &mut Effects::default());
@@ -2907,7 +2953,17 @@ fn visual_regressions() {
                 let root = Element::grid(8, icons).gap(8.).padding(12.).fill();
                 layout.build(&root, width, height, &Interaction::default(), now)
             } else if name.starts_with("bar") {
-                app.media.title = "A long media title that must stay inside its own capsule".into();
+                let mut media = crate::media::fixture();
+                if let lucent_domain::MediaPlayerState::Ready(playback) =
+                    &mut media.players[0].state
+                {
+                    playback.track.as_mut().unwrap().title =
+                        "A long media title that must stay inside its own capsule".into();
+                }
+                app.update(
+                    Message::Media(crate::media::Message::Observed(Ok(media))),
+                    &mut Effects::default(),
+                );
                 app.audio.observe(Ok(crate::audio::fixture()));
                 app.compositor.workspaces = (1..=8)
                     .map(|id| lucent_domain::Workspace {
@@ -3103,13 +3159,19 @@ fn selection_fill_and_outline_move_together_on_the_first_frame() {
 fn desktop_actions_use_injected_adapters_without_executing_host_commands() {
     let fake = Arc::new(crate::test_adapters::Fake::default());
     let mut app = Desktop::new(crate::test_adapters::with(fake.clone()));
-    for action in [
-        crate::actions::Action::VolumeUp,
-        crate::actions::Action::PlayPause,
-        crate::actions::Action::Lock,
+    app.update(
+        Message::Media(crate::media::Message::Observed(Ok(crate::media::fixture()))),
+        &mut Effects::default(),
+    );
+    for message in [
+        Message::Action(crate::actions::Action::VolumeUp),
+        Message::Media(crate::media::Message::Request(
+            lucent_domain::MediaCommand::Pause(lucent_domain::MediaPlayerId::new(1).unwrap()),
+        )),
+        Message::Action(crate::actions::Action::Lock),
     ] {
         let mut effects = Effects::default();
-        app.update(Message::Action(action), &mut effects);
+        app.update(message, &mut effects);
         for task in effects.tasks {
             app.update(task.run(), &mut Effects::default());
         }

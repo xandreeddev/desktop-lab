@@ -600,6 +600,12 @@ pub mod component {
         pub const PANEL_HEIGHT: f32 = 560.0;
         pub const STATUS_LINES: f32 = 3.0;
     }
+    pub mod media_panel {
+        pub const WIDTH: f32 = 480.0;
+        pub const HEIGHT: f32 = 640.0;
+        pub const ARTWORK: f32 = 168.0;
+        pub const SLIDE_DISTANCE: f32 = 20.0;
+    }
 }
 pub mod icon {
     pub const TINY: f32 = 16.0;

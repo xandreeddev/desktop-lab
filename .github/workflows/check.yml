@@ -47,6 +47,7 @@ jobs:
       - run: cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-services bluetooth_protocol -- --ignored
       - run: cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-services power_protocol -- --ignored
       - run: cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-services tray_protocol -- --ignored
+      - run: cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-services media_protocol -- --ignored
       - name: Native Vulkan visual regressions
         run: |
           export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name '*lvp*' -print -quit)"

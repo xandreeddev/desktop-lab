@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compatibility adapter: system commands/data → typed native picker requests.
 
-Audio, network and Bluetooth open desktop children; other presentation uses lucent-menu.
+Audio, media, network and Bluetooth open desktop children; other presentation uses lucent-menu.
 Returned values are opaque row IDs,
 validated against the current snapshot. They never become shell expressions.
 """
@@ -50,6 +50,10 @@ def information(title, text):
 
 def audio():
     output(str(Path.home()/'.local/bin/lucent-cli'), 'audio', 'open')
+
+
+def media():
+    output(str(Path.home()/'.local/bin/lucent-cli'), 'media', 'open')
 
 
 def network():
@@ -119,7 +123,7 @@ def reminders():
 
 
 def main(panel):
-    handlers = {'audio':audio,'network':network,'bluetooth':bluetooth,'monitor':monitor,'power':power,
+    handlers = {'audio':audio,'media':media,'network':network,'bluetooth':bluetooth,'monitor':monitor,'power':power,
                 'clipboard':clipboard,'emojis':emojis,'reminders':reminders,
                 'clock':lambda: information('Calendar',calendar.month(date.today().year,date.today().month)),
                 'weather':lambda: output('lucent-cli','widget','weather','show')}

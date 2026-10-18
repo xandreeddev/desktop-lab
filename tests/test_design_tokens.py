@@ -26,7 +26,7 @@ class DesignTokens(unittest.TestCase):
             self.assertEqual(path.read_text(), content, f'Stale tokens: {path.name}')
 
     def test_native_views_have_no_literal_visual_styles(self):
-        for name in ['views.rs', 'widgets/view.rs']:
+        for name in ['views.rs', 'widgets/view.rs', 'media/view.rs']:
             source = (ROOT / 'lucent/apps/lucent-desktop/src' / name).read_text()
             self.assertNotRegex(source, r'Color::hex|#[0-9a-fA-F]{6}\b')
             self.assertNotRegex(source, r'\.(?:font|padding(?:_xy)?|gap|radius)\(\d')
