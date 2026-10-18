@@ -113,6 +113,7 @@ mod tests {
         parent.delegate(
             |child: &mut Effects<&str>| {
                 child.redraw_surface(address.clone());
+                child.recreate_surface(address.clone());
                 child.clipboard.push(ClipboardRequest::new(
                     ClipboardTarget::new("bar", "edit").in_instance(instance),
                     ClipboardAction::Read,
@@ -122,6 +123,10 @@ mod tests {
             str::to_owned,
         );
         assert!(parent.redraw_instances.contains(&address));
+        assert_eq!(
+            parent.recreate_surfaces.as_slice(),
+            std::slice::from_ref(&address)
+        );
         assert!(parent.redraw.is_empty());
         let request = parent.clipboard.pop().unwrap();
         assert_eq!(request.target.address(), address);

@@ -29,6 +29,7 @@ fn app(name: &str) -> Application {
         keywords: vec![],
         icon: "missing-fixture-icon".into(),
         startup_class: String::new(),
+        actions: vec![],
         launch: lucent_domain::ApplicationLaunch::Command(LaunchCommand {
             program: "unused-fixture".into(),
             args: vec![],

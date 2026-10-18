@@ -50,6 +50,7 @@ mod clipboard;
 mod delivery;
 mod effects;
 mod fractional;
+mod handoff;
 mod ipc;
 mod keyboard;
 mod layer_commit;
@@ -75,12 +76,17 @@ struct Native<M> {
     height: u32,
     scale: u32,
     configured: bool,
+    presented: Option<PresentationState>,
     demand: FrameDemand,
     scene: Scene<M>,
     interaction: Interaction<M>,
     regions: Vec<api::Clip>,
-    frame_times: std::collections::VecDeque<f64>,
-    profiles: profiling::History,
+    history: handoff::SubmissionHistory,
+}
+#[derive(Clone, Copy)]
+struct PresentationState {
+    extent: (u32, u32),
+    buffer_scale: i32,
 }
 impl<M> Native<M> {
     fn density(&self) -> api::Density {
@@ -106,6 +112,7 @@ impl SurfaceRole {
 }
 struct State<A: Application> {
     surfaces: BTreeMap<api::SurfaceAddress, Native<A::Message>>,
+    retiring: handoff::Presentations<api::SurfaceAddress, Native<A::Message>>,
     gpu: Rc<Gpu>,
     app: A,
     layout: Layout,
@@ -146,6 +153,7 @@ impl<A: Application> Drop for State<A> {
         // as a permission agent can outlive this individual runtime invocation.
         // Teardown never authorizes a secure-session unlock.
         self.surfaces.clear();
+        self.retiring.clear();
         self.fractional.take();
         if let Err(error) = self.connection.flush() {
             eprintln!("{} surface cleanup failed: {error}", self.app.name());
@@ -226,6 +234,7 @@ fn run_inner<A: Application>(
     };
     let mut state = State {
         surfaces: BTreeMap::new(),
+        retiring: Default::default(),
         gpu,
         app,
         layout: Layout::new(fonts),
@@ -382,12 +391,12 @@ impl<A: Application> State<A> {
                     height: 1,
                     scale: 1,
                     configured: false,
+                    presented: None,
                     demand: FrameDemand::default(),
                     scene: Scene::default(),
                     interaction: Interaction::default(),
                     regions: vec![],
-                    frame_times: Default::default(),
-                    profiles: Default::default(),
+                    history: Default::default(),
                 },
             );
         }
@@ -397,7 +406,11 @@ impl<A: Application> State<A> {
         let cache = self.gpu.cache_stats();
         let mut scene_images = BTreeMap::new();
         if self.profile_frames {
-            for surface in self.surfaces.values() {
+            for surface in self
+                .surfaces
+                .values()
+                .chain(self.retiring.iter().map(|(_, native)| native))
+            {
                 for primitive in &surface.scene.paint {
                     if let lucent_ui::Paint::Image { data, .. } = primitive {
                         scene_images.insert(data.cache_id(), data.bytes() as u64);
@@ -407,12 +420,13 @@ impl<A: Application> State<A> {
         }
         let profile_memory = self.profile_frames.then(|| serde_json::json!({
             "scene_image_payload_bytes": scene_images.values().sum::<u64>(),
-            "geometry_buffer_payload_bytes": self.surfaces.values().map(|s| s.renderer.buffer_payload_bytes()).sum::<u64>(),
-            "one_color_buffer_per_surface_bytes": self.surfaces.values().map(|s| s.renderer.single_surface_buffer_bytes()).sum::<u64>(),
-            "scope":"Prepared image payloads referenced by current scenes only; app caches excluded. GPU buffer values are requested payloads, not driver allocations. Actual surface buffer counts and total GPU memory are unknown."
+            "geometry_buffer_payload_bytes": self.surfaces.values().chain(self.retiring.iter().map(|(_, native)| native)).map(|s| s.renderer.buffer_payload_bytes()).sum::<u64>(),
+            "one_color_buffer_per_surface_bytes": self.surfaces.values().chain(self.retiring.iter().map(|(_, native)| native)).map(|s| s.renderer.single_surface_buffer_bytes()).sum::<u64>(),
+            "scope":"Prepared image payloads referenced by current and retiring scenes only; app caches excluded. GPU buffer values are requested payloads, not driver allocations. Actual surface buffer counts and total GPU memory are unknown."
         }));
-        let mut result = serde_json::json!({"profile_memory":profile_memory,"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id.to_string(),"role":s.spec.id,"instance":s.spec.instance.as_ref().map(api::SurfaceInstance::as_str),"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"keyboard":match s.spec.keyboard { api::Keyboard::None=>"none", api::Keyboard::OnDemand=>"on-demand", api::Keyboard::Exclusive=>"exclusive" },"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"density":s.density().factor(),"buffer_scale":if s.fractional.is_some(){1}else{s.scale},"buffer_width":s.density().physical_size(s.width,s.height).ok().map(|size|size.0),"buffer_height":s.density().physical_size(s.width,s.height).ok().map(|size|size.1),"frames":s.renderer.frames,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.frame_times,"frame_profiles":s.profiles.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)});
+        let mut result = serde_json::json!({"profile_memory":profile_memory,"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id.to_string(),"role":s.spec.id,"instance":s.spec.instance.as_ref().map(api::SurfaceInstance::as_str),"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"keyboard":match s.spec.keyboard { api::Keyboard::None=>"none", api::Keyboard::OnDemand=>"on-demand", api::Keyboard::Exclusive=>"exclusive" },"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"density":s.density().factor(),"buffer_scale":if s.fractional.is_some(){1}else{s.scale},"buffer_width":s.density().physical_size(s.width,s.height).ok().map(|size|size.0),"buffer_height":s.density().physical_size(s.width,s.height).ok().map(|size|size.1),"frames":s.history.frames,"native_frames":s.renderer.frames,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.history.frame_times,"frame_profiles":s.history.profiles.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)});
         result["outputs"]=serde_json::json!(self.output_bindings.iter().map(|(info,_)|serde_json::json!({"global":info.global,"name":info.name.as_ref().map(api::OutputName::as_str),"logical_size":info.logical_size,"integer_scale":info.integer_scale})).collect::<Vec<_>>());
+        result["retiring_native_surfaces"] = serde_json::json!(self.retiring.len());
         result["closed_named_surfaces"] = serde_json::json!(
             self.closed_targets
                 .keys()
@@ -487,6 +501,17 @@ impl<A: Application> State<A> {
         }
     }
     fn effects(&mut self, effects: Effects<A::Message>, qh: &QueueHandle<Self>) {
+        // Session-lock roles cannot be recreated: a second role for one output
+        // is a protocol error, and teardown never grants an unlock. Reject the
+        // whole effect batch before tasks, clipboard or native state mutate.
+        if let Err(error) = handoff::validate_recreation(
+            self.authorize_unlock.is_some() || self.session_lock.is_some(),
+            !effects.recreate_surfaces.is_empty(),
+        ) {
+            self.error = Some(error.into());
+            self.exit = true;
+            return;
+        }
         if self.authorize_unlock.is_none() {
             self.exit |= effects.exit;
         } else if self.locked
@@ -515,7 +540,8 @@ impl<A: Application> State<A> {
         for request in effects.clipboard {
             self.clipboard_request(request, qh);
         }
-        if let Err(e) = self.reconcile(qh) {
+        let recreate = effects.recreate_surfaces.into_iter().collect();
+        if let Err(e) = self.reconcile_with_recreation(qh, &recreate) {
             self.error = Some(e.to_string());
             self.exit = true;
         }
@@ -540,6 +566,13 @@ impl<A: Application> State<A> {
         self.draw_all(qh);
     }
     fn reconcile(&mut self, qh: &QueueHandle<Self>) -> Result<(), Error> {
+        self.reconcile_with_recreation(qh, &Default::default())
+    }
+    fn reconcile_with_recreation(
+        &mut self,
+        qh: &QueueHandle<Self>,
+        recreate: &std::collections::BTreeSet<api::SurfaceAddress>,
+    ) -> Result<(), Error> {
         if self.session_lock.is_none() {
             let specs = self.app.surfaces();
             let mut ids = std::collections::BTreeSet::new();
@@ -562,6 +595,11 @@ impl<A: Application> State<A> {
             for id in removed {
                 self.retire_native(&id);
             }
+            self.retiring.retain(|id, _| {
+                specs
+                    .iter()
+                    .any(|spec| spec.address() == *id && spec.visible)
+            });
             self.closed_targets.retain(|id, (name, output)| {
                 specs.iter().any(|spec| {
                     spec.address() == *id && spec.visible && spec.output.as_ref() == Some(name)
@@ -572,6 +610,15 @@ impl<A: Application> State<A> {
             });
             for spec in specs.into_iter().filter(|s| s.visible) {
                 let address = spec.address();
+                if recreate.contains(&address)
+                    && let Some(native) = self.surfaces.get(&address)
+                {
+                    handoff::validate_layer_recreation(
+                        native.committed_spec.exclusive_zone,
+                        native.spec.exclusive_zone,
+                        spec.exclusive_zone,
+                    )?;
+                }
                 let target = match outputs::resolve(
                     spec.output.as_ref(),
                     &self.output_bindings,
@@ -591,6 +638,11 @@ impl<A: Application> State<A> {
                 {
                     self.retire_native(&address);
                 }
+                let history = if recreate.contains(&address) {
+                    self.begin_recreation(&address)?
+                } else {
+                    None
+                };
                 if let Some(native) = self.surfaces.get_mut(&address) {
                     if native.spec != spec {
                         // Stage role changes until a matching buffer is ready.
@@ -639,12 +691,12 @@ impl<A: Application> State<A> {
                         height: 1,
                         scale: 1,
                         configured: false,
+                        presented: None,
                         demand: FrameDemand::default(),
                         scene: Scene::default(),
                         interaction: Interaction::default(),
                         regions: vec![],
-                        frame_times: std::collections::VecDeque::new(),
-                        profiles: Default::default(),
+                        history: history.unwrap_or_default(),
                     },
                 );
             }
@@ -659,7 +711,48 @@ impl<A: Application> State<A> {
             self.keyboard_surface = None;
             self.input_serial = None;
         }
+        self.retiring.retire(id);
         self.surfaces.remove(id)
+    }
+    fn begin_recreation(
+        &mut self,
+        id: &api::SurfaceAddress,
+    ) -> Result<Option<handoff::SubmissionHistory>, Error> {
+        let Some(native) = self.surfaces.get_mut(id) else {
+            return Ok(None);
+        };
+        let SurfaceRole::Layer(layer) = &native.role else {
+            return Err("Cannot recreate a session-lock surface".into());
+        };
+        let region = Region::new(&self.compositor)?;
+        if let Some(presented) = native.presented {
+            // A failed/retried render may have queued viewport/role state
+            // without submitting its matching buffer. This input-disable commit
+            // must retain the geometry and scale of the last successful image.
+            configure_layer(layer, &native.committed_spec);
+            if let Some(fractional) = &mut native.fractional {
+                fractional.destination(presented.extent.0, presented.extent.1)?;
+            }
+            layer.wl_surface().set_buffer_scale(presented.buffer_scale);
+        }
+        layer.set_keyboard_interactivity(KeyboardInteractivity::None);
+        layer
+            .wl_surface()
+            .set_input_region(Some(region.wl_region()));
+        layer.commit();
+        if self.keyboard_surface.as_ref() == Some(id) {
+            self.keyboard_surface = None;
+            self.input_serial = None;
+            // draw_all observes the retired focus after replacement insertion.
+            // Cancelling here would synchronously reenter client update while
+            // native replacement and logical-history transfer are incomplete.
+        }
+        let mut previous = self.surfaces.remove(id).expect("validated native surface");
+        let history = previous.history.continuation();
+        let presented = previous.presented.is_some();
+        self.retiring
+            .retain_last_good(id.clone(), previous, presented);
+        Ok(Some(history))
     }
     /// Some compositors update wl_output scale without repeating the preferred
     /// buffer-scale event on every existing layer surface. Track entered outputs
@@ -681,18 +774,23 @@ impl<A: Application> State<A> {
                 surface.scale = scale;
                 surface.demand.invalidate();
                 if surface.configured {
-                    events.push(surface.spec.scope_event(api::Event::Resize {
-                        surface: surface.spec.id,
-                        width: surface.width as f32,
-                        height: surface.height as f32,
-                        scale,
-                        density: surface.density(),
-                    }));
+                    events.push((
+                        surface.role.wl_surface().clone(),
+                        surface.spec.scope_event(api::Event::Resize {
+                            surface: surface.spec.id,
+                            width: surface.width as f32,
+                            height: surface.height as f32,
+                            scale,
+                            density: surface.density(),
+                        }),
+                    ));
                 }
             }
         }
-        for event in events {
-            if let Some(message) = self.app.event(event) {
+        for (surface, event) in events {
+            if self.id_for(&surface).is_some()
+                && let Some(message) = self.app.event(event)
+            {
                 self.message(message, qh);
             }
         }
@@ -761,7 +859,7 @@ impl<A: Application> State<A> {
             }
             let input_ms = profiling::elapsed(started);
             s.renderer.enable_profiling(self.profile_frames);
-            match s
+            let outcome = s
                 .renderer
                 .render_scaled(width, height, density, &scene.paint, || {
                     if s.committed_spec != s.spec
@@ -772,7 +870,9 @@ impl<A: Application> State<A> {
                     // WSI presentation commits the role state, viewport,
                     // input region and newly rendered buffer together.
                     surface.frame(qh, FrameCallbackData(surface.clone()));
-                }) {
+                });
+            self.retiring.finish_submission(&s.spec.address(), &outcome);
+            match outcome {
                 Ok(RenderOutcome::Presented) => {}
                 Ok(RenderOutcome::RetryAfter(delay)) => {
                     s.demand.defer();
@@ -809,20 +909,28 @@ impl<A: Application> State<A> {
                 s.demand.invalidate();
             }
             let submitted_ms = self.epoch.elapsed().as_secs_f64() * 1000.;
-            s.frame_times.push_back(submitted_ms);
-            if s.frame_times.len() > profiling::MAX_FRAMES {
-                s.frame_times.pop_front();
-            }
+            s.history.record(submitted_ms);
+            s.presented = Some(PresentationState {
+                extent: (width, height),
+                buffer_scale: if s.fractional.is_some() {
+                    1
+                } else {
+                    s.scale as i32
+                },
+            });
             s.scene = scene;
-            submitted.push(s.spec.scope_event(api::Event::FrameSubmitted {
-                surface: s.spec.id,
-                width: s.width as f32,
-                height: s.height as f32,
-                now,
-            }));
+            submitted.push((
+                s.role.wl_surface().clone(),
+                s.spec.scope_event(api::Event::FrameSubmitted {
+                    surface: s.spec.id,
+                    width: s.width as f32,
+                    height: s.height as f32,
+                    now,
+                }),
+            ));
             if let Some(render) = s.renderer.last_profile {
-                s.profiles.push(profiling::FrameProfile {
-                    frame: s.renderer.frames,
+                s.history.profiles.push(profiling::FrameProfile {
+                    frame: s.history.frames,
                     submitted_ms,
                     view_ms,
                     layout_ms,
@@ -834,12 +942,14 @@ impl<A: Application> State<A> {
             }
         }
         self.clipboard_observe_focus(qh);
-        let messages: Vec<_> = submitted
-            .into_iter()
-            .filter_map(|event| self.app.event(event))
-            .collect();
-        if !messages.is_empty() {
-            self.messages(messages, qh);
+        for (surface, event) in submitted {
+            // Clipboard completions and preceding frame messages may renew or
+            // hide an address. An old frame cannot authorize its replacement.
+            if self.id_for(&surface).is_some()
+                && let Some(message) = self.app.event(event)
+            {
+                self.message(message, qh);
+            }
         }
     }
     fn surface_event(&self, id: &api::SurfaceAddress, event: api::Event) -> Option<A::Message> {
@@ -865,7 +975,11 @@ impl<A: Application> State<A> {
             }
             s.interaction.focus_visible = true;
         }
-        let Some(logical_id) = self.surfaces.get(&id).map(|s| s.spec.id) else {
+        let Some((logical_id, native_surface)) = self
+            .surfaces
+            .get(&id)
+            .map(|s| (s.spec.id, s.role.wl_surface().clone()))
+        else {
             self.keyboard_surface = None;
             return;
         };
@@ -886,11 +1000,13 @@ impl<A: Application> State<A> {
                 s.demand.invalidate();
             }
             self.clipboard_observe_focus(qh);
-            if messages.is_empty() {
-                self.draw_all(qh);
-            } else {
-                self.messages(messages, qh);
+            for message in messages {
+                if self.id_for(&native_surface).as_ref() != Some(&id) {
+                    break;
+                }
+                self.message(message, qh);
             }
+            self.draw_all(qh);
         }
     }
 }
@@ -1117,6 +1233,8 @@ impl<A: Application> OutputHandler for State<A> {
         qh: &QueueHandle<Self>,
         output: wl_output::WlOutput,
     ) {
+        self.retiring
+            .retain(|_, native| native.bound_output.as_ref() != Some(&output));
         let removed: Vec<_> = self
             .surfaces
             .iter()
@@ -1271,7 +1389,12 @@ impl<A: Application> PointerHandler for State<A> {
                 s.demand.invalidate();
             }
             self.clipboard_observe_focus(qh);
-            let logical_id = self.surfaces[&id].spec.id;
+            if self.id_for(&event.surface).as_ref() != Some(&id) {
+                continue;
+            }
+            let Some(logical_id) = self.surfaces.get(&id).map(|native| native.spec.id) else {
+                continue;
+            };
             let boundary = match event.kind {
                 PointerEventKind::Enter { .. } => Some(true),
                 PointerEventKind::Leave { .. } => Some(false),
@@ -1331,6 +1454,9 @@ impl<A: Application> PointerHandler for State<A> {
                 messages.push(m);
             }
             for m in messages {
+                if self.id_for(&event.surface).as_ref() != Some(&id) {
+                    break;
+                }
                 self.message(m, qh);
             }
         }
@@ -1349,17 +1475,31 @@ impl<A: Application> KeyboardHandler for State<A> {
         _: &[u32],
         _: &[Keysym],
     ) {
+        let Some(id) = self.id_for(surface) else {
+            return;
+        };
         self.clipboard_cancel(qh, false);
-        self.keyboard_surface = self.id_for(surface);
+        // Cancellation completes client requests synchronously. Those updates
+        // may hide or renew this address; only this exact native object's Enter
+        // can grant authority to the still-current lifetime.
+        if self.id_for(surface).as_ref() == Some(&id) {
+            self.keyboard_surface = Some(id);
+        }
     }
     fn leave(
         &mut self,
         _: &Connection,
         qh: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
-        _: &wl_surface::WlSurface,
+        surface: &wl_surface::WlSurface,
         _: u32,
     ) {
+        let Some(id) = self.id_for(surface) else {
+            return;
+        };
+        if self.keyboard_surface.as_ref() != Some(&id) {
+            return;
+        }
         self.keyboard_surface = None;
         self.input_serial = None;
         self.clipboard_cancel(qh, false);

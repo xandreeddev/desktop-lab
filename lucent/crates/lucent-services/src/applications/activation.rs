@@ -1,6 +1,6 @@
 //! Standard desktop-service activation. Native addressing and uncertain-reply
 //! policy belong here; callers never interpolate application data into commands.
-use lucent_domain::AppId;
+use lucent_domain::{AppId, ApplicationActionId};
 use std::{
     collections::HashMap,
     time::{Duration, Instant},
@@ -41,8 +41,23 @@ fn error(error: zbus::Error) -> ActivationError {
 pub(super) fn activate(id: &AppId, address: Option<&str>) -> Result<(), ActivationError> {
     activate_for(id, address, Duration::from_secs(5))
 }
+pub(super) fn activate_action(
+    id: &AppId,
+    action: &ApplicationActionId,
+    address: Option<&str>,
+) -> Result<(), ActivationError> {
+    request_for(id, Some(action), address, Duration::from_secs(5))
+}
 fn activate_for(
     id: &AppId,
+    address: Option<&str>,
+    timeout: Duration,
+) -> Result<(), ActivationError> {
+    request_for(id, None, address, timeout)
+}
+fn request_for(
+    id: &AppId,
+    action: Option<&ApplicationActionId>,
     address: Option<&str>,
     timeout: Duration,
 ) -> Result<(), ActivationError> {
@@ -59,16 +74,29 @@ fn activate_for(
             .map_err(|_| ActivationError::Unsupported)?;
         let request = async {
             let platform_data: HashMap<&str, Value<'_>> = HashMap::new();
-            let reply = connection
-                .call_method(
-                    Some(name.as_str()),
-                    path.as_str(),
-                    Some("org.freedesktop.Application"),
-                    "Activate",
-                    &(platform_data,),
-                )
-                .await
-                .map_err(error)?;
+            let reply = if let Some(action) = action {
+                let parameters: Vec<Value<'_>> = vec![];
+                connection
+                    .call_method(
+                        Some(name.as_str()),
+                        path.as_str(),
+                        Some("org.freedesktop.Application"),
+                        "ActivateAction",
+                        &(action.as_str(), parameters, platform_data),
+                    )
+                    .await
+            } else {
+                connection
+                    .call_method(
+                        Some(name.as_str()),
+                        path.as_str(),
+                        Some("org.freedesktop.Application"),
+                        "Activate",
+                        &(platform_data,),
+                    )
+                    .await
+            }
+            .map_err(error)?;
             reply
                 .body()
                 .deserialize::<()>()

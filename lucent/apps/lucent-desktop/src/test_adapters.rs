@@ -21,6 +21,10 @@ impl ApplicationPort for Fake {
         self.calls.lock().unwrap().push("launch");
         Ok(())
     }
+    fn launch_action(&self, _: &Application, _: &ApplicationActionId) -> Result<()> {
+        self.calls.lock().unwrap().push("launch-action");
+        Ok(())
+    }
 }
 impl SettingsPort for Fake {
     fn load(&self) -> Result<DesktopSettings> {
