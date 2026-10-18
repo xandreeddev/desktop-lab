@@ -4,6 +4,7 @@
 //! selection, scrolling and panel motion; it returns typed intents to the root,
 //! which owns persistence and shared OS effects. No production adapter is selected
 //! here, and neither domain policy nor the renderer depends on this component.
+mod application_actions;
 mod view;
 use crate::{
     actions::{Action, COMMANDS},
@@ -13,7 +14,8 @@ use crate::{
 use lucent_api::*;
 use lucent_design::{component::panel, motion};
 use lucent_domain::{
-    AppId, Application, DesktopSettings, LauncherSize, ThemePalette, Wallpaper, WidgetLayout,
+    AppId, Application, ApplicationActionId, DesktopSettings, LauncherSize, ThemePalette,
+    Wallpaper, WidgetLayout,
 };
 pub use view::View;
 /// The same range drives painting and worker demand; no scan of the full library.
@@ -62,13 +64,28 @@ pub enum Message {
     Toggle,
     Close,
     Compacted(u64),
-    Submitted { height: f32, now: f64 },
+    Submitted {
+        height: f32,
+        now: f64,
+    },
     Mode(Mode),
     Query(String),
     EditQuery(TextEdit),
     Select(usize),
     Navigate(i32),
     Activate,
+    OpenActions(Application),
+    SelectedActions,
+    Back,
+    SelectAction(usize),
+    ChooseAction {
+        menu: u64,
+        action: ApplicationActionId,
+    },
+    ActionFinished {
+        revision: u64,
+        result: lucent_domain::Result<()>,
+    },
     Request(Intent),
 }
 
@@ -76,6 +93,11 @@ pub enum Message {
 pub enum Intent {
     Error(lucent_domain::DomainError),
     Launch(AppId, bool),
+    LaunchAction {
+        revision: u64,
+        app: Application,
+        action: ApplicationActionId,
+    },
     Pin(AppId),
     Action(Action),
     Wallpaper(usize, bool),
@@ -127,6 +149,9 @@ pub struct Launcher {
     results: Vec<usize>,
     selected: usize,
     scroll: usize,
+    action_menu: Option<application_actions::Menu>,
+    action_pending: Option<application_actions::Pending>,
+    action_revision: u64,
     reveal: Motion,
     panel_width: Motion,
     panel_height: Motion,
@@ -152,6 +177,9 @@ impl Default for Launcher {
             results: vec![],
             selected: 0,
             scroll: 0,
+            action_menu: None,
+            action_pending: None,
+            action_revision: 0,
             reveal: Motion::fixed(0.),
             panel_width: Motion::fixed(panel::INITIAL_WIDTH),
             panel_height: Motion::fixed(panel::DOCK_HEIGHT),
@@ -216,6 +244,7 @@ impl Launcher {
         geometry: Geometry,
         now: f64,
     ) {
+        self.revalidate_actions(apps);
         self.results = lucent_usecases::search_applications(apps, &self.query);
         if let Some(position) =
             selected.and_then(|id| self.results.iter().position(|index| &apps[*index].id == id))
@@ -225,11 +254,17 @@ impl Launcher {
         self.reconcile(geometry, now);
     }
     pub fn refresh(&mut self, apps: &[Application], geometry: Geometry, now: f64) {
+        self.revalidate_actions(apps);
         self.results = lucent_usecases::search_applications(apps, &self.query);
         self.reconcile(geometry, now);
     }
     pub fn reconcile(&mut self, geometry: Geometry, now: f64) {
-        self.choose(self.selected, geometry);
+        self.choose(
+            self.action_menu
+                .as_ref()
+                .map_or(self.selected, |menu| menu.selected),
+            geometry,
+        );
         self.full_height = geometry.viewport.1;
         if self.open && self.submitted_height < self.full_height {
             if !self.opening {
@@ -243,7 +278,7 @@ impl Launcher {
         let (width, height) = if self.open {
             shell_layout::launcher_size(
                 self.mode,
-                self.results.len(),
+                self.presentation_count(),
                 geometry.viewport,
                 geometry.preferred,
             )
@@ -266,6 +301,10 @@ impl Launcher {
         );
     }
     fn choose(&mut self, index: usize, geometry: Geometry) {
+        if self.action_menu.is_some() {
+            self.choose_action(index, geometry);
+            return;
+        }
         let count = match self.mode {
             Mode::Apps => self.results.len(),
             Mode::Commands => COMMANDS.len(),
@@ -300,6 +339,7 @@ impl Launcher {
             .min(row_count.saturating_sub(rows));
     }
     fn open_mode(&mut self, mode: Mode, input: Input<'_>, geometry: Geometry, now: f64) {
+        self.action_menu = None;
         self.open = true;
         self.expanded = true;
         self.closing = None;
@@ -312,6 +352,8 @@ impl Launcher {
         self.refresh(input.apps, geometry, now);
     }
     fn close(&mut self, geometry: Geometry, now: f64) {
+        self.action_menu = None;
+        self.query_field.cancel();
         self.open = false;
         self.opening = false;
         self.reconcile(geometry, now);
@@ -431,6 +473,7 @@ impl Launcher {
                 None
             }
             Message::Query(query) => {
+                self.action_menu = None;
                 self.query = query;
                 self.query_field.reset(&self.query);
                 self.selected = 0;
@@ -448,6 +491,7 @@ impl Launcher {
                     Message::EditQuery,
                 ) {
                     Ok(change) if change.content => {
+                        self.action_menu = None;
                         self.selected = 0;
                         self.scroll = 0;
                         self.refresh(input.apps, geometry, now);
@@ -460,7 +504,39 @@ impl Launcher {
                 }
             }
             Message::Select(index) => {
-                self.choose(index, geometry);
+                if self.action_menu.is_none() {
+                    self.choose(index, geometry);
+                }
+                None
+            }
+            Message::OpenActions(app) => {
+                self.open_actions(app, input, geometry, now);
+                None
+            }
+            Message::SelectedActions => {
+                if self.action_menu.is_none()
+                    && let Some(app) = self
+                        .results
+                        .get(self.selected)
+                        .and_then(|index| input.apps.get(*index))
+                        .cloned()
+                {
+                    self.open_actions(app, input, geometry, now);
+                }
+                None
+            }
+            Message::Back => {
+                self.action_menu = None;
+                self.reconcile(geometry, now);
+                None
+            }
+            Message::SelectAction(index) => {
+                self.choose_action(index, geometry);
+                None
+            }
+            Message::ChooseAction { menu, action } => self.admit_action(menu, action, input),
+            Message::ActionFinished { revision, result } => {
+                self.finish_action(revision, result, geometry, now);
                 None
             }
             Message::Navigate(delta)
@@ -476,12 +552,23 @@ impl Launcher {
                 false,
             )),
             Message::Navigate(delta) => {
-                self.choose(
-                    self.selected.saturating_add_signed(delta as isize),
-                    geometry,
-                );
+                let selected = self
+                    .action_menu
+                    .as_ref()
+                    .map_or(self.selected, |menu| menu.selected);
+                self.choose(selected.saturating_add_signed(delta as isize), geometry);
                 None
             }
+            Message::Activate if self.action_menu.is_some() => self
+                .action_menu
+                .as_ref()
+                .and_then(|menu| {
+                    menu.app
+                        .actions
+                        .get(menu.selected)
+                        .map(|action| (menu.revision, action.id.clone()))
+                })
+                .and_then(|(menu, action)| self.admit_action(menu, action, input)),
             Message::Activate => self.activate(input),
             Message::Request(intent) => Some(intent),
         };
@@ -515,12 +602,18 @@ impl Launcher {
                 surface: "dock",
                 key,
             } => match key {
-                Key::Text(text) if self.mode == Mode::Apps && !self.edit_mounted => {
+                Key::Text(text)
+                    if self.mode == Mode::Apps
+                        && self.action_menu.is_none()
+                        && !self.edit_mounted =>
+                {
                     Some(Message::Query(format!("{}{text}", self.query)))
                 }
                 Key::Tab => Some(Message::Mode(self.mode.cycle(1))),
                 Key::BackTab => Some(Message::Mode(self.mode.cycle(-1))),
+                Key::Escape if self.action_menu.is_some() => Some(Message::Back),
                 Key::Escape => Some(Message::Close),
+                Key::ContextMenu if self.mode == Mode::Apps => Some(Message::SelectedActions),
                 Key::Enter => Some(Message::Activate),
                 Key::Up => Some(Message::Navigate(-1)),
                 Key::Left
@@ -571,6 +664,7 @@ mod tests {
                         keywords: vec![],
                         icon: String::new(),
                         startup_class: String::new(),
+                        actions: vec![],
                         launch: lucent_domain::ApplicationLaunch::Command(LaunchCommand {
                             program: "never-executed".into(),
                             args: vec![],
@@ -645,6 +739,221 @@ mod tests {
             },
             false,
         )
+    }
+    fn action_fixture() -> Fixture {
+        let mut fixture = Fixture::new();
+        for app in &mut fixture.apps {
+            app.actions = (0..32)
+                .map(|index| lucent_domain::ApplicationAction {
+                    id: ApplicationActionId::new(format!("Action-{index}")).unwrap(),
+                    name: format!("Action {index}"),
+                    icon: String::new(),
+                    launch: app.launch.clone(),
+                })
+                .collect();
+        }
+        fixture
+    }
+    #[test]
+    fn action_navigation_preserves_query_selection_and_reaches_last_choice() {
+        let fixture = action_fixture();
+        let mut launcher = Launcher::default();
+        fixture.send(&mut launcher, Message::Mode(Mode::Apps));
+        fixture.send(&mut launcher, Message::Query("a".into()));
+        fixture.send(&mut launcher, Message::Select(1));
+        let original = (
+            launcher.query().to_owned(),
+            launcher.selected(),
+            launcher.scroll,
+        );
+        let message = launcher
+            .event(
+                Event::Key {
+                    surface: "dock",
+                    key: Key::ContextMenu,
+                },
+                false,
+            )
+            .unwrap();
+        fixture.send(&mut launcher, message);
+        assert_eq!(
+            launcher.action_menu.as_ref().unwrap().app.id,
+            fixture.apps[1].id
+        );
+        fixture.send(&mut launcher, Message::Navigate(i32::MAX));
+        let menu = launcher.action_menu.as_ref().unwrap();
+        assert_eq!(menu.selected, 31);
+        assert!(menu.scroll > 0);
+        let rows = shell_layout::visible_rows(
+            Mode::Apps,
+            32,
+            fixture.geometry().viewport,
+            fixture.geometry().preferred,
+        );
+        assert!(menu.selected >= menu.scroll && menu.selected < menu.scroll + rows);
+        let back = launcher
+            .event(
+                Event::Key {
+                    surface: "dock",
+                    key: Key::Escape,
+                },
+                false,
+            )
+            .unwrap();
+        assert!(matches!(back, Message::Back));
+        fixture.send(&mut launcher, back);
+        assert!(!launcher.actions_open() && launcher.open());
+        assert_eq!(
+            (
+                launcher.query().to_owned(),
+                launcher.selected(),
+                launcher.scroll
+            ),
+            original
+        );
+        assert!(matches!(
+            launcher.event(
+                Event::Key {
+                    surface: "dock",
+                    key: Key::Escape
+                },
+                false
+            ),
+            Some(Message::Close)
+        ));
+    }
+    #[test]
+    fn action_menu_retires_changed_descriptor_query_mode_and_captured_press() {
+        let mut fixture = action_fixture();
+        let mut launcher = Launcher::default();
+        fixture.send(&mut launcher, Message::Mode(Mode::Apps));
+        fixture.send(&mut launcher, Message::OpenActions(fixture.apps[0].clone()));
+        let stale = launcher.action_message("Action-0").unwrap();
+        fixture.apps[0].actions[0].name = "Replacement".into();
+        launcher.refresh(&fixture.apps, fixture.geometry(), 0.);
+        assert!(!launcher.actions_open());
+        assert!(fixture.send(&mut launcher, stale).is_none());
+        fixture.send(&mut launcher, Message::OpenActions(fixture.apps[0].clone()));
+        let stale = launcher.action_message("Action-0").unwrap();
+        fixture.send(&mut launcher, Message::Query("Alpha".into()));
+        assert!(!launcher.actions_open());
+        fixture.send(&mut launcher, Message::OpenActions(fixture.apps[0].clone()));
+        assert!(fixture.send(&mut launcher, stale).is_none());
+        fixture.send(&mut launcher, Message::Mode(Mode::Commands));
+        assert!(!launcher.actions_open());
+        fixture.send(&mut launcher, Message::OpenActions(fixture.apps[0].clone()));
+        fixture.apps.push(fixture.apps[0].clone());
+        launcher.refresh(&fixture.apps, fixture.geometry(), 0.);
+        assert!(
+            !launcher.actions_open(),
+            "ambiguous application identity has no action authority"
+        );
+    }
+    #[test]
+    fn action_attempts_are_bounded_and_completion_belongs_to_exact_origin_menu() {
+        let fixture = action_fixture();
+        let mut launcher = Launcher::default();
+        fixture.send(&mut launcher, Message::Mode(Mode::Apps));
+        fixture.send(&mut launcher, Message::OpenActions(fixture.apps[0].clone()));
+        let Some(Intent::LaunchAction {
+            revision,
+            app,
+            action,
+        }) = fixture.send(&mut launcher, Message::Activate)
+        else {
+            panic!("action intent");
+        };
+        assert_eq!(app, fixture.apps[0]);
+        assert_eq!(action.as_str(), "Action-0");
+        assert!(fixture.send(&mut launcher, Message::Activate).is_none());
+        fixture.send(
+            &mut launcher,
+            Message::ActionFinished {
+                revision: revision + 1,
+                result: Ok(()),
+            },
+        );
+        assert!(launcher.action_pending.is_some());
+        fixture.send(&mut launcher, Message::Back);
+        fixture.send(&mut launcher, Message::OpenActions(fixture.apps[0].clone()));
+        fixture.send(
+            &mut launcher,
+            Message::ActionFinished {
+                revision,
+                result: Err(lucent_domain::DomainError::Failed("Old action".into())),
+            },
+        );
+        assert!(launcher.action_pending.is_none() && launcher.open());
+        assert!(launcher.action_menu.as_ref().unwrap().error.is_empty());
+        let Some(Intent::LaunchAction { revision, .. }) =
+            fixture.send(&mut launcher, Message::Activate)
+        else {
+            panic!("new action");
+        };
+        fixture.send(
+            &mut launcher,
+            Message::ActionFinished {
+                revision,
+                result: Err(lucent_domain::DomainError::Failed("Denied action".into())),
+            },
+        );
+        assert!(
+            launcher
+                .action_menu
+                .as_ref()
+                .unwrap()
+                .error
+                .contains("Denied action")
+        );
+        let Some(Intent::LaunchAction {
+            revision: retry, ..
+        }) = fixture.send(&mut launcher, Message::Activate)
+        else {
+            panic!("retry");
+        };
+        assert!(retry > revision);
+        fixture.send(
+            &mut launcher,
+            Message::ActionFinished {
+                revision,
+                result: Ok(()),
+            },
+        );
+        assert!(launcher.open() && launcher.action_pending.is_some());
+        fixture.send(
+            &mut launcher,
+            Message::ActionFinished {
+                revision: retry,
+                result: Ok(()),
+            },
+        );
+        assert!(!launcher.open() && launcher.action_pending.is_none());
+    }
+    #[test]
+    fn action_admission_rejects_unavailable_catalog_duplicate_action_and_id_exhaustion() {
+        let mut fixture = action_fixture();
+        let mut launcher = Launcher::default();
+        fixture.send(&mut launcher, Message::Mode(Mode::Apps));
+        fixture.send(&mut launcher, Message::OpenActions(fixture.apps[0].clone()));
+        let action = launcher.action_message("Action-0").unwrap();
+        let mut input = fixture.input();
+        input.application_status = crate::catalog::Status::Unavailable;
+        assert!(
+            launcher
+                .update(action, input, fixture.geometry(), &mut Effects::default())
+                .is_none()
+        );
+        assert!(!launcher.actions_open() && launcher.action_pending.is_none());
+        let duplicate = fixture.apps[0].actions[0].clone();
+        fixture.apps[0].actions.push(duplicate);
+        fixture.send(&mut launcher, Message::OpenActions(fixture.apps[0].clone()));
+        assert!(launcher.action_message("Action-0").is_err());
+        assert!(fixture.send(&mut launcher, Message::Activate).is_none());
+        fixture.apps[0].actions.pop();
+        fixture.send(&mut launcher, Message::OpenActions(fixture.apps[0].clone()));
+        launcher.action_revision = u64::MAX;
+        assert!(fixture.send(&mut launcher, Message::Activate).is_none());
+        assert!(launcher.action_pending.is_none());
     }
     #[test]
     fn clipboard_completion_refilters_current_query_and_rejects_a_closed_generation() {

@@ -64,6 +64,63 @@ mod app_id_tests {
         }
     }
 }
+/// A case-sensitive declared action key. The byte cap is implementation policy,
+/// not a limit imposed by the desktop-entry specification.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ApplicationActionId(String);
+impl ApplicationActionId {
+    pub const MAX_BYTES: usize = 128;
+    pub fn new(value: impl Into<String>) -> Result<Self> {
+        let value = value.into();
+        if value.is_empty()
+            || value.len() > Self::MAX_BYTES
+            || !value
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || c == b'-')
+        {
+            return Err(DomainError::Invalid(
+                "Application action identity is invalid".into(),
+            ));
+        }
+        Ok(Self(value))
+    }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+#[cfg(test)]
+mod action_identity_tests {
+    use super::*;
+    #[test]
+    fn action_ids_are_case_sensitive_key_names_with_a_resource_bound() {
+        for value in ["New-Window", "new-window", "123", "-"] {
+            assert_eq!(ApplicationActionId::new(value).unwrap().as_str(), value);
+        }
+        for value in [
+            "",
+            "New Window",
+            "new_window",
+            "../action",
+            "Édit",
+            "line\n",
+        ] {
+            assert!(ApplicationActionId::new(value).is_err());
+        }
+        assert!(ApplicationActionId::new("a".repeat(128)).is_ok());
+        assert!(ApplicationActionId::new("a".repeat(129)).is_err());
+        assert_ne!(
+            ApplicationActionId::new("New").unwrap(),
+            ApplicationActionId::new("new").unwrap()
+        );
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ApplicationAction {
+    pub id: ApplicationActionId,
+    pub name: String,
+    pub icon: String,
+    pub launch: ApplicationLaunch,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Application {
     pub id: AppId,
@@ -73,6 +130,7 @@ pub struct Application {
     pub icon: String,
     pub startup_class: String,
     pub launch: ApplicationLaunch,
+    pub actions: Vec<ApplicationAction>,
 }
 impl Application {
     /// Match an observed compositor class using desktop-entry hints. Missing
@@ -277,6 +335,10 @@ pub trait ApplicationPort: Send + Sync {
     /// Adapters own catalog updates and observation failure/recovery.
     fn watch(&self, emit: &mut dyn FnMut(Result<Vec<Application>>), stop: &dyn crate::StopSignal);
     fn launch(&self, app: &Application) -> Result<()>;
+    /// Dispatch an explicitly selected declared action from the captured catalog
+    /// descriptor. Adapters reject a descriptor that no longer matches their
+    /// current source; action failure never invokes the main application entry.
+    fn launch_action(&self, app: &Application, action: &ApplicationActionId) -> Result<()>;
 }
 pub trait CompositorPort: Send + Sync {
     fn snapshot(&self) -> Result<CompositorSnapshot>;

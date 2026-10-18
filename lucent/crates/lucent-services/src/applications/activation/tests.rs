@@ -118,3 +118,159 @@ fn application_activation_native_success_unavailable_denial_and_uncertain_timeou
         drop(connection);
     }
 }
+
+struct ActionApplication {
+    calls: Arc<Mutex<Vec<String>>>,
+    deny: bool,
+    delay: Duration,
+}
+#[zbus::interface(name = "org.freedesktop.Application")]
+impl ActionApplication {
+    async fn activate_action(
+        &self,
+        action: String,
+        parameters: Vec<zbus::zvariant::OwnedValue>,
+        data: HashMap<String, zbus::zvariant::OwnedValue>,
+    ) -> zbus::fdo::Result<()> {
+        assert!(parameters.is_empty());
+        // No ambient startup/activation token is forwarded as platform data.
+        assert!(data.is_empty());
+        self.calls.lock().unwrap().push(action);
+        if self.delay > Duration::ZERO {
+            async_io::Timer::after(self.delay).await;
+        }
+        if self.deny {
+            Err(zbus::fdo::Error::AccessDenied(
+                "private fixture refusal".into(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[test]
+fn action_activation_captures_exact_case_and_distinguishes_denial_timeout_and_absence() {
+    for (deny, delay, expected) in [
+        (false, Duration::ZERO, Ok(())),
+        (true, Duration::ZERO, Err(ActivationError::Failed)),
+        (
+            false,
+            Duration::from_millis(300),
+            Err(ActivationError::Failed),
+        ),
+    ] {
+        let bus = Bus::new();
+        let calls = Arc::new(Mutex::new(vec![]));
+        let connection = futures_lite::future::block_on(
+            Builder::address(bus.address.as_str())
+                .unwrap()
+                .name("org.example.Fixture")
+                .unwrap()
+                .serve_at(
+                    "/org/example/Fixture",
+                    ActionApplication {
+                        calls: calls.clone(),
+                        deny,
+                        delay,
+                    },
+                )
+                .unwrap()
+                .build(),
+        )
+        .unwrap();
+        let id = AppId::new("org.example.Fixture.desktop").unwrap();
+        let action = ApplicationActionId::new("New-Window").unwrap();
+        assert_eq!(
+            request_for(
+                &id,
+                Some(&action),
+                Some(&bus.address),
+                Duration::from_millis(200)
+            ),
+            expected
+        );
+        assert_eq!(*calls.lock().unwrap(), ["New-Window"]);
+        assert_eq!(
+            activate_action(
+                &AppId::new("org.example.Missing.desktop").unwrap(),
+                &action,
+                Some(&bus.address)
+            ),
+            Err(ActivationError::Unsupported)
+        );
+        drop(connection);
+    }
+}
+
+#[test]
+fn primary_activate_method_does_not_substitute_for_an_unsupported_action() {
+    let bus = Bus::new();
+    let count = Arc::new(Mutex::new(0));
+    let connection = futures_lite::future::block_on(
+        Builder::address(bus.address.as_str())
+            .unwrap()
+            .name("org.example.Fixture")
+            .unwrap()
+            .serve_at(
+                "/org/example/Fixture",
+                Application {
+                    count: count.clone(),
+                    deny: false,
+                    delay: Duration::ZERO,
+                },
+            )
+            .unwrap()
+            .build(),
+    )
+    .unwrap();
+    assert_eq!(
+        activate_action(
+            &AppId::new("org.example.Fixture.desktop").unwrap(),
+            &ApplicationActionId::new("New").unwrap(),
+            Some(&bus.address)
+        ),
+        Err(ActivationError::Unsupported)
+    );
+    assert_eq!(*count.lock().unwrap(), 0);
+    drop(connection);
+}
+
+struct WrongReply;
+#[zbus::interface(name = "org.freedesktop.Application")]
+impl WrongReply {
+    async fn activate_action(
+        &self,
+        action: String,
+        parameters: Vec<zbus::zvariant::OwnedValue>,
+        data: HashMap<String, zbus::zvariant::OwnedValue>,
+    ) -> u32 {
+        assert_eq!(action, "New");
+        assert!(parameters.is_empty() && data.is_empty());
+        1
+    }
+}
+
+#[test]
+fn malformed_action_acknowledgement_is_uncertain_not_unsupported() {
+    let bus = Bus::new();
+    let connection = futures_lite::future::block_on(
+        Builder::address(bus.address.as_str())
+            .unwrap()
+            .name("org.example.Fixture")
+            .unwrap()
+            .serve_at("/org/example/Fixture", WrongReply)
+            .unwrap()
+            .build(),
+    )
+    .unwrap();
+    assert_eq!(
+        activate_action(
+            &AppId::new("org.example.Fixture.desktop").unwrap(),
+            &ApplicationActionId::new("New").unwrap(),
+            Some(&bus.address)
+        ),
+        Err(ActivationError::Failed)
+    );
+    drop(connection);
+}

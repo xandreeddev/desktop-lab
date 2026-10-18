@@ -1,5 +1,7 @@
 //! Desktop application policy, expressed against domain ports.
+pub mod applications;
 pub mod audio;
+pub use applications::launch_application_action;
 pub mod bluetooth;
 pub mod dock;
 pub mod live_wallpaper;
@@ -267,6 +269,7 @@ mod tests {
             keywords: vec![],
             icon: String::new(),
             startup_class: name.into(),
+            actions: vec![],
             launch: lucent_domain::ApplicationLaunch::Command(LaunchCommand {
                 program: name.into(),
                 args: vec![],
@@ -300,6 +303,13 @@ mod tests {
         }
         fn launch(&self, _: &Application) -> Result<()> {
             self.calls.lock().unwrap().push("launch".into());
+            Ok(())
+        }
+        fn launch_action(&self, _: &Application, action: &ApplicationActionId) -> Result<()> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("action:{}", action.as_str()));
             Ok(())
         }
     }

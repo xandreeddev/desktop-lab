@@ -398,6 +398,21 @@ outgoing-image retirement in both change directions. Both the resource and
 pixel checks restore exact settings, wallpaper, exports and idle policy. See
 the [image lifetime report](../reports/measurements/lucent-image-lifetime.json).
 
+A fresh normal-mode sample of PR73 source
+`d2aed42199ed6b29f6eef214c1a6ee490658adc6` preserves the currently selected live
+wallpaper on the 1920×1080 scale-1 software-Vulkan output. Over 120 seconds it
+measures 548.29 MiB mean / 609.41 MiB peak RSS and 250.132% of one logical CPU
+core. There are 2232 background submissions, and the live producer retains
+33,177,600 bytes of RGBA pixels. Warm launcher submission medians range from
+32.98 to 48.67 ms, with maxima up to 98.97 ms. This different workload is not a
+matched comparison with the earlier 1280×800, 15 FPS sample. It exceeds the
+300 MiB target; source-size conversion, display demand and decoder/driver
+costs require investigation. Source timing, display density and effects were
+unchanged. Settings/wallpaper and the running binary hash were verified.
+See the [current live resource baseline](../reports/measurements/lucent-live-wallpaper-4k-baseline.json).
+These are software-VM process and submission measurements, not physical-GPU
+memory, execution or scanout results.
+
 ## Diagonal cut and local library acceptance
 
 Implementation `8b26f6d4ae5fa92ffaa0cfc4455e904f36f3f5ce` passed
