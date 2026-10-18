@@ -218,11 +218,29 @@ prepared VM: Ctrl+A/U with Shift/Caps and unconsumed Alt/Super combinations.
 It checks keyboard/binding prerequisites, restores the original launcher query
 and open state, and verifies unchanged settings and wallpaper. Running it
 requires an unlocked guest; its existence does not establish native acceptance.
+
+```sh
+python3 vm/test-input-settings.py --skip-bound-chords --skip-remapped-caps
+```
+
+These explicit flags preserve the prepared guest's bindings and Caps-key mapping.
+Conflicting chords and Caps-dependent cases are listed as skipped; a passing
+supported subset is not full modifier acceptance. Caps Lock must already be off
+when its physical key is remapped. The helper waits for stable native field/layer
+geometry and real pointer arrival, then restores the original query/open/Caps
+state and verifies unchanged settings and wallpaper.
+
+The latest supported-case run against deployed cohort `76176f83b19` stopped at
+`ordinary_launcher_field_focused`, with all recorded restoration checks passing.
+The launcher incorrectly marked ordinary `text_edit` fields as non-focusable;
+the admission milestone fixes that guard and adds an engine-pointer regression.
+Native editing acceptance for the corrected cohort remains pending.
+
 The malformed/oversized stored-notes native restart check remains pending.
 Failed settings load can apply the default theme, so that check needs exact
 theme/login export restoration as well as the original JSON file.
 
-Native VM/hardware acceptance is deferred under the user instruction. Current
+Native clipboard interoperability and hardware acceptance remain open. Current
 shaping remains the existing kerning-based implementation. Clipboard native
 interoperability, IME, bidi/complex-script shaping, font fallback, multiline editing and
 platform accessibility remain separate requirements. Editing tests and

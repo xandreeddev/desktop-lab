@@ -35,6 +35,24 @@ impl MediaTrackId {
     }
 }
 
+/// A transient command admission, unique for this adapter instance's lifetime.
+/// It is distinct from both player and track identities and is never persisted.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct MediaOperationId(u64);
+impl MediaOperationId {
+    pub fn new(value: u64) -> Result<Self> {
+        if value == 0 {
+            return Err(DomainError::Invalid(
+                "Media operation identity is empty".into(),
+            ));
+        }
+        Ok(Self(value))
+    }
+    pub fn value(self) -> u64 {
+        self.0
+    }
+}
+
 /// Nonnegative microseconds representable by native signed media timestamps.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MediaTime(u64);
@@ -233,6 +251,9 @@ pub struct MediaPlayer {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct MediaSnapshot {
     pub players: Vec<MediaPlayer>,
+    /// Current admitted operation, retained after termination. Player playback
+    /// remains an independent observation, including after acknowledgement.
+    pub operation: Option<MediaOperation>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -263,13 +284,36 @@ impl MediaCommand {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MediaOperationPhase {
+    /// Locally admitted; native validation or dispatch may still be pending.
+    InProgress,
+    /// The addressed native method replied successfully, not an observed state.
+    Acknowledged,
+    /// Rejection or transport failure. An unavailable outcome may be uncertain:
+    /// it does not establish that a dispatched method had no effect.
+    Failed(DomainError),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MediaOperation {
+    pub id: MediaOperationId,
+    pub command: MediaCommand,
+    pub phase: MediaOperationPhase,
+}
+
 pub trait MediaPort: Send + Sync {
     /// Observe current player lifetimes until cancelled. An empty successful
     /// snapshot means no players; an error means observation is unavailable.
     fn watch(&self, emit: &mut dyn FnMut(Result<MediaSnapshot>), stop: &dyn StopSignal);
-    /// Completion acknowledges the addressed native method, not observed state.
-    /// Implementations revalidate current player/track ownership before dispatch.
-    fn control(&self, command: MediaCommand) -> Result<()>;
+    /// Admit one operation to a bounded local mailbox without waiting for native
+    /// validation or a method reply. Busy/offline/full admission fails without
+    /// dispatch. Watch the returned identity for method acknowledgement/error;
+    /// admission never changes observed playback or guarantees target validity.
+    /// Implementations revalidate player/track ownership before dispatch and
+    /// retain terminal results until published. Watch failure makes a pending
+    /// outcome uncertain; closing a client does not undo an admitted action.
+    fn start(&self, command: MediaCommand) -> Result<MediaOperationId>;
 }
 
 #[cfg(test)]
@@ -279,8 +323,10 @@ mod tests {
     fn transient_handles_and_native_time_rate_ranges_reject_invalid_values() {
         assert!(MediaPlayerId::new(0).is_err());
         assert!(MediaTrackId::new(0).is_err());
+        assert!(MediaOperationId::new(0).is_err());
         assert_eq!(MediaPlayerId::new(1).unwrap().value(), 1);
         assert_eq!(MediaTrackId::new(u64::MAX).unwrap().value(), u64::MAX);
+        assert_eq!(MediaOperationId::new(u64::MAX).unwrap().value(), u64::MAX);
         assert_eq!(MediaTime::new(0).unwrap().micros(), 0);
         assert_eq!(
             MediaTime::new(i64::MAX as u64).unwrap().micros(),

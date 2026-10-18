@@ -30,6 +30,7 @@ pub struct SeekTarget {
 #[cfg(test)]
 pub fn fixture() -> MediaSnapshot {
     MediaSnapshot {
+        operation: None,
         players: vec![MediaPlayer {
             id: MediaPlayerId::new(1).unwrap(),
             name: "Fixture player".into(),
@@ -71,7 +72,7 @@ pub enum Message {
     Closed(u64),
     Select(MediaPlayerId),
     Request(MediaCommand),
-    Finished(u64, Result<()>),
+    Admitted(u64, Result<MediaOperationId>),
     Seek(SeekTarget, SliderEvent),
     CancelSeek,
     Scroll(lucent_api::ScrollEvent),
@@ -83,6 +84,11 @@ pub enum Message {
 struct ArtworkDemand {
     revision: u64,
     source: MediaArtworkSource,
+}
+struct PendingCommand {
+    revision: u64,
+    command: MediaCommand,
+    operation: Option<MediaOperationId>,
 }
 pub struct Media {
     snapshot: MediaSnapshot,
@@ -101,7 +107,7 @@ pub struct Media {
     progress_visible: bool,
     scroll: f32,
     command_revision: u64,
-    pending: Option<(u64, MediaCommand)>,
+    pending: Option<PendingCommand>,
     command_cancel: Cancellation,
     error: String,
     adapter: Arc<dyn MediaPort>,
@@ -367,6 +373,10 @@ impl Media {
                         }
                         self.ready = false;
                         self.observation_error = error.to_string();
+                        if self.pending.take().is_some() {
+                            self.command_cancel.cancel();
+                            self.error = "Media command outcome is uncertain; observe the player before retrying".into();
+                        }
                     }
                 }
                 let current = self.selected().map(|player| {
@@ -380,14 +390,7 @@ impl Media {
                 if !self.ready || previous != current || self.seek_target().is_none() {
                     self.cancel_seek();
                 }
-                if self
-                    .pending
-                    .as_ref()
-                    .is_some_and(|(_, command)| !self.admits(command))
-                {
-                    self.command_cancel.cancel();
-                    self.pending = None;
-                }
+                self.settle_command();
                 self.reconcile_artwork(effects);
             }
             Message::Open | Message::Toggle => {
@@ -427,15 +430,19 @@ impl Media {
                     self.error.clear();
                     self.command_revision = self.command_revision.wrapping_add(1);
                     let revision = self.command_revision;
-                    self.pending = Some((revision, command));
+                    self.pending = Some(PendingCommand {
+                        revision,
+                        command,
+                        operation: None,
+                    });
                     self.command_cancel = Cancellation::default();
                     let adapter = self.adapter.clone();
                     effects.task_cancellable_on_with_failure(
-                        crate::work::AUDIO,
+                        crate::work::CONTROLS,
                         self.command_cancel.clone(),
-                        move || Message::Finished(revision, adapter.control(command)),
+                        move || Message::Admitted(revision, adapter.start(command)),
                         move |failure| {
-                            Message::Finished(
+                            Message::Admitted(
                                 revision,
                                 Err(DomainError::Failed(failure.to_string())),
                             )
@@ -443,18 +450,26 @@ impl Media {
                     );
                 }
             }
-            Message::Finished(revision, result) => {
+            Message::Admitted(revision, result) => {
                 if self
                     .pending
                     .as_ref()
-                    .is_none_or(|(current, _)| *current != revision)
+                    .is_none_or(|pending| pending.revision != revision)
                 {
                     return;
                 }
-                self.pending = None;
-                self.error = result
-                    .err()
-                    .map_or_else(String::new, |error| error.to_string());
+                match result {
+                    Ok(operation) => {
+                        self.pending.as_mut().unwrap().operation = Some(operation);
+                        // The observer may deliver completion before this short
+                        // admission task's reply reaches the UI thread.
+                        self.settle_command();
+                    }
+                    Err(error) => {
+                        self.pending = None;
+                        self.error = error.to_string();
+                    }
+                }
             }
             Message::Seek(target, event) => {
                 if self.seek_target() != Some(target)
@@ -543,6 +558,23 @@ impl Media {
         effects.redraw("media-controls");
         effects.redraw("bar");
         effects.redraw("widgets");
+    }
+    fn settle_command(&mut self) {
+        let Some(pending) = &self.pending else {
+            return;
+        };
+        let Some(operation) = self.snapshot.operation.as_ref().filter(|operation| {
+            Some(operation.id) == pending.operation && operation.command == pending.command
+        }) else {
+            return;
+        };
+        let error = match &operation.phase {
+            MediaOperationPhase::InProgress => return,
+            MediaOperationPhase::Acknowledged => String::new(),
+            MediaOperationPhase::Failed(error) => error.to_string(),
+        };
+        self.pending = None;
+        self.error = error;
     }
     fn set_open(&mut self, open: bool, now: f64) {
         if self.open == open {
@@ -653,6 +685,8 @@ impl Media {
         serde_json::json!({"status":if !self.observed {"loading"} else if self.ready {"ready"} else {"unavailable"},
             "observation_error":self.observation_error,"control_error":self.error,"busy":self.pending.is_some(),
             "open":self.open,"visible":self.mounted,"selected":self.selected.map(MediaPlayerId::value),
+            "pending_operation":self.pending.as_ref().and_then(|pending|pending.operation).map(MediaOperationId::value),
+            "command_phase":self.pending.as_ref().map(|pending|if pending.operation.is_some(){"in_progress"}else{"admitting"}),
             "players":self.snapshot.players.iter().map(|player|{
                 let mut value=serde_json::json!({"id":player.id.value(),"name":player.name,"available":self.ready && matches!(player.state,MediaPlayerState::Ready(_))});
                 if let MediaPlayerState::Ready(playback)=&player.state {

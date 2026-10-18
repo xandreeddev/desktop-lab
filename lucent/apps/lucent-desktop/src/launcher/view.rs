@@ -501,7 +501,7 @@ impl View<'_> {
         // This launcher owns Tab to cycle modes. Keep typing focused in its
         // search input while pointer clicks select/activate other controls.
         fn retain_search_focus(e: &mut Element<Message>) {
-            if e.input.is_none() {
+            if e.input.is_none() && e.text_edit.is_none() && e.edit.is_none() {
                 e.style.tab_stop = false;
             }
             for child in &mut e.children {

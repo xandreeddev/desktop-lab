@@ -122,6 +122,7 @@ mod tests {
                 desktop_entry: None,
                 state: MediaPlayerState::Ready(playback),
             }],
+            operation: None,
         }
     }
     #[test]

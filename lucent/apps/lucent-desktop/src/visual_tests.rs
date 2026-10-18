@@ -576,6 +576,79 @@ fn launcher_size_commands_keyboard_presets_and_settings_roundtrip() {
     assert_eq!(app.settings.launcher, LauncherSize::default());
 }
 #[test]
+fn ordinary_launcher_search_accepts_pointer_focus_after_another_live_control() {
+    for width in [640., 390.] {
+        let mut app = fixture(1, false);
+        resize_fixture(&mut app, width, 580.);
+        let layout = Layout::new(fonts(&app));
+        let cx = ViewContext {
+            surface: "dock",
+            instance: None,
+            width,
+            height: 580.,
+            now: 1.,
+            density: Density::ONE,
+        };
+        let root = Element::stack(vec![
+            app.view(&cx),
+            Element::button("Other control", Message::Ignore)
+                .id("other-live-control")
+                .size(100., 40.),
+        ])
+        .fill();
+        let mut input = Interaction::default();
+        let first = layout.build(&root, width, cx.height, &input, cx.now);
+        input.synchronize(&first);
+        let other = first
+            .hits
+            .iter()
+            .find(|hit| hit.id == "other-live-control")
+            .unwrap();
+        let (x, y) = (
+            other.rect.x + other.rect.w / 2.,
+            other.rect.y + other.rect.h / 2.,
+        );
+        assert!(input.press(&first, x, y).is_none());
+        assert!(matches!(input.release(x, y), Some(Message::Ignore)));
+        assert_eq!(input.focus.as_deref(), Some("other-live-control"));
+
+        let current = layout.build(&root, width, cx.height, &input, cx.now);
+        input.synchronize(&current);
+        assert_eq!(
+            input.focus.as_deref(),
+            Some("other-live-control"),
+            "autofocus cannot replace an existing live focus"
+        );
+        let search = current
+            .hits
+            .iter()
+            .find(|hit| hit.id == "launcher-search")
+            .unwrap();
+        assert!(
+            search.tab_stop,
+            "ordinary text editing must retain pointer focus admission"
+        );
+        assert!(fully_visible(search.rect, search.clip.bounds));
+        let (x, y) = (
+            search.rect.x + search.rect.w / 2.,
+            search.rect.y + search.rect.h / 2.,
+        );
+        for message in input
+            .press(&current, x, y)
+            .into_iter()
+            .chain(input.release(x, y))
+        {
+            app.update(message, &mut Effects::default());
+        }
+        assert_eq!(input.focus.as_deref(), Some("launcher-search"));
+        for message in input.key(&current, &Key::Text("focus".into())) {
+            app.update(message, &mut Effects::default());
+        }
+        assert_eq!(app.launcher.query(), "focus");
+    }
+}
+
+#[test]
 fn search_text_icons_and_caret_share_a_centered_line_box() {
     let mut app = fixture(9, false);
     app.launcher.fixture_query(

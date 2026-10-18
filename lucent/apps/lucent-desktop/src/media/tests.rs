@@ -5,14 +5,19 @@ use std::{collections::BTreeMap, sync::Mutex};
 struct Adapter {
     commands: Mutex<Vec<MediaCommand>>,
     images: Mutex<Vec<String>>,
+    admission_error: Mutex<Option<DomainError>>,
 }
 impl MediaPort for Adapter {
     fn watch(&self, emit: &mut dyn FnMut(Result<MediaSnapshot>), _: &dyn StopSignal) {
         emit(Ok(fixture()));
     }
-    fn control(&self, command: MediaCommand) -> Result<()> {
-        self.commands.lock().unwrap().push(command);
-        Ok(())
+    fn start(&self, command: MediaCommand) -> Result<MediaOperationId> {
+        if let Some(error) = self.admission_error.lock().unwrap().take() {
+            return Err(error);
+        }
+        let mut commands = self.commands.lock().unwrap();
+        commands.push(command);
+        MediaOperationId::new(commands.len() as u64)
     }
 }
 impl AssetPort for Adapter {
@@ -55,6 +60,15 @@ fn with_art(track: u64) -> MediaSnapshot {
         selected.artwork =
             Some(MediaArtworkSource::new("file:///owned/current-cover.png").unwrap());
     }
+    snapshot
+}
+fn operation(id: u64, command: MediaCommand, phase: MediaOperationPhase) -> MediaSnapshot {
+    let mut snapshot = fixture();
+    snapshot.operation = Some(MediaOperation {
+        id: MediaOperationId::new(id).unwrap(),
+        command,
+        phase,
+    });
     snapshot
 }
 #[test]
@@ -148,8 +162,9 @@ fn seek_dispatches_only_release_and_rejects_retired_track_or_cancelled_capture()
     );
     assert_eq!(effects.tasks.len(), 1);
     let task = effects.tasks.pop().unwrap();
-    assert_eq!(task.queue, crate::work::AUDIO);
+    assert_eq!(task.queue, crate::work::CONTROLS);
     media.update(task.run(), &mut Effects::default());
+    assert!(media.pending.is_some(), "admission is not completion");
     assert_eq!(
         *adapter.commands.lock().unwrap(),
         [MediaCommand::SetPosition {
@@ -158,7 +173,13 @@ fn seek_dispatches_only_release_and_rejects_retired_track_or_cancelled_capture()
             position: MediaTime::new(90_000_000).unwrap()
         }]
     );
-    // Delivery acknowledgement does not invent an observed seeked position.
+    let command = adapter.commands.lock().unwrap()[0];
+    observe(
+        &mut media,
+        operation(1, command, MediaOperationPhase::Acknowledged),
+    );
+    assert!(media.pending.is_none());
+    // Native acknowledgement does not invent an observed seeked position.
     assert_eq!(
         media
             .playback()
@@ -171,7 +192,209 @@ fn seek_dispatches_only_release_and_rejects_retired_track_or_cancelled_capture()
     );
 }
 #[test]
-fn player_retirement_cancels_queued_work_and_stale_completion_cannot_clear_new_failure() {
+fn selection_close_and_player_retirement_do_not_revoke_or_retarget_admitted_work() {
+    let (mut media, adapter) = client();
+    observe(&mut media, fixture());
+    let command = media.toggle_command().unwrap();
+    let mut effects = Effects::default();
+    media.update(Message::Request(command), &mut effects);
+    let task = effects.tasks.pop().unwrap();
+    let admitted = task.run();
+    assert_eq!(*adapter.commands.lock().unwrap(), [command]);
+    let mut replacement = fixture();
+    replacement.players[0].id = MediaPlayerId::new(2).unwrap();
+    observe(&mut media, replacement.clone());
+    media.update(
+        Message::Select(MediaPlayerId::new(2).unwrap()),
+        &mut effects,
+    );
+    media.update(Message::Close, &mut effects);
+    assert!(media.pending.is_some());
+    media.update(admitted, &mut effects);
+    assert_eq!(
+        media.pending.as_ref().unwrap().operation.unwrap().value(),
+        1
+    );
+    assert_eq!(media.selected.unwrap().value(), 2);
+    replacement.operation = Some(MediaOperation {
+        id: MediaOperationId::new(1).unwrap(),
+        command,
+        phase: MediaOperationPhase::Failed(DomainError::Unavailable("Player retired".into())),
+    });
+    observe(&mut media, replacement);
+    assert!(media.pending.is_none());
+    assert!(media.error.contains("Player retired"));
+    assert_eq!(*adapter.commands.lock().unwrap(), [command]);
+}
+
+#[test]
+fn native_completion_joins_admission_in_either_order_without_inventing_playback() {
+    for terminal_first in [false, true] {
+        for failure in [false, true] {
+            let (mut media, _) = client();
+            observe(&mut media, fixture());
+            let command = media.toggle_command().unwrap();
+            let mut effects = Effects::default();
+            media.update(Message::Request(command), &mut effects);
+            assert_eq!(media.inspect()["command_phase"], "admitting");
+            let admitted = effects.tasks.pop().unwrap().run();
+            observe(
+                &mut media,
+                operation(1, command, MediaOperationPhase::InProgress),
+            );
+            assert!(media.pending.is_some());
+            let terminal = operation(
+                1,
+                command,
+                if failure {
+                    MediaOperationPhase::Failed(DomainError::Failed("Player denied command".into()))
+                } else {
+                    MediaOperationPhase::Acknowledged
+                },
+            );
+            if terminal_first {
+                observe(&mut media, terminal);
+                assert!(
+                    media.pending.is_some(),
+                    "completion needs the admitted identity"
+                );
+                media.update(admitted, &mut effects);
+            } else {
+                media.update(admitted, &mut effects);
+                assert_eq!(media.inspect()["command_phase"], "in_progress");
+                assert_eq!(media.inspect()["pending_operation"], 1);
+                observe(&mut media, terminal);
+            }
+            assert!(media.pending.is_none());
+            assert_eq!(media.error.contains("Player denied command"), failure);
+            assert_eq!(media.playback().unwrap().status, PlaybackStatus::Playing);
+        }
+    }
+}
+
+#[test]
+fn unrelated_operation_ids_commands_and_stale_admission_cannot_finish_newer_request() {
+    let (mut media, _) = client();
+    observe(&mut media, fixture());
+    let command = media.toggle_command().unwrap();
+    let mut effects = Effects::default();
+    media.update(Message::Request(command), &mut effects);
+    let first_revision = media.command_revision;
+    media.update(effects.tasks.pop().unwrap().run(), &mut effects);
+    observe(
+        &mut media,
+        operation(1, command, MediaOperationPhase::Acknowledged),
+    );
+    media.update(Message::Request(command), &mut effects);
+    let admitted = effects.tasks.pop().unwrap().run();
+    observe(
+        &mut media,
+        operation(
+            1,
+            command,
+            MediaOperationPhase::Failed(DomainError::Failed("Old failure".into())),
+        ),
+    );
+    media.update(
+        Message::Admitted(
+            first_revision,
+            Err(DomainError::Failed("Old admission".into())),
+        ),
+        &mut effects,
+    );
+    assert!(media.pending.as_ref().unwrap().operation.is_none());
+    assert!(media.error.is_empty());
+    media.update(admitted, &mut effects);
+    observe(
+        &mut media,
+        operation(1, command, MediaOperationPhase::Acknowledged),
+    );
+    assert_eq!(
+        media.pending.as_ref().unwrap().operation.unwrap().value(),
+        2
+    );
+    observe(
+        &mut media,
+        operation(
+            2,
+            MediaCommand::Next(command.player()),
+            MediaOperationPhase::Acknowledged,
+        ),
+    );
+    assert!(
+        media.pending.is_some(),
+        "matching ID alone does not grant command authority"
+    );
+    observe(
+        &mut media,
+        operation(2, command, MediaOperationPhase::Acknowledged),
+    );
+    assert!(media.pending.is_none());
+}
+
+#[test]
+fn observation_loss_retires_queued_or_admitted_work_without_replaying_recovery_results() {
+    for admitted_first in [false, true] {
+        let (mut media, _) = client();
+        observe(&mut media, fixture());
+        let command = media.toggle_command().unwrap();
+        let mut effects = Effects::default();
+        media.update(Message::Request(command), &mut effects);
+        let task = effects.tasks.pop().unwrap();
+        let cancellation = task.cancellation.clone();
+        let revision = media.command_revision;
+        if admitted_first {
+            media.update(task.run(), &mut effects);
+        } else {
+            drop(task);
+        }
+        media.update(
+            Message::Observed(Err(DomainError::Unavailable("Disconnected".into()))),
+            &mut effects,
+        );
+        assert!(cancellation.cancelled());
+        assert!(media.pending.is_none());
+        let uncertain = media.error.clone();
+        assert!(uncertain.contains("outcome is uncertain"));
+        media.update(
+            Message::Admitted(revision, Ok(MediaOperationId::new(1).unwrap())),
+            &mut effects,
+        );
+        observe(
+            &mut media,
+            operation(1, command, MediaOperationPhase::Acknowledged),
+        );
+        assert!(media.pending.is_none());
+        assert_eq!(media.error, uncertain);
+        assert!(
+            effects.tasks.is_empty(),
+            "reconnection must not replay an uncertain method"
+        );
+    }
+}
+
+#[test]
+fn rejected_local_admission_clears_only_its_request_and_permits_explicit_retry() {
+    let (mut media, adapter) = client();
+    observe(&mut media, fixture());
+    *adapter.admission_error.lock().unwrap() =
+        Some(DomainError::Unavailable("Native mailbox busy".into()));
+    let mut effects = Effects::default();
+    let command = media.toggle_command().unwrap();
+    media.update(Message::Request(command), &mut effects);
+    media.update(effects.tasks.pop().unwrap().run(), &mut effects);
+    assert!(media.pending.is_none());
+    assert!(media.error.contains("Native mailbox busy"));
+    assert!(adapter.commands.lock().unwrap().is_empty());
+    media.update(Message::Request(command), &mut effects);
+    media.update(effects.tasks.pop().unwrap().run(), &mut effects);
+    assert!(media.pending.is_some());
+    assert!(media.error.is_empty());
+    assert_eq!(*adapter.commands.lock().unwrap(), [command]);
+}
+
+#[test]
+fn waiting_for_native_media_reply_does_not_occupy_the_volume_lane() {
     let (mut media, _) = client();
     observe(&mut media, fixture());
     let mut effects = Effects::default();
@@ -179,19 +402,36 @@ fn player_retirement_cancels_queued_work_and_stale_completion_cannot_clear_new_f
         Message::Request(media.toggle_command().unwrap()),
         &mut effects,
     );
-    let task = effects.tasks.pop().unwrap();
-    let revision = media.command_revision;
-    observe(&mut media, MediaSnapshot::default());
-    assert!(task.cancellation.cancelled());
-    assert!(media.pending.is_none());
-    drop(task);
-    media.update(
-        Message::Request(MediaCommand::Play(MediaPlayerId::new(1).unwrap())),
-        &mut effects,
+    let admission = effects.tasks.pop().unwrap();
+    assert_eq!(admission.queue, crate::work::CONTROLS);
+    media.update(admission.run(), &mut effects);
+    assert!(
+        effects.tasks.is_empty(),
+        "native reply waiting stays in the observer"
     );
-    let error = media.error.clone();
-    media.update(Message::Finished(revision, Ok(())), &mut effects);
-    assert_eq!(media.error, error);
+    assert!(media.pending.is_some());
+
+    let adapter = Arc::new(crate::test_adapters::Fake::default());
+    let mut audio = crate::audio::commands::Commands::new(adapter.clone());
+    let snapshot = crate::audio::fixture();
+    let mut volume = Effects::default();
+    audio.request(
+        AudioCommand::SetVolume(
+            AudioObjectId::new(1).unwrap(),
+            AudioVolume::new(0.4).unwrap(),
+        ),
+        Some(&snapshot),
+        &mut volume,
+    );
+    let task = volume.tasks.pop().unwrap();
+    assert_eq!(task.queue, crate::work::AUDIO);
+    audio.update(task.run(), Some(&snapshot), &mut volume);
+    assert!(!audio.busy());
+    assert_eq!(*adapter.calls.lock().unwrap(), ["audio"]);
+    assert!(
+        media.pending.is_some(),
+        "volume can finish while media still waits"
+    );
 }
 #[test]
 fn selected_track_artwork_is_one_active_latest_and_same_uri_never_grants_old_revision() {
@@ -324,6 +564,7 @@ fn initial_placeholders_choose_the_first_ready_playing_player_and_explicit_selec
         &mut media,
         MediaSnapshot {
             players: vec![a.clone(), b.clone()],
+            ..Default::default()
         },
     );
     a.state = fixture().players.remove(0).state;
@@ -335,6 +576,7 @@ fn initial_placeholders_choose_the_first_ready_playing_player_and_explicit_selec
         &mut media,
         MediaSnapshot {
             players: vec![a.clone(), b.clone()],
+            ..Default::default()
         },
     );
     assert_eq!(media.selected, Some(b.id));
@@ -343,6 +585,7 @@ fn initial_placeholders_choose_the_first_ready_playing_player_and_explicit_selec
         &mut media,
         MediaSnapshot {
             players: vec![a.clone(), b.clone()],
+            ..Default::default()
         },
     );
     assert_eq!(media.selected, Some(a.id));
@@ -350,6 +593,7 @@ fn initial_placeholders_choose_the_first_ready_playing_player_and_explicit_selec
         &mut media,
         MediaSnapshot {
             players: vec![b.clone()],
+            ..Default::default()
         },
     );
     assert_eq!(media.selected, Some(b.id));
@@ -364,11 +608,11 @@ fn command_and_artwork_failures_return_to_the_owning_operation_on_shared_lanes()
         &mut effects,
     );
     let mut task = effects.tasks.pop().unwrap();
-    assert_eq!(task.queue, crate::work::AUDIO);
+    assert_eq!(task.queue, crate::work::CONTROLS);
     let fail = task.take_failure_handler().unwrap();
     media.update(
         fail(lucent_api::RuntimeFailure {
-            source: "effect queue audio".into(),
+            source: "effect queue controls".into(),
             reason: "queue full".into(),
         }),
         &mut effects,

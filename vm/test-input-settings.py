@@ -4,6 +4,10 @@
 Uses the existing bounded native helpers, QMP keys and public inspector. Requires
 an unlocked single-output guest, Apps mode, no other foreground panel, a reported
 main-keyboard US layout/Caps Lock state, and no compositor bindings for the tested chords.
+With --skip-bound-chords, conflicting Alt/Super probes are reported as skipped;
+baseline/editing chords must still be unbound. Existing bindings are never changed.
+With --skip-remapped-caps, Caps-dependent cases are explicitly skipped when
+keyboard options remap Caps Lock. Shift and ordinary editing are still tested.
 An already-open query is restored through bounded undo, including arbitrary
 Unicode. A closed launcher must have an empty query: opening clears it and there
 is no public command that could restore arbitrary text without the clipboard.
@@ -18,6 +22,7 @@ failed load also applies the default palette to theme/login exports; replacing
 desktop.json alone would not be an exact rollback of that wider state.
 """
 
+import argparse
 import json
 from pathlib import Path
 import runpy
@@ -99,8 +104,20 @@ def bound(bindings, mask, symbol, code):
 
 def click_query(name, monitor):
     previous = None
-    for _ in range(50):
-        surface = find_surface(inspect(), 'dock')
+    stable_since = time.monotonic()
+    deadline = stable_since + 15
+    while time.monotonic() < deadline:
+        snapshot = inspect()
+        state = snapshot['client']
+        surface = find_surface(snapshot, 'dock')
+        if (not state['launcher'] or not state['dock_surface_expanded']
+                or state['launcher_opening'] or surface['keyboard'] != 'exclusive'
+                or surface['pointer_input'] != 'all'
+                or surface['height'] != state['desktop_viewport'][1]):
+            previous = None
+            stable_since = time.monotonic()
+            time.sleep(.15)
+            continue
         hits = [hit for hit in surface['hits'] if hit['id'] == 'launcher-search']
         if len(hits) == 1:
             hit = hits[0]
@@ -108,15 +125,28 @@ def click_query(name, monitor):
             left, top = max(hit['x'], clip['x']), max(hit['y'], clip['y'])
             right = min(hit['x'] + hit['width'], clip['x'] + clip['width'])
             bottom = min(hit['y'] + hit['height'], clip['y'] + clip['height'])
-            rect = (left, top, right, bottom)
-            if rect == previous and right - left > 2 and bottom - top > 2:
-                origin = h['layer_origin'](surface)
-                h['move'](name, monitor, origin['x'] + (left + right) / 2,
-                          origin['y'] + (top + bottom) / 2)
-                h['qmp'](name, [{'type': 'btn', 'data': {'button': 'left', 'down': True}}])
-                h['qmp'](name, [{'type': 'btn', 'data': {'button': 'left', 'down': False}}])
+            origin = h['layer_origin'](surface)
+            rect = (left, top, right, bottom, origin['x'], origin['y'],
+                    origin['w'], origin['h'])
+            if rect != previous:
+                stable_since = time.monotonic()
+            if (rect == previous and time.monotonic() - stable_since >= .5
+                    and right - left >= hit['width'] - .5
+                    and bottom - top >= hit['height'] - .5):
+                x, y = origin['x'] + (left + right) / 2, origin['y'] + (top + bottom) / 2
+                h['move'](name, monitor, x, y)
+                def pointer_arrived():
+                    cursor = json.loads(session('hyprctl', '-j', 'cursorpos'))
+                    return abs(cursor['x'] - x) <= 2 and abs(cursor['y'] - y) <= 2
+                eventually(pointer_arrived, 'ordinary_launcher_pointer_arrived', timeout=3)
+                time.sleep(.1)
+                try:
+                    h['qmp'](name, [{'type': 'btn', 'data': {'button': 'left', 'down': True}}])
+                    time.sleep(.05)
+                finally:
+                    h['qmp'](name, [{'type': 'btn', 'data': {'button': 'left', 'down': False}}])
                 eventually(lambda: find_surface(inspect(), 'dock').get('focus') == 'launcher-search',
-                           'ordinary_launcher_field_focused')
+                           'ordinary_launcher_field_focused', timeout=5)
                 return
             previous = rect
         time.sleep(.15)
@@ -156,7 +186,7 @@ def restore_query(name, original):
     raise CheckFailure('original_query_restored_within_history_bound')
 
 
-def suite(report):
+def suite(report, *, skip_bound_chords=False, skip_remapped_caps=False):
     require(session('omarchy-shell', 'lock', 'isLocked').strip() == 'false', 'guest_unlocked')
     eventually(lambda: client()['settings_save_status'] == 'saved'
                and not client()['wallpaper_busy'], 'initial_settings_settled')
@@ -175,11 +205,26 @@ def suite(report):
     keyboard = main_keyboard()
     require(keyboard.get('layout') == 'us' and keyboard.get('variant', '') == '',
             'plain_us_keyboard_layout')
+    caps_remapped = any('caps' in option and option != 'shift:both_capslock_cancel'
+                        for option in keyboard.get('options', '').split(','))
+    require(not caps_remapped or skip_remapped_caps, 'caps_lock_key_available')
+    if caps_remapped:
+        report['skipped_caps_lock_cases'] = [
+            'control_a_caps', 'control_a_caps_shift',
+            'control_u_caps', 'control_u_caps_shift',
+        ]
     original_caps = caps_lock()
+    require(not caps_remapped or not original_caps, 'remapped_caps_must_start_off')
     preferences = json.loads(remote('python3', '-c', PREFERENCES))
     bindings = json.loads(session('hyprctl', '-j', 'binds'))
-    for _, _, mask, symbol, code in IGNORED:
-        require(not bound(bindings, mask, symbol, code), 'tested_chords_have_no_compositor_bindings')
+    tested_ignored = []
+    for probe in IGNORED:
+        label, _, mask, symbol, code = probe
+        if bound(bindings, mask, symbol, code):
+            require(skip_bound_chords, 'tested_chords_have_no_compositor_bindings')
+            report['skipped_compositor_bound_chords'].append(label)
+        else:
+            tested_ignored.append(probe)
     for mask in (CONTROL, CONTROL | SHIFT):
         for symbol, code in (('a', 30), ('u', 22), ('z', 44)):
             require(not bound(bindings, mask, symbol, code), 'editing_chords_have_no_compositor_bindings')
@@ -193,37 +238,44 @@ def suite(report):
     _, logo_code = printable
     mutated = False
     try:
+        # Opening may succeed even when its acknowledgement is lost.
+        mutated = True
         if not initial['launcher']:
             cli('launcher', 'open')
             eventually(lambda: client()['launcher'], 'launcher_opened')
-        mutated = True
         click_query(name, monitor)
         set_caps(name, False)
         for caps, shift in ((False, False), (False, True), (True, False), (True, True)):
+            if caps and caps_remapped:
+                continue
             set_caps(name, False)
             baseline(name)
             set_caps(name, caps)
             h['key'](name, 29, *((42,) if shift else ()), 30)
             h['key'](name, 45)
             query_is('X' if caps else 'x', 'control_a_replaces_whole_query')
-        report['checks']['control_a_with_shift_caps_and_both'] = True
+        report['checks']['control_a_with_shift' if caps_remapped
+                         else 'control_a_with_shift_caps_and_both'] = True
 
         for caps, shift in ((False, True), (True, False), (True, True)):
+            if caps and caps_remapped:
+                continue
             set_caps(name, False)
             baseline(name)
             set_caps(name, caps)
             h['key'](name, 29, *((42,) if shift else ()), 22)
             query_is('', 'control_u_clears_whole_query')
-        report['checks']['control_u_with_shift_caps_and_both'] = True
+        report['checks']['control_u_with_shift' if caps_remapped
+                         else 'control_u_with_shift_caps_and_both'] = True
 
         set_caps(name, False)
-        for label, codes, _, _, _ in [*IGNORED, ('logo_printable', (125, logo_code), 0, '', 0)]:
+        for label, codes, _, _, _ in [*tested_ignored, ('logo_printable', (125, logo_code), 0, '', 0)]:
             baseline(name)
             h['key'](name, *codes)
             unchanged_query('qq', 'modified_chord_does_not_clear_or_type_' + label)
             h['key'](name, 45)
             query_is('qqx', 'modified_chord_does_not_select_' + label)
-        report['checks']['alt_logo_chords_preserve_content_and_selection'] = True
+        report['checks']['tested_alt_logo_chords_preserve_content_and_selection'] = True
     finally:
         failures = []
         if mutated:
@@ -232,7 +284,12 @@ def suite(report):
             except Exception:
                 failures.append('pointer_release')
             try:
-                restore_query(name, initial['query'])
+                current = client()
+                if current['launcher']:
+                    restore_query(name, initial['query'])
+                else:
+                    require(not initial['launcher'] and current['query'] == initial['query'],
+                            'closed_launcher_query_unchanged')
                 if not initial['launcher']:
                     cli('launcher', 'close')
                 eventually(lambda: client()['launcher'] == initial['launcher']
@@ -259,12 +316,19 @@ def suite(report):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--skip-bound-chords', action='store_true')
+    parser.add_argument('--skip-remapped-caps', action='store_true')
+    args = parser.parse_args()
     report = {'checks': {}, 'restoration': {}, 'passed': False,
+              'skipped_compositor_bound_chords': [],
+              'skipped_caps_lock_cases': [],
               'notes_load_error_acceptance': 'pending_theme_and_login_export_checkpoint'}
     try:
         measure = runpy.run_path(str(ROOT / 'vm/measure-framework.py'))
         with measure['stay_awake'](remote):
-            suite(report)
+            suite(report, skip_bound_chords=args.skip_bound_chords,
+                  skip_remapped_caps=args.skip_remapped_caps)
         report['passed'] = bool(report['checks']) and all(report['checks'].values())
     except CheckFailure as error:
         report['failed_check'] = str(error)
