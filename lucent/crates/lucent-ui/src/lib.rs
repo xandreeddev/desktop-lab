@@ -1322,13 +1322,12 @@ impl<M: Clone> Interaction<M> {
         if let Some(hit) = scene.hits.iter().find(|hit| {
             Some(&hit.id) == self.focus.as_ref()
                 && hit.text.as_ref().is_some_and(TextHit::is_multiline)
-        }) {
-            if let Some(callback) = &hit.text_edit {
-                return text_area::key(hit, key, &mut self.text_navigation)
-                    .map(|edit| callback(edit))
-                    .into_iter()
-                    .collect();
-            }
+        }) && let Some(callback) = &hit.text_edit
+        {
+            return text_area::key(hit, key, &mut self.text_navigation)
+                .map(|edit| callback(edit))
+                .into_iter()
+                .collect();
         }
         if let Some(hit) = scene
             .hits

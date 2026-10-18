@@ -613,7 +613,8 @@ pub(super) fn system(d: &View<'_>, _: &ViewContext) -> Element<Message> {
 }
 pub(super) fn notes(d: &View<'_>, cx: &ViewContext) -> Element<Message> {
     let width = (cx.width - 2. * component::notes::INSET).max(0.);
-    let caption_top = (cx.height - (size::notes::HEIGHT - component::notes::CAPTION_TOP))
+    let caption_top = (cx.height
+        - (component::widget_size::notes::HEIGHT - component::notes::CAPTION_TOP))
         .max(component::notes::INPUT_TOP);
     let input_height = (caption_top - space::SM - component::notes::INPUT_TOP).max(0.);
     let caption = match d.input.save_status {

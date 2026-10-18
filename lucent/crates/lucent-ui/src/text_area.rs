@@ -842,6 +842,195 @@ mod tests {
         );
         assert_eq!(value, "\n");
     }
+
+    /// Opt-in CPU evidence only. Run with an explicit Cargo profile and retain
+    /// the invocation with these timings; debug assertions are printed as well.
+    #[test]
+    #[ignore = "opt-in bounded TextArea CPU measurements; no timing pass thresholds"]
+    fn text_area_bounded_cpu_measurement() {
+        use std::{hint::black_box, time::Instant};
+        let layout = layout();
+        let viewport = (96., 80.);
+        let control = |key| Key::Modified {
+            key: Box::new(key),
+            modifiers: KeyModifiers {
+                control: true,
+                ..Default::default()
+            },
+        };
+        let keys = [
+            control(Key::Home),
+            Key::Down,
+            Key::Down,
+            shifted(Key::Up),
+            Key::PageDown,
+            Key::End,
+            control(Key::End),
+            Key::PageUp,
+        ];
+        let cases = [
+            ("unbroken-line", "w".repeat(8192)),
+            (
+                "hard-and-blank-lines",
+                format!("{}\n\n", "a\n\n".repeat(2730)),
+            ),
+            ("combining-cluster", format!("a{}b", "\u{301}".repeat(4095))),
+        ];
+        let statistics = |samples: &mut [f64]| {
+            samples.sort_by(f64::total_cmp);
+            (
+                samples.iter().sum::<f64>() / samples.len() as f64,
+                samples[(samples.len() * 95).div_ceil(100) - 1],
+                samples[samples.len() - 1],
+            )
+        };
+        for (name, original) in cases {
+            assert_eq!(original.len(), 8192);
+            let original_tail = original[8191..].to_owned();
+            let mut value = original;
+            let mut field = TextFieldState::multiline();
+            let mut input = Interaction::default();
+            let mut offset = 0.;
+            let mut max_rows = 0;
+            let mut max_text_rows = 0;
+            let mut max_primitives = 0;
+            let mut max_row_text_bytes = 0;
+            let mut observe = |scene: &Scene<Message>| {
+                let text = text(scene);
+                let area = text.area.as_ref().unwrap();
+                max_rows = max_rows.max(area.rows.len());
+                max_row_text_bytes = max_row_text_bytes
+                    .max(area.rows.iter().map(|row| row.display.len()).sum::<usize>());
+                let text_rows = scene
+                    .paint
+                    .iter()
+                    .filter(|paint| matches!(paint, Paint::Text { .. }))
+                    .count();
+                max_text_rows = max_text_rows.max(text_rows);
+                max_primitives = max_primitives.max(scene.paint.len());
+                // Fractional row position plus one row of overscan at each edge.
+                assert!(text_rows <= (text.inner.h / area.line_height).ceil() as usize + 3);
+                for paint in &scene.paint {
+                    let (rect, clip) = match paint {
+                        Paint::Outline { rect, clip, .. }
+                        | Paint::Shape { rect, clip, .. }
+                        | Paint::Shadow { rect, clip, .. }
+                        | Paint::Text { rect, clip, .. }
+                        | Paint::Image { rect, clip, .. } => (rect, &clip.bounds),
+                    };
+                    for bounds in [rect, clip] {
+                        assert!(
+                            [bounds.x, bounds.y, bounds.w, bounds.h]
+                                .iter()
+                                .all(|value| value.is_finite())
+                        );
+                        assert!(bounds.w >= 0. && bounds.h >= 0.);
+                    }
+                }
+            };
+            // Establish autofocus before timed steady-state layout samples.
+            let warm = build(
+                &layout, &mut input, &field, &value, offset, viewport.0, viewport.1,
+            );
+            observe(&warm);
+            drop(warm);
+            let mut layout_ms = Vec::with_capacity(32);
+            for _ in 0..32 {
+                let start = Instant::now();
+                let scene = black_box(build(
+                    &layout, &mut input, &field, &value, offset, viewport.0, viewport.1,
+                ));
+                layout_ms.push(start.elapsed().as_secs_f64() * 1000.);
+                observe(&scene);
+            }
+            let mut content_ms = Vec::with_capacity(16);
+            let mut navigation_ms = Vec::with_capacity(16 * keys.len());
+            for cycle in 0..16 {
+                for step in 0..=keys.len() {
+                    let start = Instant::now();
+                    let previous = build(
+                        &layout, &mut input, &field, &value, offset, viewport.0, viewport.1,
+                    );
+                    if step == 0 {
+                        // Replace one ASCII tail byte, keeping every workload
+                        // exactly at the 8192-byte admission boundary throughout.
+                        select(&mut field, &mut value, 8191, 8192);
+                        let replacement = if cycle % 2 == 0 { "x" } else { &original_tail };
+                        apply(
+                            &mut field,
+                            &mut value,
+                            &mut offset,
+                            vec![Message::Edit(TextEdit::Insert(replacement.into()))],
+                        );
+                    } else {
+                        apply(
+                            &mut field,
+                            &mut value,
+                            &mut offset,
+                            input.key(&previous, &keys[step - 1]),
+                        );
+                    }
+                    let current = build(
+                        &layout, &mut input, &field, &value, offset, viewport.0, viewport.1,
+                    );
+                    let reveal = input.text_caret_reveal(&previous, &current);
+                    let settled = if reveal.is_empty() {
+                        None
+                    } else {
+                        apply(&mut field, &mut value, &mut offset, reveal);
+                        Some(build(
+                            &layout, &mut input, &field, &value, offset, viewport.0, viewport.1,
+                        ))
+                    };
+                    let elapsed = start.elapsed().as_secs_f64() * 1000.;
+                    if step == 0 {
+                        content_ms.push(elapsed);
+                    } else {
+                        navigation_ms.push(elapsed);
+                    }
+                    // Count/geometry assertions are outside the timed samples.
+                    assert_eq!(value.len(), 8192);
+                    assert!(
+                        TextSelection::boundaries(&value).any(|at| at == field.selection().caret())
+                    );
+                    observe(&previous);
+                    observe(&current);
+                    if let Some(scene) = settled {
+                        observe(&scene);
+                    }
+                }
+            }
+            let (layout_mean, layout_p95, layout_max) = statistics(&mut layout_ms);
+            let (content_mean, content_p95, content_max) = statistics(&mut content_ms);
+            let (navigation_mean, navigation_p95, navigation_max) = statistics(&mut navigation_ms);
+            println!(
+                concat!(
+                    "TEXT_AREA_CPU {{\"case\":\"{}\",\"debug_assertions\":{},\"bytes\":8192,",
+                    "\"viewport\":[96,80],\"font_size\":20,\"layout_samples\":32,",
+                    "\"layout_mean_ms\":{:.4},\"layout_p95_ms\":{:.4},\"layout_max_ms\":{:.4},",
+                    "\"content_samples\":16,\"content_mean_ms\":{:.4},\"content_p95_ms\":{:.4},\"content_max_ms\":{:.4},",
+                    "\"navigation_samples\":128,\"navigation_mean_ms\":{:.4},\"navigation_p95_ms\":{:.4},\"navigation_max_ms\":{:.4},",
+                    "\"max_visual_rows\":{},\"max_painted_text_rows\":{},\"max_paint_primitives\":{},\"max_row_text_bytes\":{},",
+                    "\"scope\":\"CPU view/layout/synchronize; edits include current-model update and caret reveal; excludes GPU, native delivery, count checks and scene teardown\"}}"
+                ),
+                name,
+                cfg!(debug_assertions),
+                layout_mean,
+                layout_p95,
+                layout_max,
+                content_mean,
+                content_p95,
+                content_max,
+                navigation_mean,
+                navigation_p95,
+                navigation_max,
+                max_rows,
+                max_text_rows,
+                max_primitives,
+                max_row_text_bytes
+            );
+        }
+    }
 }
 
 #[cfg(test)]
