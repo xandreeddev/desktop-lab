@@ -424,6 +424,7 @@ impl Launcher {
         effects: &mut Effects<Message>,
     ) -> Option<Intent> {
         let now = effects.now;
+        let was_expanded = self.expanded;
         if let Message::Submitted {
             height,
             now: painted,
@@ -572,6 +573,12 @@ impl Launcher {
             Message::Activate => self.activate(input),
             Message::Request(intent) => Some(intent),
         };
+        if self.expanded != was_expanded {
+            // Compact and fullscreen buffers have different native origins.
+            // A new native lifetime supplies fresh surface-local pointer
+            // coordinates even when the physical cursor has not moved.
+            effects.recreate_surface(SurfaceAddress::new("dock"));
+        }
         effects.redraw("dock");
         intent
     }
@@ -739,6 +746,80 @@ mod tests {
             },
             false,
         )
+    }
+    #[test]
+    fn native_lifetime_changes_only_when_the_dock_crosses_its_compact_extent() {
+        let fixture = Fixture::new();
+        let mut launcher = Launcher::default();
+        let mut effects = Effects::default();
+        launcher.update(
+            Message::Mode(Mode::Apps),
+            fixture.input(),
+            fixture.geometry(),
+            &mut effects,
+        );
+        assert_eq!(effects.recreate_surfaces, [SurfaceAddress::new("dock")]);
+        effects.recreate_surfaces.clear();
+        effects.now = 0.1;
+        launcher.update(
+            Message::Submitted {
+                height: fixture.geometry().viewport.1,
+                now: 0.1,
+            },
+            fixture.input(),
+            fixture.geometry(),
+            &mut effects,
+        );
+        effects.now = 1.;
+        launcher.update(
+            Message::Mode(Mode::Commands),
+            fixture.input(),
+            fixture.geometry(),
+            &mut effects,
+        );
+        assert!(effects.recreate_surfaces.is_empty());
+        effects.now = 2.;
+        launcher.update(
+            Message::Close,
+            fixture.input(),
+            fixture.geometry(),
+            &mut effects,
+        );
+        assert!(launcher.expanded && effects.recreate_surfaces.is_empty());
+        let closing = launcher.closing.unwrap().revision;
+        // Reopening before the closing submission keeps the same full extent.
+        effects.now = 2.1;
+        launcher.update(
+            Message::Toggle,
+            fixture.input(),
+            fixture.geometry(),
+            &mut effects,
+        );
+        effects.now = 3.;
+        launcher.update(
+            Message::Compacted(closing),
+            fixture.input(),
+            fixture.geometry(),
+            &mut effects,
+        );
+        assert!(launcher.open && launcher.expanded && effects.recreate_surfaces.is_empty());
+        effects.now = 4.;
+        launcher.update(
+            Message::Close,
+            fixture.input(),
+            fixture.geometry(),
+            &mut effects,
+        );
+        let closing = launcher.closing.unwrap().revision;
+        effects.now = 5.;
+        launcher.update(
+            Message::Compacted(closing),
+            fixture.input(),
+            fixture.geometry(),
+            &mut effects,
+        );
+        assert!(!launcher.expanded);
+        assert_eq!(effects.recreate_surfaces, [SurfaceAddress::new("dock")]);
     }
     fn action_fixture() -> Fixture {
         let mut fixture = Fixture::new();

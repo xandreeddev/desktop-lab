@@ -251,19 +251,24 @@ def suite(results):
         require(all(event['kind'] not in ('primary-exec', 'activate', 'open') for event in events()),
                 'action_never_uses_primary_launch_or_open')
 
-    def open_query(kind):
+    def open_query(kind, stationary=False):
+        previous_cursor = json.loads(session('hyprctl', '-j', 'cursorpos')) if stationary else None
         cli('launcher', 'open')
         eventually(lambda: client()['launcher'] and not client()['query'], 'launcher_open_empty')
         click(name, monitor, 'launcher-search')
         eventually(lambda: find_surface(inspect(), 'dock').get('focus') == 'launcher-search',
                    'owned_launcher_query_focused', timeout=5)
+        if stationary:
+            require(json.loads(session('hyprctl', '-j', 'cursorpos')) == previous_cursor,
+                    'stationary_search_click_uses_unchanged_physical_cursor')
+            require(client()['launcher'], 'stationary_search_click_does_not_dismiss_launcher')
         h['type_ascii'](name, entries[kind]['name'])
         eventually(lambda: client()['query'] == entries[kind]['name']
                    and client()['result_count'] == 1, 'owned_query_has_one_result')
         require(client()['selected'] == 0, 'owned_query_result_selected')
 
-    def chooser(kind, how='keyboard'):
-        open_query(kind)
+    def chooser(kind, how='keyboard', stationary=False):
+        open_query(kind, stationary)
         if how == 'keyboard':
             h['key'](name, 42, 68)  # Shift+F10: the native ContextMenu key route.
         else:
@@ -330,7 +335,8 @@ def suite(results):
         no_primary()
         results['checks']['keyboard_action_and_literal_argv'] = True
 
-        chooser('command', 'pointer')
+        chooser('command', 'pointer', stationary=True)
+        results['checks']['stationary_cursor_reopen_keeps_search_focus'] = True
         h['key'](name, 108)  # Down moves inside the chooser, not the app results.
         eventually(lambda: menu()['selected'] == 'Stale', 'chooser_down_selects_second_action')
         h['key'](name, 103)

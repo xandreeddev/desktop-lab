@@ -84,6 +84,37 @@ and recreate the native role, with GPU resources retired before protocol roles.
 Secure session-lock retains its separate all-output path and authenticated gate;
 ordinary instance/output declarations cannot narrow secure coverage.
 
+`Effects::recreate_surface(address)` explicitly renews an ordinary non-reserving layer-shell
+native lifetime while keeping its logical address and instance. Use it when a
+client intentionally starts a new coordinate/input lifetime. It is not an
+implicit consequence of every resize. Delegation preserves the exact address;
+hidden or unknown addresses have no native lifetime to replace.
+Current committed/pending and replacement declarations must all have
+`exclusive_zone <= 0`. Reserved layers are rejected before native mutation:
+layer-shell does not provide an atomic reservation transfer between surfaces,
+so this API does not briefly double-reserve or release a bar's reserved area.
+
+The old surface becomes pointer- and keyboard-inactive immediately. One
+last-good native presentation remains while the replacement configures; only
+the replacement's successful submission retires it. Retry/error does not claim
+a presented replacement, and repeated requests cannot replace retained good
+pixels with an unpainted pending surface. Input, configure, retry and frame
+events are admitted by current native object identity, rechecked after
+synchronous clipboard/client callbacks and between native message deliveries. The replacement gets
+fresh scene/focus/capture state and native Enter coordinates, while logical
+submission counts and the latest bounded timing/profile history continue.
+Inspector `frames` is that logical count; `native_frames` counts the current
+renderer and `retiring_native_surfaces` reports retained presentations. Profile
+payload accounting includes both current and retiring resources.
+
+Hiding/removing the address, output retirement, failure and runtime teardown
+release both lifetimes with GPU resources dropped before protocol roles.
+Session-lock runtimes reject any recreation request before the effect batch
+can perform tasks, clipboard operations or native mutations. Recreation never
+creates a second lock surface or authorizes unlocking. This adds no worker,
+polling or idle redraw. Native stationary-pointer and visual-handoff acceptance
+must still be recorded for the exact deployed source.
+
 ## Validation scope
 
 Pure tests exercise validated identities, typed-key collision resistance,
