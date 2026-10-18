@@ -45,6 +45,16 @@ Ctrl+Z undoes; Ctrl+Shift+Z or Ctrl+Y redoes. The callback emits relative
 `TextEdit::Undo`/`Redo` messages, and `TextFieldState::update` applies them against
 the current component value. `TextSelection::apply` alone owns no history.
 
+Native key translation keeps shortcut modifiers separate from printable text.
+Ctrl+A and Ctrl+U select/clear with either letter case, including Caps Lock or
+Shift; adding Alt or Super never turns those chords into an edit. Ctrl+Shift
+clipboard/history shortcuts retain Shift while normalizing the control letter.
+Unconsumed Super+letters remain shortcuts instead of inserting their UTF-8 text.
+Ordinary and masked controls consume the same translated SDK keys; masked
+controls retain count-only edits without clipboard or undo authority. Composed
+UTF-8 text from the existing keyboard adapter keeps its original contents.
+This does not implement compositor IME/preedit or complex-script shaping.
+
 Extended graphemes use the maintained
 [Unicode segmentation implementation](https://docs.rs/unicode-segmentation/latest/unicode_segmentation/trait.UnicodeSegmentation.html).
 This improves editing of combining characters and emoji sequences. It does not

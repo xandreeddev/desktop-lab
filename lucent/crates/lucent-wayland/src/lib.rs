@@ -51,6 +51,7 @@ mod delivery;
 mod effects;
 mod fractional;
 mod ipc;
+mod keyboard;
 mod layer_commit;
 mod outputs;
 mod pointer_input;
@@ -855,89 +856,8 @@ impl<A: Application> State<A> {
         let Some(id) = self.keyboard_surface.clone() else {
             return;
         };
-        let shortcut = if self.modifiers.ctrl || self.modifiers.alt {
-            event
-                .keysym
-                .key_char()
-                .filter(|c| !c.is_control())
-                .map(|character| api::Key::Shortcut {
-                    character,
-                    modifiers: api::KeyModifiers {
-                        control: self.modifiers.ctrl,
-                        alt: self.modifiers.alt,
-                        shift: self.modifiers.shift,
-                        logo: self.modifiers.logo,
-                    },
-                })
-        } else {
-            None
-        };
-        let key = match event.keysym {
-            Keysym::Escape => api::Key::Escape,
-            Keysym::Return | Keysym::KP_Enter => api::Key::Enter,
-            Keysym::Menu => api::Key::ContextMenu,
-            Keysym::F10
-                if self.modifiers.shift
-                    && !self.modifiers.ctrl
-                    && !self.modifiers.alt
-                    && !self.modifiers.logo =>
-            {
-                api::Key::ContextMenu
-            }
-            Keysym::BackSpace => api::Key::Backspace,
-            Keysym::Delete | Keysym::KP_Delete => api::Key::Delete,
-            Keysym::Up => api::Key::Up,
-            Keysym::Down => api::Key::Down,
-            Keysym::Left => api::Key::Left,
-            Keysym::Right => api::Key::Right,
-            Keysym::ISO_Left_Tab => api::Key::BackTab,
-            Keysym::Tab if self.modifiers.shift => api::Key::BackTab,
-            Keysym::Tab => api::Key::Tab,
-            Keysym::Page_Up => api::Key::PageUp,
-            Keysym::Page_Down => api::Key::PageDown,
-            Keysym::Home => api::Key::Home,
-            Keysym::End => api::Key::End,
-            Keysym::a if self.modifiers.ctrl => api::Key::SelectAll,
-            Keysym::u if self.modifiers.ctrl => api::Key::ClearInput,
-            _ if shortcut.is_some() => shortcut.unwrap(),
-            _ => {
-                let Some(text) = event
-                    .utf8
-                    .filter(|s| !s.is_empty() && s.chars().all(|c| !c.is_control()))
-                else {
-                    return;
-                };
-                if let Some(shortcut) = shortcut {
-                    shortcut
-                } else {
-                    api::Key::Text(text)
-                }
-            }
-        };
-        let key = if matches!(
-            key,
-            api::Key::Left
-                | api::Key::Right
-                | api::Key::Home
-                | api::Key::End
-                | api::Key::Delete
-                | api::Key::Backspace
-        ) && (self.modifiers.ctrl
-            || self.modifiers.shift
-            || self.modifiers.alt
-            || self.modifiers.logo)
-        {
-            api::Key::Modified {
-                key: Box::new(key),
-                modifiers: api::KeyModifiers {
-                    control: self.modifiers.ctrl,
-                    shift: self.modifiers.shift,
-                    alt: self.modifiers.alt,
-                    logo: self.modifiers.logo,
-                },
-            }
-        } else {
-            key
+        let Some(key) = keyboard::translate(event, self.modifiers) else {
+            return;
         };
         if let Some(s) = self.surfaces.get_mut(&id) {
             if !s.interaction.focus_visible {
