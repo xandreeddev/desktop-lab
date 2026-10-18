@@ -4191,10 +4191,12 @@ Enter makes a new line. Select across lines, resize and wrap.
             );
         }
         if state == "area-selection" {
+            // Keep the highlighted word pair and caret in the first visible
+            // row: this fixture paints settled state without runtime reveal.
             app.update(
                 Message::Widgets(crate::widgets::Message::EditNotes(TextEdit::Select {
-                    anchor: 10,
-                    caret: 58,
+                    anchor: 2,
+                    caret: 12,
                 })),
                 &mut Effects::default(),
             );
