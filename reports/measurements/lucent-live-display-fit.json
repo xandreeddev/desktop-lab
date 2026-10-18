@@ -1,0 +1,387 @@
+{
+  "schema": 1,
+  "feature": "Physical-cover live-wallpaper conversion",
+  "status": "native_single_output_verified_software_performance_targets_unmet",
+  "implementation_source_commit": "83a02372ff7b3313931b475bc650521c6adb19ac",
+  "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/75",
+  "configuration": {
+    "displays": [
+      {
+        "width": 1920,
+        "height": 1080,
+        "refreshRate": 60.0,
+        "scale": 1,
+        "transform": 0
+      }
+    ],
+    "adapter": "AdapterInfo { name: \"llvmpipe (LLVM 22.1.8, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 26.2.2-arch1.1 (LLVM 22.1.8)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: Some(false), limit_bucket: None }",
+    "vcpus": 4,
+    "architecture": "x86_64",
+    "kernel": "7.2.5-3-omarchy",
+    "workload": {
+      "visible_widgets": [
+        "calendar",
+        "clock",
+        "weather",
+        "media",
+        "system"
+      ],
+      "launcher": "closed",
+      "applications": 57
+    },
+    "live_source_metadata": {
+      "codec_name": "h264",
+      "width": 3840,
+      "height": 2160,
+      "pix_fmt": "yuv420p",
+      "r_frame_rate": "60/1",
+      "avg_frame_rate": "60/1"
+    },
+    "live_fps_policy": "source",
+    "frame_profiling": false,
+    "guest_os_memtotal_mib": 2893.55,
+    "configured_guest_memory_mib": 3072
+  },
+  "comparison": {
+    "before": {
+      "binary_source_commit": "73577a4cbf7aba68ee1c40b1280c27e738a5e820",
+      "binary_sha256": "72629dca7eb293222cc117be3a40347acacae9f03b36c069638d62b22287cf8d",
+      "measurement_harness_source_commit": "39beeec50e9f14edd673c38bc7ced5c01519949b",
+      "duration_seconds": 120.0,
+      "main_cpu_percent_one_core": 233.458,
+      "service_cpu_percent_one_core": 233.41,
+      "rss_mib_mean": 519.77,
+      "rss_mib_peak": 577.04,
+      "background_submissions": 2094,
+      "background_submissions_per_second": 17.45,
+      "closed_dock_submissions": 0,
+      "retained_rgba_frame_bytes": 33177600,
+      "gpu_texture_payload_after": {
+        "active_payload_bytes": 34552890,
+        "entries": 144,
+        "evictions": 0,
+        "hits": 7206,
+        "misses": 144,
+        "payload_bytes": 35514127,
+        "reuse_budget_bytes": 67108864
+      },
+      "resident_kib_before": {
+        "Rss": 465380,
+        "Pss": 418778,
+        "Pss_Anon": 250456,
+        "Pss_File": 77322,
+        "Pss_Shmem": 91000,
+        "Shared_Clean": 33984,
+        "Shared_Dirty": 43688,
+        "Private_Clean": 68096,
+        "Private_Dirty": 319612,
+        "Anonymous": 250456,
+        "Swap": 0
+      },
+      "resident_kib_after": {
+        "Rss": 561760,
+        "Pss": 515158,
+        "Pss_Anon": 346636,
+        "Pss_File": 77386,
+        "Pss_Shmem": 91136,
+        "Shared_Clean": 33984,
+        "Shared_Dirty": 43688,
+        "Private_Clean": 68160,
+        "Private_Dirty": 415928,
+        "Anonymous": 346636,
+        "Swap": 0
+      },
+      "prepared_assets_after": {
+        "background": {
+          "bytes": 11058620,
+          "unique_images": 1
+        },
+        "icons": {
+          "bytes": 3364154,
+          "unique_images": 82
+        },
+        "local_previews": {
+          "active": false,
+          "bytes": 0,
+          "closed_budget_bytes": 8388608,
+          "entries": 0,
+          "entry_limit": 16,
+          "failed": 0,
+          "pinned_bytes": 0,
+          "reuse_budget_bytes": 67108864,
+          "wanted": 0,
+          "wanted_ready": 0
+        },
+        "online_previews": {
+          "bytes": 0,
+          "unique_images": 0
+        },
+        "total": {
+          "bytes": 14422774,
+          "unique_images": 83
+        }
+      },
+      "restart_to_background_ready_ms": 1074.67,
+      "launcher_samples": [
+        {
+          "action": "open",
+          "warmup": true,
+          "frames": 15,
+          "median_frame_interval_ms": 33.65,
+          "max_frame_interval_ms": 87.44,
+          "observed_frame_span_ms": 556.82,
+          "cache_misses": 27,
+          "cpu_profile": null
+        },
+        {
+          "action": "close",
+          "warmup": true,
+          "frames": 18,
+          "median_frame_interval_ms": 31.19,
+          "max_frame_interval_ms": 68.83,
+          "observed_frame_span_ms": 527.4,
+          "cache_misses": 2,
+          "cpu_profile": null
+        },
+        {
+          "action": "open",
+          "warmup": false,
+          "frames": 13,
+          "median_frame_interval_ms": 34.46,
+          "max_frame_interval_ms": 89.23,
+          "observed_frame_span_ms": 526.64,
+          "cache_misses": 0,
+          "cpu_profile": null
+        },
+        {
+          "action": "close",
+          "warmup": false,
+          "frames": 15,
+          "median_frame_interval_ms": 33.42,
+          "max_frame_interval_ms": 83.45,
+          "observed_frame_span_ms": 546.11,
+          "cache_misses": 0,
+          "cpu_profile": null
+        },
+        {
+          "action": "open",
+          "warmup": false,
+          "frames": 12,
+          "median_frame_interval_ms": 35.08,
+          "max_frame_interval_ms": 82.89,
+          "observed_frame_span_ms": 541.12,
+          "cache_misses": 2,
+          "cpu_profile": null
+        },
+        {
+          "action": "close",
+          "warmup": false,
+          "frames": 15,
+          "median_frame_interval_ms": 32.42,
+          "max_frame_interval_ms": 87.58,
+          "observed_frame_span_ms": 537.57,
+          "cache_misses": 0,
+          "cpu_profile": null
+        }
+      ],
+      "settings_wallpaper_and_running_hash_preserved": true
+    },
+    "after": {
+      "binary_source_commit": "83a02372ff7b3313931b475bc650521c6adb19ac",
+      "binary_sha256": "c3ef83128e973301ce258896544603b933dc27c0093173c4a6ec1500a3f6c387",
+      "measurement_harness_source_commit": "a02f32ae98b5100031ecdca92fe7c8512e21befa",
+      "duration_seconds": 120.001,
+      "main_cpu_percent_one_core": 254.949,
+      "service_cpu_percent_one_core": 254.848,
+      "rss_mib_mean": 375.36,
+      "rss_mib_peak": 380.61,
+      "background_submissions": 3242,
+      "background_submissions_per_second": 27.016,
+      "closed_dock_submissions": 0,
+      "retained_rgba_frame_bytes": 8294400,
+      "gpu_texture_payload_after": {
+        "active_payload_bytes": 9662214,
+        "entries": 130,
+        "evictions": 0,
+        "hits": 8684,
+        "misses": 130,
+        "payload_bytes": 10575673,
+        "reuse_budget_bytes": 67108864
+      },
+      "resident_kib_before": {
+        "Rss": 350008,
+        "Pss": 303390,
+        "Pss_Anon": 160476,
+        "Pss_File": 77578,
+        "Pss_Shmem": 65336,
+        "Shared_Clean": 34036,
+        "Shared_Dirty": 43688,
+        "Private_Clean": 68316,
+        "Private_Dirty": 203968,
+        "Anonymous": 160476,
+        "Swap": 0
+      },
+      "resident_kib_after": {
+        "Rss": 383716,
+        "Pss": 337030,
+        "Pss_Anon": 186024,
+        "Pss_File": 77510,
+        "Pss_Shmem": 73496,
+        "Shared_Clean": 34036,
+        "Shared_Dirty": 43688,
+        "Private_Clean": 68316,
+        "Private_Dirty": 237676,
+        "Anonymous": 186024,
+        "Swap": 0
+      },
+      "prepared_assets_after": {
+        "background": {
+          "bytes": 11058620,
+          "unique_images": 1
+        },
+        "icons": {
+          "bytes": 3364154,
+          "unique_images": 82
+        },
+        "local_previews": {
+          "active": false,
+          "bytes": 0,
+          "closed_budget_bytes": 8388608,
+          "entries": 0,
+          "entry_limit": 16,
+          "failed": 0,
+          "pinned_bytes": 0,
+          "reuse_budget_bytes": 67108864,
+          "wanted": 0,
+          "wanted_ready": 0
+        },
+        "online_previews": {
+          "bytes": 0,
+          "unique_images": 0
+        },
+        "total": {
+          "bytes": 14422774,
+          "unique_images": 83
+        }
+      },
+      "restart_to_background_ready_ms": 1427.66,
+      "launcher_samples": [
+        {
+          "action": "open",
+          "warmup": true,
+          "frames": 15,
+          "median_frame_interval_ms": 36.79,
+          "max_frame_interval_ms": 78.9,
+          "observed_frame_span_ms": 555.0,
+          "cache_misses": 27,
+          "cpu_profile": null
+        },
+        {
+          "action": "close",
+          "warmup": true,
+          "frames": 15,
+          "median_frame_interval_ms": 36.25,
+          "max_frame_interval_ms": 80.79,
+          "observed_frame_span_ms": 536.96,
+          "cache_misses": 2,
+          "cpu_profile": null
+        },
+        {
+          "action": "open",
+          "warmup": false,
+          "frames": 16,
+          "median_frame_interval_ms": 32.79,
+          "max_frame_interval_ms": 62.51,
+          "observed_frame_span_ms": 517.66,
+          "cache_misses": 0,
+          "cpu_profile": null
+        },
+        {
+          "action": "close",
+          "warmup": false,
+          "frames": 16,
+          "median_frame_interval_ms": 32.73,
+          "max_frame_interval_ms": 66.57,
+          "observed_frame_span_ms": 532.19,
+          "cache_misses": 0,
+          "cpu_profile": null
+        },
+        {
+          "action": "open",
+          "warmup": false,
+          "frames": 14,
+          "median_frame_interval_ms": 40.73,
+          "max_frame_interval_ms": 58.73,
+          "observed_frame_span_ms": 538.11,
+          "cache_misses": 2,
+          "cpu_profile": null
+        },
+        {
+          "action": "close",
+          "warmup": false,
+          "frames": 17,
+          "median_frame_interval_ms": 32.3,
+          "max_frame_interval_ms": 73.41,
+          "observed_frame_span_ms": 550.44,
+          "cache_misses": 0,
+          "cpu_profile": null
+        }
+      ],
+      "settings_wallpaper_and_running_hash_preserved": true
+    },
+    "mean_rss_reduction_mib": 144.41,
+    "mean_rss_reduction_percent": 27.78,
+    "peak_rss_reduction_mib": 196.43,
+    "normal_rss_target_mib": 300,
+    "normal_rss_target_met": false,
+    "source_60fps_delivery_proven": false
+  },
+  "native_acceptance": {
+    "passed": true,
+    "initial_owned_h264_4k60_source_workload": true,
+    "smaller_cover": true,
+    "integer_density": true,
+    "fractional_density": true,
+    "latest_target_after_burst": true,
+    "producer_generation_retires_on_physical_change": true,
+    "frames_advance_with_stable_fitted_geometry": true,
+    "original_output_restored": true,
+    "idle_marker_restored": true,
+    "closed_idle_state_preserved": true,
+    "exact_settings_wallpaper_and_source_preserved": true,
+    "owned_guest_checkpoint_removed": true,
+    "binary_source_commit": "83a02372ff7b3313931b475bc650521c6adb19ac",
+    "binary_sha256": "c3ef83128e973301ce258896544603b933dc27c0093173c4a6ec1500a3f6c387",
+    "running_binary_hash_rechecked": true,
+    "scope": "Owned current 4K60 Source clip on one software-Vulkan display; real resize, density, current generations and exact preservation"
+  },
+  "local_validation": {
+    "regular_rust_tests": 665,
+    "ignored_rust_fixtures": 75,
+    "python_checks": 95,
+    "generated_tokens": 552,
+    "strict_clippy_and_fmt": true,
+    "independent_empty_application_consumer": true,
+    "stream_resource_gpu_tests": 3,
+    "unchanged_live_wallpaper_visual_comparisons": 56,
+    "docs_prefixes": [
+      "/",
+      "/desktop-lab/"
+    ],
+    "docs_pages_per_prefix": 13,
+    "docs_links_and_assets_per_prefix": 488,
+    "native_frame_format_unknown_before_packet_parse_regression": true,
+    "owned_parallel_power_protocol_cases": 4
+  },
+  "limits": [
+    "One same-boot before/after sample on software Vulkan; not a statistical estimate or physical-display pacing result.",
+    "RSS includes mapped software-driver allocations. KiB breakdowns are two snapshots, not interval averages. GPU counters are texture payload only, not total device memory.",
+    "Main CPU increased while more background frames were submitted. No reduced aggregate CPU claim is made.",
+    "Source 60/1 is the requested media timeline. Successful background submissions are not GPU completion, scanout or proof of sixty unique frames per second.",
+    "Source file resolution, display resolution/density, FPS policy, five widgets, 57 applications and settings were preserved. Only opaque converted RGBA is fitted to physical demand; source cadence was not reduced to meet a budget.",
+    "Native resolution/density checks preserve exact settings, source, wallpaper, original display and one unchanged desktop child. The separate measurement harness deliberately restarts that child before sampling.",
+    "The original FFmpeg crash had a descriptor assertion in context creation. First-frame initialization closes the demonstrated unknown-metadata admission path and the corrected binary passes native retargeting; original aborted arguments were not captured.",
+    "The 300 MiB RSS target and 60 FPS delivery remain unmet. Hardware/accelerated guest, native multi-output, alpha-safe fitting and seamless playhead retarget remain separate work.",
+    "CI exposed timestamp-only temporary-directory collisions in the power fixture. Power and catalog test setup now uses exclusive private directories, atomic tickets and bounded retries; regular checks and four concurrent owned power protocol cases pass locally. Final evidence-head CI is still pending."
+  ]
+}
