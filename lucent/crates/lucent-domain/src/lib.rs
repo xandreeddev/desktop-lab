@@ -6,6 +6,8 @@ pub use monitor::*;
 
 mod ports;
 pub use ports::*;
+mod media;
+pub use media::*;
 
 mod audio;
 pub use audio::*;

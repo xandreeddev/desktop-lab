@@ -36,7 +36,7 @@ pub enum Message {
     Bluetooth(crate::bluetooth::Message),
     Power(crate::power::Message),
     Tray(crate::tray::Message),
-    Media(domain::Result<MediaSnapshot>),
+    Media(crate::media::Message),
     Weather(domain::Result<WeatherSnapshot>),
     Launcher(launcher::Message),
     Launch(AppId, bool),
@@ -130,7 +130,7 @@ pub struct Desktop {
     pub bluetooth: crate::bluetooth::Bluetooth,
     pub power: crate::power::Power,
     pub tray: crate::tray::Tray,
-    pub media: MediaSnapshot,
+    pub media: crate::media::Media,
     pub weather: Option<WeatherSnapshot>,
     pub browser: crate::wallpaper_browser::Browser,
     browser_selection: Option<(u64, u64, Option<crate::palette_intent::Revision>)>,
@@ -190,7 +190,7 @@ impl Desktop {
             bluetooth: crate::bluetooth::Bluetooth::new(adapters.bluetooth.clone()),
             power: crate::power::Power::new(adapters.power.clone()),
             tray: crate::tray::Tray::new(adapters.tray.clone(), adapters.assets.clone()),
-            media: MediaSnapshot::default(),
+            media: crate::media::Media::new(adapters.media.clone(), adapters.assets.clone()),
             weather: None,
             browser: Default::default(),
             browser_selection: None,
@@ -518,6 +518,7 @@ impl Desktop {
             "background",
             "osd",
             "audio",
+            "media-controls",
             "network",
             "bluetooth",
             "power",
@@ -695,6 +696,10 @@ impl Desktop {
         if self.monitors.active.as_ref() == Some(id) && self.viewport == viewport {
             return;
         }
+        effects.delegate(
+            |child| self.media.update(crate::media::Message::CancelSeek, child),
+            Message::Media,
+        );
         self.monitors.active = Some(id.clone());
         self.viewport = viewport;
         self.update_dock(crate::dock::Message::Cancel, effects);
@@ -703,6 +708,7 @@ impl Desktop {
             "bar",
             "dock",
             "audio",
+            "media-controls",
             "network",
             "bluetooth",
             "power",
@@ -854,7 +860,7 @@ impl Desktop {
                 Message::Persistence(crate::persistence::Message::Retry),
                 effects,
             ),
-            Some(widgets::Intent::Action(action)) => self.perform(action, effects),
+            Some(widgets::Intent::Media(message)) => self.update(Message::Media(message), effects),
             Some(widgets::Intent::Error(error)) => {
                 self.error = error.to_string();
                 effects.redraw("dock");
@@ -932,9 +938,6 @@ impl Desktop {
             move || {
                 Message::Completed(match action {
                     Action::Lock => adapters.session.lock(),
-                    Action::PlayPause => adapters.media.control(MediaCommand::PlayPause),
-                    Action::Next => adapters.media.control(MediaCommand::Next),
-                    Action::Previous => adapters.media.control(MediaCommand::Previous),
                     _ => Ok(()),
                 })
             },
@@ -957,6 +960,7 @@ impl Component for Desktop {
         let viewport = monitor.map_or(self.viewport, |monitor| monitor.viewport);
         let tree = match cx.surface {
             "audio" => self.audio.view(cx, self.theme()).map(Message::Audio),
+            "media-controls" => self.media.view(cx, self.theme()).map(Message::Media),
             "network" => self.network.view(cx, self.theme()).map(Message::Network),
             "bluetooth" => self
                 .bluetooth
@@ -1026,6 +1030,10 @@ impl Component for Desktop {
                 }
             }
             Message::Outputs(catalog) => {
+                effects.delegate(
+                    |child| self.media.update(crate::media::Message::CancelSeek, child),
+                    Message::Media,
+                );
                 self.display_catalog_seen = true;
                 self.monitors.reconcile(catalog, self.viewport);
                 let pending = self
@@ -1411,13 +1419,10 @@ impl Component for Desktop {
                 effects.delegate(|child| self.power.update(message, child), Message::Power);
                 self.panel_opened(Panel::Power, was_open, effects);
             }
-            Message::Media(result) => {
-                let value = result.unwrap_or_default();
-                if self.media != value {
-                    self.media = value;
-                    effects.redraw("bar");
-                    effects.redraw("widgets");
-                }
+            Message::Media(message) => {
+                let was_open = self.media.open();
+                effects.delegate(|child| self.media.update(message, child), Message::Media);
+                self.panel_opened(Panel::Media, was_open, effects);
             }
             Message::Weather(result) => {
                 self.weather = result.ok();
@@ -1625,6 +1630,12 @@ impl Component for Desktop {
                 effects.redraw("dock");
             }
             Message::Resize(id, w, h, density) => {
+                if id == "media-controls" {
+                    effects.delegate(
+                        |child| self.media.update(crate::media::Message::CancelSeek, child),
+                        Message::Media,
+                    );
+                }
                 self.update_dock(crate::dock::Message::Cancel, effects);
                 if id == "background" {
                     match crate::ports::BackgroundTarget::from_density(w, h, density) {
@@ -1658,6 +1669,21 @@ impl Component for Desktop {
         }
         self.reconcile_live_wallpapers();
         self.reconcile_backgrounds(effects);
+        self.media.set_progress_visible(
+            (self.monitors.legacy()
+                && self
+                    .settings
+                    .layout
+                    .visible_widgets
+                    .iter()
+                    .any(|id| id == "media"))
+                || self.monitors.connected.keys().any(|id| {
+                    self.widget_layout(Some(id))
+                        .visible_widgets
+                        .iter()
+                        .any(|widget| widget == "media")
+                }),
+        );
         self.refresh_previews(effects);
     }
 }
@@ -1666,6 +1692,11 @@ impl api::Application for Desktop {
         true
     }
     fn runtime_failure(&self, failure: api::RuntimeFailure) -> Option<Message> {
+        if failure.source == "subscription media" {
+            return Some(Message::Media(crate::media::Message::Observed(Err(
+                DomainError::Unavailable(failure.to_string()),
+            ))));
+        }
         if let Some(revision) = failure
             .source
             .strip_prefix("subscription live-wallpaper:")
@@ -1740,6 +1771,29 @@ impl api::Application for Desktop {
                 },
                 visible: self.live_wallpaper.mounted,
                 pointer_input: if self.live_wallpaper.open {
+                    PointerInput::All
+                } else {
+                    PointerInput::None
+                },
+            },
+            SurfaceSpec {
+                id: "media-controls",
+                instance: None,
+                output: None,
+                layer: Layer::Overlay,
+                anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
+                width: 0,
+                height: 0,
+                exclusive_zone: -1,
+                keyboard: if self.media.open() {
+                    Keyboard::Exclusive
+                } else {
+                    Keyboard::None
+                },
+                visible: self.media.visible(),
+                pointer_input: if self.media.open() {
                     PointerInput::All
                 } else {
                     PointerInput::None
@@ -2046,7 +2100,6 @@ impl api::Application for Desktop {
         let apps = self.adapters.apps.clone();
         let clock = self.adapters.clock.clone();
         let system = self.adapters.system.clone();
-        let media = self.adapters.media.clone();
         let weather = self.adapters.weather.clone();
         let notifications = self.adapters.notifications.clone();
         let audio = self.adapters.audio.clone();
@@ -2117,13 +2170,16 @@ impl api::Application for Desktop {
             Subscription::every("system", Duration::from_secs(5), move || {
                 Message::System(system.sample())
             }),
-            Subscription::every("media", Duration::from_secs(2), move || {
-                Message::Media(media.snapshot())
-            }),
             Subscription::every("weather", Duration::from_secs(15 * 60), move || {
                 Message::Weather(weather.snapshot())
             }),
         ];
+        s.extend(
+            self.media
+                .subscriptions()
+                .into_iter()
+                .map(|subscription| subscription.map(Message::Media)),
+        );
         for subscription in self.audio.subscriptions() {
             s.push(Subscription::stream(subscription.id, move |out, cancel| {
                 (subscription.run)(
@@ -2214,6 +2270,13 @@ impl api::Application for Desktop {
     }
     fn event(&self, event: Event) -> Option<Message> {
         match event {
+            Event::Key {
+                surface: "media-controls",
+                key: Key::Escape,
+            }
+            | Event::Outside {
+                surface: "media-controls",
+            } => Some(Message::Media(crate::media::Message::Close)),
             Event::FrameSubmitted {
                 surface: "background",
                 now,
@@ -2387,6 +2450,12 @@ impl api::Application for Desktop {
         }
     }
     fn command(&self, command: &str) -> std::result::Result<Option<Message>, String> {
+        if let Some(command) = command.strip_prefix("media ") {
+            return self
+                .media
+                .command(command)
+                .map(|message| Some(Message::Media(message)));
+        }
         if command == "wallpaper live open" {
             return Ok(Some(Message::LiveWallpaper(
                 crate::live_wallpaper::Message::Open,
@@ -2697,6 +2766,7 @@ impl api::Application for Desktop {
             serde_json::json!(self.monitors.pending_focus.as_ref().map(MonitorId::as_str));
         value["active_monitor"] =
             serde_json::json!(self.monitors.active.as_ref().map(MonitorId::as_str));
+        value["media"] = self.media.inspect();
         value["monitor_layouts"] = serde_json::json!(self.settings.monitor_layouts);
         value["monitor_hosts"] = serde_json::json!(self.monitors.connected.iter().map(|(id,monitor)| serde_json::json!({"id":id.as_str(),"generation":monitor.generation,"viewport":monitor.viewport,"scale":monitor.scale,"density":monitor.density.factor(),"instance":monitor.instance.as_str(),"grid_visible":monitor.widgets.grid_visible(),"editing":monitor.widgets.editing(),"widget_surfaces":monitor.widgets.surfaces(self.widget_layout(Some(id)),monitor.viewport).iter().map(|source|serde_json::json!({"id":source.id,"members":source.members})).collect::<Vec<_>>()})).collect::<Vec<_>>());
         value["background_transitions"] = serde_json::json!(self.backgrounds.iter().map(|(instance, (_, presentation))| serde_json::json!({"instance": instance.as_ref().map(SurfaceInstance::as_str), "presentation": presentation.inspect()})).collect::<Vec<_>>());
@@ -2715,6 +2785,7 @@ impl api::Application for Desktop {
         (surface == "live-wallpaper" && self.live_wallpaper.motion.active(now))
             || (surface == "notifications" && self.notifications.animating(now))
             || (surface == "audio" && self.audio.animating(now))
+            || (surface == "media-controls" && self.media.animating(now))
             || (surface == "power" && self.power.animating(now))
             || (surface == "tray" && self.tray.animating(now))
             || (surface == "bluetooth" && self.bluetooth.animating(now))

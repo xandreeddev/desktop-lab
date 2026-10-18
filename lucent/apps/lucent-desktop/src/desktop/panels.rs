@@ -7,6 +7,7 @@ use lucent_api::{Component, Effects, Element, ViewContext};
 pub(super) enum Panel {
     Launcher,
     Audio,
+    Media,
     Network,
     Bluetooth,
     Power,
@@ -14,9 +15,10 @@ pub(super) enum Panel {
     LiveWallpaper,
     Notifications,
 }
-const PANELS: [Panel; 8] = [
+const PANELS: [Panel; 9] = [
     Panel::Launcher,
     Panel::Audio,
+    Panel::Media,
     Panel::Network,
     Panel::Bluetooth,
     Panel::Power,
@@ -30,6 +32,7 @@ impl Panel {
         match self {
             Self::Launcher => "dock",
             Self::Audio => "audio",
+            Self::Media => "media-controls",
             Self::Network => "network",
             Self::Bluetooth => "bluetooth",
             Self::Power => "power",
@@ -45,6 +48,7 @@ impl Desktop {
         match panel {
             Panel::Launcher => self.launcher.open(),
             Panel::Audio => self.audio.open(),
+            Panel::Media => self.media.open(),
             Panel::Network => self.network.open(),
             Panel::Bluetooth => self.bluetooth.open(),
             Panel::Power => self.power.open(),
@@ -71,6 +75,10 @@ impl Desktop {
                 Panel::LiveWallpaper => {
                     self.update_live_wallpaper(crate::live_wallpaper::Message::Close, effects)
                 }
+                Panel::Media => effects.delegate(
+                    |e| self.media.update(crate::media::Message::Close, e),
+                    Message::Media,
+                ),
                 Panel::Audio => effects.delegate(
                     |e| self.audio.update(crate::audio::Message::Close, e),
                     Message::Audio,
@@ -167,6 +175,7 @@ mod tests {
                 Message::Launcher(crate::launcher::Message::Mode(crate::launcher::Mode::Apps))
             }
             Panel::Audio => Message::Audio(crate::audio::Message::Open),
+            Panel::Media => Message::Media(crate::media::Message::Open),
             Panel::Network => Message::Network(crate::network::Message::Open),
             Panel::Bluetooth => Message::Bluetooth(crate::bluetooth::Message::Open),
             Panel::Power => Message::Power(crate::power::Message::Open),

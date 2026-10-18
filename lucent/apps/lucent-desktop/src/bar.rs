@@ -119,19 +119,30 @@ impl Desktop {
             .gap(space::SM)
             .size(geometry.workspaces.w, geometry.workspaces.h)
             .at(geometry.workspaces.x, geometry.workspaces.y);
-        let title = if self.media.title.is_empty() {
-            "Nothing playing".into()
+        let title = self.media.label();
+        let media_control = if let Some(command) = self.media.toggle_command() {
+            bar_icon(
+                if matches!(command, lucent_domain::MediaCommand::Pause(_)) {
+                    "pause"
+                } else {
+                    "play"
+                },
+            )
+            .on_click(Message::Media(crate::media::Message::Request(command)))
+            .id("bar-play")
         } else {
-            format!("{} · {}", self.media.artist, self.media.title)
+            bar_icon("play").opacity(opacity::DISABLED)
         };
         let media = self.pill(vec![
-            bar_icon("music"),
+            bar_icon("music")
+                .on_click(Message::Media(crate::media::Message::Toggle))
+                .id("bar-media"),
             self.label(title, font::SMALL)
                 .width(Length::Fixed(component::bar::MEDIA_TEXT_WIDTH))
-                .clip(),
-            bar_icon(if self.media.playing { "pause" } else { "play" })
-                .on_click(Message::Action(Action::PlayPause))
-                .id("bar-play"),
+                .clip()
+                .on_click(Message::Media(crate::media::Message::Toggle))
+                .id("bar-media-title"),
+            media_control,
         ]);
         let weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
         let date = &self.clock.date;
@@ -280,6 +291,10 @@ mod tests {
     #[test]
     fn clock_capsule_absorbs_pointer_without_opening_menu_or_taking_focus() {
         let mut app = Desktop::new(crate::test_adapters::adapters());
+        app.update(
+            Message::Media(crate::media::Message::Observed(Ok(crate::media::fixture()))),
+            &mut Effects::default(),
+        );
         app.viewport = (1920., 1080.);
         let cx = ViewContext {
             surface: "bar",
@@ -325,7 +340,9 @@ mod tests {
 
         assert!(matches!(
             element(&tree, "bar-play").unwrap().click,
-            Some(Message::Action(Action::PlayPause))
+            Some(Message::Media(crate::media::Message::Request(
+                lucent_domain::MediaCommand::Pause(_)
+            )))
         ));
         assert!(matches!(
             element(&tree, "bar-network").unwrap().click,
@@ -438,5 +455,49 @@ mod tests {
                 assert!(scene.hits.iter().any(|hit| hit.id == "bar-tray"));
             }
         }
+    }
+    #[test]
+    fn bar_play_captures_the_displayed_player_and_explicit_pause() {
+        use lucent_domain::*;
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        app.viewport = (1920., 1080.);
+        let mut snapshot = crate::media::fixture();
+        let mut other = snapshot.players[0].clone();
+        other.id = MediaPlayerId::new(2).unwrap();
+        snapshot.players.push(other);
+        app.update(
+            Message::Media(crate::media::Message::Observed(Ok(snapshot))),
+            &mut Effects::default(),
+        );
+        let tree = app.view(&ViewContext {
+            surface: "bar",
+            instance: None,
+            width: 1920.,
+            height: component::panel::BAR_HEIGHT,
+            now: 1.,
+            density: Density::ONE,
+        });
+        let captured = element(&tree, "bar-play").unwrap().click.clone().unwrap();
+        assert!(
+            matches!(captured, Message::Media(crate::media::Message::Request(MediaCommand::Pause(id))) if id.value() == 1)
+        );
+        app.update(
+            Message::Media(crate::media::Message::Select(
+                MediaPlayerId::new(2).unwrap(),
+            )),
+            &mut Effects::default(),
+        );
+        assert!(
+            matches!(captured, Message::Media(crate::media::Message::Request(MediaCommand::Pause(id))) if id.value() == 1)
+        );
+        app.update(
+            Message::Media(crate::media::Message::Observed(
+                Ok(MediaSnapshot::default()),
+            )),
+            &mut Effects::default(),
+        );
+        let mut effects = Effects::default();
+        app.update(captured, &mut effects);
+        assert!(effects.tasks.is_empty());
     }
 }

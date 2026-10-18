@@ -18,23 +18,6 @@ impl SystemPort for LinuxSystem {
             .sample()
     }
 }
-pub struct Playerctl;
-impl MediaPort for Playerctl {
-    fn snapshot(&self) -> Result<MediaSnapshot> {
-        crate::media()
-    }
-    fn control(&self, command: MediaCommand) -> Result<()> {
-        crate::command(
-            "playerctl",
-            &[match command {
-                MediaCommand::PlayPause => "play-pause",
-                MediaCommand::Next => "next",
-                MediaCommand::Previous => "previous",
-            }],
-        )
-        .map(|_| ())
-    }
-}
 pub struct OpenMeteo;
 impl WeatherPort for OpenMeteo {
     fn snapshot(&self) -> Result<WeatherSnapshot> {

@@ -376,16 +376,6 @@ pub struct SystemSnapshot {
     pub memory_used_mib: u64,
     pub memory_total_mib: u64,
 }
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct MediaSnapshot {
-    pub player: String,
-    pub title: String,
-    pub artist: String,
-    pub playing: bool,
-    pub art_url: String,
-    pub position: u64,
-    pub length: u64,
-}
 #[derive(Clone, Debug, PartialEq)]
 pub struct WeatherSnapshot {
     pub temperature: f32,

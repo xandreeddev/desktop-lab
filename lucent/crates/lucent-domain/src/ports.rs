@@ -13,16 +13,6 @@ pub trait ClockPort: Send + Sync {
 pub trait SystemPort: Send + Sync {
     fn sample(&self) -> Result<SystemSnapshot>;
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MediaCommand {
-    PlayPause,
-    Next,
-    Previous,
-}
-pub trait MediaPort: Send + Sync {
-    fn snapshot(&self) -> Result<MediaSnapshot>;
-    fn control(&self, command: MediaCommand) -> Result<()>;
-}
 pub trait WeatherPort: Send + Sync {
     fn snapshot(&self) -> Result<WeatherSnapshot>;
 }

@@ -127,6 +127,105 @@ impl crate::ports::AssetPort for UnavailablePreviews {
         self.0.background(path, target)
     }
 }
+const MEDIA_ARTWORK_SOURCE: &str = "file:///fixture/media-cover.png";
+const MEDIA_ARTWORK_KEY: &str = "media-cover-fixture";
+struct MediaArtworkAssets(Arc<dyn crate::ports::AssetPort>);
+impl crate::ports::AssetPort for MediaArtworkAssets {
+    fn media_artwork(
+        &self,
+        source: &lucent_domain::MediaArtworkSource,
+    ) -> lucent_domain::Result<Arc<ImageData>> {
+        assert_eq!(source.value(), MEDIA_ARTWORK_SOURCE);
+        // A non-square source exercises cover cropping as well as image upload.
+        let mut rgba = Vec::with_capacity(256 * 192 * 4);
+        for y in 0..192 {
+            for x in 0..256 {
+                let color = if (x / 32 + y / 32) % 2 == 0 {
+                    [44, 96, 164, 255]
+                } else {
+                    [228, 164, 88, 255]
+                };
+                rgba.extend(color);
+            }
+        }
+        Ok(Arc::new(
+            ImageData::from_rgba(MEDIA_ARTWORK_KEY, 256, 192, rgba).unwrap(),
+        ))
+    }
+    fn initial(&self) -> std::collections::BTreeMap<String, Arc<ImageData>> {
+        self.0.initial()
+    }
+    fn application_icons(&self, apps: &[lucent_domain::Application]) -> crate::ports::Images {
+        self.0.application_icons(apps)
+    }
+    fn thumbnail(&self, path: &str) -> lucent_domain::Result<Arc<ImageData>> {
+        self.0.thumbnail(path)
+    }
+    fn preview(&self, image: &ImageData) -> Arc<ImageData> {
+        self.0.preview(image)
+    }
+    fn background(
+        &self,
+        path: &str,
+        target: Option<crate::ports::BackgroundTarget>,
+    ) -> lucent_domain::Result<Arc<ImageData>> {
+        self.0.background(path, target)
+    }
+}
+fn open_media_fixture(app: &mut Desktop, name: &str) {
+    use crate::media::Message as MediaMessage;
+    let artwork = matches!(name, "media-playing" | "media-paused");
+    if artwork {
+        app.media = crate::media::Media::new(
+            app.adapters.media.clone(),
+            Arc::new(MediaArtworkAssets(app.adapters.assets.clone())),
+        );
+    }
+    app.update(Message::Media(MediaMessage::Open), &mut Effects::default());
+    if name == "media-loading" {
+        return;
+    }
+    let mut snapshot = if name == "media-empty" {
+        lucent_domain::MediaSnapshot::default()
+    } else {
+        crate::media::fixture()
+    };
+    if artwork
+        && let lucent_domain::MediaPlayerState::Ready(playback) = &mut snapshot.players[0].state
+    {
+        if name == "media-paused" {
+            playback.status = lucent_domain::PlaybackStatus::Paused;
+        }
+        playback.track.as_mut().unwrap().artwork =
+            Some(lucent_domain::MediaArtworkSource::new(MEDIA_ARTWORK_SOURCE).unwrap());
+    }
+    let mut effects = Effects::default();
+    app.update(
+        Message::Media(MediaMessage::Observed(Ok(snapshot))),
+        &mut effects,
+    );
+    if artwork {
+        assert!(app.media.artwork().is_none());
+        assert_eq!(
+            effects.tasks.len(),
+            1,
+            "one artwork preparation is admitted"
+        );
+        let task = effects.tasks.pop().unwrap();
+        assert_eq!(task.queue, crate::work::ASSETS);
+        app.update(task.run(), &mut effects);
+        assert!(effects.tasks.is_empty());
+        assert_eq!(app.media.artwork().unwrap().key, MEDIA_ARTWORK_KEY);
+    }
+    if name == "media-unavailable" {
+        app.update(
+            Message::Media(MediaMessage::Observed(Err(
+                lucent_domain::DomainError::Unavailable("Session bus disconnected".into()),
+            ))),
+            &mut Effects::default(),
+        );
+    }
+}
 struct FixturePlaybackLibrary(Arc<dyn lucent_domain::WallpaperPlaybackPort>);
 impl lucent_domain::WallpaperPlaybackPort for FixturePlaybackLibrary {
     fn library(&self) -> lucent_domain::Result<Vec<lucent_domain::Wallpaper>> {
@@ -1488,6 +1587,11 @@ fn visual_regressions() {
             ("notes-failed", Mode::Apps, 0, 0, "", 1., 390.),
             ("notes-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("menu-submenu", Mode::Apps, 0, 0, "", 1., 640.),
+            ("media-loading", Mode::Apps, 0, 0, "", 1., 640.),
+            ("media-empty", Mode::Apps, 0, 0, "", 1., 390.),
+            ("media-playing", Mode::Apps, 0, 0, "", 1., 640.),
+            ("media-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
+            ("media-paused", Mode::Apps, 0, 0, "", 1., 390.),
             ("audio-loading", Mode::Apps, 0, 0, "", 1., 640.),
             ("tray-loading", Mode::Apps, 0, 0, "", 1., 640.),
             ("tray-bar-wide", Mode::Apps, 0, 0, "", 1., 1920.),
@@ -2405,6 +2509,131 @@ fn visual_regressions() {
                 let mut input = Interaction::default();
                 input.synchronize(&layout.build(&tree, width, height, &input, now));
                 layout.build(&tree, width, height, &input, now)
+            } else if name.starts_with("media-") {
+                open_media_fixture(&mut app, name);
+                let cx = ViewContext {
+                    surface: "media-controls",
+                    instance: None,
+                    width,
+                    height,
+                    now,
+                    density: lucent_api::Density::ONE,
+                };
+                let tree = app.view(&cx);
+                let mut input = Interaction::default();
+                input.synchronize(&layout.build(&tree, width, height, &input, now));
+                let mut scene = layout.build(&tree, width, height, &input, now);
+                let controls: Vec<_> = if matches!(name, "media-playing" | "media-paused") {
+                    let scroll = scene
+                        .hits
+                        .iter()
+                        .find(|hit| hit.id == "media-scroll")
+                        .and_then(|hit| hit.scroll.as_ref())
+                        .unwrap();
+                    assert_eq!(
+                        scroll.offset, 0.,
+                        "transport starts fully visible without scrolling"
+                    );
+                    let toggle = if name == "media-playing" {
+                        "media-pause"
+                    } else {
+                        "media-play"
+                    };
+                    [
+                        "media-previous",
+                        toggle,
+                        "media-next",
+                        "media-stop",
+                        "media-raise",
+                    ]
+                    .into_iter()
+                    .map(|id| {
+                        let hit = scene.hits.iter().find(|hit| hit.id == id).unwrap();
+                        assert!(
+                            fully_visible(hit.rect, hit.clip.bounds),
+                            "{name}: {id} must be fully visible before scrolling"
+                        );
+                        assert!(
+                            hit.scroll_ancestors.is_empty(),
+                            "{id} must remain outside the metadata scroll body"
+                        );
+                        (id, hit.rect)
+                    })
+                    .collect()
+                } else {
+                    Vec::new()
+                };
+                if name == "media-paused" {
+                    let scroll = scene
+                        .hits
+                        .iter()
+                        .find(|hit| hit.id == "media-scroll")
+                        .and_then(|hit| hit.scroll.as_ref())
+                        .unwrap();
+                    assert!(
+                        scroll.maximum > 0.,
+                        "artwork must exercise narrow scrolling"
+                    );
+                    for message in input
+                        .scroll(
+                            &scene,
+                            scroll.viewport.x + scroll.viewport.w / 2.,
+                            scroll.viewport.y + scroll.viewport.h / 2.,
+                            10_000.,
+                        )
+                        .expect("media body accepts a native scroll event")
+                    {
+                        app.update(message, &mut Effects::default());
+                    }
+                    scene = layout.build(&app.view(&cx), width, height, &input, now);
+                    let scroll = scene
+                        .hits
+                        .iter()
+                        .find(|hit| hit.id == "media-scroll")
+                        .and_then(|hit| hit.scroll.as_ref())
+                        .unwrap();
+                    assert!((scroll.offset - scroll.maximum).abs() < 0.01);
+                    for (id, original) in controls {
+                        let hit = scene.hits.iter().find(|hit| hit.id == id).unwrap();
+                        assert_eq!(
+                            hit.rect, original,
+                            "{id} must stay fixed while metadata scrolls"
+                        );
+                        assert!(
+                            fully_visible(hit.rect, hit.clip.bounds),
+                            "{id} must remain fully visible after scrolling"
+                        );
+                    }
+                }
+                if matches!(name, "media-playing" | "media-paused") {
+                    let images: Vec<_> = scene
+                        .paint
+                        .iter()
+                        .filter_map(|paint| match paint {
+                            Paint::Image {
+                                rect,
+                                uv,
+                                clip,
+                                data,
+                                ..
+                            } if data.key == MEDIA_ARTWORK_KEY => Some((rect, uv, clip)),
+                            _ => None,
+                        })
+                        .collect();
+                    assert_eq!(images.len(), 1, "prepared artwork must reach the scene");
+                    let (rect, uv, clip) = images[0];
+                    let edge = lucent_design::component::media_panel::ARTWORK;
+                    assert!((rect.w - edge).abs() < 0.01 && (rect.h - edge).abs() < 0.01);
+                    assert!((uv.w - 0.75).abs() < 0.01 && (uv.h - 1.).abs() < 0.01);
+                    assert!(
+                        clip.bounds.w > 0. && clip.bounds.h > 0.,
+                        "prepared pixels must remain visible"
+                    );
+                    if name == "media-playing" {
+                        assert!(fully_visible(*rect, clip.bounds));
+                    }
+                }
+                scene
             } else if name.starts_with("audio-") {
                 use crate::audio::{Message as AudioMessage, panel::Tab};
                 app.update(Message::Audio(AudioMessage::Open), &mut Effects::default());
@@ -2907,7 +3136,20 @@ fn visual_regressions() {
                 let root = Element::grid(8, icons).gap(8.).padding(12.).fill();
                 layout.build(&root, width, height, &Interaction::default(), now)
             } else if name.starts_with("bar") {
-                app.media.title = "A long media title that must stay inside its own capsule".into();
+                let mut media = crate::media::fixture();
+                if let lucent_domain::MediaPlayerState::Ready(playback) =
+                    &mut media.players[0].state
+                {
+                    // Preserve the historical title-overflow fixture's paused
+                    // state; this case checks capsule geometry, not playback.
+                    playback.status = lucent_domain::PlaybackStatus::Paused;
+                    playback.track.as_mut().unwrap().title =
+                        "A long media title that must stay inside its own capsule".into();
+                }
+                app.update(
+                    Message::Media(crate::media::Message::Observed(Ok(media))),
+                    &mut Effects::default(),
+                );
                 app.audio.observe(Ok(crate::audio::fixture()));
                 app.compositor.workspaces = (1..=8)
                     .map(|id| lucent_domain::Workspace {
@@ -3103,13 +3345,19 @@ fn selection_fill_and_outline_move_together_on_the_first_frame() {
 fn desktop_actions_use_injected_adapters_without_executing_host_commands() {
     let fake = Arc::new(crate::test_adapters::Fake::default());
     let mut app = Desktop::new(crate::test_adapters::with(fake.clone()));
-    for action in [
-        crate::actions::Action::VolumeUp,
-        crate::actions::Action::PlayPause,
-        crate::actions::Action::Lock,
+    app.update(
+        Message::Media(crate::media::Message::Observed(Ok(crate::media::fixture()))),
+        &mut Effects::default(),
+    );
+    for message in [
+        Message::Action(crate::actions::Action::VolumeUp),
+        Message::Media(crate::media::Message::Request(
+            lucent_domain::MediaCommand::Pause(lucent_domain::MediaPlayerId::new(1).unwrap()),
+        )),
+        Message::Action(crate::actions::Action::Lock),
     ] {
         let mut effects = Effects::default();
-        app.update(Message::Action(action), &mut effects);
+        app.update(message, &mut effects);
         for task in effects.tasks {
             app.update(task.run(), &mut Effects::default());
         }

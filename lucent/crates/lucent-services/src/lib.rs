@@ -5,6 +5,7 @@ pub mod bluetooth;
 pub mod compositor;
 pub mod desktop_adapters;
 pub mod images;
+pub mod media;
 pub mod network;
 pub mod power;
 pub mod session;
@@ -202,31 +203,6 @@ impl SystemProbe {
             memory_total_mib: total,
         })
     }
-}
-pub fn media() -> Result<MediaSnapshot> {
-    let data = command(
-        "playerctl",
-        &[
-            "metadata",
-            "--format",
-            "{{playerName}}\t{{title}}\t{{artist}}\t{{status}}\t{{mpris:artUrl}}\t{{mpris:length}}",
-        ],
-    )?;
-    let p: Vec<_> = data.split('\t').collect();
-    let get = |n| p.get(n).copied().unwrap_or("").to_string();
-    let position = command("playerctl", &["position"])
-        .ok()
-        .and_then(|v| v.parse::<f64>().ok())
-        .unwrap_or(0.) as u64;
-    Ok(MediaSnapshot {
-        player: get(0),
-        title: get(1),
-        artist: get(2),
-        playing: get(3) == "Playing",
-        art_url: get(4),
-        position,
-        length: get(5).parse::<u64>().unwrap_or(0) / 1_000_000,
-    })
 }
 pub fn weather() -> Result<WeatherSnapshot> {
     let path = config_directory().join("weather.json");

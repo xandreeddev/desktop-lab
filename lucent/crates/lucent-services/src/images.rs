@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
+pub mod media;
 pub mod notification;
 mod raster;
 pub use raster::LoadError;

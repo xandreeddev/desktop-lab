@@ -213,6 +213,15 @@ not replace real compositor serial/selection acceptance.
 
 ## Acceptance still open
 
+`vm/test-input-settings.py` supplies a focused real-keyboard check for the
+prepared VM: Ctrl+A/U with Shift/Caps and unconsumed Alt/Super combinations.
+It checks keyboard/binding prerequisites, restores the original launcher query
+and open state, and verifies unchanged settings and wallpaper. Running it
+requires an unlocked guest; its existence does not establish native acceptance.
+The malformed/oversized stored-notes native restart check remains pending.
+Failed settings load can apply the default theme, so that check needs exact
+theme/login export restoration as well as the original JSON file.
+
 Native VM/hardware acceptance is deferred under the user instruction. Current
 shaping remains the existing kerning-based implementation. Clipboard native
 interoperability, IME, bidi/complex-script shaping, font fallback, multiline editing and

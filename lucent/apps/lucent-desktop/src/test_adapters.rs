@@ -61,8 +61,8 @@ impl AudioPort for Fake {
     }
 }
 impl MediaPort for Fake {
-    fn snapshot(&self) -> Result<MediaSnapshot> {
-        Ok(MediaSnapshot::default())
+    fn watch(&self, emit: &mut dyn FnMut(Result<MediaSnapshot>), _: &dyn StopSignal) {
+        emit(Ok(MediaSnapshot::default()));
     }
     fn control(&self, _: MediaCommand) -> Result<()> {
         self.calls.lock().unwrap().push("media");

@@ -24,7 +24,7 @@ pub fn desktop_adapters() -> DesktopAdapters {
         bluetooth: Arc::new(lucent_services::bluetooth::BlueZ::default()),
         power: Arc::new(lucent_services::power::PowerServices::default()),
         tray: Arc::new(lucent_services::tray::StatusNotifier::default()),
-        media: Arc::new(Playerctl),
+        media: Arc::new(lucent_services::media::Mpris::default()),
         weather: Arc::new(OpenMeteo),
         wallpaper: Arc::new(LucentWallpaper),
         playback: Arc::new(lucent_services::video::NativeVideoWallpapers::default()),
@@ -40,6 +40,9 @@ pub fn desktop_adapters() -> DesktopAdapters {
 }
 pub struct NativeAssets;
 impl AssetPort for NativeAssets {
+    fn media_artwork(&self, source: &MediaArtworkSource) -> Result<Arc<ImageData>> {
+        images::media::prepare(source)
+    }
     fn notification_images(&self, requests: &[NotificationAsset]) -> Images {
         requests
             .iter()

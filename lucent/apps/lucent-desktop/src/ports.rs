@@ -55,6 +55,11 @@ impl BackgroundTarget {
 }
 /// Presentation asset boundary: rendering data belongs here, not in the domain.
 pub trait AssetPort: Send + Sync {
+    fn media_artwork(&self, _source: &MediaArtworkSource) -> Result<Arc<ImageData>> {
+        Err(DomainError::Unavailable(
+            "Media artwork is unavailable".into(),
+        ))
+    }
     fn initial(&self) -> BTreeMap<String, Arc<ImageData>>;
     fn application_icons(&self, apps: &[Application]) -> Images;
     /// Prepare tray image resources on an asset worker, never in a view.
