@@ -380,8 +380,10 @@ fn ordinary_field<M>(tree: &api::Element<M>, id: &str) -> bool {
         return false;
     }
     if tree.id == id {
-        return matches!(tree.kind, api::Kind::TextInput { .. })
-            && tree.text_edit.is_some()
+        return matches!(
+            tree.kind,
+            api::Kind::TextInput { .. } | api::Kind::TextArea { .. }
+        ) && tree.text_edit.is_some()
             && tree.style.opacity > 0.;
     }
     tree.children.iter().any(|child| ordinary_field(child, id))

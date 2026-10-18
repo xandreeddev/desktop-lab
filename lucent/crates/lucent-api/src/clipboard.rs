@@ -125,8 +125,21 @@ pub struct TextFieldState {
     next: u64,
     pending: Option<Pending>,
     history: crate::text_edit::TextHistory,
+    multiline: bool,
 }
 impl TextFieldState {
+    /// Preserve hard lines and normalize accepted CRLF/CR edits to LF. This
+    /// immutable policy survives reset; the canonical value is still client-owned.
+    pub fn multiline() -> Self {
+        Self {
+            multiline: true,
+            ..Self::default()
+        }
+    }
+    pub fn is_multiline(&self) -> bool {
+        self.multiline
+    }
+
     pub fn selection(&self) -> TextSelection {
         self.selection
     }
@@ -171,6 +184,7 @@ impl TextFieldState {
                         TextEdit::Insert(text),
                         max_bytes,
                         false,
+                        self.multiline,
                     )
                 }
                 ClipboardOutcome::WritePosted if matches!(pending.operation, Operation::Cut) => {
@@ -180,6 +194,7 @@ impl TextFieldState {
                         TextEdit::Delete,
                         max_bytes,
                         false,
+                        self.multiline,
                     )
                 }
                 ClipboardOutcome::Error(ClipboardError::Cancelled) => Ok(TextChange::default()),
@@ -225,8 +240,14 @@ impl TextFieldState {
                 }));
             Ok(TextChange::default())
         } else {
-            self.history
-                .apply(&mut self.selection, value, edit, max_bytes, true)
+            self.history.apply(
+                &mut self.selection,
+                value,
+                edit,
+                max_bytes,
+                true,
+                self.multiline,
+            )
         }
     }
 }
@@ -599,5 +620,132 @@ mod tests {
             edit(&mut field, &mut value, TextEdit::Redo, &mut effects).unwrap();
             assert_eq!(value, "abc!");
         }
+    }
+}
+
+#[cfg(test)]
+mod multiline_tests {
+    use super::*;
+    fn apply(
+        field: &mut TextFieldState,
+        value: &mut String,
+        edit: TextEdit,
+        limit: usize,
+        effects: &mut Effects<TextEdit>,
+    ) -> Result<TextChange, TextEditError> {
+        field.update(
+            value,
+            edit,
+            limit,
+            ClipboardTarget::new("area", "body"),
+            effects,
+            |edit| edit,
+        )
+    }
+    #[test]
+    fn multiline_normalizes_only_accepted_edits_and_reset_preserves_policy() {
+        let mut field = TextFieldState::multiline();
+        let mut value = "loaded\r\n\rlegacy\n".to_owned();
+        field.reset(&value);
+        assert!(field.is_multiline());
+        assert_eq!(value, "loaded\r\n\rlegacy\n");
+        let mut effects = Effects::default();
+        apply(
+            &mut field,
+            &mut value,
+            TextEdit::Replace("a\r\n\r\nb\rc\n".into()),
+            8192,
+            &mut effects,
+        )
+        .unwrap();
+        assert_eq!(value, "a\n\nb\nc\n");
+        apply(&mut field, &mut value, TextEdit::Undo, 8192, &mut effects).unwrap();
+        assert_eq!(value, "loaded\r\n\rlegacy\n");
+        apply(&mut field, &mut value, TextEdit::Redo, 8192, &mut effects).unwrap();
+        assert_eq!(value, "a\n\nb\nc\n");
+    }
+    #[test]
+    fn normalized_byte_admission_and_clipboard_rejection_are_atomic() {
+        let mut field = TextFieldState::multiline();
+        let mut value = "é".to_owned();
+        field.reset(&value);
+        let mut effects = Effects::default();
+        apply(
+            &mut field,
+            &mut value,
+            TextEdit::Insert("\r\n".into()),
+            3,
+            &mut effects,
+        )
+        .unwrap();
+        assert_eq!(value, "é\n");
+        let before = field.selection();
+        apply(&mut field, &mut value, TextEdit::Paste, 3, &mut effects).unwrap();
+        let request = effects.clipboard.pop().unwrap();
+        assert_eq!(
+            apply(
+                &mut field,
+                &mut value,
+                request.finish(ClipboardOutcome::Text("\r\nx".into())),
+                3,
+                &mut effects
+            ),
+            Err(TextEditError::ByteLimit)
+        );
+        assert_eq!(value, "é\n");
+        assert_eq!(field.selection(), before);
+        apply(&mut field, &mut value, TextEdit::Undo, 3, &mut effects).unwrap();
+        assert_eq!(value, "é");
+        apply(&mut field, &mut value, TextEdit::Redo, 2, &mut effects).unwrap_err();
+        assert_eq!(value, "é");
+        apply(&mut field, &mut value, TextEdit::Redo, 3, &mut effects).unwrap();
+        assert_eq!(value, "é\n");
+    }
+    #[test]
+    fn enter_breaks_typing_groups_and_grapheme_deletion_crosses_hard_lines() {
+        let mut field = TextFieldState::multiline();
+        let mut value = String::new();
+        let mut effects = Effects::default();
+        for text in ["e\u{301}", "!", "\n", "👩‍💻", "x"] {
+            apply(
+                &mut field,
+                &mut value,
+                TextEdit::Insert(text.into()),
+                8192,
+                &mut effects,
+            )
+            .unwrap();
+        }
+        apply(&mut field, &mut value, TextEdit::Undo, 8192, &mut effects).unwrap();
+        assert_eq!(value, "e\u{301}!\n");
+        apply(&mut field, &mut value, TextEdit::Undo, 8192, &mut effects).unwrap();
+        assert_eq!(value, "e\u{301}!");
+        apply(&mut field, &mut value, TextEdit::Redo, 8192, &mut effects).unwrap();
+        apply(
+            &mut field,
+            &mut value,
+            TextEdit::Backspace,
+            8192,
+            &mut effects,
+        )
+        .unwrap();
+        assert_eq!(value, "e\u{301}!");
+        apply(
+            &mut field,
+            &mut value,
+            TextEdit::Backspace,
+            8192,
+            &mut effects,
+        )
+        .unwrap();
+        apply(
+            &mut field,
+            &mut value,
+            TextEdit::Backspace,
+            8192,
+            &mut effects,
+        )
+        .unwrap();
+        assert!(value.is_empty());
     }
 }

@@ -2481,6 +2481,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "text-area"
+version = "0.1.0"
+dependencies = [
+ "lucent-api",
+ "lucent-design",
+ "lucent-wayland",
+]
+
+[[package]]
 name = "text-input"
 version = "0.1.0"
 dependencies = [

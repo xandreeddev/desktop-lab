@@ -54,7 +54,17 @@ pub(super) fn translate(event: KeyEvent, native: Modifiers) -> Option<Key> {
     Some(
         if matches!(
             key,
-            Key::Left | Key::Right | Key::Home | Key::End | Key::Delete | Key::Backspace
+            Key::Left
+                | Key::Right
+                | Key::Up
+                | Key::Down
+                | Key::PageUp
+                | Key::PageDown
+                | Key::Home
+                | Key::End
+                | Key::Delete
+                | Key::Backspace
+                | Key::Enter
         ) && modifiers != KeyModifiers::default()
         {
             Key::Modified {
@@ -455,6 +465,46 @@ mod tests {
                     modifiers
                 ),
                 None
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod multiline_navigation_tests {
+    use super::*;
+    #[test]
+    fn vertical_page_and_enter_modifiers_reach_generic_editor() {
+        for (keysym, expected) in [
+            (Keysym::Up, Key::Up),
+            (Keysym::Down, Key::Down),
+            (Keysym::Page_Up, Key::PageUp),
+            (Keysym::Page_Down, Key::PageDown),
+            (Keysym::Return, Key::Enter),
+        ] {
+            let result = translate(
+                KeyEvent {
+                    time: 0,
+                    raw_code: 0,
+                    keysym,
+                    utf8: None,
+                },
+                Modifiers {
+                    shift: true,
+                    ctrl: true,
+                    ..Default::default()
+                },
+            );
+            assert_eq!(
+                result,
+                Some(Key::Modified {
+                    key: Box::new(expected),
+                    modifiers: KeyModifiers {
+                        shift: true,
+                        control: true,
+                        ..Default::default()
+                    }
+                })
             );
         }
     }

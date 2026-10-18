@@ -515,6 +515,15 @@ impl Launcher {
                 surface: "dock",
                 key,
             } => match key {
+                Key::Modified { key, .. } if matches!(key.as_ref(), Key::Up) => {
+                    Some(Message::Navigate(-1))
+                }
+                Key::Modified { key, .. } if matches!(key.as_ref(), Key::Down) => {
+                    Some(Message::Navigate(1))
+                }
+                Key::Modified { key, .. } if matches!(key.as_ref(), Key::Enter) => {
+                    Some(Message::Activate)
+                }
                 Key::Text(text) if self.mode == Mode::Apps && !self.edit_mounted => {
                     Some(Message::Query(format!("{}{text}", self.query)))
                 }
