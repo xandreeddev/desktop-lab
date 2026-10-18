@@ -186,7 +186,8 @@ detector. No wallpaper observation ever authorizes an unlock.
 Initial envelopes:
 
 - Local regular sources up to 512 MiB; MP4, WebM and GIF containers only.
-- Decoded dimensions at most 4096 per edge and 64 MiB per RGBA frame.
+- Source decoded dimensions at most 4096 per edge and 64 MiB per RGBA frame;
+  a smaller playback destination does not admit a larger source.
 - At most four enabled profiles, 32 retained monitor preference entries and
   32 imported assets. Remove unused owned media when the asset store is full;
   there is no automatic deletion of configured/rollback media.
@@ -203,14 +204,71 @@ physical GPU frame pacing, hardware decoding and power use still need measuremen
 This implementation decodes on the CPU with one codec thread; Vulkan renders the
 result. It does not claim Vulkan Video or hardware decode support.
 
+## Display-sized playback pixels
+
+`PlaybackOptions.target` accepts an optional domain `WallpaperPixelTarget` with
+validated positive physical-pixel dimensions. `None` preserves source dimensions
+until display geometry is known. Import validation and poster preparation keep
+that source-sized default; playback fitting does not reduce poster quality or
+relax the source envelope.
+
+The client derives each connected consumer's demand from its actual background
+viewport and integer or fractional rendering density. Consumers sharing a
+media/frame-rate producer contribute the maximum width and maximum height to
+that producer's target, including paused consumers. Independent producers keep
+independent targets. The focused output and a global desktop extent cannot
+substitute for these per-consumer observations.
+
+Before a named output catalog arrives, the default route can use its validated
+legacy background extent. An observed catalog containing only unnamed outputs
+still does not establish a live-wallpaper route in the current coordinator;
+extending that legacy fallback remains separate work. A genuinely empty catalog
+continues to retire playback.
+
+For formats proven opaque by FFmpeg's pixel descriptor, the adapter converts
+only the RGBA destination to the smallest uniformly scaled size sufficient to
+cover both target edges, with checked outward rounding and no upscaling.
+Alpha-capable or paletted formats retain source-sized conversion, even when a
+particular frame happens to be opaque. An unavailable format descriptor also
+keeps source size. FFmpeg's `AV_PIX_FMT_FLAG_ALPHA` contract describes these
+values as straight alpha; resampling before the SDK premultiplies can introduce
+invisible RGB into visible edges. Source-sized conversion preserves the existing
+premultiply then GPU-filter path. This conservative policy means GIF and
+alpha-bearing media do not receive the conversion-memory reduction;
+alpha-safe fitted conversion is separate work.
+
+Source aspect metadata passes through `MediaFrame` into the
+prepared SDK image, so rounding odd dimensions does not alter cover geometry.
+The existing private FFmpeg frame and owned row copy remain; published bytes are
+never borrowed from conversion scratch.
+
+A changed target retires the producer generation and its latest-frame mailbox.
+The last good immutable image remains visible while its replacement prepares;
+paused consumers keep their frozen pixels. This adds no decoder per output,
+worker, polling or redraw source. Source timestamps, frame-rate policy, bounded
+delivery and the existing reveal animation continue to govern playback.
+
+An output enlarged while paused keeps the exact pixels it previously froze;
+it cannot gain detail that those pixels no longer contain. An active shared
+producer includes the enlarged demand, and a resumed output uses its newly
+prepared frame. Re-decoding the exact frozen timestamp at a larger size remains
+separate work; this change does not seek, replace frozen content with a poster,
+or retain additional full-resolution source snapshots.
+
+The live-wallpaper inspector's `producers` entries report target, stored frame
+size and source aspect separately, without exposing media paths. These counters
+support matching a resource sample to the actual conversion demand; they are
+not decoder scratch, GPU staging or total process-memory measurements.
+
 ## Architecture and startup path
 
 ```text
 saved LiveWallpapers or explicit import
   → domain WallpaperFrameRate policy (Source or validated WallpaperFps cap)
+  → optional per-producer WallpaperPixelTarget from background consumers
   → WallpaperPlaybackPort supplied by NativeVideoWallpapers
   → producer subscription owns FFmpeg context and timing
-  → decoded MediaFrame with validated dimensions/bytes
+  → decoded MediaFrame with validated destination pixels and source aspect
   → SDK ImageStream prepares a single immutable image level on the worker
   → latest mailbox replaces previous unpublished content
   → small Wake message reaches the client's UI thread
@@ -297,6 +355,18 @@ they do not cause idle surfaces to repaint continuously. Codec timestamps and th
 FPS cap schedule media frames independently of UI component motion.
 
 ## Evidence and remaining acceptance
+
+The display-fit implementation is awaiting workspace checks and native
+acceptance. Focused checks must cover odd source dimensions and aspect,
+fractional density, differently shaped shared outputs, independent profiles,
+resize/hotplug generation retirement, retained paused pixels and unchanged
+source timing. A tiny two-frame transparent GIF and descriptor checks cover
+source-sized alpha conversion, contrasting invisible RGB and premultiplied edge
+coverage; actual compositor alpha-edge acceptance remains separate. Repeat the
+same full-resolution workload and source cadence when
+measuring RSS/PSS, retained/uploaded bytes and presented frames. No display-fit
+native performance sample or 300 MiB pass is claimed here; the historical
+measurements below retain their recorded source identities.
 
 Owned fixtures encode tiny synthetic MP4/WebM/GIF files and decode them through
 this exact native adapter. Tests cover actual pixels, frame counts/timestamps,

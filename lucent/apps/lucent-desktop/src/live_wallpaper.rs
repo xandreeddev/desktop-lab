@@ -90,6 +90,7 @@ struct Player {
     revision: u64,
     asset: LiveWallpaperAsset,
     fps: WallpaperFrameRate,
+    target: Option<WallpaperPixelTarget>,
     mailbox: Arc<Mutex<Mailbox>>,
     frame: Option<Arc<ImageData>>,
     running: bool,
@@ -190,6 +191,7 @@ impl LiveWallpaper {
         monitors: &[MonitorId],
         outputs_known: bool,
         context: &WallpaperPlaybackContext,
+        pixel_targets: &BTreeMap<LiveWallpaperTarget, WallpaperPixelTarget>,
     ) {
         let targets: Vec<_> = if monitors.is_empty() && !outputs_known {
             vec![LiveWallpaperTarget::Default]
@@ -200,12 +202,16 @@ impl LiveWallpaper {
                 .map(LiveWallpaperTarget::Monitor)
                 .collect()
         };
-        let mut wanted: BTreeMap<String, (LiveWallpaperSettings, bool)> = BTreeMap::new();
+        let mut wanted: BTreeMap<
+            String,
+            (LiveWallpaperSettings, bool, Option<WallpaperPixelTarget>),
+        > = BTreeMap::new();
         let mut routes = BTreeMap::new();
         let mut seeds = BTreeMap::new();
         for target in targets {
             let selected = settings.selected(&target);
             if let Some(setting) = selected.filter(|s| s.enabled) {
+                let pixels = pixel_targets.get(&target).copied();
                 let key = format!("{}:{}:{}", setting.asset.path, setting.fps, setting.paused);
                 let pause = lucent_usecases::live_wallpaper::wallpaper_pause_reason(
                     settings, setting, &target, context,
@@ -232,8 +238,21 @@ impl LiveWallpaper {
                 // Covered outputs retain their own frozen presentation frame.
                 wanted
                     .entry(key)
-                    .and_modify(|(_, running)| *running |= pause.is_none())
-                    .or_insert((setting.clone(), pause.is_none()));
+                    .and_modify(|(_, running, target)| {
+                        *running |= pause.is_none();
+                        // Each connected consumer, including a paused output,
+                        // must retain cover density. Unknown geometry keeps
+                        // source pixels until that output configures.
+                        *target = match (*target, pixels) {
+                            (Some(left), Some(right)) => {
+                                let (lw, lh) = left.size();
+                                let (rw, rh) = right.size();
+                                WallpaperPixelTarget::new(lw.max(rw), lh.max(rh)).ok()
+                            }
+                            _ => None,
+                        };
+                    })
+                    .or_insert((setting.clone(), pause.is_none(), pixels));
             }
         }
         // A changed FPS/pause profile retires its producer identity, but keeps
@@ -250,12 +269,13 @@ impl LiveWallpaper {
             .collect();
         self.players.retain(|key, _| wanted.contains_key(key));
         self.routes = routes;
-        for (key, (setting, running)) in wanted.into_iter().take(4) {
+        for (key, (setting, running, target)) in wanted.into_iter().take(4) {
             if let Some(player) = self.players.get_mut(&key) {
-                if player.running != running {
+                if player.running != running || player.target != target {
                     self.revision = self.revision.wrapping_add(1);
                     player.revision = self.revision;
                     player.running = running;
+                    player.target = target;
                     player.error.clear();
                     player.mailbox = Arc::new(Mutex::new(Mailbox::default()));
                 }
@@ -272,6 +292,7 @@ impl LiveWallpaper {
                         revision: self.revision,
                         asset: setting.asset,
                         fps: setting.fps,
+                        target,
                         mailbox: Arc::new(Mutex::new(Mailbox::default())),
                         frame,
                         running,
@@ -302,6 +323,7 @@ impl LiveWallpaper {
                 let asset = player.asset.clone();
                 let assets = self.assets.clone();
                 let fps = player.fps;
+                let target = player.target;
                 let running = player.running;
                 Subscription::stream(format!("live-wallpaper:{revision}"), move |out, cancel| {
                     let stream = ImageStream::new();
@@ -330,15 +352,19 @@ impl LiveWallpaper {
                     }
                     adapter.play(
                         &asset,
-                        PlaybackOptions { fps, looping: true },
+                        PlaybackOptions {
+                            fps,
+                            looping: true,
+                            target,
+                        },
                         &mut |result| {
                             if stop.cancelled() {
                                 return false;
                             }
                             let delivery = match result.and_then(|frame| {
-                                let (w, h, bytes) = frame.into_rgba();
+                                let (w, h, bytes, aspect) = frame.into_rgba_with_aspect();
                                 stream
-                                    .frame_rgba(w, h, bytes)
+                                    .frame_rgba_with_aspect(w, h, bytes, aspect)
                                     .map(Arc::new)
                                     .map_err(|e| DomainError::Failed(e.to_string()))
                             }) {
@@ -770,7 +796,7 @@ impl LiveWallpaper {
                 .filter_map(|player| player.frame.as_ref())
                 .chain(self.routes.values().filter_map(|route| route.held.as_ref())),
         );
-        serde_json::json!({"open":self.open,"awaiting_first_frame":self.awaiting_first_frame.is_some(),"importing":self.importing.is_some(),"library_loading":self.library_loading,"library_count":self.library.len(),"library_error":self.library_error,"players":self.players.len(),"running":self.players.values().filter(|p|p.running&&p.error.is_empty()).count(),"retained_frame_bytes":retained.bytes,"error":self.status(),"outputs":self.routes.iter().map(|(target,route)| serde_json::json!({"monitor":target.monitor().map(MonitorId::as_str),"pause_reason":route.pause})).collect::<Vec<_>>()})
+        serde_json::json!({"open":self.open,"awaiting_first_frame":self.awaiting_first_frame.is_some(),"importing":self.importing.is_some(),"library_loading":self.library_loading,"library_count":self.library.len(),"library_error":self.library_error,"players":self.players.len(),"running":self.players.values().filter(|p|p.running&&p.error.is_empty()).count(),"retained_frame_bytes":retained.bytes,"producers":self.players.values().map(|player|serde_json::json!({"revision":player.revision,"running":player.running,"target":player.target.map(WallpaperPixelTarget::size),"frame_size":player.frame.as_ref().map(|frame|(frame.width(),frame.height())),"source_aspect":player.frame.as_ref().map(|frame|frame.aspect_size())})).collect::<Vec<_>>(),"error":self.status(),"outputs":self.routes.iter().map(|(target,route)| serde_json::json!({"monitor":target.monitor().map(MonitorId::as_str),"pause_reason":route.pause})).collect::<Vec<_>>()})
     }
 }
 #[cfg(test)]

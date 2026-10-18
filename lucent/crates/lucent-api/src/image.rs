@@ -94,9 +94,29 @@ impl ImageStream {
         &self,
         width: u32,
         height: u32,
+        pixels: Vec<u8>,
+    ) -> Result<ImageData, ImageError> {
+        self.frame_rgba_with_aspect(width, height, pixels, (width, height))
+    }
+    /// Preserve natural image geometry independently of converted pixel storage.
+    /// Both aspect dimensions must be positive and within presentation limits.
+    pub fn frame_rgba_with_aspect(
+        &self,
+        width: u32,
+        height: u32,
         mut pixels: Vec<u8>,
+        aspect_size: (u32, u32),
     ) -> Result<ImageData, ImageError> {
         validate(&pixels, width, height, ImageFormat::PremultipliedRgba8)?;
+        if aspect_size.0 == 0
+            || aspect_size.1 == 0
+            || aspect_size.0 > 16384
+            || aspect_size.1 > 16384
+        {
+            return Err(ImageError(
+                "Image aspect dimensions exceed the presentation budget",
+            ));
+        }
         let mut opaque = true;
         for pixel in pixels.as_chunks_mut::<4>().0 {
             if pixel[3] != 255 {
@@ -116,7 +136,7 @@ impl ImageStream {
             + 1;
         Ok(ImageData {
             key: "streamed-image".into(),
-            aspect_size: (width, height),
+            aspect_size,
             prepared: Arc::new(Prepared {
                 id: NEXT_IMAGE.fetch_add(1, Ordering::Relaxed),
                 format: ImageFormat::PremultipliedRgba8,
@@ -538,6 +558,71 @@ mod tests {
 #[cfg(test)]
 mod streaming_tests {
     use super::*;
+    #[test]
+    fn converted_frames_keep_natural_aspect_and_immutable_premultiplied_pixels() {
+        let stream = ImageStream::new();
+        let pixels = [200, 100, 50, 128].repeat(16 * 10);
+        let allocation = pixels.as_ptr();
+        let first = stream
+            .frame_rgba_with_aspect(16, 10, pixels, (65, 37))
+            .unwrap();
+        let snapshot = first.snapshot();
+        let second = stream
+            .frame_rgba_with_aspect(18, 10, vec![255; 18 * 10 * 4], (65, 37))
+            .unwrap();
+        assert_eq!((first.width(), first.height()), (16, 10));
+        assert_eq!(first.aspect_size(), (65, 37));
+        assert_eq!(first.clone().aspect_size(), (65, 37));
+        assert_eq!(snapshot.aspect_size(), (65, 37));
+        assert_eq!(second.aspect_size(), (65, 37));
+        assert_eq!(first.levels().len(), 1);
+        assert_eq!(first.bytes(), 16 * 10 * 4);
+        assert_eq!(first.pixels().as_ptr(), allocation);
+        assert_eq!(first.pixels(), [100, 50, 25, 128].repeat(16 * 10));
+        assert_eq!(snapshot.pixels().as_ptr(), first.pixels().as_ptr());
+        assert!(snapshot.stream_revision().is_none());
+        assert_eq!(
+            first.stream_revision().unwrap().0,
+            second.stream_revision().unwrap().0
+        );
+        assert_ne!(first.cache_id(), second.cache_id());
+        drop(first);
+        drop(second);
+        drop(stream);
+        assert_eq!(snapshot.aspect_size(), (65, 37));
+        assert_eq!(snapshot.pixels(), [100, 50, 25, 128].repeat(16 * 10));
+    }
+    #[test]
+    fn streamed_aspect_validation_preserves_independent_storage_limits() {
+        let stream = ImageStream::new();
+        for aspect in [(0, 1), (1, 0), (16385, 1), (1, 16385), (u32::MAX, u32::MAX)] {
+            assert!(
+                stream
+                    .frame_rgba_with_aspect(1, 1, vec![255; 4], aspect)
+                    .is_err()
+            );
+        }
+        for (width, height, pixels) in [
+            (0, 1, vec![]),
+            (1, 1, vec![255; 3]),
+            (16385, 1, vec![]),
+            (16384, 2049, vec![]),
+        ] {
+            assert!(
+                stream
+                    .frame_rgba_with_aspect(width, height, pixels, (1, 1))
+                    .is_err()
+            );
+        }
+        let frame = stream
+            .frame_rgba_with_aspect(1, 1, vec![255; 4], (16384, 16384))
+            .unwrap();
+        assert_eq!(frame.aspect_size(), (16384, 16384));
+        assert_eq!(frame.bytes(), 4);
+        assert_eq!(frame.stream_revision().unwrap().1, 1);
+        let legacy = stream.frame_rgba(2, 1, vec![255; 8]).unwrap();
+        assert_eq!(legacy.aspect_size(), (2, 1));
+    }
     #[test]
     fn prepared_coverage_survives_clones_mips_and_snapshots_without_becoming_optimistic() {
         for alpha in [0, 1, 254, 255] {

@@ -295,6 +295,32 @@ fn dimensions(width: u32, height: u32) -> Result<()> {
         Ok(())
     }
 }
+fn conversion_dimensions(
+    format: ffmpeg::format::Pixel,
+    width: u32,
+    height: u32,
+    target: Option<WallpaperPixelTarget>,
+) -> Result<(u32, u32)> {
+    dimensions(width, height)?;
+    let opaque = format.descriptor().is_some_and(|descriptor| {
+        // SAFETY: Pixel::descriptor returns a non-null pointer obtained from
+        // av_pix_fmt_desc_get. FFmpeg owns this immutable format descriptor for
+        // the process lifetime; this reads only its public flags field.
+        let flags = unsafe { (*descriptor.as_ptr()).flags };
+        // pixdesc.h documents alpha-capable formats (including PAL8) as
+        // straight alpha. Resampling before the SDK premultiplies can mix
+        // invisible RGB into an edge, so only proven opaque formats fit here.
+        // The C macros are nonnegative signed constants (1<<7 and 1<<1).
+        let alpha_flags =
+            (ffmpeg::ffi::AV_PIX_FMT_FLAG_ALPHA | ffmpeg::ffi::AV_PIX_FMT_FLAG_PAL) as u64;
+        flags & alpha_flags == 0
+    });
+    if opaque && let Some(target) = target {
+        target.cover_size(width, height)
+    } else {
+        Ok((width, height))
+    }
+}
 fn decode(
     path: &Path,
     options: PlaybackOptions,
@@ -351,13 +377,19 @@ fn decode(
         let mut decoder = context.decoder().video().map_err(|_| failed())?;
         dimensions(decoder.width(), decoder.height())?;
         let expected = (decoder.width(), decoder.height(), decoder.format());
+        let (width, height) = conversion_dimensions(
+            decoder.format(),
+            decoder.width(),
+            decoder.height(),
+            options.target,
+        )?;
         let mut scaler = ffmpeg::software::scaling::context::Context::get(
             decoder.format(),
             decoder.width(),
             decoder.height(),
             ffmpeg::format::Pixel::RGBA,
-            decoder.width(),
-            decoder.height(),
+            width,
+            height,
             ffmpeg::software::scaling::flag::Flags::BILINEAR,
         )
         .map_err(|_| failed())?;
@@ -404,19 +436,23 @@ fn decode(
                     return Ok(false);
                 }
                 scaler.run(&frame, &mut rgba).map_err(|_| failed())?;
-                let row = frame.width() as usize * 4;
+                if (rgba.width(), rgba.height()) != (width, height) {
+                    return Err(failed());
+                }
+                let row = width as usize * 4;
                 let stride = rgba.stride(0);
                 let plane = rgba.data(0);
-                let mut bytes = Vec::with_capacity(row * frame.height() as usize);
-                for y in 0..frame.height() as usize {
+                let mut bytes = Vec::with_capacity(row * height as usize);
+                for y in 0..height as usize {
                     let start = y.checked_mul(stride).ok_or_else(failed)?;
                     bytes.extend_from_slice(plane.get(start..start + row).ok_or_else(failed)?);
                 }
                 delivered = true;
-                if !emit(MediaFrame::rgba(
-                    frame.width(),
-                    frame.height(),
+                if !emit(MediaFrame::rgba_with_aspect(
+                    width,
+                    height,
                     bytes,
+                    (frame.width(), frame.height()),
                     timestamp,
                 )?) {
                     return Ok(false);

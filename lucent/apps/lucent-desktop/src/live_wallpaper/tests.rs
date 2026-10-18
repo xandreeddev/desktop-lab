@@ -464,6 +464,7 @@ fn shared_streams_pause_without_workers_and_hotplug_rejects_old_frames() {
         &[id.clone(), other.clone()],
         true,
         &WallpaperPlaybackContext::default(),
+        &BTreeMap::new(),
     );
     assert_eq!(controller.players.len(), 1);
     assert_eq!(controller.subscriptions().len(), 1);
@@ -489,6 +490,7 @@ fn shared_streams_pause_without_workers_and_hotplug_rejects_old_frames() {
         &[id.clone(), other.clone()],
         true,
         &WallpaperPlaybackContext::default(),
+        &BTreeMap::new(),
     );
     assert!(controller.subscriptions().is_empty());
     assert!(controller.frame(Some(&id)).is_some());
@@ -503,12 +505,338 @@ fn shared_streams_pause_without_workers_and_hotplug_rejects_old_frames() {
         std::slice::from_ref(&id),
         true,
         &WallpaperPlaybackContext::default(),
+        &BTreeMap::new(),
     );
     assert_eq!(controller.subscriptions().len(), 1);
     assert!(controller.frame(Some(&other)).is_none());
-    controller.reconcile(&settings, &[], true, &WallpaperPlaybackContext::default());
+    controller.reconcile(
+        &settings,
+        &[],
+        true,
+        &WallpaperPlaybackContext::default(),
+        &BTreeMap::new(),
+    );
     assert!(controller.subscriptions().is_empty());
     assert!(controller.players.is_empty());
+}
+
+fn pixel_target(width: u32, height: u32) -> WallpaperPixelTarget {
+    WallpaperPixelTarget::new(width, height).unwrap()
+}
+
+#[derive(Default)]
+struct FittedPlayback(Mutex<Vec<PlaybackOptions>>);
+impl WallpaperPlaybackPort for FittedPlayback {
+    fn prepare(&self, _: &Wallpaper) -> Result<LiveWallpaperAsset> {
+        Err(DomainError::Unavailable("Unused fixture import".into()))
+    }
+    fn play(
+        &self,
+        _: &LiveWallpaperAsset,
+        options: PlaybackOptions,
+        emit: &mut dyn FnMut(Result<MediaFrame>) -> bool,
+        _: Arc<dyn StopSignal>,
+    ) {
+        self.0.lock().unwrap().push(options);
+        let (width, height) = options
+            .target
+            .map_or(Ok((17, 13)), |target| target.cover_size(17, 13))
+            .unwrap();
+        emit(MediaFrame::rgba_with_aspect(
+            width,
+            height,
+            [80, 120, 160, 255].repeat(width as usize * height as usize),
+            (17, 13),
+            std::time::Duration::from_millis(125),
+        ));
+    }
+}
+
+fn deliver_subscription(controller: &mut LiveWallpaper, subscription: Subscription<Message>) {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    (subscription.run)(
+        lucent_api::Emitter::new(move |message| {
+            sender.send(message).unwrap();
+        }),
+        Cancellation::default(),
+    );
+    let messages: Vec<_> = receiver.try_iter().collect();
+    assert_eq!(
+        messages.len(),
+        1,
+        "one latest-frame wake, never a pixel message"
+    );
+    for message in messages {
+        controller.update(message, &mut Effects::default());
+    }
+}
+
+#[test]
+fn connected_consumers_merge_cover_demand_only_within_their_shared_profile() {
+    let mut controller = controller();
+    let left = MonitorId::new("DP-1").unwrap();
+    let right = MonitorId::new("DP-2").unwrap();
+    let other = MonitorId::new("DP-3").unwrap();
+    let left_target = LiveWallpaperTarget::Monitor(left.clone());
+    let right_target = LiveWallpaperTarget::Monitor(right.clone());
+    let other_target = LiveWallpaperTarget::Monitor(other.clone());
+    let monitors = [left, right.clone(), other.clone()];
+    let settings = LiveWallpapers {
+        default: Some(setting("/fixture/shared.mp4")),
+        monitors: BTreeMap::from([(other, setting("/fixture/independent.mp4"))]),
+        ..Default::default()
+    };
+    let mut targets = BTreeMap::from([
+        (left_target.clone(), pixel_target(1920, 1080)),
+        (right_target.clone(), pixel_target(1080, 1920)),
+        (other_target.clone(), pixel_target(3840, 2160)),
+    ]);
+    let mut context = WallpaperPlaybackContext::default();
+    controller.reconcile(&settings, &monitors, true, &context, &targets);
+    let key = controller.routes[&left_target].key.clone();
+    let independent = controller.routes[&other_target].key.clone();
+    assert_eq!(controller.routes[&right_target].key, key);
+    assert_eq!(controller.players.len(), 2);
+    assert_eq!(controller.subscriptions().len(), 2);
+    assert_eq!(
+        controller.players[&key].target,
+        Some(pixel_target(1920, 1920))
+    );
+    assert_eq!(
+        controller.players[&independent].target,
+        Some(pixel_target(3840, 2160))
+    );
+    assert_eq!(controller.players[&key].fps, WallpaperFrameRate::Source);
+    let revision = controller.players[&key].revision;
+    context.fullscreen_monitors.insert(right);
+    controller.reconcile(&settings, &monitors, true, &context, &targets);
+    assert_eq!(
+        controller.players[&key].target,
+        Some(pixel_target(1920, 1920))
+    );
+    assert_eq!(controller.players[&key].revision, revision);
+    assert!(controller.players[&key].running);
+    targets.remove(&right_target);
+    controller.reconcile(&settings, &monitors, true, &context, &targets);
+    assert_eq!(
+        controller.players[&key].target, None,
+        "unknown consumer geometry keeps source detail"
+    );
+    assert_eq!(
+        controller.players[&independent].target,
+        Some(pixel_target(3840, 2160))
+    );
+}
+
+#[test]
+fn pixel_retarget_retires_mailbox_and_old_wakes_while_retaining_last_good_pixels() {
+    let adapter = Arc::new(FittedPlayback::default());
+    let mut controller =
+        LiveWallpaper::new(adapter.clone(), crate::test_adapters::adapters().assets);
+    let settings = LiveWallpapers {
+        default: Some(setting("/fixture/resizing.mp4")),
+        ..Default::default()
+    };
+    let mut targets = BTreeMap::from([(LiveWallpaperTarget::Default, pixel_target(8, 6))]);
+    let context = WallpaperPlaybackContext::default();
+    controller.reconcile(&settings, &[], false, &context, &targets);
+    let first = controller.subscriptions().pop().unwrap();
+    deliver_subscription(&mut controller, first);
+    let previous = controller.frame(None).unwrap().clone();
+    assert_eq!((previous.width(), previous.height()), (8, 7));
+    assert_eq!(previous.aspect_size(), (17, 13));
+    let key = controller.routes[&LiveWallpaperTarget::Default].key.clone();
+    let old_revision = controller.players[&key].revision;
+    let old_mailbox = controller.players[&key].mailbox.clone();
+    let late = controller.subscriptions().pop().unwrap();
+    targets.insert(LiveWallpaperTarget::Default, pixel_target(16, 12));
+    controller.reconcile(&settings, &[], false, &context, &targets);
+    let revision = controller.players[&key].revision;
+    assert_ne!(revision, old_revision);
+    assert!(!Arc::ptr_eq(
+        &old_mailbox,
+        &controller.players[&key].mailbox
+    ));
+    assert!(Arc::ptr_eq(controller.frame(None).unwrap(), &previous));
+    deliver_subscription(&mut controller, late);
+    assert!(
+        Arc::ptr_eq(controller.frame(None).unwrap(), &previous),
+        "retired worker cannot install pixels"
+    );
+    let current = controller.subscriptions().pop().unwrap();
+    deliver_subscription(&mut controller, current);
+    let frame = controller.frame(None).unwrap();
+    assert_eq!((frame.width(), frame.height()), (16, 13));
+    assert_eq!(frame.aspect_size(), (17, 13));
+    assert_eq!(previous.pixels(), [80, 120, 160, 255].repeat(8 * 7));
+    assert_eq!(controller.subscriptions().len(), 1);
+    controller.reconcile(&settings, &[], false, &context, &targets);
+    assert_eq!(
+        controller.players[&key].revision, revision,
+        "unchanged geometry keeps the producer"
+    );
+    assert!(
+        adapter
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|options| options.fps == WallpaperFrameRate::Source && options.looping)
+    );
+}
+
+#[test]
+fn paused_pixels_stay_frozen_through_growth_and_resume_uses_the_fitted_active_frame() {
+    let mut controller = LiveWallpaper::new(
+        Arc::new(FittedPlayback::default()),
+        crate::test_adapters::adapters().assets,
+    );
+    let left = MonitorId::new("DP-1").unwrap();
+    let right = MonitorId::new("DP-2").unwrap();
+    let monitors = [left.clone(), right.clone()];
+    let left_target = LiveWallpaperTarget::Monitor(left.clone());
+    let right_target = LiveWallpaperTarget::Monitor(right.clone());
+    let mut targets = BTreeMap::from([
+        (left_target.clone(), pixel_target(8, 6)),
+        (right_target, pixel_target(8, 6)),
+    ]);
+    let settings = LiveWallpapers {
+        default: Some(setting("/fixture/frozen.mp4")),
+        ..Default::default()
+    };
+    let mut context = WallpaperPlaybackContext::default();
+    controller.reconcile(&settings, &monitors, true, &context, &targets);
+    let subscription = controller.subscriptions().pop().unwrap();
+    deliver_subscription(&mut controller, subscription);
+    context.fullscreen_monitors.insert(left.clone());
+    controller.reconcile(&settings, &monitors, true, &context, &targets);
+    let held = controller.frame(Some(&left)).unwrap().clone();
+    assert!(held.stream_revision().is_none());
+    targets.insert(left_target.clone(), pixel_target(16, 12));
+    controller.reconcile(&settings, &monitors, true, &context, &targets);
+    let key = controller.routes[&left_target].key.clone();
+    assert_eq!(controller.players[&key].target, Some(pixel_target(16, 12)));
+    assert!(Arc::ptr_eq(controller.frame(Some(&left)).unwrap(), &held));
+    let subscription = controller.subscriptions().pop().unwrap();
+    deliver_subscription(&mut controller, subscription);
+    assert!(Arc::ptr_eq(controller.frame(Some(&left)).unwrap(), &held));
+    assert_eq!(held.pixels(), [80, 120, 160, 255].repeat(8 * 7));
+    let active = controller.frame(Some(&right)).unwrap().clone();
+    assert_eq!((active.width(), active.height()), (16, 13));
+    context.fullscreen_monitors.clear();
+    controller.reconcile(&settings, &monitors, true, &context, &targets);
+    assert!(Arc::ptr_eq(controller.frame(Some(&left)).unwrap(), &active));
+}
+
+#[test]
+fn desktop_uses_configured_physical_pixels_for_legacy_and_current_monitor_generations() {
+    use crate::desktop::{Desktop, Message as DesktopMessage};
+    use lucent_api::{Component, Density, DisplayOutput, OutputName};
+    let mut app = Desktop::new(crate::test_adapters::adapters());
+    app.settings.live_wallpapers.default = Some(setting("/fixture/output-fit.mp4"));
+    let settings = app.settings.clone();
+    let observed_target = |app: &Desktop| {
+        assert_eq!(app.live_wallpaper.players.len(), 1);
+        app.live_wallpaper.players.values().next().unwrap().target
+    };
+    let density = Density::new(150, 120).unwrap();
+    app.update(DesktopMessage::Ignore, &mut Effects::default());
+    assert_eq!(observed_target(&app), None, "no assumed startup viewport");
+    app.update(
+        DesktopMessage::Resize("background", 65., 37., density),
+        &mut Effects::default(),
+    );
+    assert_eq!(observed_target(&app), Some(pixel_target(82, 47)));
+    let id = MonitorId::new("DP-1").unwrap();
+    let output = |global| DisplayOutput {
+        global,
+        name: Some(OutputName::new("DP-1").unwrap()),
+        logical_size: Some((65, 37)),
+        integer_scale: 1,
+    };
+    app.update(
+        DesktopMessage::Outputs(vec![output(1)]),
+        &mut Effects::default(),
+    );
+    assert_eq!(
+        observed_target(&app),
+        None,
+        "named output waits for its own configure"
+    );
+    let route = app.monitors.connected[&id].route(&id);
+    app.update(
+        DesktopMessage::OnMonitor(
+            route.clone(),
+            Box::new(DesktopMessage::Resize("background", 65., 37., density)),
+        ),
+        &mut Effects::default(),
+    );
+    assert_eq!(observed_target(&app), Some(pixel_target(82, 47)));
+    let revision = app.live_wallpaper.players.values().next().unwrap().revision;
+    app.update(
+        DesktopMessage::Outputs(vec![output(1)]),
+        &mut Effects::default(),
+    );
+    assert_eq!(observed_target(&app), Some(pixel_target(82, 47)));
+    assert_eq!(
+        app.live_wallpaper.players.values().next().unwrap().revision,
+        revision,
+        "unchanged integer metadata must not replace fractional geometry"
+    );
+    app.update(
+        DesktopMessage::OnMonitor(
+            route.clone(),
+            Box::new(DesktopMessage::Resize("background", f32::NAN, 37., density)),
+        ),
+        &mut Effects::default(),
+    );
+    assert_eq!(observed_target(&app), Some(pixel_target(82, 47)));
+    app.update(
+        DesktopMessage::Outputs(vec![output(2)]),
+        &mut Effects::default(),
+    );
+    assert_eq!(
+        observed_target(&app),
+        None,
+        "a replacement protocol owner needs fresh geometry"
+    );
+    app.update(
+        DesktopMessage::OnMonitor(
+            route,
+            Box::new(DesktopMessage::Resize(
+                "background",
+                4096.,
+                4096.,
+                Density::ONE,
+            )),
+        ),
+        &mut Effects::default(),
+    );
+    assert_eq!(
+        observed_target(&app),
+        None,
+        "retired output cannot supply new demand"
+    );
+    let route = app.monitors.connected[&id].route(&id);
+    app.update(
+        DesktopMessage::OnMonitor(
+            route,
+            Box::new(DesktopMessage::Resize(
+                "background",
+                1920.,
+                1080.,
+                Density::ONE,
+            )),
+        ),
+        &mut Effects::default(),
+    );
+    assert_eq!(observed_target(&app), Some(pixel_target(1920, 1080)));
+    app.update(DesktopMessage::Outputs(vec![]), &mut Effects::default());
+    assert!(app.live_wallpaper.players.is_empty());
+    assert_eq!(
+        app.settings, settings,
+        "display fit never writes preferences"
+    );
 }
 #[test]
 fn per_monitor_disable_overrides_default_and_frame_submission_never_creates_an_idle_loop() {
@@ -521,7 +849,13 @@ fn per_monitor_disable_overrides_default_and_frame_submission_never_creates_an_i
     let mut disabled = setting("/fixture/default.mp4");
     disabled.enabled = false;
     settings.monitors.insert(id.clone(), disabled);
-    controller.reconcile(&settings, &[id], true, &WallpaperPlaybackContext::default());
+    controller.reconcile(
+        &settings,
+        &[id],
+        true,
+        &WallpaperPlaybackContext::default(),
+        &BTreeMap::new(),
+    );
     assert!(controller.players.is_empty());
     let mut effects = Effects::default();
     controller.update(Message::Open, &mut effects);
@@ -563,7 +897,13 @@ fn cancelled_import_and_decoder_error_keep_configuration_and_last_frame_separate
         default: Some(setting("/fixture/default.mp4")),
         ..Default::default()
     };
-    controller.reconcile(&settings, &[], false, &WallpaperPlaybackContext::default());
+    controller.reconcile(
+        &settings,
+        &[],
+        false,
+        &WallpaperPlaybackContext::default(),
+        &BTreeMap::new(),
+    );
     let key = controller.routes[&LiveWallpaperTarget::Default].key.clone();
     let revision = controller.players[&key].revision;
     let image = Arc::new(ImageStream::new().frame_rgba(1, 1, vec![255; 4]).unwrap());
@@ -672,6 +1012,7 @@ fn paused_profiles_keep_their_own_frame_across_fps_changes_and_stream_splitting(
         &[id.clone(), other.clone()],
         true,
         &WallpaperPlaybackContext::default(),
+        &BTreeMap::new(),
     );
     let original = put_frame(&mut controller, &target);
     let mut paused = settings.default.clone().unwrap();
@@ -682,6 +1023,7 @@ fn paused_profiles_keep_their_own_frame_across_fps_changes_and_stream_splitting(
         &[id.clone(), other.clone()],
         true,
         &WallpaperPlaybackContext::default(),
+        &BTreeMap::new(),
     );
     let held = controller.frame(Some(&id)).unwrap().clone();
     assert_eq!(held.pixels(), original.pixels());
@@ -700,6 +1042,7 @@ fn paused_profiles_keep_their_own_frame_across_fps_changes_and_stream_splitting(
         &[id.clone(), other.clone()],
         true,
         &WallpaperPlaybackContext::default(),
+        &BTreeMap::new(),
     );
     assert!(Arc::ptr_eq(controller.frame(Some(&id)).unwrap(), &held));
     assert!(
@@ -735,6 +1078,7 @@ fn retry_preserves_last_good_frame_retires_old_notices_and_is_selected() {
         &[id.clone(), other.clone()],
         true,
         &WallpaperPlaybackContext::default(),
+        &BTreeMap::new(),
     );
     let image = put_frame(&mut controller, &target);
     let key = controller.routes[&target].key.clone();
@@ -799,7 +1143,13 @@ fn restored_paused_profiles_prepare_one_poster_without_starting_playback_or_idle
         default: Some(profile),
         ..Default::default()
     };
-    controller.reconcile(&settings, &[], false, &WallpaperPlaybackContext::default());
+    controller.reconcile(
+        &settings,
+        &[],
+        false,
+        &WallpaperPlaybackContext::default(),
+        &BTreeMap::new(),
+    );
     let mut subscriptions = controller.subscriptions();
     assert_eq!(subscriptions.len(), 1);
     let notices = Arc::new(Mutex::new(Vec::new()));
@@ -835,12 +1185,12 @@ fn fullscreen_freezes_one_output_without_stopping_or_repainting_its_visible_peer
     };
     let original_settings = settings.clone();
     let mut context = WallpaperPlaybackContext::default();
-    controller.reconcile(&settings, &monitors, true, &context);
+    controller.reconcile(&settings, &monitors, true, &context, &BTreeMap::new());
     let original = put_frame(&mut controller, &left_target);
     let key = controller.routes[&left_target].key.clone();
     let revision = controller.players[&key].revision;
     context.fullscreen_monitors.insert(left.clone());
-    controller.reconcile(&settings, &monitors, true, &context);
+    controller.reconcile(&settings, &monitors, true, &context, &BTreeMap::new());
     assert_eq!(controller.players.len(), 1);
     assert_eq!(controller.subscriptions().len(), 1);
     assert_eq!(controller.players[&key].revision, revision);
@@ -867,7 +1217,7 @@ fn fullscreen_freezes_one_output_without_stopping_or_repainting_its_visible_peer
     assert!(
         matches!(notice, Some(Intent::FrameChanged(targets)) if targets == [right_target.clone()])
     );
-    controller.reconcile(&settings, &monitors, true, &context);
+    controller.reconcile(&settings, &monitors, true, &context, &BTreeMap::new());
     assert!(Arc::ptr_eq(controller.frame(Some(&left)).unwrap(), &held));
     assert!(Arc::ptr_eq(controller.frame(Some(&right)).unwrap(), &later));
     assert_eq!(
@@ -884,7 +1234,7 @@ fn fullscreen_freezes_one_output_without_stopping_or_repainting_its_visible_peer
     );
 
     context.fullscreen_monitors.insert(right.clone());
-    controller.reconcile(&settings, &monitors, true, &context);
+    controller.reconcile(&settings, &monitors, true, &context, &BTreeMap::new());
     assert!(controller.subscriptions().is_empty());
     assert_ne!(controller.players[&key].revision, revision);
     assert!(
@@ -904,11 +1254,11 @@ fn fullscreen_freezes_one_output_without_stopping_or_repainting_its_visible_peer
         "observations must never persist a manual pause"
     );
     context.fullscreen_monitors.remove(&right);
-    controller.reconcile(&settings, &monitors, true, &context);
+    controller.reconcile(&settings, &monitors, true, &context, &BTreeMap::new());
     assert_eq!(controller.subscriptions().len(), 1);
     assert!(Arc::ptr_eq(controller.frame(Some(&left)).unwrap(), &held));
     settings.policy.pause_when_fullscreen = false;
-    controller.reconcile(&settings, &monitors, true, &context);
+    controller.reconcile(&settings, &monitors, true, &context, &BTreeMap::new());
     assert!(
         controller
             .routes
@@ -916,7 +1266,7 @@ fn fullscreen_freezes_one_output_without_stopping_or_repainting_its_visible_peer
             .all(|route| route.held.is_none() && route.pause.is_none())
     );
     assert_eq!(controller.subscriptions().len(), 1);
-    controller.reconcile(&settings, &[], true, &context);
+    controller.reconcile(&settings, &[], true, &context, &BTreeMap::new());
     assert!(controller.routes.is_empty() && controller.players.is_empty());
 }
 

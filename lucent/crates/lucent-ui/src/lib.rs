@@ -1514,6 +1514,27 @@ mod tests {
         }
     }
     #[test]
+    fn rounded_stream_pixel_sizes_keep_original_cover_and_contain_geometry() {
+        let source = ImageData::from_rgba("source aspect", 65, 37, vec![255; 65 * 37 * 4]).unwrap();
+        let stream = lucent_api::ImageStream::new();
+        let frame = stream
+            .frame_rgba_with_aspect(16, 10, vec![255; 16 * 10 * 4], (65, 37))
+            .unwrap();
+        let layout = Layout::new(Arc::new(vec![]));
+        for fit in [ImageFit::Cover, ImageFit::Contain] {
+            let geometry = |image| {
+                let mut root = Element::<()>::image(Arc::new(image)).size(23., 17.);
+                root.style.image_fit = fit;
+                let scene = layout.build(&root, 23., 17., &Interaction::default(), 0.);
+                match &scene.paint[0] {
+                    Paint::Image { rect, uv, .. } => (*rect, *uv),
+                    _ => panic!("expected an image primitive"),
+                }
+            };
+            assert_eq!(geometry(source.clone()), geometry(frame.clone()));
+        }
+    }
+    #[test]
     fn rounded_hit_test_leaves_corners_click_through() {
         let h: Hit<()> = Hit {
             id: "a".into(),

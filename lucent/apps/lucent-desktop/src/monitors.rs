@@ -19,6 +19,8 @@ pub struct Monitor {
     pub viewport: (f32, f32),
     pub scale: u32,
     pub density: lucent_api::Density,
+    /// Only a background configure supplies authoritative playback geometry.
+    pub background_configured: bool,
     pub widgets: widgets::Host,
 }
 impl Monitor {
@@ -113,6 +115,7 @@ impl Monitors {
                         scale: output.integer_scale,
                         density: lucent_api::Density::integer(output.integer_scale)
                             .unwrap_or_default(),
+                        background_configured: false,
                         widgets: widgets::Host::default(),
                     },
                 );
