@@ -174,6 +174,15 @@ def cover_size(width, height):
     return [(3840 * height + 2159) // 2160, height]
 
 
+def nominal_refresh_matches(reported, advertised):
+    # availableModes rounds this VM's 60.004 Hz mode to "60.00Hz".
+    # Compare at the advertised precision, retaining exact original-output
+    # restoration below instead of inventing precision that the label lacks.
+    precision = len(advertised.partition('.')[2])
+    return (math.isfinite(reported)
+            and f'{reported:.{precision}f}' == f'{float(advertised):.{precision}f}')
+
+
 def current(monitor, width, height, scale):
     native = monitors()
     require(native['name'] == monitor['name'] and native['x'] == monitor['x']
@@ -181,7 +190,8 @@ def current(monitor, width, height, scale):
             'same_native_output_identity_and_position')
     require((native['width'], native['height']) == (width, height)
             and math.isclose(native['scale'], scale, abs_tol=.0001)
-            and math.isclose(native['refreshRate'], monitor['refreshRate'], abs_tol=.001),
+            and nominal_refresh_matches(native['refreshRate'],
+                                        mode_for(monitor, width, height).split('@', 1)[1]),
             'native_monitor_mode_and_scale')
     state = inspect()
     background = find_surface(state, 'background')
@@ -248,7 +258,7 @@ def mode_for(monitor, width, height):
     for mode in monitor['availableModes']:
         match = re.fullmatch(r'(\d+)x(\d+)@([0-9]+(?:\.[0-9]+)?)(?:Hz)?', mode)
         if (match and (int(match[1]), int(match[2])) == (width, height)
-                and math.isclose(float(match[3]), monitor['refreshRate'], abs_tol=.01)):
+                and nominal_refresh_matches(monitor['refreshRate'], match[3])):
             choices.append(f'{width}x{height}@{match[3]}')
     require(len(set(choices)) == 1, 'advertised_exact_refresh_mode_available')
     return choices[0]

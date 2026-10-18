@@ -34,7 +34,6 @@ fn video_fit_uses_ffmpeg_alpha_and_palette_descriptors_conservatively() {
         Pixel::YUVA420P,
         Pixel::GBRAP,
         Pixel::PAL8,
-        Pixel::None,
     ] {
         assert_eq!(conversion_dimensions(format, 4, 2, target).unwrap(), (4, 2));
     }
@@ -51,6 +50,68 @@ fn video_fit_uses_ffmpeg_alpha_and_palette_descriptors_conservatively() {
     }
     assert!(conversion_dimensions(Pixel::RGBA, 4097, 1, target).is_err());
     assert!(conversion_dimensions(Pixel::YUV420P, 4097, 1, target).is_err());
+    assert!(conversion_dimensions(Pixel::None, 4, 2, target).is_err());
+}
+
+#[test]
+fn video_conversion_rejects_missing_decoded_format_before_native_context_creation() {
+    let mut frame = ffmpeg::util::frame::video::Video::empty();
+    frame.set_width(14);
+    frame.set_height(10);
+    frame.set_format(ffmpeg::format::Pixel::None);
+    assert!(FrameConverter::new(&frame, None).is_err());
+    assert!(FrameConverter::new(&ffmpeg::util::frame::video::Video::empty(), None).is_err());
+}
+
+#[test]
+fn video_conversion_uses_decoded_frame_contract_and_preserves_owned_odd_rows() {
+    use ffmpeg::{format::Pixel, util::frame::video::Video};
+    let mut frame = Video::new(Pixel::YUV420P, 14, 10);
+    frame.data_mut(0).fill(81);
+    frame.data_mut(1).fill(90);
+    frame.data_mut(2).fill(240);
+    let mut converter =
+        FrameConverter::new(&frame, Some(WallpaperPixelTarget::new(9, 5).unwrap())).unwrap();
+    let first = converter.convert(&frame, Duration::ZERO).unwrap();
+    assert_eq!(first.dimensions(), (9, 7));
+    assert_eq!(first.aspect_size(), (14, 10));
+    let first_bytes = first.into_rgba().2;
+    let first_snapshot = first_bytes.clone();
+    assert_eq!(first_bytes.len(), 9 * 7 * 4);
+    assert!(
+        first_bytes
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|pixel| pixel[0] > 200 && pixel[1] < 35 && pixel[2] < 35 && pixel[3] == 255)
+    );
+    // Reusing FFmpeg's private buffer cannot mutate a published older frame.
+    frame.data_mut(0).fill(145);
+    frame.data_mut(1).fill(54);
+    frame.data_mut(2).fill(34);
+    let second = converter
+        .convert(&frame, Duration::from_millis(17))
+        .unwrap();
+    assert_ne!(second.into_rgba().2, first_bytes);
+    assert_eq!(first_bytes, first_snapshot);
+    // A new producer gets a fresh contract and conversion allocation. Changing
+    // format or dimensions inside one producer still fails before sws_scale.
+    for target in [None, Some(WallpaperPixelTarget::new(9, 5).unwrap()), None] {
+        let mut replacement = FrameConverter::new(&frame, target).unwrap();
+        assert_eq!(
+            replacement
+                .convert(&frame, Duration::ZERO)
+                .unwrap()
+                .dimensions(),
+            if target.is_some() { (9, 7) } else { (14, 10) }
+        );
+    }
+    for changed in [
+        Video::new(Pixel::YUV420P, 16, 10),
+        Video::new(Pixel::RGBA, 14, 10),
+    ] {
+        assert!(converter.convert(&changed, Duration::ZERO).is_err());
+    }
 }
 #[test]
 fn video_cap_is_anchored_without_rounding_down_to_a_divisor_or_upsampling() {
@@ -352,6 +413,47 @@ fn video_native_mp4_webm_and_gif_import_and_decode_through_the_real_port() {
         assert_eq!(count, 3);
         assert!(timestamps.windows(2).all(|pair| pair[0] <= pair[1]));
     }
+}
+
+#[test]
+fn video_native_conversion_waits_for_decoded_format_when_codec_metadata_is_unknown() {
+    let root = Directory::new();
+    let file = fixture(&root.0, "mp4");
+    let mut input = ffmpeg::format::input(&file).unwrap();
+    let stream = input.streams().best(ffmpeg::media::Type::Video).unwrap();
+    let index = stream.index();
+    let mut parameters = stream.parameters().clone();
+    // SAFETY: This is an owned copy, changed before creating/opening a decoder.
+    // AVCodecParameters::format explicitly permits -1 for unknown pixel format.
+    unsafe {
+        (*parameters.as_mut_ptr()).format = -1;
+    }
+    let context = ffmpeg::codec::context::Context::from_parameters(parameters).unwrap();
+    let mut decoder = context.decoder().video().unwrap();
+    assert_eq!(decoder.format(), ffmpeg::format::Pixel::None);
+    let mut converted = false;
+    for (stream, packet) in input.packets() {
+        if stream.index() != index {
+            continue;
+        }
+        decoder.send_packet(&packet).unwrap();
+        let mut frame = ffmpeg::util::frame::video::Video::empty();
+        if decoder.receive_frame(&mut frame).is_ok() {
+            assert_ne!(frame.format(), ffmpeg::format::Pixel::None);
+            let mut converter =
+                FrameConverter::new(&frame, Some(WallpaperPixelTarget::new(9, 5).unwrap()))
+                    .unwrap();
+            let output = converter.convert(&frame, Duration::ZERO).unwrap();
+            assert_eq!(output.dimensions(), (9, 7));
+            assert_eq!(output.aspect_size(), (16, 12));
+            converted = true;
+            break;
+        }
+    }
+    assert!(
+        converted,
+        "unknown metadata must not prevent decoding the first frame"
+    );
 }
 #[test]
 fn video_native_display_fit_preserves_source_poster_pixels_and_timestamps() {

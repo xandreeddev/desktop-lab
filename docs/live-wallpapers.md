@@ -229,8 +229,9 @@ For formats proven opaque by FFmpeg's pixel descriptor, the adapter converts
 only the RGBA destination to the smallest uniformly scaled size sufficient to
 cover both target edges, with checked outward rounding and no upscaling.
 Alpha-capable or paletted formats retain source-sized conversion, even when a
-particular frame happens to be opaque. An unavailable format descriptor also
-keeps source size. FFmpeg's `AV_PIX_FMT_FLAG_ALPHA` contract describes these
+particular frame happens to be opaque. A missing or unsupported decoded pixel
+format is rejected before native scaler construction. FFmpeg's
+`AV_PIX_FMT_FLAG_ALPHA` contract describes these
 values as straight alpha; resampling before the SDK premultiplies can introduce
 invisible RGB into visible edges. Source-sized conversion preserves the existing
 premultiply then GPU-filter path. This conservative policy means GIF and
@@ -241,6 +242,15 @@ Source aspect metadata passes through `MediaFrame` into the
 prepared SDK image, so rounding odd dimensions does not alter cover geometry.
 The existing private FFmpeg frame and owned row copy remain; published bytes are
 never borrowed from conversion scratch.
+
+The first successfully decoded frame establishes the source dimensions and
+pixel format. Codec metadata before packet parsing can still report an unknown
+format; it never authorizes constructing a scaler. Every later decoded frame,
+including one skipped by the frame-rate policy, must match that established
+contract. A new playback generation creates its own converter. Missing format
+descriptors and unsupported input/output formats fail before FFmpeg's conversion
+context is entered; this avoids the FFmpeg 9 colorspace assertion path for an
+unknown pixel format.
 
 A changed target retires the producer generation and its latest-frame mailbox.
 The last good immutable image remains visible while its replacement prepares;
@@ -358,13 +368,15 @@ FPS cap schedule media frames independently of UI component motion.
 
 ## Evidence and remaining acceptance
 
-The integrated display-fit source passes 662 regular Rust tests, strict Clippy,
+The integrated display-fit source passes 665 regular Rust tests, strict Clippy,
 95 Python checks, generated tokens, three streamed-image GPU checks, 56 unchanged
 live-wallpaper visual comparisons and both documentation prefixes. Focused
 tests cover odd source dimensions and aspect,
 fractional density, differently shaped shared outputs, independent profiles,
 resize/hotplug generation retirement, retained paused pixels and unchanged
-source timing. A tiny two-frame transparent GIF and descriptor checks cover
+source timing. A real decoder with unknown initial format, missing-format
+rejection, odd-row ownership and repeated converter recreation cover scaler
+admission and lifetime. A tiny two-frame transparent GIF and descriptor checks cover
 source-sized alpha conversion, contrasting invisible RGB and premultiplied edge
 coverage. Native resize/density acceptance and compositor alpha-edge acceptance
 remain separate. Repeat the
