@@ -188,23 +188,78 @@ impl LiveWallpapers {
             .or(self.default.as_ref())
     }
 }
+/// Transient physical pixel demand, independent of monitor and renderer types.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WallpaperPixelTarget {
+    width: u32,
+    height: u32,
+}
+impl WallpaperPixelTarget {
+    pub fn new(width: u32, height: u32) -> Result<Self> {
+        if width == 0 || height == 0 {
+            return Err(DomainError::Invalid(
+                "Wallpaper pixel target must have positive dimensions".into(),
+            ));
+        }
+        Ok(Self { width, height })
+    }
+    pub fn size(self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+    /// Retain sufficient pixels on both edges for cover presentation. Scale
+    /// uniformly, round outward and never enlarge or admit an oversized source.
+    pub fn cover_size(self, source_width: u32, source_height: u32) -> Result<(u32, u32)> {
+        media_frame_byte_size(source_width, source_height)?;
+        if self.width >= source_width || self.height >= source_height {
+            return Ok((source_width, source_height));
+        }
+        let invalid_size = || DomainError::Invalid("Wallpaper cover size is invalid".into());
+        let width_demand = u64::from(self.width)
+            .checked_mul(u64::from(source_height))
+            .ok_or_else(invalid_size)?;
+        let height_demand = u64::from(self.height)
+            .checked_mul(u64::from(source_width))
+            .ok_or_else(invalid_size)?;
+        let (numerator, denominator) = if width_demand >= height_demand {
+            (u64::from(self.width), u64::from(source_width))
+        } else {
+            (u64::from(self.height), u64::from(source_height))
+        };
+        let scaled_edge = |edge| {
+            u64::from(edge)
+                .checked_mul(numerator)
+                .and_then(|value| value.checked_add(denominator - 1))
+                .map(|value| value / denominator)
+                .and_then(|value| u32::try_from(value).ok())
+                .ok_or_else(invalid_size)
+        };
+        Ok((scaled_edge(source_width)?, scaled_edge(source_height)?))
+    }
+}
 #[derive(Debug)]
 pub struct MediaFrame {
     width: u32,
     height: u32,
+    aspect_size: (u32, u32),
     pixels: Vec<u8>,
     pub timestamp: Duration,
 }
 impl MediaFrame {
     pub fn rgba(width: u32, height: u32, pixels: Vec<u8>, timestamp: Duration) -> Result<Self> {
-        let bytes = u64::from(width) * u64::from(height) * 4;
-        if width == 0
-            || height == 0
-            || width > 4096
-            || height > 4096
-            || bytes > 64 * 1024 * 1024
-            || bytes != pixels.len() as u64
-        {
+        Self::rgba_with_aspect(width, height, pixels, (width, height), timestamp)
+    }
+    /// Keep the original source aspect when outward rounding changes the
+    /// converted pixel dimensions. Both remain within the same media envelope.
+    pub fn rgba_with_aspect(
+        width: u32,
+        height: u32,
+        pixels: Vec<u8>,
+        aspect_size: (u32, u32),
+        timestamp: Duration,
+    ) -> Result<Self> {
+        let bytes = media_frame_byte_size(width, height)?;
+        media_frame_byte_size(aspect_size.0, aspect_size.1)?;
+        if bytes != pixels.len() as u64 {
             return Err(DomainError::Invalid(
                 "Decoded wallpaper frame exceeds the media envelope".into(),
             ));
@@ -212,6 +267,7 @@ impl MediaFrame {
         Ok(Self {
             width,
             height,
+            aspect_size,
             pixels,
             timestamp,
         })
@@ -219,20 +275,47 @@ impl MediaFrame {
     pub fn dimensions(&self) -> (u32, u32) {
         (self.width, self.height)
     }
+    pub fn aspect_size(&self) -> (u32, u32) {
+        self.aspect_size
+    }
     pub fn into_rgba(self) -> (u32, u32, Vec<u8>) {
         (self.width, self.height, self.pixels)
+    }
+    pub fn into_rgba_with_aspect(self) -> (u32, u32, Vec<u8>, (u32, u32)) {
+        (self.width, self.height, self.pixels, self.aspect_size)
+    }
+}
+fn media_frame_byte_size(width: u32, height: u32) -> Result<u64> {
+    let bytes = u64::from(width)
+        .checked_mul(u64::from(height))
+        .and_then(|value| value.checked_mul(4));
+    match bytes {
+        Some(bytes)
+            if width > 0
+                && height > 0
+                && width <= 4096
+                && height <= 4096
+                && bytes <= 64 * 1024 * 1024 =>
+        {
+            Ok(bytes)
+        }
+        _ => Err(DomainError::Invalid(
+            "Decoded wallpaper frame exceeds the media envelope".into(),
+        )),
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PlaybackOptions {
     pub fps: WallpaperFrameRate,
     pub looping: bool,
+    pub target: Option<WallpaperPixelTarget>,
 }
 impl Default for PlaybackOptions {
     fn default() -> Self {
         Self {
             fps: WallpaperFrameRate::default(),
             looping: true,
+            target: None,
         }
     }
 }
@@ -275,6 +358,73 @@ mod tests {
         );
     }
     #[test]
+    fn pixel_targets_retain_cover_density_without_enlarging_sources() {
+        for (target, source, expected) in [
+            ((1920, 1080), (3840, 2160), (1920, 1080)),
+            ((1080, 1920), (2160, 3840), (1080, 1920)),
+            ((1080, 1920), (3840, 2160), (3414, 1920)),
+            ((1920, 1080), (2160, 3840), (1920, 3414)),
+            ((16, 9), (65, 37), (16, 10)),
+            ((16, 10), (65, 37), (18, 10)),
+            ((1920, 1080), (16, 9), (16, 9)),
+            ((1, 1), (4096, 4095), (2, 1)),
+            ((1, 1), (4096, 1), (4096, 1)),
+            ((u32::MAX, u32::MAX), (4096, 4096), (4096, 4096)),
+        ] {
+            let target = WallpaperPixelTarget::new(target.0, target.1).unwrap();
+            assert_eq!(target.cover_size(source.0, source.1).unwrap(), expected);
+        }
+        for target in [(1, 1), (u32::MAX, 1), (1, u32::MAX)] {
+            let value = WallpaperPixelTarget::new(target.0, target.1).unwrap();
+            assert_eq!(value.size(), target);
+        }
+    }
+    #[test]
+    fn display_demand_cannot_relax_source_admission() {
+        assert!(WallpaperPixelTarget::new(0, 1).is_err());
+        assert!(WallpaperPixelTarget::new(1, 0).is_err());
+        let target = WallpaperPixelTarget::new(1, 1).unwrap();
+        for (width, height) in [(0, 1), (1, 0), (4097, 1), (1, 4097), (u32::MAX, u32::MAX)] {
+            assert!(target.cover_size(width, height).is_err());
+            assert!(
+                MediaFrame::rgba_with_aspect(1, 1, vec![0; 4], (width, height), Duration::ZERO)
+                    .is_err()
+            );
+            assert!(
+                MediaFrame::rgba_with_aspect(width, height, vec![0; 4], (1, 1), Duration::ZERO)
+                    .is_err()
+            );
+        }
+        assert!(
+            MediaFrame::rgba_with_aspect(1, 1, vec![0; 3], (4096, 4096), Duration::ZERO).is_err()
+        );
+        assert_eq!(
+            MediaFrame::rgba_with_aspect(1, 1, vec![0; 4], (4096, 4096), Duration::ZERO)
+                .unwrap()
+                .aspect_size(),
+            (4096, 4096)
+        );
+    }
+    #[test]
+    fn media_frames_preserve_original_aspect_and_owned_pixels() {
+        let pixels = [200, 100, 50, 128].repeat(16 * 10);
+        let allocation = pixels.as_ptr();
+        let timestamp = Duration::from_millis(125);
+        let frame = MediaFrame::rgba_with_aspect(16, 10, pixels, (65, 37), timestamp).unwrap();
+        assert_eq!(frame.dimensions(), (16, 10));
+        assert_eq!(frame.aspect_size(), (65, 37));
+        assert_eq!(frame.timestamp, timestamp);
+        let (width, height, pixels, aspect) = frame.into_rgba_with_aspect();
+        assert_eq!((width, height), (16, 10));
+        assert_eq!(aspect, (65, 37));
+        assert_eq!(pixels.as_ptr(), allocation);
+        assert_eq!(pixels, [200, 100, 50, 128].repeat(16 * 10));
+
+        let legacy = MediaFrame::rgba(2, 1, vec![80; 8], Duration::ZERO).unwrap();
+        assert_eq!(legacy.aspect_size(), (2, 1));
+        assert_eq!(legacy.into_rgba(), (2, 1, vec![80; 8]));
+    }
+    #[test]
     fn frame_rate_defaults_to_source_and_retains_validated_caps_and_labels() {
         for fps in [1, 15, 30, 60] {
             let rate = WallpaperFrameRate::Capped(WallpaperFps::new(fps).unwrap());
@@ -287,6 +437,7 @@ mod tests {
         }
         assert_eq!(WallpaperFrameRate::default(), WallpaperFrameRate::Source);
         assert_eq!(PlaybackOptions::default().fps, WallpaperFrameRate::Source);
+        assert_eq!(PlaybackOptions::default().target, None);
         assert_eq!(WallpaperFrameRate::Source.cap(), None);
         assert_eq!(WallpaperFrameRate::Source.to_string(), "source");
     }

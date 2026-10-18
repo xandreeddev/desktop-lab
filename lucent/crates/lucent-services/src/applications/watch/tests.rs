@@ -7,9 +7,10 @@ fn catalog_explicit_source_rejects_relative_roots() {
     );
 }
 use std::{
+    os::unix::fs::DirBuilderExt,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc,
     },
     thread,
@@ -17,13 +18,20 @@ use std::{
 struct Directory(PathBuf);
 impl Directory {
     fn new() -> Self {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let p = std::env::temp_dir().join(format!("lucent-catalog-{}-{nonce}", std::process::id()));
-        fs::create_dir(&p).unwrap();
-        Self(p)
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        for _ in 0..1024 {
+            let path = std::env::temp_dir().join(format!(
+                "lucent-catalog-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            match fs::DirBuilder::new().mode(0o700).create(&path) {
+                Ok(()) => return Self(path),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => panic!("Catalog fixture directory creation failed: {error}"),
+            }
+        }
+        panic!("Catalog fixture directory allocation exhausted");
     }
 }
 impl Drop for Directory {

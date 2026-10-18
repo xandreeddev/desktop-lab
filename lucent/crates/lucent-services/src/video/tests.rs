@@ -22,6 +22,98 @@ fn video_source_clock_preserves_actual_integer_and_fractional_cadences() {
     }
 }
 #[test]
+fn video_fit_uses_ffmpeg_alpha_and_palette_descriptors_conservatively() {
+    use ffmpeg::format::Pixel;
+    let target = Some(WallpaperPixelTarget::new(3, 1).unwrap());
+    for format in [
+        Pixel::RGBA,
+        Pixel::BGRA,
+        Pixel::ARGB,
+        Pixel::ABGR,
+        Pixel::YA8,
+        Pixel::YUVA420P,
+        Pixel::GBRAP,
+        Pixel::PAL8,
+    ] {
+        assert_eq!(conversion_dimensions(format, 4, 2, target).unwrap(), (4, 2));
+    }
+    for format in [
+        Pixel::YUV420P,
+        Pixel::YUVJ420P,
+        Pixel::YUV444P,
+        Pixel::RGB24,
+        Pixel::BGR24,
+        Pixel::GRAY8,
+    ] {
+        assert_eq!(conversion_dimensions(format, 4, 2, target).unwrap(), (3, 2));
+        assert_eq!(conversion_dimensions(format, 4, 2, None).unwrap(), (4, 2));
+    }
+    assert!(conversion_dimensions(Pixel::RGBA, 4097, 1, target).is_err());
+    assert!(conversion_dimensions(Pixel::YUV420P, 4097, 1, target).is_err());
+    assert!(conversion_dimensions(Pixel::None, 4, 2, target).is_err());
+}
+
+#[test]
+fn video_conversion_rejects_missing_decoded_format_before_native_context_creation() {
+    let mut frame = ffmpeg::util::frame::video::Video::empty();
+    frame.set_width(14);
+    frame.set_height(10);
+    frame.set_format(ffmpeg::format::Pixel::None);
+    assert!(FrameConverter::new(&frame, None).is_err());
+    assert!(FrameConverter::new(&ffmpeg::util::frame::video::Video::empty(), None).is_err());
+}
+
+#[test]
+fn video_conversion_uses_decoded_frame_contract_and_preserves_owned_odd_rows() {
+    use ffmpeg::{format::Pixel, util::frame::video::Video};
+    let mut frame = Video::new(Pixel::YUV420P, 14, 10);
+    frame.data_mut(0).fill(81);
+    frame.data_mut(1).fill(90);
+    frame.data_mut(2).fill(240);
+    let mut converter =
+        FrameConverter::new(&frame, Some(WallpaperPixelTarget::new(9, 5).unwrap())).unwrap();
+    let first = converter.convert(&frame, Duration::ZERO).unwrap();
+    assert_eq!(first.dimensions(), (9, 7));
+    assert_eq!(first.aspect_size(), (14, 10));
+    let first_bytes = first.into_rgba().2;
+    let first_snapshot = first_bytes.clone();
+    assert_eq!(first_bytes.len(), 9 * 7 * 4);
+    assert!(
+        first_bytes
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|pixel| pixel[0] > 200 && pixel[1] < 35 && pixel[2] < 35 && pixel[3] == 255)
+    );
+    // Reusing FFmpeg's private buffer cannot mutate a published older frame.
+    frame.data_mut(0).fill(145);
+    frame.data_mut(1).fill(54);
+    frame.data_mut(2).fill(34);
+    let second = converter
+        .convert(&frame, Duration::from_millis(17))
+        .unwrap();
+    assert_ne!(second.into_rgba().2, first_bytes);
+    assert_eq!(first_bytes, first_snapshot);
+    // A new producer gets a fresh contract and conversion allocation. Changing
+    // format or dimensions inside one producer still fails before sws_scale.
+    for target in [None, Some(WallpaperPixelTarget::new(9, 5).unwrap()), None] {
+        let mut replacement = FrameConverter::new(&frame, target).unwrap();
+        assert_eq!(
+            replacement
+                .convert(&frame, Duration::ZERO)
+                .unwrap()
+                .dimensions(),
+            if target.is_some() { (9, 7) } else { (14, 10) }
+        );
+    }
+    for changed in [
+        Video::new(Pixel::YUV420P, 16, 10),
+        Video::new(Pixel::RGBA, 14, 10),
+    ] {
+        assert!(converter.convert(&changed, Duration::ZERO).is_err());
+    }
+}
+#[test]
 fn video_cap_is_anchored_without_rounding_down_to_a_divisor_or_upsampling() {
     for (source, cap, expected) in [
         (30u32, 30u8, 30usize),
@@ -322,6 +414,217 @@ fn video_native_mp4_webm_and_gif_import_and_decode_through_the_real_port() {
         assert!(timestamps.windows(2).all(|pair| pair[0] <= pair[1]));
     }
 }
+
+#[test]
+fn video_native_conversion_waits_for_decoded_format_when_codec_metadata_is_unknown() {
+    let root = Directory::new();
+    let file = fixture(&root.0, "mp4");
+    let mut input = ffmpeg::format::input(&file).unwrap();
+    let stream = input.streams().best(ffmpeg::media::Type::Video).unwrap();
+    let index = stream.index();
+    let mut parameters = stream.parameters().clone();
+    // SAFETY: This is an owned copy, changed before creating/opening a decoder.
+    // AVCodecParameters::format explicitly permits -1 for unknown pixel format.
+    unsafe {
+        (*parameters.as_mut_ptr()).format = -1;
+    }
+    let context = ffmpeg::codec::context::Context::from_parameters(parameters).unwrap();
+    let mut decoder = context.decoder().video().unwrap();
+    assert_eq!(decoder.format(), ffmpeg::format::Pixel::None);
+    let mut converted = false;
+    for (stream, packet) in input.packets() {
+        if stream.index() != index {
+            continue;
+        }
+        decoder.send_packet(&packet).unwrap();
+        let mut frame = ffmpeg::util::frame::video::Video::empty();
+        if decoder.receive_frame(&mut frame).is_ok() {
+            assert_ne!(frame.format(), ffmpeg::format::Pixel::None);
+            let mut converter =
+                FrameConverter::new(&frame, Some(WallpaperPixelTarget::new(9, 5).unwrap()))
+                    .unwrap();
+            let output = converter.convert(&frame, Duration::ZERO).unwrap();
+            assert_eq!(output.dimensions(), (9, 7));
+            assert_eq!(output.aspect_size(), (16, 12));
+            converted = true;
+            break;
+        }
+    }
+    assert!(
+        converted,
+        "unknown metadata must not prevent decoding the first frame"
+    );
+}
+#[test]
+fn video_native_display_fit_preserves_source_poster_pixels_and_timestamps() {
+    for extension in ["mp4", "webm", "gif"] {
+        let root = Directory::new();
+        let file = fixture(&root.0, extension);
+        let source = fs::read(&file).unwrap();
+        let adapter = NativeVideoWallpapers {
+            state: root.0.join("store"),
+            library: root.0.clone(),
+        };
+        let asset = adapter
+            .prepare(&Wallpaper {
+                path: file.to_string_lossy().into(),
+                name: "Display fit fixture".into(),
+            })
+            .unwrap();
+        let poster = fs::read(&asset.poster.path).unwrap();
+        assert_eq!(
+            image::image_dimensions(&asset.poster.path).unwrap(),
+            (16, 12)
+        );
+        let mut reference_timestamps = vec![];
+        for target in [
+            None,
+            Some(WallpaperPixelTarget::new(8, 5).unwrap()),
+            Some(WallpaperPixelTarget::new(32, 24).unwrap()),
+        ] {
+            let mut timestamps = vec![];
+            adapter.play(
+                &asset,
+                PlaybackOptions {
+                    target,
+                    looping: false,
+                    ..Default::default()
+                },
+                &mut |frame| {
+                    let frame = frame.unwrap();
+                    timestamps.push(frame.timestamp);
+                    assert_eq!(frame.aspect_size(), (16, 12));
+                    let (width, height, rgba) = frame.into_rgba();
+                    assert_eq!(
+                        (width, height),
+                        if extension != "gif" && target.is_some_and(|t| t.size() == (8, 5)) {
+                            (8, 6)
+                        } else {
+                            (16, 12)
+                        }
+                    );
+                    assert_eq!(rgba.len(), width as usize * height as usize * 4);
+                    assert!(rgba.as_chunks::<4>().0.iter().all(|pixel| pixel[0] > 200
+                        && pixel[1] < 35
+                        && pixel[2] < 35
+                        && pixel[3] == 255));
+                    true
+                },
+                Arc::new(Never),
+            );
+            assert_eq!(timestamps.len(), 3);
+            if target.is_none() {
+                reference_timestamps = timestamps;
+            } else {
+                assert_eq!(
+                    timestamps, reference_timestamps,
+                    "display size must not change media time"
+                );
+            }
+        }
+        assert_eq!(fs::read(&file).unwrap(), source);
+        assert_eq!(fs::read(&asset.path).unwrap(), source);
+        assert_eq!(fs::read(&asset.poster.path).unwrap(), poster);
+        assert_eq!(fs::read_dir(&adapter.state).unwrap().count(), 1);
+    }
+}
+
+fn transparent_edge_gif(path: &Path) {
+    // Two 4×2 frames: opaque red beside transparent contrasting green. A clear
+    // code before each palette index keeps every LZW code three bits wide.
+    let mut data = b"GIF89a\x04\0\x02\0\x80\x01\0\xff\0\0\0\xff\0".to_vec();
+    let mut compressed = vec![];
+    let (mut bits, mut used) = (0u32, 0u32);
+    for code in [0u32, 0, 1, 1, 0, 0, 1, 1]
+        .into_iter()
+        .flat_map(|index| [4, index])
+        .chain([5])
+    {
+        bits |= code << used;
+        used += 3;
+        while used >= 8 {
+            compressed.push(bits as u8);
+            bits >>= 8;
+            used -= 8;
+        }
+    }
+    if used > 0 {
+        compressed.push(bits as u8);
+    }
+    for _ in 0..2 {
+        // Transparent palette index 1, a 100-ms duration, then a full frame.
+        data.extend_from_slice(b"\x21\xf9\x04\x01\x0a\0\x01\0");
+        data.extend_from_slice(b"\x2c\0\0\0\0\x04\0\x02\0\0\x02");
+        data.push(u8::try_from(compressed.len()).unwrap());
+        data.extend_from_slice(&compressed);
+        data.push(0);
+    }
+    data.push(0x3b);
+    fs::write(path, data).unwrap();
+}
+
+#[test]
+fn video_native_transparent_gif_fit_keeps_premultiplied_coverage_without_color_fringes() {
+    let root = Directory::new();
+    let file = root.0.join("transparent-edge.gif");
+    transparent_edge_gif(&file);
+    let original = fs::read(&file).unwrap();
+    let adapter = NativeVideoWallpapers {
+        state: root.0.join("store"),
+        library: root.0.clone(),
+    };
+    let asset = adapter
+        .prepare(&Wallpaper {
+            path: file.to_string_lossy().into(),
+            name: "Transparent edge".into(),
+        })
+        .unwrap();
+    assert_eq!(image::image_dimensions(&asset.poster.path).unwrap(), (4, 2));
+    let mut reference = vec![];
+    for target in [None, Some(WallpaperPixelTarget::new(3, 1).unwrap())] {
+        let mut frames = vec![];
+        adapter.play(&asset, PlaybackOptions {
+            target, looping: false, ..Default::default()
+        }, &mut |frame| {
+            let frame = frame.unwrap();
+            let timestamp = frame.timestamp;
+            let (width, height, rgba, aspect) = frame.into_rgba_with_aspect();
+            assert_eq!((width, height), (4, 2),
+                "alpha-capable conversion must preserve pixels before premultiplied GPU filtering");
+            assert_eq!(aspect, (4, 2));
+            for row in rgba.as_chunks::<{ 4 * 4 }>().0 {
+                assert_eq!(&row[..8], &[255, 0, 0, 255, 255, 0, 0, 255]);
+                assert_eq!(row[11], 0);
+                assert_eq!(row[15], 0);
+            }
+            let prepared = lucent_api::ImageStream::new()
+                .frame_rgba_with_aspect(width, height, rgba, aspect).unwrap();
+            assert!(!prepared.is_opaque());
+            // The centre output pixel at 3×1 samples exactly between source
+            // columns 1 and 2. Interpolate the premultiplied render inputs:
+            // 50% red coverage, with no invisible green/white RGB contribution.
+            let pixels = prepared.pixels();
+            let middle: Vec<f32> = (0..4).map(|channel|
+                (f32::from(pixels[4 + channel]) + f32::from(pixels[8 + channel])) / 510.
+            ).collect();
+            assert_eq!(middle, [0.5, 0., 0., 0.5]);
+            frames.push((timestamp, pixels.to_vec()));
+            true
+        }, Arc::new(Never));
+        assert_eq!(frames.len(), 2);
+        assert!(frames[1].0 > frames[0].0);
+        if target.is_none() {
+            reference = frames;
+        } else {
+            assert_eq!(
+                frames, reference,
+                "target cannot alter alpha pixels or timestamps"
+            );
+        }
+    }
+    assert_eq!(fs::read(&file).unwrap(), original);
+    assert_eq!(fs::read(&asset.path).unwrap(), original);
+}
 #[test]
 fn video_native_loop_cancellation_and_metadata_rejection_preserve_storage() {
     let root = Directory::new();
@@ -433,27 +736,34 @@ fn video_native_reused_conversion_preserves_retained_frame_bytes_and_odd_row_str
             name: "Colors".into(),
         })
         .unwrap();
-    let mut retained = vec![];
-    adapter.play(
-        &asset,
-        PlaybackOptions {
-            looping: false,
-            ..Default::default()
-        },
-        &mut |frame| {
-            retained.push(frame.unwrap());
-            true
-        },
-        Arc::new(Never),
-    );
-    assert_eq!(retained.len(), colors.len());
-    for (frame, expected) in retained.into_iter().zip(colors) {
-        let (width, height, pixels) = frame.into_rgba();
-        assert_eq!((width, height), (17, 13));
-        assert_eq!(
-            pixels,
-            expected.repeat(17 * 13),
-            "later conversion must not mutate a retained frame or copy row padding"
+    for target in [None, Some(WallpaperPixelTarget::new(9, 5).unwrap())] {
+        let mut retained = vec![];
+        adapter.play(
+            &asset,
+            PlaybackOptions {
+                target,
+                looping: false,
+                ..Default::default()
+            },
+            &mut |frame| {
+                retained.push(frame.unwrap());
+                true
+            },
+            Arc::new(Never),
         );
+        assert_eq!(retained.len(), colors.len());
+        for (frame, expected) in retained.into_iter().zip(colors) {
+            assert_eq!(frame.aspect_size(), (17, 13));
+            let (width, height, pixels) = frame.into_rgba();
+            assert_eq!(
+                (width, height),
+                if target.is_some() { (9, 7) } else { (17, 13) }
+            );
+            assert_eq!(
+                pixels,
+                expected.repeat(width as usize * height as usize),
+                "later conversion must not mutate a retained frame or copy row padding"
+            );
+        }
     }
 }

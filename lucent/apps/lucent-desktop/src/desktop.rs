@@ -385,11 +385,35 @@ impl Desktop {
     }
     fn reconcile_live_wallpapers(&mut self) {
         let monitors = self.monitors.connected.keys().cloned().collect::<Vec<_>>();
+        let mut pixel_targets = std::collections::BTreeMap::new();
+        for (id, monitor) in &self.monitors.connected {
+            if monitor.background_configured
+                && let Ok(target) = crate::ports::BackgroundTarget::from_density(
+                    monitor.viewport.0,
+                    monitor.viewport.1,
+                    monitor.density,
+                )
+            {
+                let (width, height) = target.size();
+                if let Ok(target) = WallpaperPixelTarget::new(width, height) {
+                    pixel_targets.insert(LiveWallpaperTarget::Monitor(id.clone()), target);
+                }
+            }
+        }
+        if self.monitors.legacy()
+            && let Some(target) = self.wallpaper.background_target()
+        {
+            let (width, height) = target.size();
+            if let Ok(target) = WallpaperPixelTarget::new(width, height) {
+                pixel_targets.insert(LiveWallpaperTarget::Default, target);
+            }
+        }
         self.live_wallpaper.reconcile(
             &self.settings.live_wallpapers,
             &monitors,
             self.display_catalog_seen,
             &self.wallpaper_context,
+            &pixel_targets,
         );
     }
     fn reconcile_backgrounds(&mut self, effects: &mut Effects<Message>) {
@@ -1142,6 +1166,7 @@ impl Component for Desktop {
                             .connected
                             .get_mut(&route.id)
                             .expect("validated route");
+                        monitor.background_configured = true;
                         if monitor.viewport != (width, height) || monitor.density != density {
                             monitor.widgets.cancel_interactions();
                             monitor.viewport = (width, height);

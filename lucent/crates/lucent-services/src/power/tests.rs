@@ -2,6 +2,7 @@
 use super::*;
 use std::{
     io::{BufRead, BufReader},
+    os::unix::fs::DirBuilderExt,
     process::{Child, Command, Stdio},
     sync::Arc,
     thread,
@@ -41,14 +42,20 @@ impl Drop for Bus {
 struct Directory(PathBuf);
 impl Directory {
     fn new() -> Self {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let path =
-            std::env::temp_dir().join(format!("lucent-power-{}-{nonce}", std::process::id()));
-        std::fs::create_dir(&path).unwrap();
-        Self(path)
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        for _ in 0..1024 {
+            let path = std::env::temp_dir().join(format!(
+                "lucent-power-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            match std::fs::DirBuilder::new().mode(0o700).create(&path) {
+                Ok(()) => return Self(path),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => panic!("Power fixture directory creation failed: {error}"),
+            }
+        }
+        panic!("Power fixture directory allocation exhausted");
     }
 }
 impl Drop for Directory {

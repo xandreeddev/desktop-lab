@@ -295,6 +295,118 @@ fn dimensions(width: u32, height: u32) -> Result<()> {
         Ok(())
     }
 }
+fn conversion_dimensions(
+    format: ffmpeg::format::Pixel,
+    width: u32,
+    height: u32,
+    target: Option<WallpaperPixelTarget>,
+) -> Result<(u32, u32)> {
+    dimensions(width, height)?;
+    let descriptor = format.descriptor().ok_or_else(failed)?;
+    let opaque = {
+        // SAFETY: Pixel::descriptor returns a non-null pointer obtained from
+        // av_pix_fmt_desc_get. FFmpeg owns this immutable format descriptor for
+        // the process lifetime; this reads only its public flags field.
+        let flags = unsafe { (*descriptor.as_ptr()).flags };
+        // pixdesc.h documents alpha-capable formats (including PAL8) as
+        // straight alpha. Resampling before the SDK premultiplies can mix
+        // invisible RGB into an edge, so only proven opaque formats fit here.
+        // The C macros are nonnegative signed constants (1<<7 and 1<<1).
+        let alpha_flags =
+            (ffmpeg::ffi::AV_PIX_FMT_FLAG_ALPHA | ffmpeg::ffi::AV_PIX_FMT_FLAG_PAL) as u64;
+        flags & alpha_flags == 0
+    };
+    if opaque && let Some(target) = target {
+        target.cover_size(width, height)
+    } else {
+        Ok((width, height))
+    }
+}
+
+/// The first decoded frame, not the codec's initial metadata, establishes the
+/// conversion contract. Some decoders only discover their pixel format while
+/// parsing packets. FFmpeg 9 can assert inside sws_getContext for Pixel::None
+/// before it reaches its unsupported-format check.
+struct FrameConverter {
+    source: ffmpeg::software::scaling::context::Definition,
+    scaler: ffmpeg::software::scaling::context::Context,
+    rgba: ffmpeg::util::frame::video::Video,
+}
+impl FrameConverter {
+    fn new(
+        frame: &ffmpeg::util::frame::video::Video,
+        target: Option<WallpaperPixelTarget>,
+    ) -> Result<Self> {
+        dimensions(frame.width(), frame.height())?;
+        let format = frame.format();
+        if format.descriptor().is_none()
+            || !ffmpeg::software::scaling::support::input(format)
+            || !ffmpeg::software::scaling::support::output(ffmpeg::format::Pixel::RGBA)
+        {
+            return Err(failed());
+        }
+        let (width, height) = conversion_dimensions(format, frame.width(), frame.height(), target)?;
+        let scaler = ffmpeg::software::scaling::context::Context::get(
+            format,
+            frame.width(),
+            frame.height(),
+            ffmpeg::format::Pixel::RGBA,
+            width,
+            height,
+            ffmpeg::software::scaling::flag::Flags::BILINEAR,
+        )
+        .map_err(|_| failed())?;
+        Ok(Self {
+            source: *scaler.input(),
+            scaler,
+            // FFmpeg owns the aligned, padded conversion allocation. Published
+            // frames own separate immutable bytes and may outlive this worker.
+            rgba: ffmpeg::util::frame::video::Video::empty(),
+        })
+    }
+
+    fn validate(&self, frame: &ffmpeg::util::frame::video::Video) -> Result<()> {
+        dimensions(frame.width(), frame.height())?;
+        if (frame.width(), frame.height(), frame.format())
+            != (self.source.width, self.source.height, self.source.format)
+        {
+            return Err(DomainError::Invalid(
+                "Video changes dimensions or pixel format during playback".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn convert(
+        &mut self,
+        frame: &ffmpeg::util::frame::video::Video,
+        timestamp: Duration,
+    ) -> Result<MediaFrame> {
+        self.validate(frame)?;
+        self.scaler
+            .run(frame, &mut self.rgba)
+            .map_err(|_| failed())?;
+        let (width, height) = (self.scaler.output().width, self.scaler.output().height);
+        if (self.rgba.width(), self.rgba.height()) != (width, height) {
+            return Err(failed());
+        }
+        let row = width as usize * 4;
+        let stride = self.rgba.stride(0);
+        let plane = self.rgba.data(0);
+        let mut bytes = Vec::with_capacity(row * height as usize);
+        for y in 0..height as usize {
+            let start = y.checked_mul(stride).ok_or_else(failed)?;
+            bytes.extend_from_slice(plane.get(start..start + row).ok_or_else(failed)?);
+        }
+        MediaFrame::rgba_with_aspect(
+            width,
+            height,
+            bytes,
+            (self.source.width, self.source.height),
+            timestamp,
+        )
+    }
+}
 fn decode(
     path: &Path,
     options: PlaybackOptions,
@@ -349,22 +461,10 @@ fn decode(
             .map_err(|_| failed())?;
         context.set_threading(ffmpeg::codec::threading::Config::count(1));
         let mut decoder = context.decoder().video().map_err(|_| failed())?;
-        dimensions(decoder.width(), decoder.height())?;
-        let expected = (decoder.width(), decoder.height(), decoder.format());
-        let mut scaler = ffmpeg::software::scaling::context::Context::get(
-            decoder.format(),
-            decoder.width(),
-            decoder.height(),
-            ffmpeg::format::Pixel::RGBA,
-            decoder.width(),
-            decoder.height(),
-            ffmpeg::software::scaling::flag::Flags::BILINEAR,
-        )
-        .map_err(|_| failed())?;
-        // swscale writes into one private conversion buffer for this decoder.
-        // Published frames still own separate immutable bytes: consumers can
-        // retain an old frame while the worker converts the next one.
-        let mut rgba = ffmpeg::util::frame::video::Video::empty();
+        // Reject known oversized declarations before allocating decoded frames,
+        // but permit unknown (zero) edges until the first frame establishes them.
+        dimensions(decoder.width().max(1), decoder.height().max(1))?;
+        let mut converter = None;
         let mut timeline = PresentationTimeline::new(time_base, rate);
         let mut clock = FrameClock::new(options.fps);
         let started = Instant::now();
@@ -384,12 +484,11 @@ fn decode(
                 if stop.cancelled() {
                     return Ok(false);
                 }
-                dimensions(frame.width(), frame.height())?;
-                if (frame.width(), frame.height(), frame.format()) != expected {
-                    return Err(DomainError::Invalid(
-                        "Video changes dimensions or pixel format during playback".into(),
-                    ));
+                if converter.is_none() {
+                    converter = Some(FrameConverter::new(&frame, options.target)?);
                 }
+                let converter = converter.as_mut().ok_or_else(failed)?;
+                converter.validate(&frame)?;
                 let (timestamp, hold) =
                     timeline.frame(frame.timestamp(), frame.packet().duration)?;
                 end_time = end_time.max(timestamp.saturating_add(hold));
@@ -403,22 +502,8 @@ fn decode(
                 if stop.cancelled() {
                     return Ok(false);
                 }
-                scaler.run(&frame, &mut rgba).map_err(|_| failed())?;
-                let row = frame.width() as usize * 4;
-                let stride = rgba.stride(0);
-                let plane = rgba.data(0);
-                let mut bytes = Vec::with_capacity(row * frame.height() as usize);
-                for y in 0..frame.height() as usize {
-                    let start = y.checked_mul(stride).ok_or_else(failed)?;
-                    bytes.extend_from_slice(plane.get(start..start + row).ok_or_else(failed)?);
-                }
                 delivered = true;
-                if !emit(MediaFrame::rgba(
-                    frame.width(),
-                    frame.height(),
-                    bytes,
-                    timestamp,
-                )?) {
+                if !emit(converter.convert(&frame, timestamp)?) {
                     return Ok(false);
                 }
             }

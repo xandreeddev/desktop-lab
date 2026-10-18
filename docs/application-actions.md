@@ -105,3 +105,12 @@ fixtures cover the ordinary and narrow scrolled chooser at both render scales.
 The owned native fixture/harness separately tests real input and native action
 dispatch. Added tests and helpers are not evidence of execution; executed
 checks and native acceptance belong in the source-specific report.
+
+Source `73577a4cbf7aba68ee1c40b1280c27e738a5e820` passed owned native keyboard,
+secondary-click, literal-argument, stale-descriptor and native-denial checks.
+It also fixes stationary-cursor search clicks after compact/full dock reopening
+through explicit framework native-lifetime renewal. Five real compositor capture
+cycles contain 710 frames with no compact-at-top signature. Exact preferences
+and wallpaper remain unchanged, and fixture resources are removed. See the
+[source-specific acceptance report](../reports/measurements/lucent-application-actions.json)
+for scope, tests and the remaining interoperability and pacing acceptance.
