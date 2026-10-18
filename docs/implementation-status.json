@@ -142,7 +142,8 @@
         "Inline rich-content source 861627d0709f9986343f7a246d5155f86bfd3ae1 adds a generic TextSpan/Element::rich_text control, shared baselines, wrapping, underlines and mapped opaque links with one keyboard target and disjoint native/pointer coverage. The pure notification parser, revision-keyed client and ExternalUri/UriPort/XdgUri adapters retain architecture boundaries; genuine pinned font faces preserve density and renderer ink overhang. 381 Rust tests/58 ignored, 85 Python checks, 11 owned native protocol cases and all 488 software-Vulkan comparisons pass. Twenty new references are reviewed with zero existing reference/tolerance changes. The independent example help, byte-for-byte font generation and both Astro prefixes pass. Notification images/other rich behavior, shaping/IME/accessibility and actual compositor/RSS/pacing acceptance remain open. See reports/measurements/lucent-rich-content.json.",
         "Native key translation now preserves shortcut modifiers: uppercase/Caps/Shift Ctrl+A/U, clipboard/history case normalization, and Alt/Logo exclusion are covered through ordinary and count-only masked consumers. Six native-adapter/SDK tests pass in the 584-test workspace checkpoint. This does not implement IME, shaping, multiline text or new graphical acceptance.",
         "Native testing of release76176 reproduced an ordinary launcher pointer-focus defect: the client focus filter excluded the new text_edit field. The following source corrects that filter and adds real UI-engine pointer-routing checks at normal and narrow widths. Native current-build acceptance remains pending. The VM maps Caps Lock to Compose and reserves two modified probe chords; the test now reports explicit skips and preserves those settings. Shaping, IME and multiline remain open; accessibility remains deferred.",
-        "Corrected source d2aed42199ed6b29f6eef214c1a6ee490658adc6 passes native launcher pointer focus, Ctrl+A/U with Shift and all nine unbound modifier probes. Exact query/open/Caps state, settings and wallpaper restoration pass. Four Caps-dependent cases and two compositor-bound chords are explicitly skipped, preserving the prepared keyboard configuration. Clipboard interoperability, stored-notes restart/export restoration, shaping/IME/multiline and physical acceptance remain open; see reports/measurements/lucent-media-admission.json."
+        "Corrected source d2aed42199ed6b29f6eef214c1a6ee490658adc6 passes native launcher pointer focus, Ctrl+A/U with Shift and all nine unbound modifier probes. Exact query/open/Caps state, settings and wallpaper restoration pass. Four Caps-dependent cases and two compositor-bound chords are explicitly skipped, preserving the prepared keyboard configuration. Clipboard interoperability, stored-notes restart/export restoration, shaping/IME/multiline and physical acceptance remain open; see reports/measurements/lucent-media-admission.json.",
+        "Source e67a8955a600063b87bd64dcf2806fccfb641b1d implements controlled multiline TextArea and Notes on the existing editing/clipboard/scroll API, with fresh CPU input geometry while GPU frames are pending and shared placeholder tokens. Local strict checks pass 686 regular Rust tests/76 ignored, 95 Python checks and 554 generated tokens. A single optimized host run on Ryzen 5 7430U under a one-CPU quota, with the video VM running, measures three 8192-byte cases: mean layout 0.697–1.140 ms, worst content-edit p95 8.994 ms and keyboard-navigation p95 6.134 ms. This is CPU-only layout/edit/reveal evidence, not native latency, GPU pacing, RSS or a 60 FPS claim. Visual review and real Notes focus/clipboard/scroll/restart/restoration remain pending; shaping/bidi/fallback/IME remain open and accessibility is deferred. See reports/measurements/lucent-multiline-notes.json and docs/multiline-text.md."
       ]
     },
     {
@@ -1758,8 +1759,31 @@
       ],
       "pending": [
         "The 300 MiB RSS target and 60 FPS delivery remain unmet; CPU rises as more frames are processed. Texture counters are not total GPU memory.",
-        "Hardware/accelerated guest performance, native multi-output, alpha-safe fitting and seamless playhead retarget remain separate work.",
-        "Final evidence-head CI and authorized merge are pending."
+        "Hardware/accelerated guest performance, native multi-output, alpha-safe fitting and seamless playhead retarget remain separate work."
+      ],
+      "delivery": {
+        "status": "merged",
+        "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/75",
+        "merged_head": "426da8da9d38a16715acae1575238fcafb5606ec",
+        "merge_commit": "c9c7cdd58e694f64a61e7c831ef24dbcc416a935"
+      }
+    },
+    {
+      "milestone": "controlled-multiline-text-area-and-notes",
+      "source_commit": "e67a8955a600063b87bd64dcf2806fccfb641b1d",
+      "report": "reports/measurements/lucent-multiline-notes.json",
+      "status": "local_checks_and_bounded_cpu_measurement_passed_visual_and_native_acceptance_pending",
+      "checks": [
+        "686 regular Rust tests, 95 Python checks, strict all-target Clippy/formatting and verification of 554 generated design tokens pass; 76 opt-in Rust fixtures remain ignored by the regular workspace run.",
+        "Controlled multiline editing, row-based layout/input, pending-frame geometry, Notes persistence policy and semantic placeholder opacity have local regression coverage.",
+        "One optimized CPU-only run measures three synthetic 8192-byte cases on an AMD Ryzen 5 7430U under a one-CPU quota, with the existing video VM running. Mean layout is 0.697–1.140 ms; worst content-edit p95 is 8.994 ms and navigation p95 is 6.134 ms."
+      ],
+      "pending": [
+        "Rendered comparison/review of new multiline fixtures and changed Notes geometry on the integrated revision.",
+        "Native Notes focus, Enter/Shift navigation, external clipboard transfer, thumb dragging, restart persistence and exact settings/wallpaper restoration.",
+        "Repeated isolated/native latency, GPU/presentation pacing and current RSS measurements; the CPU microbenchmark establishes neither improvement nor native 60 FPS.",
+        "Complex-script shaping, bidirectional layout, font fallback and preedit/IME remain open; accessibility remains deferred by user request.",
+        "Final published-head CI and authorized merge."
       ]
     }
   ],

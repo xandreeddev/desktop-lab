@@ -95,8 +95,9 @@ uses current source offsets before another buffer can be submitted. Existing
 `draw_all` remains the sole GPU submission gate.
 
 This path may rebuild a document more than once during an editing interaction.
-The worst-case 8192-byte typing/pointer cost needs measurement before claiming a
-latency or CPU improvement. No extra worker or continuously repainting timer is
+The bounded CPU measurement below includes these repeated layouts for content
+edits and keyboard navigation. It does not measure native pointer delivery or
+end-to-end latency. No extra worker or continuously repainting timer is
 introduced by the editor.
 
 ## Notes is a client of that API
@@ -131,11 +132,49 @@ bounds, single-line/masked submit compatibility, Notes save policy and stale
 clipboard retirement. New visual fixtures cover empty, multiline, selected,
 scrolled, narrow and resized Notes in both themes at 1×/2×.
 
-These cases and fixtures require execution and review on the integrated revision.
-They are not evidence of native acceptance merely because they exist. Real Notes
-focus, Enter/Shift navigation, external clipboard transfer, thumb dragging,
-restart persistence and exact settings/wallpaper restoration still require the
-prepared VM. No document contents should be exported in public native evidence.
+Source `e67a8955a600063b87bd64dcf2806fccfb641b1d` passes 686 regular Rust
+workspace tests, with 76 opt-in fixtures ignored, strict all-target Clippy,
+formatting, 95 Python checks and verification of 554 generated design tokens.
+Those checks establish model, framework and client policy behavior; the new
+visual fixtures still need rendered comparison and review on the integrated
+revision. Real Notes focus, Enter/Shift navigation, external clipboard transfer,
+thumb dragging, restart persistence and exact settings/wallpaper restoration
+also remain pending in the prepared VM. No document contents should be exported
+in public native evidence.
+
+### Bounded CPU measurement
+
+An optimized `--release` run on an AMD Ryzen 5 7430U measured three synthetic
+8192-byte documents in a 96 × 80 logical viewport with a 20-unit font. The process
+ran under a one-CPU quota while the existing video-wallpaper VM remained running.
+Each case contains 32 layout samples, 16 content replacements and 128 keyboard
+navigation samples. These are observations from one run with contention, rather
+than timing thresholds or a statistical performance guarantee.
+
+| Document | Mean layout (ms) | Content edit p95 (ms) | Navigation p95 (ms) | Maximum painted text rows |
+| --- | ---: | ---: | ---: | ---: |
+| Unbroken line | 1.140 | 7.009 | 6.134 | 6 |
+| Hard and blank lines | 0.854 | 8.994 | 5.613 | 3 |
+| Combining cluster | 0.697 | 1.459 | 1.829 | 1 |
+
+Layout timings cover CPU view/layout/input synchronization. Edit and navigation
+timings also include current-model updates, repeated layout and controlled caret
+reveal. They exclude GPU work, native delivery, the measurement's count/geometry
+assertions and scene teardown. The row counts show bounded visible-row painting
+even when the layout contains up to 5463 visual rows; the complete document is
+still measured during layout.
+
+The opt-in measurement can be repeated with:
+
+```sh
+cargo test --manifest-path lucent/Cargo.toml --locked --release -p lucent-ui \
+  text_area_bounded_cpu_measurement -- --ignored --nocapture --test-threads=1
+```
+
+The command selects the workload; apply the same CPU quota and record host load
+when comparing runs. The [sanitized report](../reports/measurements/lucent-multiline-notes.json)
+retains all sample summaries and their source revision. This is no before/after
+CPU comparison, desktop RSS measurement, GPU benchmark or proof of native 60 FPS.
 
 Complex-script shaping, bidirectional layout, font fallback, preedit/IME and
 platform accessibility remain separate requirements. The current glyph metrics

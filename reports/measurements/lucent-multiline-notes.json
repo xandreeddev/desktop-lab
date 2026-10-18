@@ -1,0 +1,144 @@
+{
+  "schema": 1,
+  "milestone": "controlled-multiline-text-area-and-notes",
+  "source_commit": "e67a8955a600063b87bd64dcf2806fccfb641b1d",
+  "status": "local_checks_and_bounded_cpu_measurement_passed_visual_and_native_acceptance_pending",
+  "local_checks": {
+    "workspace_regular_passed": 686,
+    "workspace_failed": 0,
+    "workspace_ignored": 76,
+    "python_passed": 95,
+    "generated_design_tokens": 554,
+    "format_passed": true,
+    "strict_clippy_workspace_all_targets_passed": true
+  },
+  "implemented": [
+    "Element::text_area reuses the controlled TextFieldState/TextEdit, ScrollSpec and clipboard contracts; canonical text, selection, scroll and byte policy remain client-owned.",
+    "One source-indexed grapheme row map drives wrapping, hit testing, selection, caret, visual navigation and bounded visible-row painting.",
+    "Pending GPU frames do not defer client updates or fresh CPU input geometry; unrelated wallpaper redraws do not rewrap idle Notes.",
+    "Notes fills its actual resized bounds and saves accepted content only through the existing root persistence coordinator.",
+    "Single-line, masked and multiline placeholder opacity comes from the shared design recipe and semantic token."
+  ],
+  "cpu_measurement": {
+    "status": "completed_single_host_run",
+    "source_commit": "e67a8955a600063b87bd64dcf2806fccfb641b1d",
+    "host_cpu": "AMD Ryzen 5 7430U with Radeon Graphics",
+    "cargo_profile": "release",
+    "debug_assertions": false,
+    "cpu_quota_logical_cores": 1,
+    "test_threads": 1,
+    "contention": "Existing video-wallpaper VM remained running; no isolated-host claim.",
+    "document_bytes": 8192,
+    "viewport_logical": [
+      96,
+      80
+    ],
+    "font_size_logical": 20,
+    "run_wall_seconds": 1.473,
+    "timing_scope": "Optimized host CPU-only UI layout/edit/navigation at an 8192-byte client bound; one CPU quota; existing video VM remains running. No GPU/native delivery or end-to-end latency claim.",
+    "command": "cargo test --manifest-path lucent/Cargo.toml --locked --release -p lucent-ui text_area_bounded_cpu_measurement -- --ignored --nocapture --test-threads=1",
+    "cases": [
+      {
+        "case": "unbroken-line",
+        "debug_assertions": false,
+        "bytes": 8192,
+        "viewport": [
+          96,
+          80
+        ],
+        "font_size": 20,
+        "layout_samples": 32,
+        "layout_mean_ms": 1.1398,
+        "layout_p95_ms": 1.2417,
+        "layout_max_ms": 1.2477,
+        "content_samples": 16,
+        "content_mean_ms": 5.915,
+        "content_p95_ms": 7.0092,
+        "content_max_ms": 7.0092,
+        "navigation_samples": 128,
+        "navigation_mean_ms": 3.457,
+        "navigation_p95_ms": 6.1342,
+        "navigation_max_ms": 6.5981,
+        "max_visual_rows": 1639,
+        "max_painted_text_rows": 6,
+        "max_paint_primitives": 9,
+        "max_row_text_bytes": 8192,
+        "scope": "CPU view/layout/synchronize; edits include current-model update and caret reveal; excludes GPU, native delivery, count checks and scene teardown"
+      },
+      {
+        "case": "hard-and-blank-lines",
+        "debug_assertions": false,
+        "bytes": 8192,
+        "viewport": [
+          96,
+          80
+        ],
+        "font_size": 20,
+        "layout_samples": 32,
+        "layout_mean_ms": 0.8538,
+        "layout_p95_ms": 1.0399,
+        "layout_max_ms": 1.0992,
+        "content_samples": 16,
+        "content_mean_ms": 5.4006,
+        "content_p95_ms": 8.9937,
+        "content_max_ms": 8.9937,
+        "navigation_samples": 128,
+        "navigation_mean_ms": 2.7666,
+        "navigation_p95_ms": 5.6131,
+        "navigation_max_ms": 6.9241,
+        "max_visual_rows": 5463,
+        "max_painted_text_rows": 3,
+        "max_paint_primitives": 7,
+        "max_row_text_bytes": 2731,
+        "scope": "CPU view/layout/synchronize; edits include current-model update and caret reveal; excludes GPU, native delivery, count checks and scene teardown"
+      },
+      {
+        "case": "combining-cluster",
+        "debug_assertions": false,
+        "bytes": 8192,
+        "viewport": [
+          96,
+          80
+        ],
+        "font_size": 20,
+        "layout_samples": 32,
+        "layout_mean_ms": 0.6969,
+        "layout_p95_ms": 0.7182,
+        "layout_max_ms": 1.2107,
+        "content_samples": 16,
+        "content_mean_ms": 0.946,
+        "content_p95_ms": 1.459,
+        "content_max_ms": 1.459,
+        "navigation_samples": 128,
+        "navigation_mean_ms": 1.3761,
+        "navigation_p95_ms": 1.8286,
+        "navigation_max_ms": 2.6457,
+        "max_visual_rows": 1,
+        "max_painted_text_rows": 1,
+        "max_paint_primitives": 3,
+        "max_row_text_bytes": 8192,
+        "scope": "CPU view/layout/synchronize; edits include current-model update and caret reveal; excludes GPU, native delivery, count checks and scene teardown"
+      }
+    ]
+  },
+  "visual_acceptance": {
+    "status": "pending",
+    "scope": "New multiline and resized Notes fixtures require rendered comparisons and review on the integrated revision."
+  },
+  "native_acceptance": {
+    "status": "pending",
+    "scope": "Real compositor focus, Enter/Shift navigation, external clipboard, thumb dragging, restart persistence and exact settings/wallpaper restoration."
+  },
+  "limits": [
+    "One optimized host run with a one-CPU quota and a running video VM. These observations are not timing thresholds, a statistically repeatable result or a before/after CPU improvement.",
+    "Layout/edit/navigation timings cover CPU view/layout/input synchronization and current-model updates/reveal; they exclude GPU, native input delivery, count/geometry assertions and scene teardown.",
+    "Visible-row painting is bounded, but layout still measures the full client-owned document. This is an 8192-byte Notes editor, not virtualized large-document layout.",
+    "No current desktop RSS, GPU completion, scanout, end-to-end input latency or native 60 FPS result is established by this measurement.",
+    "Complex-script shaping, bidirectional layout, font fallback, preedit/IME and native interoperability remain separate requirements. Accessibility remains deferred by the user.",
+    "There is no stationary-pointer selection autoscroll timer. Selection reveal remains input-driven."
+  ],
+  "privacy": {
+    "document_contents_or_private_paths_published": false,
+    "native_captures_or_credentials_published": false
+  }
+}
