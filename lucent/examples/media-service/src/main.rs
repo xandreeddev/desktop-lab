@@ -29,6 +29,39 @@ impl StopSignal for Stop {
 fn print(value: serde_json::Value) {
     println!("{value}");
 }
+fn operation_value(operation: &MediaOperation) -> serde_json::Value {
+    let (phase, error) = match &operation.phase {
+        MediaOperationPhase::InProgress => ("in-progress", None),
+        MediaOperationPhase::Acknowledged => ("acknowledged", None),
+        MediaOperationPhase::Failed(error) => (
+            "failed",
+            Some(serde_json::json!({
+                "kind": match error {
+                    DomainError::Unavailable(_) => "unavailable",
+                    DomainError::Invalid(_) => "invalid",
+                    DomainError::Failed(_) => "failed",
+                },
+                "message": error.to_string(),
+            })),
+        ),
+    };
+    let command = match operation.command {
+        MediaCommand::Play(_) => "play",
+        MediaCommand::Pause(_) => "pause",
+        MediaCommand::Next(_) => "next",
+        MediaCommand::Previous(_) => "previous",
+        MediaCommand::Stop(_) => "stop",
+        MediaCommand::Raise(_) => "raise",
+        MediaCommand::SetPosition { .. } => "seek",
+    };
+    serde_json::json!({
+        "id": operation.id.value(),
+        "player": operation.command.player().value(),
+        "command": command,
+        "phase": phase,
+        "error": error,
+    })
+}
 fn usage() {
     eprintln!("{HELP}");
 }
@@ -136,7 +169,8 @@ fn main() {
                     }),
                 }
             }).collect::<Vec<_>>());
-            print(serde_json::json!({"state":"ready","count":snapshot.players.len(),"players":players}));
+            print(serde_json::json!({"state":"ready","count":snapshot.players.len(),"players":players,
+                "operation":snapshot.operation.as_ref().map(operation_value)}));
             *c.lock().unwrap() = Some(snapshot);
         }
         Err(_) => { *c.lock().unwrap() = None; print(serde_json::json!({"state":"unavailable"})); }
@@ -203,8 +237,14 @@ fn main() {
                             .iter()
                             .any(|player| player.id == command.player())
                     });
-                    let acknowledged = known && adapter.control(command).is_ok();
-                    print(serde_json::json!({"acknowledged":acknowledged}));
+                    // Local admission and the watched native method outcome
+                    // carry the same ID and may be printed in either order.
+                    match known.then(|| adapter.start(command)) {
+                        Some(Ok(id)) => {
+                            print(serde_json::json!({"admitted":true,"operation":id.value()}))
+                        }
+                        _ => print(serde_json::json!({"admitted":false})),
+                    }
                 }
                 Err(_) => print(serde_json::json!({"error":"Invalid media command"})),
             }

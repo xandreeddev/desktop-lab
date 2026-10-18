@@ -5,26 +5,29 @@ mod snapshot;
 use lucent_domain::*;
 use std::{
     sync::{
-        Arc, Mutex,
+        Mutex,
         atomic::{AtomicBool, AtomicU64, Ordering},
-        mpsc,
     },
     time::{Duration, Instant},
 };
 
 const DEADLINE: Duration = Duration::from_secs(3);
-const REQUEST_LIMIT: usize = 32;
+const REQUEST_LIMIT: usize = 1;
 struct Request {
+    id: MediaOperationId,
     command: MediaCommand,
-    reply: mpsc::SyncSender<Result<()>>,
     deadline: Instant,
-    cancelled: Arc<AtomicBool>,
+}
+struct Operation {
+    value: MediaOperation,
+    terminal_published: bool,
 }
 pub struct Mpris {
     address: Option<String>,
     watching: AtomicBool,
     identity: AtomicU64,
     online: Mutex<Option<async_channel::Sender<Request>>>,
+    operation: Mutex<Option<Operation>>,
     timeout: Duration,
 }
 impl Default for Mpris {
@@ -34,6 +37,7 @@ impl Default for Mpris {
             watching: AtomicBool::new(false),
             identity: AtomicU64::new(1),
             online: Mutex::new(None),
+            operation: Mutex::new(None),
             timeout: DEADLINE,
         }
     }
@@ -55,10 +59,59 @@ impl Mpris {
             .map_err(|_| native::unavailable("Media identity space exhausted"))
     }
     fn offline(&self) {
-        *self
+        // Lock ordering matches admission so no request can enter an already
+        // retired observer. Neither lock is held while emitting observations.
+        let mut online = self
             .online
             .lock()
-            .unwrap_or_else(|error| error.into_inner()) = None;
+            .unwrap_or_else(|error| error.into_inner());
+        *online = None;
+        let mut operation = self
+            .operation
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        if let Some(operation) = operation.as_mut()
+            && operation.value.phase == MediaOperationPhase::InProgress
+        {
+            operation.value.phase = MediaOperationPhase::Failed(native::unavailable(
+                "Media observation ended; the command outcome may be uncertain",
+            ));
+            operation.terminal_published = false;
+        }
+    }
+    fn operation(&self) -> Option<MediaOperation> {
+        self.operation
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .as_ref()
+            .map(|operation| operation.value.clone())
+    }
+    fn finish(&self, id: MediaOperationId, result: Result<()>) {
+        let mut operation = self
+            .operation
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        if let Some(operation) = operation.as_mut().filter(|operation| {
+            operation.value.id == id && operation.value.phase == MediaOperationPhase::InProgress
+        }) {
+            operation.value.phase = match result {
+                Ok(()) => MediaOperationPhase::Acknowledged,
+                Err(error) => MediaOperationPhase::Failed(error),
+            };
+            operation.terminal_published = false;
+        }
+    }
+    fn published(&self, observed: Option<&MediaOperation>) {
+        let mut operation = self
+            .operation
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        if let Some(operation) = operation.as_mut().filter(|operation| {
+            Some(&operation.value) == observed
+                && operation.value.phase != MediaOperationPhase::InProgress
+        }) {
+            operation.terminal_published = true;
+        }
     }
 }
 struct Observer<'a>(&'a Mpris);
@@ -87,32 +140,43 @@ impl MediaPort for Mpris {
             stop.wait(Duration::from_secs(2));
         }
     }
-    fn control(&self, command: MediaCommand) -> Result<()> {
-        let sender = self
+    fn start(&self, command: MediaCommand) -> Result<MediaOperationId> {
+        let online = self
             .online
-            .lock()
-            .map_err(|_| native::unavailable("Media admission is unavailable"))?
-            .clone()
+            .try_lock()
+            .map_err(|_| native::unavailable("Media admission is unavailable"))?;
+        let sender = online
+            .as_ref()
             .ok_or_else(|| native::unavailable("Media observation is not ready"))?;
-        let (reply, receive) = mpsc::sync_channel(1);
-        let cancelled = Arc::new(AtomicBool::new(false));
+        let mut operation = self
+            .operation
+            .try_lock()
+            .map_err(|_| native::unavailable("Media operation admission is unavailable"))?;
+        if operation.as_ref().is_some_and(|operation| {
+            operation.value.phase == MediaOperationPhase::InProgress
+                || !operation.terminal_published
+        }) {
+            return Err(native::unavailable(
+                "A media operation is pending or awaiting publication",
+            ));
+        }
+        let id = MediaOperationId::new(self.identity()?)?;
         sender
             .try_send(Request {
+                id,
                 command,
-                reply,
                 deadline: Instant::now() + self.timeout,
-                cancelled: cancelled.clone(),
             })
             .map_err(|_| native::unavailable("Media command queue is unavailable or full"))?;
-        match receive.recv_timeout(self.timeout + Duration::from_millis(200)) {
-            Ok(result) => result,
-            Err(_) => {
-                cancelled.store(true, Ordering::Release);
-                Err(native::unavailable(
-                    "Media request timed out; its outcome may be uncertain",
-                ))
-            }
-        }
+        *operation = Some(Operation {
+            value: MediaOperation {
+                id,
+                command,
+                phase: MediaOperationPhase::InProgress,
+            },
+            terminal_published: false,
+        });
+        Ok(id)
     }
 }
 

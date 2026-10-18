@@ -116,15 +116,19 @@ def stale_command_rejected(*arguments):
         'python3', 'desktop-lab/scripts/in-session.py',
         '/home/omarchy/.local/bin/lucent-cli', 'media', *arguments,
     ])], capture_output=True, timeout=15)
-    require(result.returncode != 0, 'retired_media_cli_target_rejected')
+    require(result.returncode == 1 and result.stderr.startswith(b'lucent: error:'),
+            'retired_media_cli_target_rejected')
 
 
 def stop_owned_unit(unit):
     remote('python3', '-c',
            "import subprocess,sys; unit=sys.argv[1]; "
-           "subprocess.run(['systemctl','--user','stop',unit],capture_output=True,timeout=10); "
-           "r=subprocess.run(['systemctl','--user','is-active',unit],capture_output=True,text=True,timeout=5); "
-           "assert r.stdout.strip() not in ('active','activating','deactivating')", unit)
+           "stopped=subprocess.run(['systemctl','--user','stop',unit],capture_output=True,timeout=10); "
+           "r=subprocess.run(['systemctl','--user','show',unit,'--property=LoadState,ActiveState'],capture_output=True,text=True,timeout=5); "
+           "state=dict(line.split('=',1) for line in r.stdout.splitlines() if '=' in line); "
+           "assert r.returncode in (0,1) and state.get('LoadState') in ('loaded','not-found') "
+           "and state.get('ActiveState') in ('inactive','failed'); "
+           "assert stopped.returncode==0 or state['LoadState']=='not-found'", unit)
 
 
 def suite():
@@ -138,7 +142,8 @@ def suite():
     before = inspect()['client']
     require(before['media']['status'] == 'ready' and not before['media']['players'],
             'empty_native_media_catalog')
-    require(not before['media']['open'] and not before['launcher'], 'test_panels_closed')
+    require(not before['media']['open'] and not before['launcher']
+            and not before['notification_history_open'], 'test_panels_closed')
     for panel in ('audio', 'network', 'bluetooth', 'power', 'tray', 'live_wallpaper'):
         require(not before.get(panel, {}).get('open', False), 'other_test_panels_closed')
     monitors = json.loads(session('hyprctl', '-j', 'monitors'))
@@ -153,7 +158,6 @@ def suite():
     fixture = scratch + '/fixture.py'
     run_id = scratch.rsplit('.', 1)[-1]
     units, results = [], {}
-    pointer_down = False
 
     def control(key, action, *arguments):
         return session('python3', fixture, action, key, *arguments)
@@ -244,13 +248,11 @@ def suite():
         seeks = count('b', 'set_position')
         point(name, monitor, target, .25)
         button(name, True)
-        pointer_down = True
         eventually(lambda: media()['seek_active'], 'native_slider_capture')
         point(name, monitor, target, .75)
         time.sleep(.25)
         require(count('b', 'set_position') == seeks, 'seek_preview_does_not_send')
         button(name, False)
-        pointer_down = False
         eventually(lambda: count('b', 'set_position') == seeks + 1 and acknowledged(),
                    'seek_release_sends_one_native_call')
         event = [event for event in state('b')['events'] if event[0] == 'set_position'][-1]
@@ -265,14 +267,12 @@ def suite():
         target = stable_hit(slider)
         point(name, monitor, target, .2)
         button(name, True)
-        pointer_down = True
         eventually(lambda: media()['seek_active'], 'native_retiring_slider_capture')
         control('b', 'configure', json.dumps({'new_track': True}))
         eventually(lambda: current_player('b')['track'] != old_track and not media()['seek_active'],
                    'track_change_retires_native_seek')
         point(name, monitor, target, .8)
         button(name, False)
-        pointer_down = False
         time.sleep(.35)
         require(count('b', 'set_position') == seeks + 1 and count('b', 'stale_seek') == 0,
                 'retired_slider_release_sends_no_native_call')
@@ -302,11 +302,12 @@ def suite():
         results['native_escape_dismissal'] = True
     finally:
         failures = []
-        if pointer_down:
-            try:
-                button(name, False)
-            except Exception:
-                failures.append('pointer_release')
+        # A failed click may have delivered its press before losing the reply.
+        # Releasing an already-up button is harmless and covers that ambiguity.
+        try:
+            button(name, False)
+        except Exception:
+            failures.append('pointer_release')
         try:
             cli('media', 'close')
         except Exception:

@@ -1,0 +1,83 @@
+{
+  "milestone": "native-mpris-player-controls",
+  "date": "2026-10-18",
+  "status": "owned_native_fixture_verified_third_party_acceptance_pending",
+  "binary_source_commit": "76176f83b19bb78e526c02fb9fab0f0ec5f506a6",
+  "merged_pr": "https://github.com/xandreeddev/desktop-lab/pull/72",
+  "merge_commit": "a3b90b8f1d9eb0ae4e3eea17afd2be831b5f2103",
+  "environment": {
+    "guest": "Arch/Omarchy test VM",
+    "compositor": "Hyprland 0.56.2",
+    "renderer": "software Vulkan (llvmpipe)",
+    "display": {
+      "width": 1920,
+      "height": 1080,
+      "scale": 1
+    },
+    "vcpus": 4,
+    "memory_mib": 3072
+  },
+  "binaries": {
+    "lucent-desktop": {
+      "sha256": "f1bd6f90e566fc2aa5f66f4b5207ada068a9d446efdd55041b32a967909a9433",
+      "bytes": 20790440
+    },
+    "lucent-cli": {
+      "sha256": "94d45e25be64d264203179b619f84c0f847e629227c9ed3a2b357c9a415ab881",
+      "bytes": 345400
+    },
+    "lucent-menu": {
+      "sha256": "f1daae28c68d732af1d3a93979702cc1e6c16d04aec5342484ae1156f5344d2b",
+      "bytes": 8475216
+    },
+    "lucent-lock": {
+      "sha256": "9e7fc08ac564378016af9d3e1bc8ca8983d621e407c6eaeef70cb29ee918d75a",
+      "bytes": 11995120
+    },
+    "lucent-greeter": {
+      "sha256": "bc231fbbf85518f05569cc9dbe630545f4f2a0b35f14d325cdffb9b9f949e1e5",
+      "bytes": 11884896
+    },
+    "lucent-polkit": {
+      "sha256": "4ddac2d410eedaf81d071b7de4453973ce9e799b1a92a69221e28d8a454f4554",
+      "bytes": 8672536
+    }
+  },
+  "deployment": {
+    "running_binary_hash_verified": true,
+    "supervisor_stable": true,
+    "settings_bytes_preserved": true,
+    "wallpaper_preserved": true,
+    "live_media_files_untouched": true
+  },
+  "native_checks": {
+    "two_non_replacing_independent_owners": true,
+    "keyboard_pointer_selection_and_targeted_play_pause": true,
+    "owned_local_raster_artwork_prepared": true,
+    "compatibility_media_key_uses_shared_selection": true,
+    "release_only_seek_with_exact_track": true,
+    "track_retirement_and_same_uri_artwork": true,
+    "owner_retirement_and_stale_player_rejection": true,
+    "native_escape_dismissal": true,
+    "settings_and_wallpaper_preserved": true,
+    "owned_units_and_files_removed": true
+  },
+  "harness": "vm/test-media.py with unconditional button release, strict native CLI rejection and verified fixture-unit retirement; hardened helper is committed with this report",
+  "validation": {
+    "workspace_regular_tests": 604,
+    "private_bus_media_scenarios": 6,
+    "python_tests": 95,
+    "local_affected_visual_comparisons": 60,
+    "exact_head_required_checks_passed": 6,
+    "ci_full_vulkan_suite_passed": true,
+    "baseline_tolerances_changed": false
+  },
+  "limits": [
+    "Two owned fixture players establish controlled native session-bus and QMP input behavior; third-party player interoperability is not established.",
+    "Artwork readiness establishes bounded preparation, not changed cover pixels or remote-provider interoperability.",
+    "This accepted binary uses the earlier synchronous media command contract; short admission and separate volume scheduling are a later source change requiring their own validation.",
+    "Native ordinary-input acceptance found a launcher focus-filter defect on this binary; keyboard configuration also remaps Caps Lock and reserves two probe chords. No keyboard bindings/options were changed, and every attempt restored query/open state, Caps state, settings bytes and wallpaper identity.",
+    "No current CPU/RSS/frame-pacing/GPU-allocation or physical hardware claim is made.",
+    "The wider desktop remains incomplete; consult docs/implementation-status.json."
+  ]
+}

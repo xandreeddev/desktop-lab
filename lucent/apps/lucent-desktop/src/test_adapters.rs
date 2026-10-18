@@ -1,10 +1,14 @@
 //! In-memory adapters: component tests do not inspect the host or execute commands.
 use crate::adapters::DesktopAdapters;
 use lucent_domain::*;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicU64, Ordering},
+};
 #[derive(Default)]
 pub struct Fake {
     pub calls: Mutex<Vec<&'static str>>,
+    next_media_operation: AtomicU64,
 }
 impl ApplicationPort for Fake {
     fn watch(&self, emit: &mut dyn FnMut(Result<Vec<Application>>), _: &dyn StopSignal) {
@@ -64,9 +68,9 @@ impl MediaPort for Fake {
     fn watch(&self, emit: &mut dyn FnMut(Result<MediaSnapshot>), _: &dyn StopSignal) {
         emit(Ok(MediaSnapshot::default()));
     }
-    fn control(&self, _: MediaCommand) -> Result<()> {
+    fn start(&self, _: MediaCommand) -> Result<MediaOperationId> {
         self.calls.lock().unwrap().push("media");
-        Ok(())
+        MediaOperationId::new(self.next_media_operation.fetch_add(1, Ordering::Relaxed) + 1)
     }
 }
 impl NetworkPort for Fake {

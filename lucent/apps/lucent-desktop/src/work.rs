@@ -1,5 +1,6 @@
 //! Client policy: nine bounded ordered lanes, matching the runtime contract.
-//! Short pairing answers share controls, independent of slow Bluetooth methods.
+//! Short pairing answers and media admission share controls. Native media method
+//! waiting stays in its observer, independent of the audio volume lane.
 pub const ASSETS: &str = "assets";
 pub const APPEARANCE: &str = "appearance";
 pub const SETTINGS: &str = "settings";

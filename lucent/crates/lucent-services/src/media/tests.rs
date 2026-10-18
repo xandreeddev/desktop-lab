@@ -4,6 +4,7 @@ use std::{
     collections::HashMap,
     io::{BufRead, BufReader},
     process::{Child, Command, Stdio},
+    sync::{Arc, mpsc},
     thread,
 };
 use zbus::{
@@ -61,13 +62,22 @@ impl Watch {
     fn new(bus: &Bus, timeout: Duration) -> Self {
         let mut adapter = Mpris::with_bus_address(bus.address.clone());
         adapter.timeout = timeout;
-        let adapter = Arc::new(adapter);
+        Self::from_adapter(Arc::new(adapter))
+    }
+    fn from_adapter(adapter: Arc<Mpris>) -> Self {
+        Self::with_hook(adapter, |_| {})
+    }
+    fn with_hook(
+        adapter: Arc<Mpris>,
+        mut hook: impl FnMut(&Result<MediaSnapshot>) + Send + 'static,
+    ) -> Self {
         let stop = Arc::new(Stop(AtomicBool::new(false)));
         let (send, values) = mpsc::channel();
         let (a, s) = (adapter.clone(), stop.clone());
         let worker = thread::spawn(move || {
             a.watch(
                 &mut |value| {
+                    hook(&value);
                     let _ = send.send(value);
                 },
                 s.as_ref(),
@@ -92,6 +102,60 @@ impl Watch {
                 _ => (),
             }
         }
+    }
+    fn admit(&self, command: MediaCommand) -> MediaOperationId {
+        // A receiver can observe the callback's channel send just before that
+        // callback returns. Retry only local busy admission, never an admitted
+        // command, while the owner marks the prior terminal as published.
+        let deadline = Instant::now() + Duration::from_secs(1);
+        loop {
+            match self.adapter.start(command) {
+                Ok(id) => return id,
+                Err(_) if Instant::now() < deadline => thread::sleep(Duration::from_millis(1)),
+                Err(error) => panic!("Media admission did not reopen: {error:?}"),
+            }
+        }
+    }
+    fn terminal(&self, id: MediaOperationId) -> MediaSnapshot {
+        self.state(|snapshot| {
+            snapshot.operation.as_ref().is_some_and(|operation| {
+                operation.id == id && operation.phase != MediaOperationPhase::InProgress
+            })
+        })
+    }
+    fn refreshed_after(&self, terminal: &MediaSnapshot, player: MediaPlayerId) -> MediaSnapshot {
+        let sampled_at = terminal
+            .players
+            .iter()
+            .find(|value| value.id == player)
+            .and_then(|value| match &value.state {
+                MediaPlayerState::Ready(playback) => {
+                    playback.position.map(|sample| sample.sampled_at)
+                }
+                _ => None,
+            })
+            .expect("Fixture player must have a position sample");
+        self.state(|snapshot| snapshot.operation == terminal.operation
+            && snapshot.players.iter().any(|value| value.id == player && matches!(&value.state,
+                MediaPlayerState::Ready(playback) if playback.position.is_some_and(|sample| sample.sampled_at > sampled_at))))
+    }
+    fn acknowledge(&self, command: MediaCommand) -> MediaSnapshot {
+        let id = self.admit(command);
+        let terminal = self.terminal(id);
+        assert_eq!(
+            terminal.operation.as_ref().unwrap().phase,
+            MediaOperationPhase::Acknowledged
+        );
+        // Completion is separate from the follow-up native observation. This
+        // also proves the exact terminal survives a property refresh.
+        self.refreshed_after(&terminal, command.player())
+    }
+    fn fail(&self, command: MediaCommand) -> MediaOperation {
+        let id = self.admit(command);
+        let terminal = self.terminal(id).operation.unwrap();
+        assert_eq!(terminal.command, command);
+        assert!(matches!(terminal.phase, MediaOperationPhase::Failed(_)));
+        terminal
     }
 }
 impl Drop for Watch {
@@ -123,6 +187,7 @@ struct State {
     read_started: async_channel::Sender<()>,
     read_notices: async_channel::Receiver<()>,
     read_block: Option<async_channel::Receiver<()>>,
+    read_block_once: Option<async_channel::Receiver<()>>,
 }
 type Shared = Arc<Mutex<State>>;
 fn fixture() -> (Shared, async_channel::Receiver<()>) {
@@ -147,6 +212,7 @@ fn fixture() -> (Shared, async_channel::Receiver<()>) {
             read_started,
             read_notices,
             read_block: None,
+            read_block_once: None,
         })),
         receive,
     )
@@ -191,7 +257,11 @@ impl Player {
             let mut state = self.0.lock().unwrap();
             state.metadata_reads += 1;
             let _ = state.read_started.try_send(());
-            (state.read_delay, state.read_block.clone())
+            let block = state
+                .read_block_once
+                .take()
+                .or_else(|| state.read_block.clone());
+            (state.read_delay, block)
         };
         if let Some(block) = block {
             let _ = block.recv().await;
@@ -436,6 +506,150 @@ fn queued_owner_events_never_regress_a_newer_discovery_result() {
 }
 
 #[test]
+fn media_admission_rejects_contended_locks_without_waiting_or_orphan_requests() {
+    let adapter = Mpris::default();
+    let player = MediaPlayerId::new(1).unwrap();
+    let (send, receive) = async_channel::bounded(1);
+    *adapter.online.lock().unwrap() = Some(send);
+    let first = adapter.start(MediaCommand::Play(player)).unwrap();
+    receive.try_recv().unwrap();
+    adapter.finish(first, Ok(()));
+    let terminal = adapter.operation().unwrap();
+    adapter.published(Some(&terminal));
+    {
+        // Keep each mutex held by the caller itself. A blocking lock cannot
+        // make progress here; local admission must reject rather than wait.
+        let _online = adapter.online.lock().unwrap();
+        assert!(adapter.start(MediaCommand::Next(player)).is_err());
+        assert_eq!(adapter.operation(), Some(terminal.clone()));
+        assert!(receive.try_recv().is_err());
+    }
+    {
+        let operation = adapter.operation.lock().unwrap();
+        assert!(adapter.start(MediaCommand::Next(player)).is_err());
+        assert_eq!(operation.as_ref().unwrap().value, terminal);
+        assert!(receive.try_recv().is_err());
+    }
+    let next = adapter.start(MediaCommand::Next(player)).unwrap();
+    assert!(next.value() > first.value());
+    assert_eq!(receive.try_recv().unwrap().id, next);
+    assert!(receive.try_recv().is_err());
+    assert_eq!(adapter.operation().unwrap().id, next);
+}
+
+#[test]
+fn media_admission_rejects_pressure_until_the_exact_terminal_is_published() {
+    let adapter = Mpris::default();
+    let player = MediaPlayerId::new(1).unwrap();
+    let pause = MediaCommand::Pause(player);
+    assert!(adapter.start(pause).is_err());
+    assert!(adapter.operation().is_none());
+    let (send, receive) = async_channel::bounded(1);
+    *adapter.online.lock().unwrap() = Some(send);
+    let first = adapter.start(pause).unwrap();
+    let request = receive.try_recv().unwrap();
+    assert_eq!(request.id, first);
+    assert_eq!(request.command, pause);
+    for _ in 0..64 {
+        assert!(adapter.start(MediaCommand::Next(player)).is_err());
+    }
+    assert!(
+        receive.try_recv().is_err(),
+        "Rejected pressure must never enqueue a native action"
+    );
+    adapter.finish(first, Ok(()));
+    let terminal = adapter.operation().unwrap();
+    assert_eq!(terminal.phase, MediaOperationPhase::Acknowledged);
+    assert!(adapter.start(MediaCommand::Next(player)).is_err());
+    let mut wrong = terminal.clone();
+    wrong.phase = MediaOperationPhase::InProgress;
+    adapter.published(Some(&wrong));
+    wrong = terminal.clone();
+    wrong.id = MediaOperationId::new(first.value() + 1).unwrap();
+    adapter.published(Some(&wrong));
+    adapter.published(None);
+    assert!(adapter.start(MediaCommand::Next(player)).is_err());
+    assert!(receive.try_recv().is_err());
+    adapter.published(Some(&terminal));
+    let next = adapter.start(MediaCommand::Next(player)).unwrap();
+    assert!(next.value() > first.value());
+    adapter.finish(first, Err(DomainError::Failed("Late prior result".into())));
+    adapter.published(Some(&terminal));
+    assert!(adapter.start(MediaCommand::Stop(player)).is_err());
+    let current = adapter.operation().unwrap();
+    assert_eq!(current.id, next);
+    assert_eq!(current.phase, MediaOperationPhase::InProgress);
+    assert_eq!(receive.try_recv().unwrap().id, next);
+    assert!(receive.try_recv().is_err());
+}
+
+#[test]
+fn media_admission_transport_failure_cannot_replace_a_published_outcome() {
+    let adapter = Mpris::default();
+    let player = MediaPlayerId::new(1).unwrap();
+    let (send, receive) = async_channel::bounded(1);
+    *adapter.online.lock().unwrap() = Some(send.clone());
+    let first = adapter.start(MediaCommand::Play(player)).unwrap();
+    receive.try_recv().unwrap();
+    adapter.finish(first, Ok(()));
+    let terminal = adapter.operation().unwrap();
+    adapter.published(Some(&terminal));
+    let occupied = MediaOperationId::new(u64::MAX).unwrap();
+    assert!(
+        send.try_send(Request {
+            id: occupied,
+            command: MediaCommand::Stop(player),
+            deadline: Instant::now() + DEADLINE
+        })
+        .is_ok()
+    );
+    assert!(adapter.start(MediaCommand::Next(player)).is_err());
+    assert_eq!(adapter.operation(), Some(terminal.clone()));
+    assert_eq!(receive.try_recv().unwrap().id, occupied);
+    assert!(
+        receive.try_recv().is_err(),
+        "A full-channel rejection must leave no orphan request"
+    );
+    drop(receive);
+    assert!(adapter.start(MediaCommand::Next(player)).is_err());
+    assert_eq!(adapter.operation(), Some(terminal));
+}
+
+#[test]
+fn media_admission_disconnect_retires_exact_identity_until_recovery_publication() {
+    let adapter = Mpris::default();
+    let player = MediaPlayerId::new(1).unwrap();
+    let command = MediaCommand::Pause(player);
+    let (send, receive) = async_channel::bounded(1);
+    *adapter.online.lock().unwrap() = Some(send);
+    let first = adapter.start(command).unwrap();
+    receive.try_recv().unwrap();
+    adapter.offline();
+    let terminal = adapter.operation().unwrap();
+    assert_eq!(terminal.id, first);
+    assert_eq!(terminal.command, command);
+    assert!(matches!(
+        terminal.phase,
+        MediaOperationPhase::Failed(DomainError::Unavailable(_))
+    ));
+    adapter.finish(first, Ok(()));
+    assert_eq!(
+        adapter.operation(),
+        Some(terminal.clone()),
+        "A late success cannot revive retired authority"
+    );
+    assert!(adapter.start(MediaCommand::Play(player)).is_err());
+    let (send, receive) = async_channel::bounded(1);
+    *adapter.online.lock().unwrap() = Some(send);
+    assert!(adapter.start(MediaCommand::Play(player)).is_err());
+    assert!(receive.try_recv().is_err());
+    adapter.published(Some(&terminal));
+    let recovered = adapter.start(MediaCommand::Play(player)).unwrap();
+    assert!(recovered.value() > first.value());
+    assert_eq!(receive.try_recv().unwrap().id, recovered);
+}
+
+#[test]
 #[ignore = "owned private MPRIS D-Bus fixture; no host session bus"]
 fn media_protocol_discovery_current_controls_and_no_position_polling() {
     let bus = Bus::new();
@@ -468,21 +682,26 @@ fn media_protocol_discovery_current_controls_and_no_position_polling() {
     let id = selected.id;
     let track = playback(selected).track.as_ref().unwrap();
     assert_eq!(track.title, "Synthetic track");
-    watch.adapter.control(MediaCommand::Play(id)).unwrap();
-    watch.state(|s| {
-        s.players
-            .iter()
-            .any(|p| p.id == id && matches!(p.state, MediaPlayerState::Ready(_)))
+    watch.acknowledge(MediaCommand::Play(id));
+    let snapshot = watch.acknowledge(MediaCommand::SetPosition {
+        player: id,
+        track: track.id,
+        position: MediaTime::new(6_000_000).unwrap(),
     });
-    watch
-        .adapter
-        .control(MediaCommand::SetPosition {
-            player: id,
-            track: track.id,
-            position: MediaTime::new(6_000_000).unwrap(),
-        })
-        .unwrap();
-    let snapshot = watch.state(|s| s.players.iter().any(|p| p.id == id && matches!(&p.state, MediaPlayerState::Ready(value) if value.position.is_some_and(|sample| sample.position.micros() == 6_000_000))));
+    assert_eq!(
+        playback(
+            snapshot
+                .players
+                .iter()
+                .find(|player| player.id == id)
+                .unwrap()
+        )
+        .position
+        .unwrap()
+        .position
+        .micros(),
+        6_000_000
+    );
     assert_eq!(
         playback(snapshot.players.iter().find(|p| p.id == id).unwrap())
             .track
@@ -528,16 +747,11 @@ fn media_protocol_track_retirement_capability_changes_seeked_and_per_player_fail
         .as_ref()
         .unwrap()
         .id;
-    assert!(
-        watch
-            .adapter
-            .control(MediaCommand::SetPosition {
-                player: id,
-                track: old_track,
-                position: MediaTime::default()
-            })
-            .is_err()
-    );
+    watch.fail(MediaCommand::SetPosition {
+        player: id,
+        track: old_track,
+        position: MediaTime::default(),
+    });
     assert!(state.lock().unwrap().calls.is_empty());
     state.lock().unwrap().can_seek = false;
     changed(&app, &["CanSeek"]);
@@ -546,16 +760,12 @@ fn media_protocol_track_retirement_capability_changes_seeked_and_per_player_fail
             |p| matches!(&p.state, MediaPlayerState::Ready(value) if !value.capabilities.can_seek),
         )
     });
-    assert!(
-        watch
-            .adapter
-            .control(MediaCommand::SetPosition {
-                player: id,
-                track: current_track,
-                position: MediaTime::default()
-            })
-            .is_err()
-    );
+    watch.fail(MediaCommand::SetPosition {
+        player: id,
+        track: current_track,
+        position: MediaTime::default(),
+    });
+    assert!(state.lock().unwrap().calls.is_empty());
     state.lock().unwrap().position = 9_000_000;
     futures_lite::future::block_on(app.emit_signal(
         None::<&str>,
@@ -573,7 +783,7 @@ fn media_protocol_track_retirement_capability_changes_seeked_and_per_player_fail
             .iter()
             .any(|p| p.id == id && matches!(p.state, MediaPlayerState::Unavailable(_)))
     });
-    assert!(watch.adapter.control(MediaCommand::Play(id)).is_err());
+    watch.fail(MediaCommand::Play(id));
     state.lock().unwrap().rate = 1.;
     changed(&app, &["Rate"]);
     let recovered = watch.state(|s| {
@@ -609,8 +819,7 @@ fn media_protocol_owner_retirement_during_slow_control_never_retargets_replaceme
             .any(|p| matches!(p.state, MediaPlayerState::Ready(_)))
     });
     let old = ready(&snapshot).id;
-    let adapter = watch.adapter.clone();
-    let command = thread::spawn(move || adapter.control(MediaCommand::Pause(old)));
+    let operation = watch.adapter.start(MediaCommand::Pause(old)).unwrap();
     futures_lite::future::block_on(async {
         futures_lite::future::or(
             async {
@@ -636,12 +845,11 @@ fn media_protocol_owner_retirement_during_slow_control_never_retargets_replaceme
         retired_at.elapsed() < Duration::from_millis(700),
         "Owner events waited for the old method"
     );
-    assert!(command.join().unwrap().is_err());
-    assert!(watch.adapter.control(MediaCommand::Next(old)).is_err());
-    watch
-        .adapter
-        .control(MediaCommand::Next(ready(&current).id))
-        .unwrap();
+    let retired = current.operation.as_ref().unwrap();
+    assert_eq!(retired.id, operation);
+    assert!(matches!(retired.phase, MediaOperationPhase::Failed(_)));
+    watch.fail(MediaCommand::Next(old));
+    watch.acknowledge(MediaCommand::Next(ready(&current).id));
     assert_eq!(
         replacement.lock().unwrap().calls,
         vec![Call::Method("Next")]
@@ -663,9 +871,15 @@ fn media_protocol_timeout_keeps_observation_live_and_bus_loss_is_not_no_player()
             .any(|p| matches!(p.state, MediaPlayerState::Ready(_)))
     });
     let id = ready(&initial).id;
-    let adapter = watch.adapter.clone();
     let start = Instant::now();
-    let command = thread::spawn(move || adapter.control(MediaCommand::Pause(id)));
+    let operation = watch.adapter.start(MediaCommand::Pause(id)).unwrap();
+    assert!(
+        start.elapsed() < Duration::from_millis(200),
+        "Admission waited for native validation or a method reply"
+    );
+    for _ in 0..32 {
+        assert!(watch.adapter.start(MediaCommand::Next(id)).is_err());
+    }
     futures_lite::future::block_on(async {
         futures_lite::future::or(
             async {
@@ -687,8 +901,18 @@ fn media_protocol_timeout_keeps_observation_live_and_bus_loss_is_not_no_player()
         &(17_000_000i64,),
     ))
     .unwrap();
-    watch.state(|s| s.players.iter().any(|p| matches!(&p.state, MediaPlayerState::Ready(value) if value.position.is_some_and(|sample| sample.position.micros() == 17_000_000))));
-    assert!(command.join().unwrap().is_err());
+    let seeked = watch.state(|s| s.players.iter().any(|p| matches!(&p.state, MediaPlayerState::Ready(value) if value.position.is_some_and(|sample| sample.position.micros() == 17_000_000))));
+    assert!(
+        seeked.operation.as_ref().is_some_and(
+            |value| value.id == operation && value.phase == MediaOperationPhase::InProgress
+        ),
+        "Seeked waited behind the pending native method"
+    );
+    let terminal = watch.terminal(operation);
+    assert!(matches!(
+        terminal.operation.as_ref().unwrap().phase,
+        MediaOperationPhase::Failed(DomainError::Unavailable(_))
+    ));
     assert!(start.elapsed() < Duration::from_secs(1));
     assert_eq!(state.lock().unwrap().calls, vec![Call::Method("Pause")]);
     bus.child.kill().unwrap();
@@ -703,7 +927,7 @@ fn media_protocol_timeout_keeps_observation_live_and_bus_loss_is_not_no_player()
             break;
         }
     }
-    assert!(watch.adapter.control(MediaCommand::Play(id)).is_err());
+    assert!(watch.adapter.start(MediaCommand::Play(id)).is_err());
 }
 
 #[test]
@@ -723,27 +947,36 @@ fn media_protocol_delayed_seek_validation_cannot_reuse_retired_track_path() {
     let track = playback(player).track.as_ref().unwrap().id;
     let notices = next_read(&state);
     state.lock().unwrap().read_delay = Duration::from_millis(500);
-    let adapter = watch.adapter.clone();
-    let command = thread::spawn(move || {
-        adapter.control(MediaCommand::SetPosition {
+    let admitted_at = Instant::now();
+    let operation = watch
+        .adapter
+        .start(MediaCommand::SetPosition {
             player: id,
             track,
             position: MediaTime::new(25_000_000).unwrap(),
         })
-    });
+        .unwrap();
+    assert!(
+        admitted_at.elapsed() < Duration::from_millis(200),
+        "Seek admission waited for its delayed GetAll"
+    );
     read_started(&notices);
     // The validation GetAll is already dispatched but has not returned its
     // metadata. Reusing the same native path must not restore this old token.
     state.lock().unwrap().track = "/fixture/b".into();
     changed(&app, &["Metadata"]);
-    watch.state(|s| {
+    let retired = watch.state(|s| {
         s.players
             .iter()
             .any(|p| matches!(&p.state, MediaPlayerState::Ready(value) if value.track.is_none()))
     });
+    assert_eq!(retired.operation.as_ref().unwrap().id, operation);
+    assert!(matches!(
+        retired.operation.as_ref().unwrap().phase,
+        MediaOperationPhase::Failed(_)
+    ));
     state.lock().unwrap().track = "/fixture/a".into();
     changed(&app, &["Metadata"]);
-    assert!(command.join().unwrap().is_err());
     let recovered = watch.state(|s| s.players.iter().any(|p| matches!(&p.state, MediaPlayerState::Ready(value) if value.track.as_ref().is_some_and(|current| current.id != track))));
     assert_ne!(
         playback(ready(&recovered)).track.as_ref().unwrap().id,
@@ -788,4 +1021,230 @@ fn media_protocol_signal_burst_coalesces_behind_one_accepted_property_read() {
     release.send_blocking(()).unwrap();
     watch.state(|s| s.players.iter().any(|p| matches!(&p.state, MediaPlayerState::Ready(value) if value.position.is_some_and(|sample| sample.position.micros() == 31_000_000))));
     assert!(state.lock().unwrap().metadata_reads <= baseline + 3);
+}
+
+#[test]
+#[ignore = "owned private MPRIS D-Bus fixture; no host session bus"]
+fn media_protocol_terminal_delivery_precedes_readmission_and_pressure_never_dispatches() {
+    let bus = Bus::new();
+    let (state, _) = fixture();
+    let _app = application(&bus, "publication", state.clone());
+    let adapter = Arc::new(Mpris::with_bus_address(bus.address.clone()));
+    let (entered, terminal_values) = mpsc::sync_channel(1);
+    let (release, held) = mpsc::sync_channel(1);
+    let mut first_terminal = true;
+    let watch = Watch::with_hook(adapter, move |result| {
+        if first_terminal
+            && let Ok(snapshot) = result
+            && let Some(operation) = snapshot.operation.as_ref()
+            && operation.phase != MediaOperationPhase::InProgress
+        {
+            first_terminal = false;
+            let _ = entered.send(operation.clone());
+            // A short test-only callback gate distinguishes "about to emit"
+            // from "published". Missing release cannot strand the test worker.
+            let _ = held.recv_timeout(Duration::from_secs(3));
+        }
+    });
+    let initial = watch.state(|snapshot| {
+        snapshot
+            .players
+            .iter()
+            .any(|player| matches!(player.state, MediaPlayerState::Ready(_)))
+    });
+    let player = ready(&initial).id;
+    let first = watch.adapter.start(MediaCommand::Play(player)).unwrap();
+    let terminal = terminal_values
+        .recv_timeout(Duration::from_secs(3))
+        .unwrap();
+    assert_eq!(terminal.id, first);
+    assert_eq!(terminal.phase, MediaOperationPhase::Acknowledged);
+    for _ in 0..64 {
+        assert!(
+            watch.adapter.start(MediaCommand::Next(player)).is_err(),
+            "An undelivered terminal must not be replaced"
+        );
+    }
+    assert_eq!(state.lock().unwrap().calls, vec![Call::Method("Play")]);
+    release.send(()).unwrap();
+    let published = watch.terminal(first);
+    let refreshed = watch.refreshed_after(&published, player);
+    assert_eq!(refreshed.operation, Some(terminal));
+    let next = watch.acknowledge(MediaCommand::Next(player));
+    assert!(next.operation.as_ref().unwrap().id.value() > first.value());
+    assert_eq!(
+        state.lock().unwrap().calls,
+        vec![Call::Method("Play"), Call::Method("Next")]
+    );
+}
+
+#[test]
+#[ignore = "owned private MPRIS D-Bus fixture; no host session bus"]
+fn media_protocol_pending_bus_loss_retains_exact_failure_across_owned_bus_recovery() {
+    let mut bus = Bus::new();
+    let (state, started) = fixture();
+    state.lock().unwrap().delay = Duration::from_secs(2);
+    let _app = application(&bus, "lost", state.clone());
+    let watch = Watch::new(&bus, Duration::from_secs(3));
+    let initial = watch.state(|snapshot| {
+        snapshot
+            .players
+            .iter()
+            .any(|player| matches!(player.state, MediaPlayerState::Ready(_)))
+    });
+    let old = ready(&initial).id;
+    let command = MediaCommand::Pause(old);
+    let operation = watch.adapter.start(command).unwrap();
+    futures_lite::future::block_on(async {
+        futures_lite::future::or(
+            async {
+                started.recv().await.unwrap();
+            },
+            async {
+                async_io::Timer::after(Duration::from_secs(3)).await;
+                panic!("Native pending method did not begin");
+            },
+        )
+        .await;
+    });
+    bus.child.kill().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        if watch
+            .values
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+            .unwrap()
+            .is_err()
+        {
+            break;
+        }
+    }
+    let terminal = watch.adapter.operation().unwrap();
+    assert_eq!(terminal.id, operation);
+    assert_eq!(terminal.command, command);
+    assert!(matches!(
+        terminal.phase,
+        MediaOperationPhase::Failed(DomainError::Unavailable(_))
+    ));
+    assert!(watch.adapter.start(MediaCommand::Next(old)).is_err());
+    let mut adapter = watch.adapter.clone();
+    drop(watch);
+    let recovery_bus = Bus::new();
+    Arc::get_mut(&mut adapter).unwrap().address = Some(recovery_bus.address.clone());
+    let (replacement, _) = fixture();
+    let _replacement_app = application(&recovery_bus, "recovered", replacement.clone());
+    let recovered = Watch::from_adapter(adapter);
+    let snapshot = recovered.state(|snapshot| {
+        snapshot
+            .players
+            .iter()
+            .any(|player| matches!(player.state, MediaPlayerState::Ready(_)))
+    });
+    assert_eq!(snapshot.operation, Some(terminal));
+    let current = ready(&snapshot).id;
+    assert!(current.value() > old.value());
+    let stale = recovered.fail(MediaCommand::Next(old));
+    assert!(stale.id.value() > operation.value());
+    let next = recovered.acknowledge(MediaCommand::Next(current));
+    assert!(next.operation.as_ref().unwrap().id.value() > stale.id.value());
+    assert_eq!(
+        replacement.lock().unwrap().calls,
+        vec![Call::Method("Next")]
+    );
+    assert_eq!(state.lock().unwrap().calls, vec![Call::Method("Pause")]);
+}
+
+#[test]
+#[ignore = "owned private MPRIS D-Bus fixture; no host session bus"]
+fn media_protocol_next_during_post_ack_refresh_uses_current_owner_and_rejects_retired_seek() {
+    let bus = Bus::new();
+    let (state, _) = fixture();
+    let app = application(&bus, "first", state.clone());
+    let (other, _) = fixture();
+    let _other_app = application(&bus, "second", other.clone());
+    let (release, block) = async_channel::bounded(1);
+    let gated_state = state.clone();
+    let mut arm_refresh = true;
+    let adapter = Arc::new(Mpris::with_bus_address(bus.address.clone()));
+    let watch = Watch::with_hook(adapter, move |result| {
+        if arm_refresh
+            && let Ok(snapshot) = result
+            && snapshot
+                .operation
+                .as_ref()
+                .is_some_and(|operation| operation.phase == MediaOperationPhase::Acknowledged)
+        {
+            arm_refresh = false;
+            // The follow-up read is spawned before this callback but has not
+            // been polled. Hold only that read; command revalidation stays live.
+            gated_state.lock().unwrap().read_block_once = Some(block.clone());
+        }
+    });
+    let initial = watch.state(|snapshot| {
+        snapshot.players.len() == 2
+            && snapshot
+                .players
+                .iter()
+                .all(|player| matches!(player.state, MediaPlayerState::Ready(_)))
+    });
+    let selected = &initial.players[0];
+    let player = selected.id;
+    let old_track = playback(selected).track.as_ref().unwrap().id;
+    let notices = next_read(&state);
+    let first = watch.adapter.start(MediaCommand::Play(player)).unwrap();
+    let acknowledged = watch.terminal(first);
+    assert_eq!(
+        acknowledged.operation.as_ref().unwrap().phase,
+        MediaOperationPhase::Acknowledged
+    );
+    // First GetAll validates Play; the second is the now-held post-ack read.
+    read_started(&notices);
+    read_started(&notices);
+    assert!(state.lock().unwrap().read_block_once.is_none());
+    // Deliberately avoid acknowledge()/refreshed_after(): a user can issue the
+    // next action immediately after the prior terminal reaches their callback.
+    let next = watch.admit(MediaCommand::Next(player));
+    let completed = watch.terminal(next);
+    assert_eq!(
+        completed.operation.as_ref().unwrap().phase,
+        MediaOperationPhase::Acknowledged,
+        "A valid current owner must not become stale solely because its refresh is pending"
+    );
+    assert_eq!(
+        state.lock().unwrap().calls,
+        vec![Call::Method("Play"), Call::Method("Next")]
+    );
+    assert!(
+        other.lock().unwrap().calls.is_empty(),
+        "The action reached a different running player"
+    );
+    // Relaxing the redundant freshness flag must preserve exact track authority.
+    state.lock().unwrap().track = "/fixture/b".into();
+    changed(&app, &["Metadata"]);
+    watch.state(|snapshot| {
+        snapshot.players.iter().any(|value| value.id == player
+        && matches!(&value.state, MediaPlayerState::Ready(playback) if playback.track.is_none()))
+    });
+    let stale = watch.fail(MediaCommand::SetPosition {
+        player,
+        track: old_track,
+        position: MediaTime::default(),
+    });
+    assert!(matches!(
+        stale.phase,
+        MediaOperationPhase::Failed(DomainError::Invalid(_))
+    ));
+    assert_eq!(
+        state.lock().unwrap().calls,
+        vec![Call::Method("Play"), Call::Method("Next")]
+    );
+    release.send_blocking(()).unwrap();
+    let refreshed = watch.state(|snapshot| {
+        snapshot.players.iter().any(|value| {
+            value.id == player
+                && matches!(&value.state, MediaPlayerState::Ready(playback)
+            if playback.track.as_ref().is_some_and(|track| track.id != old_track))
+        })
+    });
+    assert_eq!(refreshed.operation, Some(stale));
 }

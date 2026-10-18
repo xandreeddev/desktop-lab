@@ -192,7 +192,6 @@ struct Entry {
     generation: u64,
     refresh: Option<Task<()>>,
     dirty: bool,
-    authoritative: bool,
     retry_at: Option<Instant>,
     retries: u8,
 }
@@ -206,7 +205,6 @@ impl Entry {
         // refresh. Dropping/restarting it on every signal would leave already
         // dispatched GetAll calls running in the peer during a signal burst.
         self.dirty = true;
-        self.authoritative = false;
         self.retry_at = None;
         Ok(())
     }
@@ -235,26 +233,26 @@ struct Active {
     request: Request,
     _task: Task<()>,
 }
-impl Drop for Active {
-    fn drop(&mut self) {
-        // If it already received a reply, a second try_send either fills an
-        // unobserved slot or fails; it never blocks or authorizes a retry.
-        let _ = self.request.reply.try_send(Err(stale()));
-    }
-}
-fn retire_seek(active: &mut Option<Active>, player: MediaPlayerId) {
+fn retire_seek(adapter: &Mpris, active: &mut Option<Active>, player: MediaPlayerId) {
     if active.as_ref().is_some_and(|active| {
         active.id == player && matches!(active.request.command, MediaCommand::SetPosition { .. })
     }) {
         // Dropping Task cancels a GetAll/method still awaiting its reply. This
         // cannot undo an accepted method, but must prevent A -> B -> A native
         // path reuse from restoring a retired domain track's authority.
-        *active = None;
+        let retired = active.take().unwrap();
+        adapter.finish(
+            retired.request.id,
+            Err(unavailable(
+                "Media track retired; the seek outcome may be uncertain",
+            )),
+        );
     }
 }
-fn catalog(entries: &BTreeMap<String, Entry>) -> MediaSnapshot {
+fn catalog(adapter: &Mpris, entries: &BTreeMap<String, Entry>) -> MediaSnapshot {
     MediaSnapshot {
         players: entries.values().map(|entry| entry.data.clone()).collect(),
+        operation: adapter.operation(),
     }
 }
 fn refresh(
@@ -319,7 +317,6 @@ fn add(
             generation: 0,
             refresh: None,
             dirty: true,
-            authoritative: false,
             retry_at: None,
             retries: 0,
         },
@@ -487,9 +484,12 @@ pub(super) async fn observe(
         .run(async {
             while !stop.cancelled() {
                 refresh(&executor, &connection, &done, &mut entries, adapter.timeout);
-                let snapshot = catalog(&entries);
+                let snapshot = catalog(adapter, &entries);
                 if previous.as_ref() != Some(&snapshot) {
                     emit(Ok(snapshot.clone()));
+                    // Admission remains closed until the terminal value has
+                    // reached the subscriber. Never hold its mutex in emit.
+                    adapter.published(snapshot.operation.as_ref());
                     previous = Some(snapshot);
                 }
                 let accept = active.is_none();
@@ -521,12 +521,6 @@ pub(super) async fn observe(
                 .await;
                 match wake {
                     Wake::Cancel => {
-                        if active
-                            .as_ref()
-                            .is_some_and(|active| active.request.cancelled.load(Ordering::Acquire))
-                        {
-                            active = None;
-                        }
                         // Failed reads get at most three bounded recovery attempts;
                         // ordinary ready players are never periodically queried.
                         for entry in entries.values_mut() {
@@ -558,7 +552,10 @@ pub(super) async fn observe(
                         if let Some(retired) = retired {
                             entries.remove(&name); // drops the in-flight property future
                             if active.as_ref().is_some_and(|active| active.id == retired) {
-                                active = None; // replies immediately without waiting on the old player
+                                let retired = active.take().unwrap();
+                                adapter.finish(retired.request.id, Err(unavailable(
+                                    "Media player retired; the command outcome may be uncertain",
+                                )));
                             }
                         }
                         if !new.is_empty() {
@@ -582,7 +579,7 @@ pub(super) async fn observe(
                                 for entry in
                                     entries.values_mut().filter(|entry| entry.owner == sender)
                                 {
-                                    retire_seek(&mut active, entry.data.id);
+                                    retire_seek(adapter, &mut active, entry.data.id);
                                     entry.retire_track();
                                     entry.invalidate()?;
                                     entry.data.state = MediaPlayerState::Unavailable(
@@ -604,7 +601,7 @@ pub(super) async fn observe(
                                 if native.as_ref() != entry.track.as_ref()
                                     || invalidated.iter().any(|p| p == "Metadata")
                                 {
-                                    retire_seek(&mut active, entry.data.id);
+                                    retire_seek(adapter, &mut active, entry.data.id);
                                     entry.retire_track();
                                 }
                             }
@@ -665,15 +662,13 @@ pub(super) async fn observe(
                             Ok((data, track)) => {
                                 entry.data = data;
                                 entry.track = track;
-                                entry.authoritative = true;
                                 entry.retry_at = None;
                                 entry.retries = 0;
                             }
                             Err(error) => {
-                                retire_seek(&mut active, entry.data.id);
+                                retire_seek(adapter, &mut active, entry.data.id);
                                 entry.retire_track();
                                 entry.data.state = MediaPlayerState::Unavailable(error.to_string());
-                                entry.authoritative = false;
                                 if entry.retries < 3 {
                                     entry.retries += 1;
                                     entry.retry_at = Some(Instant::now() + Duration::from_secs(2));
@@ -687,7 +682,7 @@ pub(super) async fn observe(
                             .is_some_and(|active| active.revision == revision)
                         {
                             let active = active.take().unwrap();
-                            let _ = active.request.reply.try_send(result);
+                            adapter.finish(active.request.id, result);
                             if let Some(entry) = entries
                                 .values_mut()
                                 .find(|entry| entry.data.id == active.id)
@@ -697,27 +692,28 @@ pub(super) async fn observe(
                         }
                     }
                     Wake::Request(Ok(request)) => {
-                        if request.cancelled.load(Ordering::Acquire)
-                            || request.deadline <= Instant::now()
-                        {
-                            let _ = request
-                                .reply
-                                .try_send(Err(unavailable("Media request deadline expired")));
+                        if request.deadline <= Instant::now() {
+                            adapter.finish(
+                                request.id,
+                                Err(unavailable(
+                                    "Media request deadline expired before dispatch",
+                                )),
+                            );
                             continue;
                         }
                         let id = target(&request.command);
-                        let Some(entry) = entries
-                            .values()
-                            .find(|entry| entry.data.id == id && entry.authoritative)
-                        else {
-                            let _ = request.reply.try_send(Err(stale()));
+                        // A pending refresh does not retire a still-current
+                        // Ready player. Validate the captured domain handles
+                        // here, then re-read native capabilities before dispatch.
+                        let Some(entry) = entries.values().find(|entry| entry.data.id == id) else {
+                            adapter.finish(request.id, Err(stale()));
                             continue;
                         };
                         if let Err(error) = lucent_usecases::media::validate_media_command(
-                            &catalog(&entries),
+                            &catalog(adapter, &entries),
                             &request.command,
                         ) {
-                            let _ = request.reply.try_send(Err(error));
+                            adapter.finish(request.id, Err(error));
                             continue;
                         }
                         command_revision = command_revision

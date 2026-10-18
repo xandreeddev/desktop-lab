@@ -44,7 +44,7 @@ Wallpaper decoding is a different feature with a different port; see
 
 ## What the domain means
 
-`MediaPlayerId` and `MediaTrackId` are nonzero transient handles. They are not a
+`MediaPlayerId`, `MediaTrackId` and `MediaOperationId` are nonzero transient handles. They are not a
 persisted application ID, bus name or transport path. Removing a player or
 replacing its owner retires the handle. A track change retires its track handle,
 including a change away from and back to the same native path. Updating metadata
@@ -57,7 +57,7 @@ playback. A `MediaPositionSample` pairs the observed position with a monotonic
 sample instant and rate. None of these values opens a connection or queries a
 clock during pure policy evaluation.
 
-`MediaSnapshot` contains current players. A successful empty snapshot means no
+`MediaSnapshot` contains current players and an optional current operation. A successful empty player list means no
 running players. A global error means observation is unavailable. Each player
 also distinguishes ready playback from unavailable metadata; one broken player
 must not manufacture an empty successful library. Capability flags govern
@@ -71,17 +71,35 @@ plain data; checked constructors enforce only their documented invariants.
 ## What happens when you click Pause or seek
 
 The element captures `Pause(player_id)` for the player it actually displayed.
-The child revalidates the command and schedules an effect on the existing audio
-work lane. The native adapter admits it to a bounded queue, resolves the captured
-handle to its current unique owner and calls that owner directly. It never
-substitutes whichever player happens to be globally active later.
+The child revalidates the command and schedules `MediaPort::start` on the existing
+controls work lane. This call only admits one job to a bounded local mailbox and
+returns its `MediaOperationId`; it does not wait for D-Bus, validate native target
+ownership or guarantee that the method will succeed. Busy, offline or full
+admission fails without dispatch. Contended local guards also fail immediately;
+`start` never waits to acquire them. The observer's executor resolves the captured
+handle to its current unique owner, revalidates it and calls that owner directly.
+It never substitutes whichever player happens to be globally active later.
+After a method reply, a background property refresh may still be pending. That
+refresh does not reject an otherwise current follow-up action: the adapter
+revalidates its capabilities and seek identity immediately before native dispatch.
 
-Admission, a method reply and observed playback are distinct. The child keeps
-its pending/error state separately and waits for observations to change the
-displayed playback status. A successful reply does not rewrite the snapshot.
-Unknown outcomes are reported and not automatically replayed. Player retirement
-cancels local pending authority; it cannot undo a method already delivered to
-the application.
+Admission, a method reply and observed playback are distinct. The watcher reports
+`MediaOperation { id, command, phase }`, whose phase is `InProgress`,
+`Acknowledged` or `Failed(DomainError)`. Acknowledgement means the addressed
+method replied successfully; playback changes only through observed properties.
+The adapter retains the terminal result until it has been emitted, and will not
+admit another operation before that publication. The desktop keeps one local
+request and joins its revision, captured command and admitted operation ID with
+that observation. A terminal watch update can arrive before the admission task
+reply; unrelated IDs or commands cannot settle the request.
+
+Close, selection changes and target retirement cannot revoke an admitted native
+method. The client keeps waiting for its exact result while the adapter rejects
+retired player/track authority. A whole-observer error retires the local request,
+cancels any admission task still queued and reports an uncertain outcome. Late
+admission/results cannot resurrect it. Unknown outcomes are never automatically
+replayed, and there is no cancellation API that could imply an already-sent
+method had no effect.
 
 A slider drag previews a fraction locally. Only release submits
 `SetPosition { player, track, position }`. Changing player, track or capability,
@@ -121,7 +139,9 @@ prepared bytes, GPU texture bytes and process RSS have different scopes.
 
 ## Bounds, failures and acceptance
 
-The native catalog admits at most 16 players, with 32 waiting commands. Signals,
+The native catalog admits at most 16 players and one admitted operation, either
+waiting for native dispatch or awaiting its method result. A second request is
+rejected while that operation is active or its terminal result is unpublished. Signals,
 metadata and native reads have separate limits; these are not a total process
 memory budget. Startup has one shared three-second deadline; each accepted
 read/control has its own three-second absolute deadline. At most one property
@@ -130,17 +150,17 @@ demand behind a read already accepted. Failed reads have at most three recovery
 attempts at two-second intervals until a new native signal resets demand.
 Transport reconnection waits two seconds. Connection-close teardown follows
 the existing native adapter pattern and has no separate explicit deadline.
-Observing workers
-must keep their callbacks responsive and never call a synchronous control
-method from the owning observation callback.
+Observing callbacks must remain responsive. `start` does no native I/O, but the
+desktop still schedules its short local admission on a framework effect lane.
 
 The desktop distinguishes loading, no players, unavailable observation,
 per-player errors, command failures and artwork failures. Retained last-good
 content is not current control authority. Reconnection creates fresh handles;
-the user must act on current controls. Media and audio currently share one
-ordered effect lane; a stalled media method can delay a queued volume action
-until its bounded call returns. Rendering and the urgent session lane remain
-independent. Independent audio/media command scheduling remains follow-up work.
+the user must act on current controls. Short media admission shares the existing
+controls lane with other brief control work; audio volume stays on the audio
+lane. Native media validation and method waiting live in the observing adapter,
+so a stalled player method does not occupy the volume lane. The framework still
+uses the same nine bounded workers; no media command worker was added.
 
 Private D-Bus protocol fixtures, pure policy tests, injected child tests and
 Vulkan visual checks are separate from actual player interoperability. A
@@ -148,6 +168,15 @@ controlled fixture does not establish browser, Spotify, VLC or physical-device
 acceptance. Current source-specific results belong in the implementation
 ledger and measurement report. Rate/volume editing, playlists, track lists and
 OpenUri are outside this initial control surface and remain future work.
+
+The accepted release from source `76176f83b19` passed real keyboard/pointer
+interaction with two owned players in the test VM, including selected-player
+compatibility keys, release-only seeking and retirement rejection. Its six-client
+deployment preserved settings and wallpaper; see
+[the source-specific report](../reports/measurements/lucent-native-mpris.json).
+That release predates the operation-admission contract described above. Current
+source tests, current-binary VM acceptance and third-party interoperability are
+separate evidence; the report does not claim they have all passed.
 
 The native panel opens with `lucent-cli media open`, toggles with
 `lucent-cli media toggle` and closes with `lucent-cli media close`. Its surface role is `media-controls`; the desktop
@@ -165,6 +194,10 @@ and newline-delimited JSON commands, each limited to 4096 bytes. A seek command
 uses current handles and microseconds, for example
 `{"command":"seek","player":1,"track":2,"position_us":30000000}`.
 Those numbers are illustrative, not stable identities.
+
+A successful command line reports `{"admitted":true,"operation":ID}`. Watched
+snapshots separately report that operation's command, phase and typed error.
+Either line may arrive first; admission alone never reports native success.
 
 Compatibility media keys and shorthand `lucent-cli media play-pause`, `next`
 and `previous` capture the current selected player during command admission.

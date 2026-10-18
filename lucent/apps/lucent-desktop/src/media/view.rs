@@ -165,8 +165,15 @@ impl Media {
         if !self.error.is_empty() {
             content.push(theme.status_text(&self.error, true).wrap(3));
         }
-        if self.pending.is_some() {
-            content.push(theme.status_text("Sending media command…", false));
+        if let Some(pending) = &self.pending {
+            content.push(theme.status_text(
+                if pending.operation.is_some() {
+                    "Waiting for player…"
+                } else {
+                    "Sending command…"
+                },
+                false,
+            ));
         }
         let rect = crate::shell_layout::media_panel((cx.width, cx.height));
         let progress = self.motion.value(cx.now);
