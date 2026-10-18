@@ -385,11 +385,35 @@ impl Desktop {
     }
     fn reconcile_live_wallpapers(&mut self) {
         let monitors = self.monitors.connected.keys().cloned().collect::<Vec<_>>();
+        let mut pixel_targets = std::collections::BTreeMap::new();
+        for (id, monitor) in &self.monitors.connected {
+            if monitor.background_configured
+                && let Ok(target) = crate::ports::BackgroundTarget::from_density(
+                    monitor.viewport.0,
+                    monitor.viewport.1,
+                    monitor.density,
+                )
+            {
+                let (width, height) = target.size();
+                if let Ok(target) = WallpaperPixelTarget::new(width, height) {
+                    pixel_targets.insert(LiveWallpaperTarget::Monitor(id.clone()), target);
+                }
+            }
+        }
+        if self.monitors.legacy()
+            && let Some(target) = self.wallpaper.background_target()
+        {
+            let (width, height) = target.size();
+            if let Ok(target) = WallpaperPixelTarget::new(width, height) {
+                pixel_targets.insert(LiveWallpaperTarget::Default, target);
+            }
+        }
         self.live_wallpaper.reconcile(
             &self.settings.live_wallpapers,
             &monitors,
             self.display_catalog_seen,
             &self.wallpaper_context,
+            &pixel_targets,
         );
     }
     fn reconcile_backgrounds(&mut self, effects: &mut Effects<Message>) {
@@ -659,6 +683,14 @@ impl Desktop {
             let message = match intent {
                 Intent::Error(error) => Message::Completed(Err(error)),
                 Intent::Launch(id, prefer) => Message::Launch(id, prefer),
+                Intent::LaunchAction {
+                    revision,
+                    app,
+                    action,
+                } => {
+                    self.launch_application_action(revision, app, action, effects);
+                    return;
+                }
                 Intent::Pin(id) => Message::Dock(crate::dock::Message::Pin(id)),
                 Intent::Action(action) => Message::Action(action),
                 Intent::Wallpaper(index, apply) => Message::Wallpaper(index, apply),
@@ -887,6 +919,52 @@ impl Desktop {
             })
         });
     }
+    fn launch_application_action(
+        &mut self,
+        revision: u64,
+        app: domain::Application,
+        action: ApplicationActionId,
+        effects: &mut Effects<Message>,
+    ) {
+        let mut current = self.apps.iter().filter(|entry| entry.id == app.id);
+        if !matches!(self.catalog.status(), crate::catalog::Status::Ready)
+            || current.next() != Some(&app)
+            || current.next().is_some()
+        {
+            self.update_launcher(
+                launcher::Message::ActionFinished {
+                    revision,
+                    result: Err(DomainError::Invalid(
+                        "Application actions changed; open them again".into(),
+                    )),
+                },
+                effects,
+            );
+            return;
+        }
+        let apps = self.adapters.apps.clone();
+        effects.task_on_with_failure(
+            crate::work::CONTROLS,
+            move || {
+                Message::Launcher(launcher::Message::ActionFinished {
+                    revision,
+                    result: lucent_usecases::launch_application_action(
+                        apps.as_ref(),
+                        &app,
+                        &action,
+                    ),
+                })
+            },
+            move |failure| {
+                Message::Launcher(launcher::Message::ActionFinished {
+                    revision,
+                    result: Err(DomainError::Failed(format!(
+                        "Application action outcome is uncertain: {failure}"
+                    ))),
+                })
+            },
+        );
+    }
     fn perform(&mut self, action: Action, effects: &mut Effects<Message>) {
         if matches!(action, Action::DockAutoHide) {
             self.update_dock(
@@ -1088,6 +1166,7 @@ impl Component for Desktop {
                             .connected
                             .get_mut(&route.id)
                             .expect("validated route");
+                        monitor.background_configured = true;
                         if monitor.viewport != (width, height) || monitor.density != density {
                             monitor.widgets.cancel_interactions();
                             monitor.viewport = (width, height);
@@ -1197,7 +1276,12 @@ impl Component for Desktop {
                     },
                     Message::Catalog,
                 );
-                if changed {
+                let retire_actions = self.launcher.actions_open()
+                    && !matches!(self.catalog.status(), crate::catalog::Status::Ready);
+                if retire_actions {
+                    self.launcher.retire_actions();
+                }
+                if changed || retire_actions {
                     self.update_dock(crate::dock::Message::Cancel, effects);
                     self.launcher.refresh_preserving(
                         &self.apps,
@@ -2358,6 +2442,7 @@ impl api::Application for Desktop {
                 && !modifiers.alt
                 && !modifiers.logo
                 && self.launcher.open()
+                && !self.launcher.actions_open()
                 && self.launcher.mode() == Mode::Apps =>
             {
                 self.launcher
@@ -2450,6 +2535,34 @@ impl api::Application for Desktop {
         }
     }
     fn command(&self, command: &str) -> std::result::Result<Option<Message>, String> {
+        if let Some(value) = command.strip_prefix("launcher actions ") {
+            let id = AppId::new(value).map_err(|error| error.to_string())?;
+            if !matches!(self.catalog.status(), crate::catalog::Status::Ready) {
+                return Err("Application catalog is unavailable".into());
+            }
+            let mut apps = self.apps.iter().filter(|app| app.id == id);
+            let app = apps.next().ok_or("Application is unavailable")?;
+            if apps.next().is_some() {
+                return Err("Application identity is ambiguous".into());
+            }
+            if self.launcher.open()
+                && self.launcher.mode() == Mode::Apps
+                && !lucent_usecases::search_applications(&self.apps, self.launcher.query())
+                    .iter()
+                    .any(|index| self.apps.get(*index) == Some(app))
+            {
+                return Err("Application is outside the current launcher query".into());
+            }
+            return Ok(Some(Message::Launcher(launcher::Message::OpenActions(
+                app.clone(),
+            ))));
+        }
+        if let Some(value) = command.strip_prefix("launcher action ") {
+            return self
+                .launcher
+                .action_message(value)
+                .map(|message| Some(Message::Launcher(message)));
+        }
         if let Some(command) = command.strip_prefix("media ") {
             return self
                 .media
@@ -2754,6 +2867,7 @@ impl api::Application for Desktop {
         value["power"] = self.power.inspect();
         value["tray"] = self.tray.inspect();
         value["catalog"] = self.catalog.inspect();
+        value["application_actions"] = self.launcher.actions_inspect();
         value["dock"] = self.dock.inspect();
         value["widget_sizes"] = serde_json::json!(self.active_widget_layout().widget_sizes);
         value["widgets_editing"] = serde_json::json!(self.active_widgets().editing());

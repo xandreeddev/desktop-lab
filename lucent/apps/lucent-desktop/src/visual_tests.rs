@@ -1,5 +1,6 @@
 //! Deterministic fixtures use the production layout, fonts, shaders and Vulkan renderer.
 //! Run ignored snapshots explicitly; no session, D-Bus service or compositor is needed.
+mod application_actions;
 use crate::desktop::{Desktop, Message};
 use crate::launcher::{self, Mode};
 use lucent_api::*;
@@ -64,6 +65,7 @@ fn fixture(count: usize, light: bool) -> Desktop {
                 format!("symbol:{}", icons[n % icons.len()])
             },
             startup_class: String::new(),
+            actions: vec![],
             launch: lucent_domain::ApplicationLaunch::Command(LaunchCommand {
                 program: "unused-fixture".into(),
                 args: vec![],
@@ -340,6 +342,31 @@ fn key(app: &mut Desktop, key: Key) {
         })
         .expect("handled key");
     app.update(msg, &mut Effects::default());
+}
+fn prepare_application_actions(app: &mut Desktop, count: usize) {
+    let mut applications = app.apps.clone();
+    let selected = &mut applications[0];
+    selected.actions = (0..count)
+        .map(|index| lucent_domain::ApplicationAction {
+            id: lucent_domain::ApplicationActionId::new(format!("Action-{index}")).unwrap(),
+            name: if index == 0 {
+                "Open a new window".into()
+            } else {
+                format!("Action {index}: a deliberately long application action label")
+            },
+            icon: String::new(),
+            launch: selected.launch.clone(),
+        })
+        .collect();
+    let captured = selected.clone();
+    app.update(
+        Message::Catalog(crate::catalog::Message::Observed(Ok(applications))),
+        &mut Effects::default(),
+    );
+    app.update(
+        Message::Launcher(launcher::Message::OpenActions(captured)),
+        &mut Effects::default(),
+    );
 }
 fn fully_visible(rect: Rect, clip: Rect) -> bool {
     rect.x >= clip.x - 0.01
@@ -1669,6 +1696,16 @@ fn visual_regressions() {
             ("media-loading", Mode::Apps, 0, 0, "", 1., 640.),
             ("media-empty", Mode::Apps, 0, 0, "", 1., 390.),
             ("media-playing", Mode::Apps, 0, 0, "", 1., 640.),
+            ("application-actions", Mode::Apps, 2, 0, "", 1., 640.),
+            (
+                "application-actions-narrow",
+                Mode::Apps,
+                2,
+                31,
+                "",
+                1.,
+                390.,
+            ),
             ("media-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("media-paused", Mode::Apps, 0, 0, "", 1., 390.),
             ("audio-loading", Mode::Apps, 0, 0, "", 1., 640.),
@@ -1779,7 +1816,7 @@ fn visual_regressions() {
                 320.
             } else if name.starts_with("launcher-size-") {
                 1080.
-            } else if name.starts_with("notes-") {
+            } else if name.starts_with("notes-") || name == "application-actions-narrow" {
                 320.
             } else if name == "themes-small-screen" {
                 360.
@@ -1809,6 +1846,13 @@ fn visual_regressions() {
                 Message::Launcher(launcher::Message::Select(selected)),
                 &mut Effects::default(),
             );
+            if name.starts_with("application-actions") {
+                prepare_application_actions(&mut app, 32);
+                app.update(
+                    Message::Launcher(launcher::Message::SelectAction(selected)),
+                    &mut Effects::default(),
+                );
+            }
             if name == "apps-empty" {
                 app.update(
                     Message::Launcher(launcher::Message::Query(query.into())),
@@ -3270,6 +3314,14 @@ fn visual_regressions() {
             if name.starts_with("live-wallpaper-policy") {
                 assert_visible("live-policy-battery");
                 assert_visible("live-policy-fullscreen");
+            }
+            if name.starts_with("application-actions") {
+                assert_visible("application-actions-back");
+                assert_visible(if name.ends_with("narrow") {
+                    "application-action-Action-31"
+                } else {
+                    "application-action-Action-0"
+                });
             }
             if name.starts_with("live-wallpaper-library") {
                 assert_visible("live-library-0");

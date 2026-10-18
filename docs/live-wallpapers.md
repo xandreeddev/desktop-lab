@@ -186,7 +186,8 @@ detector. No wallpaper observation ever authorizes an unlock.
 Initial envelopes:
 
 - Local regular sources up to 512 MiB; MP4, WebM and GIF containers only.
-- Decoded dimensions at most 4096 per edge and 64 MiB per RGBA frame.
+- Source decoded dimensions at most 4096 per edge and 64 MiB per RGBA frame;
+  a smaller playback destination does not admit a larger source.
 - At most four enabled profiles, 32 retained monitor preference entries and
   32 imported assets. Remove unused owned media when the asset store is full;
   there is no automatic deletion of configured/rollback media.
@@ -203,14 +204,73 @@ physical GPU frame pacing, hardware decoding and power use still need measuremen
 This implementation decodes on the CPU with one codec thread; Vulkan renders the
 result. It does not claim Vulkan Video or hardware decode support.
 
+## Display-sized playback pixels
+
+`PlaybackOptions.target` accepts an optional domain `WallpaperPixelTarget` with
+validated positive physical-pixel dimensions. `None` preserves source dimensions
+until display geometry is known. Import validation and poster preparation keep
+that source-sized default; playback fitting does not reduce poster quality or
+relax the source envelope.
+
+The client derives each connected consumer's demand from its actual background
+viewport and integer or fractional rendering density. Consumers sharing a
+media/frame-rate producer contribute the maximum width and maximum height to
+that producer's target, including paused consumers. Independent producers keep
+independent targets. The focused output and a global desktop extent cannot
+substitute for these per-consumer observations.
+
+Before a named output catalog arrives, the default route can use its validated
+legacy background extent. An observed catalog containing only unnamed outputs
+still does not establish a live-wallpaper route in the current coordinator;
+extending that legacy fallback remains separate work. A genuinely empty catalog
+continues to retire playback.
+
+For formats proven opaque by FFmpeg's pixel descriptor, the adapter converts
+only the RGBA destination to the smallest uniformly scaled size sufficient to
+cover both target edges, with checked outward rounding and no upscaling.
+Alpha-capable or paletted formats retain source-sized conversion, even when a
+particular frame happens to be opaque. An unavailable format descriptor also
+keeps source size. FFmpeg's `AV_PIX_FMT_FLAG_ALPHA` contract describes these
+values as straight alpha; resampling before the SDK premultiplies can introduce
+invisible RGB into visible edges. Source-sized conversion preserves the existing
+premultiply then GPU-filter path. This conservative policy means GIF and
+alpha-bearing media do not receive the conversion-memory reduction;
+alpha-safe fitted conversion is separate work.
+
+Source aspect metadata passes through `MediaFrame` into the
+prepared SDK image, so rounding odd dimensions does not alter cover geometry.
+The existing private FFmpeg frame and owned row copy remain; published bytes are
+never borrowed from conversion scratch.
+
+A changed target retires the producer generation and its latest-frame mailbox.
+The last good immutable image remains visible while its replacement prepares;
+paused consumers keep their frozen pixels. This adds no decoder per output,
+worker, polling or redraw source. Source timestamps, frame-rate policy, bounded
+delivery and the existing reveal animation continue to govern playback.
+The replacement decoder starts at the beginning of the clip. Preserving the
+playhead across a target change requires a separate seek/resume contract.
+
+An output enlarged while paused keeps the exact pixels it previously froze;
+it cannot gain detail that those pixels no longer contain. An active shared
+producer includes the enlarged demand, and a resumed output uses its newly
+prepared frame. Re-decoding the exact frozen timestamp at a larger size remains
+separate work; this change does not seek, replace frozen content with a poster,
+or retain additional full-resolution source snapshots.
+
+The live-wallpaper inspector's `producers` entries report target, stored frame
+size and source aspect separately, without exposing media paths. These counters
+support matching a resource sample to the actual conversion demand; they are
+not decoder scratch, GPU staging or total process-memory measurements.
+
 ## Architecture and startup path
 
 ```text
 saved LiveWallpapers or explicit import
   → domain WallpaperFrameRate policy (Source or validated WallpaperFps cap)
+  → optional per-producer WallpaperPixelTarget from background consumers
   → WallpaperPlaybackPort supplied by NativeVideoWallpapers
   → producer subscription owns FFmpeg context and timing
-  → decoded MediaFrame with validated dimensions/bytes
+  → decoded MediaFrame with validated destination pixels and source aspect
   → SDK ImageStream prepares a single immutable image level on the worker
   → latest mailbox replaces previous unpublished content
   → small Wake message reaches the client's UI thread
@@ -297,6 +357,21 @@ they do not cause idle surfaces to repaint continuously. Codec timestamps and th
 FPS cap schedule media frames independently of UI component motion.
 
 ## Evidence and remaining acceptance
+
+The integrated display-fit source passes 662 regular Rust tests, strict Clippy,
+95 Python checks, generated tokens, three streamed-image GPU checks, 56 unchanged
+live-wallpaper visual comparisons and both documentation prefixes. Focused
+tests cover odd source dimensions and aspect,
+fractional density, differently shaped shared outputs, independent profiles,
+resize/hotplug generation retirement, retained paused pixels and unchanged
+source timing. A tiny two-frame transparent GIF and descriptor checks cover
+source-sized alpha conversion, contrasting invisible RGB and premultiplied edge
+coverage. Native resize/density acceptance and compositor alpha-edge acceptance
+remain separate. Repeat the
+same full-resolution workload and source cadence when
+measuring RSS/PSS, retained/uploaded bytes and presented frames. No display-fit
+native performance sample or 300 MiB pass is claimed here; the historical
+measurements below retain their recorded source identities.
 
 Owned fixtures encode tiny synthetic MP4/WebM/GIF files and decode them through
 this exact native adapter. Tests cover actual pixels, frame counts/timestamps,
@@ -397,6 +472,21 @@ Actual compositor captures also verify intermediate red/blue fade pixels and
 outgoing-image retirement in both change directions. Both the resource and
 pixel checks restore exact settings, wallpaper, exports and idle policy. See
 the [image lifetime report](../reports/measurements/lucent-image-lifetime.json).
+
+A fresh normal-mode sample of PR73 source
+`d2aed42199ed6b29f6eef214c1a6ee490658adc6` preserves the currently selected live
+wallpaper on the 1920×1080 scale-1 software-Vulkan output. Over 120 seconds it
+measures 548.29 MiB mean / 609.41 MiB peak RSS and 250.132% of one logical CPU
+core. There are 2232 background submissions, and the live producer retains
+33,177,600 bytes of RGBA pixels. Warm launcher submission medians range from
+32.98 to 48.67 ms, with maxima up to 98.97 ms. This different workload is not a
+matched comparison with the earlier 1280×800, 15 FPS sample. It exceeds the
+300 MiB target; source-size conversion, display demand and decoder/driver
+costs require investigation. Source timing, display density and effects were
+unchanged. Settings/wallpaper and the running binary hash were verified.
+See the [current live resource baseline](../reports/measurements/lucent-live-wallpaper-4k-baseline.json).
+These are software-VM process and submission measurements, not physical-GPU
+memory, execution or scanout results.
 
 ## Diagonal cut and local library acceptance
 

@@ -85,17 +85,7 @@ pub(super) fn discover(source: &XdgApplications) -> Result<Vec<Application>> {
                 .flatten()
             })();
             if let Some(app) = &entry {
-                bytes += app.id.as_str().len()
-                    + app.name.len()
-                    + app.description.len()
-                    + app.icon.len()
-                    + app.startup_class.len()
-                    + app.launch.command().map_or(0, |command| {
-                        command.program.len()
-                            + command.directory.as_ref().map_or(0, String::len)
-                            + command.args.iter().map(String::len).sum::<usize>()
-                    })
-                    + app.keywords.iter().map(String::len).sum::<usize>();
+                bytes += retained_bytes(app);
                 if bytes > MAX_CATALOG_BYTES {
                     return Err(DomainError::Unavailable(
                         "Application catalog content limit exceeded".into(),
@@ -107,4 +97,36 @@ pub(super) fn discover(source: &XdgApplications) -> Result<Vec<Application>> {
         }
     }
     Ok(entries.into_values().flatten().collect())
+}
+fn launch_bytes(launch: &ApplicationLaunch) -> usize {
+    launch.command().map_or(0, |command| {
+        command.program.capacity()
+            + command.directory.as_ref().map_or(0, String::capacity)
+            + command.args.capacity() * std::mem::size_of::<String>()
+            + command.args.iter().map(String::capacity).sum::<usize>()
+    })
+}
+fn retained_bytes(app: &Application) -> usize {
+    // Include empty argument/keyword slots and action storage, not just nonempty
+    // text. Enum/Vec/String headers inside Application/Action are counted once.
+    std::mem::size_of::<Application>()
+        + app.id.as_str().len()
+        + app.name.capacity()
+        + app.description.capacity()
+        + app.icon.capacity()
+        + app.startup_class.capacity()
+        + launch_bytes(&app.launch)
+        + app.keywords.capacity() * std::mem::size_of::<String>()
+        + app.keywords.iter().map(String::capacity).sum::<usize>()
+        + app.actions.capacity() * std::mem::size_of::<ApplicationAction>()
+        + app
+            .actions
+            .iter()
+            .map(|action| {
+                action.id.as_str().len()
+                    + action.name.capacity()
+                    + action.icon.capacity()
+                    + launch_bytes(&action.launch)
+            })
+            .sum::<usize>()
 }

@@ -48,6 +48,9 @@ impl View<'_> {
         self.artwork.app_icon(app, size)
     }
     fn launcher_face(&self, cx: &ViewContext, width: f32, height: f32) -> Element<Message> {
+        if let Some(menu) = &self.launcher.action_menu {
+            return self.application_actions(menu, width, height);
+        }
         let mut modes = Vec::new();
         for (mode, icon) in [
             (Mode::Apps, "apps"),
@@ -160,6 +163,7 @@ impl View<'_> {
                         .selected(rank == self.launcher.selected)
                         .on_hover(Message::Select(rank))
                         .on_click(Message::Request(Intent::Launch(app.id.clone(), false)))
+                        .on_secondary_click(Message::OpenActions(app.clone()))
                         .id(format!("result-{rank}"))
                     })
                     .collect();
@@ -511,6 +515,85 @@ impl View<'_> {
         let mut face = Element::stack(elements).size(width, height);
         retain_search_focus(&mut face);
         face
+    }
+    fn application_actions(
+        &self,
+        menu: &super::application_actions::Menu,
+        width: f32,
+        height: f32,
+    ) -> Element<Message> {
+        let header = Element::row(vec![
+            self.button("Back", Message::Back)
+                .height(Length::Fixed(component::launcher::HEADER_HEIGHT))
+                .id("application-actions-back"),
+            self.app_icon(&menu.app, icon::COMPACT),
+            self.label(&menu.app.name, font::BODY)
+                .wrap(1)
+                .width(Length::Fill),
+        ])
+        .gap(space::SM)
+        .align(Align::Center)
+        .size(width, component::launcher::HEADER_HEIGHT)
+        .clip();
+        let body_height = shell_layout::body_height(Mode::Apps, height);
+        let visible_rows = (body_height / component::launcher::ROW_HEIGHT)
+            .floor()
+            .max(1.) as usize;
+        let busy = self.launcher.action_pending.is_some();
+        let rows = menu
+            .app
+            .actions
+            .iter()
+            .enumerate()
+            .skip(menu.scroll)
+            .take(visible_rows)
+            .map(|(index, action)| {
+                let mut row = self
+                    .theme()
+                    .choice_button(
+                        &action.name,
+                        Message::ChooseAction {
+                            menu: menu.revision,
+                            action: action.id.clone(),
+                        },
+                        index == menu.selected,
+                    )
+                    .wrap(1)
+                    .size(width, component::launcher::ROW_HEIGHT)
+                    .selected(index == menu.selected)
+                    .on_hover(Message::SelectAction(index))
+                    .tab_stop(false)
+                    .id(format!("application-action-{}", action.id.as_str()));
+                if busy {
+                    row.click = None;
+                    row = row.opacity(opacity::DISABLED);
+                }
+                row
+            })
+            .collect::<Vec<_>>();
+        let body = if rows.is_empty() {
+            self.label("No application actions available", font::LABEL)
+                .size(width, body_height)
+                .align(Align::Center)
+        } else {
+            Element::column(rows).size(width, body_height).clip()
+        };
+        let status = if busy {
+            "Waiting for application action reply…"
+        } else if menu.error.is_empty() {
+            "Choose an action · Escape goes back"
+        } else {
+            &menu.error
+        };
+        let status = self
+            .theme()
+            .status_text(status, !busy && !menu.error.is_empty())
+            .wrap(2)
+            .size(width, component::input::HEIGHT)
+            .at(0., height - component::input::HEIGHT)
+            .id("application-actions-status");
+        Element::stack(vec![header, body.at(0., shell_layout::body_top()), status])
+            .size(width, height)
     }
     fn wallpaper_strip(&self, cx: &ViewContext, width: f32, height: f32) -> Element<Message> {
         if self.input.wallpapers.is_empty() {

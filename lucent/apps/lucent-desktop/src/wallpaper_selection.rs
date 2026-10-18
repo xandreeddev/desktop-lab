@@ -116,6 +116,10 @@ impl Selection {
     pub fn busy(&self) -> bool {
         self.phase != Phase::Idle || self.awaiting_download
     }
+    /// Last validated physical extent, also used by legacy live backgrounds.
+    pub fn background_target(&self) -> Option<BackgroundTarget> {
+        self.target
+    }
     /// Display changes affect preparation only; they never choose, stage or
     /// commit a wallpaper or change palette intent. One refit is accepted at a
     /// time; target changes retain only the latest desired size.

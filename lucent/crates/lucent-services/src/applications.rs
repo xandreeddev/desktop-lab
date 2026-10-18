@@ -1,4 +1,5 @@
 //! XDG desktop entry discovery and isolated argument-array launching.
+mod actions;
 mod activation;
 mod catalog;
 mod launch;
@@ -11,6 +12,15 @@ use std::{
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
 };
+// Presentation metadata limits are adapter resource policy, not format limits.
+const MAX_LABEL_BYTES: usize = 1024;
+const MAX_DESCRIPTION_BYTES: usize = 4096;
+
+fn usable_label(value: &str) -> bool {
+    !value.trim().is_empty()
+        && value.len() <= MAX_LABEL_BYTES
+        && !value.chars().any(char::is_control)
+}
 
 pub struct XdgApplications {
     data_roots: Vec<PathBuf>,
@@ -85,6 +95,20 @@ impl ApplicationPort for XdgApplications {
     fn launch(&self, app: &Application) -> Result<()> {
         launch::application(app)
     }
+    fn launch_action(&self, app: &Application, action: &ApplicationActionId) -> Result<()> {
+        lucent_usecases::applications::application_action(app, action)?;
+        let current = self
+            .discover()?
+            .into_iter()
+            .find(|current| current.id == app.id);
+        if current.as_ref() != Some(app) {
+            return Err(DomainError::Invalid(
+                "Application changed; choose its action again".into(),
+            ));
+        }
+        let selected = lucent_usecases::applications::application_action(app, action)?;
+        launch::action(app, selected)
+    }
 }
 /// URI selection starts the desktop handler in an independent application unit.
 pub struct XdgUri;
@@ -134,6 +158,28 @@ fn unescape(value: &str) -> String {
     }
     out
 }
+fn localized(values: &BTreeMap<&str, &str>, key: &str, locale: &str) -> String {
+    let (base, modifier) = locale
+        .split_once('@')
+        .map_or((locale, None), |(base, modifier)| (base, Some(modifier)));
+    let base = base.split('.').next().unwrap_or(base);
+    let language = base.split('_').next().unwrap_or(base);
+    let mut candidates = vec![];
+    if let Some(modifier) = modifier {
+        candidates.push(format!("{base}@{modifier}"));
+    }
+    candidates.push(base.to_string());
+    if let Some(modifier) = modifier {
+        candidates.push(format!("{language}@{modifier}"));
+    }
+    candidates.push(language.to_string());
+    for candidate in candidates {
+        if let Some(value) = values.get(format!("{key}[{candidate}]").as_str()) {
+            return unescape(value);
+        }
+    }
+    unescape(values.get(key).copied().unwrap_or(""))
+}
 pub fn parse_entry(
     id: &str,
     path: &str,
@@ -178,18 +224,12 @@ pub fn parse_entry(
     if !value("TryExec").is_empty() && !executable(&unescape(value("TryExec"))) {
         return Ok(None);
     }
-    let locale = locale.split('.').next().unwrap_or(locale);
-    let language = locale.split('_').next().unwrap_or(locale);
-    let localized = |key: &str| -> String {
-        for l in [locale, language] {
-            if let Some(v) = values.get(format!("{key}[{l}]").as_str()) {
-                return unescape(v);
-            }
-        }
-        unescape(value(key))
-    };
-    let name = localized("Name");
-    if name.is_empty() || (value("Exec").is_empty() && value("DBusActivatable") != "true") {
+    let name = localized(&values, "Name", locale);
+    if !usable_label(&name) || (value("Exec").is_empty() && value("DBusActivatable") != "true") {
+        return Ok(None);
+    }
+    let description = localized(&values, "Comment", locale);
+    if description.len() > MAX_DESCRIPTION_BYTES {
         return Ok(None);
     }
     let icon = unescape(value("Icon"));
@@ -199,16 +239,18 @@ pub fn parse_entry(
         Some(parse_exec(&unescape(value("Exec")), &name, path, &icon)?)
     };
     let directory = unescape(value("Path"));
+    let actions = actions::parse(text, &values, path, locale, &name, &icon);
     Ok(Some(Application {
         id: AppId::new(id)?,
         name,
-        description: localized("Comment"),
-        keywords: localized("Keywords")
+        description,
+        keywords: localized(&values, "Keywords", locale)
             .split(';')
             .map(str::to_owned)
             .collect(),
         icon,
         startup_class: unescape(value("StartupWMClass")),
+        actions,
         launch: {
             let command = argv.map(|argv| LaunchCommand {
                 program: argv[0].clone(),
@@ -227,6 +269,13 @@ pub fn parse_entry(
 /// Parse the desktop-entry quoting grammar, then expand each field code once.
 pub fn parse_exec(exec: &str, name: &str, path: &str, icon: &str) -> Result<Vec<String>> {
     let invalid = || DomainError::Invalid("Invalid desktop entry Exec field".into());
+    // An input file's byte limit alone cannot bound repeated %c/%k expansion.
+    // This is an implementation resource policy, not a desktop-entry limit.
+    const MAX_EXEC_BYTES: usize = 1024 * 1024;
+    const MAX_EXEC_ARGUMENTS: usize = 4096;
+    if exec.len() > MAX_EXEC_BYTES {
+        return Err(invalid());
+    }
     let mut tokens = vec![];
     let mut token = String::new();
     let mut quoted = false;
@@ -245,6 +294,9 @@ pub fn parse_exec(exec: &str, name: &str, path: &str, icon: &str) -> Result<Vec<
             }
             c if c.is_whitespace() && !quoted => {
                 if started {
+                    if tokens.len() == MAX_EXEC_ARGUMENTS {
+                        return Err(invalid());
+                    }
                     tokens.push(std::mem::take(&mut token));
                     started = false;
                 }
@@ -259,35 +311,58 @@ pub fn parse_exec(exec: &str, name: &str, path: &str, icon: &str) -> Result<Vec<
         return Err(invalid());
     }
     if started {
+        if tokens.len() == MAX_EXEC_ARGUMENTS {
+            return Err(invalid());
+        }
         tokens.push(token);
     }
     let mut out = vec![];
+    let mut bytes = 0;
     for token in tokens {
         match token.as_str() {
             "%f" | "%F" | "%u" | "%U" | "%d" | "%D" | "%n" | "%N" | "%v" | "%m" => continue,
             "%i" => {
                 if !icon.is_empty() {
+                    if out.len() > MAX_EXEC_ARGUMENTS - 2 {
+                        return Err(invalid());
+                    }
+                    let added = "--icon".len().checked_add(icon.len()).ok_or_else(invalid)?;
+                    if added > MAX_EXEC_BYTES - bytes {
+                        return Err(invalid());
+                    }
+                    bytes += added;
                     out.extend(["--icon".into(), icon.into()]);
                 }
                 continue;
             }
             _ => {}
         }
+        if out.len() == MAX_EXEC_ARGUMENTS {
+            return Err(invalid());
+        }
         let mut expanded = String::new();
+        let append = |out: &mut String, value: &str| -> Result<()> {
+            if value.len() > MAX_EXEC_BYTES - bytes - out.len() {
+                return Err(invalid());
+            }
+            out.push_str(value);
+            Ok(())
+        };
         let mut cs = token.chars();
         while let Some(c) = cs.next() {
             if c != '%' {
-                expanded.push(c);
+                append(&mut expanded, c.encode_utf8(&mut [0; 4]))?;
                 continue;
             }
             match cs.next() {
-                Some('%') => expanded.push('%'),
-                Some('c') => expanded.push_str(name),
-                Some('k') => expanded.push_str(path),
+                Some('%') => append(&mut expanded, "%")?,
+                Some('c') => append(&mut expanded, name)?,
+                Some('k') => append(&mut expanded, path)?,
                 Some('f' | 'u' | 'd' | 'D' | 'n' | 'N' | 'v' | 'm') => {}
                 _ => return Err(invalid()),
             }
         }
+        bytes += expanded.len();
         out.push(expanded);
     }
     if out.first().is_none_or(|s| s.is_empty() || s.contains('=')) {

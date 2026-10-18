@@ -956,6 +956,8 @@ pub struct Effects<M> {
     pub tasks: Vec<ScheduledTask<M>>,
     pub redraw: BTreeSet<&'static str>,
     pub redraw_instances: BTreeSet<SurfaceAddress>,
+    /// Explicitly replace an ordinary native surface while preserving its logical address.
+    pub recreate_surfaces: Vec<SurfaceAddress>,
     pub exit: bool,
     pub clipboard: Vec<ClipboardRequest<M>>,
 }
@@ -966,6 +968,7 @@ impl<M> Default for Effects<M> {
             tasks: vec![],
             redraw: BTreeSet::new(),
             redraw_instances: BTreeSet::new(),
+            recreate_surfaces: vec![],
             exit: false,
             clipboard: vec![],
         }
@@ -1027,6 +1030,16 @@ impl<M> Effects<M> {
     pub fn redraw_surface(&mut self, surface: SurfaceAddress) {
         self.redraw_instances.insert(surface);
     }
+    /// Renew an ordinary non-reserving layer-shell surface's native input/presentation
+    /// lifetime without changing its logical address or instance. The runtime
+    /// keeps one noninteractive last-good presentation until the replacement's
+    /// first successful submission. Unknown/hidden addresses are ignored.
+    /// Positive committed, pending or replacement exclusive zones are rejected;
+    /// cross-surface reservation transfer has no atomic layer-shell guarantee.
+    /// Secure session-lock runtimes reject recreation before effects execute.
+    pub fn recreate_surface(&mut self, surface: SurfaceAddress) {
+        self.recreate_surfaces.push(surface);
+    }
     /// Run a child update and lift its async results into the parent's message type.
     pub fn delegate<C: Send + 'static>(
         &mut self,
@@ -1042,6 +1055,7 @@ impl<M> Effects<M> {
         update(&mut child);
         self.redraw.extend(child.redraw);
         self.redraw_instances.extend(child.redraw_instances);
+        self.recreate_surfaces.extend(child.recreate_surfaces);
         self.exit |= child.exit;
         let map = Arc::new(map);
         for request in child.clipboard {

@@ -235,7 +235,11 @@ The latest supported-case run against deployed cohort `76176f83b19` stopped at
 `ordinary_launcher_field_focused`, with all recorded restoration checks passing.
 The launcher incorrectly marked ordinary `text_edit` fields as non-focusable;
 the admission milestone fixes that guard and adds an engine-pointer regression.
-Native editing acceptance for the corrected cohort remains pending.
+Corrected source `d2aed42199e` now passes the supported native subset with all
+restoration checks; see
+[the source-specific report](../reports/measurements/lucent-media-admission.json).
+The explicit Caps/binding skips, clipboard interoperability and physical
+acceptance remain open.
 
 The malformed/oversized stored-notes native restart check remains pending.
 Failed settings load can apply the default theme, so that check needs exact
