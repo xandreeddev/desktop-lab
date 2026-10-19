@@ -84,7 +84,7 @@ impl Weather {
     }
     pub fn widget(
         &self,
-        cx: &ViewContext,
+        _cx: &ViewContext,
         theme: Theme,
         icon: impl Fn(&str, f32) -> Element<Message>,
     ) -> Element<Message> {
@@ -98,55 +98,59 @@ impl Weather {
             .as_ref()
             .map(|report| condition_label(report.condition))
             .unwrap_or(self.status());
-        let inset = space::LG;
-        let width = (cx.width - 2. * inset).max(0.);
-        Element::column(vec![
-            Element::row(vec![
-                icon(symbol, lucent_design::icon::WIDGET),
+        let details =
+            if self.report.is_some() && self.error.is_empty() && !self.stale() && !self.busy {
+                format!("{description} · {}", self.age())
+            } else {
+                self.status().to_owned()
+            };
+        // The widget host owns this root's size and position. Keep the inset
+        // inside a child so card composition cannot reset content geometry.
+        Element::stack(vec![
+            Element::column(vec![
+                Element::row(vec![
+                    icon(symbol, lucent_design::icon::WEATHER),
+                    Element::column(vec![
+                        label(self.summary(), theme)
+                            .font(font::TEMPERATURE)
+                            .font_face(1)
+                            .wrap(1),
+                        label(
+                            self.preferences
+                                .location
+                                .as_ref()
+                                .map(WeatherLocation::name)
+                                .unwrap_or("Weather"),
+                            theme,
+                        )
+                        .font(font::CAPTION)
+                        .color(theme.on_surface.alpha(opacity::MUTED))
+                        .wrap(1),
+                    ])
+                    .gap(space::XS)
+                    .width(Length::Fill),
+                ])
+                .align(Align::Center)
+                .gap(space::SM)
+                .width(Length::Fill),
                 theme
-                    .button(
-                        if self.report.is_some() {
-                            format!("{} · {description}", self.summary())
-                        } else {
-                            "Configure weather".into()
-                        },
-                        Message::Open,
-                    )
+                    .button(details, Message::Open)
                     .width(Length::Fill)
                     .wrap(1)
+                    .color(if self.error.is_empty() {
+                        theme.on_surface
+                    } else {
+                        theme.error
+                    })
                     .id("weather-details"),
             ])
-            .gap(space::SM)
-            .width(Length::Fill),
-            label(
-                self.preferences
-                    .location
-                    .as_ref()
-                    .map(WeatherLocation::name)
-                    .unwrap_or("Weather"),
-                theme,
-            )
-            .font(font::CAPTION),
-            label(
-                if !self.error.is_empty() || self.report.is_none() {
-                    self.status().to_owned()
-                } else {
-                    self.age()
-                },
-                theme,
-            )
-            .font(font::CAPTION)
-            .color(if self.error.is_empty() {
-                theme.on_surface.alpha(opacity::MUTED)
-            } else {
-                theme.error
-            }),
+            .gap(space::XS)
+            .padding(space::LG)
+            .fill(),
         ])
-        .gap(space::XS)
-        .size(width, (cx.height - 2. * inset).max(0.))
-        .at(inset, inset)
-        .clip()
+        .fill()
     }
+
     pub fn view(
         &self,
         cx: &ViewContext,
@@ -175,6 +179,7 @@ impl Weather {
                     )
                     .font(font::TITLE),
                 ])
+                .align(Align::Center)
                 .gap(space::MD)
                 .width(Length::Fill),
             );

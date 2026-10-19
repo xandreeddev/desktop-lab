@@ -376,6 +376,148 @@ fn fully_visible(rect: Rect, clip: Rect) -> bool {
         && rect.y + rect.h <= clip.y + clip.h + 0.01
 }
 #[test]
+fn weather_widget_content_keeps_its_inset_after_host_card_geometry_is_applied() {
+    use lucent_design::{component::widget_size::weather, font, icon, space};
+    for state in ["ready", "widget-long"] {
+        for (width, height) in [(weather::WIDTH, weather::HEIGHT), (384., 240.)] {
+            let mut app = fixture(0, false);
+            app.weather = crate::weather::tests::visual_fixture(state);
+            app.settings.layout.visible_widgets = vec!["weather".into()];
+            app.settings.layout.positions.insert(
+                "weather".into(),
+                lucent_domain::Placement::new(64., 96.).unwrap(),
+            );
+            app.settings.layout.widget_sizes.insert(
+                "weather".into(),
+                lucent_domain::WidgetSize::new(width, height).unwrap(),
+            );
+            let cx = ViewContext {
+                surface: "widgets",
+                instance: None,
+                width: 640.,
+                height: 580.,
+                now: 1.,
+                density: Density::ONE,
+            };
+            let scene = Layout::new(fonts(&app)).build(
+                &app.view(&cx),
+                cx.width,
+                cx.height,
+                &Interaction::default(),
+                cx.now,
+            );
+            let card = scene
+                .hits
+                .iter()
+                .find(|hit| hit.id == "widget-weather")
+                .unwrap();
+            assert_eq!((card.rect.w, card.rect.h), (width, height));
+            let inner = Rect::new(
+                card.rect.x + space::LG,
+                card.rect.y + space::LG,
+                width - 2. * space::LG,
+                height - 2. * space::LG,
+            );
+            let details = scene
+                .hits
+                .iter()
+                .find(|hit| hit.id == "weather-details")
+                .unwrap();
+            assert!(
+                fully_visible(details.rect, inner),
+                "details hit must clear every rounded border"
+            );
+            let mut images = 0;
+            let mut temperatures = 0;
+            let mut texts = 0;
+            let mut detail_labels = 0;
+            for paint in &scene.paint {
+                let (rect, clip) = match paint {
+                    Paint::Image { rect, clip, .. } => {
+                        images += 1;
+                        assert_eq!((rect.w, rect.h), (icon::WEATHER, icon::WEATHER));
+                        (rect, clip)
+                    }
+                    Paint::Text {
+                        rect,
+                        clip,
+                        size,
+                        text,
+                        ..
+                    } => {
+                        texts += 1;
+                        if *size == font::TEMPERATURE {
+                            temperatures += 1;
+                        }
+                        if fully_visible(*rect, details.rect) {
+                            detail_labels += 1;
+                            assert_eq!(
+                                text.lines().count(),
+                                1,
+                                "long condition details stay on one bounded line"
+                            );
+                        }
+                        (rect, clip)
+                    }
+                    _ => continue,
+                };
+                assert!(
+                    fully_visible(*rect, inner),
+                    "widget content must retain its token inset after card composition"
+                );
+                assert!(
+                    fully_visible(*rect, clip.bounds),
+                    "widget content must not be clipped by its card"
+                );
+            }
+            assert_eq!((images, temperatures, texts, detail_labels), (1, 1, 3, 1));
+        }
+    }
+}
+
+#[test]
+fn weather_current_conditions_text_is_centered_beside_its_large_icon() {
+    let mut app = fixture(0, false);
+    app.bar_visible = false;
+    app.weather = crate::weather::tests::visual_fixture("ready");
+    let cx = ViewContext {
+        surface: "weather-controls",
+        instance: None,
+        width: 640.,
+        height: 580.,
+        now: 1.,
+        density: Density::ONE,
+    };
+    let scene = Layout::new(fonts(&app)).build(
+        &app.view(&cx),
+        cx.width,
+        cx.height,
+        &Interaction::default(),
+        cx.now,
+    );
+    let icon = scene
+        .paint
+        .iter()
+        .find_map(|paint| match paint {
+            Paint::Image { rect, .. } if rect.w == lucent_design::icon::WEATHER => Some(rect),
+            _ => None,
+        })
+        .unwrap();
+    let current = scene
+        .paint
+        .iter()
+        .find_map(|paint| match paint {
+            Paint::Text { rect, text, .. } if text == "8°C · Clear sky" => Some(rect),
+            _ => None,
+        })
+        .unwrap();
+    assert!(
+        (icon.y + icon.h / 2. - current.y - current.h / 2.).abs() < 0.01,
+        "current conditions share the icon's vertical center"
+    );
+}
+
+#[test]
 fn every_visible_launcher_row_fits_even_after_scrolling() {
     for count in [1, 7, 9] {
         let mut app = fixture(count, false);
