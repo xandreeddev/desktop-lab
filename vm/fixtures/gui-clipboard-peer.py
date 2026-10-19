@@ -234,6 +234,10 @@ def browser_lease(directory, run_id, retiring=False):
             return captured
         return chromium.observe(receipt, manifest['startup'], captured)
     captured = chromium.observe(receipt, manifest['startup'])
+    # Arch Chromium registers its application scope during normal startup.
+    # Wait for that observed migration before freezing this fixture's lease;
+    # an already frozen lease is never updated to follow another scope.
+    require(captured['scope'] is not None)
     try:
         private(path, json.dumps(captured).encode())
     except FileExistsError:

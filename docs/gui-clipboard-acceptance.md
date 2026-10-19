@@ -119,7 +119,11 @@ receipt can nominate that original lifetime for guarded retirement. Returning th
 receipt reads immutable pre-exec evidence; it neither requires page readiness nor
 grants input or signal authority. A separate durable process lease pins the
 installed root-owned Chromium executable and current running identity without
-requiring CDP, the endpoint file or the document. The test-only
+requiring CDP, the endpoint file or the document. Before its first durable lease,
+this Arch fixture waits until kernel membership identifies Chromium's existing,
+registered application scope. An early observation in the original wrapper's
+service is not frozen; an already frozen lease never follows a later migration.
+The test-only
 [Chromium lease](native-chromium-lease.md) retains
 the original PID birth and service invocation across the normal scope migration.
 It freezes the existing registered scope invocation/cgroup, opaque process-title
@@ -147,9 +151,12 @@ Guest failures emit bounded JSON with a fixed operation/class/allowlisted reason
 and at most 12 source-basename/function/line locations. The staged `fixture.py`
 name is normalized to its source name. A rejected WebSocket upgrade may add only
 the bounded HTTP version and three-digit status code; no reason phrase, headers,
-URL, exception text, document or clipboard content is emitted. **Handshake
-acceptance remains unchanged**: collecting status metadata does not accept an
-alternate response. The host retains the failed operation separately from any
+URL, exception text, document or clipboard content is emitted. Upgrade admission
+requires a well-formed HTTP/1.1 status line with status 101 and a legal optional
+reason phrase, rather than one literal English phrase. The existing accept-hash,
+unique-header, Upgrade/Connection, extension refusal and size/deadline checks
+remain required. Status metadata alone grants no admission. The host retains
+the failed operation separately from any
 later restoration failure; private command logs contain the guest diagnostics.
 
 Notes restoration starts only after original-browser retirement and a fresh
@@ -169,6 +176,21 @@ watchdog/service/scope drainage, unchanged settings/wallpaper/media/exports, and
 restored history/service/workspace/cursor/idle state. Its first refused recovery
 and the original failed test remain historical. The new separation and
 diagnostics have source/pure-test evidence, not a passed native transfer.
+
+The later `2fc161b` native attempt also failed before transfers. Read-only
+diagnostics showed its durable lease had been captured before Chromium's normal
+scope migration; the original process birth/executable and opaque command stayed
+the same, but the frozen cgroup/scope correctly refused that change. Independent
+recovery then observed `HTTP/1.1 101 WebSocket Protocol Handshake` with the exact
+expected accept hash and WebSocket Upgrade header. The old literal reason-phrase
+check rejected this valid status. The corrected parser follows
+[RFC 6455 section 4.1](https://www.rfc-editor.org/rfc/rfc6455.html#section-4.1)
+and [RFC 9112 section 4](https://www.rfc-editor.org/rfc/rfc9112.html#section-4):
+malformed control bytes, separators, protocol versions and non-101 responses
+remain refused. A separate guarded recovery restored the original desktop,
+settings/media/clipboard/workspace/cursor/idle state. The failed attempt remains
+failed; scope readiness and status parsing corrections have local boundary-test
+evidence pending another native transfer run.
 
 This test does not establish rich HTML/image clipboard behavior, other
 applications, delayed-provider/focus-retirement races, physical hardware, IME

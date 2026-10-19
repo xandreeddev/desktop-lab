@@ -61,13 +61,18 @@ class Peer:
                 raw.extend(block)
             header, buffered = bytes(raw).split(b'\r\n\r\n', 1)
             require(len(header) <= 16384, 'bounded_upgrade_required')
-            lines = header.decode('ascii').split('\r\n')
-            status = re.match(r'^HTTP/([0-9]{1,2}(?:\.[0-9]{1,2})?) ([1-5][0-9]{2})(?: |$)', lines[0])
+            lines = header.split(b'\r\n')
+            status = re.match(rb'^HTTP/([0-9]{1,2}(?:\.[0-9]{1,2})?) ([1-5][0-9]{2})(?: |$)', lines[0])
             if status:
-                upgrade_status = {'http_version': status[1], 'status_code': int(status[2])}
-            require(lines[0] == 'HTTP/1.1 101 Switching Protocols', 'websocket_upgrade_required')
+                upgrade_status = {'http_version': status[1].decode('ascii'), 'status_code': int(status[2])}
+            # RFC 6455 requires status 101, not a specific human-readable phrase.
+            # RFC 9112 section 4 still requires both SP separators and limits
+            # reason bytes to HTAB / SP / VCHAR / obs-text; reject bare controls.
+            require(re.fullmatch(rb'HTTP/1\.1 101 [\t\x20-\x7e\x80-\xff]*', lines[0]),
+                    'websocket_upgrade_required')
             headers = {}
-            for line in lines[1:]:
+            for raw_line in lines[1:]:
+                line = raw_line.decode('ascii')
                 name, separator, contents = line.partition(':')
                 require(separator and name.lower() not in headers, 'unique_upgrade_headers_required')
                 headers[name.lower()] = contents.strip()

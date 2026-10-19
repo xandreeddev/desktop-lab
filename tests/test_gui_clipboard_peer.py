@@ -270,6 +270,35 @@ class SeparateProcessLease(unittest.TestCase):
             observe.assert_called_once_with(lease['origin'],lease['declared'],lease)
             page.assert_not_called();self.assertFalse((path/'admission.json').exists())
 
+    def test_initial_lease_waits_for_registered_scope_without_freezing_the_wrapper_group(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory);ready=self.proof(path)['lease']
+            starting=json.loads(json.dumps(ready));starting['scope']=None
+            starting['process']['group']=starting['origin']['unit']['group']
+            peer.private(path/'origin.json',json.dumps(ready['origin']).encode())
+            with patch.object(peer,'context',return_value=(path,{'startup':ready['declared']})), \
+                 patch.object(peer.chromium,'observe',side_effect=[starting,ready,ready]) as observe, \
+                 patch.object(peer,'page') as page:
+                with self.assertRaises(ValueError):peer.browser_lease(path,self.run_id)
+                self.assertFalse((path/'browser-lease.json').exists())
+                self.assertFalse((path/'admission.json').exists())
+                self.assertEqual(peer.browser_lease(path,self.run_id),ready)
+                self.assertEqual(json.loads((path/'browser-lease.json').read_bytes()),ready)
+            self.assertEqual(observe.call_count,3)
+            self.assertEqual(observe.call_args.args,(ready['origin'],ready['declared'],ready))
+            page.assert_not_called()
+
+    def test_page_admission_waits_without_input_or_durable_lease_before_scope_readiness(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory);starting=self.proof(path)['lease'];starting['scope']=None
+            peer.private(path/'origin.json',json.dumps(starting['origin']).encode())
+            with patch.object(peer,'context',return_value=(path,{'startup':starting['declared']})), \
+                 patch.object(peer.chromium,'observe',return_value=starting),patch.object(peer,'page') as page:
+                with self.assertRaises(ValueError):peer.admit(path,self.run_id)
+            page.assert_not_called()
+            self.assertFalse((path/'browser-lease.json').exists())
+            self.assertFalse((path/'admission.json').exists())
+
     def test_failed_page_admission_neither_grants_input_nor_blocks_process_only_cleanup(self):
         with tempfile.TemporaryDirectory() as directory:
             path=Path(directory);proof=self.proof(path);lease=proof['lease']
