@@ -1745,6 +1745,15 @@ fn visual_regressions() {
             ("wallpapers-empty", Mode::Wallpapers, 9, 0, "", 1., 640.),
             ("wallpapers", Mode::Wallpapers, 9, 0, "", 1., 1280.),
             (
+                "wallpapers-local-narrow",
+                Mode::Wallpapers,
+                9,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            (
                 "wallpapers-unavailable",
                 Mode::Wallpapers,
                 9,
@@ -2202,7 +2211,10 @@ fn visual_regressions() {
             } else {
                 app.launcher.fixture_query(query.into());
             }
-            if matches!(name, "wallpapers" | "wallpapers-unavailable") {
+            if matches!(
+                name,
+                "wallpapers" | "wallpapers-unavailable" | "wallpapers-local-narrow"
+            ) {
                 app.wallpapers = wallpaper_fixtures();
             }
             if name == "wallpapers-unavailable" {
@@ -3735,6 +3747,16 @@ fn visual_regressions() {
                 assert_visible("live-library-0");
                 // Neighbor cards intentionally continue past the stage clip.
                 for id in ["live-previous", "live-apply", "live-next"] {
+                    assert_visible(id);
+                }
+            }
+            if name == "wallpapers-local-narrow" {
+                for id in [
+                    "wallpaper-0",
+                    "wallpaper-previous",
+                    "apply-wallpaper",
+                    "wallpaper-next",
+                ] {
                     assert_visible(id);
                 }
             }
