@@ -136,6 +136,7 @@ fn actual_wrapping_paint_hits_selection_and_candidate_share_resolved_order() {
         .font(20.)
         .scroll_style(ScrollStyle {
             gutter: 0.,
+            width: 0.,
             ..Default::default()
         });
         let mut input = Interaction::default();
@@ -149,9 +150,7 @@ fn actual_wrapping_paint_hits_selection_and_candidate_share_resolved_order() {
             .iter()
             .enumerate()
             .find(|(_, row)| row.range.start == start && row.range.end >= start + body.len())
-            .expect(
-                "fixture must soft-wrap after the opening control and before the complete body",
-            );
+            .unwrap_or_else(|| panic!("fixture {opening:?} {body:?}; width={width}; inner={}; start={start}; rows={:?}", text_hit.inner.w, area.rows.iter().map(|row| (row.range.clone(),row.display.as_ref())).collect::<Vec<_>>()));
         let paint_layout = scene
             .paint
             .iter()

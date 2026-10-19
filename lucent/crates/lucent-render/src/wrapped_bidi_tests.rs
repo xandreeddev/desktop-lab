@@ -28,6 +28,7 @@ fn row(fonts: Arc<Vec<lucent_ui::text::Font>>, opening: &str, body: &str) -> (Pa
     .font(20.)
     .scroll_style(ScrollStyle {
         gutter: 0.,
+        width: 0.,
         ..Default::default()
     });
     let scene = lucent_ui::Layout::new(fonts).build(
