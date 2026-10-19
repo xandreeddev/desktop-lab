@@ -2393,3 +2393,65 @@ mod stream_trace_rendering {
         assert!(canvas.last_stream_trace.is_none());
     }
 }
+
+#[cfg(test)]
+mod international_style_pixels {
+    use super::*;
+    use lucent_api::{Color, Element, TextSpan};
+    use lucent_ui::{Interaction, Layout};
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn international_style_masks_keep_complete_arabic_coverage_at_both_densities() {
+        let fonts = Arc::new(vec![
+            lucent_ui::text::Font::from_bytes(
+                include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf").as_slice(),
+                Default::default(),
+            )
+            .unwrap(),
+        ]);
+        let layout = Layout::new(fonts.clone());
+        let gpu = Gpu::headless(fonts).unwrap();
+        let mut canvas = Canvas::new(gpu);
+        let make = |spans: Vec<TextSpan>| {
+            let tree: Element<()> = Element::rich_text(spans).size(320., 80.).font(24.);
+            layout
+                .build(&tree, 320., 80., &Interaction::default(), 0.)
+                .paint
+        };
+        let red = Color::hex(0xff0000);
+        let blue = Color::hex(0x0000ff);
+        let whole = make(vec![TextSpan::new("سلام").color(red)]);
+        let styled = make(vec![
+            TextSpan::new("سل").color(red),
+            TextSpan::new("ام").color(blue),
+        ]);
+        for density in [1, 2] {
+            let reference = canvas.snapshot(320, 80, density, &whole).unwrap();
+            let actual = canvas.snapshot(320, 80, density, &styled).unwrap();
+            let mut red_pixels = 0;
+            let mut blue_pixels = 0;
+            for (expected, observed) in reference
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(actual.as_chunks::<4>().0)
+            {
+                assert_eq!(
+                    observed[3], expected[3],
+                    "a style boundary cannot remove or duplicate shaped coverage"
+                );
+                assert_eq!(observed[1], 0);
+                assert_eq!(
+                    u16::from(observed[0]) + u16::from(observed[2]),
+                    u16::from(observed[3])
+                );
+                red_pixels += usize::from(observed[0] > 0);
+                blue_pixels += usize::from(observed[2] > 0);
+            }
+            assert!(
+                red_pixels > 0 && blue_pixels > 0,
+                "both style clips must contribute actual glyph pixels"
+            );
+        }
+    }
+}

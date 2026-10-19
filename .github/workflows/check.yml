@@ -53,6 +53,8 @@ jobs:
           export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name '*lvp*' -print -quit)"
           test -n "$VK_DRIVER_FILES"
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render frozen_stream_snapshot_keeps_pixels -- --ignored --nocapture
+          cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render trace_reports_final_bound_alias -- --ignored --nocapture
+          cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render international_style_masks -- --ignored --nocapture
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render streamed_images_reuse -- --ignored --nocapture
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render snapshot_rejects_invalid_extents -- --ignored --nocapture
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render scene_rejection_preserves -- --ignored --nocapture
