@@ -129,6 +129,55 @@ def main():
         click('network-tab-Saved');click('network-activate-'+str(profile['id']))
         v.eventually(connected,'Saved activation did not connect',timeout=35)
         assert v.remote('nmcli','-g','GENERAL.CON-UUID','device','show',fixture['station']).strip()==profile['key']
+        # Repair an existing saved profile through the actual SecretAgent
+        # request, never by starting another AddAndActivate join.
+        def disconnect_fixture():
+            click('network-tab-Active')
+            current=next(c for c in state()['connections'] if device['id'] in c['devices'])
+            click('network-disconnect-'+str(current['id']))
+            v.eventually(lambda:not connected() and not any(device['id'] in c['devices'] for c in state()['connections']),'Owned profile did not disconnect',timeout=35)
+            click('network-tab-Saved')
+
+        def same_profile():
+            matches=[p for p in state()['profiles'] if p['ssid']==ssid]
+            assert len(matches)==1 and matches[0]['key']==profile['key'], 'Credential repair created or replaced the saved profile'
+            return matches[0]
+
+        disconnect_fixture()
+        root('python3',directory+'/fixture.py','wrong-secret',directory,profile['key'])
+        click('network-activate-'+str(same_profile()['id']))
+        v.eventually(lambda:state()['form'] is not None and state()['form'].get('credential_request') is not None,'Wrong saved password did not produce a native credential request',timeout=95)
+        cancelled_generation=state()['form']['generation']
+        field='network-password-'+str(cancelled_generation)
+        click(field);enter('discard-this-fixture-value',field)
+        assert 'discard-this-fixture-value' not in json.dumps(v.inspect())
+        v.key(1) # Native Escape cancels this exchange, keeping the panel open.
+        v.eventually(lambda:state()['form'] is None and not state()['busy'],'Credential cancellation did not retire the form',timeout=35)
+        v.eventually(lambda:not connected() and not any(device['id'] in c['devices'] for c in state()['connections']),'Cancelled authentication remained active',timeout=35)
+        same_profile()
+        root('python3',directory+'/fixture.py','clear-secret',directory,profile['key'])
+        click('network-activate-'+str(same_profile()['id']))
+        v.eventually(lambda:state()['form'] is not None and state()['form'].get('credential_request') is not None,'Missing saved password did not produce a native credential request',timeout=35)
+        generation=state()['form']['generation']
+        assert generation!=cancelled_generation
+        field='network-password-'+str(generation)
+        click(field);enter(fixture['password'],field)
+        assert fixture['password'] not in json.dumps(v.inspect())
+        assert not any(h['id']=='network-remember' for h in panel()['hits']), 'Secret repair must retain the original profile storage policy'
+        v.key(28)
+        v.eventually(connected,'Saved-password repair did not associate',timeout=35)
+        assert v.remote('nmcli','-g','GENERAL.CON-UUID','device','show',fixture['station']).strip()==profile['key']
+        assert '198.18.0.' in v.remote('nmcli','-g','IP4.ADDRESS','device','show',fixture['station'])
+        assert json.loads(root('python3',directory+'/fixture.py','verify-secret',directory,profile['key']))['stored_secret_matches']
+        same_profile()
+        disconnect_fixture()
+        click('network-activate-'+str(same_profile()['id']))
+        v.eventually(connected,'Repaired saved password did not persist for reconnection',timeout=35)
+        assert state()['form'] is None
+        same_profile()
+        checks += ['wrong_saved_password_native_request_cancel_no_inspector_secret',
+                   'missing_saved_password_masked_secret_agent_reply_same_uuid_no_duplicate',
+                   'system_owned_password_persistence_and_subsequent_dhcp_reconnection']
         click('network-forget-'+str(profile['id']))
         assert any(p['key']==profile['key'] for p in state()['profiles'])
         click('network-forget-confirm')

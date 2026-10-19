@@ -146,7 +146,7 @@ def stop(directory):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('start', 'info', 'register', 'hide', 'stop'))
+    parser.add_argument('operation', choices=('start', 'info', 'register', 'wrong-secret', 'clear-secret', 'verify-secret', 'hide', 'stop'))
     parser.add_argument('directory', type=Path)
     parser.add_argument('profile', nargs='?')
     args = parser.parse_args()
@@ -163,6 +163,31 @@ def main():
         state = json.loads((directory / 'state.json').read_text())
         state['profile_keys'].append(args.profile)
         save(directory, state)
+    elif args.operation in ('wrong-secret', 'clear-secret', 'verify-secret'):
+        # Mutate/read only a profile created and explicitly registered by this
+        # fixture. Never touch a host/guest user's pre-existing connection.
+        state = json.loads((directory / 'state.json').read_text())
+        key = args.profile
+        if not key or key not in state['profile_keys'] or key in state['original_profiles']:
+            raise SystemExit("Credential testing requires this fixture's registered new profile")
+        if run('nmcli', '-g', '802-11-wireless.ssid', 'connection', 'show', 'uuid', key) != state['ssid']:
+            raise SystemExit('Owned profile changed its network identity')
+        if args.operation == 'verify-secret':
+            # The actual credential stays inside this root fixture process;
+            # stdout contains only a comparison result, never secret material.
+            stored = run('nmcli', '--show-secrets', '-g', '802-11-wireless-security.psk', 'connection', 'show', 'uuid', key)
+            print(json.dumps({'stored_secret_matches': stored == state['password']}))
+        else:
+            active = run('nmcli', '-g', 'GENERAL.CON-UUID', 'device', 'show', state['station'])
+            if active == key:
+                raise SystemExit('Disconnect this owned profile before invalidating its credentials')
+            # A public, synthetic invalid fixture value is not the real secret.
+            # Clearing exercises an immediately missing system-owned password.
+            replacement = 'invalid-lucent-fixture-only' if args.operation == 'wrong-secret' else ''
+            run('nmcli', 'connection', 'modify', 'uuid', key,
+                '802-11-wireless-security.psk', replacement,
+                '802-11-wireless-security.psk-flags', '0')
+            print(json.dumps({'owned_profile_credentials_invalidated': True}))
     elif args.operation == 'hide':
         state = json.loads((directory / 'state.json').read_text())
         terminate(state['children'][0])
