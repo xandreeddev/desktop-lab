@@ -1813,7 +1813,9 @@
         "Adapter malformed units/arrays/overflow and bounded regular legacy-file cases",
         "Client last-good/recovery/coalescing/stale result/disabled precedence/form/clipboard cases",
         "Preference roundtrip/invalid-file preservation",
-        "Thirteen new visual scenarios across both reference themes at 1x/2x"
+        "Fourteen new visual scenarios across both reference themes at 1x/2x",
+        "Legacy/named-output native role routing and transient input redraw isolation",
+        "Owned local-file curl process isolates ambient output/trace configuration; freezing drizzle/rain mapping"
       ],
       "pending": [
         "Cargo compilation, formatting/clippy workspace gates and all new Rust test execution",
@@ -1831,7 +1833,9 @@
         "Cached rustfmt parsed/formatted 25 scoped Rust files without compilation",
         "Python suite: 104 tests passed; two modified Python files also parsed with ast",
         "Generated design token check: 557 tokens verified; git diff --check passed",
-        "Original 24 requirement IDs/statuses remain unchanged"
+        "Original 24 requirement IDs/statuses remain unchanged",
+        "Review follow-up: cached rustfmt parsed/formatted eight scoped Rust files; Python 104/token557/diff checks repeated successfully",
+        "Owned local-file curl isolation and negative control passed using extracted command arguments; no HTTP request or HOME mutation"
       ]
     }
   ],

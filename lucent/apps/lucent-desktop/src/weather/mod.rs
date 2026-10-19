@@ -340,6 +340,7 @@ impl Weather {
     }
     pub fn update(&mut self, message: Message, effects: &mut Effects<Message>) -> Option<Intent> {
         let mut intent = None;
+        let mut shared_presentation_changed = false;
         match message {
             Message::Open => {
                 if !self.open {
@@ -397,7 +398,7 @@ impl Weather {
                         edit,
                         limit,
                         ClipboardTarget::new(
-                            "weather",
+                            "weather-controls",
                             format!("weather-{}-{generation}", field.name()),
                         ),
                         effects,
@@ -424,6 +425,7 @@ impl Weather {
                     match form.preferences() {
                         Ok(preferences) => {
                             form.retire();
+                            shared_presentation_changed = self.preferences != preferences;
                             self.set_preferences(preferences.clone());
                             intent = Some(Intent::Save(preferences));
                         }
@@ -437,6 +439,10 @@ impl Weather {
                         enabled: false,
                         ..self.preferences.clone()
                     };
+                    shared_presentation_changed = self.preferences.enabled
+                        || self.report.is_some()
+                        || self.busy
+                        || !self.error.is_empty();
                     self.set_preferences(preferences.clone());
                     if let Some(form) = &mut self.form {
                         form.retire();
@@ -444,13 +450,18 @@ impl Weather {
                     intent = Some(Intent::Save(preferences));
                 }
             }
-            Message::Refresh => self.refresh(),
+            Message::Refresh => {
+                let before = (self.generation, self.busy);
+                self.refresh();
+                shared_presentation_changed = before != (self.generation, self.busy);
+            }
             Message::Started(generation) => {
                 if self
                     .worker
                     .as_ref()
                     .is_some_and(|worker| worker.generation == generation)
                 {
+                    shared_presentation_changed = !self.busy;
                     self.busy = true;
                 } else {
                     return None;
@@ -468,6 +479,7 @@ impl Weather {
                     return None;
                 };
                 self.busy = false;
+                shared_presentation_changed = true;
                 if Some(coordinates) == self.desired() {
                     match result {
                         Ok(report) => {
@@ -490,6 +502,7 @@ impl Weather {
                 }
                 self.worker = None;
                 self.busy = false;
+                shared_presentation_changed = true;
                 match result {
                     Ok(Some(preferences)) => {
                         let clean_form = self.form.as_ref().is_some_and(|form| !form.dirty);
@@ -516,6 +529,7 @@ impl Weather {
                 }
                 self.worker = None;
                 self.busy = false;
+                shared_presentation_changed = true;
                 self.error = "Weather worker stopped; retry the refresh".into();
                 if self.queued {
                     self.start_desired();
@@ -527,10 +541,14 @@ impl Weather {
                 }
             }
             Message::RetrySave => intent = Some(Intent::RetrySave),
-            Message::Ignore => (),
+            Message::Ignore => return None,
         }
-        for role in ["weather", "bar", "widgets"] {
-            effects.redraw(role);
+        effects.redraw("weather-controls");
+        if shared_presentation_changed {
+            // Widgets can share a native group whose source role is another
+            // catalog member. Preserve the existing all-host redraw group.
+            effects.redraw("bar");
+            effects.redraw("widgets");
         }
         intent
     }

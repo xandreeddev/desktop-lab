@@ -543,7 +543,7 @@ impl Desktop {
             "osd",
             "audio",
             "media-controls",
-            "weather",
+            "weather-controls",
             "network",
             "bluetooth",
             "power",
@@ -742,7 +742,7 @@ impl Desktop {
             "dock",
             "audio",
             "media-controls",
-            "weather",
+            "weather-controls",
             "network",
             "bluetooth",
             "power",
@@ -1046,7 +1046,7 @@ impl Component for Desktop {
             .and_then(|route| self.monitors.connected.get(&route.id));
         let viewport = monitor.map_or(self.viewport, |monitor| monitor.viewport);
         let tree = match cx.surface {
-            "weather" => self
+            "weather-controls" => self
                 .weather
                 .view(
                     cx,
@@ -1431,7 +1431,7 @@ impl Component for Desktop {
             },
             Message::Clock(clock) => {
                 if self.weather.tick(clock.unix_seconds) {
-                    effects.redraw("weather");
+                    effects.redraw("weather-controls");
                     effects.redraw("widgets");
                 }
                 if self.clock.minute != clock.minute || self.clock.date != clock.date {
@@ -1612,7 +1612,7 @@ impl Component for Desktop {
                         |child| self.persistence.update(message, child),
                         Message::Persistence,
                     );
-                    effects.redraw("weather");
+                    effects.redraw("weather-controls");
                     effects.redraw("live-wallpaper");
                 }
             }
@@ -1890,7 +1890,7 @@ impl api::Application for Desktop {
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         let mut surfaces = vec![
             SurfaceSpec {
-                id: "weather",
+                id: "weather-controls",
                 instance: None,
                 output: None,
                 layer: Layer::Overlay,
@@ -2432,19 +2432,19 @@ impl api::Application for Desktop {
     fn event(&self, event: Event) -> Option<Message> {
         match event {
             Event::FrameSubmitted {
-                surface: "weather",
+                surface: "weather-controls",
                 now,
                 ..
             } if !self.weather.open() => {
                 Some(Message::Weather(crate::weather::Message::Frame(now)))
             }
             Event::Key {
-                surface: "weather",
+                surface: "weather-controls",
                 key: Key::Escape,
             }
-            | Event::Outside { surface: "weather" } => {
-                Some(Message::Weather(crate::weather::Message::Close))
-            }
+            | Event::Outside {
+                surface: "weather-controls",
+            } => Some(Message::Weather(crate::weather::Message::Close)),
             Event::Key {
                 surface: "media-controls",
                 key: Key::Escape,
@@ -2998,7 +2998,7 @@ impl api::Application for Desktop {
         }
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
-        (surface == "weather" && self.weather.animating(now))
+        (surface == "weather-controls" && self.weather.animating(now))
             || (surface == "live-wallpaper" && self.live_wallpaper.motion.active(now))
             || (surface == "notifications" && self.notifications.animating(now))
             || (surface == "audio" && self.audio.animating(now))

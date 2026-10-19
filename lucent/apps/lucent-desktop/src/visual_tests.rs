@@ -1720,6 +1720,7 @@ fn visual_regressions() {
             ("weather-narrow", Mode::Apps, 0, 0, "", 1., 390.),
             ("weather-form-bottom", Mode::Apps, 0, 0, "", 1., 390.),
             ("weather-widget", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-widget-long", Mode::Apps, 0, 0, "", 1., 640.),
             ("weather-widget-resized", Mode::Apps, 0, 0, "", 1., 640.),
             ("audio-loading", Mode::Apps, 0, 0, "", 1., 640.),
             ("tray-loading", Mode::Apps, 0, 0, "", 1., 640.),
@@ -2025,7 +2026,7 @@ fn visual_regressions() {
                     surface: if state.starts_with("widget") {
                         "widgets"
                     } else {
-                        "weather"
+                        "weather-controls"
                     },
                     instance: None,
                     width,

@@ -108,28 +108,7 @@ fn fetch(coordinates: WeatherCoordinates, stop: &dyn StopSignal) -> Result<Vec<u
     if stop.cancelled() {
         return Err(unavailable());
     }
-    let mut child = OwnedChild(
-        Command::new("curl")
-            .args([
-                "--config",
-                "-",
-                "--silent",
-                "--fail",
-                "--max-time",
-                "4",
-                "--connect-timeout",
-                "2",
-                "--proto",
-                "=https",
-                "--max-redirs",
-                "0",
-            ])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|_| unavailable())?,
-    );
+    let mut child = OwnedChild(forecast_command().spawn().map_err(|_| unavailable())?);
     let request = format!(
         "url = \"https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=3&temperature_unit=celsius&timezone=auto&timeformat=unixtime\"\n",
         coordinates.latitude(),
@@ -184,6 +163,32 @@ fn fetch(coordinates: WeatherCoordinates, stop: &dyn StopSignal) -> Result<Vec<u
         stop.wait(Duration::from_millis(10));
     }
 }
+fn forecast_command() -> Command {
+    let mut command = Command::new("curl");
+    command
+        .args([
+            // curl reads its default configuration even with --config -.
+            // This must be first: ambient output/trace/URL policy must not
+            // escape this adapter. Proxy environment support is preserved.
+            "--disable",
+            "--config",
+            "-",
+            "--silent",
+            "--fail",
+            "--max-time",
+            "4",
+            "--connect-timeout",
+            "2",
+            "--proto",
+            "=https",
+            "--max-redirs",
+            "0",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    command
+}
 fn condition(code: u64) -> WeatherCondition {
     use WeatherCondition::*;
     match code {
@@ -193,7 +198,8 @@ fn condition(code: u64) -> WeatherCondition {
         3 => Overcast,
         45 | 48 => Fog,
         51 | 53 | 55 => Drizzle,
-        56 | 57 | 66 | 67 => FreezingRain,
+        56 | 57 => FreezingDrizzle,
+        66 | 67 => FreezingRain,
         61 | 63 | 65 => Rain,
         71 | 73 | 75 | 77 => Snow,
         80..=82 => Showers,
@@ -280,6 +286,59 @@ fn parse(bytes: &[u8], fetched_at: u64) -> Result<WeatherSnapshot> {
 mod tests {
     use super::*;
     use std::os::unix::fs::symlink;
+    #[test]
+    fn ambient_curlrc_cannot_redirect_or_trace_the_owned_response() {
+        struct Directory(std::path::PathBuf);
+        impl Drop for Directory {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let directory = Directory(std::env::temp_dir().join(format!(
+            "lucent-weather-curlrc-{}-{}",
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        )));
+        std::fs::create_dir(&directory.0).unwrap();
+        let fixture = directory.0.join("response");
+        let redirected = directory.0.join("ambient-output");
+        let trace = directory.0.join("ambient-trace");
+        let quote = |path: &Path| {
+            path.to_str()
+                .unwrap()
+                .replace('\\', "\\\\")
+                .replace('"', "\\\"")
+        };
+        std::fs::write(&fixture, b"owned weather transport fixture").unwrap();
+        std::fs::write(
+            directory.0.join(".curlrc"),
+            format!(
+                "output = \"{}\"\ntrace-ascii = \"{}\"\n",
+                quote(&redirected),
+                quote(&trace)
+            ),
+        )
+        .unwrap();
+        let mut command = forecast_command();
+        // Only this child receives a private curl configuration directory. The
+        // fixture explicitly overrides the transport to an owned file: no HTTP,
+        // provider request, global environment mutation or HOME replacement.
+        let output = command
+            .env("CURL_HOME", &directory.0)
+            .args(["--proto", "=file", "--url"])
+            .arg(format!("file://{}", fixture.display()))
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"owned weather transport fixture");
+        assert!(
+            !redirected.exists(),
+            "ambient output policy escaped isolation"
+        );
+        assert!(!trace.exists(), "ambient tracing policy escaped isolation");
+    }
+
     fn response() -> serde_json::Value {
         serde_json::json!({"utc_offset_seconds":0,"current_units":{"time":"unixtime","temperature_2m":"°C"},"daily_units":{"time":"unixtime","temperature_2m_min":"°C","temperature_2m_max":"°C"},"current":{"time":1768435200u64,"temperature_2m":7.,"weather_code":61,"is_day":0},"daily":{"time":[1768435200u64,1768521600u64,1768608000u64],"temperature_2m_min":[3.,2.,1.],"temperature_2m_max":[8.,9.,10.],"weather_code":[61,2,0]}})
     }
@@ -288,6 +347,10 @@ mod tests {
         let snapshot = parse(&serde_json::to_vec(&response()).unwrap(), 1768436000).unwrap();
         assert_eq!(snapshot.condition, WeatherCondition::Rain);
         assert!(!snapshot.is_day);
+        assert_eq!(condition(56), WeatherCondition::FreezingDrizzle);
+        assert_eq!(condition(57), WeatherCondition::FreezingDrizzle);
+        assert_eq!(condition(66), WeatherCondition::FreezingRain);
+        assert_eq!(condition(67), WeatherCondition::FreezingRain);
         assert_eq!(snapshot.days()[1].condition, WeatherCondition::PartlyCloudy);
         assert_eq!(snapshot.days()[0].date, Date::new(2026, 1, 15).unwrap());
         for (field, replacement) in [

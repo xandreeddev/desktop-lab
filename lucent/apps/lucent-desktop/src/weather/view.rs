@@ -11,6 +11,7 @@ pub fn condition_label(condition: WeatherCondition) -> &'static str {
         Overcast => "Overcast",
         Fog => "Fog",
         Drizzle => "Drizzle",
+        FreezingDrizzle => "Freezing drizzle",
         FreezingRain => "Freezing rain",
         Rain => "Rain",
         Snow => "Snow",
@@ -25,7 +26,7 @@ pub fn condition_symbol(condition: WeatherCondition, is_day: bool) -> &'static s
     match condition {
         Clear | MostlyClear if is_day => "sun",
         Clear | MostlyClear => "weather-night",
-        Rain | Drizzle | FreezingRain | Showers => "weather-rain",
+        Rain | Drizzle | FreezingDrizzle | FreezingRain | Showers => "weather-rain",
         Snow | SnowShowers => "weather-snow",
         Thunderstorm => "weather-storm",
         Fog => "weather-fog",
@@ -112,6 +113,7 @@ impl Weather {
                         Message::Open,
                     )
                     .width(Length::Fill)
+                    .wrap(1)
                     .id("weather-details"),
             ])
             .gap(space::SM)

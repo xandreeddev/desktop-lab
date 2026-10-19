@@ -35,6 +35,9 @@ deadline, with a five-second outer bound and cooperative cancellation. The
 owned process is killed/reaped on cancellation or failure. Coordinates are sent
 through curl's stdin configuration, never command arguments. Provider bodies,
 URLs and coordinates are absent from error messages and inspector output.
+The first curl argument disables default curlrc loading, so ambient trace,
+output-file or extra-URL settings cannot escape the adapter's request policy.
+Proxy environment support remains available.
 
 ## Client and scheduling
 
@@ -50,6 +53,11 @@ discard old-location presentation and reject late results; display-unit changes
 retain the canonical report and make no HTTP request. No tenth task lane is added.
 Closing the panel retires its form/clipboard authority while configured weather
 continues updating for the widget and passive bar.
+The ordinary panel uses the distinct `weather-controls` surface role; `weather`
+remains the catalog widget role on every monitor. Form input, selection, scroll
+and closing frames invalidate only the panel. Report, preference and loading/error
+changes invalidate the shared bar/widgets groups, including weather members whose
+native group is named after another widget.
 
 Missing preferences permit one legacy read. A successful import returns a normal
 root save intent. An explicit saved disabled preference forbids later import.
@@ -82,7 +90,10 @@ dates, malformed arrays/units and bounded read-only legacy import. Client cases
 cover last-good recovery, opaque generations, refresh coalescing, explicit off,
 legacy precedence, invalid forms, units, readonly preferences and retired clipboard
 responses. Visual fixtures cover ready/night/rain/loading/offline/stale/configuration,
-narrow panels and actual resized widget bounds in both palettes at 1×/2×.
+narrow panels, long-condition truncation and actual resized widget bounds in both
+palettes at 1×/2×. Native role-routing cases cover legacy and named-output hosting;
+an owned curl process fixture exercises default-config isolation using local
+files and a child-only configuration directory without an HTTP request.
 
 All new Rust tests and GPU/native checks remain unexecuted until the shared build
 owner runs them. City search, persistent disk cache, alerts and hourly graphs are

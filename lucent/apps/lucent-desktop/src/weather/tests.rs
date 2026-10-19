@@ -81,6 +81,10 @@ pub(crate) fn visual_fixture(state: &str) -> Weather {
         if state == "rain" {
             value.condition = WeatherCondition::Rain;
         }
+        if state == "widget-long" {
+            value.condition = WeatherCondition::FreezingDrizzle;
+            value.temperature = WeatherTemperature::new(-23.).unwrap();
+        }
         send(&mut child, Message::Observed(generation, Ok(value)));
         if state == "stale" {
             child.tick(1_768_472_640 + 7200);
@@ -265,6 +269,7 @@ fn closing_retires_clipboard_authority_and_reopened_form_identity() {
         &mut effects,
     );
     let request = effects.clipboard.pop().unwrap();
+    assert_eq!(request.target.surface, "weather-controls");
     send(&mut child, Message::Close);
     send(&mut child, Message::Open);
     let before = child.form.as_ref().unwrap().values.clone();
@@ -286,4 +291,51 @@ fn missing_preferences_and_readonly_failure_never_start_a_request() {
     assert!(send(&mut child, Message::Apply).is_none());
     send(&mut child, Message::Refresh);
     assert!(child.subscriptions().is_empty());
+}
+
+#[test]
+fn transient_form_input_and_close_frames_do_not_invalidate_shared_consumers() {
+    let mut child = child();
+    let request = child.generation;
+    send(&mut child, Message::Observed(request, Ok(report())));
+    send(&mut child, Message::Open);
+    let form = child.form.as_ref().unwrap().generation;
+    for message in [
+        Message::Edit(
+            form,
+            Field::Name,
+            TextEdit::Select {
+                anchor: 0,
+                caret: 2,
+            },
+        ),
+        Message::Edit(form, Field::Name, TextEdit::Replace("New label".into())),
+        Message::Unit(TemperatureUnit::Fahrenheit),
+        Message::Scroll(ScrollEvent { offset: 32. }),
+    ] {
+        let mut effects = Effects::default();
+        assert!(child.update(message, &mut effects).is_none());
+        assert!(effects.redraw.contains("weather-controls"));
+        assert!(!effects.redraw.contains("widgets"));
+        assert!(!effects.redraw.contains("bar"));
+    }
+    let mut effects = Effects::default();
+    assert!(matches!(
+        child.update(Message::Apply, &mut effects),
+        Some(Intent::Save(_))
+    ));
+    assert!(
+        effects.redraw.contains("widgets"),
+        "shared group covers every monitor and grouped weather member"
+    );
+    assert!(effects.redraw.contains("bar"));
+    let mut effects = Effects::default();
+    child.update(Message::Ignore, &mut effects);
+    assert!(effects.redraw.is_empty());
+    child.update(Message::Close, &mut effects);
+    child.update(Message::Frame(100.), &mut effects);
+    assert!(!child.visible());
+    assert!(effects.redraw.contains("weather-controls"));
+    assert!(!effects.redraw.contains("widgets"));
+    assert!(!effects.redraw.contains("bar"));
 }

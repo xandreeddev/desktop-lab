@@ -160,6 +160,7 @@ pub enum WeatherCondition {
     Overcast,
     Fog,
     Drizzle,
+    FreezingDrizzle,
     FreezingRain,
     Rain,
     Snow,
