@@ -14,6 +14,7 @@ enum Operation {
 }
 #[derive(Clone)]
 enum Message {
+    Interact,
     Request(Operation),
     Prepared(Operation, ActivationOutcome),
     Finished(Result<(), String>),
@@ -24,6 +25,7 @@ struct IntentExample {
     application: domain::Application,
     open: domain::ApplicationOpenRequest,
     action: Option<domain::ApplicationActionId>,
+    keyboard_interactive: bool,
     busy: bool,
     completed: u64,
     fresh_token: bool,
@@ -72,7 +74,12 @@ impl Component for IntentExample {
     }
     fn update(&mut self, message: Message, effects: &mut Effects<Message>) {
         match message {
+            Message::Interact if !self.busy => self.keyboard_interactive = true,
             Message::Request(operation) if !self.busy => {
+                // Like the desktop launcher, yield in the same update that
+                // requests authority from the current physical input. The
+                // runtime captures that input before reconciling this policy.
+                self.keyboard_interactive = false;
                 self.busy = true;
                 self.fresh_token = false;
                 self.status = "Requesting intent from this input event…".into();
@@ -159,13 +166,22 @@ impl Application for IntentExample {
             width: example::WIDTH as u32,
             height: example::HEIGHT as u32,
             exclusive_zone: 0,
-            keyboard: Keyboard::OnDemand,
+            keyboard: if self.keyboard_interactive {
+                Keyboard::OnDemand
+            } else {
+                Keyboard::None
+            },
             visible: true,
             pointer_input: PointerInput::Content,
         }]
     }
     fn event(&self, event: Event) -> Option<Message> {
         match event {
+            Event::PointerButton {
+                surface: "intent",
+                pressed: true,
+                ..
+            } if !self.busy => Some(Message::Interact),
             Event::Key { key, .. } if matches!(key.unmodified(), Key::Escape) => {
                 Some(Message::Quit)
             }
@@ -249,9 +265,239 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         application,
         open,
         action,
+        keyboard_interactive: true,
         busy: false,
         completed: 0,
         fresh_token: false,
         status: "Click a control to request fresh compositor activation authority.".into(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    #[derive(Default)]
+    struct RecordingApplications {
+        calls: Mutex<Vec<(&'static str, Option<String>)>>,
+    }
+    impl RecordingApplications {
+        fn record(
+            &self,
+            operation: &'static str,
+            context: domain::ApplicationLaunchContext,
+        ) -> domain::Result<()> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push((operation, context.activation_token().map(str::to_owned)));
+            Ok(())
+        }
+    }
+    impl domain::ApplicationPort for RecordingApplications {
+        fn discover(&self) -> domain::Result<Vec<domain::Application>> {
+            unreachable!("the component does not discover applications")
+        }
+        fn watch(
+            &self,
+            _: &mut dyn FnMut(domain::Result<Vec<domain::Application>>),
+            _: &dyn domain::StopSignal,
+        ) {
+            unreachable!("the component does not watch applications")
+        }
+        fn launch(&self, _: &domain::Application) -> domain::Result<()> {
+            self.record("launch", domain::ApplicationLaunchContext::default())
+        }
+        fn launch_with_context(
+            &self,
+            _: &domain::Application,
+            context: domain::ApplicationLaunchContext,
+        ) -> domain::Result<()> {
+            self.record("launch", context)
+        }
+        fn open(
+            &self,
+            _: &domain::Application,
+            _: &domain::ApplicationOpenRequest,
+            context: domain::ApplicationLaunchContext,
+        ) -> domain::Result<()> {
+            self.record("open", context)
+        }
+        fn launch_action(
+            &self,
+            _: &domain::Application,
+            _: &domain::ApplicationActionId,
+        ) -> domain::Result<()> {
+            self.record("action", domain::ApplicationLaunchContext::default())
+        }
+        fn launch_action_with_context(
+            &self,
+            _: &domain::Application,
+            _: &domain::ApplicationActionId,
+            context: domain::ApplicationLaunchContext,
+        ) -> domain::Result<()> {
+            self.record("action", context)
+        }
+    }
+
+    fn example() -> (IntentExample, Arc<RecordingApplications>) {
+        let applications = Arc::new(RecordingApplications::default());
+        let action = domain::ApplicationActionId::new("OpenOwned").unwrap();
+        let launch = domain::ApplicationLaunch::DesktopService { fallback: None };
+        (
+            IntentExample {
+                applications: applications.clone(),
+                application: domain::Application {
+                    id: domain::AppId::new("org.lucent.Intent.desktop").unwrap(),
+                    name: "Intent fixture".into(),
+                    description: String::new(),
+                    keywords: vec![],
+                    icon: String::new(),
+                    startup_class: String::new(),
+                    launch: launch.clone(),
+                    actions: vec![domain::ApplicationAction {
+                        id: action.clone(),
+                        name: "Open owned".into(),
+                        icon: String::new(),
+                        launch,
+                    }],
+                },
+                open: domain::ApplicationOpenRequest::new(vec![
+                    domain::ApplicationOpenTarget::file("/owned/a b%雪").unwrap(),
+                ])
+                .unwrap(),
+                action: Some(action),
+                keyboard_interactive: true,
+                busy: false,
+                completed: 0,
+                fresh_token: false,
+                status: String::new(),
+            },
+            applications,
+        )
+    }
+    fn apply(app: &mut IntentExample, message: Message) -> Effects<Message> {
+        let mut effects = Effects::default();
+        app.update(message, &mut effects);
+        effects
+    }
+    fn press(surface: &'static str, pressed: bool) -> Event {
+        Event::PointerButton {
+            surface,
+            button: MouseButton::Primary,
+            pressed,
+            x: 20.,
+            y: 20.,
+        }
+    }
+
+    #[test]
+    fn request_yields_before_token_completion_or_adapter_dispatch() {
+        for operation in [Operation::Launch, Operation::Open, Operation::Action] {
+            let (mut app, adapter) = example();
+            assert_eq!(app.surfaces()[0].keyboard, Keyboard::OnDemand);
+            let effects = apply(&mut app, Message::Request(operation));
+            let surface = app.surfaces().remove(0);
+            assert_eq!(surface.keyboard, Keyboard::None);
+            assert!(surface.visible);
+            assert_eq!(surface.pointer_input, PointerInput::Content);
+            assert!(app.busy);
+            assert_eq!(effects.activation.len(), 1);
+            assert_eq!(effects.activation[0].app_id, "org.lucent.Intent");
+            assert!(effects.tasks.is_empty());
+            assert!(effects.redraw.contains("intent"));
+            assert!(adapter.calls.lock().unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn prepared_operations_forward_context_without_reclaiming_keyboard() {
+        for (operation, name) in [
+            (Operation::Launch, "launch"),
+            (Operation::Open, "open"),
+            (Operation::Action, "action"),
+        ] {
+            let (mut app, adapter) = example();
+            let mut requested = apply(&mut app, Message::Request(operation));
+            let prepared = requested
+                .activation
+                .remove(0)
+                .finish(ActivationOutcome::Token(
+                    ActivationToken::new("controlled-token".into()).unwrap(),
+                ));
+            let mut effects = apply(&mut app, prepared);
+            assert_eq!(app.surfaces()[0].keyboard, Keyboard::None);
+            assert!(effects.activation.is_empty());
+            assert_eq!(effects.tasks.len(), 1);
+            assert!(adapter.calls.lock().unwrap().is_empty());
+            let completed = effects.tasks.remove(0).run();
+            assert_eq!(
+                *adapter.calls.lock().unwrap(),
+                vec![(name, Some("controlled-token".into()))]
+            );
+            apply(&mut app, completed);
+            assert!(!app.busy);
+            assert_eq!(app.completed, 1);
+            assert!(app.fresh_token);
+            assert_eq!(app.surfaces()[0].keyboard, Keyboard::None);
+        }
+    }
+
+    #[test]
+    fn completion_errors_do_not_reclaim_keyboard() {
+        let (mut app, _) = example();
+        apply(&mut app, Message::Request(Operation::Launch));
+        apply(
+            &mut app,
+            Message::Finished(Err("adapter unavailable".into())),
+        );
+        assert!(!app.busy);
+        assert_eq!(app.surfaces()[0].keyboard, Keyboard::None);
+    }
+
+    #[test]
+    fn only_an_idle_press_on_the_own_surface_rearms_keyboard() {
+        let (mut app, _) = example();
+        apply(&mut app, Message::Request(Operation::Launch));
+        assert!(app.event(press("intent", true)).is_none());
+        apply(&mut app, Message::Interact);
+        assert_eq!(app.surfaces()[0].keyboard, Keyboard::None);
+        apply(&mut app, Message::Finished(Ok(())));
+        assert!(app.event(press("intent", false)).is_none());
+        assert!(app.event(press("other", true)).is_none());
+        assert!(
+            app.event(Event::PointerInside {
+                surface: "intent",
+                inside: true,
+            })
+            .is_none()
+        );
+        assert_eq!(app.surfaces()[0].keyboard, Keyboard::None);
+        let message = app.event(press("intent", true)).unwrap();
+        let effects = apply(&mut app, message);
+        assert_eq!(app.surfaces()[0].keyboard, Keyboard::OnDemand);
+        assert!(effects.activation.is_empty());
+        assert!(effects.tasks.is_empty());
+        assert!(effects.redraw.contains("intent"));
+    }
+
+    #[test]
+    fn socket_request_neither_rearms_keyboard_nor_invents_a_token() {
+        let (mut app, adapter) = example();
+        app.keyboard_interactive = false;
+        let message = app.command("open").unwrap().unwrap();
+        let mut requested = apply(&mut app, message);
+        assert_eq!(app.surfaces()[0].keyboard, Keyboard::None);
+        let prepared = requested
+            .activation
+            .remove(0)
+            .finish(ActivationOutcome::NoUserInput);
+        let mut effects = apply(&mut app, prepared);
+        let completed = effects.tasks.remove(0).run();
+        apply(&mut app, completed);
+        assert_eq!(*adapter.calls.lock().unwrap(), vec![("open", None)]);
+        assert!(!app.fresh_token);
+        assert_eq!(app.surfaces()[0].keyboard, Keyboard::None);
+    }
 }
