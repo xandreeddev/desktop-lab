@@ -67,7 +67,8 @@ The collector refuses a mismatched running/installed executable, a replacement
 process, changed settings bytes/inode, output changes or a changed playback
 generation/target. It samples Linux process RSS/CPU every 250 ms, captures
 smaps_rollup before/after and observes bounded presentation histories every
-500 ms. It does not restart the VM/shell, change wallpapers/preferences, open
+500 ms, retaining at most 16,384 host samples across at most 64 surfaces and
+explicitly reporting truncation. It does not restart the VM/shell, change wallpapers/preferences, open
 panels or send native input. Reports are private mode 0600 until reviewed.
 CPU-stage profiling must be disabled for normal-resource samples. Optional
 presentation instrumentation and inspection overhead are recorded explicitly.
