@@ -87,7 +87,11 @@ impl InputMethod {
             external_reset: false,
         }
     }
-    pub fn seat<A: Application>(&mut self, seat: &wl_seat::WlSeat, qh: &QueueHandle<State<A>>) {
+    pub fn seat<D: Dispatch<ZwpTextInputV3, ()> + 'static>(
+        &mut self,
+        seat: &wl_seat::WlSeat,
+        qh: &QueueHandle<D>,
+    ) {
         if let Some(manager) = &self.manager {
             self.input = Some(manager.get_text_input(seat, qh, ()));
             self.serial = 0;
@@ -109,17 +113,29 @@ impl InputMethod {
         self.pending = Pending::default();
     }
     pub fn shutdown(&mut self) {
-        self.remove_seat();
+        self.remove_seat(|_| {});
         if let Some(manager) = self.manager.take() {
             manager.destroy();
         }
     }
-    pub fn remove_seat(&mut self) {
+    fn remove_seat(&mut self, clear_preedit: impl FnOnce(&Target)) {
+        // Presentation belongs to the native interaction, not this protocol
+        // object. Retire it while the old target still identifies that native.
+        if let Some(target) = &self.target {
+            clear_preedit(target);
+        }
         self.disable();
         if let Some(input) = self.input.take() {
             input.destroy();
         }
         self.entered = None;
+        self.serial = 0;
+        self.force = false;
+        self.deferred = false;
+        self.external_reset = false;
+    }
+    fn accepts(&self, proxy: &ZwpTextInputV3) -> bool {
+        self.input.as_ref() == Some(proxy)
     }
 }
 impl Drop for InputMethod {
@@ -150,7 +166,33 @@ fn surrounding(value: &str, selection: api::TextSelection) -> (String, i32, i32)
         (selection.anchor() - start) as i32,
     )
 }
+fn retire_preedit<M: Clone>(
+    interaction: &mut lucent_ui::Interaction<M>,
+    scene: &lucent_ui::Scene<M>,
+    demand: &mut FrameDemand,
+) {
+    if interaction.set_preedit(scene, None) {
+        demand.invalidate();
+    }
+}
 impl<A: Application> State<A> {
+    pub(super) fn input_method_remove_seat(&mut self, qh: &QueueHandle<Self>) {
+        let surfaces = &mut self.surfaces;
+        let mut retired = None;
+        self.input_method.remove_seat(|target| {
+            if let Some(native) = surfaces.get_mut(&target.address) {
+                retire_preedit(&mut native.interaction, &native.scene, &mut native.demand);
+                retired = Some(target.address.clone());
+            }
+        });
+        // Rebuild CPU hit/caret geometry even while a previous GPU submission
+        // waits for its frame callback. A recreated seat cannot see ghost preedit.
+        if let Some(address) = retired {
+            for message in self.refresh_input_scene(&address, false, true) {
+                self.message(message, qh);
+            }
+        }
+    }
     fn input_method_target(&self) -> Option<Target> {
         let address = self.keyboard_surface.as_ref()?;
         let native = self.surfaces.get(address)?;
@@ -390,7 +432,7 @@ impl<A: Application> Dispatch<ZwpTextInputV3, ()> for State<A> {
         _: &Connection,
         qh: &QueueHandle<Self>,
     ) {
-        if state.input_method.input.as_ref() != Some(proxy) {
+        if !state.input_method.accepts(proxy) {
             return;
         }
         match event {
@@ -439,6 +481,140 @@ wayland_client::delegate_noop!(@<A:Application> State<A>:ZwpTextInputManagerV3);
 #[cfg(test)]
 mod tests {
     use super::*;
+    struct Peer;
+    wayland_client::delegate_noop!(Peer: ignore wayland_client::protocol::wl_registry::WlRegistry);
+    wayland_client::delegate_noop!(Peer: ignore wl_seat::WlSeat);
+    wayland_client::delegate_noop!(Peer: ignore wayland_client::protocol::wl_compositor::WlCompositor);
+    wayland_client::delegate_noop!(Peer: ignore wl_surface::WlSurface);
+    wayland_client::delegate_noop!(Peer: ignore ZwpTextInputManagerV3);
+    wayland_client::delegate_noop!(Peer: ignore ZwpTextInputV3);
+
+    #[test]
+    fn seat_retirement_clears_visible_preedit_before_dropping_target_and_denies_old_proxy() {
+        // Client-owned local socket only: no compositor, GPU, host display or IME.
+        let (socket, _server) = std::os::unix::net::UnixStream::pair().unwrap();
+        let connection = Connection::from_socket(socket).unwrap();
+        let queue = connection.new_event_queue::<Peer>();
+        let qh = queue.handle();
+        let registry = connection.display().get_registry(&qh, ());
+        let manager = registry.bind::<ZwpTextInputManagerV3, _, _>(1, 1, &qh, ());
+        let seat = registry.bind::<wl_seat::WlSeat, _, _>(2, 1, &qh, ());
+        let compositor = registry
+            .bind::<wayland_client::protocol::wl_compositor::WlCompositor, _, _>(3, 1, &qh, ());
+        let surface = compositor.create_surface(&qh, ());
+        let layout = lucent_ui::Layout::new(Arc::new(vec![
+            lucent_ui::text::Font::from_bytes(
+                include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf").as_slice(),
+                Default::default(),
+            )
+            .unwrap(),
+        ]));
+        for multiline in [false, true] {
+            let value = "ab";
+            let selection = api::TextSelection::at_end(value);
+            let tree = if multiline {
+                api::Element::text_area(
+                    value,
+                    selection,
+                    "",
+                    api::ScrollSpec::new(0., 24.).unwrap(),
+                    |edit| edit,
+                    |_| api::TextEdit::Clear,
+                )
+            } else {
+                api::Element::text_input(value, selection, "", |edit| edit)
+            }
+            .id("field")
+            .autofocus()
+            .size(320., 100.)
+            .font(20.);
+            let mut interaction = lucent_ui::Interaction::default();
+            let scene = layout.build(&tree, 320., 100., &interaction, 0.);
+            interaction.synchronize(&scene);
+            let scene = layout.build(&tree, 320., 100., &interaction, 0.);
+            let original_cursor = scene.hits[0].text.as_ref().unwrap().caret_rect();
+            assert!(interaction.set_preedit(&scene, Some(("候補".into(), 6, 6))));
+            let projected = layout.build(&tree, 320., 100., &interaction, 0.);
+            assert!(projected.paint.iter().any(|paint| matches!(paint,
+                lucent_ui::Paint::Text { text, .. } if text == "ab候補"
+            )));
+            let mut method = InputMethod {
+                manager: Some(manager.clone()),
+                input: None,
+                entered: None,
+                target: None,
+                serial: 0,
+                pending: Pending::default(),
+                force: false,
+                deferred: false,
+                external_reset: false,
+            };
+            method.seat(&seat, &qh);
+            let old_proxy = method.input.as_ref().unwrap().clone();
+            method.entered = Some(surface.clone());
+            method.target = Some(Target {
+                address: api::SurfaceAddress::new("editor"),
+                element: "field".into(),
+                surface: surface.clone(),
+                value: value.into(),
+                selection,
+                cursor: original_cursor,
+                multiline,
+            });
+            method.pending.preedit = Some(("stale".into(), 5, 5));
+            method.pending.commit = Some("stale".into());
+            method.pending.delete = (1, 1);
+            method.serial = 9;
+            method.force = true;
+            method.deferred = true;
+            method.external_reset = true;
+            let mut demand = FrameDemand::default();
+            let mut cleared = false;
+            method.remove_seat(|target| {
+                assert_eq!(target.element, "field");
+                retire_preedit(&mut interaction, &projected, &mut demand);
+                cleared = true;
+            });
+            assert!(
+                cleared && demand.begin(),
+                "retirement must request a repaint"
+            );
+            assert!(method.input.is_none() && method.target.is_none() && method.entered.is_none());
+            assert!(!method.accepts(&old_proxy));
+            assert_eq!(method.serial, 0);
+            assert!(!method.force && !method.deferred && !method.external_reset);
+            assert!(
+                method.pending.preedit.is_none()
+                    && method.pending.commit.is_none()
+                    && method.pending.delete == (0, 0)
+            );
+            let retired = layout.build(&tree, 320., 100., &interaction, 0.);
+            interaction.synchronize(&retired);
+            assert_eq!(interaction.focus.as_deref(), Some("field"));
+            assert_eq!(retired.hits[0].text.as_ref().unwrap().value.as_ref(), value);
+            assert_eq!(
+                retired.hits[0].text.as_ref().unwrap().caret_rect(),
+                original_cursor
+            );
+            assert!(retired.paint.iter().any(|paint| matches!(paint,
+                lucent_ui::Paint::Text { text, .. } if text == value
+            )));
+            assert!(!retired.paint.iter().any(|paint| matches!(paint,
+                lucent_ui::Paint::Text { text, .. } if text.contains("候補")
+            )));
+            method.seat(&seat, &qh);
+            assert!(method.accepts(method.input.as_ref().unwrap()));
+            assert!(
+                !method.accepts(&old_proxy),
+                "old Done/Commit/Preedit/Leave cannot reach the replacement seat"
+            );
+            assert!(method.target.is_none() && method.entered.is_none());
+            method.remove_seat(|_| {});
+            // This fixture shares one manager across both independent field cases.
+            method.manager = None;
+        }
+    }
+
     #[test]
     fn stale_done_applies_the_atomic_edit_but_defers_protocol_state_updates() {
         for (serial, expected_updates) in [(4, false), (5, true)] {

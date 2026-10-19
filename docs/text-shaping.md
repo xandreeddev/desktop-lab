@@ -116,7 +116,11 @@ the selected keyboard seat. It enables input only when both native keyboard
 focus and text-input `enter` identify the exact current surface, and the freshly
 resolved focused element is an ordinary controlled field. A surface role alone
 never grants authority. Focus loss, hidden/recreated controls and seat retirement
-remove authority. Applications explicitly opt in with
+remove authority. Keyboard capability or seat removal clears the old native
+preedit before dropping its protocol target, rebuilds canonical CPU caret
+geometry and invalidates a repaint. A replacement seat starts with clean batch
+and serial state; callbacks from the retired text-input proxy are rejected.
+Applications explicitly opt in with
 `Application::input_method_enabled()`. Its default is `false`; the desktop, menu
 and ordinary text examples opt in. Login, lock and authorization clients retain
 the default and do not bind the manager.

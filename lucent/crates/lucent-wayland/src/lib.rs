@@ -1583,12 +1583,15 @@ impl<A: Application> SeatHandler for State<A> {
             && self.keyboard_seat.as_ref() == Some(&seat)
             && let Some(k) = self.keyboard.take()
         {
+            self.input_serial = None;
+            self.activation.input = None;
+            self.input_method_remove_seat(qh);
             k.release();
             self.keyboard_surface = None;
             self.keyboard_seat = None;
-            self.input_method.remove_seat();
             self.clipboard_cancel(qh, true);
             self.clipboard_drop();
+            self.draw_all(qh);
         }
     }
     fn remove_seat(&mut self, conn: &Connection, qh: &QueueHandle<Self>, seat: wl_seat::WlSeat) {
