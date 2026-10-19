@@ -1316,6 +1316,9 @@ dependencies = [
 [[package]]
 name = "lucent-cli"
 version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
 
 [[package]]
 name = "lucent-design"
