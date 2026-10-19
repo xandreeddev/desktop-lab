@@ -122,6 +122,31 @@ class InputPolicy(unittest.TestCase):
         self.assertNotEqual(policy.workspace_state({'id': 1}), policy.workspace_state({'id': 2}))
 
 
+class IndependentFixtureProvenance(unittest.TestCase):
+    desktop = '8e6d074bfcb30a0bcc0b371afddcd50c08993af0'
+    peer = 'b4d67a4560948b78549a371d3ef00ef06089f4f1'
+
+    def test_single_release_default_and_peer_only_override_keep_desktop_example_pinned(self):
+        driver = driver_module()
+        self.assertEqual(driver.source_commits(self.desktop),
+                         {'desktop': self.desktop, 'example': self.desktop, 'peer': self.desktop})
+        self.assertEqual(driver.source_commits(self.desktop, self.peer),
+                         {'desktop': self.desktop, 'example': self.desktop, 'peer': self.peer})
+
+    def test_invalid_peer_commit_is_refused_before_any_process_or_native_action(self):
+        driver = driver_module()
+        for invalid in ('', 'b4d67a4', self.peer.upper(), 'g'*40, self.peer+'0'):
+            argv = ['test-international-text.py', '--source-commit', self.desktop,
+                    '--peer-source-commit', invalid, '--example-bin', '/unused/example',
+                    '--peer-bin', '/unused/peer', '--example-sha256', 'a'*64,
+                    '--peer-sha256', 'b'*64, '--desktop-sha256', 'c'*64]
+            with self.subTest(peer=invalid), patch.object(sys, 'argv', argv), \
+                 patch.object(driver, 'run') as run:
+                with self.assertRaisesRegex(driver.Failure, '^full_peer_source_commit_required$'):
+                    driver.main()
+                run.assert_not_called()
+
+
 class OwnedGuestBoundary(unittest.TestCase):
     def functions(self):
         namespace = {}

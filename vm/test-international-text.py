@@ -41,6 +41,13 @@ def require(condition, label):
         raise Failure(label)
 
 
+def source_commits(source_commit, peer_source_commit=None):
+    require(re.fullmatch('[a-f0-9]{40}', source_commit), 'full_source_commit_required')
+    peer = source_commit if peer_source_commit is None else peer_source_commit
+    require(re.fullmatch('[a-f0-9]{40}', peer), 'full_peer_source_commit_required')
+    return {'desktop': source_commit, 'example': source_commit, 'peer': peer}
+
+
 def run(argv, *, data=None, timeout=20, label='bounded_subprocess_failed'):
     require(re.fullmatch('[a-z_]+', label) is not None, 'fixed_subprocess_step_label')
     try:
@@ -93,13 +100,14 @@ print(json.dumps({'settings_sha256':value['sha256'],'settings_inode':value['iden
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source-commit', required=True)
+    parser.add_argument('--peer-source-commit', help='Full peer-only fixture commit; defaults to --source-commit')
     parser.add_argument('--example-bin', required=True)
     parser.add_argument('--peer-bin', required=True)
     parser.add_argument('--example-sha256', required=True)
     parser.add_argument('--peer-sha256', required=True)
     parser.add_argument('--desktop-sha256', required=True)
     args = parser.parse_args()
-    require(re.fullmatch('[a-f0-9]{40}', args.source_commit), 'full_source_commit_required')
+    provenance = source_commits(args.source_commit, args.peer_source_commit)
     for digest in (args.example_sha256, args.peer_sha256, args.desktop_sha256):
         require(re.fullmatch('[a-f0-9]{64}', digest), 'full_binary_digest_required')
     common = Path(run(['git', '-C', str(ROOT), 'rev-parse', '--path-format=absolute',
@@ -125,7 +133,8 @@ def main():
     focused = None
     input_deadline = None
     sequence = 0
-    report = {'passed': False, 'source_commit': args.source_commit, 'checks': {}, 'restoration': {},
+    report = {'passed': False, 'source_commit': args.source_commit, 'source_commits': provenance,
+              'checks': {}, 'restoration': {},
               'helper_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               'policy_sha256': hashlib.sha256((ROOT / 'vm/international_text_policy.py').read_bytes()).hexdigest(),
               'binaries': {'desktop': args.desktop_sha256, 'example': args.example_sha256, 'peer': args.peer_sha256},

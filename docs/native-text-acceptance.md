@@ -18,6 +18,14 @@ python3 vm/test-international-text.py \
   --peer-sha256 RELEASE_PEER_SHA256
 ```
 
+The desktop and SDK example share `--source-commit`. An independently corrected
+acceptance peer may instead supply `--peer-source-commit FULL_FIXTURE_COMMIT`;
+it defaults to the common source commit. Both require full lowercase 40-digit
+commit IDs. Reports retain the legacy common `source_commit` and explicitly
+record `source_commits.desktop`, `.example` and `.peer`, alongside all three
+binary hashes. A peer-only build does not relabel the installed desktop/example
+or the immutable nine-binary release archive as rebuilt.
+
 Before every native action it checks the original output/workspace, unchanged
 owned processes/cgroups and socket peers, closed shell panels, absent credential
 requests, no managed applications or foreign layers, safe compositor bindings
@@ -63,5 +71,23 @@ its generic subprocess failure did not record which file attribute differed.
 Restoration checks passed. It is retained as a failed attempt, not proof that
 access time caused the refusal. That attempt paired the 8e SDK examples with the
 older a7f desktop, so it is not coherent 8e runtime acceptance. The corrected file
-checks pass real temporary file cold-read and mutation-refusal regressions; a
-native rerun remains pending.
+checks pass real temporary file cold-read and mutation-refusal regressions.
+
+A later attempt used the coherent 8e desktop, SDK example and original peer.
+It failed before native input: the peer panicked on the legitimate initial seat
+Capabilities event because the eventless `delegate_noop!` form is unreachable on
+events. The failed report retains its cleanup/guard failures; an independent
+read-only check at 2026-10-19 20:39:54 UTC subsequently verified the peer unit was
+failed with no processes, no example had been created, and exact settings,
+wallpaper, output, workspace, pointer and idle/unlocked 8e desktop were preserved.
+That separate observation does not turn the failed attempt into a pass.
+
+The acceptance-peer-only correction explicitly ignores legitimate seat/surface
+events while retaining static-seat, registry-retirement and nonreplacement
+guards. Its independently compiled fixture source is
+`b4d67a4560948b78549a371d3ef00ef06089f4f1`; binary SHA256
+`ff22d164e475893f12d45c34cdcdd82ceeb8b92c22a4ec7c720bf184762c016f`
+(894,008 bytes). Formatting and the peer-only build passed. The desktop/example
+remain at `8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, and the original archive
+remains unchanged. A native rerun with explicit independent-peer provenance is
+pending; no successful IME interaction is claimed from compilation alone.
