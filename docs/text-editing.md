@@ -185,7 +185,8 @@ Paste negotiates `text/plain;charset=utf-8`, `UTF8_STRING`, then `text/plain`.
 The receiver requires valid UTF-8 at EOF. Unsupported formats, overflow, timeout
 and disconnected pipes return typed generic errors; they never print clipboard
 text or execute it as a shell command. Incoming CR/LF is removed by single-line
-editing. Launchers and menus show failures without changing their query; notes
+editing. Multiline fields normalize accepted CRLF/CR edits to LF and preserve
+hard lines through the same history/clipboard admission path. Launchers and menus show failures without changing their query; notes
 returns the existing typed error intent. Wallpaper search and hidden-network
 name errors use their existing status/failure presentation. Clipboard history
 and primary-selection UI remain separate features.
@@ -246,6 +247,8 @@ theme/login export restoration as well as the original JSON file.
 
 Native clipboard interoperability and hardware acceptance remain open. Current
 shaping remains the existing kerning-based implementation. Clipboard native
-interoperability, IME, bidi/complex-script shaping, font fallback, multiline editing and
-platform accessibility remain separate requirements. Editing tests and
+interoperability, IME, bidi/complex-script shaping, font fallback and platform accessibility remain separate requirements.
+The controlled multiline editor and Notes client are described in
+[multiline editing](multiline-text.md); their integrated and native acceptance
+remain separately recorded. Editing tests and
 synthetic Vulkan references cannot prove those features.

@@ -4,7 +4,7 @@ pub mod catalog;
 mod sizing;
 pub mod surfaces;
 mod view;
-use lucent_api::{ClipboardTarget, DragEvent, Effects, TextEdit, TextFieldState};
+use lucent_api::{ClipboardTarget, DragEvent, Effects, ScrollEvent, TextEdit, TextFieldState};
 use lucent_design::component;
 #[cfg(test)]
 use lucent_domain::DesktopSettings;
@@ -23,6 +23,7 @@ pub enum Message {
     Edit(bool),
     Press,
     EditNotes(TextEdit),
+    ScrollNotes(ScrollEvent),
     RetrySave,
     TimerToggle,
     TimerReset,
@@ -58,7 +59,6 @@ enum Drag {
     // release removes this marker; a subsequent press can start a new drag.
     Cancelled,
 }
-#[derive(Default)]
 pub struct Host {
     drags: BTreeMap<String, Drag>,
     resizer: sizing::Resizer,
@@ -66,6 +66,20 @@ pub struct Host {
     timer: FocusTimer,
     month_offset: i32,
     notes_field: TextFieldState,
+    notes_scroll: f32,
+}
+impl Default for Host {
+    fn default() -> Self {
+        Self {
+            drags: BTreeMap::new(),
+            resizer: sizing::Resizer::default(),
+            captured_surfaces: None,
+            timer: FocusTimer::default(),
+            month_offset: 0,
+            notes_field: TextFieldState::multiline(),
+            notes_scroll: 0.,
+        }
+    }
 }
 impl Host {
     pub fn grid_visible(&self) -> bool {
@@ -139,6 +153,7 @@ impl Host {
             *drag = Drag::Cancelled;
         }
         self.captured_surfaces = None;
+        self.notes_field.cancel();
     }
     pub fn timer_remaining(&self) -> u64 {
         self.timer.remaining
@@ -166,6 +181,9 @@ impl Host {
                 self.resizer.cancel_widget(&id);
                 if self.drags.contains_key(&id) {
                     self.cancel_drag(&id, false);
+                }
+                if id == "notes" {
+                    self.notes_field.cancel();
                 }
                 lucent_usecases::toggle_widget(settings, &id);
                 effects.redraw("widgets");
@@ -322,6 +340,13 @@ impl Host {
                 None
             }
             Message::Media(message) => Some(Intent::Media(message)),
+            Message::ScrollNotes(event) => {
+                if event.offset.is_finite() && event.offset >= 0. {
+                    self.notes_scroll = event.offset;
+                    effects.redraw("widgets");
+                }
+                None
+            }
             Message::EditNotes(edit) => {
                 effects.redraw("widgets");
                 let surface = self
@@ -821,5 +846,117 @@ mod tests {
         ));
         assert_eq!(settings.notes, admitted);
         assert!(lucent_usecases::validate_settings(&settings).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod multiline_notes_tests {
+    use super::*;
+    fn send(
+        host: &mut Host,
+        settings: &mut DesktopSettings,
+        message: Message,
+    ) -> (Option<Intent>, Effects<Message>) {
+        let mut effects = Effects::default();
+        let intent = host.update(
+            message,
+            Update {
+                layout: &mut settings.layout,
+                notes: &mut settings.notes,
+                instance: None,
+                viewport: (1920., 1080.),
+                unix_seconds: 0,
+            },
+            &mut effects,
+        );
+        (intent, effects)
+    }
+    #[test]
+    fn notes_preserves_lines_and_persists_only_content_not_selection_or_scroll() {
+        let mut host = Host::default();
+        let mut settings = DesktopSettings::default();
+        let (intent, effects) = send(
+            &mut host,
+            &mut settings,
+            Message::EditNotes(TextEdit::Replace("one\r\n\r\ntwo\rthree\n".into())),
+        );
+        assert!(matches!(intent, Some(Intent::Save)));
+        assert_eq!(settings.notes, "one\n\ntwo\nthree\n");
+        assert!(
+            effects.tasks.is_empty(),
+            "the root persistence coordinator owns all I/O"
+        );
+        assert!(
+            send(
+                &mut host,
+                &mut settings,
+                Message::EditNotes(TextEdit::Select {
+                    anchor: 0,
+                    caret: 5
+                })
+            )
+            .0
+            .is_none()
+        );
+        assert!(
+            send(
+                &mut host,
+                &mut settings,
+                Message::ScrollNotes(ScrollEvent { offset: 80. })
+            )
+            .0
+            .is_none()
+        );
+        assert_eq!(host.notes_scroll, 80.);
+        assert!(matches!(
+            send(&mut host, &mut settings, Message::EditNotes(TextEdit::Undo)).0,
+            Some(Intent::Save)
+        ));
+    }
+    #[test]
+    fn hidden_notes_retires_pending_clipboard_and_normalized_limit_is_atomic() {
+        let mut host = Host::default();
+        let mut settings = DesktopSettings::default();
+        settings.layout.visible_widgets.push("notes".into());
+        send(
+            &mut host,
+            &mut settings,
+            Message::EditNotes(TextEdit::Replace("x".repeat(NOTES_MAX_BYTES - 1))),
+        );
+        send(
+            &mut host,
+            &mut settings,
+            Message::EditNotes(TextEdit::Insert("\r\n".into())),
+        );
+        assert_eq!(settings.notes.len(), NOTES_MAX_BYTES);
+        assert!(settings.notes.ends_with('\n'));
+        let before = settings.notes.clone();
+        assert!(matches!(
+            send(
+                &mut host,
+                &mut settings,
+                Message::EditNotes(TextEdit::Insert("é".into()))
+            )
+            .0,
+            Some(Intent::Error(_))
+        ));
+        assert_eq!(settings.notes, before);
+        let (_, mut effects) = send(
+            &mut host,
+            &mut settings,
+            Message::EditNotes(TextEdit::Paste),
+        );
+        let request = effects.clipboard.pop().unwrap();
+        send(&mut host, &mut settings, Message::Toggle("notes".into()));
+        assert!(
+            send(
+                &mut host,
+                &mut settings,
+                request.finish(lucent_api::ClipboardOutcome::Text("late".into()))
+            )
+            .0
+            .is_none()
+        );
+        assert_eq!(settings.notes, before);
     }
 }

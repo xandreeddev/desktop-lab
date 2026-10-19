@@ -6,9 +6,37 @@ pub struct TextHit {
     pub selection: TextSelection,
     pub inner: Rect,
     pub scroll: f32,
-    boundaries: Arc<[(usize, f32)]>,
+    pub(super) boundaries: Arc<[(usize, f32)]>,
+    pub(super) area: Option<Arc<super::text_area::AreaGeometry>>,
 }
 impl TextHit {
+    pub fn is_multiline(&self) -> bool {
+        self.area.is_some()
+    }
+    pub fn at_point(&self, x: f32, y: f32) -> Option<usize> {
+        if self.area.is_some() {
+            super::text_area::at(self, x, y).map(|(byte, _)| byte)
+        } else {
+            self.at(x)
+        }
+    }
+    pub(super) fn same_geometry(&self, other: &Self) -> bool {
+        self.value == other.value
+            && self.inner == other.inner
+            && match (&self.area, &other.area) {
+                (Some(a), Some(b)) => {
+                    a.line_height == b.line_height
+                        && a.rows.len() == b.rows.len()
+                        && a.rows
+                            .iter()
+                            .zip(b.rows.iter())
+                            .all(|(a, b)| a.range == b.range && a.stops == b.stops)
+                }
+                (None, None) => self.boundaries == other.boundaries,
+                _ => false,
+            }
+    }
+
     pub fn at(&self, x: f32) -> Option<usize> {
         if !x.is_finite() {
             return None;
@@ -81,6 +109,7 @@ pub(super) fn geometry(
         inner,
         scroll,
         boundaries: boundaries.into(),
+        area: None,
     }
 }
 pub(super) fn paint<M>(
@@ -132,9 +161,15 @@ pub(super) fn paint<M>(
         },
         size: style.font_size,
         face: style.font_face,
-        color: style
-            .foreground
-            .alpha(style.foreground.3 * alpha * if value.is_empty() { 0.55 } else { 1. }),
+        color: style.foreground.alpha(
+            style.foreground.3
+                * alpha
+                * if value.is_empty() {
+                    style.placeholder_opacity
+                } else {
+                    1.
+                },
+        ),
         align: Align::Start,
     });
     if focused {
@@ -386,5 +421,65 @@ mod clipboard_keys {
                 .iter()
                 .all(|hit| hit.text_edit.is_none() && hit.value.is_empty())
         );
+    }
+}
+
+#[cfg(test)]
+mod placeholder_styling {
+    use super::*;
+    #[test]
+    fn placeholder_opacity_is_explicit_and_entered_text_keeps_its_own_alpha() {
+        let layout = Layout::new(Arc::new(vec![
+            fontdue::Font::from_bytes(
+                include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
+                fontdue::FontSettings::default(),
+            )
+            .unwrap(),
+        ]));
+        assert_eq!(Style::default().placeholder_opacity, 1.);
+        for populated in [false, true] {
+            for opacity in [None, Some(0.25)] {
+                let value = if populated { "entered" } else { "" };
+                let fields = [
+                    Element::input(value, "Hint", |_| ()),
+                    Element::masked_input(usize::from(populated), "Hint", |_| ()),
+                    Element::text_input(value, TextSelection::default(), "Hint", |_| ()),
+                    Element::text_area(
+                        value,
+                        TextSelection::default(),
+                        "Hint",
+                        ScrollSpec::new(0., 24.).unwrap(),
+                        |_| (),
+                        |_| (),
+                    ),
+                ];
+                for field in fields {
+                    let field = field
+                        .size(200., 80.)
+                        .font(20.)
+                        .color(Color::hex(0xffffff).alpha(0.8))
+                        .opacity(0.5);
+                    let field = if let Some(opacity) = opacity {
+                        field.placeholder_opacity(opacity)
+                    } else {
+                        field
+                    };
+                    let scene = layout.build(&field, 200., 80., &Interaction::default(), 0.);
+                    let painted = scene
+                        .paint
+                        .iter()
+                        .find_map(|paint| match paint {
+                            Paint::Text { color, .. } => Some(color.3),
+                            _ => None,
+                        })
+                        .expect("the control paints ordinary or placeholder text");
+                    let expected = 0.8 * 0.5 * if populated { 1. } else { opacity.unwrap_or(1.) };
+                    assert!(
+                        (painted - expected).abs() < 1e-6,
+                        "placeholder style must compose with foreground and ancestor opacity only for empty fields"
+                    );
+                }
+            }
+        }
     }
 }

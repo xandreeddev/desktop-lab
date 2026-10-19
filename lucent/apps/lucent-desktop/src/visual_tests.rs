@@ -1681,6 +1681,12 @@ fn visual_regressions() {
             ("text-selection-reverse", Mode::Apps, 0, 0, "", 1., 640.),
             ("text-scrolled-selection", Mode::Apps, 0, 0, "", 1., 390.),
             ("text-grapheme-selection", Mode::Apps, 0, 0, "", 1., 640.),
+            ("notes-area-empty", Mode::Apps, 0, 0, "", 1., 640.),
+            ("notes-area-multiline", Mode::Apps, 0, 0, "", 1., 640.),
+            ("notes-area-selection", Mode::Apps, 0, 0, "", 1., 640.),
+            ("notes-area-scrolled", Mode::Apps, 0, 0, "", 1., 640.),
+            ("notes-area-narrow", Mode::Apps, 0, 0, "", 1., 390.),
+            ("notes-area-resized", Mode::Apps, 0, 0, "", 1., 640.),
             ("notes-saved", Mode::Apps, 0, 0, "", 1., 390.),
             ("notes-saving", Mode::Apps, 0, 0, "", 1., 390.),
             ("notes-retrying", Mode::Apps, 0, 0, "", 1., 390.),
@@ -1971,6 +1977,10 @@ fn visual_regressions() {
                 layout.build(&tree, width, height, &interaction, now)
             } else if let Some(state) = name.strip_prefix("notes-") {
                 let app = notes_fixture(state, light);
+                let mut interaction = Interaction::default();
+                if state.starts_with("area-") {
+                    interaction.focus = Some("notes-input".into());
+                }
                 layout.build(
                     &app.view(&ViewContext {
                         surface: "widgets",
@@ -1982,7 +1992,7 @@ fn visual_regressions() {
                     }),
                     width,
                     height,
-                    &Interaction::default(),
+                    &interaction,
                     now,
                 )
             } else if name.starts_with("widget-resize-") || name.starts_with("widget-edit") {
@@ -4160,6 +4170,46 @@ fn notes_fixture(state: &str, light: bool) -> Desktop {
         "notes".into(),
         lucent_domain::Placement::new(48., 80.).unwrap(),
     );
+    if state.starts_with("area-") {
+        app.settings.notes = match state {
+            "area-empty" => String::new(),
+            "area-scrolled" => "A longer thought to keep nearby.
+
+Another line with preserved spacing.
+"
+            .repeat(8),
+            _ => "A thought to keep nearby.
+
+Enter makes a new line. Select across lines, resize and wrap.
+"
+            .into(),
+        };
+        if state == "area-resized" {
+            app.settings.layout.widget_sizes.insert(
+                "notes".into(),
+                lucent_domain::WidgetSize::new(384., 320.).unwrap(),
+            );
+        }
+        if state == "area-selection" {
+            // Keep the highlighted word pair and caret in the first visible
+            // row: this fixture paints settled state without runtime reveal.
+            app.update(
+                Message::Widgets(crate::widgets::Message::EditNotes(TextEdit::Select {
+                    anchor: 2,
+                    caret: 12,
+                })),
+                &mut Effects::default(),
+            );
+        }
+        if state == "area-scrolled" {
+            app.update(
+                Message::Widgets(crate::widgets::Message::ScrollNotes(ScrollEvent {
+                    offset: 4. * lucent_design::component::scroll::LINE_STEP,
+                })),
+                &mut Effects::default(),
+            );
+        }
+    }
     if matches!(state, "saving" | "failed" | "retrying") {
         let notes = std::mem::take(&mut app.settings.notes);
         app.update(
@@ -5532,4 +5582,57 @@ fn failed_live_import_preserves_restored_profile_with_a_different_static_fallbac
         assert_eq!(app.settings.live_wallpapers.default, Some(previous));
         assert_eq!(app.wallpaper.source_path(), "/fixture/fallback.png");
     }
+}
+
+#[test]
+fn notes_editor_uses_actual_resized_card_insets_and_vertical_space() {
+    let mut app = notes_fixture("saved", false);
+    app.viewport = (960., 700.);
+    app.settings.layout.widget_sizes.insert(
+        "notes".into(),
+        lucent_domain::WidgetSize::new(384., 320.).unwrap(),
+    );
+    let layout = Layout::new(fonts(&app));
+    let cx = ViewContext {
+        surface: "widgets",
+        instance: None,
+        width: 960.,
+        height: 700.,
+        now: 1.,
+        density: Density::ONE,
+    };
+    let scene = layout.build(
+        &app.view(&cx),
+        cx.width,
+        cx.height,
+        &Interaction::default(),
+        cx.now,
+    );
+    let card = scene
+        .hits
+        .iter()
+        .find(|hit| hit.id == "widget-notes")
+        .unwrap();
+    let field = scene
+        .hits
+        .iter()
+        .find(|hit| hit.id == "notes-input")
+        .unwrap();
+    assert_eq!(card.rect.w, 384.);
+    assert_eq!(card.rect.h, 320.);
+    assert_eq!(
+        field.rect.w,
+        card.rect.w - 2. * lucent_design::component::notes::INSET
+    );
+    assert_eq!(
+        field.rect.x,
+        card.rect.x + lucent_design::component::notes::INSET
+    );
+    assert_eq!(
+        field.rect.y,
+        card.rect.y + lucent_design::component::notes::INPUT_TOP
+    );
+    assert!(field.rect.h > lucent_design::component::input::HEIGHT * 3.);
+    assert!(field.text.as_ref().unwrap().is_multiline());
+    assert!(field.scroll.is_some());
 }

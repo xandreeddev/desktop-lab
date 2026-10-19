@@ -7,6 +7,7 @@ pub use scroll::{FocusClip, ScrollHit};
 mod input_tests;
 mod rich_text;
 mod slider;
+mod text_area;
 mod text_input;
 pub use text_input::TextHit;
 pub mod text;
@@ -246,7 +247,10 @@ impl Layout {
                 );
                 (flow.width, flow.height)
             }
-            Kind::Input { .. } | Kind::MaskedInput { .. } | Kind::TextInput { .. } => (
+            Kind::Input { .. }
+            | Kind::MaskedInput { .. }
+            | Kind::TextInput { .. }
+            | Kind::TextArea { .. } => (
                 160.,
                 text::line_metrics(
                     self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
@@ -367,8 +371,35 @@ impl Layout {
             (rect.w - 2. * p.horizontal).max(0.),
             (rect.h - 2. * p.vertical).max(0.),
         );
-        let scroll_hit = if let Kind::Scroll(spec) = e.kind {
-            e.scroll.as_ref().map(|callback| {
+        let prepared_area = if let Kind::TextArea {
+            value,
+            selection,
+            scroll,
+            ..
+        } = &e.kind
+        {
+            let font = self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]);
+            let content = Rect::new(
+                inner.x,
+                inner.y,
+                (inner.w - scroll::gutter(e.style.scroll, inner.w)).max(0.),
+                inner.h,
+            );
+            Some(text_area::geometry(
+                font,
+                value,
+                *selection,
+                e.style.font_size,
+                content,
+                *scroll,
+                &id,
+                interaction.text_navigation.as_ref(),
+            ))
+        } else {
+            None
+        };
+        let scroll_hit = match &e.kind {
+            Kind::Scroll(spec) => e.scroll.as_ref().map(|callback| {
                 let width = (inner.w - scroll::gutter(e.style.scroll, inner.w)).max(0.);
                 let height = e
                     .children
@@ -379,13 +410,25 @@ impl Layout {
                     id.clone(),
                     inner,
                     height,
-                    spec,
+                    *spec,
                     e.style.scroll,
                     callback.clone(),
                 ))
-            })
-        } else {
-            None
+            }),
+            Kind::TextArea { scroll, .. } => e.scroll.as_ref().map(|callback| {
+                Arc::new(ScrollHit::new(
+                    id.clone(),
+                    inner,
+                    prepared_area
+                        .as_ref()
+                        .and_then(|text| text.area.as_ref())
+                        .map_or(0., |area| area.content_height),
+                    *scroll,
+                    e.style.scroll,
+                    callback.clone(),
+                ))
+            }),
+            _ => None,
         };
         let mut child_focus_clips = focus_clips.clone();
         if e.style.clip || e.style.diagonal_reveal.is_some() {
@@ -413,7 +456,7 @@ impl Layout {
                 interaction.focus.as_deref() == Some(&id),
             ))
         } else {
-            None
+            prepared_area
         };
         let interactive = e.click.is_some()
             || e.secondary_click.is_some()
@@ -537,6 +580,15 @@ impl Layout {
                 &child_focus_clips,
                 &id,
             ),
+            Kind::TextArea { .. } => text_area::paint(
+                scene,
+                e,
+                prepared_text.as_ref().expect("prepared text area"),
+                own_clip.intersect(prepared_text.as_ref().expect("prepared text area").inner),
+                alpha,
+                interaction.focus.as_deref() == Some(&id),
+                self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
+            ),
             Kind::TextInput { .. } => text_input::paint(
                 scene,
                 e,
@@ -581,7 +633,7 @@ impl Layout {
                     value.to_string()
                 };
                 if value.is_empty() {
-                    fg.3 *= 0.55;
+                    fg.3 *= e.style.placeholder_opacity;
                 }
                 scene.paint.push(Paint::Text {
                     rect: inner,
@@ -841,6 +893,7 @@ pub struct Interaction<M> {
     input_buffer: Option<(String, String)>,
     slider_buffer: Option<(String, f32)>,
     scroll_buffer: BTreeMap<String, f32>,
+    text_navigation: Option<text_area::Navigation>,
 }
 impl<M> Default for Interaction<M> {
     fn default() -> Self {
@@ -856,6 +909,7 @@ impl<M> Default for Interaction<M> {
             input_buffer: None,
             slider_buffer: None,
             scroll_buffer: BTreeMap::new(),
+            text_navigation: None,
         }
     }
 }
@@ -873,13 +927,15 @@ impl<M: Clone> Interaction<M> {
             self.press = None;
         }
         if let Some(press) = &mut self.press
+            && press.text_anchor.is_some()
             && let Some(previous) = &press.hit.text
         {
             let current = scene.hits.iter().find(|hit| hit.id == press.hit.id);
             if let Some(current) = current
-                && current.text.as_ref().is_some_and(|text| {
-                    text.value == previous.value && text.inner == previous.inner
-                })
+                && current
+                    .text
+                    .as_ref()
+                    .is_some_and(|text| text.same_geometry(previous))
                 && current.clip == press.hit.clip
             {
                 press.hit = current.clone();
@@ -946,6 +1002,14 @@ impl<M: Clone> Interaction<M> {
                 self.focus_visible = true;
             }
         }
+        if self.text_navigation.as_ref().is_some_and(|navigation| {
+            !scene
+                .hits
+                .iter()
+                .any(|hit| Some(&hit.id) == self.focus.as_ref() && navigation.compatible(hit))
+        }) {
+            self.text_navigation = None;
+        }
         self.input_buffer = self.focus.as_ref().and_then(|id| {
             scene
                 .hits
@@ -953,6 +1017,31 @@ impl<M: Clone> Interaction<M> {
                 .find(|h| &h.id == id && h.input.is_some())
                 .map(|h| (id.clone(), h.value.clone()))
         });
+    }
+    /// Whether current input contains a multiline editor. Runtime uses this to
+    /// refresh CPU geometry before queued native input, without a GPU submission.
+    pub fn has_text_area(scene: &Scene<M>) -> bool {
+        scene
+            .hits
+            .iter()
+            .any(|hit| hit.text.as_ref().is_some_and(TextHit::is_multiline))
+    }
+    /// Resolve an actual model/selection/viewport change into controlled scroll
+    /// effects. An offset-only change deliberately leaves the caret offscreen.
+    pub fn text_caret_reveal(&self, previous: &Scene<M>, current: &Scene<M>) -> Vec<M> {
+        current
+            .hits
+            .iter()
+            .filter(|hit| Some(&hit.id) == self.focus.as_ref())
+            .filter_map(|hit| {
+                previous
+                    .hits
+                    .iter()
+                    .find(|old| old.id == hit.id)
+                    .and_then(|old| old.text.as_ref())
+                    .and_then(|old| text_area::reveal(hit, old))
+            })
+            .collect()
     }
     pub fn hover_amount(&self, id: &str, now: f64) -> f32 {
         self.motions.get(id).map(|m| m.value(now)).unwrap_or(0.)
@@ -1011,11 +1100,14 @@ impl<M: Clone> Interaction<M> {
             press.moved |= dx.hypot(dy) >= 5.;
             if let (Some(anchor), Some(text), Some(callback)) =
                 (press.text_anchor, &press.hit.text, &press.hit.text_edit)
-                && let Some(caret) = text.at(x)
-                && press.text_last != Some(caret)
+                && let Some(caret) = text.at_point(x, y)
             {
-                press.text_last = Some(caret);
-                out.push(callback(TextEdit::Select { anchor, caret }));
+                let navigation = text_area::pointer_navigation(&press.hit, x, y, anchor);
+                if press.text_last != Some(caret) || self.text_navigation != navigation {
+                    press.text_last = Some(caret);
+                    self.text_navigation = navigation;
+                    out.push(callback(TextEdit::Select { anchor, caret }));
+                }
             }
             if let (Some(scroll), Some(grab)) = (&press.hit.scroll, press.scroll_grab) {
                 if let Some(offset) = scroll.at(y, grab) {
@@ -1052,6 +1144,7 @@ impl<M: Clone> Interaction<M> {
     ) -> Option<M> {
         self.focus_visible = false;
         self.slider_buffer = None;
+        self.text_navigation = None;
         self.press = scene
             .hits
             .iter()
@@ -1079,14 +1172,26 @@ impl<M: Clone> Interaction<M> {
                         }
                     });
                 Press {
-                    text_anchor: hit.text.as_ref().and_then(|text| {
-                        if modifiers.shift {
-                            Some(text.selection.anchor())
-                        } else {
-                            text.at(x)
-                        }
-                    }),
-                    text_last: hit.text.as_ref().and_then(|text| text.at(x)),
+                    text_anchor: hit
+                        .text
+                        .as_ref()
+                        .filter(|_| scroll_grab.is_none())
+                        .and_then(|text| {
+                            if modifiers.shift {
+                                Some(text.selection.anchor())
+                            } else {
+                                let (x, y) = text_area::press_point(text, x, y);
+                                text.at_point(x, y)
+                            }
+                        }),
+                    text_last: hit
+                        .text
+                        .as_ref()
+                        .filter(|_| scroll_grab.is_none())
+                        .and_then(|text| {
+                            let (x, y) = text_area::press_point(text, x, y);
+                            text.at_point(x, y)
+                        }),
                     hit,
                     scroll_grab,
                     x,
@@ -1098,6 +1203,12 @@ impl<M: Clone> Interaction<M> {
             && let (Some(anchor), Some(caret), Some(callback)) =
                 (press.text_anchor, press.text_last, &press.hit.text_edit)
         {
+            let (x, y) = press
+                .hit
+                .text
+                .as_ref()
+                .map_or((x, y), |text| text_area::press_point(text, x, y));
+            self.text_navigation = text_area::pointer_navigation(&press.hit, x, y, anchor);
             return Some(callback(TextEdit::Select { anchor, caret }));
         }
         if let Some(p) = &self.press
@@ -1117,8 +1228,16 @@ impl<M: Clone> Interaction<M> {
         if let (Some(anchor), Some(text), Some(callback)) =
             (p.text_anchor, &p.hit.text, &p.hit.text_edit)
         {
+            if text.is_multiline() && !p.moved && x == p.x && y == p.y {
+                // Revealing the pressed row can scroll underneath a stationary
+                // pointer. Mouse-up must keep that click's source position.
+                return p
+                    .text_last
+                    .map(|caret| callback(TextEdit::Select { anchor, caret }));
+            }
+            self.text_navigation = text_area::pointer_navigation(&p.hit, x, y, anchor);
             return text
-                .at(x)
+                .at_point(x, y)
                 .map(|caret| callback(TextEdit::Select { anchor, caret }));
         }
         if let (Some(scroll), Some(grab)) = (&p.hit.scroll, p.scroll_grab) {
@@ -1210,6 +1329,16 @@ impl<M: Clone> Interaction<M> {
         if matches!(key, Key::Tab | Key::BackTab) {
             return self.traverse(scene, key);
         }
+        if let Some(hit) = scene.hits.iter().find(|hit| {
+            Some(&hit.id) == self.focus.as_ref()
+                && hit.text.as_ref().is_some_and(TextHit::is_multiline)
+        }) && let Some(callback) = &hit.text_edit
+        {
+            return text_area::key(hit, key, &mut self.text_navigation)
+                .map(|edit| callback(edit))
+                .into_iter()
+                .collect();
+        }
         if let Some(hit) = scene
             .hits
             .iter()
@@ -1270,6 +1399,7 @@ impl<M: Clone> Interaction<M> {
             return vec![];
         };
         self.focus = Some(hit.id.clone());
+        self.text_navigation = None;
         self.slider_buffer = None;
         self.select_all = false;
         self.input_buffer = hit
@@ -1290,7 +1420,7 @@ impl<M: Clone> Interaction<M> {
             .find(|hit| Some(&hit.id) == self.focus.as_ref())
             && let Some(callback) = &hit.text_edit
         {
-            if matches!(key, Key::Enter) {
+            if matches!(key.unmodified(), Key::Enter) {
                 return hit.submit.clone();
             }
             return text_input::key(key).map(|edit| callback(edit));

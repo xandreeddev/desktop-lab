@@ -1,4 +1,4 @@
-//! Pure single-line editing and bounded ordinary-field history; values stay component-owned.
+//! Pure ordinary editing and bounded history; values stay component-owned.
 use std::{collections::VecDeque, fmt, ops::Range};
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -84,6 +84,14 @@ impl fmt::Display for TextEditError {
     }
 }
 impl std::error::Error for TextEditError {}
+fn normalized(value: String, multiline: bool) -> String {
+    if multiline {
+        value.replace("\r\n", "\n").replace('\r', "\n")
+    } else {
+        value.replace(['\n', '\r'], "")
+    }
+}
+
 fn floor(text: &str, offset: usize) -> usize {
     if offset >= text.len() {
         return text.len();
@@ -149,7 +157,7 @@ impl TextSelection {
         edit: TextEdit,
         max_bytes: usize,
     ) -> Result<TextChange, TextEditError> {
-        self.apply_inner(text, edit, max_bytes, false)
+        self.apply_inner(text, edit, max_bytes, false, false)
             .map(|(change, _)| change)
     }
     fn apply_inner(
@@ -158,6 +166,7 @@ impl TextSelection {
         edit: TextEdit,
         max_bytes: usize,
         record: bool,
+        multiline: bool,
     ) -> Result<(TextChange, Option<TextDelta>), TextEditError> {
         let before = *self;
         let mut selection = self.reconciled(text);
@@ -174,7 +183,7 @@ impl TextSelection {
                 return Ok((TextChange::default(), None));
             }
             TextEdit::Replace(value) => {
-                let value = value.replace(['\n', '\r'], "");
+                let value = normalized(value, multiline);
                 if value.len() > max_bytes {
                     return Err(TextEditError::ByteLimit);
                 }
@@ -186,7 +195,7 @@ impl TextSelection {
                 selection = Self::at_end(text);
             }
             TextEdit::Insert(insert) => {
-                let insert = insert.replace(['\n', '\r'], "");
+                let insert = normalized(insert, multiline);
                 if insert.is_empty() {
                     return Ok((TextChange::default(), None));
                 }
@@ -405,13 +414,21 @@ impl TextHistory {
         edit: TextEdit,
         max_bytes: usize,
         typed: bool,
+        multiline: bool,
     ) -> Result<TextChange, TextEditError> {
         if matches!(edit, TextEdit::Undo | TextEdit::Redo) {
             return self.replay(selection, value, max_bytes, matches!(edit, TextEdit::Undo));
         }
-        let typing = typed && matches!(edit, TextEdit::Insert(_));
+        // Hard line insertion is an independent undo boundary, including typed Enter.
+        let line_break =
+            multiline && matches!(&edit, TextEdit::Insert(value) if value.contains(['\n', '\r']));
+        let typing = typed && !line_break && matches!(edit, TextEdit::Insert(_));
+        if line_break {
+            self.break_group();
+        }
         let record = value.len() <= SNAPSHOT_BYTES;
-        let (change, delta) = match selection.apply_inner(value, edit, max_bytes, record) {
+        let (change, delta) = match selection.apply_inner(value, edit, max_bytes, record, multiline)
+        {
             Ok(result) => result,
             Err(error) => {
                 self.break_group();
@@ -531,7 +548,7 @@ mod tests {
         max_bytes: usize,
     ) -> Result<TextChange, TextEditError> {
         history.reconcile(value);
-        history.apply(selection, value, edit, max_bytes, true)
+        history.apply(selection, value, edit, max_bytes, true, false)
     }
     #[test]
     fn undo_restores_joined_graphemes_and_directional_selection() {
@@ -845,6 +862,7 @@ mod tests {
                     &mut value,
                     TextEdit::Replace(format!("{step:04}{}", "x".repeat(1020))),
                     usize::MAX,
+                    false,
                     false,
                 )
                 .unwrap();

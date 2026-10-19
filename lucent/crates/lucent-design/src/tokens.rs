@@ -84,6 +84,7 @@ pub mod opacity {
     pub const SHADOW: f32 = 0.22;
     pub const DISABLED: f32 = 0.3;
     pub const QUIET: f32 = 0.4;
+    pub const PLACEHOLDER: f32 = 0.55;
     pub const SECONDARY: f32 = 0.65;
     pub const MUTED: f32 = 0.75;
     pub const SUPPORTING: f32 = 0.8;
@@ -431,6 +432,7 @@ pub mod component {
         pub const CARET_WIDTH: f32 = 1.5;
         pub const PADDING_INLINE: f32 = 16.0;
         pub const PADDING_BLOCK: f32 = 8.0;
+        pub const PLACEHOLDER_OPACITY: f32 = 0.55;
         pub const SELECTION_OPACITY: f32 = 0.16;
         pub const UNDERLINE_WIDTH: f32 = 1.0;
     }

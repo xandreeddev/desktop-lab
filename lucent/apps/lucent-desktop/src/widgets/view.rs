@@ -94,20 +94,28 @@ impl View<'_> {
         viewport: (f32, f32),
         source: bool,
     ) -> Element<Message> {
-        let content = super::catalog::registry()
-            .view(id, self, cx)
-            .expect("catalog members have a registered view");
         let size = self
             .host
             .size(id, self.input.layout, viewport, source)
             .tuple();
         let editor_height = super::sizing::editor_height(self.host.editing());
         let base = widget_size(id);
-        let mut children = vec![
-            content
-                .size(base.0, base.1)
-                .at((size.0 - base.0) / 2., (size.1 - base.1) / 2.),
-        ];
+        // Notes uses the actual resized card, rather than a fixed editor
+        // centered inside a larger decorative shell. Other catalog views keep
+        // their established base layouts.
+        let content_size = if id == "notes" { size } else { base };
+        let content_context = ViewContext {
+            width: content_size.0,
+            height: content_size.1,
+            ..cx.clone()
+        };
+        let content = super::catalog::registry()
+            .view(id, self, &content_context)
+            .expect("catalog members have a registered view");
+        let mut children = vec![content.size(content_size.0, content_size.1).at(
+            (size.0 - content_size.0) / 2.,
+            (size.1 - content_size.1) / 2.,
+        )];
         if self.host.editing() {
             let grip = component::widget_resize::HANDLE_SIZE;
             let inset = component::widget_resize::INSET;
@@ -603,7 +611,12 @@ pub(super) fn system(d: &View<'_>, _: &ViewContext) -> Element<Message> {
     ])
     .fill()
 }
-pub(super) fn notes(d: &View<'_>, _: &ViewContext) -> Element<Message> {
+pub(super) fn notes(d: &View<'_>, cx: &ViewContext) -> Element<Message> {
+    let width = (cx.width - 2. * component::notes::INSET).max(0.);
+    let caption_top = (cx.height
+        - (component::widget_size::notes::HEIGHT - component::notes::CAPTION_TOP))
+        .max(component::notes::INPUT_TOP);
+    let input_height = (caption_top - space::SM - component::notes::INPUT_TOP).max(0.);
     let caption = match d.input.save_status {
         Status::Saved => "Saved",
         Status::Saving => "Saving…",
@@ -613,11 +626,8 @@ pub(super) fn notes(d: &View<'_>, _: &ViewContext) -> Element<Message> {
     };
     let status = d
         .label(caption, font::MICRO)
-        .at(component::notes::INSET, component::notes::CAPTION_TOP)
-        .size(
-            component::notes::CONTENT_WIDTH,
-            component::notes::CAPTION_HEIGHT,
-        );
+        .at(component::notes::INSET, caption_top)
+        .size(width, component::notes::CAPTION_HEIGHT);
     let status = if d.input.save_status == Status::Failed {
         status
             .color(d.theme().error)
@@ -630,23 +640,20 @@ pub(super) fn notes(d: &View<'_>, _: &ViewContext) -> Element<Message> {
     };
     Element::stack(vec![
         d.label("Notes", font::HEADING)
-            .size(
-                component::notes::CONTENT_WIDTH,
-                component::notes::HEADING_HEIGHT,
-            )
+            .size(width, component::notes::HEADING_HEIGHT)
             .at(component::notes::INSET, component::notes::HEADING_TOP),
         d.theme()
-            .text_input(
+            .text_area(
                 d.input.notes,
                 d.host.notes_field.selection(),
                 "A thought to keep nearby…",
+                ScrollSpec::new(d.host.notes_scroll, component::scroll::LINE_STEP)
+                    .expect("controlled notes offset"),
                 Message::EditNotes,
+                Message::ScrollNotes,
             )
             .id("notes-input")
-            .size(
-                component::notes::CONTENT_WIDTH,
-                component::notes::INPUT_HEIGHT,
-            )
+            .size(width, input_height)
             .at(component::notes::INSET, component::notes::INPUT_TOP)
             .background(d.surface_color()),
         status,

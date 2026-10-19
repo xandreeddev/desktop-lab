@@ -76,6 +76,7 @@
   --opacity-shadow: 0.22;
   --opacity-disabled: 0.3;
   --opacity-quiet: 0.4;
+  --opacity-placeholder: 0.55;
   --opacity-secondary: 0.65;
   --opacity-muted: 0.75;
   --opacity-supporting: 0.8;
@@ -350,6 +351,7 @@
   --component-input-caret-width: 1.5px;
   --component-input-padding-inline: var(--space-lg);
   --component-input-padding-block: var(--space-sm);
+  --component-input-placeholder-opacity: var(--opacity-placeholder);
   --component-input-selection-opacity: var(--opacity-hover);
   --component-input-underline-width: 1px;
   --component-switch-width: 32px;
