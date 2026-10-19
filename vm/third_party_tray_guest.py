@@ -159,6 +159,7 @@ def desktop_service(pid):
     service = unit_snapshot('lucent.service')
     script = str(Path.home() / '.local/lib/lucent/session.py')
     require(service.get('load') == 'loaded' and service.get('active') == 'active'
+            and service.get('transient') is False
             and service.get('executable') == '/usr/bin/python3'
             and service.get('argv') == ['/usr/bin/python3', script]
             and type(service.get('main_pid')) is int and service['main_pid'] > 1

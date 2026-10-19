@@ -148,7 +148,7 @@ class NativeAdmission(unittest.TestCase):
 
 class DesktopSupervisorAdmission(unittest.TestCase):
     def proof(self):
-        service = {'load': 'loaded', 'active': 'active', 'main_pid': 900,
+        service = {'load': 'loaded', 'active': 'active', 'transient': False, 'main_pid': 900,
                    'group': '/user.slice/owned/lucent.service', 'invocation': '1' * 32,
                    'executable': '/usr/bin/python3',
                    'argv': ['/usr/bin/python3', str(Path.home() / '.local/lib/lucent/session.py')]}
@@ -180,7 +180,7 @@ class DesktopSupervisorAdmission(unittest.TestCase):
     def test_wrong_command_same_main_pid_or_missing_invocation_is_never_admitted(self):
         service, _, _ = self.proof()
         for changed in ({'argv': ['/usr/bin/python3', '/foreign.py']}, {'main_pid': 901},
-                        {'invocation': '0' * 32}, {'invocation': ''}):
+                        {'invocation': '0' * 32}, {'invocation': ''}, {'transient': True}):
             with self.subTest(changed=changed), \
                  patch.object(guest, 'unit_snapshot', return_value=dict(service, **changed)), \
                  patch.object(guest, 'process_snapshot') as snapshot:
