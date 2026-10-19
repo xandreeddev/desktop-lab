@@ -116,10 +116,20 @@ a smaller number.
 
 
 The distinct-stream/source-PTS instrumentation and the accompanying Arabic/style
-and oversized-row corrections are source changes awaiting their own Rust/native
-cohort. Nine pure Python collector-policy cases passed locally, including one
+and oversized-row corrections pass full workspace and strict Clippy checks at
+`eec582ab0aa7c06b4ed30d24a0670c6a1df91e21`. The explicit Vulkan alias/pixel and
+Arabic-style filters also pass locally on RADV. Twelve pure Python
+collector-policy cases passed locally, including one
 revision repeated at 60 Hz with zero distinct advancement, and 24 source revisions
 referenced at 60 Hz remaining 24 unique revisions. These controlled policy cases
-are not measured compositor/video performance. Actual matched resource runs,
-Vulkan alias/pixel checks and native presentation/source-cadence acceptance remain
-pending.
+are not measured compositor/video performance. Actual matched desktop resource
+runs and native presentation/source-cadence acceptance remain pending.
+
+The [isolated font-preparation report](../reports/measurements/lucent-font-preparation.json)
+records five fresh processes at the same source and 2× density. Their warm RSS is
+12,204 KiB (Latin), 13,480 KiB (Arabic), 13,920 KiB (Devanagari), 14,528 KiB (CJK)
+and 14,712 KiB (Hangul). Each warm result follows one cold and 20 full uncached
+mask preparations; it is not application-cache reuse. The complete bounded job
+peaked at 62.9 MiB with no swap. These current-cohort observations neither claim
+a historical before/after reduction nor establish the normal desktop's 300 MiB
+target.

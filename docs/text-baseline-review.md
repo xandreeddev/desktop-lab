@@ -16,6 +16,28 @@ passing desktop visual result. Its original report and diagnostic crops remain
 private local artifacts. Baseline replacement must use the final exact-source
 artifact and an explicit reviewed case list, retaining passing baselines.
 
+The final combined runtime capture is
+[CI run 39303230650](https://github.com/xandreeddev/desktop-lab/actions/runs/39303230650)
+at `eec582ab0aa7c06b4ed30d24a0670c6a1df91e21`. Its full 832-case sweep completed:
+423 references exceeded the unchanged thresholds and 409 passed. All 796 cases
+shared with the pre-integration `39701d5` artifact are byte-identical. The 36
+additional cases cover the integrated Display and Wi-Fi credential forms; 16 of
+those have the same row-local typography changes.
+
+The [explicit review manifest](../lucent/tests/visual/reviews/international-text-eec582.json)
+records each accepted case's old/new PNG hashes, original comparison and reason,
+plus hashes for every preserved passing reference. Only the 423 failed, reviewed
+references are replaced. Expected/actual/difference crops from this exact capture
+were inspected across the 18 historical component families at both densities and
+palettes, together with the new Display and credential controls. A final full CI
+run against the updated references remains required; this review does not turn
+the original failed run into a passing result.
+
+Twenty focused Vulkan filters also pass locally on AMD RADV. The duplicate local
+full sweep was deliberately stopped after 58 actual cases; its logs and images
+are retained as partial evidence, not a passed full run. Focused comparisons
+against the reviewed references are a separate local execution.
+
 ## Reviewed changes by component family
 
 Expected, actual and thresholded-difference crops were compared at both 1× and
@@ -43,6 +65,8 @@ changes; a group is not permission to accept unrelated geometry changes.
 | Wallpaper search | Middle-dot result metadata and multiplication-sign dimensions use shaping. | `wallpapers-online` |
 | Weather | Degree signs, middle-dot forecast metadata, ellipsis progress and Unicode minus guidance use shaping. | `weather-ready` |
 | Widget persistence | Ellipsis save/retry status uses shaping. | `widget-resize-saved` |
+| Display controls | Ellipsis connection status, degree rotation, and multiplication-sign/middle-dot mode labels use shaping. Scroll/control geometry stays fixed. | `displays-loading`, `displays-last` |
+| Wi-Fi credential repair | Middle-dot state and en-dash validation guidance shape their surrounding Latin runs, including ligatures. Field bounds, count-only bullets and the painted caret stay fixed. | `network-credentials`, `network-credentials-narrow` |
 
 These representative text-ink envelopes were measured with the same threshold
 and crop for each expected/actual pair. They distinguish changed kerning width
@@ -68,8 +92,9 @@ single-line and multiline fields. Every visual stop must hit its canonical UTF-8
 byte, full selection coverage must match the shaped advance, the painted caret
 must equal the native candidate rectangle, and the declared font size remains
 20. The existing tall-fallback-mark test covers expanded vertical metrics too.
-The new punctuation regression is source code awaiting its own Rust execution;
-this document does not mark it passed.
+The punctuation regression passes in the full workspace tests at
+`eec582ab0aa7c06b4ed30d24a0670c6a1df91e21`, both locally and in its
+[exact-source CI run](https://github.com/xandreeddev/desktop-lab/actions/runs/39303230650).
 
 The renderer's Arabic style-mask test compares complete glyph alpha across style
 boundaries at both densities; the alias test checks actual bound stream revisions
