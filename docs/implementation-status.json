@@ -9,7 +9,7 @@
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted main b474d1fe includes PR87, merged normally after all six required checks passed on exact 8e6d074b and CLEAN mergeability. Text and Application integration are merged and their coherent 8e release is deployed: six user clients and root greeter match the archive with original user/security state preserved. Exact 8e passes six CI checks and 832 visual cases. A 120-second RADV resource interval records 217.28/221.92 MiB mean/peak RSS but is host-pressure-ineligible; joined-source presentation records 26.9992 callback intervals/s under host pressure; eligible 60FPS/RSS acceptance remains unproven. A source-specific 16-check native run passes two-output density/input/retirement/recreation with one owned headless output and exact restoration, not physical or secure cross-output acceptance. The fresh owned IME run passes all five feature and five restoration checks, including preedit ink/caret evidence and exact unit/transport retirement. Earlier failed reports and their independent recoveries retain their original scope; third-party IME, physical and cross-output text remain pending. A later scoped real-Chromium run with the unmerged d1 independent consumer and b6323e9 harness passes all nine feature checks, including observed first-launch focus, and all eight cleanup checks on unchanged 8e desktop/CLI. No compositor forced focus, direct token-consumption, other-application or remote-URI acceptance is claimed; earlier failed reports remain unchanged.",
+    "scope": "Accepted main 8ca4e820 includes PR89, merged normally at 2026-10-19T23:32:44Z after all six required checks passed on exact 80c8502a with CLEAN mergeability, and the earlier PR87 runtime. Text and Application integration are merged and their coherent 8e release is deployed: six user clients and root greeter match the archive with original user/security state preserved. Exact 8e passes six CI checks and 832 visual cases. A 120-second RADV resource interval records 217.28/221.92 MiB mean/peak RSS but is host-pressure-ineligible; joined-source presentation records 26.9992 callback intervals/s under host pressure; eligible 60FPS/RSS acceptance remains unproven. A source-specific 16-check native run passes two-output density/input/retirement/recreation with one owned headless output and exact restoration, not physical or secure cross-output acceptance. The fresh owned IME run passes all five feature and five restoration checks, including preedit ink/caret evidence and exact unit/transport retirement. Earlier failed reports and their independent recoveries retain their original scope; third-party IME, physical and cross-output text remain pending. A later scoped real-Chromium run with the independent d1 consumer, now merged through PR89, and b6323e9 harness passes all nine feature checks, including observed first-launch focus, and all eight cleanup checks on unchanged 8e desktop/CLI. No compositor forced focus, direct token-consumption, other-application or remote-URI acceptance is claimed; earlier failed reports remain unchanged.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -278,8 +278,8 @@
       {
         "id": "application-integration",
         "status": "merged_scoped_real_application_native_verified",
-        "implemented": "Accepted main b474d1fe includes catalog/pins, ordinary activation, declared actions and Application bb304907 through merged/deployed 8e: fresh input-bound context, explicit file/URI Open and expanded XDG parsing/observation. A later real Chromium run with the unmerged independent d1 consumer and b6323e9 harness passes all nine feature checks, including observed first-launch focus, and all eight restoration checks; deployed desktop/CLI remain unchanged.",
-        "remaining": "Other applications, arbitrary remote URI handlers, physical hardware and broader launcher/catalog/dock workflows remain unverified. Fresh token delivery and observed focus do not prove Chromium consumed a particular activation protocol token. The d1 test consumer is unmerged; this later result does not isolate the cause of earlier focus failures.",
+        "implemented": "Accepted main 8ca4e820 includes catalog/pins, ordinary activation, declared actions and Application bb304907 through merged/deployed 8e: fresh input-bound context, explicit file/URI Open and expanded XDG parsing/observation. A later real Chromium run with the independent d1 consumer, now merged through PR89, and b6323e9 harness passes all nine feature checks, including observed first-launch focus, and all eight restoration checks; deployed desktop/CLI remain unchanged.",
+        "remaining": "Other applications, arbitrary remote URI handlers, physical hardware and broader launcher/catalog/dock workflows remain unverified. Fresh token delivery and observed focus do not prove Chromium consumed a particular activation protocol token. The independent d1 test consumer is now merged through PR89; the earlier native result does not isolate the cause of previous focus failures.",
         "guides": [
           "docs/application-activation.md",
           "docs/application-catalog.md",
@@ -291,7 +291,7 @@
           "overall_passed": true,
           "production_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
           "independent_consumer_source_commit": "d1fff2d88e9f19f9805125ef25d43ace03bef20d",
-          "independent_consumer_merged": false,
+          "independent_consumer_merged": true,
           "harness_source_commit": "b6323e95de838d3bb4e6725d287b93ddb384c79b",
           "private_report_sha256": "cdf3f869102430aa78a18642d5502b668fc6b47da70bf444a3a4723524b72788",
           "feature_checks_passed": 9,
@@ -299,7 +299,8 @@
           "restoration_flags_passed": 8,
           "first_launch_focus_observed": true,
           "compositor_forced_focus_used": false,
-          "chromium_protocol_token_consumption_established": false
+          "chromium_protocol_token_consumption_established": false,
+          "consumer_delivery_note": "Now included through PR89 in accepted 8ca4e820; the immutable native report retains its capture-time unmerged flag."
         },
         "historical_partial_focus_failed_attempt": {
           "report": "reports/measurements/lucent-native-application-intents.json",
@@ -322,9 +323,9 @@
       },
       {
         "id": "documentation-accuracy",
-        "status": "source_reconciled_remote_site_ci_pending",
-        "implemented": "Current guides reconcile accepted main b474d1fe/PR87 with exact compiled/deployed 8e, six passing checks and 832 visuals, five actual owned IME feature and five restoration checks, retaining earlier failed cleanup and separate recovery as history, scoped 16-check owned-headless two-output acceptance and the 217.28/221.92 MiB host-ineligible normal resource observation. No third-party IME, real-application/GUI clipboard/tray, physical/secure-output/suspend or presentation/FPS acceptance is inferred. Historical failures retain their scopes.",
-        "remaining": "Astro/site checks for this branch and continued source-specific reconciliation after later PRs merge. Historical reports remain unchanged."
+        "status": "accepted_main_pages_published_current_reconciliation_checks_pending",
+        "implemented": "Current guides reconcile accepted main 8ca4e820/PR89 at exact 80c8502a after six passing checks and a normal CLEAN merge, plus the unchanged compiled/deployed 8e runtime from PR87. Pages run 39342230790 successfully published accepted 8ca and the public site returned HTTP 200. The independent d1 consumer is now merged; its prior scoped real-Chromium run passes nine feature and eight restoration checks on unchanged 8e desktop/CLI. Existing five-feature/five-restoration owned IME, 16-check two-output and host-pressure-ineligible resource evidence retain their original sources and limits. Broader application, GUI clipboard/tray, third-party IME, physical/secure-output/suspend and performance acceptance remain pending.",
+        "remaining": "Site checks and subsequent publication for this newer documentation/workflow reconciliation; continue source-specific updates after later merges. Current public main source links remain valid; the new Pages build environment pins future links to github.sha. Historical reports remain unchanged."
       }
     ],
     "scoped_native_evidence": [
@@ -417,17 +418,18 @@
         "feature": "owned-real-chromium-application-intents",
         "production_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
         "independent_consumer_source_commit": "d1fff2d88e9f19f9805125ef25d43ace03bef20d",
-        "independent_consumer_merged": false,
+        "independent_consumer_merged": true,
         "harness_source_commit": "b6323e95de838d3bb4e6725d287b93ddb384c79b",
         "report": "reports/measurements/lucent-native-application-intents-d1.json",
         "feature_checks_passed": 9,
         "restoration_checks_passed": 8,
-        "scope": "One prepared output and real owned Chromium profile: observed first focus, fresh local documents per physical Open/action/socket/CLI, fresh token child delivery/no stale reuse and exact cleanup. No forced focus, direct token consumption, other application, remote URI or hardware proof."
+        "scope": "One prepared output and real owned Chromium profile: observed first focus, fresh local documents per physical Open/action/socket/CLI, fresh token child delivery/no stale reuse and exact cleanup. No forced focus, direct token consumption, other application, remote URI or hardware proof.",
+        "consumer_delivery_note": "Now included through PR89 in accepted 8ca4e820; the immutable report preserves the delivery state at its native capture."
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
-    "validation": "PR87 merged normally at b474d1fe after fresh all-six SUCCESS and CLEAN mergeability on exact 8e6d074b. Exact 8e runtime passes push 39313647281 and PR 39313659557 CI: six required checks, full workspace, six controlled service-protocol filters, explicit 1x/2x wrapped/cache regressions and 832 desktop visuals. Its coherent locked/offline release builds all nine executables; all six managed user clients and root greeter are now deployed with only changed compat.py, exact original user/security state and supervision beyond startup deadline verified. Acceptance examples are staged privately. A normal uninstrumented 120.000492-second RADV interval records 480 samples, mean 217.281934 / peak 221.921875 MiB, CPU 112.24954% of one core and zero guest-process swap; full preservation passes. Host swap-in of 674 pages and I/O full-stall fraction 0.5081035 make it ineligible, with RSS-target acceptance null. Presentation/PTS are off in that normal reference. A separate 120.000563-second instrumented 8e interval records 3276 joined distinct background revisions over 121.299995s at 26.9992 callback intervals/s, with median 33.333ms and maximum 150ms gaps. Host 610 swap-in pages and I/O full-stall fraction 0.5662336 make it ineligible; no 60 FPS target, accepted RSS, matched historical improvement, pixel visibility, physical scanout, GPU-memory or hardware-decode proof. Earlier a7f hardware liveness, software RSS failure and failed/recovered trials retain their sources. Final native feature, site and exact-head delivery gates remain separate; editing docs executes none of them. Native f16cb591 on exact 8e separately passes 16 two-output checks with real input, pressed-surface retirement and same-name new lifetime; full restoration passes. This does not establish physical/suspend/secure-output or presentation/resource acceptance. The fresh owned IME suite at harness 6bb80e5942/shared observer 89604f6ef2 passes all five feature and five restoration checks on the unchanged 8e desktop/example and 3beda617 peer, including 70 non-caret preedit ink pixels and 42-pixel caret advance. Earlier failed reports and separate recovery retain their flags; third-party/physical/cross-output IME acceptance is not implied. V3 profiling enable and the metadata collection completed; separate restore passed 42.774s with flags OFF and fresh normal helpers stable 35s, original source/settings/media/security preserved, no same-PID claim. Historical failed profiling attempts retain their original outcomes. The later b6323e9 App harness with unmerged d1 independent consumer passes all nine real-Chromium feature and eight cleanup checks on unchanged 8e desktop/CLI; first-launch focus is observed at its first coherent sample with consumer keyboard None. No compositor forced focus or direct Chromium token-consumption proof is inferred; earlier failed attempts remain historical.",
-    "accepted_main_base_commit": "b474d1fe845a7cfd716daf7c382de0769fbf3849",
+    "validation": "PR87 merged normally at b474d1fe after fresh all-six SUCCESS and CLEAN mergeability on exact 8e6d074b. Exact 8e runtime passes push 39313647281 and PR 39313659557 CI: six required checks, full workspace, six controlled service-protocol filters, explicit 1x/2x wrapped/cache regressions and 832 desktop visuals. Its coherent locked/offline release builds all nine executables; all six managed user clients and root greeter are now deployed with only changed compat.py, exact original user/security state and supervision beyond startup deadline verified. Acceptance examples are staged privately. A normal uninstrumented 120.000492-second RADV interval records 480 samples, mean 217.281934 / peak 221.921875 MiB, CPU 112.24954% of one core and zero guest-process swap; full preservation passes. Host swap-in of 674 pages and I/O full-stall fraction 0.5081035 make it ineligible, with RSS-target acceptance null. Presentation/PTS are off in that normal reference. A separate 120.000563-second instrumented 8e interval records 3276 joined distinct background revisions over 121.299995s at 26.9992 callback intervals/s, with median 33.333ms and maximum 150ms gaps. Host 610 swap-in pages and I/O full-stall fraction 0.5662336 make it ineligible; no 60 FPS target, accepted RSS, matched historical improvement, pixel visibility, physical scanout, GPU-memory or hardware-decode proof. Earlier a7f hardware liveness, software RSS failure and failed/recovered trials retain their sources. Final native feature, site and exact-head delivery gates remain separate; editing docs executes none of them. Native f16cb591 on exact 8e separately passes 16 two-output checks with real input, pressed-surface retirement and same-name new lifetime; full restoration passes. This does not establish physical/suspend/secure-output or presentation/resource acceptance. The fresh owned IME suite at harness 6bb80e5942/shared observer 89604f6ef2 passes all five feature and five restoration checks on the unchanged 8e desktop/example and 3beda617 peer, including 70 non-caret preedit ink pixels and 42-pixel caret advance. Earlier failed reports and separate recovery retain their flags; third-party/physical/cross-output IME acceptance is not implied. V3 profiling enable and the metadata collection completed; separate restore passed 42.774s with flags OFF and fresh normal helpers stable 35s, original source/settings/media/security preserved, no same-PID claim. Historical failed profiling attempts retain their original outcomes. The later b6323e9 App harness with independent d1 consumer, now merged through PR89, passes all nine real-Chromium feature and eight cleanup checks on unchanged 8e desktop/CLI; first-launch focus is observed at its first coherent sample with consumer keyboard None. No compositor forced focus or direct Chromium token-consumption proof is inferred; earlier failed attempts remain historical. PR89 later merged normally at 8ca4e820 on exact 80c8502a after all six required checks were SUCCESS and mergeability was CLEAN. Pages run 39342230790 succeeded and the public site returned HTTP 200; its existing main source links remain valid. The coherent deployed runtime remains 8e. This later documentation/workflow reconciliation has only offline checks; its next site checks/publication are separate.",
+    "accepted_main_base_commit": "8ca4e82015ad07d77fe873c0dc827b6b82cc8164",
     "documentation_harness_base_commit": "cd88371923b43c53f5b48d4bafe78131ea6df8c3",
     "runtime_compilation_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
     "historical_gpu_candidate_preservation_rejection": {
@@ -512,12 +514,13 @@
       "native_feature_acceptance_complete": false
     },
     "accepted_main_merge": {
-      "pull_request": 87,
-      "merge_commit": "b474d1fe845a7cfd716daf7c382de0769fbf3849",
-      "exact_reviewed_head": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+      "pull_request": 89,
+      "merge_commit": "8ca4e82015ad07d77fe873c0dc827b6b82cc8164",
+      "exact_reviewed_head": "80c8502ae1ca7696f0590c0084a3f7ed9fabc33a",
       "required_checks_passed": 6,
       "mergeability": "CLEAN",
-      "normal_merge": true
+      "normal_merge": true,
+      "merged_at": "2026-10-19T23:32:44Z"
     },
     "implemented_unmerged_cohorts": [],
     "accepted_runtime_cohorts": [
@@ -563,13 +566,26 @@
         "feature": "application-integration",
         "source_commit": "bb3049078768ac195af49b41cf3f6f8044dd5726",
         "implementation": "Fresh input-bound intent, explicit file/URI Open, XDG parser/observer expansion and an owned real-application acceptance harness.",
-        "pending": "Other applications, remote URI handlers, physical hardware, broader client workflows and direct activation-token-consumption proof remain separate acceptance. Scoped real Chromium launch/focus/local-file Open/action/socket/CLI and all cleanup checks pass on unchanged deployed 8e with unmerged d1 independent consumer.",
+        "pending": "Other applications, remote URI handlers, physical hardware, broader client workflows and direct activation-token-consumption proof remain separate acceptance. Scoped real Chromium launch/focus/local-file Open/action/socket/CLI and all cleanup checks pass on unchanged deployed 8e with independent d1 consumer, now merged through PR89.",
         "merged_pull_request": 87,
         "accepted_main_merge_commit": "b474d1fe845a7cfd716daf7c382de0769fbf3849",
         "scoped_native_report": "reports/measurements/lucent-native-application-intents-d1.json",
-        "independent_consumer_source_commit": "d1fff2d88e9f19f9805125ef25d43ace03bef20d"
+        "independent_consumer_source_commit": "d1fff2d88e9f19f9805125ef25d43ace03bef20d",
+        "independent_consumer_merged_pull_request": 89,
+        "independent_consumer_accepted_main_merge_commit": "8ca4e82015ad07d77fe873c0dc827b6b82cc8164"
       }
-    ]
+    ],
+    "documentation_delivery": {
+      "accepted_main_commit": "8ca4e82015ad07d77fe873c0dc827b6b82cc8164",
+      "published_workflow_run": 39342230790,
+      "published_workflow_status": "SUCCESS",
+      "public_http_status": 200,
+      "current_published_source_links": "main",
+      "current_publication_valid": true,
+      "future_workflow_source_reference": "${{ github.sha }}",
+      "current_reconciliation_site_build_executed": false,
+      "scope": "Accepted-main publication succeeded. The new workflow line pins future build source links to their exact commit; current public main links remain valid. This later reconciliation still needs its own site checks and publication."
+    }
   },
   "requirements": [
     {

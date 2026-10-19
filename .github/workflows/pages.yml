@@ -38,6 +38,7 @@ jobs:
       - name: Build and validate the published paths
         working-directory: site
         env:
+          SITE_SOURCE_REF: ${{ github.sha }}
           SITE_URL: ${{ steps.pages.outputs.origin }}
           SITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}
         run: |
