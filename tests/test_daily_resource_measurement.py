@@ -38,6 +38,14 @@ class PresentationMeasurement(unittest.TestCase):
         self.assertEqual(result['intervals'], 1)
         self.assertAlmostEqual(result['fps'], 50)
 
+    def test_host_collection_cap_is_explicit_and_never_confused_with_discarded_commits(self):
+        storage = {}
+        values = [dict(self.sample(i, i*16_666_667), requested_at_ms=i*16.) for i in range(8)]
+        snapshot = {'surfaces': [{'id': 'background', 'presentation': {'samples': values}}]}
+        self.assertTrue(measurement['collect_presentations'](storage, snapshot, limit=3))
+        self.assertEqual(len(storage['background']), 3)
+        self.assertEqual(measurement['presentation_intervals'](list(storage['background'].values()))['intervals'], 2)
+
     def test_embedded_guest_sampler_is_valid_python(self):
         compile(measurement['SAMPLER'], '<guest-resource-sampler>', 'exec')
 

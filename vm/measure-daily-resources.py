@@ -109,12 +109,27 @@ def surface_key(surface):
     return surface['id']
 
 
-def collect_presentations(storage, snapshot, since=0):
+def collect_presentations(storage, snapshot, since=0, limit=16_384):
+    # Bound host collection as well as runtime histories. A long or many-output
+    # workload cannot grow this helper without limit; truncation is explicit.
+    count = sum(len(values) for values in storage.values())
+    truncated = False
     for surface in snapshot['surfaces']:
-        values = storage.setdefault(surface_key(surface), {})
+        key = surface_key(surface)
+        if key not in storage and len(storage) >= 64:
+            truncated = True
+            continue
+        values = storage.setdefault(key, {})
         for sample in surface.get('presentation', {}).get('samples', []):
-            if sample['requested_at_ms'] >= since:
-                values[sample['frame']] = sample
+            if sample['requested_at_ms'] < since:
+                continue
+            if sample['frame'] not in values:
+                if count >= limit:
+                    truncated = True
+                    continue
+                count += 1
+            values[sample['frame']] = sample
+    return truncated
 
 
 def private(path, value):
@@ -158,10 +173,11 @@ def main():
     command = ['python3', '-c', SAMPLER, pid_text[0], str(args.seconds), expected]
     process = subprocess.Popen(lab.ssh_args('lucent')+[shlex.join(command)], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     samples = {}
+    truncated = False
     since = before['uptime_ms']
     try:
         while process.poll() is None:
-            collect_presentations(samples, inspect(), since)
+            truncated |= collect_presentations(samples, inspect(), since)
             time.sleep(.5)
         output, error = process.communicate(timeout=5)
         assert process.returncode == 0, 'Read-only guest sampler failed: '+error[-1000:]
@@ -172,7 +188,7 @@ def main():
         raise
     resources = json.loads(output)
     after = inspect()
-    collect_presentations(samples, after, since)
+    truncated |= collect_presentations(samples, after, since)
     assert remote('pgrep', '-x', 'lucent-desktop').strip() == pid_text[0]
     assert after['uptime_ms'] > since
     assert json.loads(session('hyprctl', '-j', 'monitors')) == monitors_before, 'Display state changed'
@@ -188,6 +204,8 @@ def main():
               'displays': displays, 'adapter': before['adapter'], 'resources': resources,
               'cpu_stage_profiling': before.get('frame_profiling', False),
               'presentation_capture': after.get('presentation_feedback'),
+              'presentation_sampling_truncated': truncated,
+              'presentation_sample_limit': 16_384,
               'presentation': {name: presentation_intervals(list(values.values())) for name, values in samples.items()},
               'successful_submission_deltas': extra,
               'observation_uptime_ms': [since, after['uptime_ms']],
@@ -199,6 +217,7 @@ def main():
               'scope': ['Read-only collection; prepare identical workload and release cohorts separately.',
                         'RSS samples include software-driver mappings. High-water RSS spans the process lifetime; GPU texture payload is not total GPU memory.',
                         'Compositor feedback is separate from successful CPU-side submissions. No hardware scanout or 60 unique video frames per second is inferred.',
+                        'If presentation sampling is truncated, cadence covers retained samples only, not the complete resource interval.',
                         'Inspection every 0.5 seconds and optional instrumentation can affect the measured workload. Compare uninstrumented resource samples separately.']}
     path = ROOT/'reports/local'/('daily-resources-'+args.label+'.json')
     path.parent.mkdir(parents=True, exist_ok=True)
