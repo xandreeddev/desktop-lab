@@ -164,7 +164,9 @@ impl Captured {
             exchange(&temp, &self.path)?;
             recovery_required.set(true);
             let unchanged = Self::inspect(temp.clone()).is_ok_and(|outgoing| {
-                outgoing.identity == self.identity && outgoing.bytes == self.bytes
+                outgoing.identity == self.identity
+                    && outgoing.bytes == self.bytes
+                    && outgoing.mode == self.mode
             });
             if !unchanged {
                 restore_exchange(&temp, &self.path, &staged)?;
@@ -249,7 +251,7 @@ fn restore_exchange(
     staged: &std::fs::Metadata,
 ) -> Result<()> {
     let (_, current) = open(path)?;
-    if current.dev() != staged.dev() || current.ino() != staged.ino() {
+    if identity(&current) != identity(staged) || current.mode() != staged.mode() {
         return Err(failed(
             "Display configuration changed again; recovery checkpoints retained for inspection",
         ));
@@ -308,6 +310,62 @@ mod authority_tests {
         assert_eq!(std::fs::metadata(&path).unwrap().ino(), original);
         assert_eq!(std::fs::read(&path).unwrap(), b"-- original user rule\n");
         std::fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn permission_change_at_exchange_is_preserved_on_the_original_inode() {
+        use std::os::unix::fs::PermissionsExt;
+        let directory = TestDirectory::new();
+        let path = directory.0.join("monitors.lua");
+        std::fs::write(&path, b"-- original user rule\n").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let captured = Captured::at(path.clone()).unwrap();
+        let original = std::fs::metadata(&path).unwrap().ino();
+        let checks = std::cell::Cell::new(0);
+        let result = captured.keep_checked(&[], &|| {
+            checks.set(checks.get() + 1);
+            if checks.get() == 2 {
+                std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+            }
+            Ok(())
+        });
+        assert!(result.is_err());
+        assert_eq!(std::fs::metadata(&path).unwrap().ino(), original);
+        assert_eq!(std::fs::metadata(&path).unwrap().mode() & 0o777, 0o600);
+        assert_eq!(std::fs::read(&path).unwrap(), b"-- original user rule\n");
+    }
+    #[test]
+    fn failed_keep_preserves_an_in_place_edit_and_retains_original_checkpoints() {
+        let directory = TestDirectory::new();
+        let path = directory.0.join("monitors.lua");
+        std::fs::write(&path, b"-- original user rule\n").unwrap();
+        let captured = Captured::at(path.clone()).unwrap();
+        let original = std::fs::metadata(&path).unwrap().ino();
+        let checks = std::cell::Cell::new(0);
+        let result = captured.keep_checked(&[], &|| {
+            checks.set(checks.get() + 1);
+            if checks.get() == 3 {
+                std::fs::write(
+                    &path,
+                    b"-- independent edit of the newly installed monitor file\n",
+                )
+                .unwrap();
+                Err(failed("Native authority retired"))
+            } else {
+                Ok(())
+            }
+        });
+        assert!(result.is_err());
+        assert_ne!(std::fs::metadata(&path).unwrap().ino(), original);
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            b"-- independent edit of the newly installed monitor file\n"
+        );
+        assert!(std::fs::read_dir(&directory.0).unwrap().any(|entry| {
+            let entry = entry.unwrap();
+            std::fs::metadata(entry.path()).is_ok_and(|meta| meta.ino() == original)
+                && std::fs::read(entry.path())
+                    .is_ok_and(|bytes| bytes == b"-- original user rule\n")
+        }));
     }
     #[test]
     fn staging_collision_retries_without_modifying_an_existing_file_or_symlink() {

@@ -108,11 +108,14 @@ mod tests {
                 0 => draft[0].output = MonitorId::new("DP-2").unwrap(),
                 1 => draft[0].mode = DisplayMode::new(800, 600, 75000).unwrap(),
                 2 => draft[0].transform = 8,
-                3 => draft[0].scale = DisplayScale::new(1250).unwrap(),
+                3 => draft[0].scale = DisplayScale::new(1300).unwrap(),
                 _ => draft.push(draft[0].clone()),
             };
             assert!(validate_display_draft(&outputs, &base, &draft).is_err());
         }
+        let mut valid_fractional = base.clone();
+        valid_fractional[0].scale = DisplayScale::new(1250).unwrap();
+        assert!(validate_display_draft(&outputs, &base, &valid_fractional).is_ok());
         let mut stale = base.clone();
         stale[0].position = DisplayPosition::new(5, 0).unwrap();
         assert!(validate_display_draft(&outputs, &stale, &base).is_err());
