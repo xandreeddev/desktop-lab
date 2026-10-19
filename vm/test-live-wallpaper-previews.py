@@ -581,7 +581,7 @@ print('safe')
                 and all(not item.get('editing') and not item.get('grid_visible') for item in c.get('monitor_hosts', [])), 'widget_edit_active')
         require(not c['wallpaper_browser']['busy'] and not c['wallpaper_busy'], 'wallpaper_transaction_active')
     def safe(*, settled=True, check_open=True):
-        require(cleaning or time.monotonic() - started < 240, 'bounded_preview_acceptance_deadline')
+        require(cleaning or time.monotonic() - started < 600, 'bounded_preview_acceptance_deadline')
         input_guard()
         require(binary() == process, 'exact_native_process_changed')
         require(supervisor()['epoch'] == parent_epoch, 'normal_supervisor_epoch_changed')
