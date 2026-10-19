@@ -142,6 +142,9 @@ fn actual_wrapping_paint_hits_selection_and_candidate_share_resolved_order() {
         let mut input = Interaction::default();
         let scene = layout.build(&node, width, 400., &input, 0.);
         input.synchronize(&scene);
+        // Native focus is established after the initial tree is registered;
+        // paint the focused frame before asserting caret/selection pixels.
+        let scene = layout.build(&node, width, 400., &input, 0.);
         let hit = scene.hits.iter().find(|hit| hit.id == "wrapped").unwrap();
         let text_hit = hit.text.as_ref().unwrap();
         let area = text_hit.area.as_ref().unwrap();
