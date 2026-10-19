@@ -28,6 +28,9 @@ impl Native {
             identity: (m.dev(), m.ino()),
         })
     }
+    pub fn identity(&self) -> (u64, u64) {
+        self.identity
+    }
     pub fn check(&self) -> Result<()> {
         let m = std::fs::symlink_metadata(&self.socket)
             .map_err(|_| unavailable("Compositor instance retired"))?;
@@ -45,17 +48,47 @@ impl Native {
     }
     pub fn apply(&self, configs: &[DisplayConfiguration]) -> Result<()> {
         self.check()?;
+        let actual = self.outputs()?;
+        let changed = configs
+            .iter()
+            .filter(|c| {
+                !actual
+                    .iter()
+                    .any(|o| matches(std::slice::from_ref(*c), std::slice::from_ref(o)))
+            })
+            .collect::<Vec<_>>();
+        if changed.is_empty() {
+            return Ok(());
+        }
         // Enable first: disabling the old primary before its replacement would
         // transiently remove the last screen, even for a valid final layout.
-        for c in configs
+        let rules = changed
             .iter()
             .filter(|c| c.enabled)
-            .chain(configs.iter().filter(|c| !c.enabled))
-        {
-            let answer = self.hypr.request(&format!("eval {}", lua(c)))?;
-            if answer.trim() != "ok" {
-                return Err(failed("Hyprland rejected the display configuration"));
-            }
+            .chain(changed.iter().filter(|c| !c.enabled))
+            .map(|c| lua(c))
+            .collect::<Vec<_>>()
+            .join("; ");
+        // One bounded IPC exchange for the whole layout. A 32-output draft must
+        // not multiply the native request timeout by 32 during confirmation.
+        let answer = self.hypr.request(&format!("eval {rules}"))?;
+        if answer.trim() != "ok" {
+            return Err(failed("Hyprland rejected the display configuration"));
+        }
+        Ok(())
+    }
+    pub fn validate_configuration(&self, source: &str) -> Result<()> {
+        self.check()?;
+        // Omarchy's supported user module is required after packaged defaults.
+        // Compile the full proposed file without executing any of its rules.
+        let answer = self.hypr.request(&format!(
+            "eval assert(package.loaded[\"hypr.monitors\"] ~= nil); assert(load({}))",
+            literal(source)
+        ))?;
+        if answer.trim() != "ok" {
+            return Err(failed(
+                "The user monitor module is not loaded or its proposed Lua configuration is invalid",
+            ));
         }
         Ok(())
     }
@@ -163,7 +196,17 @@ pub(super) fn decode(value: &Value) -> Result<Vec<DisplayDevice>> {
                 .take(256)
                 .filter(|c| !c.is_control())
                 .collect(),
-            editable: matches!(v["mirrorOf"].as_str(), None | Some("") | Some("none")),
+            // The monitor JSON cannot reconstruct every HDR/VRR policy. Do
+            // not turn an edited geometry into an implicit advanced-policy reset.
+            editable: matches!(v["mirrorOf"].as_str(), None | Some("") | Some("none"))
+                && matches!(
+                    v["colorManagementPreset"].as_str(),
+                    None | Some("srgb") | Some("default")
+                )
+                && v["vrr"].as_bool() != Some(true)
+                && !v["currentFormat"].as_str().is_some_and(|format| {
+                    format.contains("2101010") || format.contains("16161616")
+                }),
         });
     }
     result.sort_by(|a, b| a.current.output.cmp(&b.current.output));
@@ -186,10 +229,14 @@ pub(super) fn parse_mode(value: &str) -> Option<DisplayMode> {
 fn literal(value: &str) -> String {
     let mut out = String::from("\"");
     for c in value.chars() {
-        if matches!(c, '"' | '\\') {
-            out.push('\\');
+        match c {
+            '"' | '\\' => {
+                out.push('\\');
+                out.push(c);
+            }
+            c if c.is_ascii_control() => out.push_str(&format!("\\{:03}", u32::from(c))),
+            _ => out.push(c),
         }
-        out.push(c);
     }
     out.push('"');
     out

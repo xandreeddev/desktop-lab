@@ -8,6 +8,7 @@ use std::{
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(super) struct Request {
     pub id: DisplayTransactionId,
+    pub instance: (u64, u64),
     pub baseline: Vec<DisplayConfiguration>,
     pub draft: Vec<DisplayConfiguration>,
 }
@@ -17,10 +18,15 @@ pub(super) enum Command {
     Revert,
 }
 pub(super) trait Driver {
+    fn identity(&self) -> Result<(u64, u64)>;
     fn outputs(&self) -> Result<Vec<DisplayDevice>>;
     fn apply(&self, layout: &[DisplayConfiguration]) -> Result<()>;
 }
 impl Driver for native::Native {
+    fn identity(&self) -> Result<(u64, u64)> {
+        self.check()?;
+        Ok(native::Native::identity(self))
+    }
     fn outputs(&self) -> Result<Vec<DisplayDevice>> {
         native::Native::outputs(self)
     }
@@ -114,6 +120,9 @@ pub(super) fn run_transaction(
     clock: &dyn Fn() -> Result<u64>,
     persist: &dyn Fn(&[DisplayConfiguration]) -> Result<()>,
 ) -> Result<()> {
+    if driver.identity()? != request.instance {
+        return Err(unavailable("Compositor instance changed before Apply"));
+    }
     let outputs = driver.outputs()?;
     lucent_usecases::displays::validate_display_draft(&outputs, &request.baseline, &request.draft)?;
     let deadline = clock()?
@@ -184,6 +193,7 @@ pub(super) fn run_transaction(
         match commands.recv_timeout(Duration::from_millis(50)) {
             Ok(Command::Keep) => {
                 if clock()? >= deadline
+                    || driver.identity()? != request.instance
                     || !driver
                         .outputs()
                         .is_ok_and(|o| native::matches(&request.draft, &o))
@@ -229,9 +239,40 @@ pub fn main() -> Result<()> {
     let request: Request =
         serde_json::from_str(&first).map_err(|_| failed("Invalid display guard request"))?;
     drop(input);
-    let native = native::Native::from_env()?;
-    // Establish file safety and recovery before the first display mutation.
-    let config = persistence::Captured::capture()?;
+    // Establish file safety and supported module loading before mutation.
+    let prepared: Result<_> = (|| {
+        let native = native::Native::from_env()?;
+        let config = persistence::Captured::capture()?;
+        let editable = native
+            .outputs()?
+            .into_iter()
+            .filter(|o| o.editable)
+            .map(|o| o.current.output)
+            .collect::<std::collections::BTreeSet<_>>();
+        let persistent = request
+            .draft
+            .iter()
+            .filter(|c| editable.contains(&c.output))
+            .cloned()
+            .collect::<Vec<_>>();
+        let content = config.content(&persistent)?;
+        let source = std::str::from_utf8(&content)
+            .map_err(|_| failed("Monitor configuration is not UTF-8"))?;
+        native.validate_configuration(source)?;
+        Ok((native, config, editable))
+    })();
+    let (native, config, editable) = match prepared {
+        Ok(pair) => pair,
+        Err(error) => {
+            return emit(
+                &mut std::io::stdout().lock(),
+                request.id,
+                DisplayTransactionPhase::Failed {
+                    reason: error.to_string(),
+                },
+            );
+        }
+    };
     let (tx, rx) = mpsc::sync_channel(1);
     std::thread::spawn(move || {
         let input = std::io::stdin();
@@ -251,12 +292,35 @@ pub fn main() -> Result<()> {
             }
         }
     });
-    run_transaction(
+    let id = request.id;
+    match run_transaction(
         &native,
         request,
         rx,
         &mut std::io::stdout().lock(),
         &boot_millis,
-        &|layout| config.keep(layout),
-    )
+        &|layout| {
+            let persistent = layout
+                .iter()
+                .filter(|c| editable.contains(&c.output))
+                .cloned()
+                .collect::<Vec<_>>();
+            config.keep_checked(&persistent, &|| {
+                native.check()?;
+                if !native::matches(layout, &native.outputs()?) {
+                    return Err(failed("Display state changed before configuration commit"));
+                }
+                Ok(())
+            })
+        },
+    ) {
+        Ok(()) => Ok(()),
+        Err(error) => emit(
+            &mut std::io::stdout().lock(),
+            id,
+            DisplayTransactionPhase::Failed {
+                reason: error.to_string(),
+            },
+        ),
+    }
 }

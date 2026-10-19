@@ -93,6 +93,7 @@ impl Displays {
     }
     fn pending(&self) -> bool {
         self.active.is_some()
+            || self.transaction.is_some()
             || self
                 .snapshot
                 .as_ref()
@@ -366,9 +367,19 @@ impl Displays {
                 self.active = None;
                 match result {
                     Ok(id) => {
-                        self.transaction = Some(id);
-                        if !self.open {
-                            self.command(false, effects);
+                        let completed = self
+                            .snapshot
+                            .as_ref()
+                            .and_then(|s| s.transaction.as_ref())
+                            .is_some_and(|t| t.id == id && !t.phase.pending());
+                        if completed {
+                            self.transaction = None;
+                            self.reset();
+                        } else {
+                            self.transaction = Some(id);
+                            if !self.open {
+                                self.command(false, effects);
+                            }
                         }
                     }
                     Err(e) => self.error = e.to_string(),

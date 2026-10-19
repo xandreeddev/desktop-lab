@@ -44,12 +44,26 @@ impl Captured {
         Self::at(path)
     }
     fn at(path: PathBuf) -> Result<Self> {
+        let this = Self::inspect(path)?;
+        this.base()?;
+        Ok(this)
+    }
+    fn inspect(path: PathBuf) -> Result<Self> {
         let (mut file, meta) = open(&path)?;
         let mut bytes = vec![];
-        file.read_to_end(&mut bytes)
+        Read::by_ref(&mut file)
+            .take(MAX_BYTES + 1)
+            .read_to_end(&mut bytes)
             .map_err(|_| failed("User monitor configuration cannot be read"))?;
-        if bytes.len() as u64 > MAX_BYTES {
-            return Err(failed("User monitor configuration is too large"));
+        let after = file
+            .metadata()
+            .map_err(|_| failed("User monitor configuration cannot be reinspected"))?;
+        if bytes.len() as u64 > MAX_BYTES
+            || bytes.len() as u64 != meta.len()
+            || identity(&meta) != identity(&after)
+            || meta.mode() != after.mode()
+        {
+            return Err(failed("User monitor configuration changed while reading"));
         }
         let this = Self {
             path,
@@ -57,7 +71,6 @@ impl Captured {
             identity: identity(&meta),
             mode: meta.mode(),
         };
-        this.base()?;
         Ok(this)
     }
     fn base(&self) -> Result<&[u8]> {
@@ -85,19 +98,18 @@ impl Captured {
         }
     }
     fn unchanged(&self) -> Result<()> {
-        let (mut file, meta) = open(&self.path)?;
-        let mut bytes = vec![];
-        file.read_to_end(&mut bytes)
-            .map_err(|_| failed("Monitor configuration changed"))?;
-        if identity(&meta) != self.identity || bytes != self.bytes {
+        let current = Self::inspect(self.path.clone())?;
+        if current.identity != self.identity
+            || current.bytes != self.bytes
+            || current.mode != self.mode
+        {
             return Err(failed(
                 "User monitor configuration changed; reverting instead of overwriting it",
             ));
         }
         Ok(())
     }
-    pub fn keep(&self, layout: &[DisplayConfiguration]) -> Result<()> {
-        self.unchanged()?;
+    pub fn content(&self, layout: &[DisplayConfiguration]) -> Result<Vec<u8>> {
         let mut content = self.base()?.to_vec();
         if !content.is_empty() && !content.ends_with(b"\n") {
             content.push(b'\n');
@@ -108,6 +120,20 @@ impl Captured {
             content.push(b'\n');
         }
         content.extend_from_slice(END.as_bytes());
+        Ok(content)
+    }
+    #[cfg(test)]
+    pub fn keep(&self, layout: &[DisplayConfiguration]) -> Result<()> {
+        self.keep_checked(layout, &|| Ok(()))
+    }
+    pub fn keep_checked(
+        &self,
+        layout: &[DisplayConfiguration],
+        validate: &dyn Fn() -> Result<()>,
+    ) -> Result<()> {
+        validate()?;
+        self.unchanged()?;
+        let content = self.content(layout)?;
         let parent = self
             .path
             .parent()
@@ -118,6 +144,7 @@ impl Captured {
             super::boot_millis()?
         ));
         let backup = temp.with_extension("baseline");
+        let recovery_required = std::cell::Cell::new(false);
         let result = (|| {
             let mut file = OpenOptions::new()
                 .write(true)
@@ -140,27 +167,72 @@ impl Captured {
                 return Err(failed("Monitor configuration changed before commit"));
             }
             self.unchanged()?;
-            std::fs::rename(&temp, &self.path)
-                .map_err(|_| failed("Display configuration could not be committed"))?;
-            if File::open(parent).and_then(|f| f.sync_all()).is_err() {
-                let (_, current) = open(&self.path)?;
-                if current.dev() != staged.dev() || current.ino() != staged.ino() {
-                    return Err(failed(
-                        "Display configuration recovery requires inspection after an external replacement",
-                    ));
-                }
-                std::fs::rename(&backup, &self.path)
-                    .map_err(|_| failed("Display configuration rollback failed"))?;
+            validate()?;
+            // Exchange atomically and inspect the outgoing inode. This closes
+            // the final check/rename race with an editor's atomic replacement.
+            exchange(&temp, &self.path)?;
+            recovery_required.set(true);
+            let unchanged = Self::inspect(temp.clone()).is_ok_and(|outgoing| {
+                outgoing.identity == self.identity && outgoing.bytes == self.bytes
+            });
+            if !unchanged {
+                restore_exchange(&temp, &self.path, &staged)?;
+                recovery_required.set(false);
                 return Err(failed(
-                    "Display configuration durability failed; original inode restored",
+                    "Monitor configuration changed during commit; external file restored",
                 ));
             }
+            if File::open(parent).and_then(|f| f.sync_all()).is_err() || validate().is_err() {
+                restore_exchange(&temp, &self.path, &staged)?;
+                recovery_required.set(false);
+                return Err(failed(
+                    "Display configuration durability or authority check failed; original inode restored",
+                ));
+            }
+            recovery_required.set(false);
             Ok(())
         })();
-        let _ = std::fs::remove_file(&temp);
-        let _ = std::fs::remove_file(&backup);
+        if !recovery_required.get() {
+            let _ = std::fs::remove_file(&temp);
+            let _ = std::fs::remove_file(&backup);
+        }
         result
     }
+}
+fn exchange(first: &std::path::Path, second: &std::path::Path) -> Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    let a = std::ffi::CString::new(first.as_os_str().as_bytes())
+        .map_err(|_| failed("Invalid monitor configuration path"))?;
+    let b = std::ffi::CString::new(second.as_os_str().as_bytes())
+        .map_err(|_| failed("Invalid monitor configuration path"))?;
+    if unsafe {
+        libc::renameat2(
+            libc::AT_FDCWD,
+            a.as_ptr(),
+            libc::AT_FDCWD,
+            b.as_ptr(),
+            libc::RENAME_EXCHANGE,
+        )
+    } != 0
+    {
+        return Err(failed(
+            "Atomic display configuration exchange is unavailable",
+        ));
+    }
+    Ok(())
+}
+fn restore_exchange(
+    temp: &std::path::Path,
+    path: &std::path::Path,
+    staged: &std::fs::Metadata,
+) -> Result<()> {
+    let (_, current) = open(path)?;
+    if current.dev() != staged.dev() || current.ino() != staged.ino() {
+        return Err(failed(
+            "Display configuration changed again; recovery checkpoints retained for inspection",
+        ));
+    }
+    exchange(temp, path)
 }
 #[cfg(test)]
 mod tests {
@@ -187,5 +259,47 @@ mod tests {
         std::fs::write(&path, format!("{BEGIN}{END}-- user after marker\n")).unwrap();
         assert!(Captured::at(path.clone()).is_err());
         std::fs::remove_file(path).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod authority_tests {
+    use super::*;
+    #[test]
+    fn authority_loss_after_exchange_restores_exact_original_inode() {
+        let path =
+            std::env::temp_dir().join(format!("lucent-display-authority-{}", std::process::id()));
+        std::fs::write(&path, b"-- original user rule\n").unwrap();
+        let captured = Captured::at(path.clone()).unwrap();
+        let original = std::fs::metadata(&path).unwrap().ino();
+        let checks = std::cell::Cell::new(0);
+        let result = captured.keep_checked(&[], &|| {
+            checks.set(checks.get() + 1);
+            if checks.get() == 3 {
+                Err(failed("Authority retired"))
+            } else {
+                Ok(())
+            }
+        });
+        assert!(result.is_err());
+        assert_eq!(checks.get(), 3);
+        assert_eq!(std::fs::metadata(&path).unwrap().ino(), original);
+        assert_eq!(std::fs::read(&path).unwrap(), b"-- original user rule\n");
+        std::fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn oversized_or_symlink_configuration_is_rejected_before_staging() {
+        let directory =
+            std::env::temp_dir().join(format!("lucent-display-file-check-{}", std::process::id()));
+        std::fs::create_dir(&directory).unwrap();
+        let path = directory.join("monitors.lua");
+        std::fs::write(&path, vec![b'x'; MAX_BYTES as usize + 1]).unwrap();
+        assert!(Captured::at(path.clone()).is_err());
+        let link = directory.join("link.lua");
+        std::os::unix::fs::symlink(&path, &link).unwrap();
+        assert!(Captured::at(link.clone()).is_err());
+        std::fs::remove_file(link).unwrap();
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(directory).unwrap();
     }
 }

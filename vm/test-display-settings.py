@@ -1,0 +1,262 @@
+#!/usr/bin/env python3
+"""Guarded real-input acceptance for the native Displays transaction.
+
+Requires a deliberately idle, unlocked single-output QEMU guest at 1920x1080/1x,
+with 1280x720 advertised. Uses the already deployed executable: no build/deploy.
+A separate SSH-started recovery process holds a private original-inode checkpoint
+before the first UI change. Reports remain private. Physical hardware and multiple
+outputs are outside this harness. --test-crash explicitly also kills only the
+captured desktop UI PID; its independent guardian must restore the preview.
+"""
+import argparse
+import ast
+import hashlib
+import json
+import os
+from pathlib import Path
+import runpy
+import shlex
+import subprocess
+import time
+import uuid
+
+import lab
+from native_surfaces import active_surfaces, find_surface
+
+ROOT = Path(__file__).resolve().parents[1]
+HELPER = runpy.run_path(str(ROOT / 'vm/test-framework.py'))
+remote, session, inspect = [HELPER[key] for key in ('remote', 'session', 'inspect')]
+key, eventually = [HELPER[key] for key in ('key', 'eventually')]
+
+RECOVERY = r'''
+import hashlib,json,os,stat,subprocess,sys,time
+from pathlib import Path
+operation,raw=sys.argv[1:]
+directory=Path(raw)
+assert directory.name.startswith('lucent-display-transaction-') and directory.is_absolute()
+meta=directory.lstat(); assert stat.S_ISDIR(meta.st_mode) and meta.st_uid==os.getuid() and stat.S_IMODE(meta.st_mode)==0o700
+manifest=directory/'manifest.json'; backup=directory/'monitors.original'
+config=Path.home()/'.config/hypr/monitors.lua'
+state=Path.home()/'.local/state/lucent/desktop.json'
+def read(path,limit):
+    descriptor=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+    with os.fdopen(descriptor,'rb') as stream:
+        before=os.fstat(stream.fileno()); assert stat.S_ISREG(before.st_mode) and before.st_uid==os.getuid() and before.st_size<=limit
+        data=stream.read(limit+1); after=os.fstat(stream.fileno())
+        assert len(data)<=limit and (before.st_dev,before.st_ino,before.st_mtime_ns,before.st_size)==(after.st_dev,after.st_ino,after.st_mtime_ns,after.st_size)
+        return data,[before.st_dev,before.st_ino,before.st_mtime_ns,before.st_size]
+def session(*args):
+    result=subprocess.run(['python3',str(Path.home()/'desktop-lab/scripts/in-session.py'),*args],capture_output=True,text=True,timeout=10)
+    assert result.returncode==0
+    return result.stdout
+def monitors(): return json.loads(session('hyprctl','-j','monitors'))
+def signature(m): return [m[k] for k in ('name','width','height','x','y','scale','transform')]
+def private(path,value):
+    descriptor=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+    with os.fdopen(descriptor,'w') as stream: json.dump(value,stream)
+def current_manifest():
+    value,_=read(manifest,65536); return json.loads(value)
+def native_restore(value):
+    current=monitors(); assert len(current)==1
+    original=value['monitor']; actual=current[0]
+    assert actual['name']==original['name'] and actual['transform']==original['transform']
+    # Restore only this harness's possible preview states. Never replace an
+    # unrelated mode/layout selected concurrently by the person testing the VM.
+    assert (actual['width'],actual['height']) in ((1920,1080),(1280,720))
+    assert actual['x'] in (original['x'],original['x']+16) and actual['y']==original['y'] and actual['scale'] in (1,2)
+    output=json.dumps(original['name'])
+    source='hl.monitor({ output = '+output+', mode = "'+str(original['width'])+'x'+str(original['height'])+'@'+str(original['refreshRate'])+'", position = "'+str(original['x'])+'x'+str(original['y'])+'", scale = '+str(original['scale'])+', transform = '+str(original['transform'])+' })'
+    session('hyprctl','eval',source)
+    for _ in range(40):
+        current=monitors()
+        if len(current)==1 and signature(current[0])==signature(original): return
+        time.sleep(.1)
+    raise AssertionError('Native recovery could not verify the captured output')
+def restore(value):
+    original,original_id=read(backup,256*1024)
+    assert hashlib.sha256(original).hexdigest()==value['config_sha256'] and original_id==value['config_identity']
+    current,current_id=read(config,256*1024)
+    if current!=original or current_id!=original_id:
+        # Keep may replace only a marked tail. A changed prefix is never ours.
+        marker=b'-- BEGIN LUCENT DISPLAY CONFIGURATION\n'
+        prefix=original.split(marker,1)[0]
+        assert current.startswith(prefix) and marker in current and current.endswith(b'-- END LUCENT DISPLAY CONFIGURATION\n')
+        body=current[len(prefix):]
+        assert all(line.startswith((b'-- ',b'hl.monitor({ output = ')) or not line for line in body.splitlines())
+        replacement=directory/'monitors.restore'
+        os.link(backup,replacement); os.replace(replacement,config)
+    native_restore(value)
+    actual,actual_id=read(config,256*1024)
+    settings,settings_id=read(state,4*1024*1024)
+    assert actual==original and actual_id==value['config_identity']
+    assert hashlib.sha256(settings).hexdigest()==value['settings_sha256'] and settings_id==value['settings_identity']
+    return {'config_bytes_and_inode':True,'native_baseline':True,'settings_bytes_and_inode':True}
+if operation=='create':
+    config_data,config_id=read(config,256*1024); settings,settings_id=read(state,4*1024*1024)
+    current=monitors(); assert len(current)==1
+    os.link(config,backup)
+    value={'monitor':current[0],'config_sha256':hashlib.sha256(config_data).hexdigest(),'config_identity':config_id,'settings_sha256':hashlib.sha256(settings).hexdigest(),'settings_identity':settings_id}
+    private(manifest,value)
+    print(json.dumps({'checkpoint':True}))
+elif operation=='watch':
+    private(directory/'watch.ready',{'pid':os.getpid()})
+    deadline=time.monotonic()+240
+    while time.monotonic()<deadline:
+        if (directory/'watch.stop').exists(): raise SystemExit(0)
+        time.sleep(.25)
+    value=current_manifest()
+    try: result=restore(value)
+    except BaseException:
+        private(directory/'watch.result.json',{'restoration':False}); raise
+    private(directory/'watch.result.json',{'restoration':True,**result})
+elif operation=='restore': print(json.dumps(restore(current_manifest())))
+elif operation=='stop':
+    restore(current_manifest()); private(directory/'watch.stop',{'stop':True}); print(json.dumps({'restoration':True}))
+else: raise ValueError('Unknown recovery operation')
+'''
+
+
+def cli(*args):
+    return session('/home/omarchy/.local/bin/lucent-cli', *args)
+
+
+def state():
+    return inspect()['client']['displays']
+
+
+def monitor():
+    monitors = json.loads(session('hyprctl', '-j', 'monitors'))
+    assert len(monitors) == 1
+    return monitors[0]
+
+
+def phase():
+    return (state().get('transaction') or {}).get('phase')
+
+
+def panel():
+    return find_surface(inspect(), 'displays')
+
+
+def click(identifier):
+    """Physical input uses current dimensions after each modeset, not a 1080p constant."""
+    for _ in range(128):
+        current = panel()
+        hit = next((hit for hit in current['hits'] if hit['id'] == identifier), None)
+        if hit:
+            clip = hit['clip']
+            if hit['y'] >= clip['y'] and hit['y']+hit['height'] <= clip['y']+clip['height']+.01:
+                native = monitor()
+                layer = HELPER['layer_geometry']('displays')
+                x = (layer['x']+hit['x']+hit['width']/2-native['x'])*native['scale']
+                y = (layer['y']+hit['y']+hit['height']/2-native['y'])*native['scale']
+                HELPER['send']([{'type':'abs','data':{'axis':axis,'value':round(value/(size-1)*32767)}} for axis,value,size in [('x',x,native['width']),('y',y,native['height'])]])
+                time.sleep(.1)
+                HELPER['button'](True);time.sleep(.05);HELPER['button'](False)
+                time.sleep(.3)
+                return
+        key(15)
+    raise AssertionError('Display control did not become reachable: '+identifier)
+
+
+def enter(value):
+    mapping = {}
+    for node in ast.walk(ast.parse((ROOT/'vm/run.py').read_text())):
+        if isinstance(node,ast.Assign) and len(node.targets)==1 and isinstance(node.targets[0],ast.Name) and node.targets[0].id in ('normal','shifted','codes'):
+            mapping[node.targets[0].id] = ast.literal_eval(node.value)
+    key(29,30)
+    for char in value:
+        if char in mapping['normal']: key(mapping['codes'][mapping['normal'].index(char)])
+        elif char in mapping['shifted']: key(42,mapping['codes'][mapping['shifted'].index(char)])
+        else: raise ValueError('Unsupported test character')
+
+
+def field(index):
+    return next(hit['id'] for hit in panel()['hits'] if hit['id'].startswith(f'display-field-{index}-'))
+
+
+def changed(native):
+    return tuple(native[key] for key in ('width','height','x','y','scale','transform'))
+
+
+def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--desktop-sha256',required=True)
+    parser.add_argument('--test-crash',action='store_true')
+    args=parser.parse_args()
+    assert len(args.desktop_sha256)==64 and all(c in '0123456789abcdef' for c in args.desktop_sha256)
+    assert remote('systemd-detect-virt','--vm').strip() in ('qemu','kvm')
+    assert session('omarchy-shell','lock','isLocked').strip()=='false'
+    before=inspect();client=before['client']
+    assert not client['launcher'] and not client['notification_history_open'] and not client['widget_grid']
+    for name in ('audio','media','network','bluetooth','power','tray','live_wallpaper','displays','weather'):
+        assert not client.get(name,{}).get('open',False), 'Close panels before this deliberate acceptance run'
+    observed=monitor();assert changed(observed)==(1920,1080,0,0,1,0)
+    assert any(mode.startswith('1280x720@') for mode in observed['availableModes'])
+    assert remote('sha256sum','/home/omarchy/.local/bin/lucent-desktop').split()[0]==args.desktop_sha256
+    directory='/home/omarchy/.local/state/lucent/lucent-display-transaction-'+uuid.uuid4().hex
+    remote('mkdir','-m','700',directory)
+    subprocess.run(lab.ssh_args('lucent')+['cat > '+shlex.quote(directory+'/recovery.py')],input=RECOVERY.encode(),check=True)
+    def recovery(operation): return json.loads(remote('python3',directory+'/recovery.py',operation,directory))
+    recovery('create')
+    launch="import os,subprocess,sys; directory=sys.argv[1]; subprocess.Popen(['python3',directory+'/recovery.py','watch',directory],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True); print('started')"
+    remote('python3','-c',launch,directory)
+    eventually(lambda:remote('test','-f',directory+'/watch.ready')=='','Independent recovery watchdog did not arm')
+    checks=[];restoration=None
+    report_path=ROOT/'reports/local'/('display-settings-native-'+uuid.uuid4().hex+'.json')
+    report_path.parent.mkdir(parents=True,exist_ok=True)
+    def original(): return changed(monitor())==changed(observed)
+    def open_panel():
+        cli('displays','open');eventually(lambda:state()['open'] and panel()['frames']>0,'Display panel did not submit');time.sleep(.3)
+    def apply():
+        click('display-apply');eventually(lambda:phase()=='confirmation','Native preview was not verified',timeout=10)
+    try:
+        # Existing Omarchy discovery/action remains, only its presentation changes.
+        session('omarchy-shell','shell','summon','omarchy.monitor')
+        eventually(lambda:state()['open'],'Compatibility display action did not open native child')
+        key(1);eventually(lambda:not state()['open'],'Escape did not close the display panel')
+        assert original();checks.append('compatibility_open_and_escape')
+        open_panel()
+        modes=[]
+        current=f"{observed['width']}x{observed['height']}@{observed['refreshRate']:.3f}"
+        def normalized(value):
+            dims,hz=value.removesuffix('Hz').split('@');return dims,round(float(hz)*1000)
+        for value in observed['availableModes']:
+            parsed=normalized(value)
+            if parsed not in modes:modes.append(parsed)
+        if normalized(current) not in modes:modes.insert(0,normalized(current))
+        index=next(i for i,mode in enumerate(modes) if mode[0]=='1280x720')
+        click('display-mode-'+str(index));assert original() and state()['dirty'];checks.append('mode_draft_performs_no_native_change')
+        apply();assert (monitor()['width'],monitor()['height'])==(1280,720)
+        click('display-revert');eventually(original,'Explicit Revert did not restore full baseline');checks.append('mode_apply_and_explicit_revert')
+        open_panel();click(field(2));enter('2');apply();assert monitor()['scale']==2
+        eventually(lambda:phase()=='reverted' and original(),'Timeout did not restore scale',timeout=22);checks.append('scale_apply_and_timeout_revert')
+        open_panel();click(field(0));enter('16');apply();assert monitor()['x']==16
+        click('display-keep');eventually(lambda:phase()=='kept','Keep did not persist')
+        assert monitor()['x']==16
+        checks.append('position_apply_and_keep')
+        cli('displays','close');eventually(lambda:not state()['open'],'Close did not release keyboard')
+        restoration=recovery('restore');assert all(restoration.values())
+        checks.append('keep_file_and_native_independent_restore')
+        if args.test_crash:
+            open_panel();click(field(0));enter('16');apply()
+            # Match only the preflight-verified desktop binary with no arguments;
+            # the --display-guard child must remain alive and restore on pipe EOF.
+            script="import os,pathlib,signal,sys; expected=pathlib.Path(sys.argv[1]); matches=[]\nfor path in pathlib.Path('/proc').iterdir():\n if path.name.isdecimal():\n  try:\n   args=(path/'cmdline').read_bytes().split(bytes([0])); exe=(path/'exe').resolve();\n   if exe==expected and len([a for a in args if a])==1: matches.append(int(path.name))\n  except (OSError,PermissionError): pass\nassert len(matches)==1\nos.kill(matches[0],signal.SIGKILL)"
+            remote('python3','-c',script,'/home/omarchy/.local/bin/lucent-desktop')
+            eventually(original,'Guardian did not restore after desktop crash',timeout=12)
+            eventually(lambda:inspect()['client']['settings_writable'],'Supervisor did not recover desktop',timeout=45)
+            checks.append('desktop_crash_eof_rollback_and_supervisor_recovery')
+    finally:
+        try:
+            cli('displays','close');time.sleep(.8)
+        except (OSError,subprocess.SubprocessError): pass
+        try: restoration=recovery('stop')
+        finally:
+            report={'desktop_sha256':args.desktop_sha256,'checks':checks,'restoration':restoration,'crash_test_requested':args.test_crash,'scope':'single-output QEMU native panel input and observed layout; no physical/multi-output claims'}
+            descriptor=os.open(report_path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+            with os.fdopen(descriptor,'w') as stream:json.dump(report,stream,indent=2);stream.write('\n')
+    assert restoration and all(restoration.values())
+    print(json.dumps({'passed':True,'checks':checks,'restoration':restoration,'private_report':str(report_path)}))
+
+if __name__=='__main__': main()

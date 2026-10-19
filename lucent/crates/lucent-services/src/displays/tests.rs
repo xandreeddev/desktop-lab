@@ -34,6 +34,9 @@ impl Fake {
     }
 }
 impl guard::Driver for Fake {
+    fn identity(&self) -> Result<(u64, u64)> {
+        Ok((1, 2))
+    }
     fn outputs(&self) -> Result<Vec<DisplayDevice>> {
         Ok(self.outputs.borrow().clone())
     }
@@ -68,6 +71,7 @@ fn request(driver: &Fake) -> guard::Request {
     draft[1].position = DisplayPosition::new(1280, 0).unwrap();
     guard::Request {
         id: DisplayTransactionId::new(1).unwrap(),
+        instance: (1, 2),
         baseline,
         draft,
     }
@@ -244,4 +248,31 @@ fn native_decoder_handles_disabled_modes_and_literal_lua() {
         59940
     );
     assert!(native::parse_mode("1920x1080@NaNHz").is_none());
+}
+
+#[test]
+fn new_compositor_instance_rejects_even_an_identical_layout() {
+    let driver = Fake::new();
+    let mut request = request(&driver);
+    request.instance = (9, 9);
+    let (_tx, rx) = mpsc::channel();
+    assert!(
+        guard::run_transaction(&driver, request, rx, &mut vec![], &|| Ok(0), &|_| Ok(())).is_err()
+    );
+    assert!(driver.calls.borrow().is_empty());
+}
+
+#[test]
+fn event_framing_retains_partial_names_and_rejects_unbounded_records() {
+    let mut framing = EventFrames::default();
+    assert_eq!(framing.push(b"monitoradd"), Some(false));
+    assert_eq!(
+        framing.push(b"edv2>>1,DP-1\nactivewindow>>a,b\n"),
+        Some(true)
+    );
+    assert_eq!(
+        framing.push(b"activewindow>>monitor in a title\n"),
+        Some(false)
+    );
+    assert_eq!(framing.push(&vec![b'x'; 64 * 1024 + 1]), None);
 }

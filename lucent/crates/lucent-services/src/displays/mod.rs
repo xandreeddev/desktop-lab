@@ -7,7 +7,7 @@ use lucent_domain::*;
 use std::{
     io::{BufRead, BufReader, Read, Write},
     process::{ChildStdin, Command, Stdio},
-    sync::{Arc, Condvar, Mutex},
+    sync::{Arc, Mutex},
     time::Duration,
 };
 fn failed(message: &str) -> DomainError {
@@ -37,7 +37,6 @@ struct State {
 #[derive(Default)]
 struct Core {
     state: Mutex<State>,
-    changed: Condvar,
 }
 /// The executable is selected by the composition root, never from an IPC request.
 /// It must dispatch `--display-guard` before creating any Wayland/GPU objects.
@@ -50,7 +49,9 @@ impl Default for HyprlandDisplays {
     fn default() -> Self {
         Self {
             core: Arc::default(),
-            executable: std::env::current_exe().unwrap_or_default(),
+            // Resolve the running inode, including after an atomic installation
+            // replaces its pathname. The guardian must be the same release.
+            executable: std::path::PathBuf::from("/proc/self/exe"),
         }
     }
 }
@@ -113,6 +114,7 @@ impl DisplayPort for HyprlandDisplays {
             let mut refresh = true;
             let mut revision = u64::MAX;
             let mut bytes = [0; 4096];
+            let mut framing = EventFrames::default();
             while !stop.cancelled() {
                 let next_revision = self.core.state.lock().map(|s| s.revision).unwrap_or(0);
                 if refresh || next_revision != revision {
@@ -126,12 +128,10 @@ impl DisplayPort for HyprlandDisplays {
                 }
                 match events.read(&mut bytes) {
                     Ok(0) => break,
-                    Ok(n) => {
-                        let text = String::from_utf8_lossy(&bytes[..n]);
-                        refresh = text.contains("monitor")
-                            || text.contains("configreloaded")
-                            || text.contains("focusedmon");
-                    }
+                    Ok(n) => match framing.push(&bytes[..n]) {
+                        Some(changed) => refresh |= changed,
+                        None => break,
+                    },
                     Err(e)
                         if matches!(
                             e.kind(),
@@ -191,6 +191,7 @@ impl DisplayPort for HyprlandDisplays {
             .ok_or_else(|| failed("Display guard output is unavailable"))?;
         let request = guard::Request {
             id,
+            instance: native.identity(),
             baseline,
             draft,
         };
@@ -234,7 +235,6 @@ impl DisplayPort for HyprlandDisplays {
                 terminal = !transaction.phase.pending();
                 state.transaction = Some(transaction);
                 state.revision = state.revision.wrapping_add(1);
-                core.changed.notify_all();
             }
             let _ = child.wait();
             if let Some(core) = weak.upgrade()
@@ -246,7 +246,6 @@ impl DisplayPort for HyprlandDisplays {
                     state.transaction=Some(DisplayTransaction{id,phase:DisplayTransactionPhase::Failed{reason:"Display guard ended without verified completion. Inspect the current displays before retrying.".into()}});
                 }
                 state.revision = state.revision.wrapping_add(1);
-                core.changed.notify_all();
             }
         });
         Ok(id)
@@ -260,3 +259,39 @@ impl DisplayPort for HyprlandDisplays {
 }
 #[cfg(test)]
 mod tests;
+
+#[derive(Default)]
+struct EventFrames {
+    partial: Vec<u8>,
+}
+impl EventFrames {
+    fn push(&mut self, bytes: &[u8]) -> Option<bool> {
+        let mut refresh = false;
+        for byte in bytes {
+            if *byte == b'\n' {
+                let name = self
+                    .partial
+                    .split(|v| *v == b'>')
+                    .next()
+                    .unwrap_or_default();
+                refresh |= matches!(
+                    name,
+                    b"monitoradded"
+                        | b"monitoraddedv2"
+                        | b"monitorremoved"
+                        | b"monitorremovedv2"
+                        | b"configreloaded"
+                        | b"focusedmon"
+                        | b"focusedmonv2"
+                );
+                self.partial.clear();
+            } else {
+                if self.partial.len() >= 64 * 1024 {
+                    return None;
+                }
+                self.partial.push(*byte);
+            }
+        }
+        Some(refresh)
+    }
+}

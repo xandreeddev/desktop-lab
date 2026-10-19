@@ -114,3 +114,57 @@ fn disabling_last_output_or_changed_native_baseline_blocks_apply() {
         assert!(!child.error.is_empty());
     }
 }
+
+#[test]
+fn terminal_watch_before_admission_cannot_leave_a_stuck_transaction() {
+    let adapter = Arc::new(Adapter::default());
+    let mut child = Displays::new(adapter);
+    let mut effects = Effects::default();
+    child.update(Message::Observed(Ok(fixture())), &mut effects);
+    child.update(Message::Open, &mut effects);
+    child.update(
+        Message::Mode(
+            MonitorId::new("DP-1").unwrap(),
+            DisplayMode::new(1280, 720, 60000).unwrap(),
+        ),
+        &mut effects,
+    );
+    child.update(Message::Apply, &mut effects);
+    let task = effects.tasks.remove(0);
+    let admission = task.run();
+    let mut snapshot = fixture();
+    snapshot.transaction = Some(DisplayTransaction {
+        id: DisplayTransactionId::new(7).unwrap(),
+        phase: DisplayTransactionPhase::Reverted {
+            reason: "Preview failed".into(),
+        },
+    });
+    child.update(Message::Observed(Ok(snapshot)), &mut effects);
+    child.update(admission, &mut effects);
+    assert!(!child.pending());
+    assert!(!child.dirty);
+    assert!(child.transaction.is_none());
+}
+#[test]
+fn admitted_preview_remains_pending_until_watch_or_explicit_close() {
+    let adapter = Arc::new(Adapter::default());
+    let mut child = Displays::new(adapter.clone());
+    let mut effects = Effects::default();
+    child.update(Message::Observed(Ok(fixture())), &mut effects);
+    child.update(Message::Open, &mut effects);
+    child.update(
+        Message::Mode(
+            MonitorId::new("DP-1").unwrap(),
+            DisplayMode::new(1280, 720, 60000).unwrap(),
+        ),
+        &mut effects,
+    );
+    child.update(Message::Apply, &mut effects);
+    let task = effects.tasks.remove(0);
+    child.update(task.run(), &mut effects);
+    assert!(child.pending());
+    child.update(Message::Close, &mut effects);
+    let revert = effects.tasks.remove(0);
+    child.update(revert.run(), &mut effects);
+    assert_eq!(*adapter.0.lock().unwrap(), ["apply", "revert"]);
+}

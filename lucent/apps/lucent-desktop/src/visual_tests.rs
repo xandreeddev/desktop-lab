@@ -1,6 +1,7 @@
 //! Deterministic fixtures use the production layout, fonts, shaders and Vulkan renderer.
 //! Run ignored snapshots explicitly; no session, D-Bus service or compositor is needed.
 mod application_actions;
+mod displays;
 mod live_previews;
 mod overlays;
 use crate::desktop::{Desktop, Message};
@@ -2063,6 +2064,13 @@ fn visual_regressions() {
             ("tray-menu", Mode::Apps, 0, 0, "", 1., 390.),
             ("tray-last", Mode::Apps, 0, 0, "", 1., 390.),
             ("tray-opening", Mode::Apps, 0, 0, "", 0.12, 640.),
+            ("displays-loading", Mode::Apps, 0, 0, "", 1., 640.),
+            ("displays-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
+            ("displays-controls", Mode::Apps, 0, 0, "", 1., 640.),
+            ("displays-narrow", Mode::Apps, 0, 0, "", 1., 390.),
+            ("displays-confirmation", Mode::Apps, 0, 0, "", 1., 390.),
+            ("displays-failed", Mode::Apps, 0, 0, "", 1., 390.),
+            ("displays-last", Mode::Apps, 0, 0, "", 1., 390.),
             ("power-loading", Mode::Apps, 0, 0, "", 1., 640.),
             ("power-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("power-controls", Mode::Apps, 0, 0, "", 1., 390.),
@@ -2835,6 +2843,19 @@ fn visual_regressions() {
                     height,
                     now,
                     density: lucent_api::Density::ONE,
+                });
+                let mut input = Interaction::default();
+                input.synchronize(&layout.build(&tree, width, height, &input, now));
+                layout.build(&tree, width, height, &input, now)
+            } else if name.starts_with("displays-") {
+                displays::prepare(&mut app, name);
+                let tree = app.view(&ViewContext {
+                    surface: "displays",
+                    instance: None,
+                    width,
+                    height,
+                    now,
+                    density: Density::ONE,
                 });
                 let mut input = Interaction::default();
                 input.synchronize(&layout.build(&tree, width, height, &input, now));

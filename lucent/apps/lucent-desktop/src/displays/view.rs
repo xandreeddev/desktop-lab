@@ -74,7 +74,7 @@ impl Displays {
         let editable = !self.pending() && output.editable;
         content.push(label(&output.description, theme).font(font::CAPTION));
         if !output.editable {
-            content.push(label("This display is mirrored. Its richer native configuration is preserved; edit it in the user monitor configuration.",theme));
+            content.push(label("This display uses mirroring or advanced color/VRR settings. Its native configuration is preserved; edit it in the user monitor configuration.",theme));
         }
         content.push(button(
             if row.configuration.enabled {
