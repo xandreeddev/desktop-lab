@@ -93,6 +93,25 @@ The desktop `Monitors` host owns protocol-name mapping, current geometry and
 callback generations. The reusable runtime owns native surfaces/input/frame
 demand. It has no widget catalog, profile migration or desktop monitor policy.
 
+## System widget redraw routing
+
+The existing five-second system subscription stays shared. An unchanged
+`SystemSnapshot` requests no redraw; a changed snapshot updates the shared value
+and the desktop resolves the current surfaces whose members include `system`.
+An overlap group can have another role, such as `calendar`, so invalidation uses
+membership rather than assuming a surface named `system`. Each connected host
+uses its saved layout or borrows the default, without creating a profile. Saved
+disconnected profiles do not receive redraws; the legacy host keeps its exact
+uninstanced address.
+
+During drag or resize capture, the host retains its frozen source groups and
+also paints the cards in its temporary `widgets` preview. Both relevant exact
+addresses are invalidated. Hosts that do not paint `system` and unrelated groups
+remain untouched.
+This is client routing over the existing surface API; it adds no polling,
+persistence, renderer or domain behavior. Focused source regressions accompany
+the change; compilation and native/performance acceptance remain pending.
+
 ## Geometry, density and startup
 
 Background configure events establish each monitor's logical viewport and

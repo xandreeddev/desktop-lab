@@ -3,6 +3,8 @@ use crate::adapters::{DesktopAdapters, WatchStop};
 use crate::launcher::Mode;
 use crate::launcher::{self, Launcher};
 mod panels;
+#[cfg(test)]
+mod system_tests;
 use crate::widgets::{self, catalog::WIDGETS};
 use lucent_api::{self as api, *};
 use lucent_design::{component::panel, motion};
@@ -741,6 +743,46 @@ impl Desktop {
     pub fn active_widget_layout(&self) -> &WidgetLayout {
         self.widget_layout(self.monitors.active.as_ref())
     }
+    /// A logical widget can paint inside a differently named overlap group.
+    /// Resolve current host membership, including frozen capture sources, rather
+    /// than invalidating every surface in the widgets redraw group.
+    fn redraw_widget(&self, widget: &str, effects: &mut Effects<Message>) {
+        let mut redraw_host = |host: &widgets::Host,
+                               layout: &WidgetLayout,
+                               viewport: (f32, f32),
+                               instance: Option<&SurfaceInstance>| {
+            let mut visible = false;
+            for source in host.surfaces(layout, viewport) {
+                if source.members.contains(&widget) {
+                    visible = true;
+                    effects.redraw_surface(SurfaceAddress {
+                        role: source.id,
+                        instance: instance.cloned(),
+                    });
+                }
+            }
+            // Captured sources retain input only; the temporary full-host
+            // preview paints every visible card and the decorative grid.
+            if visible && host.grid_visible() {
+                effects.redraw_surface(SurfaceAddress {
+                    role: "widgets",
+                    instance: instance.cloned(),
+                });
+            }
+        };
+        if self.monitors.legacy() {
+            redraw_host(&self.widgets, &self.settings.layout, self.viewport, None);
+        } else {
+            for (id, monitor) in &self.monitors.connected {
+                redraw_host(
+                    &monitor.widgets,
+                    self.widget_layout(Some(id)),
+                    monitor.viewport,
+                    Some(&monitor.instance),
+                );
+            }
+        }
+    }
     fn select_monitor(&mut self, id: &MonitorId, effects: &mut Effects<Message>) {
         let Some(monitor) = self.monitors.connected.get(id) else {
             return;
@@ -1476,21 +1518,10 @@ impl Component for Desktop {
                 self.clock = clock;
             }
             Message::System(Ok(value)) => {
-                if self
-                    .settings
-                    .layout
-                    .visible_widgets
-                    .iter()
-                    .any(|w| w == "system")
-                    || self
-                        .settings
-                        .monitor_layouts
-                        .values()
-                        .any(|layout| layout.visible_widgets.iter().any(|w| w == "system"))
-                {
-                    effects.redraw("widgets");
+                if self.system != value {
+                    self.system = value;
+                    self.redraw_widget("system", effects);
                 }
-                self.system = value;
             }
             Message::System(Err(_)) => {}
             Message::Audio(message) => {
