@@ -779,43 +779,147 @@ fn framework_buttons_support_keyboard_focus_and_activation_without_hover() {
 }
 #[test]
 fn command_rows_center_icons_and_labels_inside_rounded_endcaps() {
-    let mut app = fixture(9, false);
-    app.update(
-        Message::Launcher(launcher::Message::Mode(Mode::Commands)),
-        &mut Effects::default(),
-    );
-    let layout = Layout::new(fonts(&app));
-    let command_scene = scene(&app, &layout, &mut Interaction::default(), 1.);
-    let rows: Vec<_> = command_scene
-        .hits
-        .iter()
-        .filter(|h| h.id.starts_with("command-"))
-        .collect();
-    assert_eq!(rows.len(), crate::actions::COMMANDS.len());
-    for row in rows {
-        let center = row.rect.y + row.rect.h / 2.;
-        let paints: Vec<_> = command_scene
-            .paint
+    fn assert_aligned(scene: &Scene<Message>, capacity: usize, selected: &str) {
+        let rows: Vec<_> = scene
+            .hits
             .iter()
-            .filter_map(|p| match p {
-                Paint::Image { rect, .. } | Paint::Text { rect, .. }
-                    if rect.y >= row.rect.y && rect.y + rect.h <= row.rect.y + row.rect.h =>
-                {
-                    Some(rect)
-                }
-                _ => None,
-            })
+            .filter(|hit| hit.id.starts_with("command-"))
             .collect();
-        assert_eq!(paints.len(), 2);
-        for rect in paints {
+        assert_eq!(
+            rows.len(),
+            capacity,
+            "only the bounded row window is admitted"
+        );
+        assert!(
+            rows.iter().any(|row| row.id == selected),
+            "selected command must be reachable: {selected}"
+        );
+        for row in rows {
             assert!(
-                (rect.y + rect.h / 2. - center).abs() < 0.01,
-                "command contents share a vertical center"
+                fully_visible(row.rect, row.clip.bounds),
+                "command row is cropped: {}",
+                row.id
             );
-            assert!(rect.x - row.rect.x >= 16., "content clears curved endcap");
-            assert!(fully_visible(*rect, row.clip.bounds));
+            let center = row.rect.y + row.rect.h / 2.;
+            let paints: Vec<_> = scene
+                .paint
+                .iter()
+                .filter_map(|paint| match paint {
+                    Paint::Image { rect, clip, .. } | Paint::Text { rect, clip, .. }
+                        if rect.y >= row.rect.y && rect.y + rect.h <= row.rect.y + row.rect.h =>
+                    {
+                        Some((rect, clip))
+                    }
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(paints.len(), 2);
+            for (rect, clip) in paints {
+                assert!(
+                    (rect.y + rect.h / 2. - center).abs() < 0.01,
+                    "command contents share a vertical center"
+                );
+                assert!(
+                    rect.x - row.rect.x >= lucent_design::component::launcher::ROW_PADDING_INLINE,
+                    "content clears curved endcap"
+                );
+                assert!(fully_visible(*rect, row.clip.bounds));
+                assert!(fully_visible(*rect, clip.bounds));
+            }
         }
     }
+    let commands: Vec<_> = crate::actions::COMMANDS
+        .into_iter()
+        .map(|(label, _, icon)| format!("command-{icon}-{label}"))
+        .collect();
+    let weather = crate::actions::COMMANDS
+        .iter()
+        .position(|(_, action, _)| matches!(action, crate::actions::Action::Weather))
+        .unwrap();
+    let mut app = fixture(9, false);
+    let layout = Layout::new(fonts(&app));
+    for width in [640., 390.] {
+        resize_fixture(&mut app, width, 580.);
+        app.update(
+            Message::Launcher(launcher::Message::Mode(Mode::Commands)),
+            &mut Effects::default(),
+        );
+        let capacity = crate::shell_layout::visible_rows(
+            Mode::Commands,
+            app.launcher.result_count(),
+            app.viewport,
+            app.settings.launcher,
+        )
+        .min(commands.len());
+        assert!(
+            capacity < commands.len(),
+            "fixture must exercise a real scroll boundary"
+        );
+        let mut seen = std::collections::BTreeSet::new();
+        for (index, id) in commands.iter().enumerate() {
+            if index > 0 {
+                key(&mut app, Key::Down);
+            }
+            assert_eq!(app.launcher.selected(), index);
+            let current = scene(&app, &layout, &mut Interaction::default(), 1.);
+            assert_aligned(&current, capacity, id);
+            seen.insert(id.clone());
+        }
+        assert_eq!(
+            seen.len(),
+            commands.len(),
+            "keyboard must reach the complete catalog"
+        );
+        for (index, id) in commands.iter().enumerate().rev().skip(1) {
+            key(&mut app, Key::Up);
+            assert_eq!(app.launcher.selected(), index);
+            assert_aligned(
+                &scene(&app, &layout, &mut Interaction::default(), 1.),
+                capacity,
+                id,
+            );
+        }
+        // The pointer-wheel route uses the same controlled selection/scroll
+        // window, rather than admitting clipped offscreen command hits.
+        for (index, id) in commands.iter().enumerate() {
+            if index > 0 {
+                let message = app
+                    .event(Event::Scroll {
+                        surface: "dock",
+                        lines: 1.,
+                    })
+                    .expect("command wheel navigation");
+                app.update(message, &mut Effects::default());
+            }
+            assert_eq!(app.launcher.selected(), index);
+            assert_aligned(
+                &scene(&app, &layout, &mut Interaction::default(), 1.),
+                capacity,
+                id,
+            );
+        }
+        app.update(
+            Message::Launcher(launcher::Message::Select(weather)),
+            &mut Effects::default(),
+        );
+        assert_aligned(
+            &scene(&app, &layout, &mut Interaction::default(), 1.),
+            capacity,
+            &commands[weather],
+        );
+        key(&mut app, Key::Enter);
+        assert!(
+            app.weather.open(),
+            "the reachable Weather command opens its native client"
+        );
+        assert!(
+            !app.launcher.open(),
+            "the command transfers foreground ownership"
+        );
+    }
+    // Retain the existing independent closed-dock padding assertions at their
+    // original geometry, after testing both bounded command viewports above.
+    let mut app = fixture(9, false);
     app.update(
         Message::Launcher(launcher::Message::Close),
         &mut Effects::default(),
