@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import secrets
 import signal
+import stat
 import subprocess
 import time
 
@@ -166,7 +167,17 @@ def main():
     elif args.operation in ('wrong-secret', 'clear-secret', 'verify-secret'):
         # Mutate/read only a profile created and explicitly registered by this
         # fixture. Never touch a host/guest user's pre-existing connection.
-        state = json.loads((directory / 'state.json').read_text())
+        if (os.geteuid() != 0 or not Path('/etc/arch-release').exists()
+                or run('systemd-detect-virt', '--vm') not in ('kvm', 'qemu')
+                or directory.stat().st_uid != 0 or stat.S_IMODE(directory.stat().st_mode) != 0o700):
+            raise SystemExit('Credential fixtures require their root-owned private directory inside the prepared VM')
+        state_file = directory / 'state.json'
+        identity = state_file.lstat()
+        if not stat.S_ISREG(identity.st_mode) or identity.st_uid != 0 or stat.S_IMODE(identity.st_mode) != 0o600:
+            raise SystemExit('Credential fixture state must be an owned private regular file')
+        state = json.loads(state_file.read_text())
+        if not state.get('module') or not Path('/sys/module/mac80211_hwsim').exists() or state.get('station') not in interfaces():
+            raise SystemExit('Credential test requires its still-live owned simulated Wi-Fi station')
         key = args.profile
         if not key or key not in state['profile_keys'] or key in state['original_profiles']:
             raise SystemExit("Credential testing requires this fixture's registered new profile")
