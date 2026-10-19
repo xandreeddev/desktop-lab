@@ -62,8 +62,10 @@ fn same_ink_with_one_pixel_phase(a: &[u8], b: &[u8], width: u32, height: u32) ->
     }
     // This fixture paints white text on transparent black. Alpha is therefore
     // the complete glyph coverage; require the corresponding RGB as well.
-    if a.chunks_exact(4)
-        .chain(b.chunks_exact(4))
+    if a.as_chunks::<4>()
+        .0
+        .iter()
+        .chain(b.as_chunks::<4>().0.iter())
         .any(|p| p[0] != p[3] || p[1] != p[3] || p[2] != p[3])
     {
         return false;
@@ -97,8 +99,16 @@ fn same_ink_with_one_pixel_phase(a: &[u8], b: &[u8], width: u32, height: u32) ->
     {
         return false;
     }
-    let alpha_mass = |image: &[u8]| image.chunks_exact(4).map(|p| u64::from(p[3])).sum::<u64>();
-    let nonzero = |image: &[u8]| image.chunks_exact(4).filter(|p| p[3] > 0).count() as u64;
+    let alpha_mass = |image: &[u8]| {
+        image
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|p| u64::from(p[3]))
+            .sum::<u64>()
+    };
+    let nonzero =
+        |image: &[u8]| image.as_chunks::<4>().0.iter().filter(|p| p[3] > 0).count() as u64;
     // At most one alpha quantization unit per covered physical pixel.
     if alpha_mass(a).abs_diff(alpha_mass(b)) > nonzero(a).max(nonzero(b)) {
         return false;
