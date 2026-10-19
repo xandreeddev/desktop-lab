@@ -190,7 +190,17 @@ pub(super) fn prepare(app: &mut Desktop, name: &str, width: f32, height: f32) {
                 .frame_for(&sources()[1].path)
                 .is_some()
         );
-        assert!(state["cached"].as_u64().unwrap() >= 3);
+        // The latest hero frame can coalesce its initial still before delivery.
+        // The two adjacent sources remain frozen, distinct cache entries.
+        assert!(state["cached"].as_u64().unwrap() >= 2);
+        for index in [0, 2] {
+            assert!(
+                app.live_wallpaper
+                    .preview
+                    .frame_for(&sources()[index].path)
+                    .is_some()
+            );
+        }
     }
 }
 
