@@ -140,6 +140,13 @@ retain its in-flight pixels; closing does not claim immediate memory reclamation
 **Retry preview** handles preview errors independently of **Retry playback** for
 the saved background.
 
+**Refresh** invalidates preview demand, cached pixels and preview failures even
+when a source keeps the same path. It requests decoder cancellation and fresh
+library discovery; a new preview waits for discovery to finish and the retiring
+decoder's terminal message. Browsing during discovery updates the selection
+without restarting the old preview. This lets Refresh reread a file replaced at
+the same path instead of retaining its earlier pixels or failure.
+
 The controller derives physical preview demand from the same logical hero
 geometry that the view uses, together with its actual rendering density.
 `WallpaperPreviewOptions` checks positive bounds up to 1024 pixels per edge.
@@ -151,7 +158,15 @@ straight-alpha interpolation would create colored fringes. Source-sized decode
 and conversion scratch still exist. The 1024-pixel output cap is not a total
 process-memory guarantee or a frame-rate measurement.
 
-The domain `WallpaperPlaybackPort.preview` reads an unimported source.
+The domain `WallpaperPlaybackPort` separates four operations: `library` discovers
+sources without decoding or selecting them, `prepare` admits an owned asset and
+poster, `play` consumes that asset, and `preview` reads an unimported source.
+`WallpaperFrameRate::Source` follows media timestamps; `Capped(WallpaperFps)` adds
+a checked 1–60 FPS delivery limit for saved playback without synthesizing frames.
+Preview uses source timing independently of that saved playback preference.
+These contracts exchange domain values such as `MediaFrame` and checked options,
+not renderer images, native file handles or FFmpeg contexts.
+
 `NativeVideoWallpapers` pins a validated, read-only, nonblocking regular-file
 descriptor, decodes that same file through its descriptor path and rejects
 in-place changes. It creates no media directory, poster or asset metadata.
@@ -175,11 +190,23 @@ Apply wallpaper / Import wallpaper
   → existing root selection transaction and persistence coordinator
 ```
 
-The preview/carousel source and its regression tests are added in this revision.
-Integrated checks, real VM input/pixels, rapid-switch cancellation and exact
-storage/preferences preservation still require acceptance for this source.
-Earlier playback measurements below do not validate preview FPS, smoothness or
-resource use.
+The released preview source passed 769 Rust tests, 104 Python tests, strict
+Clippy, formatting and all six CI checks, including 796 offscreen Vulkan
+comparisons. On one 1× VM output, native card/Previous/Next browsing, Tab and wheel
+navigation, same-path Retry/Refresh, rapid close/reopen and final coordinator
+retirement passed. Private interior crops changed synthetic GIF fixture colors.
+Browsing preserved exact settings bytes and inode, wallpaper, source files,
+owned stores and theme/login exports.
+
+A separate explicit monitor Apply created import 33 from an existing 32-asset
+store and advanced native background submissions. The test restored the exact
+original settings inode and wallpaper, removed only its own fixtures/import,
+and verified a stable runtime. Two earlier attempts reached their test deadline
+with successful restoration; shorter guarded keyboard navigation completed the
+full flow. See the source/binary pins and scope in the
+[acceptance record](../reports/measurements/lucent-live-wallpaper-previews.json).
+This proves scoped native interaction and changing pixels, not preview FPS,
+smoothness, decoder counts, physical-GPU behavior or a total-memory target.
 
 ## Owned import storage
 
@@ -296,8 +323,11 @@ Initial envelopes:
 - Preview output contains both edges within checked physical bounds of at most
   1024 pixels. One serial preview worker, up to two adjacent stills and a
   five-entry transient cache are separate from saved background producers.
-- One latest mailbox frame and one wake notice per producer. A slow UI does not
-  queue a sequence of full video frames.
+- Each background producer has one latest mailbox frame and one pending wake
+  notice. The preview worker instead holds at most one latest delivery for each
+  of its selected source and two neighbors: at most three source entries and
+  one coalesced wake for the whole mailbox. Its five-entry cache is separate.
+  A slow UI does not queue a sequence of full video frames.
 - One immutable current frame per player and one reusable GPU stream texture.
   An automatically paused output can retain one additional immutable frame with
   a static GPU identity while another output advances their shared stream.
