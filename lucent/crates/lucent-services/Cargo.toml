@@ -3,6 +3,10 @@ name = "lucent-services"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+[features]
+# Test-only private media-stage probe; never part of the normal library/runtime.
+video-stage-benchmark = []
+
 [dependencies]
 lucent-domain = { path = "../lucent-domain" }
 lucent-api = { path = "../lucent-api" }

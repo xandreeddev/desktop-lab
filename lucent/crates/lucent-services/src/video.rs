@@ -666,3 +666,6 @@ impl FrameClock {
 }
 #[cfg(test)]
 mod tests;
+
+#[cfg(all(test, feature = "video-stage-benchmark"))]
+mod benchmark;
