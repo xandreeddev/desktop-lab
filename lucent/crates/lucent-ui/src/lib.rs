@@ -473,16 +473,16 @@ impl Layout {
         } else {
             prepared_area
         };
-        if let Some(text) = prepared_text.as_mut() {
-            if let Some((_, projected)) = composition::project(
+        if let Some(text) = prepared_text.as_mut()
+            && let Some((_, projected)) = composition::project(
                 e,
                 text,
                 self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
                 interaction,
                 &id,
-            ) {
-                text.composition_cursor = Some(projected.caret_rect());
-            }
+            )
+        {
+            text.composition_cursor = Some(projected.caret_rect());
         }
         let interactive = e.click.is_some()
             || e.secondary_click.is_some()
@@ -1424,14 +1424,13 @@ impl<M: Clone> Interaction<M> {
             .iter()
             .find(|h| Some(&h.id) == self.focus.as_ref())
         {
-            if let (Some(text), Some(callback)) = (&hit.text, &hit.text_edit) {
-                if !text.is_multiline() && !text.value.is_ascii() {
-                    if let Some(edit) =
-                        text_input::visual_key(hit, key, &mut self.text_single_navigation)
-                    {
-                        return vec![callback(edit)];
-                    }
-                }
+            if let (Some(text), Some(callback)) = (&hit.text, &hit.text_edit)
+                && !text.is_multiline()
+                && !text.value.is_ascii()
+                && let Some(edit) =
+                    text_input::visual_key(hit, key, &mut self.text_single_navigation)
+            {
+                return vec![callback(edit)];
             }
             let scroll = hit.scroll.as_ref().or_else(|| {
                 matches!(key, Key::PageUp | Key::PageDown)

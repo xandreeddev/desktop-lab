@@ -216,12 +216,11 @@ impl<A: Application> State<A> {
                 a.address == b.address && a.element == b.element && a.surface == b.surface
             });
         if !lifetime_same {
-            if let Some(old) = &self.input_method.target {
-                if let Some(native) = self.surfaces.get_mut(&old.address) {
-                    if native.interaction.set_preedit(&native.scene, None) {
-                        native.demand.invalidate();
-                    }
-                }
+            if let Some(old) = &self.input_method.target
+                && let Some(native) = self.surfaces.get_mut(&old.address)
+                && native.interaction.set_preedit(&native.scene, None)
+            {
+                native.demand.invalidate();
             }
             self.input_method.disable();
         } else if self
@@ -234,10 +233,9 @@ impl<A: Application> State<A> {
             if let Some(native) = target
                 .as_ref()
                 .and_then(|target| self.surfaces.get_mut(&target.address))
+                && native.interaction.set_preedit(&native.scene, None)
             {
-                if native.interaction.set_preedit(&native.scene, None) {
-                    native.demand.invalidate();
-                }
+                native.demand.invalidate();
             }
             self.input_method.pending = Pending::default();
         }
@@ -353,10 +351,10 @@ impl<A: Application> State<A> {
                 .and_then(|hit| hit.text_edit.as_ref())
                 .map(|callback| callback(edit))
         });
-        if let Some(native) = self.surfaces.get_mut(&target.address) {
-            if native.interaction.set_preedit(&native.scene, None) {
-                native.demand.invalidate();
-            }
+        if let Some(native) = self.surfaces.get_mut(&target.address)
+            && native.interaction.set_preedit(&native.scene, None)
+        {
+            native.demand.invalidate();
         }
         if let Some(message) = message {
             self.message(message, qh);
@@ -373,15 +371,12 @@ impl<A: Application> State<A> {
             current.address == target.address
                 && current.element == target.element
                 && current.surface == target.surface
-        }) {
-            if let Some(native) = self.surfaces.get_mut(&target.address) {
-                if native
-                    .interaction
-                    .set_preedit(&native.scene, completed.preedit)
-                {
-                    native.demand.invalidate();
-                }
-            }
+        }) && let Some(native) = self.surfaces.get_mut(&target.address)
+            && native
+                .interaction
+                .set_preedit(&native.scene, completed.preedit)
+        {
+            native.demand.invalidate();
         }
         self.draw_all(qh);
     }
