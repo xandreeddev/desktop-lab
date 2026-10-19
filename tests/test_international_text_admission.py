@@ -223,25 +223,70 @@ class OwnedGuestBoundary(unittest.TestCase):
                           'Path': lambda _: path})
         with patch.object(namespace['os'].path, 'lexists', return_value=True), \
              patch.dict(namespace['os'].environ, {'XDG_RUNTIME_DIR': '/owned'}), \
-             patch.object(sys, 'argv', ['fixture', json.dumps(config)]), patch('builtins.print'):
+             patch.object(sys, 'argv', ['fixture', json.dumps(config)]), patch('builtins.print') as output:
             body = policy.RETIRE.removeprefix(policy.OBSERVATION_FUNCTIONS)
-            if replaced:
-                with self.assertRaisesRegex(AssertionError, 'only_exact_owned_retired_socket'):
-                    exec(body, namespace)
-            else:
-                exec(body, namespace)
-        return events, path
+            exec(body, namespace)
+        return events, path, json.loads(output.call_args.args[0])
 
     def test_cleanup_retires_example_first_and_only_then_peer_and_its_exact_socket(self):
-        events, path = self.retirement()
+        events, path, result = self.retirement()
         self.assertTrue(events[0].startswith('lucent-international-test-'))
         self.assertTrue(events[1].startswith('lucent-international-peer-'))
         path.unlink.assert_called_once_with()
+        self.assertTrue(result['owned_units_retired'])
 
     def test_replaced_socket_is_preserved_and_cleanup_failure_stays_explicit(self):
-        events, path = self.retirement(replaced=True)
+        events, path, result = self.retirement(replaced=True)
         self.assertEqual(len(events), 2)
         path.unlink.assert_not_called()
+        self.assertFalse(result['owned_units_retired'])
+        self.assertEqual(result['retirement_failures']['socket'],
+                         {'error_class': 'AssertionError', 'phase': 'exact_stale_socket_cleanup'})
+
+    def test_completion_dbus_failure_retains_phase_without_adopting_unit_absence(self):
+        namespace = self.functions()
+        unit = 'lucent-international-test-'+'a'*24+'.service'
+        value = {'load':'loaded','active':'active','transient':True,'group':'/owned/'+unit,
+                 'executable':'/owned/example','argv':['/owned/example'],'main_pid':202,'invocation':'1'*32}
+        process = {'pid':202,'start':'77','group':value['group'],'executable':[1,2,3],'sha256':'digest'}
+        captured = {'unit':value,'process':process}
+        config = {'example':{'unit':unit,'argv':value['argv']},'expected':{'example':captured},'peer':None}
+        class FakeBusError(Exception):
+            def get_dbus_name(self):return 'org.freedesktop.DBus.Error.UnknownObject'
+        namespace['unit_snapshot'] = MagicMock(side_effect=[value,FakeBusError('never publish payload'),{'load':'not-found'}])
+        namespace['process_snapshot'] = MagicMock(return_value=process)
+        manager = MagicMock();bus = MagicMock()
+        dbus = types.SimpleNamespace(SessionBus=MagicMock(return_value=bus),Interface=MagicMock(return_value=manager))
+        with patch.dict(sys.modules,{'dbus':dbus}),patch.object(sys,'argv',['fixture',json.dumps(config)]),patch('builtins.print') as output:
+            exec(policy.RETIRE.removeprefix(policy.OBSERVATION_FUNCTIONS),namespace)
+        result = json.loads(output.call_args.args[0])
+        self.assertFalse(result['owned_units_retired'])
+        self.assertEqual(result['retirement_failures']['example']['dbus_error_name'],
+                         'org.freedesktop.DBus.Error.UnknownObject')
+        self.assertTrue(any(event['phase']=='completion_unit_observation' and 'dbus_error_name' in event
+                            for event in result['phase_snapshots']))
+        self.assertEqual(result['phase_snapshots'][-1]['unit'],{'load':'not-found'})
+        self.assertNotIn('never publish payload',json.dumps(result))
+        manager.StopUnit.assert_called_once_with(unit,'replace',timeout=5)
+
+    def test_metadata_trace_is_bounded_and_omits_actual_argv_and_exception_payload(self):
+        namespace = self.functions()
+        unit = 'lucent-international-test-'+'a'*24+'.service'
+        value = {'load':'loaded','active':'active','transient':True,'group':'/owned/'+unit,
+                 'executable':'private executable','argv':['private secret'],'main_pid':202,'invocation':'1'*32}
+        captured = {'unit':value,'process':{}}
+        config = {'example':{'unit':unit,'argv':['/owned/example']},'expected':{'example':captured}}
+        namespace['unit_snapshot'] = lambda _unit:value
+        def retirement(*_args,**_kwargs):
+            for _ in range(80):namespace['unit_snapshot'](unit)
+            raise ValueError('private failure payload')
+        namespace['retire_unit'] = retirement
+        with patch.object(sys,'argv',['fixture',json.dumps(config)]),patch('builtins.print') as output:
+            exec(policy.RETIRE.removeprefix(policy.OBSERVATION_FUNCTIONS),namespace)
+        result = json.loads(output.call_args.args[0])
+        self.assertFalse(result['owned_units_retired']);self.assertTrue(result['phase_snapshots_truncated'])
+        self.assertLessEqual(len(result['phase_snapshots']),48)
+        self.assertNotIn('private',json.dumps(result))
 
     def test_initial_typed_unit_preflight_refuses_existing_even_with_exact_arguments(self):
         namespace = self.functions()
@@ -380,6 +425,16 @@ class PinnedFileReads(unittest.TestCase):
 
 
 class FixedFailureDiagnostics(unittest.TestCase):
+    def test_restoration_preserves_fixed_subprocess_diagnostics_not_exception_payload(self):
+        driver=driver_module();report={}
+        details={'step':'owned_units_retirement_subprocess_failed','kind':'nonzero_exit','returncode':1,
+                 'stderr_bytes':42,'stderr_sha256':'a'*64}
+        driver.record_restoration_failure(report,'unit_retirement',driver.Failure('captured_unit_retirement_refused',details))
+        self.assertEqual(report['restoration_failures']['unit_retirement']['subprocess'],details)
+        driver.record_restoration_failure(report,'state_and_pointer',ValueError('private text or path'))
+        self.assertEqual(report['restoration_failures']['state_and_pointer'],{'error_class':'ValueError'})
+        self.assertNotIn('private',json.dumps(report))
+
     def test_probe_failure_has_fixed_step_and_hash_without_process_payload(self):
         driver = driver_module()
         stderr = b'private-path-and-payload\nAssertionError: file_identity_changed_during_read\n'

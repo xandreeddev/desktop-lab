@@ -55,13 +55,13 @@ size bounds and refusal of replacement/symlinks remain required. Subprocess
 failures identify the fixed probe/checkpoint step and retain only exit metadata,
 stderr length/hash and allowlisted fixed reasons, without process payload.
 
-The sequence exercises preedit candidate movement without canonical commit,
+The sequence exercises preedit ink and caret movement without canonical commit,
 commit/delete with atomic undo/redo, masked-field deactivation, actual multiline
 commit and RTL Home/Right navigation. The fixture contains two real newline
 characters. Preedit captures are retained for inspection; image inequality alone
-is not called proof of preedit ink because a caret can blink. Candidate movement
-and unchanged canonical text are reported separately from those images. Offscreen
-render tests establish preedit geometry/pixels independently.
+is not proof of preedit ink because a caret can blink. The bounded mapped-popup
+proof below separately checks movement, new noncaret ink and unchanged canonical
+text. Offscreen render tests establish preedit geometry/pixels independently.
 
 An existing compositor input-method owner causes refusal; this harness never
 replaces it. These controlled results do not establish third-party IME behavior,
@@ -91,3 +91,44 @@ guards. Its independently compiled fixture source is
 remain at `8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, and the original archive
 remains unchanged. A native rerun with explicit independent-peer provenance is
 pending; no successful IME interaction is claimed from compilation alone.
+
+The subsequent b4d-peer native attempt no longer panicked: both fixtures were
+admitted and the owned ordinary field was focused/cleared, but it failed at the
+initial candidate rectangle. The failed report's cleanup flags remain false.
+A later independent diagnostic found both units absent with no processes; it
+also recorded the pointer at the last owned position (960,138), instead of the
+original (960,540). It did not prove why strict retirement failed or make the
+original cleanup pass. A stale example socket also blocked the guarded
+restoration path. The earlier failed reports and independent observations remain
+separate evidence; no SDK defect is inferred from this fixture failure.
+
+The exact deployed Hyprland v0.56.2 source at
+`efb50993780079460b0cbed1363e2166a2de1d9f` requires a committed texture before
+mapping this popup, and only mapped popups update their boxes. The previous peer
+never attached a buffer. Its rectangle event is popup-local, so increasing the
+event's x coordinate is not a valid general test of caret motion. See the pinned
+[popup positioning](https://github.com/hyprwm/Hyprland/blob/efb50993780079460b0cbed1363e2166a2de1d9f/src/managers/input/InputMethodPopup.cpp#L74)
+and [buffer mapping](https://github.com/hyprwm/Hyprland/blob/efb50993780079460b0cbed1363e2166a2de1d9f/src/protocols/InputMethodV2.cpp#L96)
+implementations.
+
+The corrected peer commits one immutable 8×8 opaque barcode from a 256-byte
+anonymous shared-memory file only while a genuine ordinary input method is
+active. Its empty input region accepts no pointer input; it never grabs a
+keyboard. On deactivation it detaches the buffer. Bounded PPM captures cover
+the owned example's surface bounds. The host requires one unique barcode in each capture,
+combines its observed position with the popup-local hint to reconstruct both
+global caret rectangles, and requires caret advancement after preedit. It also
+requires newly painted foreground ink between excluded old/new caret strips,
+outside either barcode, with an unchanged dominant field background. A blinking
+caret, reused image, missing/duplicate marker, background change, wrong-region
+ink or absent motion fails the pure negative fixtures. This is controlled native
+preedit evidence when executed; it does not establish third-party IME behavior.
+The mapped-peer build and native execution of this latest source remain pending.
+
+Cleanup now records a bounded trace of original unit/process observation phases,
+fixed exception classes and allowlisted D-Bus error names. It retains protected
+metadata and comparisons against pinned identities, without actual argv,
+credential/text payloads or raw exception messages. Subprocess failure metadata
+also remains attached to its fixed restoration phase. Failed identity checks
+still block socket cleanup and pointer restoration; no invocation, process-birth
+or same-name successor guard has been relaxed based on an unrecorded failure.

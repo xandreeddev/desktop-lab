@@ -249,26 +249,84 @@ for unit in units:
 print(json.dumps({'initial_units_absent':True}))
 '''
 
-RETIRE = OBSERVATION_FUNCTIONS + r'''
+DIAGNOSTIC_FUNCTIONS = r'''
+def diagnostic_error(error):
+ allowed={'AssertionError','ValueError','FileNotFoundError','PermissionError','OSError',
+          'TimeoutExpired','TimeoutError','ConnectionRefusedError','DBusException','Failure'}
+ result={'error_class':type(error).__name__ if type(error).__name__ in allowed else 'OtherError'}
+ try:
+  name=error.get_dbus_name()
+ except Exception:name=None
+ if isinstance(name,str) and re.fullmatch(r'org\.freedesktop\.(?:DBus\.Error|systemd1)\.[A-Za-z_][A-Za-z0-9_]{0,96}',name):
+  result['dbus_error_name']=name
+ if type(getattr(error,'errno',None)) is int:result['errno']=error.errno
+ return result
+
+def diagnostic_unit(value,captured):
+ result={key:value[key] for key in ('load','active','transient','main_pid','invocation') if key in value}
+ if value.get('load')!='not-found' and captured is not None:
+  original=captured['unit']
+  for key in ('executable','argv','group','invocation','main_pid'):
+   result[key+'_matches_pinned']=value.get(key)==original.get(key)
+ return result
+'''
+exec('import re\n'+DIAGNOSTIC_FUNCTIONS)
+
+
+RETIRE = OBSERVATION_FUNCTIONS + DIAGNOSTIC_FUNCTIONS + r'''
 import sys
-config=json.loads(sys.argv[1]);failures=[]
+config=json.loads(sys.argv[1]);failures={};trace=[];truncated=False
+original_unit_snapshot=unit_snapshot;original_process_snapshot=process_snapshot
+current_name=None;captured=None;unit_observations=0
+def record(event):
+ global truncated
+ if len(trace)<48:trace.append(event)
+ else:trace[-1]=event;truncated=True
+def traced_unit_snapshot(unit):
+ global unit_observations
+ phase='initial_unit_observation' if unit_observations==0 else 'completion_unit_observation'
+ unit_observations+=1
+ try:
+  value=original_unit_snapshot(unit)
+ except Exception as error:
+  record(dict(diagnostic_error(error),name=current_name,phase=phase));raise
+ record({'name':current_name,'phase':phase,'unit':diagnostic_unit(value,captured)})
+ return value
+def traced_process_snapshot(pid,*args,**kwargs):
+ try:value=original_process_snapshot(pid,*args,**kwargs)
+ except Exception as error:
+  record(dict(diagnostic_error(error),name=current_name,phase='pinned_process_observation'));raise
+ record({'name':current_name,'phase':'pinned_process_observation',
+         'process':{key:value[key] for key in ('pid','start','executable')},
+         'group_matches_pinned':captured is not None and value['group']==captured['process']['group'],
+         'birth_matches_pinned':captured is not None and value['start']==captured['process']['start']})
+ return value
+unit_snapshot=traced_unit_snapshot;process_snapshot=traced_process_snapshot
 for name in ('example','peer'):
  spec=config.get(name)
  if spec is None:continue
+ current_name=name;captured=config.get('expected',{}).get(name);unit_observations=0
  try:
   assert re.fullmatch(r'lucent-international-(test|peer)-[a-f0-9]{24}\.service',spec['unit'])
   assert len(spec['argv'])==1 and Path(spec['argv'][0]).is_absolute()
-  captured=config.get('expected',{}).get(name);assert captured is not None,'captured_owned_invocation_required'
+  assert captured is not None,'captured_owned_invocation_required'
   retire_unit(spec['unit'],spec['argv'],group=captured['unit']['group'] if captured else None,captured=captured)
- except Exception:
+  record({'name':name,'phase':'retire_call_returned'})
+ except Exception as error:
   # Continue retiring the other exact owned unit, then fail closed. No input or
   # file cleanup is admitted if either unit's lifetime could not be verified.
-  failures.append(name)
-assert not failures,'owned_unit_retirement_failed'
-if config.get('expected',{}).get('example_socket') is not None:
- path=Path(os.environ['XDG_RUNTIME_DIR'])/'lucent-international-text.sock'
- if os.path.lexists(path):
-  assert inode(path.lstat())==config['expected']['example_socket'],'only_exact_owned_retired_socket'
-  path.unlink()
-print(json.dumps({'owned_units_retired':True}))
+  failures[name]=dict(diagnostic_error(error),phase='retire_call')
+  try:record({'name':name,'phase':'after_retire_failure','unit':diagnostic_unit(original_unit_snapshot(spec['unit']),captured)})
+  except Exception as snapshot_error:record(dict(diagnostic_error(snapshot_error),name=name,phase='after_retire_failure'))
+if not failures:
+ try:
+  if config.get('expected',{}).get('example_socket') is not None:
+   path=Path(os.environ['XDG_RUNTIME_DIR'])/'lucent-international-text.sock'
+   if os.path.lexists(path):
+    assert inode(path.lstat())==config['expected']['example_socket'],'only_exact_owned_retired_socket'
+    path.unlink()
+  record({'phase':'exact_stale_socket_cleanup_returned'})
+ except Exception as error:failures['socket']=dict(diagnostic_error(error),phase='exact_stale_socket_cleanup')
+print(json.dumps({'owned_units_retired':not failures,'retirement_failures':failures,
+                  'phase_snapshots':trace,'phase_snapshots_truncated':truncated}))
 '''

@@ -22,6 +22,7 @@ import secrets
 import signal
 
 import international_text_policy as policy
+import international_text_pixels as pixels
 import shlex
 import subprocess
 import time
@@ -46,6 +47,18 @@ def source_commits(source_commit, peer_source_commit=None):
     peer = source_commit if peer_source_commit is None else peer_source_commit
     require(re.fullmatch('[a-f0-9]{40}', peer), 'full_peer_source_commit_required')
     return {'desktop': source_commit, 'example': source_commit, 'peer': peer}
+
+
+def record_restoration_failure(report, phase, error):
+    require(phase in ('pointer_release', 'unit_retirement', 'peer_transport', 'state_and_pointer'),
+            'fixed_restoration_phase_required')
+    details = policy.diagnostic_error(error)
+    if isinstance(error, Failure):
+        if re.fullmatch('[a-z_]{1,128}', str(error)):
+            details['fixed_reason'] = str(error)
+        if error.diagnostics is not None:
+            details['subprocess'] = error.diagnostics
+    report.setdefault('restoration_failures', {})[phase] = details
 
 
 def run(argv, *, data=None, timeout=20, label='bounded_subprocess_failed'):
@@ -137,6 +150,7 @@ def main():
               'checks': {}, 'restoration': {},
               'helper_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               'policy_sha256': hashlib.sha256((ROOT / 'vm/international_text_policy.py').read_bytes()).hexdigest(),
+              'pixel_proof_sha256': hashlib.sha256((ROOT / 'vm/international_text_pixels.py').read_bytes()).hexdigest(),
               'binaries': {'desktop': args.desktop_sha256, 'example': args.example_sha256, 'peer': args.peer_sha256},
               'scope': 'One prepared native output; independent non-replacing input-method peer, no third-party IME/hardware claim',
               'host_crash_policy': 'Both exact owned transient units expire after210seconds. Private evidence remains; cursor restoration requires a guarded live host.'}
@@ -277,13 +291,19 @@ def main():
         focused = field
 
     def capture(field, label):
-        _, hit, target = geometry(field)
+        surface, hit, target = geometry(field)
         layer = target['layer']
-        x, y = round(layer['x'] + hit['x']), round(layer['y'] + hit['y'])
-        width, height = round(hit['width']), round(hit['height'])
+        x, y = round(layer['x']), round(layer['y'])
+        width, height = round(surface['width']), round(surface['height'])
+        require(0 <= x < x+width <= 1920 and 0 <= y < y+height <= 1080
+                and width*height*3+1024 <= 4*1024*1024, 'bounded_owned_surface_capture')
         data = session('grim', '-g', f'{x},{y} {width}x{height}', '-')
         private(directory / (label + '.png'), data)
-        return hashlib.sha256(data).hexdigest()
+        ppm = session('grim', '-t', 'ppm', '-g', f'{x},{y} {width}x{height}', '-')
+        image = pixels.read_ppm(ppm)
+        private(directory / (label + '.ppm'), ppm)
+        return {'sha256': hashlib.sha256(data).hexdigest(), 'image': image,
+                'field': (round(hit['x']), round(hit['y']), round(hit['x']+hit['width']), round(hit['y']+hit['height']))}
 
     def clear(field):
         click(field)
@@ -336,18 +356,25 @@ def main():
         guard()
         private(directory / 'owned-authority-private.json', authority)
         clear('single')
+        def initial_rectangle():
+            observation = focused_guard('')
+            rectangle = observation['rectangle']
+            return observation.get('popup_buffer_committed') and rectangle is not None and rectangle[2] > 0 and rectangle[3] > 0
+        eventually(initial_rectangle, 'initial_native_candidate_rectangle')
         baseline = capture('single', 'before-preedit')
-        before_rectangle = focused_guard('')['rectangle']
-        require(before_rectangle is not None and before_rectangle[2] > 0 and before_rectangle[3] > 0, 'initial_native_candidate_rectangle')
+        before = focused_guard('')
+        before_rectangle = before['rectangle']
+        pixels.caret_from_popup(baseline['image'], pixels.marker(baseline['image']), before_rectangle, baseline['field'])
         send('', preedit='にほん', begin=9, end=9)
-        def candidate_advanced():
-            rectangle = status('')['rectangle']
-            return rectangle is not None and rectangle[0] > before_rectangle[0] + before_rectangle[2] and rectangle[3] > 0
-        eventually(candidate_advanced, 'native_preedit_updates_candidate_geometry')
+        eventually(lambda: status('')['rectangle_updates'] > before['rectangle_updates'], 'native_preedit_refreshes_candidate_hint')
+        time.sleep(.1)  # Let the already requested native frame reach the compositor.
         require(inspect()['client']['single'] == '', 'preedit_not_committed')
-        report['preedit_capture'] = {'before_sha256': baseline, 'after_sha256': capture('single', 'preedit'),
-              'scope': 'Candidate movement plus uncommitted canonical text is observed. Capture differences alone do not isolate preedit ink from caret blinking.'}
-        report['checks']['native_preedit_candidate_moved_without_commit'] = True
+        after = focused_guard('')
+        composed = capture('single', 'preedit')
+        require(composed['field'] == baseline['field'], 'same_owned_field_during_preedit')
+        proof = pixels.preedit_proof(baseline['image'], composed['image'], before_rectangle, after['rectangle'], baseline['field'])
+        report['preedit_capture'] = dict(proof, before_sha256=baseline['sha256'], after_sha256=composed['sha256'])
+        report['checks']['native_preedit_ink_and_caret_advance_without_commit'] = True
         send('', preedit='', commit='日本語')
         eventually(lambda: inspect()['client']['single'] == '日本語' and status('日本語')['matches'], 'native_cjk_commit')
         send('日本語', commit='人', delete=[3, 0])
@@ -389,28 +416,33 @@ def main():
         if pressed:
             try:
                 qmp([{'type': 'btn', 'data': {'button': 'left', 'down': False}}])
-            except Failure:
+            except Failure as error:
                 report['restoration']['pointer_released'] = False
+                record_restoration_failure(report, 'pointer_release', error)
         try:
             cleanup, uncertain = policy.captured_cleanup(configuration(),
                 [name for name, attempted in (('example', example_attempted), ('peer', peer_attempted)) if attempted])
-            session('python3', '-c', policy.RETIRE, json.dumps(cleanup))
+            retired = json.loads(session('python3', '-c', policy.RETIRE, json.dumps(cleanup), label='owned_units_retirement_subprocess_failed'))
+            report['retirement_diagnostics'] = retired
+            require(retired.get('owned_units_retired') is True, 'captured_unit_retirement_refused')
             report['restoration']['owned_example_and_peer_units_retired'] = not uncertain
             if uncertain:
                 report['unconfirmed_start_attempts_not_retired'] = uncertain
                 report['unconfirmed_start_policy'] = 'No cleanup authority inferred after a refused/lost launch reply or missing captured lifetime. Any actually created unit remains bounded by its independent210second watchdog.'
-        except (Failure, ValueError):
+        except (Failure, ValueError) as error:
             report['restoration']['owned_example_and_peer_units_retired'] = False
+            record_restoration_failure(report, 'unit_retirement', error)
         if peer is not None:
             try:
                 peer.stdin.close()
                 peer.wait(timeout=15)
                 report['restoration']['owned_peer_transport_closed'] = True
-            except (OSError, subprocess.TimeoutExpired):
+            except (OSError, subprocess.TimeoutExpired) as error:
                 # This terminates only our local SSH transport; the exact guest
                 # transient unit remains independently bounded by RuntimeMaxSec.
                 peer.terminate()
                 report['restoration']['owned_peer_transport_closed'] = False
+                record_restoration_failure(report, 'peer_transport', error)
         if peer_log is not None:
             peer_log.close()
         if original is not None:
@@ -423,8 +455,9 @@ def main():
                 if current != cursor.initial:
                     move(cursor.initial, restoring=True)
                 report['restoration']['pointer_restored'] = cursor.observe(json.loads(session('hyprctl', '-j', 'cursorpos'))) == cursor.initial
-            except (Failure, ValueError):
+            except (Failure, ValueError) as error:
                 report['restoration']['guarded_state_and_pointer_verification'] = False
+                record_restoration_failure(report, 'state_and_pointer', error)
         signal.signal(signal.SIGTERM, previous_signal)
         report['passed'] = report['passed'] and all(report['restoration'].values())
         private(directory / 'report.json', report)
