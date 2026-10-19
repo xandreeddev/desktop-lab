@@ -1,6 +1,6 @@
 # Application catalog and dock preferences
 
-`ApplicationPort` now exposes `discover`, `watch` and `launch`. The production
+`ApplicationPort` exposes `discover`, `watch`, `watch_updates` and application launch/open commands. The production
 `XdgApplications` adapter captures its source directories, session desktop and
 locale at construction. The composition root injects it; clients never read
 `.desktop` files or choose production implementations.
@@ -8,7 +8,7 @@ locale at construction. The composition root injects it; clients never read
 ## How applications reach the launcher
 
 1. `Desktop::subscriptions` registers the `applications` stream. Its worker calls
-   the port's `watch` method with the runtime's cooperative stop signal.
+   the port's `watch_updates` method with the runtime's cooperative stop signal.
 2. The native adapter registers Linux directory notifications before discovery.
    Missing directories have parent watches; newly created subdirectories and
    replaced roots are registered again before reading their catalog.
@@ -29,9 +29,14 @@ locale at construction. The composition root injects it; clients never read
 
 Notifications debounce for 150 ms, with a 500 ms maximum batching interval.
 The cancellation check waits at most 100 ms during an idle watch; idle catalogs
-are not periodically rescanned. Production also watches executable directories
-from PATH for `TryExec` availability changes. Custom absolute executables outside
-those directories and external icon-theme file changes are not fully monitored.
+are not periodically rescanned. Production also watches executable directories from PATH, absolute TryExec
+dependencies (including entries currently hidden by a missing executable), absolute
+icon dependencies and XDG icon/pixmap trees. Legacy `~/.icons` is observed in the
+production source. Missing dependency ancestors and canonical file targets are
+registered on the same notification descriptor. Tree recursion is bounded to eight
+levels. The observer reports `ApplicationCatalogUpdate.artwork_changed` when icon
+content changes without descriptor changes; the client coalesces icon preparation
+on its existing asset queue. Views never inspect file mtimes or poll icon themes.
 There are limits of 20,000 source files, 1 MiB per file, 16 MiB retained catalog
 string content and 4,096 directory watches. Non-regular entries are rejected
 through a nonblocking file-open path, while their presence still masks lower-
