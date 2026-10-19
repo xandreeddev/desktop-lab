@@ -1,11 +1,13 @@
 # Standard application activation
 
-Source scope: catalog and declared-action foundations are in accepted main `d0001450`.
-Fresh intent tokens, explicit file/URI Open and the expanded XDG parser/observer belong
-to the implemented, unmerged application cohort
-`bb3049078768ac195af49b41cf3f6f8044dd5726`. The native application harness exists but
-has not run; these APIs and commands do not imply that the installed accepted-main
-release exposes them. See [current readiness](current-readiness.md).
+Source scope: accepted main `b474d1fe` includes normally merged PR87 and the coherent
+deployed `8e6d074b` runtime, including Application integration `bb304907`. Fresh
+intent tokens, explicit file/URI Open and the expanded XDG parser/observer are
+implemented and included in that release. Its six CI checks pass. The newer native
+application harness has executed failed attempts; the latest `d28fbe6b` run fails
+its actual focus assertion while owned cleanup and caller preservation pass. No
+complete native application acceptance follows from implementation, delivery or
+CI. See [current readiness](current-readiness.md).
 
 An application can now declare a command or standard desktop-service activation.
 `ApplicationLaunch::Command` carries its parsed argument vector.
@@ -127,9 +129,10 @@ with observed focus or file loading.
 ## Verification scope
 
 Declared desktop actions predate this milestone and already have owned native
-acceptance; see [application-actions.md](application-actions.md). The new token,
-Open, parser and observation changes require their own final strict, protocol,
-visual and native application acceptance. Do not treat source implementation as
+acceptance; see [application-actions.md](application-actions.md). The token,
+Open, parser and observation changes are merged in the deployed `8e` release,
+whose full workspace/protocol CI and 832 visual cases pass. Complete native
+application acceptance remains pending. Do not treat source implementation as
 proof of broad third-party compatibility. Current evidence and remaining checks
 are tracked in `docs/daily-use-completion.json`.
 
@@ -239,3 +242,29 @@ mode 0600 and refuse to overwrite an existing receipt. Stdout gives only the
 fixed outcome/check summary and report location, leaving private artifact paths
 inside the report. The reporting correction has local tests; it does not rerun
 or relabel the original failed native attempt.
+
+The later `d28fbe6b` attempt used the unchanged coherent `8e` desktop/example and
+the corrected test-owned Chromium lease. It failed
+`first_launch_native_focus` / `fresh_owned_browser_focus_observed`, with no guest
+guard exception or failed fixture-stderr artifact. This is an actual unsuccessful
+focus assertion, distinct from the earlier scope/duplicate-platform guard failures.
+Its checks remain empty and its overall result remains failed. Automatic cleanup
+retired the exact example, browser and watchdog, preserved settings/wallpaper and
+output/workspace/cursor, and retained private diagnostic artifacts as intended.
+It did not establish file loading, protocol-token consumption or complete App
+interoperability. The original private report remains unchanged.
+
+The host now keeps one bounded last focus observation before cleanup: whether an
+active window exists, whether its class/PID/address match the admitted owned
+clients, and whether the original combined focus predicate succeeds. It also
+copies the submitted example's keyboard policy, logical/buffer sizes and layer
+geometry, including comparison with its admitted geometry. It records no raw
+window title, class, process identity, native address or field payload. Separate
+fixed phases distinguish a false focus predicate from a guard exception or failed
+focus observation. These diagnostics neither change the acceptance criterion nor
+issue a focus command. Their source/pure checks do not rerun the failed attempt.
+
+The independent example currently keeps its Overlay/OnDemand surface visible;
+the production launcher closes after requesting a launch. That client difference
+is under investigation, not an established cause of the observed failure. The
+compositor remains responsible for deciding whether to grant application focus.

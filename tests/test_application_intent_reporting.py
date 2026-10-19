@@ -169,5 +169,84 @@ class FailureEvidence(unittest.TestCase):
             self.assertEqual(path.read_bytes(), b'original failed receipt')
 
 
+class FocusEvidence(unittest.TestCase):
+    def fixture(self):
+        layer={'x':750,'y':380,'w':420,'h':320,'address':'private-layer-address','pid':999}
+        surface={'id':'intent','instance':None,'width':420,'height':320,'buffer_width':420,
+                 'buffer_height':320,'frames':3,'native_frames':3,'keyboard':'on-demand',
+                 'private_text':'private field contents'}
+        admitted={'example_state':{'surfaces':[surface]},'intent_layer':layer}
+        clients=[{'class':'Owned','pid':123,'address':'0xabc','title':'private document'}]
+        focused=dict(clients[0],title='private focused document')
+        return layer,admitted,clients,focused
+
+    def test_unchanged_exact_focus_predicate_and_submitted_example_facts(self):
+        driver=load();layer,admitted,clients,focused=self.fixture()
+        value=driver.focus_observation(focused,clients,admitted,'Owned',layer)
+        self.assertTrue(value['matches_owned_browser'])
+        self.assertEqual(value['submitted_example'],{'keyboard':'on-demand','surface_size':[420,320],
+            'buffer_size':[420,320],'submitted':True,'native_submitted':True,
+            'layer_geometry':{'x':750,'y':380,'w':420,'h':320},'layer_geometry_unchanged':True,
+            'layer_matches_surface_size':True})
+        for private in ('private document','private focused document','private field contents',
+                        'private-layer-address','0xabc','999','123'):
+            self.assertNotIn(private,json.dumps(value))
+
+    def test_empty_foreign_and_cross_paired_active_window_do_not_satisfy_original_predicate(self):
+        driver=load();layer,admitted,clients,focused=self.fixture()
+        clients.append({'class':'Owned','pid':124,'address':'0xdef'})
+        cases=[{},dict(focused,**{'class':'Other'}),dict(focused,pid=125),
+               dict(focused,address='0xffff'),dict(focused,pid=123,address='0xdef')]
+        for active in cases:
+            with self.subTest(active=active):
+                value=driver.focus_observation(active,clients,admitted,'Owned',layer)
+                self.assertFalse(value['matches_owned_browser'])
+        mixed=driver.focus_observation(cases[-1],clients,admitted,'Owned',layer)
+        self.assertTrue(mixed['active_pid_matches_owned'] and mixed['active_address_matches_owned'])
+        self.assertFalse(mixed['matches_owned_browser'])
+
+    def test_predicate_false_is_recorded_before_timeout_cleanup_can_remove_the_example(self):
+        driver=load();layer,admitted,clients,_=self.fixture();diagnostics={}
+        guard=unittest.mock.Mock(return_value=(clients,admitted));read=unittest.mock.Mock(return_value={})
+        self.assertFalse(driver.guarded_focus_observation(diagnostics,guard,read,'Owned',layer))
+        self.assertEqual(diagnostics['phase'],'first_launch_focus_predicate')
+        self.assertEqual(diagnostics['last_outcome'],'predicate_false')
+        self.assertFalse(diagnostics['last_observation']['active_window_present'])
+        self.assertEqual(diagnostics['last_observation']['submitted_example']['keyboard'],'on-demand')
+        guard.assert_called_once_with();read.assert_called_once_with()
+        admitted.clear()  # cleanup cannot erase the copied last geometry evidence
+        self.assertTrue(diagnostics['last_observation']['submitted_example']['layer_geometry_unchanged'])
+
+    def test_guard_failure_never_reads_focus_and_keeps_its_own_phase_without_payload(self):
+        driver=load();layer,_,_,_=self.fixture();diagnostics={}
+        guard=unittest.mock.Mock(side_effect=ValueError('private guard content'));read=unittest.mock.Mock()
+        with self.assertRaises(ValueError):
+            driver.guarded_focus_observation(diagnostics,guard,read,'Owned',layer)
+        self.assertEqual(diagnostics['last_outcome'],'guard_exception')
+        self.assertEqual(diagnostics['phase'],'first_launch_focus_guard')
+        self.assertEqual(diagnostics['last_failure'],{'phase':'first_launch_focus_guard','error_class':'ValueError'})
+        read.assert_not_called();self.assertNotIn('private guard content',json.dumps(diagnostics))
+
+    def test_focus_read_failure_is_distinct_from_guard_failure_or_predicate_false(self):
+        driver=load();layer,admitted,clients,_=self.fixture();diagnostics={}
+        with self.assertRaises(ValueError):
+            driver.guarded_focus_observation(diagnostics,lambda:(clients,admitted),
+                unittest.mock.Mock(side_effect=ValueError('private focus payload')),'Owned',layer)
+        self.assertEqual(diagnostics['last_outcome'],'observation_exception')
+        self.assertEqual(diagnostics['phase'],'first_launch_focus_observation')
+        self.assertNotIn('private focus payload',json.dumps(diagnostics))
+
+    def test_invalid_or_nonfinite_submitted_geometry_cannot_emit_unbounded_diagnostics(self):
+        driver=load();layer,admitted,clients,focused=self.fixture()
+        for invalid in (float('nan'),float('inf'),32769,True,'private coordinate'):
+            with self.subTest(value=invalid):
+                changed=dict(admitted,intent_layer=dict(layer,x=invalid))
+                with self.assertRaises(ValueError):
+                    driver.focus_observation(focused,clients,changed,'Owned',layer)
+        for focused in ([],None,'private raw activewindow'):
+            with self.assertRaises(ValueError):
+                driver.focus_observation(focused,clients,admitted,'Owned',layer)
+
+
 if __name__ == '__main__':
     unittest.main()

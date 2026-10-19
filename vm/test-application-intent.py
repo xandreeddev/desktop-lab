@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import runpy
@@ -51,6 +52,62 @@ def failure_details(error, phase):
     elif isinstance(error, KeyboardInterrupt):
         result['fixed_reason'] = 'native_application_acceptance_interrupted'
     return result
+
+
+def focus_observation(focused, clients, admitted, expected_class, original_layer):
+    """Safe last-observation facts; the original focus predicate stays exact."""
+    if type(focused) is not dict or type(clients) is not list or len(clients) > 64 \
+            or any(type(client) is not dict for client in clients):
+        raise ValueError('bounded_native_focus_observation_required')
+    surface = find_surface(admitted['example_state'], 'intent')
+    layer = admitted['intent_layer']
+    geometry = {key: layer[key] for key in ('x', 'y', 'w', 'h')}
+    surface_size = [surface[key] for key in ('width', 'height')]
+    buffer_size = [surface[key] for key in ('buffer_width', 'buffer_height')]
+    if any(type(value) not in (int, float) or not math.isfinite(value) or abs(value) > 32768
+           for value in [*geometry.values(), *surface_size, *buffer_size]) \
+            or surface['keyboard'] not in ('none', 'on-demand', 'exclusive'):
+        raise ValueError('bounded_submitted_example_geometry_required')
+    matches = bool(focused) and focused.get('class') == expected_class and any(
+        client.get('address') == focused.get('address') and client.get('pid') == focused.get('pid')
+        for client in clients)
+    return {'active_window_present': bool(focused), 'owned_client_count': len(clients),
+            'active_class_matches_owned': bool(focused) and focused.get('class') == expected_class,
+            'active_pid_matches_owned': bool(focused) and any(
+                client.get('pid') == focused.get('pid') for client in clients),
+            'active_address_matches_owned': bool(focused) and any(
+                client.get('address') == focused.get('address') for client in clients),
+            'matches_owned_browser': matches,
+            'submitted_example': {'keyboard': surface['keyboard'], 'surface_size': surface_size,
+                'buffer_size': buffer_size, 'submitted': surface.get('frames', 0) > 0,
+                'native_submitted': surface.get('native_frames', 0) > 0,
+                'layer_geometry': geometry,
+                'layer_geometry_unchanged': all(layer[key] == original_layer[key] for key in geometry),
+                'layer_matches_surface_size': abs(layer['w'] - surface_size[0]) <= .5
+                    and abs(layer['h'] - surface_size[1]) <= .5}}
+
+
+def guarded_focus_observation(diagnostics, guard, read_focus, expected_class, original_layer):
+    """Record predicate-false separately from guard/observation exceptions."""
+    diagnostics['observations'] = min(diagnostics.get('observations', 0) + 1, 65536)
+    diagnostics['phase'] = 'first_launch_focus_guard'
+    try:
+        clients, admitted = guard()
+    except BaseException as error:
+        diagnostics['last_outcome'] = 'guard_exception'
+        diagnostics['last_failure'] = failure_details(error, diagnostics['phase'])
+        raise
+    diagnostics['phase'] = 'first_launch_focus_observation'
+    try:
+        observation = focus_observation(read_focus(), clients, admitted, expected_class, original_layer)
+    except BaseException as error:
+        diagnostics['last_outcome'] = 'observation_exception'
+        diagnostics['last_failure'] = failure_details(error, diagnostics['phase'])
+        raise
+    diagnostics['last_observation'] = observation
+    diagnostics['phase'] = 'first_launch_focus_predicate'
+    diagnostics['last_outcome'] = 'focused' if observation['matches_owned_browser'] else 'predicate_false'
+    return observation['matches_owned_browser']
 
 
 def fixture_command(argv, operation, directory, sequence):
@@ -402,14 +459,16 @@ def suite(args, results):
         require(event['operation'] == 'open' and event['uris'] == []
                 and event['fresh_token_present'] and not event['legacy_startup_present']
                 and example_state()['client']['fresh_token'], 'first_physical_token_delivered_to_owned_child')
+        focus_diagnostics = results['first_launch_focus'] = {}
         def focused_owned_browser():
-            clients, _ = interaction_guard()
-            focused = json.loads(session('hyprctl', '-j', 'activewindow'))
-            return bool(focused) and focused.get('class') == entry['class'] and any(
-                client.get('address') == focused.get('address') and client.get('pid') == focused.get('pid')
-                for client in clients)
+            return guarded_focus_observation(focus_diagnostics, interaction_guard,
+                lambda: json.loads(session('hyprctl', '-j', 'activewindow')), entry['class'], example_layer)
         phase = 'first_launch_native_focus'
-        eventually(focused_owned_browser, 'fresh_owned_browser_focus_observed')
+        try:
+            eventually(focused_owned_browser, 'fresh_owned_browser_focus_observed')
+        except BaseException:
+            phase = focus_diagnostics.get('phase', phase)
+            raise
         results['checks']['fresh_token_child_delivery_and_fresh_browser_focus_observed'] = True
         phase = 'first_browser_control_admission'
         eventually(lambda: bool(browser_snapshot()), 'original_blank_browser_control_target_admitted')
