@@ -14,8 +14,9 @@ lifetime retirement with one owned headless output and full restoration. The fre
 owned IME suite passes five feature and five restoration checks, including visible
 preedit/caret evidence and exact fixture retirement. Earlier failed runs and their
 separate guarded recovery retain their original results. The normal resource observation remains
-host-pressure-ineligible and presentation FPS is unproven. The seven requested
-gaps all remain in scope. Accessibility is separately deferred by the user.
+host-pressure-ineligible. A separate instrumented run records joined-source background
+callback intervals at 26.9992/s under pressure; eligible 60 FPS/RSS acceptance remains
+unproven. The seven requested gaps all remain in scope. Accessibility is separately deferred by the user.
 
 The shell's launcher, dock, widgets, notifications, lock/login and service panels
 are implemented. Several daily-use cases and their real-world acceptance remain
@@ -45,7 +46,7 @@ ledger's requirement history remains useful for the broader backlog.
 | --- | --- | --- |
 | Saved Wi-Fi recovery | Merged native masked SecretAgent repair retains the saved profile UUID and storage policy. Fourteen native NetworkManager/GUI checks pass against owned simulated WPA2/hidden radios, including cancellation, repair, DHCP, saved reconnection and exact restoration. | Enterprise/WEP provisioning, agent-owned vaults and physical-radio acceptance remain separate gaps; they are not implied by the owned fixture. |
 | Safe display settings | Native whole-layout drafts, fresh ordered observations, Apply → Keep/Revert and independent 15-second/UI-crash EOF rollback. Seven actual one-output QEMU flows pass for mode, scale, position, persistence and recovery. File preservation is exact; the expected one-restart service transition is validated explicitly. | Physical/multiple outputs, native enable/disable/rotation, fractional display-settings input, hotplug, suspend/resume, compositor restart and secure-output acceptance remain open. The Keep-to-file-identity-capture host-loss interval retains manual recovery. |
-| Resources and animation | Event-driven redraw, bounded image/preview ownership and live-video physical-cover conversion are implemented. The deployed `8e6d074b` RADV cohort records 217.28 MiB mean / 221.92 MiB sampled peak RSS over 120 seconds. | The result is ineligible for the 300 MiB acceptance gate because host swap activity and I/O full-stall pressure exceed the reviewed bounds. Presentation tracing was off: no FPS or smoothness result. Historical llvmpipe 384.82/403.88 MiB remains a different cohort, without a matched speedup comparison. |
+| Resources and animation | Event-driven redraw, bounded image/preview ownership and live-video physical-cover conversion are implemented. The deployed `8e6d074b` RADV cohort records normal RSS 217.28/221.92 MiB over 120 s. A separate instrumented run joins 3276 distinct background revisions at 26.9992 callback intervals/s, with median 33.333 ms and maximum 150 ms gaps; profiling restores off successfully. | Both resource phases are host-pressure-ineligible; the 300 MiB gate remains unaccepted and the 60 FPS target was not met in this diagnostic run. No pixel-visibility, physical-scanout or matched speedup claim. See [presentation analysis](native-presentation-analysis.md). Historical llvmpipe 384.82/403.88 MiB retains its different source/cohort. |
 | International text | Merged `8e6d074b` implements script shaping, hard-paragraph context across soft wraps, exact row-bound visual source/caret maps, tab separator projection, deterministic fallback and opt-in text-input-v3 composition. Five owned native feature checks pass: visible preedit/caret advance, CJK commit/delete/history, masked-focus retirement, multiline composition and RTL navigation. | The fresh owned native suite passes all five feature and five restoration checks; earlier cleanup failures retain their original results. Third-party IME, broader native pixel/scroll details, delayed clipboard/focus races, physical/cross-output text and third-party GUI clipboard remain pending. Exact merged `8e6d074b` passes six CI checks, full workspace, six controlled service-protocol filters and 832 Vulkan desktop cases; those checks retain their own scope. |
 | Application integration | Accepted main includes catalog, pins, ordinary activation, declared actions and Application `bb304907` through merged/deployed `8e6d074b`: fresh input-bound activation context, explicit file/URI Open and expanded XDG parsing/observation. | Native third-party launch/open/action acceptance remains pending. An intent token, dispatch acknowledgement or prepared harness does not prove focus, document loading or application interoperability. |
 | Real-world validation | Several owned native workflows already pass. The coherent `8e6d074b` also passes 16 checks for two simultaneous compositor outputs, one headless, including real panel input at 1×/2×/1.25×, held-button retirement, same-name recreation and exact restoration. | Physical monitors/cable hotplug, suspend/resume, secure-output changes, physical Bluetooth/audio and other power/radio hardware, third-party tray applications and GUI clipboard interoperability need broader testing. The owned output test establishes no presentation FPS or multi-output Display settings transaction. |
@@ -155,13 +156,36 @@ separate from the sampled interval peak.
 This observation is **ineligible for the 300 MiB acceptance gate**: the host
 records 674 swap-in pages and an I/O full-stall fraction of 0.5081; host available
 memory stays above 4152.29 MiB. The retained result has `eligible=false` and
-`normal_uninstrumented_rss_target_met=null`, with no automatic retry. Profiling is
-off and no PTS/presentation samples are collected in that interval. A separate
-profiling-enable operation does not establish a presentation measurement. Its
-private normal-resource wrapper report is
+`normal_uninstrumented_rss_target_met=null`, with no automatic retry. Profiling was
+off in that reference; it contains no PTS/presentation samples. Its private
+normal-resource wrapper report is
 `.cache/final-cohort-measurement-v2/measurement-8e-radv-1792442023-resources.json`.
 It establishes neither accepted resource targets, a matched improvement over
 llvmpipe nor actual FPS, animation pacing, GPU memory or hardware decoding.
+
+A later, separately instrumented native run on the same frozen 8e binary completed
+120.000563 resource seconds. Its selected background history contains 3276 valid
+feedback/source joins over 121.299995 compositor seconds: **26.9992 distinct
+prepared-revision advances/s**, with interval p50 **33.333 ms**, p95 **50 ms**,
+p99 **83.333 ms**, and maximum **150 ms**. All selected joins are unique; none is
+a repeated prepared revision. The full retained 3397-background history includes
+121 requests before the observation boundary and must not be divided by 120.
+The [offline guide](native-presentation-analysis.md) and
+[sanitized report](../reports/measurements/lucent-native-presentation.json)
+explain the exact request windows, integer-nanosecond calculations and
+cycle-aware PTS gaps. The prepared catalogue already has PTS gaps, but attribution
+to decode, conversion, host pressure or presentation requires stage evidence.
+
+That instrumented sample records 219.4954 MiB mean / 219.4961 MiB peak RSS and
+113.6495% of one logical core, without guest-process swap. Host 610 swap-in pages,
+I/O full-stall fraction 0.5662336 and unmatched reference pressure make it
+**ineligible** too. It does not establish normal RSS-budget acceptance or a
+causal instrumentation-overhead comparison. The 60 FPS target was not met in this
+run, while eligible performance, pixel visibility and physical scanout remain
+unestablished. The separate V3 restore passed 42.774 s, returning flags off and
+fresh normal desktop/helper lifetimes stable for 35 s while preserving original
+source/settings/media/security; no same-PID preservation is claimed. Earlier
+failed V1/V2 profiling attempts keep their original results.
 
 The [Display report](../reports/measurements/lucent-display-settings.json) records
 the separate 120-second normal-video sample of the same `a7f41ecc` binary:

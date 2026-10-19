@@ -9,7 +9,7 @@
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted main b474d1fe includes PR87, merged normally after all six required checks passed on exact 8e6d074b and CLEAN mergeability. Text and Application integration are merged and their coherent 8e release is deployed: six user clients and root greeter match the archive with original user/security state preserved. Exact 8e passes six CI checks and 832 visual cases. A 120-second RADV resource interval records 217.28/221.92 MiB mean/peak RSS but is host-pressure-ineligible; presentation/FPS remains unproven. A source-specific 16-check native run passes two-output density/input/retirement/recreation with one owned headless output and exact restoration, not physical or secure cross-output acceptance. The fresh owned IME run passes all five feature and five restoration checks, including preedit ink/caret evidence and exact unit/transport retirement. Earlier failed reports and their independent recoveries retain their original scope; third-party IME, physical and cross-output text remain pending.",
+    "scope": "Accepted main b474d1fe includes PR87, merged normally after all six required checks passed on exact 8e6d074b and CLEAN mergeability. Text and Application integration are merged and their coherent 8e release is deployed: six user clients and root greeter match the archive with original user/security state preserved. Exact 8e passes six CI checks and 832 visual cases. A 120-second RADV resource interval records 217.28/221.92 MiB mean/peak RSS but is host-pressure-ineligible; joined-source presentation records 26.9992 callback intervals/s under host pressure; eligible 60FPS/RSS acceptance remains unproven. A source-specific 16-check native run passes two-output density/input/retirement/recreation with one owned headless output and exact restoration, not physical or secure cross-output acceptance. The fresh owned IME run passes all five feature and five restoration checks, including preedit ink/caret evidence and exact unit/transport retirement. Earlier failed reports and their independent recoveries retain their original scope; third-party IME, physical and cross-output text remain pending.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -41,7 +41,7 @@
       },
       {
         "id": "resources-and-animation",
-        "status": "interval_collected_acceptance_ineligible",
+        "status": "normal_and_instrumented_intervals_collected_acceptance_ineligible",
         "implemented": "Event-driven redraw, bounded image/preview ownership and physical-cover video conversion.",
         "normal_desktop_rss_target_mib": 300,
         "latest_recorded_video_sample": {
@@ -73,7 +73,7 @@
           "actual_60_fps_presentation_established": false,
           "comparison_scope": "Observed normal-resource interval only. Host eligibility failed; no automatic retry, accepted RSS target, matched llvmpipe speedup, animation/presentation or hardware-decoding claim."
         },
-        "remaining": "The historical llvmpipe sample remains 384.82/403.88 MiB above the 300 MiB target. Current 8e RADV sampled RSS is 217.28/221.92 MiB, but host swap activity and I/O full-stall pressure make that observation ineligible, leaving RSS acceptance null. Instrumented presentation, matched idle/animated and cold/warm evidence remain pending; preserve density, effects and motion. No automatic retry or FPS claim.",
+        "remaining": "The historical llvmpipe sample remains 384.82/403.88 MiB above the 300 MiB target. Current 8e RADV normal RSS 217.28/221.92 MiB and instrumented 219.50/219.50 MiB are actual but host-pressure-ineligible, leaving normal RSS acceptance null. Selected background feedback advances distinct prepared revisions at 26.9992/s; the 60 FPS target was not met in this diagnostic run. Eligible matched idle/animated and cold/warm evidence, stage attribution and a quality-preserving performance improvement remain pending. Preserve density, effects and motion; no automatic retry, pixel visibility, physical scanout or hardware-decode claim.",
         "historical_software_video_sample": {
           "source_commit": "a7f41eccdcd8eca51e8e5ee878d8f489d8d4bde5",
           "report": "reports/measurements/lucent-display-settings.json",
@@ -84,6 +84,80 @@
           "environment": "One-output QEMU, llvmpipe LLVM 22.1.8 / Mesa 26.2.2 software Vulkan; 1920x1080 scale 1 at 60 Hz. H.264 yuv420p 3840x2160 at 60/1 FPS, duration 28.333333 s, source-rate setting, fitted to 1920x1080.",
           "actual_60_fps_presentation_established": false,
           "comparison_scope": "Separate read-only uninstrumented same-binary sample; different source/workload cohort from Weather, no isolated speedup claim."
+        },
+        "guides": [
+          "docs/native-presentation-analysis.md"
+        ],
+        "report": "reports/measurements/lucent-native-presentation.json",
+        "latest_instrumented_presentation_sample": {
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "desktop_sha256": "ecb557a094b583b45cfa07aeb9eb4284dc0bb2b86fdad3b1dbd5f4afc7b6b4ff",
+          "private_report": ".cache/final-cohort-measurement-v2/measurement-8e-v3-native-radv-1792447580-presentation.json",
+          "private_report_sha256": "fdf910d9b250681fe0436ebbcbbb7460cd1a3e7263d9fe2a831cc7769729af28",
+          "analysis_source_commit": "b7e269eca2a",
+          "seconds": 120.0005633439996,
+          "background_feedback_samples_retained": 3397,
+          "background_feedback_samples_after_request_lower_bound": 3276,
+          "compositor_timestamp_span_ns": 121299995000,
+          "feedback_intervals_per_second": 26.999176710600853,
+          "presentation_interval": {
+            "count": 3275,
+            "max_ns": 150000000,
+            "mean_ns": 37038166.41221374,
+            "min_ns": 16666000,
+            "p50_ns": 33333000,
+            "p95_ns": 50000000,
+            "p99_ns": 83333000
+          },
+          "refresh_ns_histogram": {
+            "16666666": 3276
+          },
+          "flags_histogram": {
+            "7": 3276
+          },
+          "distinct_prepared_revisions_referenced": 3276,
+          "adjacent_repeated_prepared_revisions": 0,
+          "consecutive_prepared_catalog_records_between_first_and_last_reference": 3404,
+          "prepared_catalog_holes": 0,
+          "prepared_revisions_not_referenced_in_selected_feedbacks": 128,
+          "source_cycle_crossings_excluded": 5,
+          "prepared_same_cycle_pts_p50_ns": 33333333,
+          "instrumented_mean_rss_mib": 219.49544270833334,
+          "instrumented_peak_rss_mib": 219.49609375,
+          "instrumented_cpu_percent_one_core": 113.64946646879173,
+          "eligible": false,
+          "ineligible_reasons": [
+            "host_swap_activity",
+            "host_full_stall_pressure",
+            "resource_reference_ineligible",
+            "host_psi_not_matched_io_full",
+            "host_psi_not_matched_io_some"
+          ],
+          "host_swap_in_pages": 610,
+          "host_io_full_stall_fraction": 0.5662335736330203,
+          "normal_uninstrumented_rss_target_met": null,
+          "actual_60_fps_target_met_in_this_run": false,
+          "visible_pixel_or_physical_scanout_acceptance": false,
+          "restoration": {
+            "current_recovery": {
+              "runtime_flags_off": true,
+              "status": "verified-restored"
+            },
+            "new_lifetimes_stable_seconds": 35,
+            "original_source_settings_media_security_preserved": true,
+            "owner_reported_elapsed_seconds": 42.774,
+            "phase": "restored",
+            "receipt_sha256": "8213cc0fb63f20e28ec60de1b28dc76ee0d01e50ed6da0c32a24ef9f440307c2",
+            "recovery_incomplete": false,
+            "runtime_profiling": {
+              "frames": false,
+              "presentation": false,
+              "source_pts": false
+            },
+            "same_pid_preservation_claimed": false,
+            "success": true
+          },
+          "scope": "Exact joined background wp_presentation metadata under host pressure. Rates use interval counts over own compositor timestamp spans, not successful-submission counters or 3397/120. Prepared PTS gaps occur before renderer delivery, but decode/conversion/host-pressure causality remains unproved. Normal and instrumented phases are separate, both ineligible; no RSS target or overhead comparison."
         }
       },
       {
@@ -313,7 +387,7 @@
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
-    "validation": "PR87 merged normally at b474d1fe after fresh all-six SUCCESS and CLEAN mergeability on exact 8e6d074b. Exact 8e runtime passes push 39313647281 and PR 39313659557 CI: six required checks, full workspace, six controlled service-protocol filters, explicit 1x/2x wrapped/cache regressions and 832 desktop visuals. Its coherent locked/offline release builds all nine executables; all six managed user clients and root greeter are now deployed with only changed compat.py, exact original user/security state and supervision beyond startup deadline verified. Acceptance examples are staged privately. A normal uninstrumented 120.000492-second RADV interval records 480 samples, mean 217.281934 / peak 221.921875 MiB, CPU 112.24954% of one core and zero guest-process swap; full preservation passes. Host swap-in of 674 pages and I/O full-stall fraction 0.5081035 make it ineligible, with RSS-target acceptance null. Presentation/PTS are off; no FPS, smoothness, matched historical improvement, GPU-memory or hardware-decode proof. Earlier a7f hardware liveness, software RSS failure and failed/recovered trials retain their sources. Final native feature, site and exact-head delivery gates remain separate; editing docs executes none of them. Native f16cb591 on exact 8e separately passes 16 two-output checks with real input, pressed-surface retirement and same-name new lifetime; full restoration passes. This does not establish physical/suspend/secure-output or presentation/resource acceptance. The fresh owned IME suite at harness 6bb80e5942/shared observer 89604f6ef2 passes all five feature and five restoration checks on the unchanged 8e desktop/example and 3beda617 peer, including 70 non-caret preedit ink pixels and 42-pixel caret advance. Earlier failed reports and separate recovery retain their flags; third-party/physical/cross-output IME acceptance is not implied. Profiling-enable work is not a completed presentation measurement.",
+    "validation": "PR87 merged normally at b474d1fe after fresh all-six SUCCESS and CLEAN mergeability on exact 8e6d074b. Exact 8e runtime passes push 39313647281 and PR 39313659557 CI: six required checks, full workspace, six controlled service-protocol filters, explicit 1x/2x wrapped/cache regressions and 832 desktop visuals. Its coherent locked/offline release builds all nine executables; all six managed user clients and root greeter are now deployed with only changed compat.py, exact original user/security state and supervision beyond startup deadline verified. Acceptance examples are staged privately. A normal uninstrumented 120.000492-second RADV interval records 480 samples, mean 217.281934 / peak 221.921875 MiB, CPU 112.24954% of one core and zero guest-process swap; full preservation passes. Host swap-in of 674 pages and I/O full-stall fraction 0.5081035 make it ineligible, with RSS-target acceptance null. Presentation/PTS are off in that normal reference. A separate 120.000563-second instrumented 8e interval records 3276 joined distinct background revisions over 121.299995s at 26.9992 callback intervals/s, with median 33.333ms and maximum 150ms gaps. Host 610 swap-in pages and I/O full-stall fraction 0.5662336 make it ineligible; no 60 FPS target, accepted RSS, matched historical improvement, pixel visibility, physical scanout, GPU-memory or hardware-decode proof. Earlier a7f hardware liveness, software RSS failure and failed/recovered trials retain their sources. Final native feature, site and exact-head delivery gates remain separate; editing docs executes none of them. Native f16cb591 on exact 8e separately passes 16 two-output checks with real input, pressed-surface retirement and same-name new lifetime; full restoration passes. This does not establish physical/suspend/secure-output or presentation/resource acceptance. The fresh owned IME suite at harness 6bb80e5942/shared observer 89604f6ef2 passes all five feature and five restoration checks on the unchanged 8e desktop/example and 3beda617 peer, including 70 non-caret preedit ink pixels and 42-pixel caret advance. Earlier failed reports and separate recovery retain their flags; third-party/physical/cross-output IME acceptance is not implied. V3 profiling enable and the metadata collection completed; separate restore passed 42.774s with flags OFF and fresh normal helpers stable 35s, original source/settings/media/security preserved, no same-PID claim. Historical failed profiling attempts retain their original outcomes.",
     "accepted_main_base_commit": "b474d1fe845a7cfd716daf7c382de0769fbf3849",
     "documentation_harness_base_commit": "cd88371923b43c53f5b48d4bafe78131ea6df8c3",
     "runtime_compilation_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
