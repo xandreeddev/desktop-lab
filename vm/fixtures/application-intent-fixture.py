@@ -15,13 +15,17 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import socket
+import subprocess
 import stat
+import struct
 import sys
 import tempfile
 import time
 
 sys.dont_write_bytecode = True
-from owned_application_units import (assert_unit_identity, owned_argv, retire_unit, unit_snapshot)
+from owned_application_units import (assert_unit_identity, owned_argv, process_snapshot, retire_unit, unit_snapshot)
+from application_intent_policy import owned_layers, socket_peer, unbound_pointer
 
 
 def require(condition):
@@ -73,7 +77,8 @@ def context(directory, run_id, initialized=True):
         manifest = json.loads(regular(directory / 'manifest.json'))
         require(manifest['run_id'] == run_id
                 and manifest['script_sha256'] == digest(regular(directory / 'fixture.py'))
-                and manifest['units_sha256'] == digest(regular(directory / 'owned_application_units.py')))
+                and manifest['units_sha256'] == digest(regular(directory / 'owned_application_units.py'))
+                and manifest['policy_sha256'] == digest(regular(directory / 'application_intent_policy.py')))
     return directory, manifest
 
 
@@ -111,6 +116,7 @@ def initialize(directory, run_id):
              + command + ' action ' + encoded(files[0]['uri']) + '\n').encode()
     manifest = {'run_id': run_id, 'script_sha256': digest(regular(directory / 'fixture.py')),
                 'units_sha256': digest(regular(directory / 'owned_application_units.py')),
+                'policy_sha256': digest(regular(directory / 'application_intent_policy.py')),
                 'app_id': app_id, 'name': 'Lucent intent ' + run_id.lower(),
                 'class': 'LucentIntent' + run_id, 'entry': str(entry_path),
                 'entry_sha256': digest(entry), 'settings': str(settings),
@@ -197,6 +203,103 @@ def owned_clients(directory, run_id, clients):
     print(json.dumps({'owned_clients': len(clients)}))
 
 
+def admission(directory, run_id, request):
+    """Observe real process/unit/layer authority; no input or compositor mutation."""
+    directory, _ = context(directory, run_id)
+    require(set(request) == {'desktop_sha256', 'example_sha256'})
+    require(re.fullmatch('[a-f0-9]{64}', request['desktop_sha256']) is not None)
+    def command(*args):
+        result = subprocess.run(args, capture_output=True, text=True, timeout=5)
+        require(result.returncode == 0 and len(result.stdout) <= 4 * 1024 * 1024)
+        return result.stdout
+    require(json.loads(command('hyprctl', '-j', 'locked')) == {'locked': False})
+    require(command('omarchy-shell', 'lock', 'isLocked').strip() == 'false')
+    pids = command('pgrep', '-x', 'lucent-desktop').split()
+    require(len(pids) == 1 and pids[0].isdigit())
+    desktop = process_snapshot(int(pids[0]), hashed=True)
+    require(desktop['sha256'] == request['desktop_sha256'])
+    service = unit_snapshot('lucent.service')
+    require(service['load'] == 'loaded' and service['active'] == 'active'
+            and service['group'] == desktop['group'] and service['main_pid'] > 1
+            and service['executable'] == '/usr/bin/python3'
+            and service['argv'] == ['/usr/bin/python3', str(Path.home() / '.local/lib/lucent/session.py')])
+    supervisor = process_snapshot(service['main_pid'])
+    require(supervisor['group'] == desktop['group'])
+    signature = os.environ.get('HYPRLAND_INSTANCE_SIGNATURE')
+    require(signature and '/' not in signature)
+    instances = [item for item in json.loads(command('hyprctl', '-j', 'instances'))
+                 if item.get('instance') == signature]
+    require(len(instances) == 1)
+    compositor = process_snapshot(instances[0]['pid'])
+    def socket_identity(path):
+        value = path.lstat()
+        require(stat.S_ISSOCK(value.st_mode) and value.st_uid == os.getuid())
+        return [value.st_dev, value.st_ino, value.st_mode, value.st_uid]
+    runtime = Path(os.environ['XDG_RUNTIME_DIR'])
+    baseline = {'desktop': desktop, 'service': service, 'supervisor': supervisor,
+                'compositor': compositor, 'signature': signature,
+                'compositor_socket': socket_identity(runtime / 'hypr' / signature / '.socket.sock')}
+    example = None
+    if request['example_sha256'] is not None:
+        require(re.fullmatch('[a-f0-9]{64}', request['example_sha256']) is not None)
+        unit = 'lucent-application-intent-' + run_id + '.service'
+        value = unit_snapshot(unit)
+        assert_unit_identity(value, unit, owned_argv('lucent-application-intent-',
+                             str(directory / 'application-intent'), run_id))
+        require(value['active'] == 'active' and value['main_pid'] > 1)
+        process = process_snapshot(value['main_pid'], hashed=True)
+        require(process['sha256'] == request['example_sha256'] and process['group'] == value['group'])
+        example = {'unit': value, 'process': process,
+                   'socket': socket_identity(runtime / 'application-intent.sock')}
+        require(stat.S_IMODE(example['socket'][2]) == 0o600)
+    state = json.loads(example_command(directory, run_id, 'inspect', example)) if example else None
+    layers = json.loads(command('hyprctl', '-j', 'layers'))
+    layer = owned_layers(layers, desktop['pid'], example['process']['pid'] if example else None)
+    unbound_pointer(json.loads(command('hyprctl', '-j', 'binds')))
+    # Native observations may take time: prove the same process lifetimes still
+    # exist immediately before returning the admission snapshot.
+    require(process_snapshot(desktop['pid'], hashed=True) == desktop)
+    if example:
+        require(process_snapshot(example['process']['pid'], hashed=True) == example['process'])
+    print(json.dumps({'baseline': baseline, 'example': example, 'intent_layer': layer, 'example_state': state}))
+
+
+def example_command(directory, run_id, command, expected):
+    context(directory, run_id)
+    require(command in ('inspect', 'open'))
+    unit = 'lucent-application-intent-' + run_id + '.service'
+    require(unit_snapshot(unit) == expected['unit'])
+    require(process_snapshot(expected['process']['pid'], hashed=True) == expected['process'])
+    path = Path(os.environ['XDG_RUNTIME_DIR']) / 'application-intent.sock'
+    def identity():
+        value = path.lstat()
+        require(stat.S_ISSOCK(value.st_mode) and value.st_uid == os.getuid()
+                and stat.S_IMODE(value.st_mode) == 0o600)
+        return [value.st_dev, value.st_ino, value.st_mode, value.st_uid]
+    require(identity() == expected['socket'])
+    deadline = time.monotonic() + 4
+    with socket.socket(socket.AF_UNIX) as connection:
+        connection.settimeout(4)
+        connection.connect(str(path))
+        socket_peer(struct.unpack('3i', connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)),
+                    expected['process']['pid'], os.getuid())
+        require(identity() == expected['socket'])
+        connection.sendall((command + '\n').encode())
+        response = bytearray()
+        while True:
+            remaining = deadline - time.monotonic()
+            require(remaining > 0)
+            connection.settimeout(remaining)
+            data = connection.recv(65536)
+            if not data:
+                break
+            response.extend(data)
+            require(len(response) <= 4 * 1024 * 1024)
+    require(not response.startswith(b'error:') and identity() == expected['socket'])
+    require(process_snapshot(expected['process']['pid'], hashed=True) == expected['process'])
+    return response.decode()
+
+
 def retire_example(directory, run_id):
     binary = str(directory / 'application-intent')
     retire_unit('lucent-application-intent-' + run_id + '.service',
@@ -236,7 +339,7 @@ def cleanup(directory, run_id):
     for item in manifest['files']:
         require(digest(regular(directory / item['name'])) == item['sha256'])
     require(set(path.name for path in directory.iterdir()) <= {
-        'fixture.py', 'manifest.json', 'events.json', 'events.lock', 'closing', 'profile',
+        'fixture.py', 'manifest.json', 'events.json', 'events.lock', 'closing', 'profile', 'application_intent_policy.py',
         'application-intent', 'application-intent.sha256', 'owned_application_units.py', *[item['name'] for item in manifest['files']]})
     profile = directory / 'profile'
     if profile.exists():
@@ -248,7 +351,8 @@ def cleanup(directory, run_id):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('initialize', 'execute', 'state', 'retire', 'cleanup', 'watchdog', 'guard'))
+    parser.add_argument('operation', choices=('initialize', 'execute', 'state', 'retire', 'cleanup', 'watchdog', 'guard',
+                                             'admission', 'example-command'))
     parser.add_argument('directory')
     parser.add_argument('run_id')
     parser.add_argument('arguments', nargs=argparse.REMAINDER)
@@ -263,6 +367,10 @@ def main():
         print(json.dumps({'events': events(directory)}))
     elif args.operation == 'guard' and len(args.arguments) == 1:
         owned_clients(args.directory, args.run_id, json.loads(args.arguments[0]))
+    elif args.operation == 'admission' and len(args.arguments) == 1:
+        admission(args.directory, args.run_id, json.loads(args.arguments[0]))
+    elif args.operation == 'example-command' and len(args.arguments) == 2:
+        print(example_command(args.directory, args.run_id, args.arguments[0], json.loads(args.arguments[1])))
     elif args.operation == 'retire' and not args.arguments:
         retire(args.directory, args.run_id)
     elif args.operation == 'watchdog' and not args.arguments:

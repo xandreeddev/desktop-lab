@@ -135,3 +135,28 @@ that Chromium consumed a specific activation protocol message. The run requires
 an identified release containing the independent example, an unlocked idle
 single-output VM and bounded owned-process cleanup. Its existence is not an
 executed result; no native pass is claimed here.
+
+The admission snapshot binds the desktop, supervisor and compositor to their
+captured lifetimes. The independent example must match the release digest and
+its exact transient unit's structured command, invocation, main PID, process
+birth and cgroup. Its native layer address and private socket inode remain
+frozen; every other layer must belong to the captured desktop. Example IPC
+checks Linux `SO_PEERCRED` against that process before sending any command.
+
+Each pointer action rechecks actual unmodified left-button/catch-all bindings,
+closed panels, absence of credentials/foreign windows, the current hit geometry
+and layer lifetime. Cursor ownership is exact and sticky: observed independent movement
+blocks further test moves and restoration, even if the cursor returns. A stale
+owned press retires only the identified example before attempting balanced
+release; it sends no cancellation key to another surface. The existing watchdog
+and finite example unit lifetime provide bounded process cleanup if transport is
+lost. Host SIGKILL while a physical button is down still requires console/QMP
+release by the operator; the guest watchdog cannot inject host input.
+
+Lightweight checks in `tests/test_application_intent_admission.py` exercise
+foreign layer and socket peers, replaced sockets, stale layer/hit identity,
+catch-all interception, cursor loss and captured-process retirement. They use
+pure policy, mocked transport boundaries and an actual read-only fingerprint of
+the test runner's `/proc` entry; they do not launch a guest, browser or native
+surface. A future source-specific native run must still pass preservation and
+owned cleanup before acceptance.
