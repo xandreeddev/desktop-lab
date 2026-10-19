@@ -20,7 +20,7 @@ pub fn desktop_adapters() -> DesktopAdapters {
         clock: Arc::new(LocalClock),
         system: Arc::new(LinuxSystem::default()),
         audio: Arc::new(lucent_services::audio::PulseAudio::default()),
-        network: Arc::new(lucent_services::network::NetworkManager::default()),
+        network: Arc::new(lucent_services::network::NetworkManager::default().with_secret_agent()),
         bluetooth: Arc::new(lucent_services::bluetooth::BlueZ::default()),
         displays: Arc::new(lucent_services::displays::HyprlandDisplays::default()),
         power: Arc::new(lucent_services::power::PowerServices::default()),
