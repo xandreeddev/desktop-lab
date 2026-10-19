@@ -30,12 +30,14 @@ type AgentResult<T> = std::result::Result<T, AgentError>;
 
 #[derive(Clone, PartialEq, Eq)]
 struct ProfileContext {
+    id: NetworkObjectId,
     key: NetworkProfileKey,
     ssid: NetworkSsid,
     name: String,
 }
 struct Pending {
     path: String,
+    profile_id: NetworkObjectId,
     request: NetworkCredentialRequest,
     reply: async_channel::Sender<Option<WifiCredentials>>,
 }
@@ -113,6 +115,7 @@ impl Hub {
                     Some((
                         objects.resolve(p.id, Kind::Profile).ok()?.to_string(),
                         ProfileContext {
+                            id: p.id,
                             key: p.key.clone(),
                             ssid: p.ssid.clone()?,
                             name: p.name.clone(),
@@ -127,7 +130,9 @@ impl Hub {
         let before = state.pending.len();
         state.pending.retain(|_, pending| {
             profiles.get(&pending.path).is_some_and(|profile| {
-                profile.key == pending.request.profile && profile.ssid == pending.request.ssid
+                profile.id == pending.profile_id
+                    && profile.key == pending.request.profile
+                    && profile.ssid == pending.request.ssid
             })
         });
         state.profiles = profiles;
@@ -150,13 +155,16 @@ impl Hub {
             )));
             return;
         }
-        struct Watching<'a>(&'a AtomicBool);
+        struct Watching<'a>(&'a Hub);
         impl Drop for Watching<'_> {
             fn drop(&mut self) {
-                self.0.store(false, Ordering::Release);
+                self.0.watching.store(false, Ordering::Release);
+                let mut state = self.0.state.lock().unwrap_or_else(|e| e.into_inner());
+                state.pending.clear();
+                self.0.change(&mut state);
             }
         }
-        let _watching = Watching(&self.watching);
+        let _watching = Watching(self);
         let mut revision = None;
         while !stop.cancelled() {
             let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -296,7 +304,10 @@ impl Agent {
             .get(path)
             .filter(|p| p.key == key && p.ssid == ssid)
             .ok_or_else(no_secrets)?;
-        if !state.online || state.pending.len() >= LIMIT {
+        if !state.online
+            || !self.hub.watching.load(Ordering::Acquire)
+            || state.pending.len() >= LIMIT
+        {
             return Err(no_secrets());
         }
         let id = self
@@ -345,7 +356,7 @@ impl Agent {
         hints: Vec<String>,
         flags: u32,
         #[zbus(header)] header: Header<'_>,
-    ) -> AgentResult<Reply> {
+    ) -> std::result::Result<Reply, AgentError> {
         self.authorize(&header)?;
         let request = self.request(
             &settings,
@@ -360,6 +371,7 @@ impl Agent {
         {
             let mut state = self.hub.state.lock().map_err(|_| no_secrets())?;
             if !state.online
+                || !self.hub.watching.load(Ordering::Acquire)
                 || state.pending.len() >= LIMIT
                 || !state
                     .profiles
@@ -373,10 +385,12 @@ impl Agent {
             state
                 .pending
                 .retain(|_, p| p.path != connection_path.as_str());
+            let profile_id = state.profiles[connection_path.as_str()].id;
             state.pending.insert(
                 id,
                 Pending {
                     path: connection_path.to_string(),
+                    profile_id,
                     request,
                     reply: send,
                 },
@@ -398,7 +412,7 @@ impl Agent {
         connection_path: OwnedObjectPath,
         setting_name: String,
         #[zbus(header)] header: Header<'_>,
-    ) -> AgentResult<()> {
+    ) -> std::result::Result<(), AgentError> {
         self.authorize(&header)?;
         if setting_name == SECURITY {
             self.hub.cancel_path(connection_path.as_str());
@@ -410,7 +424,7 @@ impl Agent {
         _settings: Settings,
         _connection_path: OwnedObjectPath,
         #[zbus(header)] header: Header<'_>,
-    ) -> AgentResult<()> {
+    ) -> std::result::Result<(), AgentError> {
         self.authorize(&header)?;
         // We do not advertise or silently pretend to provide a persistent vault.
         Err(no_secrets())
@@ -420,7 +434,7 @@ impl Agent {
         _settings: Settings,
         connection_path: OwnedObjectPath,
         #[zbus(header)] header: Header<'_>,
-    ) -> AgentResult<()> {
+    ) -> std::result::Result<(), AgentError> {
         self.authorize(&header)?;
         self.hub.cancel_path(connection_path.as_str());
         Ok(())

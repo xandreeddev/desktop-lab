@@ -533,6 +533,7 @@ struct Watch {
     stop: Arc<Stop>,
     latest: Arc<Mutex<Option<Result<NetworkSnapshot>>>>,
     worker: Option<thread::JoinHandle<()>>,
+    credential_worker: Option<thread::JoinHandle<()>>,
     errors: Arc<AtomicU64>,
 }
 impl Watch {
@@ -546,6 +547,14 @@ impl Watch {
             ..NetworkManager::with_address(bus.address.clone())
         });
         let stop = Arc::new(Stop::default());
+        let credential_worker = if secret_agent {
+            let (adapter, stop) = (adapter.clone(), stop.clone());
+            Some(thread::spawn(move || {
+                adapter.watch_credentials(&mut |_| {}, &*stop)
+            }))
+        } else {
+            None
+        };
         let latest = Arc::new(Mutex::new(None));
         let errors = Arc::new(AtomicU64::new(0));
         let (a, s, l, e) = (
@@ -570,6 +579,7 @@ impl Watch {
             stop,
             latest,
             worker: Some(worker),
+            credential_worker,
             errors,
         }
     }
@@ -596,6 +606,9 @@ impl Drop for Watch {
     fn drop(&mut self) {
         self.stop.0.store(true, Ordering::Release);
         self.worker.take().unwrap().join().unwrap();
+        if let Some(worker) = self.credential_worker.take() {
+            worker.join().unwrap();
+        }
     }
 }
 
