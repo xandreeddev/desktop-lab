@@ -1,6 +1,8 @@
 //! Pure desktop entities, value types, and OS service ports.
 mod desktop;
 pub use desktop::*;
+mod application_open;
+pub use application_open::*;
 mod weather;
 pub use weather::*;
 mod monitor;

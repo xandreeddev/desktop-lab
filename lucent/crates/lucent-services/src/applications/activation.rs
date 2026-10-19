@@ -61,6 +61,21 @@ fn request_for(
     address: Option<&str>,
     timeout: Duration,
 ) -> Result<(), ActivationError> {
+    let operation = action.map(Operation::Action).unwrap_or(Operation::Activate);
+    request_context(id, operation, None, address, timeout)
+}
+pub(super) enum Operation<'a> {
+    Activate,
+    Action(&'a ApplicationActionId),
+    Open(&'a [String]),
+}
+pub(super) fn request_context(
+    id: &AppId,
+    operation: Operation<'_>,
+    activation_token: Option<&str>,
+    address: Option<&str>,
+    timeout: Duration,
+) -> Result<(), ActivationError> {
     let (name, path) = endpoint(id)?;
     let deadline = Instant::now() + timeout;
     futures_lite::future::block_on(async {
@@ -73,8 +88,11 @@ fn request_for(
             .await
             .map_err(|_| ActivationError::Unsupported)?;
         let request = async {
-            let platform_data: HashMap<&str, Value<'_>> = HashMap::new();
-            let reply = if let Some(action) = action {
+            let mut platform_data: HashMap<&str, Value<'_>> = HashMap::new();
+            if let Some(token) = activation_token {
+                platform_data.insert("activation-token", Value::from(token));
+            }
+            let reply = if let Operation::Action(action) = operation {
                 let parameters: Vec<Value<'_>> = vec![];
                 connection
                     .call_method(
@@ -83,6 +101,16 @@ fn request_for(
                         Some("org.freedesktop.Application"),
                         "ActivateAction",
                         &(action.as_str(), parameters, platform_data),
+                    )
+                    .await
+            } else if let Operation::Open(uris) = operation {
+                connection
+                    .call_method(
+                        Some(name.as_str()),
+                        path.as_str(),
+                        Some("org.freedesktop.Application"),
+                        "Open",
+                        &(uris, platform_data),
                     )
                     .await
             } else {

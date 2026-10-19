@@ -34,6 +34,133 @@ fn collect(path: &Path, depth: u8, files: &mut Vec<PathBuf>) -> Result<()> {
     }
     Ok(())
 }
+/// Resolve one ID under the same deterministic masking and bounded IO policy as
+/// discovery, retaining only this entry's source text for a native Open request.
+pub(super) fn resolve(
+    source: &XdgApplications,
+    id: &AppId,
+) -> Result<(Application, PathBuf, String)> {
+    let unavailable = || DomainError::Invalid("Application changed; choose it again".into());
+    let mut count = 0usize;
+    for root in &source.data_roots {
+        let root = root.join("applications");
+        let mut files = vec![];
+        collect(&root, 0, &mut files)?;
+        count += files.len();
+        if count > MAX_FILES {
+            return Err(DomainError::Unavailable(
+                "Application catalog file limit exceeded".into(),
+            ));
+        }
+        files.sort();
+        for path in files {
+            let candidate = path
+                .strip_prefix(&root)
+                .map_err(|_| unavailable())?
+                .to_string_lossy()
+                .replace('/', "-");
+            if candidate != id.as_str() {
+                continue;
+            }
+            let file = fs::OpenOptions::new()
+                .read(true)
+                .custom_flags(libc::O_NONBLOCK)
+                .open(&path)
+                .map_err(|_| unavailable())?;
+            if !file.metadata().map_err(|_| unavailable())?.is_file() {
+                return Err(unavailable());
+            }
+            let mut text = String::new();
+            file.take(MAX_FILE_BYTES + 1)
+                .read_to_string(&mut text)
+                .map_err(|_| unavailable())?;
+            if text.len() as u64 > MAX_FILE_BYTES {
+                return Err(unavailable());
+            }
+            let app = parse_entry(
+                id.as_str(),
+                &path.to_string_lossy(),
+                &text,
+                &source.desktop,
+                &source.locale,
+            )?
+            .ok_or_else(unavailable)?;
+            return Ok((app, path, text));
+        }
+    }
+    Err(unavailable())
+}
+/// Metadata dependencies are observed even while TryExec hides an entry. Keep
+/// this bounded discovery on the catalog worker, never in client paint/update.
+pub(super) fn dependency_files(source: &XdgApplications) -> Result<Vec<PathBuf>> {
+    let mut dependencies = std::collections::BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut count = 0usize;
+    for root in &source.data_roots {
+        let root = root.join("applications");
+        let mut files = vec![];
+        collect(&root, 0, &mut files)?;
+        files.sort();
+        count += files.len();
+        if count > MAX_FILES {
+            return Err(DomainError::Unavailable(
+                "Application catalog file limit exceeded".into(),
+            ));
+        }
+        for path in files {
+            let id = path
+                .strip_prefix(&root)
+                .map_err(|_| DomainError::Invalid("Invalid application source".into()))?
+                .to_string_lossy()
+                .replace('/', "-");
+            if !seen.insert(id) {
+                continue;
+            }
+            let Some(text) = (|| {
+                let file = fs::OpenOptions::new()
+                    .read(true)
+                    .custom_flags(libc::O_NONBLOCK)
+                    .open(path)
+                    .ok()?;
+                if !file.metadata().ok()?.is_file() {
+                    return None;
+                }
+                let mut text = String::new();
+                file.take(MAX_FILE_BYTES + 1)
+                    .read_to_string(&mut text)
+                    .ok()?;
+                (text.len() as u64 <= MAX_FILE_BYTES).then_some(text)
+            })() else {
+                continue;
+            };
+            let mut main = false;
+            for line in text.lines() {
+                let line = line.trim();
+                if line.starts_with('[') {
+                    main = line == "[Desktop Entry]";
+                    continue;
+                }
+                if main && let Some(("TryExec" | "Icon", value)) = line.split_once('=') {
+                    let value = unescape(value.trim());
+                    if value.starts_with('/') && !value.contains('\0') {
+                        let path = PathBuf::from(value);
+                        let canonical = path.canonicalize().ok();
+                        dependencies.insert(path);
+                        if let Some(target) = canonical {
+                            dependencies.insert(target);
+                        }
+                        if dependencies.len() > 4096 {
+                            return Err(DomainError::Unavailable(
+                                "Application dependency watch limit exceeded".into(),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(dependencies.into_iter().collect())
+}
 pub(super) fn discover(source: &XdgApplications) -> Result<Vec<Application>> {
     let mut entries = BTreeMap::new();
     let mut bytes = 0usize;

@@ -1,5 +1,6 @@
 mod actions;
 mod adapters;
+mod application_requests;
 mod artwork;
 mod audio;
 mod background_presentation;

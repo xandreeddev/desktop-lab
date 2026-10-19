@@ -21,7 +21,13 @@ const MASK: u32 = libc::IN_CREATE
 enum Interest {
     Desktop,
     All,
-    Child(Vec<u8>),
+    Artwork,
+    Child(Vec<u8>, bool),
+}
+#[derive(Default)]
+struct Changed {
+    any: bool,
+    artwork: bool,
 }
 struct Watcher {
     fd: OwnedFd,
@@ -61,25 +67,42 @@ impl Watcher {
         Ok(())
     }
     fn parent(&self, path: &Path, next: &mut BTreeMap<i32, Vec<Interest>>) -> Result<()> {
+        self.parent_interest(path, next, false)
+    }
+    fn parent_interest(
+        &self,
+        path: &Path,
+        next: &mut BTreeMap<i32, Vec<Interest>>,
+        artwork: bool,
+    ) -> Result<()> {
         let mut child = path;
         while let Some(parent) = child.parent() {
             if parent.is_dir() {
                 let name = child.file_name().ok_or_else(error)?.as_bytes().to_vec();
-                return self.add(parent, Interest::Child(name), next);
+                return self.add(parent, Interest::Child(name, artwork), next);
             }
             child = parent;
         }
         Err(error())
     }
     fn tree(&self, path: &Path, depth: u8, next: &mut BTreeMap<i32, Vec<Interest>>) -> Result<()> {
+        self.tree_interest(path, depth, Interest::Desktop, next)
+    }
+    fn tree_interest(
+        &self,
+        path: &Path,
+        depth: u8,
+        interest: Interest,
+        next: &mut BTreeMap<i32, Vec<Interest>>,
+    ) -> Result<()> {
         if depth > 8 || !path.is_dir() {
             return Ok(());
         }
-        self.add(path, Interest::Desktop, next)?;
+        self.add(path, interest.clone(), next)?;
         for entry in fs::read_dir(path).map_err(|_| error())? {
             let entry = entry.map_err(|_| error())?;
             if entry.file_type().is_ok_and(|t| t.is_dir()) {
-                self.tree(&entry.path(), depth + 1, next)?;
+                self.tree_interest(&entry.path(), depth + 1, interest.clone(), next)?;
             }
         }
         Ok(())
@@ -97,13 +120,31 @@ impl Watcher {
                 self.add(directory, Interest::All, &mut next)?;
             }
         }
+        for root in &source.data_roots {
+            for directory in [root.join("icons"), root.join("pixmaps")] {
+                self.parent_interest(&directory, &mut next, true)?;
+                self.tree_interest(&directory, 0, Interest::Artwork, &mut next)?;
+            }
+        }
+        if let Some(directory) = &source.legacy_icons {
+            self.parent_interest(directory, &mut next, true)?;
+            self.tree_interest(directory, 0, Interest::Artwork, &mut next)?;
+        }
+        for path in catalog::dependency_files(source)? {
+            self.parent_interest(&path, &mut next, true)?;
+            if let Some(directory) = path.parent()
+                && directory.is_dir()
+            {
+                self.add(directory, Interest::Artwork, &mut next)?;
+            }
+        }
         for id in self.interests.keys().filter(|id| !next.contains_key(id)) {
             unsafe { libc::inotify_rm_watch(self.fd.as_raw_fd(), *id) };
         }
         self.interests = next;
         Ok(())
     }
-    fn changed(&self) -> Result<bool> {
+    fn changed(&self) -> Result<Changed> {
         let mut descriptor = libc::pollfd {
             fd: self.fd.as_raw_fd(),
             events: libc::POLLIN,
@@ -112,18 +153,18 @@ impl Watcher {
         let n = unsafe { libc::poll(&mut descriptor, 1, 100) };
         if n < 0 {
             if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
-                return Ok(false);
+                return Ok(Changed::default());
             }
             return Err(error());
         }
         if n == 0 {
-            return Ok(false);
+            return Ok(Changed::default());
         }
         if descriptor.revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL) != 0 {
             return Err(error());
         }
         let mut buffer = [0u8; 65536];
-        let mut dirty = false;
+        let mut dirty = Changed::default();
         for _ in 0..16 {
             let n = unsafe {
                 libc::read(
@@ -156,7 +197,13 @@ impl Watcher {
                 }
                 let name = &buffer[begin..end];
                 let name = &name[..name.iter().position(|b| *b == 0).unwrap_or(name.len())];
-                dirty |= event.mask & libc::IN_Q_OVERFLOW != 0
+                dirty.artwork |= event.mask & libc::IN_Q_OVERFLOW != 0
+                    || self.interests.get(&event.wd).is_some_and(|interests| {
+                        interests.iter().any(|interest| {
+                            matches!(interest, Interest::Artwork | Interest::Child(_, true))
+                        })
+                    });
+                dirty.any |= event.mask & libc::IN_Q_OVERFLOW != 0
                     || self.interests.get(&event.wd).is_some_and(|interests| {
                         interests.iter().any(|interest| {
                             if event.mask
@@ -166,11 +213,11 @@ impl Watcher {
                                 return true;
                             }
                             match interest {
-                                Interest::All => true,
+                                Interest::All | Interest::Artwork => true,
                                 Interest::Desktop => {
                                     event.mask & libc::IN_ISDIR != 0 || name.ends_with(b".desktop")
                                 }
-                                Interest::Child(child) => name == child,
+                                Interest::Child(child, _) => name == child,
                             }
                         })
                     });
@@ -182,7 +229,7 @@ impl Watcher {
 }
 fn session(
     source: &XdgApplications,
-    emit: &mut dyn FnMut(Result<Vec<Application>>),
+    emit: &mut dyn FnMut(Result<ApplicationCatalogUpdate>),
     stop: &dyn StopSignal,
 ) -> Result<()> {
     let mut watcher = Watcher::new()?;
@@ -191,13 +238,18 @@ fn session(
     let mut recovery = true;
     let mut first = None;
     let mut last = None;
+    let mut artwork_changed = false;
     let publish = |previous: &mut Option<Vec<Application>>,
                    recovery: &mut bool,
-                   emit: &mut dyn FnMut(Result<Vec<Application>>)| {
+                   emit: &mut dyn FnMut(Result<ApplicationCatalogUpdate>),
+                   artwork_changed: bool| {
         match source.discover() {
             Ok(apps) => {
-                if *recovery || previous.as_ref() != Some(&apps) {
-                    emit(Ok(apps.clone()));
+                if *recovery || artwork_changed || previous.as_ref() != Some(&apps) {
+                    emit(Ok(ApplicationCatalogUpdate {
+                        applications: apps.clone(),
+                        artwork_changed,
+                    }));
                     *previous = Some(apps);
                 }
                 *recovery = false;
@@ -208,9 +260,11 @@ fn session(
             }
         }
     };
-    publish(&mut previous, &mut recovery, emit);
+    publish(&mut previous, &mut recovery, emit, false);
     while !stop.cancelled() {
-        if watcher.changed()? {
+        let changed = watcher.changed()?;
+        if changed.any {
+            artwork_changed |= changed.artwork;
             let now = Instant::now();
             first.get_or_insert(now);
             last = Some(now);
@@ -221,7 +275,8 @@ fn session(
         {
             // Add new directories before scanning; queued changes remain on the same descriptor.
             watcher.refresh(source)?;
-            publish(&mut previous, &mut recovery, emit);
+            publish(&mut previous, &mut recovery, emit, artwork_changed);
+            artwork_changed = false;
             first = None;
             last = None;
         }
@@ -230,7 +285,7 @@ fn session(
 }
 pub(super) fn observe(
     source: &XdgApplications,
-    emit: &mut dyn FnMut(Result<Vec<Application>>),
+    emit: &mut dyn FnMut(Result<ApplicationCatalogUpdate>),
     stop: &dyn StopSignal,
 ) {
     while !stop.cancelled() {

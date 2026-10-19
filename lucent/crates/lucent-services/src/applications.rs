@@ -2,7 +2,9 @@
 mod actions;
 mod activation;
 mod catalog;
+mod exec;
 mod launch;
+mod open;
 mod watch;
 use lucent_domain::*;
 use std::{
@@ -27,6 +29,7 @@ pub struct XdgApplications {
     desktop: String,
     locale: String,
     program_dirs: Vec<PathBuf>,
+    legacy_icons: Option<PathBuf>,
 }
 impl Default for XdgApplications {
     fn default() -> Self {
@@ -36,7 +39,7 @@ impl Default for XdgApplications {
         let data = std::env::var_os("XDG_DATA_HOME")
             .map(PathBuf::from)
             .filter(|p| p.is_absolute())
-            .or_else(|| home.map(|p| p.join(".local/share")));
+            .or_else(|| home.as_ref().map(|p| p.join(".local/share")));
         let mut roots = data.into_iter().collect::<Vec<_>>();
         roots.extend(
             std::env::var("XDG_DATA_DIRS")
@@ -48,6 +51,7 @@ impl Default for XdgApplications {
                 .map(PathBuf::from),
         );
         Self {
+            legacy_icons: home.map(|home| home.join(".icons")),
             data_roots: roots,
             desktop: std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_else(|_| "Hyprland".into()),
             locale: std::env::var("LC_ALL")
@@ -78,6 +82,7 @@ impl XdgApplications {
             ));
         }
         Ok(Self {
+            legacy_icons: None,
             data_roots,
             desktop,
             locale,
@@ -90,12 +95,52 @@ impl ApplicationPort for XdgApplications {
         catalog::discover(self)
     }
     fn watch(&self, emit: &mut dyn FnMut(Result<Vec<Application>>), stop: &dyn StopSignal) {
+        watch::observe(
+            self,
+            &mut |update| emit(update.map(|update| update.applications)),
+            stop,
+        );
+    }
+    fn watch_updates(
+        &self,
+        emit: &mut dyn FnMut(Result<ApplicationCatalogUpdate>),
+        stop: &dyn StopSignal,
+    ) {
         watch::observe(self, emit, stop);
     }
     fn launch(&self, app: &Application) -> Result<()> {
-        launch::application(app)
+        self.launch_with_context(app, Default::default())
+    }
+    fn launch_with_context(
+        &self,
+        app: &Application,
+        context: ApplicationLaunchContext,
+    ) -> Result<()> {
+        let (current, _, _) = catalog::resolve(self, &app.id)?;
+        if current != *app {
+            return Err(DomainError::Invalid(
+                "Application changed; choose it again".into(),
+            ));
+        }
+        launch::application_with_context(&current, &context)
+    }
+    fn open(
+        &self,
+        app: &Application,
+        request: &ApplicationOpenRequest,
+        context: ApplicationLaunchContext,
+    ) -> Result<()> {
+        open::open(self, app, request, &context)
     }
     fn launch_action(&self, app: &Application, action: &ApplicationActionId) -> Result<()> {
+        self.launch_action_with_context(app, action, Default::default())
+    }
+    fn launch_action_with_context(
+        &self,
+        app: &Application,
+        action: &ApplicationActionId,
+        context: ApplicationLaunchContext,
+    ) -> Result<()> {
         lucent_usecases::applications::application_action(app, action)?;
         let current = self
             .discover()?
@@ -107,7 +152,7 @@ impl ApplicationPort for XdgApplications {
             ));
         }
         let selected = lucent_usecases::applications::application_action(app, action)?;
-        launch::action(app, selected)
+        launch::action_with_context(app, selected, &context)
     }
 }
 /// URI selection starts the desktop handler in an independent application unit.
@@ -268,107 +313,10 @@ pub fn parse_entry(
 }
 /// Parse the desktop-entry quoting grammar, then expand each field code once.
 pub fn parse_exec(exec: &str, name: &str, path: &str, icon: &str) -> Result<Vec<String>> {
-    let invalid = || DomainError::Invalid("Invalid desktop entry Exec field".into());
-    // An input file's byte limit alone cannot bound repeated %c/%k expansion.
-    // This is an implementation resource policy, not a desktop-entry limit.
-    const MAX_EXEC_BYTES: usize = 1024 * 1024;
-    const MAX_EXEC_ARGUMENTS: usize = 4096;
-    if exec.len() > MAX_EXEC_BYTES {
-        return Err(invalid());
-    }
-    let mut tokens = vec![];
-    let mut token = String::new();
-    let mut quoted = false;
-    let mut started = false;
-    let mut chars = exec.chars();
-    while let Some(c) = chars.next() {
-        match c {
-            '"' => {
-                quoted = !quoted;
-                started = true;
-            }
-            '\\' => {
-                let c = chars.next().ok_or_else(invalid)?;
-                token.push(c);
-                started = true;
-            }
-            c if c.is_whitespace() && !quoted => {
-                if started {
-                    if tokens.len() == MAX_EXEC_ARGUMENTS {
-                        return Err(invalid());
-                    }
-                    tokens.push(std::mem::take(&mut token));
-                    started = false;
-                }
-            }
-            c => {
-                token.push(c);
-                started = true;
-            }
-        }
-    }
-    if quoted {
-        return Err(invalid());
-    }
-    if started {
-        if tokens.len() == MAX_EXEC_ARGUMENTS {
-            return Err(invalid());
-        }
-        tokens.push(token);
-    }
-    let mut out = vec![];
-    let mut bytes = 0;
-    for token in tokens {
-        match token.as_str() {
-            "%f" | "%F" | "%u" | "%U" | "%d" | "%D" | "%n" | "%N" | "%v" | "%m" => continue,
-            "%i" => {
-                if !icon.is_empty() {
-                    if out.len() > MAX_EXEC_ARGUMENTS - 2 {
-                        return Err(invalid());
-                    }
-                    let added = "--icon".len().checked_add(icon.len()).ok_or_else(invalid)?;
-                    if added > MAX_EXEC_BYTES - bytes {
-                        return Err(invalid());
-                    }
-                    bytes += added;
-                    out.extend(["--icon".into(), icon.into()]);
-                }
-                continue;
-            }
-            _ => {}
-        }
-        if out.len() == MAX_EXEC_ARGUMENTS {
-            return Err(invalid());
-        }
-        let mut expanded = String::new();
-        let append = |out: &mut String, value: &str| -> Result<()> {
-            if value.len() > MAX_EXEC_BYTES - bytes - out.len() {
-                return Err(invalid());
-            }
-            out.push_str(value);
-            Ok(())
-        };
-        let mut cs = token.chars();
-        while let Some(c) = cs.next() {
-            if c != '%' {
-                append(&mut expanded, c.encode_utf8(&mut [0; 4]))?;
-                continue;
-            }
-            match cs.next() {
-                Some('%') => append(&mut expanded, "%")?,
-                Some('c') => append(&mut expanded, name)?,
-                Some('k') => append(&mut expanded, path)?,
-                Some('f' | 'u' | 'd' | 'D' | 'n' | 'N' | 'v' | 'm') => {}
-                _ => return Err(invalid()),
-            }
-        }
-        bytes += expanded.len();
-        out.push(expanded);
-    }
-    if out.first().is_none_or(|s| s.is_empty() || s.contains('=')) {
-        return Err(invalid());
-    }
-    Ok(out)
+    exec::expand(exec, name, path, icon, None)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| DomainError::Invalid("Invalid desktop entry Exec field".into()))
 }
 
 #[cfg(test)]

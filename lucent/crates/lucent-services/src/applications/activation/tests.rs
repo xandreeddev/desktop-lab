@@ -52,6 +52,86 @@ struct Application {
     deny: bool,
     delay: Duration,
 }
+
+#[derive(Default)]
+struct IntentCalls {
+    token: Vec<String>,
+    opened: Vec<Vec<String>>,
+    actions: Vec<String>,
+}
+struct IntentApplication(Arc<Mutex<IntentCalls>>);
+fn token(data: HashMap<String, zbus::zvariant::OwnedValue>) -> String {
+    assert_eq!(data.len(), 1);
+    String::try_from(
+        data.into_iter()
+            .find(|(key, _)| key == "activation-token")
+            .unwrap()
+            .1,
+    )
+    .unwrap()
+}
+#[zbus::interface(name = "org.freedesktop.Application")]
+impl IntentApplication {
+    fn activate(&self, data: HashMap<String, zbus::zvariant::OwnedValue>) {
+        self.0.lock().unwrap().token.push(token(data));
+    }
+    fn open(&self, uris: Vec<String>, data: HashMap<String, zbus::zvariant::OwnedValue>) {
+        let mut calls = self.0.lock().unwrap();
+        calls.token.push(token(data));
+        calls.opened.push(uris);
+    }
+    fn activate_action(
+        &self,
+        action: String,
+        parameters: Vec<zbus::zvariant::OwnedValue>,
+        data: HashMap<String, zbus::zvariant::OwnedValue>,
+    ) {
+        assert!(parameters.is_empty());
+        let mut calls = self.0.lock().unwrap();
+        calls.token.push(token(data));
+        calls.actions.push(action);
+    }
+}
+#[test]
+fn explicit_tokens_and_open_targets_reach_the_exact_native_operation() {
+    let bus = Bus::new();
+    let calls = Arc::new(Mutex::new(IntentCalls::default()));
+    let connection = futures_lite::future::block_on(
+        Builder::address(bus.address.as_str())
+            .unwrap()
+            .name("org.example.Intent")
+            .unwrap()
+            .serve_at("/org/example/Intent", IntentApplication(calls.clone()))
+            .unwrap()
+            .build(),
+    )
+    .unwrap();
+    let id = AppId::new("org.example.Intent.desktop").unwrap();
+    let uris = vec![
+        "file:///tmp/a%20b".into(),
+        "https://example.test/%25U".into(),
+    ];
+    let action = ApplicationActionId::new("New-Window").unwrap();
+    for (operation, fresh) in [
+        (Operation::Activate, "intent-1"),
+        (Operation::Open(&uris), "intent-2"),
+        (Operation::Action(&action), "intent-3"),
+    ] {
+        request_context(
+            &id,
+            operation,
+            Some(fresh),
+            Some(&bus.address),
+            Duration::from_secs(1),
+        )
+        .unwrap();
+    }
+    let recorded = calls.lock().unwrap();
+    assert_eq!(recorded.token, ["intent-1", "intent-2", "intent-3"]);
+    assert_eq!(recorded.opened, [uris]);
+    assert_eq!(recorded.actions, ["New-Window"]);
+    drop(connection);
+}
 #[zbus::interface(name = "org.freedesktop.Application")]
 impl Application {
     async fn activate(

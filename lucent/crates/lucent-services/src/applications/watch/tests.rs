@@ -196,3 +196,75 @@ fn catalog_idle_has_no_duplicate_publications_and_stop_is_bounded() {
     drop(watch);
     assert!(before.elapsed() < Duration::from_secs(1));
 }
+#[test]
+fn catalog_observes_absolute_tryexec_and_icon_content_without_descriptor_changes() {
+    let directory = Directory::new();
+    let apps = directory.0.join("applications");
+    let executable = directory.0.join("future/tools/bin/owned-fixture");
+    let icon = directory.0.join("artwork/owned.svg");
+    fs::create_dir(&apps).unwrap();
+    fs::create_dir(icon.parent().unwrap()).unwrap();
+    fs::write(&icon, "first").unwrap();
+    fs::write(apps.join("owned.desktop"), format!("[Desktop Entry]\nType=Application\nName=Owned\nExec=/usr/bin/true\nTryExec={}\nIcon={}\n", executable.display(), icon.display())).unwrap();
+    let source =
+        XdgApplications::with_source(vec![directory.0.clone()], "Hyprland".into(), String::new())
+            .unwrap();
+    let stop = Arc::new(Stop(AtomicBool::new(false)));
+    let worker_stop = stop.clone();
+    let (send, receive) = mpsc::channel();
+    let worker = thread::spawn(move || {
+        source.watch_updates(
+            &mut |update| {
+                let _ = send.send(update);
+            },
+            worker_stop.as_ref(),
+        )
+    });
+    struct Cleanup(Arc<Stop>, Option<thread::JoinHandle<()>>);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            self.0.0.store(true, Ordering::Release);
+            self.1.take().unwrap().join().unwrap();
+        }
+    }
+    let _cleanup = Cleanup(stop, Some(worker));
+    assert!(
+        receive
+            .recv_timeout(Duration::from_secs(3))
+            .unwrap()
+            .unwrap()
+            .applications
+            .is_empty()
+    );
+    fs::create_dir_all(executable.parent().unwrap()).unwrap();
+    fs::write(&executable, "owned nonexecuted fixture").unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let update = receive
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+            .unwrap()
+            .unwrap();
+        if update.applications.len() == 1 {
+            break;
+        }
+    }
+    fs::write(&icon, "changed artwork, identical descriptor").unwrap();
+    let update = receive
+        .recv_timeout(Duration::from_secs(5))
+        .unwrap()
+        .unwrap();
+    assert_eq!(update.applications.len(), 1);
+    assert!(update.artwork_changed);
+    fs::remove_file(&executable).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let update = receive
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+            .unwrap()
+            .unwrap();
+        if update.applications.is_empty() {
+            break;
+        }
+    }
+}

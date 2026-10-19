@@ -46,6 +46,7 @@ use wayland_client::{
 use wgpu_handle::HasDisplayHandle;
 // Use the exact raw-window-handle version used by the renderer.
 use lucent_render::display_handle as wgpu_handle;
+mod activation;
 mod clipboard;
 mod delivery;
 mod effects;
@@ -134,6 +135,7 @@ struct State<A: Application> {
     keyboard_surface: Option<api::SurfaceAddress>,
     input_serial: Option<u32>,
     clipboard: clipboard::Clipboard<A::Message>,
+    activation: activation::Activation<A::Message>,
     modifiers: Modifiers,
     epoch: Instant,
     profile_frames: bool,
@@ -236,6 +238,11 @@ fn run_inner<A: Application>(
     } else {
         None
     };
+    let activation = activation::Activation::new(
+        &globals,
+        &qh,
+        app.activation_enabled() && authorize_unlock.is_none(),
+    );
     let mut state = State {
         surfaces: BTreeMap::new(),
         retiring: Default::default(),
@@ -260,6 +267,7 @@ fn run_inner<A: Application>(
         keyboard_surface: None,
         input_serial: None,
         clipboard: clipboard::Clipboard::new(clipboard_manager),
+        activation,
         modifiers: Modifiers::default(),
         epoch: Instant::now(),
         profile_frames: std::env::var_os("LUCENT_PROFILE_FRAMES").is_some_and(|value| value == "1"),
@@ -541,6 +549,11 @@ impl<A: Application> State<A> {
             }
             self.exit = true;
             return;
+        }
+        // Capture the real input surface before reconciliation closes a launcher.
+        // The token callback is asynchronous and owns no native application policy.
+        for request in effects.activation {
+            self.activation_request(request, qh);
         }
         for task in effects.tasks {
             if let Err(rejected) = self.tasks.submit(task) {
@@ -1594,6 +1607,17 @@ impl<A: Application> PointerHandler for State<A> {
                 PointerEventKind::Press { serial, .. } => Some(serial),
                 _ => None,
             };
+            self.activation.input = match event.kind {
+                PointerEventKind::Press { serial, .. }
+                | PointerEventKind::Release { serial, .. } => {
+                    self.pointer_seat.as_ref().map(|seat| activation::Input {
+                        surface: event.surface.clone(),
+                        seat: seat.clone(),
+                        serial,
+                    })
+                }
+                _ => None,
+            };
             if let Some(s) = self.surfaces.get_mut(&id) {
                 match event.kind {
                     PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
@@ -1718,6 +1742,7 @@ impl<A: Application> PointerHandler for State<A> {
             }
         }
         self.input_serial = None;
+        self.activation.input = None;
         self.draw_all(qh);
     }
 }
@@ -1770,8 +1795,19 @@ impl<A: Application> KeyboardHandler for State<A> {
         event: KeyEvent,
     ) {
         self.input_serial = Some(serial);
+        self.activation.input = self
+            .keyboard_surface
+            .as_ref()
+            .and_then(|id| self.surfaces.get(id))
+            .zip(self.keyboard_seat.as_ref())
+            .map(|(native, seat)| activation::Input {
+                surface: native.role.wl_surface().clone(),
+                seat: seat.clone(),
+                serial,
+            });
         self.key(event, qh);
         self.input_serial = None;
+        self.activation.input = None;
     }
     fn repeat_key(
         &mut self,
