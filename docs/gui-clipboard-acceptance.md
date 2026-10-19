@@ -92,8 +92,15 @@ MIME compatibility are restored, rather than the identity of the original
 clipboard-provider process. Original text and Notes never enter the public
 report. Private evidence remains under `reports/local/` with mode 0700/0600.
 
-The browser unit's independent 210-second limit retires its entire process cgroup
-if the host driver disappears. **A host crash does not automatically restore
+Chromium can move its original main process into a registered application scope.
+The original service's 210-second limit alone is not proof that this scope and
+its descendants have drained. The wrapper starts a separate owned watchdog
+before exec. Its original unit receipt is durable before launch continues; it
+captures the same browser lease used by the host, requests graceful PIDfd
+retirement after 180 seconds, and verifies the original service and scope drain.
+The watchdog has its own 240-second systemd limit and 235-second process alarm.
+An unverified lease or failed drain remains a failure with private evidence.
+**A host crash does not automatically restore
 Notes, clipboard history or its helper.** The private checkpoint and recovery
 metadata remain available for guarded operator recovery; do not delete them or
 blindly overwrite settings. Normal interruption/failure runs the restoration
@@ -106,13 +113,19 @@ Typed unit-name absence is required during initialization and immediately before
 launch. The original wrapper writes a private InvocationID/PID-birth receipt
 before it execs Chromium. Only an acknowledged start followed by that original
 receipt can authorize retirement; full browser admission additionally waits for
-the owned page and hashes the running executable once. Subsequent checks compare
-its stable metadata and process birth instead of rehashing Chromium on every key.
+the owned page, pins the installed root-owned Chromium executable and captures its
+running identity. The test-only [Chromium lease](native-chromium-lease.md) retains
+the original PID birth and service invocation across the normal scope migration.
+It freezes the existing registered scope invocation/cgroup, opaque process-title
+digest, DevTools port-file inode/digest and exact original control target.
+Subsequent checks compare these stable identities instead of rehashing Chromium
+on every key.
 A refused or lost start reply cannot authorize stopping an existing lookalike.
-All explicit retirement paths carry either the original wrapper receipt or the
-captured browser identity and refuse same-name successor invocations, including
-those observed after StopUnit. The original unit keeps its own systemd lifetime
-limit; the harness never substitutes name-only fallback cleanup.
+All explicit browser retirement paths carry the original wrapper receipt and
+captured lease, recheck it after opening a PIDfd, and signal only that original
+main process. They refuse same-name successor invocations or later migrations.
+They never stop a guessed application scope or use name-only fallback cleanup.
+Only the separately captured watchdog is retired through the generic unit API.
 The wrapper fsyncs both its receipt file and parent directory before exec.
 
 Notes restoration starts only after original-browser retirement and a fresh
@@ -132,4 +145,5 @@ Transport boundary checks without a VM:
 ```sh
 python3 -m unittest discover -s tests -p test_cdp_peer.py -v
 python3 -m unittest discover -s tests -p 'test_gui_clipboard*.py' -v
+python3 -m unittest discover -s tests -p test_owned_chromium_lease.py -v
 ```

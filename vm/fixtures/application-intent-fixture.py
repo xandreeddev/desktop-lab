@@ -30,6 +30,7 @@ from owned_application_units import (assert_unit_origin, capture_unit_origin,
                                      unit_snapshot)
 from application_intent_policy import owned_layers, socket_peer, unbound_pointer
 from application_intent_browser import fresh_documents, pages
+import owned_chromium_lease as chromium
 
 
 def require(condition):
@@ -102,6 +103,7 @@ def context(directory, run_id, initialized=True):
                 and manifest['units_sha256'] == digest(regular(directory / 'owned_application_units.py'))
                 and manifest['policy_sha256'] == digest(regular(directory / 'application_intent_policy.py'))
                 and manifest['browser_policy_sha256'] == digest(regular(directory / 'application_intent_browser.py')))
+        require(manifest['chromium_lease_sha256'] == digest(regular(directory / 'owned_chromium_lease.py')))
     return directory, manifest
 
 
@@ -113,7 +115,7 @@ def encoded(value):
 
 
 def original_receipt(directory, name, value=None):
-    require(name in ('example-origin.json', 'example-admission.json', 'watchdog-origin.json', 'browser-admission.json'))
+    require(name in ('example-origin.json', 'example-admission.json', 'watchdog-origin.json', 'browser-admission.json', 'chromium-lease.json'))
     path = directory / name
     if value is not None and not os.path.lexists(path):
         private(path, json.dumps(value, sort_keys=True).encode())
@@ -153,12 +155,14 @@ def initialize(directory, run_id, example_sha256):
                 'units_sha256': digest(regular(directory / 'owned_application_units.py')),
                 'policy_sha256': digest(regular(directory / 'application_intent_policy.py')),
                 'browser_policy_sha256': digest(regular(directory / 'application_intent_browser.py')),
+                'chromium_lease_sha256': digest(regular(directory / 'owned_chromium_lease.py')),
                 'app_id': app_id, 'name': 'Lucent intent ' + run_id.lower(),
                 'class': 'LucentIntent' + run_id, 'entry': str(entry_path),
                 'entry_sha256': digest(entry), 'settings': str(settings),
                 'settings_sha256': digest(settings_data),
                 'files': [{key: value for key, value in item.items() if key != 'data'}
                           for item in files]}
+    manifest['browser_startup'] = chromium.startup(browser_argv(directory, manifest, []))
     private(directory / 'manifest.json', json.dumps(manifest).encode())
     private(directory / 'events.json', b'[]\n')
     private(directory / 'events.lock', b'')
@@ -223,14 +227,18 @@ def execute(directory, run_id, arguments):
         atomic(directory / 'events.json', json.dumps(recorded).encode())
     # A real browser consumes the files through its normal Wayland client and
     # file-URI path. Separate profile/class ensure no existing browser is reused.
-    arguments = ['/usr/bin/chromium', '--user-data-dir=' + str(directory / 'profile'),
+    arguments = browser_argv(directory, manifest, uris)
+    signal.alarm(0)
+    os.execv(arguments[0], arguments)
+
+
+def browser_argv(directory, manifest, uris):
+    return ['/usr/bin/chromium', '--user-data-dir=' + str(directory / 'profile'),
                  '--class=' + manifest['class'], '--ozone-platform=wayland',
                  '--no-first-run', '--no-default-browser-check', '--disable-sync',
                  '--disable-extensions', '--disable-background-networking',
                  '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0',
                  '--new-window', *(uris or ['about:blank'])]
-    signal.alarm(0)
-    os.execv(arguments[0], arguments)
 
 
 def event_argv(directory, run_id, event):
@@ -248,18 +256,11 @@ def owned_clients(directory, run_id, clients):
         pid = client['pid']
         require(isinstance(pid, int) and 1 < pid < 2**31)
         require(Path('/proc', str(pid)).stat().st_uid == os.getuid())
-        groups = [line.split(':', 2)[2] for line in regular(Path('/proc', str(pid), 'cgroup')).decode().splitlines()
-                  if line.startswith('0::')]
-        require(len(groups) == 1)
-        matching = [event for event in recorded if event['cgroup'] == groups[0]]
+        matching = [event for event in recorded if event['origin']['process']['pid'] == pid]
         require(len(matching) == 1)
         event = matching[0]
-        unit = groups[0].rsplit('/', 1)[1]
-        require(re.fullmatch(r'run-[A-Za-z0-9_-]+\.service', unit))
-        value = unit_snapshot(unit)
-        assert_unit_origin(value, unit, event_argv(directory, run_id, event), event['origin'],
-                           max_executable_bytes=512 * 1024 * 1024)
-        require(value['active'] not in ('inactive', 'failed'))
+        lease = browser_lease(directory, run_id, event)
+        require(lease['process']['pid'] == pid)
     print(json.dumps({'owned_clients': len(clients)}))
 
 
@@ -427,8 +428,11 @@ def retire(directory, run_id):
         require(len(matching) == 1)
         event = matching[0]
         try:
-            retire_original_unit(unit, event_argv(directory, run_id, event), event['origin'],
-                                 max_executable_bytes=512 * 1024 * 1024)
+            if event == recorded[0] and event['operation'] == 'open' and event['uris'] == []:
+                chromium.retire(browser_lease(directory, run_id, event, retiring=True))
+            else:
+                retire_original_unit(unit, event_argv(directory, run_id, event), event['origin'],
+                                     max_executable_bytes=512 * 1024 * 1024)
         except Exception:
             failed = True
     require(not failed)
@@ -447,13 +451,32 @@ def cleanup(directory, run_id):
         'fixture.py', 'manifest.json', 'events.json', 'events.lock', 'closing', 'profile', 'application_intent_policy.py',
         'application-intent', 'application-intent.sha256', 'owned_application_units.py',
         'example-origin.json', 'example-admission.json', 'watchdog-origin.json', 'browser-admission.json',
-        'application_intent_browser.py', *[item['name'] for item in manifest['files']]})
+        'application_intent_browser.py', 'owned_chromium_lease.py', 'chromium-lease.json',
+        *[item['name'] for item in manifest['files']]})
     profile = directory / 'profile'
     if profile.exists():
         value = profile.lstat()
         require(stat.S_ISDIR(value.st_mode) and value.st_uid == os.getuid() and not profile.is_symlink())
     entry.unlink()
     shutil.rmtree(directory)
+
+
+def browser_lease(directory, run_id, event, retiring=False):
+    directory, manifest = context(directory, run_id)
+    recorded = events(directory)
+    require(recorded and event == recorded[0] and event['operation'] == 'open' and event['uris'] == [])
+    path = directory / 'chromium-lease.json'
+    if os.path.lexists(path):
+        captured = original_receipt(directory, 'chromium-lease.json')
+        require(captured['origin'] == event['origin'] and captured['declared'] == manifest['browser_startup'])
+        # An already retired original is verified by the retirement path, never
+        # replaced by a new process or another application scope.
+        if chromium.original_gone(captured['process']):
+            require(retiring and chromium.retired(captured))
+            return captured
+        return chromium.observe(event['origin'], manifest['browser_startup'], captured)
+    captured = chromium.observe(event['origin'], manifest['browser_startup'])
+    return original_receipt(directory, 'chromium-lease.json', captured)
 
 
 def browser_authority(directory, run_id, expected=None):
@@ -463,30 +486,21 @@ def browser_authority(directory, run_id, expected=None):
     event = recorded[0]
     unit = event['cgroup'].rsplit('/', 1)[1]
     require(re.fullmatch(r'run-[A-Za-z0-9_-]+\.service', unit))
-    value = unit_snapshot(unit)
-    argv = event_argv(directory, run_id, event)
+    lease = browser_lease(directory, run_id, event)
     path = directory / 'browser-admission.json'
     if os.path.lexists(path):
         captured = original_receipt(directory, 'browser-admission.json')
         require(expected is None or expected == captured)
-        require({key: item for key, item in value.items() if key != 'active'} ==
-                {key: item for key, item in captured['unit'].items() if key != 'active'})
-        current = assert_unit_origin(value, unit, argv, event['origin'],
-                                    max_executable_bytes=512 * 1024 * 1024)
-        require(current is not None and value['active'] == 'active'
-                and {key: item for key, item in current.items() if key != 'sha256'} ==
-                    {key: item for key, item in captured['process'].items() if key != 'sha256'})
+        require(captured['lease'] == lease)
         return captured
     require(expected is None)
-    current = assert_unit_origin(value, unit, argv, event['origin'],
-                                max_executable_bytes=512 * 1024 * 1024, hashed=True)
-    require(current is not None and value['active'] == 'active')
     endpoint = browser_endpoint(directory)
     current_pages = browser_pages(directory)
     require(browser_endpoint(directory) == endpoint)
     require(len(current_pages) == 1 and current_pages[0]['url'] == 'about:blank')
-    require(unit_snapshot(unit) == value)
-    captured = {'unit': value, 'process': current, 'control': current_pages[0], 'endpoint': endpoint}
+    require(browser_lease(directory, run_id, event) == lease)
+    captured = {'unit': lease['unit'], 'process': lease['process'], 'lease': lease,
+                'control': current_pages[0], 'endpoint': endpoint}
     original_receipt(directory, 'browser-admission.json', captured)
     return captured
 

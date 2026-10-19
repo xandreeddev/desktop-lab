@@ -7,8 +7,9 @@ one textarea and reads its DOM; actual Ctrl+C/Ctrl+V goes through VM input.
 Existing Notes/clipboard/history/settings/media stay in private checkpoints.
 
 Ordinary failure restores them through the existing guarded Notes harness. A
-host crash independently retires the browser after 210 seconds, but does not
-automatically restore Notes: the private recovery checkpoint is retained. No
+host crash leaves an owned watchdog to request lease retirement after 180 seconds;
+failed lease/drain proof stays explicit. It does not automatically restore Notes:
+the private recovery checkpoint is retained. No
 physical-device, rich-HTML clipboard, other browser or focus-race claim is made.
 """
 
@@ -313,6 +314,7 @@ def suite(h, result):
         'guest_checkpoint_relative': '.local/state/lucent/.native-notes-' + h.tag,
         'source_commit': h.args.source_commit, 'desktop_sha256': h.args.desktop_sha256,
         'browser_unit': 'lucent-gui-clipboard-' + h.tag + '.service',
+        'browser_watchdog_unit': 'lucent-gui-clipboard-watchdog-' + h.tag + '.service',
         'host_crash_requires_guarded_notes_checkpoint_restoration': True})
     h.notes.add(baseline['settings']['notes'])
     h.add_layout(baseline['settings'])
@@ -327,6 +329,7 @@ def suite(h, result):
     require(re.fullmatch(r'/tmp/lucent-gui-clipboard\.[A-Za-z0-9]{12}', h.peer_directory), 'private_peer_directory')
     for source, name in ((ROOT / 'vm/fixtures/gui-clipboard-peer.py', 'fixture.py'),
                          (ROOT / 'vm/owned_application_units.py', 'owned_application_units.py'),
+                         (ROOT / 'vm/owned_chromium_lease.py', 'owned_chromium_lease.py'),
                          (ROOT / 'vm/cdp_peer.py', 'cdp_peer.py')):
         h.remote('python3', '-c',
                  'import os,sys; fd=os.open(sys.argv[1],os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600); '
@@ -341,8 +344,9 @@ def suite(h, result):
     h.input_deadline = time.monotonic() + 170
     h.workspace_focus(h.browser_workspace)
     require(h.call_peer('absent')['owned_unit_name_absent'], 'typed_browser_unit_name_absent_before_start')
-    # Default KillMode=control-group and RuntimeMaxSec retire all this profile's
-    # children independently. The exact structured ExecStart is checked later.
+    # Chromium may migrate to its own registered scope. A distinct owned peer
+    # watchdog retains the original lease; original-service expiry alone is not
+    # evidence that the migrated scope and its descendants have drained.
     private(h.directory / 'browser-attempt.json', {
         'unit': 'lucent-gui-clipboard-' + h.tag + '.service',
         'directory': h.peer_directory, 'run_id': h.tag, 'typed_name_absent': True})
@@ -468,7 +472,8 @@ def main():
               'harness_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               'support_sha256': {name: hashlib.sha256((ROOT / 'vm' / name).read_bytes()).hexdigest()
                                  for name in ('fixtures/gui-clipboard-peer.py', 'owned_application_units.py',
-                                              'cdp_peer.py', 'application_intent_policy.py', 'test-multiline-notes.py')},
+                                              'owned_chromium_lease.py', 'cdp_peer.py',
+                                              'application_intent_policy.py', 'test-multiline-notes.py')},
               'scope': 'Real owned Chromium textarea and native Notes, single-output keyboard text transfers',
               'not_covered': ['rich HTML/images', 'other applications', 'delayed-provider and focus-retirement races',
                               'physical hardware', 'IME/shaping pixel correctness', 'automatic Notes restore after host crash'],
