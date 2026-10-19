@@ -911,6 +911,7 @@ fn command_admission_is_bounded_and_stale_kind_and_security_intent_fail() {
             reply,
             cancelled: Arc::new(AtomicBool::new(false)),
             deadline: Instant::now() + OPERATION_TIMEOUT,
+            interactive_deadline: Arc::new(Mutex::new(None)),
         })
         .unwrap_or_else(|_| panic!("queue filled before its bound"));
     }
