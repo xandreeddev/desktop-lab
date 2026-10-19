@@ -56,6 +56,9 @@ ASCII preserves the prior character advances and pair kerning exactly. Density
 changes do not reflow text or change logical positions. The native renderer keeps
 its existing size, glyph and mask allocation checks and coverage supersampling.
 
+See [the baseline review](text-baseline-review.md) for the row-local typography
+changes, unchanged visual tolerances and source-specific acceptance boundaries.
+
 ## Bounded fallback
 
 Font fallback is deterministic and does not scan the machine during layout.

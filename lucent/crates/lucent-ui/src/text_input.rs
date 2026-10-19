@@ -801,6 +801,92 @@ mod bidi_navigation {
 mod shared_caret_bounds {
     use super::*;
     #[test]
+    fn unicode_label_shaping_keeps_input_hits_selection_and_painted_caret_together() {
+        let fonts = Arc::new(vec![
+            text::Font::from_bytes(
+                include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf").as_slice(),
+                Default::default(),
+            )
+            .unwrap(),
+        ]);
+        let layout = Layout::new(fonts.clone());
+        for source in [
+            "Connecting to the audio service…",
+            "Target: wallpaper · Source frame rate",
+            "8°C · Clear sky",
+            "Café e\u{301}",
+        ] {
+            let shaped = text::shape(&fonts[0], source, 20.);
+            for multiline in [false, true] {
+                let mut value = source.to_owned();
+                let mut selection = TextSelection::default();
+                selection
+                    .apply(
+                        &mut value,
+                        TextEdit::Select {
+                            anchor: 0,
+                            caret: source.len(),
+                        },
+                        usize::MAX,
+                    )
+                    .unwrap();
+                let mut tree = if multiline {
+                    Element::text_area(
+                        source,
+                        selection,
+                        "",
+                        ScrollSpec::new(0., 24.).unwrap(),
+                        |edit| edit,
+                        |_| TextEdit::Clear,
+                    )
+                } else {
+                    Element::text_input(source, selection, "", |edit| edit)
+                }
+                .id("field")
+                .autofocus()
+                .size(600., 100.)
+                .font(20.);
+                let selection_color = Color::hex(0x736291);
+                tree.style.text_selection_color = selection_color;
+                let mut input = Interaction::default();
+                let scene = layout.build(&tree, 600., 100., &input, 0.);
+                input.synchronize(&scene);
+                let scene = layout.build(&tree, 600., 100., &input, 0.);
+                let hit = scene.hits[0].text.as_ref().unwrap();
+                let caret = hit.caret_rect();
+                assert!(
+                    scene
+                        .paint
+                        .iter()
+                        .any(|paint| matches!(paint, Paint::Shape { rect, .. } if *rect == caret))
+                );
+                for (byte, x) in &shaped.stops {
+                    assert_eq!(
+                        hit.at_point(hit.inner.x + x, caret.y + caret.h / 2.),
+                        Some(*byte),
+                        "the rendered source cluster must retain its pointer target"
+                    );
+                }
+                let selected = scene
+                    .paint
+                    .iter()
+                    .filter_map(|paint| match paint {
+                        Paint::Shape { rect, color, .. } if *color == selection_color => Some(rect),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(selected.len(), 1);
+                assert_eq!(selected[0].x, hit.inner.x);
+                assert_eq!(selected[0].w, shaped.width);
+                assert_eq!(caret.x, hit.inner.x + shaped.width);
+                assert!(scene.paint.iter().any(|paint| matches!(paint,
+                    Paint::Text { text, size, .. } if text == source && *size == 20.
+                )));
+            }
+        }
+    }
+
+    #[test]
     fn native_cursor_rectangle_matches_the_painted_caret_for_tall_fallback_marks() {
         let layout = Layout::new(Arc::new(vec![
             text::Font::from_bytes(
