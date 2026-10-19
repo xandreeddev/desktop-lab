@@ -1,5 +1,6 @@
 """Owned browser lifetime and real-file read regressions; no browser/VM/D-Bus."""
 import importlib.util
+import ast
 import json
 import os
 from pathlib import Path
@@ -422,7 +423,6 @@ class ClipboardOfferDiagnostics(unittest.TestCase):
         self.assertEqual(result['payloads'], {})
         for response in ((2, b'private output', b'private error'),
                          (0, b'\xff', b'private error'),
-                         (0, b'text/plain\ntext/plain\n', b''),
                          (0, ('\n'.join('type/' + str(i) for i in range(65))).encode(), b'')):
             with self.subTest(response=response):
                 result = peer.clipboard_observation(lambda *_args: response)
@@ -500,3 +500,70 @@ class BrowserEventObservation(unittest.TestCase):
                        dict(valid, trusted_copy=4097)):
             with self.subTest(events=events), self.assertRaises(ValueError):
                 self.observe(events)
+
+
+class ClipboardDiagnosticFailureReasons(unittest.TestCase):
+    def test_duplicate_alias_advertisement_remains_observable_and_is_counted(self):
+        result = peer.clipboard_observation(lambda command, *_args:
+            (0, b'text/plain\ntext/plain\nSTRING\n', b'') if command[-1] == '--list-types'
+            else (0, peer.SOURCE_TEXT.encode(), b''))
+        self.assertEqual(result['list_status'], 'available')
+        self.assertEqual(result['entry_count'], 3)
+        self.assertEqual(result['duplicate_entry_count'], 1)
+        self.assertEqual(result['known_text_aliases'], ['text/plain', 'STRING'])
+        self.assertEqual(result['inherited_reader_compatibility'], 'supported')
+
+    def test_nonzero_exit_invalid_encoding_and_bounds_have_distinct_payload_free_reasons(self):
+        cases = ((1, b'', b'private error', 'reader_nonzero_exit'),
+                 (0, b'\xff', b'', 'types_non_utf8'),
+                 (0, b'x' * 257, b'', 'invalid_mime_length'),
+                 (0, b'x\n' * 65, b'', 'too_many_type_entries'))
+        for code, data, error, expected in cases:
+            with self.subTest(expected=expected):
+                result = peer.clipboard_observation(lambda *_args: (code, data, error))
+                self.assertEqual(result['list_failure'], expected)
+                self.assertEqual(result['list_exit_status'], code)
+                self.assertNotIn('private error', json.dumps(result))
+        failures = ((peer.ClipboardObservationFailure('read_deadline'), 'read_deadline'),
+                    (peer.ClipboardObservationFailure('stdout_limit'), 'stdout_limit'),
+                    (peer.ClipboardObservationFailure('stderr_limit'), 'stderr_limit'),
+                    (OSError('private process path'), 'reader_process_unavailable'),
+                    (ValueError('private content'), 'reader_refused'),
+                    (peer.subprocess.TimeoutExpired('private command', 3), 'read_deadline'))
+        for error, expected in failures:
+            def read(*_args):
+                raise error
+            with self.subTest(expected=expected):
+                result = peer.clipboard_observation(read)
+                self.assertEqual(result['list_failure'], expected)
+                self.assertNotIn('private', json.dumps(result))
+
+    def test_alias_failure_retains_the_specific_bounded_reason(self):
+        def read(command, *_args):
+            if command[-1] == '--list-types':
+                return 0, b'text/plain\n', b''
+            raise peer.ClipboardObservationFailure('stdout_limit')
+        result = peer.clipboard_observation(read)
+        self.assertEqual(result['payload_failures'], {'text/plain': 'stdout_limit'})
+        self.assertEqual(result['inherited_reader_compatibility'], 'read_unavailable')
+
+    def test_compatibility_diagnostic_matches_actual_inherited_reader_refusals(self):
+        spec = importlib.util.spec_from_file_location('clipboard_reader_contract', ROOT/'vm/test-multiline-notes.py')
+        notes = importlib.util.module_from_spec(spec);spec.loader.exec_module(notes)
+        function = next(node for node in ast.parse(notes.CLIPBOARD).body
+                        if isinstance(node, ast.FunctionDef) and node.name == 'read_offer')
+        for types, payloads in ((['text/plain', 'text/html'], {'text/plain': peer.SOURCE_TEXT.encode()}),
+                                (['text/plain'], {'text/plain': b'\xff'}),
+                                (['text/plain', 'STRING'], {'text/plain': b'one', 'STRING': b'two'}),
+                                (['text/plain', 'text/plain'], {'text/plain': peer.SOURCE_TEXT.encode()}),
+                                ([], {})):
+            def read(command, *_args):
+                if command[-1] == '--list-types':
+                    return 0, '\n'.join(types).encode(), b''
+                return 0, payloads[command[-1]], b''
+            namespace = {'bounded_offer': read, 'aliases': set(peer.TEXT_ALIASES)}
+            exec(compile(ast.Module(body=[function], type_ignores=[]), 'inherited-read-offer-contract', 'exec'), namespace)
+            inherited = namespace['read_offer']()
+            diagnostic = peer.clipboard_observation(read)
+            with self.subTest(types=types):
+                self.assertEqual(diagnostic['inherited_reader_compatibility'], inherited.get('unsupported', 'supported'))
