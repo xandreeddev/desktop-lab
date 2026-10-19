@@ -1394,6 +1394,8 @@ dependencies = [
  "lucent-api",
  "lucent-ui",
  "pollster",
+ "tiny-skia",
+ "ttf-parser",
  "wgpu",
 ]
 

@@ -16,6 +16,7 @@ mod extent;
 mod presentation;
 mod profiling;
 pub use profiling::{PaintProfile, RenderProfile, ResourceProfile};
+mod fallback;
 mod raster;
 mod scene;
 pub use cache::CacheStats;
