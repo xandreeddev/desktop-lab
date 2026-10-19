@@ -193,6 +193,21 @@ and original cursor restoration. Corrected coordinate regressions do not by
 themselves establish panel interaction, other scales or hotplug acceptance;
 the native rerun remains pending.
 
+A subsequent coherent 8e attempt passed 13 checks, including real audio-panel
+opening and closing on both outputs at 1×, 2× and 1.25×. Removal then failed the
+retirement assertion because its captured ID set included the shared dock. The
+read-only post-removal observation showed only the original host/output, no
+pending native retirement, and the same shared dock retargeted to the surviving
+output. Cleanup fully preserved the original state. The failed report remains
+failed; it is not an overall hotplug pass.
+
+The corrected tooling captures only surfaces with the removed host's nonempty
+instance before removal. It still refuses any captured scoped ID anywhere,
+retained old host/instance or output, any surface still bound to the removed
+output (including the shared dock), and pending native retirement. A stale
+surface cannot evade the check by moving to another output or dropping its
+instance. The next native removal/recreation run remains pending.
+
 ## Checks available without a VM
 
 ```sh

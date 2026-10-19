@@ -97,6 +97,65 @@ class Backend:
         self.restored = True
 
 
+class ScopedHostRetirement(unittest.TestCase):
+    def before(self):
+        return {'client': {'named_monitor_hosts': True, 'monitor_hosts': [
+                    {'id': NAME, 'instance': NAME}, {'id': 'Virtual-1', 'instance': 'Virtual-1'}]},
+                'outputs': [{'name': NAME}, {'name': 'Virtual-1'}], 'retiring_native_surfaces': 0,
+                'surfaces': [{'id': 'bar [' + NAME + ']', 'instance': NAME, 'output': NAME},
+                             {'id': 'background [' + NAME + ']', 'instance': NAME, 'output': NAME},
+                             {'id': 'dock', 'instance': None, 'output': NAME},
+                             {'id': 'bar [Virtual-1]', 'instance': 'Virtual-1', 'output': 'Virtual-1'}]}
+
+    def after(self):
+        return {'client': {'monitor_hosts': [{'id': 'Virtual-1', 'instance': 'Virtual-1'}]},
+                'outputs': [{'name': 'Virtual-1'}], 'retiring_native_surfaces': 0,
+                'surfaces': [{'id': 'dock', 'instance': None, 'output': 'Virtual-1'},
+                             {'id': 'bar [Virtual-1]', 'instance': 'Virtual-1', 'output': 'Virtual-1'}]}
+
+    def test_retargeted_shared_dock_is_not_a_removed_host_surface(self):
+        captured = policy.host_surface_ids(self.before(), NAME, NAME)
+        self.assertEqual(captured, {'bar [' + NAME + ']', 'background [' + NAME + ']'})
+        self.assertNotIn('dock', captured)
+        self.assertTrue(policy.retired(self.after(), NAME, NAME, captured))
+
+    def test_captured_surface_cannot_hide_by_moving_or_dropping_its_instance(self):
+        captured = policy.host_surface_ids(self.before(), NAME, NAME)
+        for instance in (None, 'Virtual-1'):
+            value = self.after()
+            value['surfaces'].append({'id': 'bar [' + NAME + ']', 'output': 'Virtual-1', 'instance': instance})
+            with self.subTest(instance=instance):
+                self.assertFalse(policy.retired(value, NAME, NAME, captured))
+        value = self.after()
+        value['surfaces'].append({'id': 'renamed-stale', 'output': 'Virtual-1', 'instance': NAME})
+        self.assertFalse(policy.retired(value, NAME, NAME, captured))
+
+    def test_shared_surface_still_on_removed_output_or_pending_retirement_refuses(self):
+        captured = policy.host_surface_ids(self.before(), NAME, NAME)
+        value = self.after();value['surfaces'][0]['output'] = NAME
+        self.assertFalse(policy.retired(value, NAME, NAME, captured))
+        value = self.after();value['retiring_native_surfaces'] = 1
+        self.assertFalse(policy.retired(value, NAME, NAME, captured))
+
+    def test_old_host_or_native_output_cannot_remain_without_visible_surfaces(self):
+        captured = policy.host_surface_ids(self.before(), NAME, NAME)
+        for key, entry in (('monitor_hosts', {'id': NAME, 'instance': NAME}),
+                           ('monitor_hosts', {'id': 'renamed-stale', 'instance': NAME}),
+                           ('outputs', {'name': NAME})):
+            value = self.after()
+            (value['client'][key] if key == 'monitor_hosts' else value[key]).append(entry)
+            with self.subTest(key=key, entry=entry):
+                self.assertFalse(policy.retired(value, NAME, NAME, captured))
+
+    def test_capture_refuses_missing_or_changed_instance_instead_of_guessing_from_output(self):
+        for instance in (None, '', 'foreign'):
+            with self.subTest(instance=instance), self.assertRaises(policy.Blocked):
+                policy.host_surface_ids(self.before(), NAME, instance)
+        value = self.before();value['surfaces'][0]['output'] = 'Virtual-1'
+        with self.assertRaises(policy.Blocked):
+            policy.host_surface_ids(value, NAME, NAME)
+
+
 class NativeGeometry(unittest.TestCase):
     def test_fractional_density_keeps_global_layer_and_hit_in_logical_coordinates(self):
         native = monitor(NAME, 1, 1920, 1.25)
