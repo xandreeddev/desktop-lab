@@ -7,8 +7,91 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+import copy
+import importlib.util
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class DisplaySupervisionContractTests(unittest.TestCase):
+    def setUp(self):
+        spec=importlib.util.spec_from_file_location('actual_display_supervision',ROOT/'vm/display_supervision.py')
+        self.module=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.module)
+        self.before={'files':{'supervisor':{'sha256':'trusted'},'desktop':{'sha256':'desktop','identity':[1,2]},'settings':{'sha256':'saved','identity':[3,4]}},
+                     'links':{'unchanged':True},'exports':{'unchanged':True},'media':{'unchanged':True},
+                     'service':{'ActiveState':'active','MainPID':'100','NRestarts':'2','KillMode':'mixed'}}
+        self.after=copy.deepcopy(self.before);self.after['service'].update(MainPID='300',NRestarts='3')
+        self.unit_before={'properties':{'Id':'lucent.service','ActiveState':'active','SubState':'running','MainPID':'100','NRestarts':'2','KillMode':'mixed','FragmentPath':'/owned/lucent.service','DropInPaths':'','InvocationID':'0'*32},
+                          'supervisor':{'pid':100,'birth':'10','argv':['python','session.py'],'exe':{'sha256':'python','identity':[5,6]},'cgroup':'0::/scope/lucent.service\n'},
+                          'unit_files':{'/owned/lucent.service':{'sha256':'unit','identity':[7,8]}}}
+        self.unit_after=copy.deepcopy(self.unit_before)
+        self.unit_after['properties'].update(MainPID='300',NRestarts='3',InvocationID='1'*32)
+        self.unit_after['supervisor'].update(pid=300,birth='30')
+        self.ui_before={'pid':200,'start':'20','supervisor_pid':'100','cgroup':'/scope/lucent.service','exe_identity':[1,2]}
+        self.ui_after={**self.ui_before,'pid':400,'start':'40','supervisor_pid':'300'}
+        self.proof={'identity':copy.deepcopy(self.unit_after),'post':{'old_ui_retired':True,'current_ui_matches':True,'current_supervisor_matches':True,'native_surfaces_rendered':True,'ui_age_seconds':16,'old_ui_pid':200,'old_ui_birth':'20','ui_pid':400,'ui_birth':'40','supervisor_pid':300,'supervisor_birth':'30','desktop_sha256':'desktop','exe_identity':[1,2]}}
+
+    def validate(self):
+        return self.module.expected_after_ui_crash(self.before,self.after,self.ui_before,self.ui_after,self.unit_before,self.unit_after,self.proof,'trusted')
+
+    def test_exact_single_restart_preserves_every_file_and_only_two_service_fields(self):
+        before=copy.deepcopy(self.before)
+        self.assertEqual(self.validate(),self.after)
+        self.assertEqual(self.before,before)
+        self.assertEqual(self.before['files'],self.after['files'])
+
+    def test_changed_content_identity_media_or_unknown_fields_are_not_exempt(self):
+        initial=copy.deepcopy(self.after)
+        for category,change in [('files',{'unexpected':'content'}),('links',{'unexpected':'target'}),('exports',{'unexpected':'mtime'}),('media',{'unexpected':'history'})]:
+            with self.subTest(category=category):
+                self.after=copy.deepcopy(initial);self.after[category]=change
+                with self.assertRaises(AssertionError):self.validate()
+        self.after=copy.deepcopy(initial)
+        for key,value in [('sha256','changed'),('identity',[3,5])]:
+            with self.subTest(key=key):
+                self.after=copy.deepcopy(initial);self.after['files']['settings'][key]=value
+                with self.assertRaises(AssertionError):self.validate()
+        self.after=copy.deepcopy(initial)
+        self.before['service']['new_field']='unchanged';self.after['service']['new_field']='changed'
+        with self.assertRaises(AssertionError):self.validate()
+
+    def test_wrong_restart_count_or_unbound_current_supervisor_is_rejected(self):
+        for key,value in [('NRestarts','4'),('NRestarts','2'),('MainPID','100'),('MainPID','900'),('KillMode','control-group')]:
+            with self.subTest(key=key,value=value):
+                saved=self.after['service'][key];self.after['service'][key]=value
+                with self.assertRaises(AssertionError):self.validate()
+                self.after['service'][key]=saved
+
+    def test_changed_unit_argv_executable_cgroup_or_invocation_is_rejected(self):
+        original=copy.deepcopy(self.unit_after)
+        for key,value in [('argv',['other']),('exe',{'sha256':'other'}),('cgroup','0::/other'),('birth','9')]:
+            with self.subTest(key=key):
+                self.unit_after=copy.deepcopy(original);self.unit_after['supervisor'][key]=value;self.proof['identity']=copy.deepcopy(self.unit_after)
+                with self.assertRaises(AssertionError):self.validate()
+        self.unit_after=copy.deepcopy(original);self.unit_after['unit_files']['/owned/lucent.service']['identity']=[9,10];self.proof['identity']=copy.deepcopy(self.unit_after)
+        with self.assertRaises(AssertionError):self.validate()
+        self.unit_after=copy.deepcopy(original);self.unit_after['properties']['InvocationID']='0'*32;self.proof['identity']=copy.deepcopy(self.unit_after)
+        with self.assertRaises(AssertionError):self.validate()
+
+    def test_reused_ui_birth_or_executable_identity_cannot_establish_recovery(self):
+        original=self.ui_after.copy()
+        for key,value in [('pid',200),('start','29'),('exe_identity',[11,12]),('cgroup','/other')]:
+            with self.subTest(key=key):
+                self.ui_after={**original,key:value}
+                with self.assertRaises(AssertionError):self.validate()
+
+    def test_unrendered_or_not_retired_or_too_early_recovery_is_rejected(self):
+        original=copy.deepcopy(self.proof)
+        cases=[(key,False)for key in ('old_ui_retired','current_ui_matches','current_supervisor_matches','native_surfaces_rendered')]
+        cases += [('ui_age_seconds',value)for value in (15,float('nan'),float('inf'))]
+        cases += [('old_ui_pid',900),('old_ui_birth','900'),('ui_pid',900),('ui_birth','900'),('supervisor_pid',900),('supervisor_birth','900'),('desktop_sha256','other'),('exe_identity',[9,10])]
+        for key,value in cases:
+            with self.subTest(key=key,value=value):
+                self.proof=copy.deepcopy(original);self.proof['post'][key]=value
+                with self.assertRaises(AssertionError):self.validate()
+
+    def test_actual_bounded_readonly_probe_script_compiles(self):
+        compile(self.module.SCRIPT,'actual-supervisor-evidence','exec')
 
 
 class DisplayRecoveryTests(unittest.TestCase):
