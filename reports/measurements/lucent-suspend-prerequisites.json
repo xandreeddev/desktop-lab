@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "milestone": "native-suspend-prerequisites",
+  "status": "prerequisites-not-satisfied",
+  "recorded_date": "2026-10-19",
+  "implementation_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+  "native_inspector_source_commit": "6bb80e5942bb05050f9a1532497080a98b429226",
+  "tooling_sha256": {
+    "inspect-native-suspend.py": "ae1f4631e954f9f9217b52444e73bf245fa82e7f8b4532254fab1d706fe99afd",
+    "native_suspend_policy.py": "ed23a873b8bbf3f24a810ad92798a5dcc020f53d9cbb597e6ba2131fb1c0166b"
+  },
+  "private_capture_sha256": "4e6b966830a15786b3107c775f774311421bb45e97215621e41a28831f1488bb",
+  "scope": "Read-only live QEMU domain and guest capability observation; no suspend/wake, authentication, service or policy mutation.",
+  "domain": {
+    "acpi": true,
+    "machine": "pc-q35-11.1",
+    "s3_advertisement": "no"
+  },
+  "guest": {
+    "virtualization": "kvm",
+    "power_states": [
+      "freeze",
+      "mem",
+      "disk"
+    ],
+    "memory_modes": [
+      "s2idle"
+    ],
+    "selected_memory_mode": "s2idle",
+    "logind_can_suspend": "challenge",
+    "sleep_block_inhibitors": 0,
+    "sleep_delay_inhibitors": 3
+  },
+  "authorization_scope": "CanSuspend was observed from the SSH collector context; active graphical-session authorization is not established.",
+  "prerequisites": {
+    "candidate_only": false,
+    "blockers": [
+      "domain_s3_advertisement_disabled",
+      "guest_deep_s3_unavailable",
+      "guest_deep_s3_not_selected",
+      "regular_user_suspend_not_authorized_without_prompt"
+    ],
+    "execution_authorized": false,
+    "remaining": [
+      "effective_systemd_sleep_policy_review",
+      "secure_lock_lifetime_admission",
+      "release_process_output_file_admission",
+      "independent_conditional_host_wake_owner",
+      "actual_s3_transition_and_resume_preservation"
+    ]
+  },
+  "actual_suspend_request_issued": false,
+  "guest_s3_transition_verified": false,
+  "secure_resume_verified": false,
+  "physical_hardware_verified": false,
+  "remaining": [
+    "effective sleep policy and graphical-session authorization",
+    "secure lock admission",
+    "conditional independent wake owner",
+    "actual deep/S3 entry, wakeup and full state preservation"
+  ]
+}

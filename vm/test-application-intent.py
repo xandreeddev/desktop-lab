@@ -10,6 +10,8 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import math
+import os
 from pathlib import Path
 import runpy
 import re
@@ -21,11 +23,191 @@ import sys
 import time
 
 from native_surfaces import find_surface
-from owned_application_units import RETIRE
-from application_intent_policy import CursorOwnership, absolute_move, same_target, target as native_target
+from application_intent_policy import CursorOwnership, compositor_move, same_target, target as native_target
+from application_intent_browser import fresh_documents
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class FixtureFailure(ValueError):
+    def __init__(self, details):
+        super().__init__('owned_fixture_operation_failed')
+        self.details = details
+
+
+def failure_details(error, phase):
+    """Fixed labels and bounded metadata only; exception payloads stay private."""
+    if re.fullmatch('[a-z_]{1,96}', phase) is None:
+        raise ValueError('fixed_failure_phase_required')
+    known = ('CheckFailure', 'FixtureFailure', 'AssertionError', 'ValueError', 'OSError',
+             'FileNotFoundError', 'PermissionError', 'TimeoutError', 'TimeoutExpired',
+             'KeyboardInterrupt', 'UnicodeDecodeError')
+    result = {'phase': phase, 'error_class': type(error).__name__ if type(error).__name__ in known else 'OtherError'}
+    if type(error).__name__ == 'CheckFailure' and re.fullmatch('[a-z][a-z0-9_-]{0,127}', str(error)):
+        result['fixed_reason'] = str(error)
+    elif isinstance(error, FixtureFailure):
+        result['fixed_reason'] = 'owned_fixture_operation_failed'
+        result['fixture'] = error.details
+    elif isinstance(error, KeyboardInterrupt):
+        result['fixed_reason'] = 'native_application_acceptance_interrupted'
+    return result
+
+
+def focus_observation(focused, clients, admitted, expected_class, original_layer):
+    """Safe last-observation facts; the original focus predicate stays exact."""
+    if type(focused) is not dict or type(clients) is not list or len(clients) > 64 \
+            or any(type(client) is not dict for client in clients):
+        raise ValueError('bounded_native_focus_observation_required')
+    surface = find_surface(admitted['example_state'], 'intent')
+    layer = admitted['intent_layer']
+    geometry = {key: layer[key] for key in ('x', 'y', 'w', 'h')}
+    surface_size = [surface[key] for key in ('width', 'height')]
+    buffer_size = [surface[key] for key in ('buffer_width', 'buffer_height')]
+    if any(type(value) not in (int, float) or not math.isfinite(value) or abs(value) > 32768
+           for value in [*geometry.values(), *surface_size, *buffer_size]) \
+            or surface['keyboard'] not in ('none', 'on-demand', 'exclusive'):
+        raise ValueError('bounded_submitted_example_geometry_required')
+    matches = bool(focused) and focused.get('class') == expected_class and any(
+        client.get('address') == focused.get('address') and client.get('pid') == focused.get('pid')
+        for client in clients)
+    return {'active_window_present': bool(focused), 'owned_client_count': len(clients),
+            'active_class_matches_owned': bool(focused) and focused.get('class') == expected_class,
+            'active_pid_matches_owned': bool(focused) and any(
+                client.get('pid') == focused.get('pid') for client in clients),
+            'active_address_matches_owned': bool(focused) and any(
+                client.get('address') == focused.get('address') for client in clients),
+            'matches_owned_browser': matches,
+            'submitted_example': {'keyboard': surface['keyboard'], 'surface_size': surface_size,
+                'buffer_size': buffer_size, 'submitted': surface.get('frames', 0) > 0,
+                'native_submitted': surface.get('native_frames', 0) > 0,
+                'layer_geometry': geometry,
+                'layer_geometry_unchanged': all(layer[key] == original_layer[key] for key in geometry),
+                'layer_matches_surface_size': abs(layer['w'] - surface_size[0]) <= .5
+                    and abs(layer['h'] - surface_size[1]) <= .5}}
+
+
+def guarded_focus_observation(diagnostics, guard, read_focus, expected_class, original_layer):
+    """Record predicate-false separately from guard/observation exceptions."""
+    diagnostics['observations'] = min(diagnostics.get('observations', 0) + 1, 65536)
+    diagnostics['phase'] = 'first_launch_focus_guard'
+    try:
+        clients, admitted = guard()
+    except BaseException as error:
+        diagnostics['last_outcome'] = 'guard_exception'
+        diagnostics['last_failure'] = failure_details(error, diagnostics['phase'])
+        raise
+    diagnostics['phase'] = 'first_launch_focus_observation'
+    try:
+        observation = focus_observation(read_focus(), clients, admitted, expected_class, original_layer)
+    except BaseException as error:
+        diagnostics['last_outcome'] = 'observation_exception'
+        diagnostics['last_failure'] = failure_details(error, diagnostics['phase'])
+        raise
+    diagnostics['last_observation'] = observation
+    diagnostics['phase'] = 'first_launch_focus_predicate'
+    diagnostics['last_outcome'] = 'focused' if observation['matches_owned_browser'] else 'predicate_false'
+    return observation['matches_owned_browser']
+
+
+def wait_for_owned_browser_focus(diagnostics, guard, read_focus, expected_class, original_layer, timeout=35):
+    """A clean false may continue coverage; any failed admission remains fatal."""
+    if type(timeout) not in (int, float) or not math.isfinite(timeout) or not 0 < timeout <= 35:
+        raise ValueError('bounded_first_launch_focus_timeout_required')
+    deadline = time.monotonic() + timeout
+    while True:
+        if guarded_focus_observation(diagnostics, guard, read_focus, expected_class, original_layer):
+            diagnostics['focus_observed'] = True
+            return True
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            # Full normal admission, not a weaker focus-only fallback. Do not
+            # catch this guard's error or adopt a changed browser/surface/input.
+            diagnostics['phase'] = 'first_launch_focus_continue_guard'
+            try:
+                guard()
+            except BaseException as error:
+                diagnostics['last_outcome'] = 'guard_exception'
+                diagnostics['last_failure'] = failure_details(error, diagnostics['phase'])
+                raise
+            diagnostics['focus_observed'] = False
+            diagnostics['clean_focus_timeout'] = True
+            diagnostics['independent_checks_admitted'] = True
+            return False
+        time.sleep(min(.2, remaining))
+
+
+def require_first_launch_focus(checks):
+    # Independent document checks cannot replace the original focus criterion.
+    require(checks.get('fresh_token_child_delivery_and_fresh_browser_focus_observed') is True,
+            'fresh_owned_browser_focus_observed')
+
+
+def record_example_retirement(cleanup, result, admitted):
+    require(result.get('retired') is True and type(result.get('socket_admitted')) is bool,
+            'original_independent_example_retired')
+    require(not admitted or result['socket_admitted'], 'captured_example_socket_retirement_required')
+    if result['socket_admitted']:
+        require(result.get('socket_retired') is True, 'original_independent_example_socket_retired')
+        cleanup['example_socket_retired'] = True
+    cleanup['example_retired'] = True
+
+
+def record_browser_retirement(cleanup, result):
+    require(result.get('owned_browser_units_retired') is True, 'owned_browser_retired')
+    cleanup['browser_retired'] = True
+    require(result.get('owned_entry_retired') is True, 'owned_desktop_entry_retired')
+    cleanup['desktop_entry_retired'] = True
+
+
+def fixture_command(argv, operation, directory, sequence):
+    """Retain failed fixture transport evidence without dropping its operation."""
+    if re.fullmatch('[a-z][a-z-]{0,47}', operation) is None or type(sequence) is not int or not 1 <= sequence <= 512:
+        raise ValueError('bounded_fixture_operation_required')
+    details = {'operation': operation, 'sequence': sequence}
+    try:
+        result = subprocess.run(argv, capture_output=True, timeout=30)
+    except subprocess.TimeoutExpired as error:
+        details['kind'] = 'deadline'
+        stderr = error.stderr or b''
+    except OSError as error:
+        details.update(kind='os_error', errno=error.errno)
+        raise FixtureFailure(details) from None
+    else:
+        if result.returncode == 0:
+            return result.stdout.decode()
+        details.update(kind='nonzero_exit', returncode=result.returncode)
+        stderr = result.stderr or b''
+    details.update(stderr_bytes=len(stderr), stderr_sha256=hashlib.sha256(stderr).hexdigest(),
+                   stderr_retained_bytes=min(len(stderr), 65536), stderr_truncated=len(stderr) > 65536)
+    path = directory / f'fixture-{sequence:03}-{operation}.stderr'
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, 'wb') as stream:
+            stream.write(stderr[:65536])
+            stream.flush()
+            os.fsync(stream.fileno())
+        details['private_stderr'] = str(path)
+    except OSError as error:
+        details['stderr_retention_error'] = {'error_class': type(error).__name__, 'errno': error.errno}
+    raise FixtureFailure(details)
+
+
+def finish_cleanup(results, failures):
+    """Never replace an earlier interaction failure with a cleanup summary."""
+    if failures:
+        results['cleanup_failures'] = failures
+        if 'primary_failure' not in results:
+            require(False, 'application_acceptance_cleanup_and_preservation')
+
+
+def write_private_report(path, result):
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, 'w') as stream:
+        json.dump(result, stream, indent=2)
+        stream.write('\n')
+        stream.flush()
+        os.fsync(stream.fileno())
 
 
 def load_helpers():
@@ -52,22 +234,6 @@ def load_helpers():
     remote, session, cli, inspect = [h[key] for key in ('remote', 'session', 'cli', 'inspect')]
     require, eventually, CheckFailure = [h[key] for key in ('require', 'eventually', 'CheckFailure')]
 
-BROWSER_TABS = r'''
-import json,stat,sys,urllib.request
-from pathlib import Path
-directory=Path(sys.argv[1]); run_id=sys.argv[2]
-assert directory.resolve()==directory and directory.stat().st_uid==__import__('os').getuid()
-manifest=json.loads((directory/'manifest.json').read_text()); assert manifest['run_id']==run_id
-path=directory/'profile/DevToolsActivePort'; value=path.lstat()
-assert stat.S_ISREG(value.st_mode) and value.st_uid==__import__('os').getuid() and value.st_size<4096
-port=int(path.read_text().splitlines()[0]); assert 1024<=port<=65535
-opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
-with opener.open('http://127.0.0.1:'+str(port)+'/json/list',timeout=3) as response:
- data=response.read(1024*1024+1); assert len(data)<=1024*1024
-tabs=json.loads(data); assert isinstance(tabs,list) and len(tabs)<=32
-print(json.dumps({'loaded':[any(tab.get('type')=='page' and tab.get('title')==item['title']
- and tab.get('url')==item['uri'] for tab in tabs) for item in manifest['files']]}))
-'''
 
 
 def checked_binary(manifest, name, supplied=None):
@@ -136,16 +302,34 @@ def suite(args, results):
     preferences = json.loads(remote('python3', '-c', a['PREFERENCES']))
     scratch = remote('mktemp', '-d', '/tmp/lucent-application-intent.XXXXXXXXXXXX').strip()
     run_id = scratch.rsplit('.', 1)[-1]
+    diagnostics = lab.ROOT / 'reports/local' / ('application-intent-diagnostics-' + run_id)
+    diagnostics.mkdir(mode=0o700)
+    results['private_artifacts'] = {'guest_directory': scratch, 'host_diagnostics': str(diagnostics),
+                                   'receipt_files': ['manifest.json', 'events.json', 'example-origin.json',
+                                                     'example-admission.json', 'watchdog-origin.json',
+                                                     'browser-admission.json', 'entry-origin.json']}
     fixture, binary = scratch + '/fixture.py', scratch + '/application-intent'
     unit = 'lucent-application-intent-' + run_id + '.service'
     guard = 'lucent-application-intent-watchdog-' + run_id + '.service'
     initialized, example_attempted, guard_attempted = False, False, False
     completed_success, pressed = False, False
     baseline, example_identity, example_layer = None, None, None
+    browser_identity = None
     cleanup = results['cleanup'] = {}
+    phase = 'prepare_owned_fixture'
+    fixture_sequence = 0
 
     def call(operation, *arguments):
-        return session('/usr/bin/python3', fixture, operation, scratch, run_id, *arguments)
+        nonlocal fixture_sequence
+        fixture_sequence += 1
+        argv = ['python3', 'desktop-lab/scripts/in-session.py', '/usr/bin/python3',
+                fixture, operation, scratch, run_id, *arguments]
+        try:
+            return fixture_command(lab.ssh_args('lucent') + [shlex.join(argv)], operation,
+                                   diagnostics, fixture_sequence)
+        except FixtureFailure as error:
+            results['last_fixture_failure'] = failure_details(error, 'fixture_operation')
+            raise
 
     def example_command(command):
         require(example_identity is not None, 'captured_example_socket_authority')
@@ -161,8 +345,30 @@ def suite(args, results):
         state = example_state()['client']
         return state['completed'] == count and not state['busy']
 
-    def loaded():
-        return all(json.loads(session('python3', '-c', BROWSER_TABS, scratch, run_id))['loaded'])
+    def browser_snapshot():
+        nonlocal browser_identity
+        value = json.loads(call('browser-snapshot', json.dumps({'identity': browser_identity})))
+        require(browser_identity is None or value['identity'] == browser_identity,
+                'frozen_original_browser_lifetime_and_control_target')
+        browser_identity = value['identity']
+        return value['pages']
+
+    def before_request():
+        current = browser_snapshot()
+        require(current == [browser_identity['control']], 'only_original_blank_before_each_document_request')
+        return current
+
+    def verify_documents_and_retire(before_pages):
+        selected = None
+        def loaded_fresh():
+            nonlocal selected
+            selected = fresh_documents(before_pages, browser_snapshot(), entry['files'], browser_identity['control'])
+            return selected is not None
+        eventually(loaded_fresh, 'request_created_both_new_literal_document_targets')
+        require(json.loads(call('browser-close', json.dumps({'identity': browser_identity,
+                    'before': before_pages, 'targets': selected})))['fresh_owned_targets_retired'],
+                'only_fresh_document_targets_retired')
+        require(browser_snapshot() == [browser_identity['control']], 'original_blank_browser_target_preserved')
 
     def observe_native(with_example=True):
         value = json.loads(call('admission', json.dumps({'desktop_sha256': expected,
@@ -216,7 +422,7 @@ def suite(args, results):
         initial = observed_target(admitted)
         point = initial['point']
         cursor_owner.begin(json.loads(session('hyprctl', '-j', 'cursorpos')), point)
-        h['qmp'](name, absolute_move(point))
+        session('hyprctl', 'dispatch', compositor_move(point))
         def arrived():
             position = json.loads(session('hyprctl', '-j', 'cursorpos'))
             return cursor_owner.observe(position) == point
@@ -231,31 +437,39 @@ def suite(args, results):
                 a['pointer'](name, True)
                 _, admitted = interaction_guard()
                 same_target(initial, observed_target(admitted))
-            except BaseException:
+            except BaseException as error:
                 # Retire only this identified example before balancing a stale
                 # capture. No cancellation key is sent to foreign/auth UI.
-                retire_example()
+                results.setdefault('primary_failure', failure_details(error, phase))
+                try:
+                    retire_example()
+                except Exception as cleanup_error:
+                    results['early_cleanup_failure'] = failure_details(cleanup_error, 'example_retirement')
                 raise
         finally:
             a['pointer'](name, False)
             pressed = False
 
     def retire_example():
-        arguments = ['lucent-application-intent-', unit, binary, run_id]
-        if example_identity is not None:
-            arguments.append(json.dumps(example_identity))
-        require(json.loads(session('python3', '-c', RETIRE, *arguments))['retired'],
-                'independent_example_retired')
+        arguments = [json.dumps(example_identity)] if example_identity is not None else []
+        record_example_retirement(cleanup, json.loads(call('retire-example', *arguments)),
+                                  example_identity is not None)
 
     try:
-        h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(fixture)],
-                 data=(ROOT / 'vm/fixtures/application-intent-fixture.py').read_bytes(), timeout=20)
-        h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(scratch + '/owned_application_units.py')],
-                 data=(ROOT / 'vm/owned_application_units.py').read_bytes(), timeout=20)
-        h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(scratch + '/application_intent_policy.py')],
-                 data=(ROOT / 'vm/application_intent_policy.py').read_bytes(), timeout=20)
+        sources = {name: path.read_bytes() for name, path in (
+            ('fixture.py', ROOT / 'vm/fixtures/application-intent-fixture.py'),
+            ('owned_application_units.py', ROOT / 'vm/owned_application_units.py'),
+            ('application_intent_policy.py', ROOT / 'vm/application_intent_policy.py'),
+            ('application_intent_browser.py', ROOT / 'vm/application_intent_browser.py'),
+            ('owned_chromium_lease.py', ROOT / 'vm/owned_chromium_lease.py'))}
+        results['helper_sources_sha256'] = {name: hashlib.sha256(raw).hexdigest() for name, raw in sources.items()}
+        results['host_harness_sha256'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+        for filename, raw in sources.items():
+            h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(scratch + '/' + filename)],
+                     data=raw, timeout=20)
         initialized = True
-        entry = json.loads(call('initialize'))
+        entry = json.loads(call('initialize', manifest['binaries']['application-intent']['sha256']))
+        require(json.loads(call('initial-absence'))['absent'], 'owned_units_initially_absent')
         baseline = observe_native(False)['baseline']
         h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(binary)],
                  data=example.read_bytes(), timeout=30)
@@ -269,9 +483,7 @@ def suite(args, results):
         example_attempted = True
         session('systemd-run', '--user', '--collect', '--unit=' + unit,
                 '--property=RuntimeMaxSec=240', '--property=MemoryMax=768M',
-                '--property=UMask=0077', binary, '--app', entry['app_id'], '--action', 'Probe',
-                '--target', scratch + '/' + entry['files'][0]['name'],
-                '--target', scratch + '/' + entry['files'][1]['name'])
+                '--property=UMask=0077', '/usr/bin/python3', fixture, 'start-example', scratch, run_id)
         admitted = None
         def ready():
             nonlocal admitted
@@ -289,89 +501,109 @@ def suite(args, results):
         # The first physical launch starts a fresh private Chromium profile.
         # We separately observe focus; token presence proves child delivery only,
         # and does not prove Chromium consumed the xdg-activation protocol token.
+        phase = 'physical_first_launch'
         physical_click('intent-launch')
+        phase = 'first_launch_child_delivery'
         eventually(lambda: finished(1) and len(events()) == 1, 'physical_first_launch_completed')
         event = events()[0]
         require(event['operation'] == 'open' and event['uris'] == []
                 and event['fresh_token_present'] and not event['legacy_startup_present']
                 and example_state()['client']['fresh_token'], 'first_physical_token_delivered_to_owned_child')
-        def focused_owned_browser():
-            clients, _ = interaction_guard()
-            focused = json.loads(session('hyprctl', '-j', 'activewindow'))
-            return bool(focused) and focused.get('class') == entry['class'] and any(
-                client.get('address') == focused.get('address') and client.get('pid') == focused.get('pid')
-                for client in clients)
-        eventually(focused_owned_browser, 'fresh_owned_browser_focus_observed')
-        results['checks']['fresh_token_child_delivery_and_fresh_browser_focus_observed'] = True
+        results['checks']['fresh_token_delivered_to_first_owned_child'] = True
+        focus_diagnostics = results['first_launch_focus'] = {}
+        phase = 'first_launch_native_focus'
+        try:
+            focus_observed = wait_for_owned_browser_focus(focus_diagnostics, interaction_guard,
+                lambda: json.loads(session('hyprctl', '-j', 'activewindow')), entry['class'], example_layer)
+        except BaseException:
+            phase = focus_diagnostics.get('phase', phase)
+            raise
+        results['checks']['fresh_browser_focus_observed'] = focus_observed
+        results['checks']['fresh_token_child_delivery_and_fresh_browser_focus_observed'] = focus_observed
+        phase = 'first_browser_control_admission'
+        eventually(lambda: bool(browser_snapshot()), 'original_blank_browser_control_target_admitted')
 
         for index, (identifier, operation) in enumerate((
             ('intent-open', 'open'), ('intent-action', 'action'),
         ), start=2):
+            phase = 'physical_' + operation
+            before_pages = before_request()
             physical_click(identifier)
             eventually(lambda: finished(index) and len(events()) == index, 'physical_intent_dispatch_completed')
             event = events()[-1]
             require(event['operation'] == operation and event['fresh_token_present']
                     and not event['legacy_startup_present'] and example_state()['client']['fresh_token'],
                     'physical_input_token_delivered_to_selected_child')
-            eventually(loaded, 'real_browser_loaded_both_literal_file_uris')
+            verify_documents_and_retire(before_pages)
         results['checks']['real_browser_opened_space_percent_unicode_and_shell_literal_filenames'] = True
         results['checks']['physical_launch_open_and_declared_action_deliver_fresh_tokens_to_children'] = True
+        phase = 'later_socket_open'
         interaction_guard()
+        before_pages = before_request()
         example_command('open')
         eventually(lambda: finished(4) and len(events()) == 4, 'later_socket_open_completed')
         require(not events()[-1]['fresh_token_present'] and not events()[-1]['legacy_startup_present']
                 and not example_state()['client']['fresh_token'], 'later_socket_request_cannot_reuse_physical_authority')
+        verify_documents_and_retire(before_pages)
+        results['checks']['later_socket_request_created_both_fresh_documents'] = True
+        phase = 'desktop_cli_open'
         interaction_guard()
+        before_pages = before_request()
         cli('applications', 'open', entry['app_id'], scratch + '/' + entry['files'][0]['name'],
             scratch + '/' + entry['files'][1]['name'])
         eventually(lambda: len(events()) == 5, 'desktop_cli_open_reaches_real_application')
         require(not events()[-1]['fresh_token_present'] and not events()[-1]['legacy_startup_present'],
                 'desktop_cli_has_no_physical_authority')
-        eventually(loaded, 'desktop_opened_both_real_browser_documents')
+        verify_documents_and_retire(before_pages)
+        results['checks']['each_open_action_socket_and_cli_created_both_fresh_documents'] = True
+        results['checks']['fresh_targets_retired_with_original_browser_control_preserved'] = True
         interaction_guard()
         results['checks']['desktop_cli_open_and_no_stale_token_reuse'] = True
+        phase = 'first_launch_focus_acceptance'
+        require_first_launch_focus(results['checks'])
         completed_success = True
         results['source_commit'] = manifest['source_commit']
+    except BaseException as error:
+        results.setdefault('primary_failure', failure_details(error, phase))
+        raise
     finally:
-        failures = []
+        failures = {}
         if pressed:
             try:
                 a['pointer'](name, False)
                 pressed = False
-            except Exception:
-                failures.append('pointer_release')
+            except Exception as error:
+                failures['pointer_release'] = failure_details(error, 'pointer_release')
         if example_attempted:
             try:
                 retire_example()
                 cleanup['example_retired'] = True
-            except Exception:
-                failures.append('example_retirement')
+            except Exception as error:
+                failures['example_retirement'] = failure_details(error, 'example_retirement')
         if initialized:
             try:
-                require(json.loads(call('retire'))['owned_browser_units_retired'], 'owned_browser_retired')
-                cleanup['browser_retired'] = True
-            except Exception:
-                failures.append('browser_retirement')
+                record_browser_retirement(cleanup, json.loads(call('retire')))
+            except Exception as error:
+                failures['browser_retirement'] = failure_details(error, 'browser_retirement')
         if guard_attempted and cleanup.get('browser_retired', False) and cleanup.get('example_retired', False):
             try:
-                require(json.loads(session('python3', '-c', RETIRE,
-                    'lucent-application-intent-watchdog-', guard, fixture, run_id))['retired'],
+                require(json.loads(call('retire-watchdog'))['retired'],
                     'owned_watchdog_retired')
                 cleanup['watchdog_retired'] = True
-            except Exception:
-                failures.append('watchdog_retirement')
+            except Exception as error:
+                failures['watchdog_retirement'] = failure_details(error, 'watchdog_retirement')
         try:
             require(json.loads(remote('python3', '-c', a['PREFERENCES'])) == preferences,
                     'exact_settings_and_wallpaper_restored')
             require(inspect()['client']['wallpaper'] == before['wallpaper'], 'wallpaper_identity_preserved')
             cleanup['settings_and_wallpaper_preserved'] = True
-        except Exception:
-            failures.append('caller_preservation')
+        except Exception as error:
+            failures['caller_preservation'] = failure_details(error, 'caller_preservation')
         try:
             eventually(lambda: bool(interaction_guard(False)), 'owned_example_layers_retired_before_cursor_restore')
             cursor = json.loads(session('hyprctl', '-j', 'cursorpos'))
             cursor_owner.begin(cursor, cursor_owner.initial)
-            h['qmp'](name, absolute_move(cursor_owner.initial))
+            session('hyprctl', 'dispatch', compositor_move(cursor_owner.initial))
             def restored():
                 cursor = json.loads(session('hyprctl', '-j', 'cursorpos'))
                 return cursor_owner.observe(cursor) == cursor_owner.initial
@@ -379,17 +611,18 @@ def suite(args, results):
             cursor_owner.finish(json.loads(session('hyprctl', '-j', 'cursorpos')))
             interaction_guard(False)
             cleanup['output_workspace_and_cursor_preserved'] = True
-        except Exception:
-            failures.append('output_workspace_cursor_preservation')
+        except Exception as error:
+            failures['output_workspace_cursor_preservation'] = failure_details(error, 'output_workspace_cursor_preservation')
         if completed_success and not failures:
             try:
                 call('cleanup')
                 cleanup['owned_scratch_and_entry_removed'] = True
-            except Exception:
-                failures.append('owned_file_cleanup')
+            except Exception as error:
+                failures['owned_file_cleanup'] = failure_details(error, 'owned_file_cleanup')
+                cleanup['private_artifacts_retained'] = True
         else:
             cleanup['private_artifacts_retained'] = True
-        require(not failures, 'application_acceptance_cleanup_and_preservation')
+        finish_cleanup(results, failures)
 
 
 def main():
@@ -400,6 +633,10 @@ def main():
     args = parser.parse_args()
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     load_helpers()
+    path = Path(args.report or lab.ROOT / 'reports/local/application-intent-native.json')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if os.path.lexists(path):
+        raise ValueError('existing_private_report_refused')
     result = {'passed': False, 'checks': {},
               'scope': 'Fresh token delivery to owned children and observed browser focus; no Chromium protocol-consumption claim'}
     try:
@@ -408,16 +645,16 @@ def main():
             suite(args, result)
         result['passed'] = True
     except CheckFailure as error:
-        result['failure'] = str(error)
+        result.setdefault('primary_failure', failure_details(error, 'native_suite'))
     except KeyboardInterrupt:
-        result['failure'] = 'native_application_acceptance_interrupted'
-    except Exception:
-        result['failure'] = 'bounded_native_application_acceptance_failure'
-    path = Path(args.report or lab.ROOT / 'reports/local/application-intent-native.json')
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(result, indent=2) + '\n')
-    path.chmod(0o600)
-    print(json.dumps(result))
+        result.setdefault('primary_failure', failure_details(KeyboardInterrupt(), 'native_suite'))
+    except Exception as error:
+        result.setdefault('primary_failure', failure_details(error, 'native_suite'))
+    if not result['passed']:
+        result['failure'] = result['primary_failure'].get('fixed_reason', 'bounded_native_application_acceptance_failure')
+    write_private_report(path, result)
+    print(json.dumps({'passed': result['passed'], 'checks': result['checks'],
+                      'failure': result.get('failure'), 'report': str(path)}))
     if not result['passed']:
         raise SystemExit(1)
 

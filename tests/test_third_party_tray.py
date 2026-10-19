@@ -4,10 +4,13 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import stat
+import struct
 import sys
 import tempfile
+import types
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'vm'))
@@ -143,6 +146,119 @@ class NativeAdmission(unittest.TestCase):
                 policy.cgroup_path(value, 1000, unit)
 
 
+class DesktopSupervisorAdmission(unittest.TestCase):
+    def proof(self):
+        service = {'load': 'loaded', 'active': 'active', 'transient': False, 'main_pid': 900,
+                   'group': '/user.slice/owned/lucent.service', 'invocation': '1' * 32,
+                   'executable': '/usr/bin/python3',
+                   'argv': ['/usr/bin/python3', str(Path.home() / '.local/lib/lucent/session.py')]}
+        supervisor = {'pid': 900, 'start': '100', 'group': service['group'], 'sha256': 'a' * 64,
+                      'executable': [1, 2, 3]}
+        child = {'pid': 901, 'start': '101', 'group': service['group'], 'sha256': 'b' * 64,
+                 'executable': [4, 5, 6]}
+        return service, supervisor, child
+
+    def snapshot(self, records):
+        def current(pid, hashed=False):
+            value = copy.deepcopy(records[pid])
+            if not hashed:
+                value['sha256'] = None
+            return value
+        return current
+
+    def test_real_supervisor_shape_admits_separate_original_child(self):
+        service, supervisor, child = self.proof()
+        with patch.object(guest, 'unit_snapshot', return_value=service), \
+             patch.object(guest, 'process_snapshot', side_effect=self.snapshot({900: supervisor, 901: child})), \
+             patch.object(guest, 'desktop_parent', return_value=900), \
+             patch.object(guest, 'file_record', return_value={'sha256': 'a' * 64}):
+            value = guest.desktop_service(901)
+        self.assertEqual(value['unit']['main_pid'], 900)
+        self.assertEqual(value['process'], supervisor)
+        self.assertEqual(value['child'], child)
+
+    def test_wrong_command_same_main_pid_or_missing_invocation_is_never_admitted(self):
+        service, _, _ = self.proof()
+        for changed in ({'argv': ['/usr/bin/python3', '/foreign.py']}, {'main_pid': 901},
+                        {'invocation': '0' * 32}, {'invocation': ''}, {'transient': True}):
+            with self.subTest(changed=changed), \
+                 patch.object(guest, 'unit_snapshot', return_value=dict(service, **changed)), \
+                 patch.object(guest, 'process_snapshot') as snapshot:
+                with self.assertRaisesRegex(policy.Blocked, 'typed_python_supervisor_required'):
+                    guest.desktop_service(901)
+            snapshot.assert_not_called()
+
+    def test_foreign_cgroup_or_reparented_child_is_refused(self):
+        service, supervisor, child = self.proof()
+        for group, parent in (('/foreign', 900), (service['group'], 999)):
+            with self.subTest(group=group, parent=parent), \
+                 patch.object(guest, 'unit_snapshot', return_value=service), \
+                 patch.object(guest, 'process_snapshot', side_effect=self.snapshot({900: supervisor, 901: dict(child, group=group)})), \
+                 patch.object(guest, 'desktop_parent', return_value=parent):
+                with self.assertRaisesRegex(policy.Blocked, 'desktop_must_be_original_supervisor_child'):
+                    guest.desktop_service(901)
+
+    def test_recycled_child_birth_or_supervisor_invocation_during_capture_is_refused(self):
+        service, supervisor, child = self.proof()
+        for changed in ('birth', 'invocation'):
+            records = {900: supervisor, 901: child}
+            def snapshot(pid, hashed=False):
+                value = self.snapshot(records)(pid, hashed)
+                if changed == 'birth' and pid == 901 and not hashed:
+                    value['start'] = 'replacement'
+                return value
+            values = [service, dict(service, invocation='2' * 32)] if changed == 'invocation' else [service, service]
+            with self.subTest(changed=changed), patch.object(guest, 'unit_snapshot', side_effect=values), \
+                 patch.object(guest, 'process_snapshot', side_effect=snapshot), \
+                 patch.object(guest, 'desktop_parent', return_value=900), \
+                 patch.object(guest, 'file_record', return_value={'sha256': 'a' * 64}):
+                with self.assertRaises(policy.Blocked):
+                    guest.desktop_service(901)
+
+    def test_frozen_checkpoint_still_rejects_a_later_valid_but_new_supervisor(self):
+        saved = {'desktop': {'supervisor': {'unit': {'invocation': 'old'}}}}
+        current = {'supervisor': {'unit': {'invocation': 'new'}}}
+        with patch.object(guest, 'read', return_value=saved), \
+             patch.object(guest, 'desktop', return_value=(current, {}, [])), \
+             patch.object(guest, 'files') as files:
+            with self.assertRaisesRegex(policy.Blocked, 'desktop_supervisor_or_output_changed'):
+                guest.verify(Path('/owned'))
+        files.assert_not_called()
+
+    def socket_fixture(self):
+        original = types.SimpleNamespace(st_dev=1, st_ino=2, st_mode=stat.S_IFSOCK | 0o600,
+                                         st_uid=os.getuid(), st_gid=os.getgid())
+        path = MagicMock();path.__truediv__.return_value = path;path.lstat.return_value = original
+        connection = MagicMock();connection.__enter__.return_value = connection
+        connection.getsockopt.return_value = struct.pack('3i', 901, os.getuid(), os.getgid())
+        connection.recv.side_effect = [b'{"client":{}}', b'']
+        return original, path, connection
+
+    def test_exact_socket_peer_and_lifetime_are_bound_before_inspect(self):
+        original, path, connection = self.socket_fixture()
+        with patch.object(guest, 'Path', return_value=path), \
+             patch.dict(os.environ, {'XDG_RUNTIME_DIR': '/owned'}), \
+             patch.object(guest.socket, 'socket', return_value=connection):
+            state, stamp = guest.desktop_ipc(901)
+        self.assertEqual(state, {'client': {}})
+        self.assertEqual(stamp[:2], [1, 2])
+        connection.sendall.assert_called_once_with(b'inspect\n')
+
+    def test_foreign_socket_peer_or_replaced_path_receives_no_command(self):
+        for failure in ('peer', 'path'):
+            original, path, connection = self.socket_fixture()
+            if failure == 'peer':
+                connection.getsockopt.return_value = struct.pack('3i', 999, os.getuid(), os.getgid())
+            else:
+                path.lstat.side_effect = [original, types.SimpleNamespace(**dict(vars(original), st_ino=3))]
+            with self.subTest(failure=failure), patch.object(guest, 'Path', return_value=path), \
+                 patch.dict(os.environ, {'XDG_RUNTIME_DIR': '/owned'}), \
+                 patch.object(guest.socket, 'socket', return_value=connection):
+                with self.assertRaisesRegex(policy.Blocked, 'exact_desktop_ipc_peer_required'):
+                    guest.desktop_ipc(901)
+            connection.sendall.assert_not_called()
+
+
 class NonsecretNetworkSnapshot(unittest.TestCase):
     def fake_bus(self, wifi=False, owner_change=False, loopback=False):
         bus = object.__new__(guest.Bus)
@@ -251,7 +367,7 @@ class OwnedKernelFilesAndCleanup(unittest.TestCase):
         for name, text in (('cgroup.procs', ''), ('cgroup.threads', ''), ('cgroup.events', f'populated {populated}\n')):
             (group / name).write_text(text)
         saved = {'unit': unit}
-        intent = {'unit': unit, 'cgroup': group_name, 'invocation': 'aa',
+        intent = {'unit': unit, 'cgroup': group_name, 'invocation': 'aa', 'pid': 99999999, 'start': '1',
                   'group_identity': guest.identity(group.stat())[:2]}
         properties = {'MainPID': '0', 'InvocationID': 'aa', 'ActiveState': 'inactive'}
         real_path = Path
@@ -284,6 +400,53 @@ class OwnedKernelFilesAndCleanup(unittest.TestCase):
                 with self.assertRaisesRegex(policy.Blocked, 'pid_recycled'):
                     guest.stop(Path(scratch))
                 command.assert_not_called()
+
+    def test_only_typed_no_such_unit_maps_to_absent_without_systemctl_fallback(self):
+        class NoSuchUnit(Exception):
+            def get_dbus_name(self):
+                return 'org.freedesktop.systemd1.NoSuchUnit'
+        manager = Mock();manager.GetUnit.side_effect = NoSuchUnit()
+        fake = types.SimpleNamespace(SessionBus=Mock(), Interface=Mock(return_value=manager), DBusException=NoSuchUnit)
+        unit = 'lucent-third-party-tray-' + 'b' * 24 + '.service'
+        with patch.dict(sys.modules, {'dbus': fake}), patch.object(guest, 'run') as command:
+            value = guest.unit_properties(unit)
+        self.assertEqual(value, {'LoadState': 'not-found', 'ActiveState': 'inactive', 'MainPID': '0',
+                                'ControlGroup': '', 'InvocationID': ''})
+        command.assert_not_called()
+
+    def test_acknowledged_stop_followed_by_typed_absence_requires_original_group_and_pid_drained(self):
+        with tempfile.TemporaryDirectory(prefix='lucent-tray-cgroup-') as scratch:
+            saved, intent, _, paths = self.fixture(scratch)
+            active = {'load': 'loaded', 'active': 'active', 'main_pid': intent['pid'],
+                      'group': intent['cgroup'], 'invocation': intent['invocation']}
+            for drained in (True, False):
+                with self.subTest(drained=drained), patch.object(guest, 'Path', side_effect=paths), \
+                     patch.object(guest, 'read', side_effect=lambda _d, name: saved if name == 'checkpoint.json' else intent), \
+                     patch.object(guest, 'unit_snapshot', side_effect=[active, {'load': 'not-found'}]), \
+                     patch.object(guest, 'original_retirement_drained', return_value=drained) as check, \
+                     patch.object(guest, 'owner'), patch.object(guest, 'run') as command:
+                    if drained:
+                        self.assertTrue(guest.stop(Path(scratch))['exact_owned_unit_quiescent'])
+                    else:
+                        with self.assertRaisesRegex(policy.Blocked, 'original_applet_process_or_group_not_drained'):
+                            guest.stop(Path(scratch))
+                    command.assert_called_once_with('systemctl', '--user', 'stop', saved['unit'])
+                    self.assertEqual(check.call_args.args[0]['process']['start'], intent['start'])
+
+    def test_active_successor_after_acknowledged_stop_is_refused_without_second_stop(self):
+        with tempfile.TemporaryDirectory(prefix='lucent-tray-cgroup-') as scratch:
+            saved, intent, _, paths = self.fixture(scratch)
+            active = {'load': 'loaded', 'active': 'active', 'main_pid': intent['pid'],
+                      'group': intent['cgroup'], 'invocation': intent['invocation']}
+            successor = dict(active, main_pid=999, invocation='foreign')
+            with patch.object(guest, 'Path', side_effect=paths), \
+                 patch.object(guest, 'read', side_effect=lambda _d, name: saved if name == 'checkpoint.json' else intent), \
+                 patch.object(guest, 'unit_snapshot', side_effect=[active, successor]), \
+                 patch.object(guest, 'original_retirement_drained', return_value=True), \
+                 patch.object(guest, 'owner'), patch.object(guest, 'run') as command:
+                with self.assertRaisesRegex(policy.Blocked, 'owned_unit_not_finally_quiescent'):
+                    guest.stop(Path(scratch))
+            command.assert_called_once_with('systemctl', '--user', 'stop', saved['unit'])
 
 
 class DriverOrdering(unittest.TestCase):

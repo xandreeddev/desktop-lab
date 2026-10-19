@@ -59,7 +59,14 @@
         "Settled unrelated surfaces and paused/hidden wallpapers do not repaint continuously; memory and decoder lifetimes remain bounded.",
         "Execute native hardware-GPU acceptance where available and retain any unmet targets explicitly."
       ],
-      "evidence": []
+      "evidence": [
+        {
+          "kind": "native-backend-liveness",
+          "source_commit": "a7f41eccdcd8eca51e8e5ee878d8f489d8d4bde5",
+          "guide": "docs/lucent-vulkan.md",
+          "scope": "Later mount-anchored AMD native-context trial passes RADV RENOIR enumeration, secure login, actual hardware-adapter selection and advancing native frame counters across three seconds with preserved user/source/settings/media/critical files and monitor. Candidate retained. No measured FPS, source cadence, RSS, GPU memory/decoding, physical-output or newer 8e6d074b binary acceptance."
+        }
+      ]
     },
     {
       "id": "international-text",
@@ -71,7 +78,21 @@
         "Masked authentication/credential fields never expose secret surrounding text or preedit through ordinary input state.",
         "ASCII and 1x/2x rendering quality remain covered; mixed-script controls and a real input-method flow have executed acceptance."
       ],
-      "evidence": []
+      "evidence": [
+        {
+          "kind": "exact-final-source-ci",
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "url": "https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281",
+          "pull_request_ci_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/39313659557",
+          "scope": "All six checks pass: formatting/strict all-target Clippy, full workspace, six controlled service-protocol filters and 832/832 Vulkan desktop cases including explicit 1x/2x wrapped/cache regressions. This is not native compositor or arbitrary-application acceptance."
+        },
+        {
+          "kind": "coherent-release-build",
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "archive_manifest_sha256": "b7a1d92c4e0e186fca4e2e7e67523763c0c57bc4b91bd3ef18247c5b5cc996c9",
+          "scope": "Locked/offline build of desktop/CLI/menu/lock/greeter/polkit plus international-text/input-method-peer/application-intent; all nine archived binary hashes verified. Built, not yet deployed or natively accepted."
+        }
+      ]
     },
     {
       "id": "application-integration",
@@ -94,6 +115,19 @@
           "url": "https://github.com/xandreeddev/desktop-lab/actions/runs/39291825252",
           "source_commit": "0886b0c69740b30a5a79177da8e24aad059b7c5e",
           "scope": "Combined application integration and tested Wi-Fi source passed remote checks, including Vulkan visual checks. This is not a graphical activation/file-opening run."
+        },
+        {
+          "kind": "exact-final-source-ci",
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "url": "https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281",
+          "pull_request_ci_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/39313659557",
+          "scope": "All six checks pass: formatting/strict all-target Clippy, full workspace, six controlled service-protocol filters and 832/832 Vulkan desktop cases including explicit 1x/2x wrapped/cache regressions. This is not native compositor or arbitrary-application acceptance."
+        },
+        {
+          "kind": "coherent-release-build",
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "archive_manifest_sha256": "b7a1d92c4e0e186fca4e2e7e67523763c0c57bc4b91bd3ef18247c5b5cc996c9",
+          "scope": "Locked/offline build of desktop/CLI/menu/lock/greeter/polkit plus international-text/input-method-peer/application-intent; all nine archived binary hashes verified. Built, not yet deployed or natively accepted."
         }
       ]
     },
@@ -106,7 +140,14 @@
         "Exercise actual third-party StatusNotifier/DBusMenu applications and ordinary application clipboard transfers, not only synthetic protocol peers.",
         "Record runtime/source/hardware identities, actual checks and exact restoration; unavailable hardware is an open acceptance item."
       ],
-      "evidence": []
+      "evidence": [
+        {
+          "kind": "native-backend-liveness",
+          "source_commit": "a7f41eccdcd8eca51e8e5ee878d8f489d8d4bde5",
+          "guide": "docs/lucent-vulkan.md",
+          "scope": "Later mount-anchored AMD native-context trial passes RADV RENOIR enumeration, secure login, actual hardware-adapter selection and advancing native frame counters across three seconds with preserved user/source/settings/media/critical files and monitor. Candidate retained. No measured FPS, source cadence, RSS, GPU memory/decoding, physical-output or newer 8e6d074b binary acceptance."
+        }
+      ]
     },
     {
       "id": "documentation-accuracy",

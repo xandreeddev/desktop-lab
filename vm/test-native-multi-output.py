@@ -25,7 +25,7 @@ import sys
 import time
 import uuid
 
-from multi_output_policy import (Blocked, button_event, cursor_matches, hit_center, host,
+from multi_output_policy import (Blocked, button_event, cursor_matches, hit_center, host, host_surface_ids,
                                  layer_for, monitor_signature, output, require, retired,
                                  surface, unique)
 
@@ -373,9 +373,10 @@ def main():
         run.press_action(name, 'bar-network', fresh_focus=True)
         run.panels_stay_closed(.25)
         before = run.settled(name)
-        old_ids = {s['id'] for s in vm.inspect()['surfaces'] if s.get('output') == name}
+        old_instance = before['host']['instance']
+        old_ids = host_surface_ids(vm.inspect(), name, old_instance)
         run.lease('remove')
-        eventually(lambda: retired(vm.inspect(), name, old_ids), 'removed_host_still_has_live_surfaces')
+        eventually(lambda: retired(vm.inspect(), name, old_instance, old_ids), 'removed_host_still_has_live_surfaces')
         run.release()
         run.panels_stay_closed()
         surviving = run.settled(original_name, receipt['baseline'][0])

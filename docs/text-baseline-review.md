@@ -34,7 +34,12 @@ palettes, together with the new Display and credential controls.
 passes all checks, including the full 832-case Vulkan comparison, at
 `5d3501ebd9e02dccca62f7c2f9cae59056e40a7a`. This does not turn the original
 failed comparison into a passing result. The later hard-paragraph/soft-wrap bidi
-correction requires a fresh source-specific run.
+correction has its own [passing full CI](https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281)
+at exact `8e6d074bfcb30a0bcc0b371afddcd50c08993af0`. Its visual report contains
+832 passed cases with the same references and thresholds. The explicit
+wrapped/cache regressions run at 1×/2× as part of that CI. A coherent release of
+all six managed clients and three acceptance examples is built, not yet deployed;
+this does not add native IME or resource acceptance.
 
 Twenty focused Vulkan filters also pass locally on AMD RADV. The duplicate local
 full sweep was deliberately stopped after 58 actual cases; its logs and images

@@ -1,5 +1,16 @@
 # Inline text: content, interaction and painting
 
+Source scope: accepted main `d00014509f13125fe4ccab3ce2e1fa3961a40dd3` includes the
+verified Display milestone. The implemented, unmerged Text cohort is
+`8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, including the soft-wrap bidi correction.
+Focused checks and [final CI](https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281)
+pass at this source: full workspace, six controlled service-protocol filters and
+all 832 Vulkan desktop cases. The coherent six-client/three-example release is
+built and archived, but has not been deployed. Native IME and interoperability
+acceptance remain pending. Earlier results retain their own source scope. See
+[current readiness](current-readiness.md) for the separate runtime, documentation
+and native-harness snapshots and remaining acceptance boundaries.
+
 `Element::rich_text(Vec<TextSpan>)` is a framework control. It knows registered
 font indices, colors, underline and opaque action identities. It does not parse
 HTML, interpret a URL, load an image or open an application.
@@ -93,5 +104,8 @@ per-line paint, mapped callbacks, one keyboard target, disjoint pointer coverage
 and capture retirement. Pure/client tests cover parser limits, URI policy,
 literal arguments, current-version actions and saved-content links. Render
 references exercise bold/italic baselines, clipped links and visible keyboard
-focus at 1x/2x with both palettes. Real compositor input remains deferred;
-complex-script shaping, bidi, fallback, IME and accessibility remain open.
+focus at 1x/2x with both palettes. Real compositor input remains unverified;
+the unmerged text cohort implements whole-paragraph bidi and script/font shaping
+with shared style masks and bounded fallback. See [international text](text-shaping.md)
+for the implementation and controlled checks. Native compositor IME and wider
+application interoperability remain unverified; accessibility is user-deferred.

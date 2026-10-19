@@ -1152,6 +1152,7 @@ dependencies = [
  "lucent-api",
  "lucent-design",
  "lucent-wayland",
+ "rustix",
  "serde_json",
  "wayland-client",
  "wayland-protocols-misc",

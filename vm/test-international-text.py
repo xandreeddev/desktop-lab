@@ -19,6 +19,10 @@ from pathlib import Path
 import re
 import select
 import secrets
+import signal
+
+import international_text_policy as policy
+import international_text_pixels as pixels
 import shlex
 import subprocess
 import time
@@ -28,7 +32,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class Failure(Exception):
-    pass
+    def __init__(self, label, diagnostics=None):
+        super().__init__(label)
+        self.diagnostics = diagnostics
 
 
 def require(condition, label):
@@ -36,12 +42,95 @@ def require(condition, label):
         raise Failure(label)
 
 
-def run(argv, *, data=None, timeout=20):
+def source_commits(source_commit, peer_source_commit=None):
+    require(re.fullmatch('[a-f0-9]{40}', source_commit), 'full_source_commit_required')
+    peer = source_commit if peer_source_commit is None else peer_source_commit
+    require(re.fullmatch('[a-f0-9]{40}', peer), 'full_peer_source_commit_required')
+    return {'desktop': source_commit, 'example': source_commit, 'peer': peer}
+
+
+def record_restoration_failure(report, phase, error):
+    require(phase in ('pointer_release', 'unit_retirement', 'peer_transport', 'state_and_pointer'),
+            'fixed_restoration_phase_required')
+    details = policy.diagnostic_error(error)
+    if isinstance(error, Failure):
+        if re.fullmatch('[a-z_]{1,128}', str(error)):
+            details['fixed_reason'] = str(error)
+        if error.diagnostics is not None:
+            details['subprocess'] = error.diagnostics
+    report.setdefault('restoration_failures', {})[phase] = details
+
+
+def move_pointer(session, guard, cursor, point, diagnostics, *, restoring=False):
+    """Declare one global warp; never turn another observed position into authority."""
+    command = policy.compositor_move(point)
+    require(len(diagnostics) < 16, 'bounded_pointer_move_diagnostics')
+    event = {'primitive': 'hyprland_global_lua', 'requested': list(point),
+             'before': None, 'observed': [], 'restoring': restoring, 'confirmed': False}
+    diagnostics.append(event)
+    try:
+        guard(owned=not restoring, restoring=restoring)
+        before = json.loads(session('hyprctl', '-j', 'cursorpos', timeout=3))
+        event['before'] = before
+        cursor.begin(before, point)
+        deadline = time.monotonic() + 3
+        require(session('hyprctl', 'dispatch', command, timeout=3).strip() == b'ok',
+                'compositor_pointer_move_rejected')
+        while time.monotonic() < deadline:
+            require(len(event['observed']) < 32, 'bounded_pointer_arrival_observations')
+            current = json.loads(session('hyprctl', '-j', 'cursorpos',
+                                         timeout=max(.01, deadline-time.monotonic())))
+            event['observed'].append(current)
+            if cursor.observe(current) == tuple(point):
+                cursor.finish(current)
+                event['confirmed'] = True
+                return
+            time.sleep(min(.12, max(0, deadline-time.monotonic())))
+        raise Failure('exact_owned_pointer_arrival')
+    except Exception as error:
+        event['failure'] = policy.diagnostic_error(error)
+        raise
+    finally:
+        event['authority_lost'] = cursor.lost
+
+
+def admit_field_press(session, guard, observe, cursor, field, target):
+    """After slow general guards, bind fresh native geometry before physical down."""
+    require(field in ('single', 'body', 'masked') and target is not None,
+            'owned_field_button_target_required')
+    guard()
+    latest = observe()
+    layer = policy.owned_layers(json.loads(session('hyprctl', '-j', 'layers')),
+                                latest['authority']['desktop']['pid'],
+                                latest['authority']['example']['process']['pid'])
+    fresh = policy.field_geometry(latest['example'], layer, field)[2]
+    require(fresh == target, 'same_current_field_and_layer_before_press')
+    current = json.loads(session('hyprctl', '-j', 'cursorpos'))
+    require(cursor.pending is None and cursor.observe(current) == tuple(target['point']),
+            'exact_owned_pointer_before_button')
+
+
+def run(argv, *, data=None, timeout=20, label='bounded_subprocess_failed'):
+    require(re.fullmatch('[a-z_]+', label) is not None, 'fixed_subprocess_step_label')
     try:
         result = subprocess.run(argv, input=data, capture_output=True, timeout=timeout)
-    except (OSError, subprocess.TimeoutExpired):
-        raise Failure('bounded_subprocess_failed') from None
-    require(result.returncode == 0, 'bounded_subprocess_failed')
+    except OSError as error:
+        raise Failure(label, {'step': label, 'kind': 'os_error', 'errno': error.errno}) from None
+    except subprocess.TimeoutExpired:
+        raise Failure(label, {'step': label, 'kind': 'deadline'}) from None
+    if result.returncode:
+        stderr = result.stderr or b''
+        # Retain useful transport metadata, never argv, stdout or stderr payload.
+        diagnostics = {'step': label, 'kind': 'nonzero_exit', 'returncode': result.returncode,
+                       'stderr_bytes': len(stderr), 'stderr_sha256': hashlib.sha256(stderr).hexdigest()}
+        allowed = {'absolute_owned_file_required', 'canonical_owned_file_required',
+                   'owned_regular_file_required', 'file_size_envelope', 'path_fd_identity_mismatch',
+                   'file_identity_changed_during_read', 'path_identity_changed_during_read',
+                   'content_size_changed_during_read', 'release_binary_digest_mismatch'}
+        match = re.search(rb'(?:^|\n)AssertionError: ([a-z_]+)\s*$', stderr)
+        if match is not None and match[1].decode() in allowed:
+            diagnostics['fixed_reason'] = match[1].decode()
+        raise Failure(label, diagnostics)
     return result.stdout
 
 
@@ -51,62 +140,41 @@ def private(path, data):
         stream.write(data if isinstance(data, bytes) else (json.dumps(data, indent=2) + '\n').encode())
 
 
-PROBE = r'''
-import hashlib,json,os,stat,sys
-from pathlib import Path
+PROBE = policy.PINNED_READ_FUNCTIONS + r'''
+import json,sys
+assert len(sys.argv)==7
 result={}
-for name,raw,expected in zip(('example','peer'),sys.argv[1::2],sys.argv[2::2]):
- path=Path(raw);assert path.is_absolute() and path.resolve(strict=True)==path
- fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
- with os.fdopen(fd,'rb') as stream:
-  info=os.fstat(stream.fileno());assert stat.S_ISREG(info.st_mode) and info.st_uid==os.getuid() and info.st_size<=128*1024*1024
-  digest=hashlib.sha256()
-  for chunk in iter(lambda:stream.read(1024*1024),b''):digest.update(chunk)
-  assert digest.hexdigest()==expected and os.fstat(stream.fileno())==info
+for name,raw,expected in zip(('example','peer','desktop'),sys.argv[1::2],sys.argv[2::2]):
+ value=read_pinned_file(raw,128*1024*1024,canonical=True)
+ assert value['sha256']==expected,'release_binary_digest_mismatch'
  result[name]=expected
 print(json.dumps(result))
 '''
-CHECKPOINT = r'''
-import hashlib,json,os,stat
-from pathlib import Path
+CHECKPOINT = policy.PINNED_READ_FUNCTIONS + r'''
+import json
 base=Path.home()/'.local/state/lucent';settings=base/'desktop.json'
-fd=os.open(settings,os.O_RDONLY|os.O_NOFOLLOW)
-with os.fdopen(fd,'rb') as stream:
- info=os.fstat(stream.fileno());assert stat.S_ISREG(info.st_mode) and info.st_size<=4*1024*1024
- data=stream.read(4*1024*1024+1);assert len(data)<=4*1024*1024 and os.fstat(stream.fileno())==info
+value=read_pinned_file(settings,4*1024*1024)
 wallpaper=base/'wallpaper';link=wallpaper.lstat();assert stat.S_ISLNK(link.st_mode)
-print(json.dumps({'settings_sha256':hashlib.sha256(data).hexdigest(),'settings_inode':[info.st_dev,info.st_ino,info.st_size,info.st_mtime_ns],'wallpaper':[link.st_dev,link.st_ino,link.st_mtime_ns,os.readlink(wallpaper),str(wallpaper.resolve(strict=True))]}))
+print(json.dumps({'settings_sha256':value['sha256'],'settings_inode':value['identity'],
+ 'wallpaper':stable_file_identity(link)+[os.readlink(wallpaper),str(wallpaper.resolve(strict=True))]}))
 '''
-INSPECT = r'''
-import json,os,socket
-from pathlib import Path
-path=Path(os.environ['XDG_RUNTIME_DIR'])/'lucent-international-text.sock'
-s=socket.socket(socket.AF_UNIX);s.settimeout(3);s.connect(str(path));s.sendall(b'inspect\n');data=bytearray()
-while True:
- chunk=s.recv(65536)
- if not chunk:break
- data+=chunk;assert len(data)<=4*1024*1024
-print(data.decode())
-'''
-
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source-commit', required=True)
+    parser.add_argument('--peer-source-commit', help='Full peer-only fixture commit; defaults to --source-commit')
     parser.add_argument('--example-bin', required=True)
     parser.add_argument('--peer-bin', required=True)
     parser.add_argument('--example-sha256', required=True)
     parser.add_argument('--peer-sha256', required=True)
+    parser.add_argument('--desktop-sha256', required=True)
     args = parser.parse_args()
-    require(re.fullmatch('[a-f0-9]{40}', args.source_commit), 'full_source_commit_required')
-    for digest in (args.example_sha256, args.peer_sha256):
+    provenance = source_commits(args.source_commit, args.peer_source_commit)
+    for digest in (args.example_sha256, args.peer_sha256, args.desktop_sha256):
         require(re.fullmatch('[a-f0-9]{64}', digest), 'full_binary_digest_required')
-    # Worktrees share the prepared VM inventory with their canonical checkout.
     common = Path(run(['git', '-C', str(ROOT), 'rev-parse', '--path-format=absolute',
                        '--git-common-dir']).decode().strip()).resolve(strict=True)
-    lab_path = common.parent / 'vm/lab.py'
-    require(lab_path.is_file(), 'canonical_lab_helper_required')
-    spec = importlib.util.spec_from_file_location('international_text_lab', lab_path)
+    spec = importlib.util.spec_from_file_location('international_text_lab', common.parent / 'vm/lab.py')
     require(spec is not None and spec.loader is not None, 'canonical_lab_loader_required')
     lab = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(lab)
@@ -118,28 +186,73 @@ def main():
     directory = lab.ROOT / 'reports/local' / ('international-text-native-' + tag)
     directory.mkdir(mode=0o700)
     unit = 'lucent-international-test-' + tag + '.service'
-    peer = None
-    unit_started = False
-    pressed = False
-    original_cursor = last_cursor = original = monitor = None
-    report = {'passed': False, 'source_commit': args.source_commit, 'checks': {}, 'restoration': {},
+    peer_unit = 'lucent-international-peer-' + tag + '.service'
+    peer = peer_log = None
+    example_attempted = peer_attempted = example_confirmed = peer_confirmed = pressed = False
+    original = original_outputs = original_workspace = cursor = None
+    authority = {}
+    frozen_layer = None
+    focused = None
+    input_deadline = None
+    sequence = 0
+    report = {'passed': False, 'source_commit': args.source_commit, 'source_commits': provenance,
+              'checks': {}, 'restoration': {}, 'pointer_moves': [],
               'helper_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-              'binaries': {'example': args.example_sha256, 'peer': args.peer_sha256},
-              'scope': 'One prepared native output; independent controlled input-method peer, no third-party IME/hardware claim'}
+              'policy_sha256': hashlib.sha256((ROOT / 'vm/international_text_policy.py').read_bytes()).hexdigest(),
+              'pixel_proof_sha256': hashlib.sha256((ROOT / 'vm/international_text_pixels.py').read_bytes()).hexdigest(),
+              'binaries': {'desktop': args.desktop_sha256, 'example': args.example_sha256, 'peer': args.peer_sha256},
+              'scope': 'One prepared native output; independent non-replacing input-method peer, no third-party IME/hardware claim',
+              'host_crash_policy': 'Both exact owned transient units expire after210seconds. Private evidence remains; cursor restoration requires a guarded live host.'}
 
-    def remote(*argv, data=None):
-        return run(lab.ssh_args('lucent') + [shlex.join(argv)], data=data)
+    def remote(*argv, data=None, label='bounded_subprocess_failed', timeout=20):
+        return run(lab.ssh_args('lucent') + [shlex.join(argv)], data=data, label=label, timeout=timeout)
 
-    def session(*argv, data=None):
-        return remote('python3', 'desktop-lab/scripts/in-session.py', *argv, data=data)
+    def session(*argv, data=None, label='bounded_subprocess_failed', timeout=20):
+        return remote('python3', 'desktop-lab/scripts/in-session.py', *argv,
+                      data=data, label=label, timeout=timeout)
 
-    def guard():
-        require(session('omarchy-shell', 'lock', 'isLocked').strip() == b'false', 'unlocked_guest_required')
-        require(json.loads(session('hyprctl', '-j', 'clients')) == [], 'idle_guest_without_ordinary_apps_required')
-        require(b'lucent-authorization-' not in session('hyprctl', '-j', 'layers'), 'secure_surface_absent_required')
+    def configuration(owned=True):
+        expected = authority if owned else {k: v for k, v in authority.items() if k.startswith('desktop')}
+        return {'desktop_sha256': args.desktop_sha256, 'expected': expected,
+                'example': {'unit': unit, 'argv': [args.example_bin], 'sha256': args.example_sha256}
+                           if owned and example_confirmed else None,
+                'peer': {'unit': peer_unit, 'argv': [args.peer_bin], 'sha256': args.peer_sha256}
+                        if owned and peer_confirmed else None}
+
+    def observe(owned=True):
+        value = json.loads(session('python3', '-c', policy.OBSERVE, json.dumps(configuration(owned))))
+        for key, identity in value['authority'].items():
+            require(key not in authority or authority[key] == identity, 'frozen_owned_runtime_authority')
+            authority[key] = identity
+        return value
 
     def inspect():
-        return json.loads(session('python3', '-c', INSPECT))
+        return observe()['example']
+
+    def guard(owned=True, restoring=False):
+        nonlocal frozen_layer
+        if input_deadline is not None and not restoring:
+            require(time.monotonic() < input_deadline, 'bounded_native_input_window')
+        require(session('omarchy-shell', 'lock', 'isLocked').strip() == b'false', 'unlocked_guest_required')
+        value = observe(owned)
+        policy.idle_client(value['desktop']['client'])
+        require(json.loads(session('hyprctl', '-j', 'clients')) == [], 'no_foreign_managed_clients')
+        policy.safe_bindings(json.loads(session('hyprctl', '-j', 'binds')))
+        layer = policy.owned_layers(json.loads(session('hyprctl', '-j', 'layers')),
+                    value['authority']['desktop']['pid'],
+                    value['authority']['example']['process']['pid'] if owned and example_confirmed else None)
+        if layer is not None:
+            if frozen_layer is None:
+                frozen_layer = layer
+            require(layer == frozen_layer, 'frozen_owned_native_layer')
+        if original_outputs is not None:
+            require(policy.output_state(json.loads(session('hyprctl', '-j', 'monitors'))) == original_outputs,
+                    'unchanged_native_output')
+            require(policy.workspace_state(json.loads(session('hyprctl', '-j', 'activeworkspace'))) == original_workspace,
+                    'unchanged_active_workspace')
+        if cursor is not None:
+            cursor.observe(json.loads(session('hyprctl', '-j', 'cursorpos')))
+        return value, layer
 
     def eventually(predicate, label, timeout=15):
         deadline = time.monotonic() + timeout
@@ -151,8 +264,6 @@ def main():
                 pass
             time.sleep(.12)
         raise Failure(label)
-
-    sequence = 0
 
     def command(**value):
         nonlocal sequence
@@ -168,7 +279,7 @@ def main():
             line = peer.stdout.readline(16385)
             require(line and len(line) <= 16384, 'bounded_peer_response_required')
             event = json.loads(line)
-            require(event.get('event') != 'unavailable', 'existing_input_method_preserved_refusal')
+            require(event.get('event') not in ('unavailable', 'retired'), 'existing_input_method_or_retired_seat_preserved_refusal')
             if event.get('id') == sequence:
                 return event
         raise Failure('native_peer_response_deadline')
@@ -176,67 +287,72 @@ def main():
     def status(expected):
         return command(action='status', expected=expected)
 
+    def focused_guard(expected=None):
+        value, _ = guard()
+        state = value['example']
+        require(focused in ('single', 'body'), 'ordinary_field_target_required')
+        current = state['client'][focused]
+        require(expected is None or current == expected, 'exact_current_fixture_text_required')
+        observation = status(current)
+        policy.focused_field(state, focused, observation)
+        return observation
+
     def send(expected, **changes):
-        guard()
-        observed = status(expected)
-        require(observed['active'] and observed['matches'], 'owned_current_fixture_text_required')
+        observed = focused_guard(expected)
         response = command(action='batch', expected=expected, cursor=observed['cursor'], anchor=observed['anchor'], **changes)
         require(response.get('posted'), 'native_peer_batch_posted')
 
     def key(*codes):
-        guard()
+        focused_guard()
         run(['virsh', '-c', lab.URI, 'send-key', name, '--codeset', 'linux', '--holdtime', '25', *map(str, codes)])
         time.sleep(.1)
 
-    def qmp(events):
+    def qmp(events, *, restoring=False, field=None, target=None):
         releasing = all(event['type'] == 'btn' and event['data']['down'] is False for event in events)
         if not releasing:
-            guard()
+            require(not restoring and len(events) == 1 and events[0]['type'] == 'btn'
+                    and events[0]['data'] == {'button': 'left', 'down': True},
+                    'only_owned_physical_button_down')
+            admit_field_press(session, guard, observe, cursor, field, target)
         value = json.loads(run(['virsh', '-c', lab.URI, 'qemu-monitor-command', name,
                                json.dumps({'execute': 'input-send-event', 'arguments': {'events': events}})]))
         require('error' not in value, 'native_pointer_delivery')
 
     def geometry(field):
-        state = inspect()
-        surface = next(s for s in state['surfaces'] if s.get('role') == 'international')
-        hit = next(h for h in surface['hits'] if h['id'] == field)
-        layers = json.loads(session('hyprctl', '-j', 'layers'))
-        found = []
-        def visit(value):
-            if isinstance(value, dict):
-                if value.get('namespace') == 'lucent-international':
-                    found.append(value)
-                for child in value.values():
-                    visit(child)
-            elif isinstance(value, list):
-                for child in value:
-                    visit(child)
-        visit(layers)
-        require(len(found) == 1, 'one_owned_native_layer')
-        return surface, hit, found[0]
+        value, layer = guard()
+        return policy.field_geometry(value['example'], layer, field)
+
+    def move(point, *, restoring=False):
+        move_pointer(session, guard, cursor, point, report['pointer_moves'], restoring=restoring)
 
     def click(field):
-        nonlocal pressed, last_cursor
-        _, hit, layer = geometry(field)
-        x = layer['x'] + hit['x'] + hit['width'] / 2
-        y = layer['y'] + hit['y'] + hit['height'] / 2
-        qmp([{'type': 'abs', 'data': {'axis': axis, 'value': round(position / (extent - 1) * 32767)}}
-             for axis, position, extent in [('x', x, monitor['width']), ('y', y, monitor['height'])]])
-        time.sleep(.2)
-        last_cursor = json.loads(session('hyprctl', '-j', 'cursorpos'))
+        nonlocal pressed, focused
+        _, _, target = geometry(field)
+        focused = None
+        move(target['point'])
+        _, _, fresh = geometry(field)
+        require(fresh == target, 'same_current_field_and_layer_before_press')
         pressed = True
-        qmp([{'type': 'btn', 'data': {'button': 'left', 'down': True}}])
+        qmp([{'type': 'btn', 'data': {'button': 'left', 'down': True}}], field=field, target=target)
         qmp([{'type': 'btn', 'data': {'button': 'left', 'down': False}}])
         pressed = False
         eventually(lambda: geometry(field)[0]['focus'] == field, 'native_field_focus_' + field)
+        focused = field
 
     def capture(field, label):
-        _, hit, layer = geometry(field)
-        x, y = round(layer['x'] + hit['x']), round(layer['y'] + hit['y'])
-        width, height = round(hit['width']), round(hit['height'])
+        surface, hit, target = geometry(field)
+        layer = target['layer']
+        x, y = round(layer['x']), round(layer['y'])
+        width, height = round(surface['width']), round(surface['height'])
+        require(0 <= x < x+width <= 1920 and 0 <= y < y+height <= 1080
+                and width*height*3+1024 <= 4*1024*1024, 'bounded_owned_surface_capture')
         data = session('grim', '-g', f'{x},{y} {width}x{height}', '-')
         private(directory / (label + '.png'), data)
-        return hashlib.sha256(data).hexdigest()
+        ppm = session('grim', '-t', 'ppm', '-g', f'{x},{y} {width}x{height}', '-')
+        image = pixels.read_ppm(ppm)
+        private(directory / (label + '.ppm'), ppm)
+        return {'sha256': hashlib.sha256(data).hexdigest(), 'image': image,
+                'field': (round(hit['x']), round(hit['y']), round(hit['x']+hit['width']), round(hit['y']+hit['height']))}
 
     def clear(field):
         click(field)
@@ -244,27 +360,70 @@ def main():
         key(14)
         eventually(lambda: inspect()['client'][field] == '' and status('')['matches'], 'cleared_' + field)
 
+    previous_signal = signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(Failure('native_fixture_interrupted')))
     try:
         guard()
         outputs = json.loads(session('hyprctl', '-j', 'monitors'))
-        require(len(outputs) == 1, 'one_output_required')
-        monitor = outputs[0]
-        require(monitor['scale'] == 1 and monitor['x'] == monitor['y'] == 0, 'native_1x_origin_output_required')
-        original_cursor = json.loads(session('hyprctl', '-j', 'cursorpos'))
-        original = json.loads(session('python3', '-c', CHECKPOINT))
-        private(directory / 'original-private.json', {'state': original, 'monitor': monitor, 'cursor': original_cursor})
-        session('python3', '-c', PROBE, args.example_bin, args.example_sha256, args.peer_bin, args.peer_sha256)
-        peer = subprocess.Popen(lab.ssh_args('lucent') + [shlex.join(['python3', 'desktop-lab/scripts/in-session.py', args.peer_bin])], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
-        session('systemd-run', '--user', '--unit', unit, '--collect', '--no-block', '--property', 'CPUQuota=100%', '--property', 'MemoryMax=768M', '--', args.example_bin)
-        unit_started = True
+        require(len(outputs) == 1 and outputs[0]['width'] == 1920 and outputs[0]['height'] == 1080
+                and outputs[0]['scale'] == 1 and outputs[0]['x'] == outputs[0]['y'] == 0
+                and outputs[0].get('transform') == 0 and outputs[0].get('dpmsStatus') is True,
+                'native_1920x1080_1x_origin_output_required')
+        original_outputs = policy.output_state(outputs)
+        original_workspace = policy.workspace_state(json.loads(session('hyprctl', '-j', 'activeworkspace')))
+        cursor = policy.CursorOwnership(json.loads(session('hyprctl', '-j', 'cursorpos')))
+        original = json.loads(session('python3', '-c', CHECKPOINT, label='settings_checkpoint_failed'))
+        private(directory / 'original-private.json', {'state': original, 'outputs': original_outputs,
+                'workspace': original_workspace, 'cursor': cursor.initial, 'owned_units': [unit, peer_unit]})
+        # These explicitly supplied paths are immutable release files/staged copies,
+        # never an existing user's input-method executable or running process.
+        session('python3', '-c', PROBE, args.example_bin, args.example_sha256, args.peer_bin, args.peer_sha256,
+                '/home/omarchy/.local/bin/lucent-desktop', args.desktop_sha256, label='release_binary_probe_failed')
+        peer_log = (directory / 'peer-private.log').open('xb')
+        os.chmod(directory / 'peer-private.log', 0o600)
+        input_deadline = time.monotonic() + 170
+        require(json.loads(session('python3', '-c', policy.ABSENT, json.dumps([unit, peer_unit])))['initial_units_absent'],
+                'initial_owned_unit_names_absent')
+        peer_attempted = True
+        peer = subprocess.Popen(lab.ssh_args('lucent') + [shlex.join([
+            'python3', 'desktop-lab/scripts/in-session.py', 'systemd-run', '--user', '--quiet', '--pipe', '--wait',
+            '--property=Type=exec', '--property=RuntimeMaxSec=210s', '--property=TimeoutStopSec=10s',
+            '--property=CPUQuota=100%', '--property=MemoryMax=256M', '--unit=' + peer_unit, '--', args.peer_bin])],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=peer_log, bufsize=0)
+        require(not command(action='status', expected='').get('unavailable'), 'nonreplacing_peer_available')
+        # A reply on this newly attached child stdio confirms its own launch;
+        # a refused systemd-run cannot attach us to an existing service's pipes.
+        peer_confirmed = True
+        observe()
+        example_attempted = True
+        session('systemd-run', '--user', '--quiet', '--collect', '--property=Type=exec',
+                '--property=RuntimeMaxSec=210s', '--property=TimeoutStopSec=10s',
+                '--property=CPUQuota=100%', '--property=MemoryMax=768M', '--unit=' + unit, '--', args.example_bin)
+        # A failed/lost start reply leaves this false: only captured successful
+        # invocations are eligible for cleanup, never a matching preexisting unit.
+        example_confirmed = True
         eventually(lambda: len(inspect()['surfaces']) == 1, 'owned_example_ready')
+        guard()
+        private(directory / 'owned-authority-private.json', authority)
         clear('single')
+        def initial_rectangle():
+            observation = focused_guard('')
+            rectangle = observation['rectangle']
+            return observation.get('popup_buffer_committed') and rectangle is not None and rectangle[2] > 0 and rectangle[3] > 0
+        eventually(initial_rectangle, 'initial_native_candidate_rectangle')
         baseline = capture('single', 'before-preedit')
+        before = focused_guard('')
+        before_rectangle = before['rectangle']
+        pixels.caret_from_popup(baseline['image'], pixels.marker(baseline['image']), before_rectangle, baseline['field'])
         send('', preedit='にほん', begin=9, end=9)
-        time.sleep(.25)
+        eventually(lambda: status('')['rectangle_updates'] > before['rectangle_updates'], 'native_preedit_refreshes_candidate_hint')
+        time.sleep(.1)  # Let the already requested native frame reach the compositor.
         require(inspect()['client']['single'] == '', 'preedit_not_committed')
-        require(capture('single', 'preedit') != baseline, 'native_preedit_pixels_changed')
-        report['checks']['preedit_transient_and_painted'] = True
+        after = focused_guard('')
+        composed = capture('single', 'preedit')
+        require(composed['field'] == baseline['field'], 'same_owned_field_during_preedit')
+        proof = pixels.preedit_proof(baseline['image'], composed['image'], before_rectangle, after['rectangle'], baseline['field'])
+        report['preedit_capture'] = dict(proof, before_sha256=baseline['sha256'], after_sha256=composed['sha256'])
+        report['checks']['native_preedit_ink_and_caret_advance_without_commit'] = True
         send('', preedit='', commit='日本語')
         eventually(lambda: inspect()['client']['single'] == '日本語' and status('日本語')['matches'], 'native_cjk_commit')
         send('日本語', commit='人', delete=[3, 0])
@@ -281,7 +440,7 @@ def main():
         require(not command(action='batch', expected='日本人', cursor=9, anchor=9, commit='invalid')['ok'], 'masked_peer_denied')
         report['checks']['masked_focus_retires_composition'] = True
         clear('body')
-        body = 'سلام\nक्षि\n日本語'
+        body = policy.MULTILINE_TEXT
         send('', commit=body)
         eventually(lambda: inspect()['client']['body'] == body and status(body)['matches'], 'native_multiline_commit')
         rectangle = status(body)['rectangle']
@@ -298,43 +457,57 @@ def main():
         report['passed'] = True
     except (Failure, KeyError, ValueError, LookupError, OSError) as error:
         report['passed'] = False
-        report['failure'] = str(error) if isinstance(error, Failure) else 'fixture_protocol_or_geometry_failed'
+        label = str(error)
+        report['failure'] = label if re.fullmatch('[a-z_]+', label) else 'fixture_protocol_geometry_or_ownership_failed'
+        if isinstance(error, Failure) and error.diagnostics is not None:
+            report['subprocess_failure'] = error.diagnostics
     finally:
         if pressed:
             try:
                 qmp([{'type': 'btn', 'data': {'button': 'left', 'down': False}}])
-            except Failure:
+            except Failure as error:
                 report['restoration']['pointer_released'] = False
+                record_restoration_failure(report, 'pointer_release', error)
+        try:
+            cleanup, uncertain = policy.captured_cleanup(configuration(),
+                [name for name, attempted in (('example', example_attempted), ('peer', peer_attempted)) if attempted])
+            retired = json.loads(session('python3', '-c', policy.RETIRE, json.dumps(cleanup), label='owned_units_retirement_subprocess_failed'))
+            report['retirement_diagnostics'] = retired
+            require(retired.get('owned_units_retired') is True, 'captured_unit_retirement_refused')
+            report['restoration']['owned_example_and_peer_units_retired'] = not uncertain
+            if uncertain:
+                report['unconfirmed_start_attempts_not_retired'] = uncertain
+                report['unconfirmed_start_policy'] = 'No cleanup authority inferred after a refused/lost launch reply or missing captured lifetime. Any actually created unit remains bounded by its independent210second watchdog.'
+        except (Failure, ValueError) as error:
+            report['restoration']['owned_example_and_peer_units_retired'] = False
+            record_restoration_failure(report, 'unit_retirement', error)
         if peer is not None:
             try:
-                if peer.poll() is None:
-                    command(action='quit')
-                peer.wait(timeout=5)
-                report['restoration']['owned_peer_exited'] = peer.returncode == 0
-            except (Failure, subprocess.TimeoutExpired):
+                peer.stdin.close()
+                peer.wait(timeout=15)
+                report['restoration']['owned_peer_transport_closed'] = True
+            except (OSError, subprocess.TimeoutExpired) as error:
+                # This terminates only our local SSH transport; the exact guest
+                # transient unit remains independently bounded by RuntimeMaxSec.
                 peer.terminate()
-                report['restoration']['owned_peer_exited'] = False
-        if unit_started:
-            try:
-                # The random owned unit is never reused and only this binary was launched.
-                observed = session('systemctl', '--user', 'show', unit, '-p', 'ExecStart', '--value').decode()
-                require(args.example_bin in observed, 'owned_unit_exec_identity_required')
-                session('systemctl', '--user', 'stop', unit)
-                report['restoration']['owned_example_stopped'] = True
-            except Failure:
-                report['restoration']['owned_example_stopped'] = False
+                report['restoration']['owned_peer_transport_closed'] = False
+                record_restoration_failure(report, 'peer_transport', error)
+        if peer_log is not None:
+            peer_log.close()
         if original is not None:
             try:
-                report['restoration']['settings_and_wallpaper_preserved'] = json.loads(session('python3', '-c', CHECKPOINT)) == original
-                after = json.loads(session('hyprctl', '-j', 'monitors'))
-                report['restoration']['output_and_workspace_preserved'] = len(after) == 1 and all(after[0].get(k) == monitor.get(k) for k in ('name', 'width', 'height', 'scale', 'x', 'y', 'activeWorkspace', 'specialWorkspace'))
-                if original_cursor is not None:
-                    current = json.loads(session('hyprctl', '-j', 'cursorpos'))
-                    require(last_cursor is None or current == last_cursor, 'concurrent_pointer_change_preserved')
-                    session('hyprctl', 'dispatch', 'movecursor', str(original_cursor['x']), str(original_cursor['y']))
-                    report['restoration']['pointer_restored'] = json.loads(session('hyprctl', '-j', 'cursorpos')) == original_cursor
-            except Failure:
-                report['restoration']['state_verified'] = False
+                require(report['restoration'].get('owned_example_and_peer_units_retired'), 'owned_units_retired_before_restoration')
+                guard(owned=False, restoring=True)
+                report['restoration']['settings_and_wallpaper_preserved'] = json.loads(session('python3', '-c', CHECKPOINT, label='settings_checkpoint_failed')) == original
+                report['restoration']['output_and_workspace_preserved'] = True  # exact guard above
+                current = cursor.observe(json.loads(session('hyprctl', '-j', 'cursorpos')))
+                if current != cursor.initial:
+                    move(cursor.initial, restoring=True)
+                report['restoration']['pointer_restored'] = cursor.observe(json.loads(session('hyprctl', '-j', 'cursorpos'))) == cursor.initial
+            except (Failure, ValueError) as error:
+                report['restoration']['guarded_state_and_pointer_verification'] = False
+                record_restoration_failure(report, 'state_and_pointer', error)
+        signal.signal(signal.SIGTERM, previous_signal)
         report['passed'] = report['passed'] and all(report['restoration'].values())
         private(directory / 'report.json', report)
     print(json.dumps(report, indent=2))

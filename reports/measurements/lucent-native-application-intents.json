@@ -1,0 +1,86 @@
+{
+  "schema": 1,
+  "status": "partial_native_acceptance_focus_failed",
+  "overall_passed": false,
+  "production_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+  "harness_source_commit": "f6d004d91e03a0e52d4a7347f850900d51fd3c33",
+  "desktop_sha256": "ecb557a094b583b45cfa07aeb9eb4284dc0bb2b86fdad3b1dbd5f4afc7b6b4ff",
+  "private_report_sha256": "ca9f57dd4ac402913c08c9a673df2edef30fe6b4fb378066d96adcf684d4f0d7",
+  "checks": {
+    "fresh_token_delivered_to_first_owned_child": true,
+    "fresh_browser_focus_observed": false,
+    "fresh_token_child_delivery_and_fresh_browser_focus_observed": false,
+    "real_browser_opened_space_percent_unicode_and_shell_literal_filenames": true,
+    "physical_launch_open_and_declared_action_deliver_fresh_tokens_to_children": true,
+    "later_socket_request_created_both_fresh_documents": true,
+    "each_open_action_socket_and_cli_created_both_fresh_documents": true,
+    "fresh_targets_retired_with_original_browser_control_preserved": true,
+    "desktop_cli_open_and_no_stale_token_reuse": true
+  },
+  "restoration": {
+    "example_socket_retired": true,
+    "example_retired": true,
+    "browser_retired": true,
+    "desktop_entry_retired": true,
+    "watchdog_retired": true,
+    "settings_and_wallpaper_preserved": true,
+    "output_workspace_and_cursor_preserved": true,
+    "private_artifacts_retained": true
+  },
+  "focus_observation": {
+    "observations": 11,
+    "phase": "first_launch_focus_continue_guard",
+    "last_observation": {
+      "active_window_present": false,
+      "owned_client_count": 1,
+      "active_class_matches_owned": false,
+      "active_pid_matches_owned": false,
+      "active_address_matches_owned": false,
+      "matches_owned_browser": false,
+      "submitted_example": {
+        "keyboard": "on-demand",
+        "surface_size": [
+          448,
+          384
+        ],
+        "buffer_size": [
+          448,
+          384
+        ],
+        "submitted": true,
+        "native_submitted": true,
+        "layer_geometry": {
+          "x": 736,
+          "y": 372,
+          "w": 448,
+          "h": 384
+        },
+        "layer_geometry_unchanged": true,
+        "layer_matches_surface_size": true
+      }
+    },
+    "last_outcome": "predicate_false",
+    "focus_observed": false,
+    "clean_focus_timeout": true,
+    "independent_checks_admitted": true
+  },
+  "helper_sources_sha256": {
+    "fixture.py": "38f4734456a757f388e6626cecd880b4521622744ed1b43d9c8c13ec82445a87",
+    "owned_application_units.py": "0082d9c4c87c36a7cc65f361304a2fbda174af83f30d6713720d709a9193d5b7",
+    "application_intent_policy.py": "c8903d689234c4c238303a579306bf8ec5ec0df1ca68dcdfed4021998de353be",
+    "application_intent_browser.py": "9f65cd623e387ef0afb18fca4ae6cf289f62b897f43716300602a9ed0e281d13",
+    "owned_chromium_lease.py": "393501ef04a9a9f6fab21ad154bcffe810ebe95774e47e7c759cf36cb180de4b"
+  },
+  "host_harness_sha256": "7737cebe4deca35f93e46034f8d4ef0b684f9a2d988a1cc7555dd3812fc14faa",
+  "owner_observed_runtime_seconds": 111.318,
+  "scope": "One prepared native output, independent SDK graphical consumer and real owned Chromium profile. Exact fresh page IDs, URLs and loaded titles prove both new local documents per Open/action/socket/CLI request; original blank target survives and only new targets retire. Token presence proves child delivery, not Chromium protocol consumption.",
+  "remaining": [
+    "First-launch focus was not observed; overall acceptance remains failed.",
+    "Persistent example OnDemand focus versus production launcher closing is under investigation; no cause is established.",
+    "Other applications, arbitrary remote URI handlers, physical hardware and actual token consumption are not established."
+  ],
+  "privacy": {
+    "private_paths_tokens_profiles_or_user_content_published": false
+  },
+  "historical_failures_unchanged": true
+}

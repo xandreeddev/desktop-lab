@@ -1,7 +1,7 @@
 """Pure ownership/geometry policy for the guarded native multi-output test.
 
 No subprocesses, desktop access, global environment reads or import side effects.
-Hyprland layer geometry is output-local; its cursor coordinates are global.
+Pinned Hyprland layer geometry and cursor coordinates are global logical values.
 """
 import math
 import re
@@ -136,8 +136,11 @@ def hit_center(monitor, source, layer, identifier):
                  finite(clip['y']) + finite(clip['height']), finite(source['height']))
     require(right - left >= 4 and bottom - top >= 4, 'hit_not_safely_visible')
     local = ((left + right) / 2, (top + bottom) / 2)
-    x = round(finite(monitor['x']) + finite(layer['x']) + local[0])
-    y = round(finite(monitor['y']) + finite(layer['y']) + local[1])
+    # The pinned Hyprland layers JSON reports the arranged global logical box.
+    # SDK hits are surface-local logical values; neither the monitor origin nor
+    # its fractional density belongs in this addition a second time.
+    x = round(finite(layer['x']) + local[0])
+    y = round(finite(layer['y']) + local[1])
     require(monitor['x'] <= x < monitor['x'] + monitor['width'] / monitor['scale']
             and monitor['y'] <= y < monitor['y'] + monitor['height'] / monitor['scale'],
             'hit_outside_target_output')
@@ -227,9 +230,30 @@ class CursorOwnership:
         self.expected, self.pending = self.pending, None
 
 
-def retired(state, name, native_ids):
-    return (not any(h['id'] == name for h in state['client']['monitor_hosts'])
+def host_surface_ids(state, name, instance):
+    """Capture monitor-owned IDs, excluding shared surfaces retargeted on focus.
+
+    The shared dock has no host instance. Its current output is an observation,
+    whereas the nonempty captured instance identifies the host-owned surfaces.
+    Keep their IDs so dropping/changing an instance after removal cannot hide a
+    stale native surface from the subsequent retirement assertion.
+    """
+    require(isinstance(instance, str) and bool(instance)
+            and host(state, name)['instance'] == instance, 'captured_monitor_host_instance_required')
+    owned = [item for item in state['surfaces'] if item.get('instance') == instance]
+    require(owned and all(item.get('output') == name and isinstance(item.get('id'), str)
+                         and item['id'] for item in owned), 'captured_host_surfaces_required')
+    result = {item['id'] for item in owned}
+    require(len(result) == len(owned), 'ambiguous_captured_host_surface_ids')
+    return result
+
+
+def retired(state, name, instance, native_ids):
+    require(isinstance(instance, str) and bool(instance) and bool(native_ids),
+            'captured_host_retirement_authority_required')
+    return (not any(h['id'] == name or h.get('instance') == instance
+                    for h in state['client']['monitor_hosts'])
             and not any(o.get('name') == name for o in state['outputs'])
-            and not any(s['id'] in native_ids or s.get('output') == name
+            and not any(s['id'] in native_ids or s.get('instance') == instance or s.get('output') == name
                         for s in state['surfaces'])
             and state.get('retiring_native_surfaces') == 0)

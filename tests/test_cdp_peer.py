@@ -112,9 +112,68 @@ class PeerTests(unittest.TestCase):
         connection = Connection(b'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n'
                                 b'Connection: Upgrade\r\nSec-WebSocket-Accept: forged\r\n\r\n')
         with patch.object(cdp.socket, 'create_connection', return_value=connection):
-            with self.assertRaisesRegex(cdp.PeerError, 'verified_uncompressed_upgrade_required'):
+            with self.assertRaisesRegex(cdp.PeerError, 'verified_uncompressed_upgrade_required') as observed:
                 cdp.Peer.connect('ws://127.0.0.1:9222/devtools/page/A', 9222, 'A')
         self.assertTrue(connection.closed)
+        self.assertEqual(observed.exception.upgrade_status,{'http_version':'1.1','status_code':101})
+
+    def test_unexpected_status_diagnostics_do_not_relax_acceptance_or_expose_reason_headers(self):
+        for line,expected in ((b'HTTP/1.1 100 PRIVATE REASON',{'http_version':'1.1','status_code':100}),
+                              (b'HTTP/1.0 403 PRIVATE REASON',{'http_version':'1.0','status_code':403}),
+                              (b'PRIVATE STATUS',None)):
+            connection=Connection(line+b'\r\nPrivate-Header: secret\r\n\r\n')
+            with self.subTest(line=line),patch.object(cdp.socket,'create_connection',return_value=connection), \
+                 self.assertRaisesRegex(cdp.PeerError,'^websocket_upgrade_required$') as observed:
+                cdp.Peer.connect('ws://127.0.0.1:9222/devtools/page/A',9222,'A')
+            self.assertEqual(getattr(observed.exception,'upgrade_status',None),expected)
+            self.assertTrue(connection.closed)
+            self.assertNotIn('PRIVATE',str(observed.exception));self.assertNotIn('secret',str(observed.exception))
+
+    def response(self, status, extra=b'', accept=None, upgrade=b'websocket', connection=b'Upgrade'):
+        key=base64.b64encode(bytes(16))
+        if accept is None:
+            accept=base64.b64encode(hashlib.sha1(key+b'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest())
+        return (status+b'\r\nUpgrade: '+upgrade+b'\r\nConnection: '+connection+
+                b'\r\nSec-WebSocket-Accept: '+accept+b'\r\n'+extra+b'\r\n')
+
+    def test_actual_chromium_reason_phrase_and_other_legal_phrases_accept_verified_upgrade(self):
+        for status in (b'HTTP/1.1 101 WebSocket Protocol Handshake',b'HTTP/1.1 101 ',
+                       b'HTTP/1.1 101 \tcustom reason \x80\xff'):
+            connection=Connection(self.response(status)+frame(b'{}'))
+            with self.subTest(status=status),patch.object(cdp.socket,'create_connection',return_value=connection), \
+                 patch.object(cdp.os,'urandom',return_value=bytes(16)):
+                peer=cdp.Peer.connect('ws://127.0.0.1:9222/devtools/page/A',9222,'A')
+                self.assertEqual(peer.receive(time.monotonic()+2),'{}')
+                peer.close()
+            self.assertTrue(connection.closed)
+
+    def test_invalid_status_version_code_separators_and_controls_remain_refused(self):
+        for status in (b'HTTP/1.0 101 Upgrade',b'HTTP/2.0 101 Upgrade',b'HTTP/1.1 200 Upgrade',
+                       b'HTTP/1.1 101',b'HTTP/1.1\t101 Upgrade',b'HTTP/1.1  101 Upgrade',
+                       b'HTTP/1.1 101\tUpgrade',b'HTTP/1.1 101 bad\x00reason',
+                       b'HTTP/1.1 101 bad\x7freason',b'HTTP/1.1 101 bad\x0breason',
+                       b'HTTP/1.1 101 bad\nreason',b'HTTP/1.1 101 bad\rreason'):
+            connection=Connection(self.response(status))
+            with self.subTest(status=status),patch.object(cdp.socket,'create_connection',return_value=connection), \
+                 patch.object(cdp.os,'urandom',return_value=bytes(16)), \
+                 self.assertRaisesRegex(cdp.PeerError,'^websocket_upgrade_required$'):
+                cdp.Peer.connect('ws://127.0.0.1:9222/devtools/page/A',9222,'A')
+            self.assertTrue(connection.closed)
+
+    def test_custom_reason_does_not_bypass_existing_upgrade_header_checks(self):
+        status=b'HTTP/1.1 101 WebSocket Protocol Handshake'
+        for arguments,label in (({'accept':b'forged'},'verified_uncompressed_upgrade_required'),
+                                ({'upgrade':b'other'},'verified_uncompressed_upgrade_required'),
+                                ({'connection':b'close'},'verified_uncompressed_upgrade_required'),
+                                ({'extra':b'Sec-WebSocket-Extensions: deflate\r\n'},'verified_uncompressed_upgrade_required'),
+                                ({'extra':b'uPgRaDe: websocket\r\n'},'unique_upgrade_headers_required'),
+                                ({'extra':b'Connection: Upgrade\r\n'},'unique_upgrade_headers_required'),
+                                ({'extra':b'Sec-WebSocket-Accept: forged\r\n'},'unique_upgrade_headers_required')):
+            connection=Connection(self.response(status,**arguments))
+            with self.subTest(arguments=arguments),patch.object(cdp.socket,'create_connection',return_value=connection), \
+                 patch.object(cdp.os,'urandom',return_value=bytes(16)),self.assertRaisesRegex(cdp.PeerError,'^'+label+'$'):
+                cdp.Peer.connect('ws://127.0.0.1:9222/devtools/page/A',9222,'A')
+            self.assertTrue(connection.closed)
 
     def test_masked_binary_or_invalid_continuation_is_rejected(self):
         for data in (b'\x81\x80', frame(b'xx', opcode=2), frame(b'xx', opcode=0),

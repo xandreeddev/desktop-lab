@@ -1,5 +1,16 @@
 # Multiline editing and Notes
 
+Source scope: accepted main `d00014509f13125fe4ccab3ce2e1fa3961a40dd3` includes the
+verified Display milestone. The implemented, unmerged Text cohort is
+`8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, including the soft-wrap bidi correction.
+Focused checks and [final CI](https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281)
+pass at this source: full workspace, six controlled service-protocol filters and
+all 832 Vulkan desktop cases. The coherent six-client/three-example release is
+built and archived, but has not been deployed. Native IME and interoperability
+acceptance remain pending. Earlier results retain their own source scope. See
+[current readiness](current-readiness.md) for the separate runtime, documentation
+and native-harness snapshots and remaining acceptance boundaries.
+
 `Element::text_area` is an ordinary controlled editor. It reuses `TextEdit`,
 `TextSelection`, `TextFieldState`, `ScrollSpec` and the existing clipboard effects.
 It adds no desktop domain port, persistence mechanism or engine-owned document.
@@ -209,6 +220,9 @@ when comparing runs. The [sanitized report](../reports/measurements/lucent-multi
 retains all sample summaries and their source revision. This is no before/after
 CPU comparison, desktop RSS measurement, GPU benchmark or proof of native 60 FPS.
 
-Complex-script shaping, bidirectional layout, font fallback, preedit/IME and
-platform accessibility remain separate requirements. The current glyph metrics
-support pair kerning and grapheme editing; that does not establish those features.
+The historical Notes results above exercise the earlier kerning/grapheme path.
+The implemented, unmerged text cohort adds complex-script shaping, bidi visual
+stops, deterministic fallback and opt-in preedit/IME through the same controlled
+API; see [international text](text-shaping.md). Those source and controlled checks
+do not repeat native Notes acceptance or establish compositor IME interoperability.
+Platform accessibility remains deferred by the user.

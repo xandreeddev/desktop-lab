@@ -5,11 +5,13 @@ Lucent VM. It adds one uniquely named native Hyprland headless output alongside
 the guest's original output. It changes no Rust API, desktop preference,
 configuration file, original output mode, wallpaper selection or application.
 
-**Native execution is pending.** The tooling has source checks and owned-fixture
-tests; those do not establish that this guest/backend accepts headless input.
-A successful future run establishes two simultaneous compositor outputs and
-native button interaction. It does not establish physical cable hotplug,
-hardware GPU rendering, suspend/resume, multi-GPU behavior or scanout FPS.
+**The scoped native run passes all 16 checks** on the coherent `8e6d074b`
+desktop, using harness `f16cb591`. It establishes two simultaneous compositor
+outputs, including one owned headless output, real panel input at 1×, 2× and
+1.25×, held-button output retirement and same-name lifetime recreation. Exact
+original-state restoration passes. See [the sanitized report](../reports/measurements/lucent-native-multi-output.json).
+Physical cable hotplug, hardware compatibility, suspend/resume, multi-GPU
+behavior and presentation/scanout FPS remain unverified.
 
 ## Prerequisites and execution
 
@@ -91,14 +93,14 @@ actually open on the exact target host and render before Escape closes it.
 There is no `lucent-cli audio open` fallback. If real input cannot be established,
 the result remains blocked.
 
-Hyprland layer `x/y` are **output-local**, while `cursorpos` is global. Therefore
-the tested mapping is:
+The pinned Hyprland build's arranged layer `x/y` and `cursorpos` are **global
+logical coordinates**. SDK hit coordinates are surface-local. The mapping is:
 
 ```text
-global cursor = monitor logical origin + native layer local origin + local hit
+global cursor = native layer global logical origin + local logical hit
 ```
 
-The fractional scale is not applied a second time. Hit centers use the visible
+The monitor origin and fractional scale are not applied a second time. Hit centers use the visible
 intersection of hit bounds, clip bounds and surface bounds. Selection is by
 explicit output, host instance and native namespace/PID; the helper never picks
 whichever host happens to be focused.
@@ -182,6 +184,62 @@ or supervisor restart, concurrent layout/config change, blocked guard or lost
 creation acknowledgement remains explicit incomplete/blocked evidence. Do not
 blindly remove an output by a copied name or call a global reset.
 
+## Current native evidence
+
+The initial coherent 8e VM attempt observed two simultaneous compositor outputs,
+rendered background/bar/widget surfaces at 1×, and the original host lifetime.
+Before any physical button injection, its hit guard refused a double-added
+monitor origin. The original failed report is retained. The independent owner
+removed only its output and verified configuration/settings/media preservation
+and original cursor restoration. That initial blocked report
+`native-multi-output-b46a3b6479db46b2a6e4d59d992c1597` remains unchanged;
+corrected coordinate regressions alone established no later native result.
+
+A subsequent coherent 8e attempt passed 13 checks, including real audio-panel
+opening and closing on both outputs at 1×, 2× and 1.25×. Removal then failed the
+retirement assertion because its captured ID set included the shared dock. The
+read-only post-removal observation showed only the original host/output, no
+pending native retirement, and the same shared dock retargeted to the surviving
+output. Cleanup fully preserved the original state. The failed report remains
+failed; it is not an overall hotplug pass.
+
+The corrected tooling captures only surfaces with the removed host's nonempty
+instance before removal. It still refuses any captured scoped ID anywhere,
+retained old host/instance or output, any surface still bound to the removed
+output (including the shared dock), and pending native retirement. A stale
+surface cannot evade the check by moving to another output or dropping its
+instance. The second blocked report
+`native-multi-output-935421b7bf9f4aa3a87ae90090a43fe8` remains unchanged.
+
+The fresh run `native-multi-output-6af175c89b164acba9c385d36c8916f6` passes all
+16 checks using that corrected `f16cb591` harness and production
+`8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, desktop SHA256
+`ecb557a094b583b45cfa07aeb9eb4284dc0bb2b86fdad3b1dbd5f4afc7b6b4ff`.
+The original 1920×1080/1×/60-Hz output remains present while the owned
+1280×960/60-Hz output changes through 1×, 2×, 1.25× and back to 1×. Its observed
+logical sizes are 1280×960, 640×480 and 1024×768; physical background buffers
+remain 1280×960. Actual QMP clicks open the audio panel on each exact host,
+and Escape closes it, at every scale.
+
+Removal while the owned network button is held retires the old native output,
+scoped surfaces and host before release; no surviving panel opens. Recreating
+the same generated name yields a different Wayland registry global and a larger
+client-host generation, followed by another successful real panel click. The
+original host lifetime survives. The shared dock is allowed to retarget to the
+surviving output; this does not permit an old scoped surface to survive.
+
+The independent owner's final receipt confirms that it removed only its output,
+restored the original monitor/workspace/cursor and preserved the supervisor,
+desktop process, user configuration, settings, wallpaper target, referenced live media and idle
+marker. The original failed receipts and their cleanup results remain historical
+evidence. The public report contains hashes and sanitized observations, without
+private process identities, native addresses or guest runtime paths.
+
+This is owned headless-output placement, density, pointer interaction and native
+lifetime acceptance. Physical monitors, suspend/resume, secure-client output
+changes, Display settings Apply/Keep/Revert across multiple outputs, cross-output
+text/clipboard and presentation/resource targets need their own acceptance.
+
 ## Checks available without a VM
 
 ```sh
@@ -207,10 +265,11 @@ Primary sources checked for the command/coordinate contract:
   documents `hl.dsp.cursor.move({x,y})` and workspace focus.
 - [Hyprland monitor Lua reference](https://wiki.hypr.land/0.55.0/Configuring/Basics/Monitors/)
   documents logical layout positioning and explicit scale.
-- [Hyprland command implementation](https://github.com/hyprwm/Hyprland/blob/main/src/ipc/s1/Commands.cpp)
-  confirms Lua dispatch wraps `hl.dispatch(...)`, layer serialization and global cursorpos.
-- [Hyprland layer implementation](https://github.com/hyprwm/Hyprland/blob/main/src/desktop/view/LayerSurface.cpp)
-  adds monitor position to layer-local geometry when constructing global damage.
+- [Pinned Hyprland layer serialization](https://github.com/hyprwm/Hyprland/blob/efb50993780079460b0cbed1363e2166a2de1d9f/src/debug/HyprCtl.cpp#L601)
+  returns the arranged `m_geometry` box directly.
+- [Pinned Hyprland layer arrangement](https://github.com/hyprwm/Hyprland/blob/efb50993780079460b0cbed1363e2166a2de1d9f/src/render/Renderer.cpp#L2343)
+  starts with the monitor's global logical position and stores the resulting box
+  in `m_geometry`. Unrelated damage paths are not the JSON coordinate contract.
 - [Reviewed v0.56.2 output removal](https://github.com/hyprwm/Hyprland/blob/efb50993780079460b0cbed1363e2166a2de1d9f/src/output/Monitor.cpp#L439)
   defines the exact declared backup-center cursor transition. Runtime admission
   requires this source commit, rather than inferring installed behavior from main.

@@ -86,9 +86,23 @@ def owned_layers(layers, desktop_pid, example_pid=None):
     return found[0] if found else None
 
 
-def absolute_move(point):
+def pointer_destination(point):
     require(len(point) == 2 and all(type(value) is int for value in point)
             and 0 <= point[0] < 1920 and 0 <= point[1] < 1080, 'bounded_exact_pointer_destination')
+
+
+def compositor_move(point):
+    """Position the test cursor in the observed compositor's logical pixels.
+
+    Positioning is not a physical-input proof. Tests still deliver button/key
+    events through QMP/evdev and verify their actual native focus or effect.
+    """
+    pointer_destination(point)
+    return f'hl.dsp.cursor.move({{x={point[0]},y={point[1]}}})'
+
+
+def absolute_move(point):
+    pointer_destination(point)
     return [{'type': 'abs', 'data': {'axis': axis, 'value': round(value / extent * 32767)}}
             for axis, value, extent in (('x', point[0], 1919), ('y', point[1], 1079))]
 

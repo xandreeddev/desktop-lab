@@ -89,13 +89,13 @@ class VM:
 def stage(vm):
     guest = '/tmp/lucent-third-party-tray-' + secrets.token_hex(12)
     payload = {name: base64.b64encode((ROOT / 'vm' / name).read_bytes()).decode()
-               for name in ('third_party_tray_guest.py', 'third_party_tray_policy.py')}
+               for name in ('third_party_tray_guest.py', 'third_party_tray_policy.py', 'owned_application_units.py')}
     code = '''import base64,json,os,sys
 from pathlib import Path
 p=Path(sys.argv[1]);assert p.parent==Path('/tmp') and not p.exists()
 p.mkdir(mode=0o700)
 for name,data in json.load(sys.stdin).items():
- assert name in ('third_party_tray_guest.py','third_party_tray_policy.py')
+ assert name in ('third_party_tray_guest.py','third_party_tray_policy.py','owned_application_units.py')
  fd=os.open(p/name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
  with os.fdopen(fd,'wb') as f:f.write(base64.b64decode(data,validate=True))
 print('staged')
@@ -318,7 +318,7 @@ def main():
               'pixel-quality or presentation-FPS acceptance.',
               'tooling_sha256': {name: hashlib.sha256((ROOT / 'vm' / name).read_bytes()).hexdigest()
                                   for name in ('test-third-party-tray.py', 'third_party_tray_guest.py',
-                                               'third_party_tray_policy.py')}}
+                                               'third_party_tray_policy.py', 'owned_application_units.py')}}
     run = None
     try:
         vm = VM(lab_root)

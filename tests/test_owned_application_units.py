@@ -1,0 +1,561 @@
+"""Original-unit cleanup authority; temporary files and mocked private D-Bus only."""
+import copy
+import importlib.util
+import json
+import os
+from pathlib import Path
+import sys
+import tempfile
+import types
+import unittest
+from unittest.mock import Mock, patch
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'vm'))
+import owned_application_units as units
+spec = importlib.util.spec_from_file_location('owned_intent', ROOT / 'vm/fixtures/application-intent-fixture.py')
+fixture = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(fixture)
+
+
+def authority(name='lucent-application-intent-abcdef.service'):
+    argv = ['/usr/bin/python3', '/owned/fixture.py', 'start-example', '/owned', 'abcdef']
+    unit = {'load': 'loaded', 'active': 'active', 'transient': True,
+            'executable': argv[0], 'argv': argv, 'main_pid': 202,
+            'invocation': '1' * 32, 'group': '/app.slice/' + name}
+    process = {'pid': 202, 'start': '42', 'group': unit['group'],
+               'executable': [1, 2, 3], 'sha256': 'a' * 64}
+    return name, argv, {'unit': unit, 'process': process}
+
+
+class ConsistentUnitObservation(unittest.TestCase):
+    class BusError(Exception):
+        def __init__(self, name):
+            self.name = name
+
+        def get_dbus_name(self):
+            return self.name
+
+    def transport(self, *, commands=None, unit_frames=None, lookup=None, property_error=None):
+        name, argv, captured = authority()
+        original = captured['unit']
+        frame = {'LoadState': original['load'], 'ActiveState': original['active'],
+                 'Transient': original['transient'], 'InvocationID': bytes.fromhex(original['invocation'])}
+        service = {'ExecStart': commands if commands is not None else [(argv[0], argv)],
+                   'ControlGroup': original['group'], 'MainPID': original['main_pid']}
+        manager, properties, bus = Mock(), Mock(), Mock()
+        manager.GetUnit.return_value = '/original/unit'
+        if lookup is not None:
+            manager.GetUnit.side_effect = lookup
+        if unit_frames is not None:
+            properties.GetAll.side_effect = unit_frames
+        else:
+            properties.GetAll.return_value = frame
+        def get(interface, key, **kwargs):
+            self.assertEqual(interface, 'org.freedesktop.systemd1.Service')
+            self.assertIn(key, ('ExecStart', 'ControlGroup', 'MainPID'))
+            if property_error is not None:
+                raise property_error
+            return service[key]
+        properties.Get.side_effect = get
+        dbus = types.SimpleNamespace(SessionBus=Mock(return_value=bus), DBusException=self.BusError,
+            Interface=lambda _object, interface: manager if interface == 'org.freedesktop.systemd1.Manager' else properties)
+        return name, argv, captured, frame, manager, properties, bus, dbus
+
+    def test_stable_typed_snapshot_never_fetches_service_environment(self):
+        name, _, captured, _, manager, properties, bus, dbus = self.transport()
+        with patch.dict(sys.modules, {'dbus': dbus}):
+            self.assertEqual(units.unit_snapshot(name), captured['unit'])
+        self.assertEqual(properties.GetAll.call_count, 3)
+        for call in properties.GetAll.call_args_list:
+            self.assertEqual(call.args, ('org.freedesktop.systemd1.Unit',))
+            self.assertTrue(0 < call.kwargs['timeout'] <= 1)
+        self.assertEqual([call.args[1] for call in properties.Get.call_args_list],
+                         ['ExecStart', 'ControlGroup', 'MainPID']*2)
+        self.assertEqual(manager.GetUnit.call_count, 2)
+        bus.close.assert_called_once()
+
+    def test_gc_empty_exec_start_is_absent_only_after_typed_manager_confirmation(self):
+        gone = self.BusError('org.freedesktop.systemd1.NoSuchUnit')
+        name, _, _, _, manager, _, bus, dbus = self.transport(commands=[], lookup=['/original/unit', gone])
+        with patch.dict(sys.modules, {'dbus': dbus}):
+            self.assertEqual(units.unit_snapshot(name), {'load': 'not-found'})
+        self.assertEqual(manager.GetUnit.call_count, 2)
+        bus.close.assert_called_once()
+
+    def test_gc_object_disappearing_between_property_calls_requires_typed_absence(self):
+        gone = self.BusError('org.freedesktop.systemd1.NoSuchUnit')
+        error = self.BusError('org.freedesktop.DBus.Error.UnknownObject')
+        name, _, _, _, _, _, bus, dbus = self.transport(lookup=['/original/unit', gone], property_error=error)
+        with patch.dict(sys.modules, {'dbus': dbus}):
+            self.assertEqual(units.unit_snapshot(name), {'load': 'not-found'})
+        bus.close.assert_called_once()
+
+    def test_still_loaded_empty_or_multiple_exec_start_is_never_absence(self):
+        for commands in ([], [('/one', ['/one']), ('/two', ['/two'])], [('/one', [])]):
+            name, _, _, _, manager, _, bus, dbus = self.transport(commands=commands)
+            with self.subTest(commands=commands), patch.dict(sys.modules, {'dbus': dbus}), \
+                 self.assertRaisesRegex(AssertionError, 'unit_exec_start_shape'):
+                units.unit_snapshot(name)
+            self.assertEqual(manager.GetUnit.call_count, 2)
+            bus.close.assert_called_once()
+
+    def test_unknown_object_without_manager_absence_is_bounded_and_not_adopted(self):
+        error = self.BusError('org.freedesktop.DBus.Error.UnknownObject')
+        name, _, _, _, manager, _, bus, dbus = self.transport(property_error=error)
+        with patch.dict(sys.modules, {'dbus': dbus}), self.assertRaisesRegex(AssertionError, 'unit_observation_changed'):
+            units.unit_snapshot(name)
+        self.assertEqual(manager.GetUnit.call_count, 6)
+        bus.close.assert_called_once()
+
+    def test_wrong_live_command_never_authorizes_the_original_stop(self):
+        name, argv, captured, _, manager, _, bus, dbus = self.transport(commands=[('/foreign', ['/foreign'])])
+        with patch.dict(sys.modules, {'dbus': dbus}), self.assertRaises(AssertionError):
+            units.retire_unit(name, argv, captured=captured)
+        manager.StopUnit.assert_not_called()
+        bus.close.assert_called_once()
+
+    def test_service_fields_that_change_within_one_invocation_are_not_combined(self):
+        name, _, captured, _, _, properties, bus, dbus = self.transport()
+        original = captured['unit']
+        group = '/app.slice/replacement.service'
+        values = {'ExecStart': [(original['executable'], original['argv'])],
+                  'ControlGroup': original['group'], 'MainPID': original['main_pid']}
+        count = 0
+        def get(_interface, key, **_kwargs):
+            nonlocal count
+            count += 1
+            if count == 4:
+                values.update(ControlGroup=group, MainPID=203)
+            return values[key]
+        properties.Get.side_effect = get
+        with patch.dict(sys.modules, {'dbus': dbus}):
+            observed = units.unit_snapshot(name)
+        self.assertEqual((observed['group'], observed['main_pid']), (group, 203))
+        self.assertEqual(properties.GetAll.call_count, 6)
+        bus.close.assert_called_once()
+
+    def test_coherent_successor_after_mid_observation_reuse_is_refused_by_original_stop(self):
+        name, argv, captured, frame, manager, properties, bus, dbus = self.transport()
+        replacement = dict(frame, InvocationID=bytes.fromhex('2'*32))
+        properties.GetAll.side_effect = [frame, frame, replacement, replacement, replacement, replacement]
+        with patch.dict(sys.modules, {'dbus': dbus}), patch.object(units, 'process_snapshot') as process, \
+             self.assertRaises(AssertionError):
+            units.retire_unit(name, argv, captured=captured)
+        self.assertEqual(properties.GetAll.call_count, 6)
+        manager.StopUnit.assert_not_called()
+        process.assert_not_called()
+        bus.close.assert_called_once()
+
+    def test_permanently_changing_invocation_never_returns_a_mixed_snapshot(self):
+        name, _, _, frame, _, properties, bus, dbus = self.transport()
+        properties.GetAll.side_effect = [dict(frame, InvocationID=bytes.fromhex(str(index)*32))
+                                         for index in range(1, 10)]
+        with patch.dict(sys.modules, {'dbus': dbus}), self.assertRaisesRegex(AssertionError, 'unit_observation_changed'):
+            units.unit_snapshot(name)
+        self.assertEqual(properties.GetAll.call_count, 9)
+        bus.close.assert_called_once()
+
+    def test_transport_error_is_not_absence_and_whole_observation_has_one_deadline(self):
+        for error in (self.BusError('org.freedesktop.DBus.Error.AccessDenied'),
+                      self.BusError('org.freedesktop.DBus.Error.NoReply')):
+            name, _, _, _, manager, _, bus, dbus = self.transport(property_error=error)
+            with self.subTest(error=error.name), patch.dict(sys.modules, {'dbus': dbus}), self.assertRaises(self.BusError):
+                units.unit_snapshot(name)
+            self.assertEqual(manager.GetUnit.call_count, 1)
+            bus.close.assert_called_once()
+        name, _, _, _, manager, _, bus, dbus = self.transport()
+        with patch.dict(sys.modules, {'dbus': dbus}), patch.object(units.time, 'monotonic', side_effect=[0, 6]), \
+             self.assertRaisesRegex(AssertionError, 'unit_observation_deadline'):
+            units.unit_snapshot(name)
+        manager.GetUnit.assert_not_called()
+        bus.close.assert_called_once()
+
+
+class OriginalUnitAuthority(unittest.TestCase):
+    def test_original_wrapper_may_exec_but_not_change_invocation_birth_or_group(self):
+        name, argv, origin = authority()
+        current = dict(origin['process'], executable=[4, 5, 6], sha256='b' * 64)
+        with patch.object(units, 'process_snapshot', return_value=current):
+            self.assertEqual(units.assert_unit_origin(origin['unit'], name, argv, origin), current)
+            for changed in ({'start': '43'}, {'group': '/foreign'}, {'pid': 203}):
+                with self.subTest(changed=changed), patch.object(units, 'process_snapshot',
+                                                              return_value=dict(current, **changed)):
+                    with self.assertRaises(AssertionError):
+                        units.assert_unit_origin(origin['unit'], name, argv, origin)
+            with self.assertRaises(AssertionError):
+                units.assert_unit_origin(dict(origin['unit'], invocation='2' * 32), name, argv, origin)
+
+    def test_capture_requires_original_main_pid_and_nonzero_invocation(self):
+        name, argv, origin = authority()
+        origin['unit']['main_pid'] = os.getpid()
+        origin['process']['pid'] = os.getpid()
+        with patch.object(units, 'unit_snapshot', return_value=origin['unit']), \
+             patch.object(units, 'process_snapshot', return_value=origin['process']):
+            self.assertEqual(units.capture_unit_origin(name, argv), origin)
+            for changed in ({'main_pid': os.getpid() + 1}, {'invocation': '0' * 32}, {'argv': ['other']}):
+                with self.subTest(changed=changed), patch.object(units, 'unit_snapshot',
+                                                               return_value=dict(origin['unit'], **changed)):
+                    with self.assertRaises(AssertionError):
+                        units.capture_unit_origin(name, argv)
+
+    def test_successor_is_refused_even_if_it_appears_inactive_after_original_stop(self):
+        name, argv, original = authority()
+        successor = dict(original['unit'], active='inactive', main_pid=0, group='', invocation='2' * 32)
+        manager = Mock()
+        bus = Mock()
+        dbus = types.SimpleNamespace(SessionBus=Mock(return_value=bus), Interface=Mock(return_value=manager))
+        with patch.dict(sys.modules, {'dbus': dbus}), \
+             patch.object(units, 'unit_snapshot', side_effect=[original['unit'], successor]), \
+             patch.object(units, 'process_snapshot', return_value=original['process']):
+            with self.assertRaises(AssertionError):
+                units.retire_unit(name, argv, captured=original)
+        manager.StopUnit.assert_called_once_with(name, 'replace', timeout=5)
+
+    def test_original_exec_receipt_is_frozen_again_before_stop(self):
+        name, argv, origin = authority()
+        current = dict(origin['process'], executable=[4, 5, 6], sha256='b' * 64)
+        with patch.object(units, 'unit_snapshot', return_value=origin['unit']), \
+             patch.object(units, 'process_snapshot', return_value=current), \
+             patch.object(units, 'retire_unit') as retire:
+            units.retire_original_unit(name, argv, origin, max_executable_bytes=512 * 1024 * 1024)
+        self.assertEqual(retire.call_args.args[3], {'unit': origin['unit'], 'process': current})
+        self.assertEqual(retire.call_args.args[4], 512 * 1024 * 1024)
+
+    def test_invalid_executable_limits_are_refused_before_proc_access(self):
+        for limit in (0, -1, True, 512 * 1024 * 1024 + 1):
+            with self.subTest(limit=limit), self.assertRaises(AssertionError):
+                units.process_snapshot(os.getpid(), max_executable_bytes=limit)
+
+
+class AcknowledgedRetirement(unittest.TestCase):
+    def cleared(self, original, active='deactivating', **changes):
+        return dict(original['unit'], active=active, transient=False, main_pid=0,
+                    invocation='', group='', **changes)
+
+    def run_retirement(self, observations, *, drained=True, stop_error=None, clock=None):
+        name, argv, original = authority()
+        manager, bus = Mock(), Mock()
+        manager.StopUnit.side_effect = stop_error
+        dbus = types.SimpleNamespace(SessionBus=Mock(return_value=bus), Interface=Mock(return_value=manager))
+        with patch.dict(sys.modules, {'dbus': dbus}), \
+             patch.object(units, 'unit_snapshot', side_effect=[original['unit'], *observations]) as observe, \
+             patch.object(units, 'process_snapshot', return_value=original['process']), \
+             patch.object(units, '_retirement_drained', side_effect=drained if isinstance(drained, list) else None,
+                          return_value=drained) as lifetime, \
+             patch.object(units.time, 'sleep') as sleep, \
+             patch.object(units.time, 'monotonic', side_effect=clock, return_value=0):
+            units.retire_unit(name, argv, captured=original)
+        manager.StopUnit.assert_called_once_with(name, 'replace', timeout=5)
+        return observe, lifetime, sleep
+
+    def test_acknowledged_stop_may_clear_metadata_while_draining_then_disappear(self):
+        _, _, original = authority()
+        observed, lifetime, sleep = self.run_retirement([self.cleared(original), {'load': 'not-found'}])
+        self.assertEqual(observed.call_count, 3)
+        lifetime.assert_called_once_with(original)
+        sleep.assert_called_once_with(.1)
+
+    def test_acknowledged_stop_may_finish_with_cleared_inactive_or_failed_metadata(self):
+        _, _, original = authority()
+        for state in ('inactive', 'failed'):
+            with self.subTest(state=state):
+                _, lifetime, _ = self.run_retirement([self.cleared(original), self.cleared(original, state)])
+                lifetime.assert_called_once_with(original)
+
+    def test_absent_name_does_not_finish_until_original_process_and_cgroup_drain(self):
+        observed, lifetime, sleep = self.run_retirement([{'load': 'not-found'}]*2, drained=[False, True])
+        self.assertEqual(observed.call_count, 3)
+        self.assertEqual(lifetime.call_count, 2)
+        sleep.assert_called_once_with(.1)
+
+    def test_foreign_successor_after_cleared_transition_is_never_stopped_or_adopted(self):
+        _, _, original = authority()
+        for successor in (dict(original['unit'], invocation='2'*32),
+                          dict(original['unit'], active='inactive', invocation='2'*32, main_pid=0, group=''),
+                          self.cleared(original, 'active'),
+                          dict(self.cleared(original), argv=['/foreign'])):
+            manager = Mock()
+            dbus = types.SimpleNamespace(SessionBus=Mock(), Interface=Mock(return_value=manager))
+            with self.subTest(successor=successor), patch.dict(sys.modules, {'dbus': dbus}), \
+                 patch.object(units, 'unit_snapshot', side_effect=[original['unit'], self.cleared(original), successor]), \
+                 patch.object(units, 'process_snapshot', return_value=original['process']), \
+                 patch.object(units, '_retirement_drained') as lifetime, patch.object(units.time, 'sleep'):
+                with self.assertRaises(AssertionError):
+                    units.retire_unit(authority()[0], authority()[1], captured=original)
+            manager.StopUnit.assert_called_once()
+            lifetime.assert_not_called()
+
+    def test_cleared_metadata_is_not_initial_stop_authority(self):
+        name, argv, original = authority()
+        dbus = types.SimpleNamespace(SessionBus=Mock())
+        with patch.dict(sys.modules, {'dbus': dbus}), \
+             patch.object(units, 'unit_snapshot', return_value=self.cleared(original)), \
+             patch.object(units, '_retirement_drained') as lifetime:
+            with self.assertRaises(AssertionError):
+                units.retire_unit(name, argv, captured=original)
+        dbus.SessionBus.assert_not_called()
+        lifetime.assert_not_called()
+
+    def test_lost_stop_reply_never_enables_cleared_metadata_completion(self):
+        with self.assertRaisesRegex(TimeoutError, 'lost_stop_reply'):
+            self.run_retirement([], stop_error=TimeoutError('lost_stop_reply'))
+
+    def test_drained_transition_and_live_original_remain_bounded(self):
+        _, _, original = authority()
+        for observations, drained in (([self.cleared(original)]*2, True),
+                                      ([{'load': 'not-found'}]*2, False)):
+            with self.subTest(observations=observations), self.assertRaises(AssertionError):
+                self.run_retirement(observations, drained=drained, clock=[0, 1, 16])
+
+
+class CapturedLifetimeDrain(unittest.TestCase):
+    def tree(self, directory, *, birth=None, populated=None):
+        _, _, original = authority()
+        proc = directory/'proc'/'202';proc.mkdir(parents=True)
+        if birth is not None:
+            (proc/'stat').write_bytes(b'202 (owned fixture) '+b' '.join([b'S']+[b'0']*18+[birth.encode()]))
+        group = directory/'cgroup'/'app.slice'/authority()[0];group.mkdir(parents=True)
+        if populated is not None:
+            (group/'cgroup.events').write_bytes(populated)
+        def rooted(value):
+            return directory/{'/proc':'proc', '/sys/fs/cgroup':'cgroup'}.get(str(value), str(value))
+        return original, rooted
+
+    def test_missing_original_and_recursively_empty_cgroup_are_drained(self):
+        for birth in (None, '43'):
+            for populated in (None, b'populated 0\nfrozen 0\n'):
+                with self.subTest(birth=birth, populated=populated), tempfile.TemporaryDirectory() as name:
+                    original, rooted = self.tree(Path(name), birth=birth, populated=populated)
+                    with patch.object(units, 'Path', side_effect=rooted):
+                        self.assertTrue(units._retirement_drained(original))
+
+    def test_original_pid_birth_or_recursive_descendants_block_completion(self):
+        for birth, populated in (('42', b'populated 0\n'), (None, b'populated 1\n'), ('43', b'populated 1\n')):
+            with self.subTest(birth=birth, populated=populated), tempfile.TemporaryDirectory() as name:
+                original, rooted = self.tree(Path(name), birth=birth, populated=populated)
+                with patch.object(units, 'Path', side_effect=rooted):
+                    self.assertFalse(units._retirement_drained(original))
+
+    def test_malformed_or_oversized_drain_evidence_is_not_absence(self):
+        for populated in (b'frozen 0\n', b'populated 0\npopulated 0\n', b'populated 2\n', b'populated 0\n'+b'x'*4096):
+            with self.subTest(populated_bytes=len(populated)), tempfile.TemporaryDirectory() as name:
+                original, rooted = self.tree(Path(name), populated=populated)
+                with patch.object(units, 'Path', side_effect=rooted), self.assertRaises(AssertionError):
+                    units._retirement_drained(original)
+
+
+class OwnedFileAuthority(unittest.TestCase):
+    def make_manifest(self, directory):
+        path = directory / 'manifest.json'
+        path.write_text('{"run_id":"abcdef"}')
+        path.chmod(0o600)
+        return path
+
+    def test_cold_manifest_read_allows_only_atime_to_change(self):
+        with tempfile.TemporaryDirectory() as name:
+            directory = Path(name)
+            path = self.make_manifest(directory)
+            os.utime(path, ns=(1, path.stat().st_mtime_ns))
+            before = path.stat()
+            self.assertEqual(units.owned_manifest(str(directory / 'fixture.py'), 'abcdef')[1],
+                             {'run_id': 'abcdef'})
+            after = path.stat()
+            self.assertGreater(after.st_atime_ns, before.st_atime_ns)
+            self.assertEqual(after.st_mtime_ns, before.st_mtime_ns)
+            self.assertEqual(after.st_ctime_ns, before.st_ctime_ns)
+
+    def test_actual_midread_mutation_with_restored_mtime_is_refused(self):
+        with tempfile.TemporaryDirectory() as name:
+            directory = Path(name)
+            path = self.make_manifest(directory)
+            before = path.stat()
+            real_fdopen = os.fdopen
+            class MutatingRead:
+                def __init__(self, stream): self.stream = stream
+                def __enter__(self): self.stream.__enter__(); return self
+                def __exit__(self, *args): return self.stream.__exit__(*args)
+                def fileno(self): return self.stream.fileno()
+                def read(self, count):
+                    data = self.stream.read(count)
+                    path.write_text('{"run_id":"ghijkl"}')
+                    os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+                    return data
+            with patch.object(units.os, 'fdopen', side_effect=lambda *args: MutatingRead(real_fdopen(*args))):
+                with self.assertRaises(AssertionError):
+                    units.owned_manifest(str(directory / 'fixture.py'), 'abcdef')
+
+    def test_path_replacement_after_read_is_refused(self):
+        with tempfile.TemporaryDirectory() as name:
+            directory = Path(name)
+            path = self.make_manifest(directory)
+            real_fdopen = os.fdopen
+            class ReplacingRead:
+                def __init__(self, stream): self.stream = stream
+                def __enter__(self): self.stream.__enter__(); return self
+                def __exit__(self, *args): return self.stream.__exit__(*args)
+                def fileno(self): return self.stream.fileno()
+                def read(self, count):
+                    data = self.stream.read(count)
+                    path.rename(directory / 'original')
+                    path.write_bytes(data)
+                    return data
+            with patch.object(units.os, 'fdopen', side_effect=lambda *args: ReplacingRead(real_fdopen(*args))):
+                with self.assertRaises(AssertionError):
+                    units.owned_manifest(str(directory / 'fixture.py'), 'abcdef')
+
+
+class FixtureRetirement(unittest.TestCase):
+    def test_actual_successor_refusal_survives_host_fallback_and_watchdog(self):
+        _, argv, origin = authority()
+        admitted = dict(origin, socket=[1, 2, 3, os.getuid()])
+        for changed_unit, changed_process in ((dict(origin['unit'], invocation='2' * 32), origin['process']),
+                                               (origin['unit'], dict(origin['process'], start='43'))):
+            with self.subTest(changed_unit=changed_unit, changed_process=changed_process), \
+                 tempfile.TemporaryDirectory() as name:
+                directory = Path(name)
+                fixture.private(directory / 'events.lock', b'')
+                fixture.private(directory / 'events.json', b'[]')
+                fixture.original_receipt(directory, 'example-origin.json', origin)
+                fixture.original_receipt(directory, 'example-admission.json', admitted)
+                dbus = types.SimpleNamespace(SessionBus=Mock())
+                with patch.dict(sys.modules, {'dbus': dbus}), \
+                     patch.object(fixture, 'context', return_value=(directory, {})), \
+                     patch.object(fixture, 'owned_argv', return_value=argv), \
+                     patch.object(fixture, 'unit_snapshot', return_value=changed_unit), \
+                     patch.object(units, 'unit_snapshot', return_value=changed_unit), \
+                     patch.object(units, 'process_snapshot', return_value=changed_process), \
+                     patch.object(fixture, 'capture_unit_origin', return_value=origin), \
+                     patch.object(fixture.signal, 'alarm'), patch.object(fixture.time, 'sleep'):
+                    with self.assertRaises(AssertionError):
+                        fixture.retire_example(directory, 'abcdef', admitted)
+                    with self.assertRaises(ValueError):
+                        fixture.retire(directory, 'abcdef')
+                    with self.assertRaises(ValueError):
+                        fixture.watchdog(directory, 'abcdef')
+                dbus.SessionBus.assert_not_called()
+
+    def test_admitted_fallback_and_expiry_reuse_identical_socket_process_receipt(self):
+        name, argv, origin = authority()
+        admitted = copy.deepcopy(origin)
+        admitted['process']['sha256'] = 'b' * 64  # The original process exec'd the Rust release.
+        admitted['socket'] = [1, 2, 3, os.getuid()]
+        with tempfile.TemporaryDirectory() as name:
+            directory = Path(name)
+            fixture.private(directory / 'events.lock', b'')
+            fixture.private(directory / 'events.json', b'[]')
+            fixture.original_receipt(directory, 'example-origin.json', origin)
+            fixture.original_receipt(directory, 'example-admission.json', admitted)
+            with patch.object(fixture, 'context', return_value=(directory, {})), \
+                 patch.object(fixture, 'owned_argv', return_value=argv), \
+                 patch.object(fixture, 'unit_snapshot', return_value=origin['unit']), \
+                 patch.object(fixture, 'assert_unit_origin'), \
+                 patch.dict(os.environ, {'XDG_RUNTIME_DIR': str(directory)}), \
+                 patch.object(fixture, 'retire_unit', side_effect=AssertionError('successor')) as stop:
+                with self.assertRaises(AssertionError):
+                    fixture.retire_example(directory, 'abcdef', admitted)
+                with self.assertRaises(ValueError):
+                    fixture.retire(directory, 'abcdef')
+                # Independent expiry repeats exactly the same captured refusal.
+                with patch.object(fixture, 'capture_unit_origin', return_value=origin), \
+                     patch.object(fixture.signal, 'alarm'), patch.object(fixture.time, 'sleep'):
+                    with self.assertRaises(ValueError):
+                        fixture.watchdog(directory, 'abcdef')
+                self.assertEqual(stop.call_count, 8)
+                for call in stop.call_args_list:
+                    self.assertEqual(call.kwargs['captured'], admitted)
+
+    def test_lost_start_reply_uses_durable_origin_and_never_adopts_later_unit(self):
+        _, argv, origin = authority()
+        with tempfile.TemporaryDirectory() as name:
+            directory = Path(name)
+            fixture.original_receipt(directory, 'example-origin.json', origin)
+            with patch.object(fixture, 'context', return_value=(directory, {})), \
+                 patch.object(fixture, 'owned_argv', return_value=argv), \
+                 patch.object(fixture, 'unit_snapshot', return_value=origin['unit']), \
+                 patch.dict(os.environ, {'XDG_RUNTIME_DIR': str(directory)}), \
+                 patch.object(fixture, 'retirement_drained', return_value=True), \
+                 patch.object(fixture, 'retire_original_unit') as stop:
+                fixture.retire_example(directory, 'abcdef')
+                self.assertEqual(stop.call_args.args[2], origin)
+                with self.assertRaises(ValueError):
+                    fixture.original_receipt(directory, 'example-origin.json',
+                                             dict(origin, unit=dict(origin['unit'], invocation='2' * 32)))
+                self.assertEqual(fixture.original_receipt(directory, 'example-origin.json'), origin)
+
+    def test_loaded_unit_without_original_receipt_cannot_be_adopted_for_cleanup(self):
+        _, argv, origin = authority()
+        with tempfile.TemporaryDirectory() as name:
+            directory = Path(name)
+            with patch.object(fixture, 'context', return_value=(directory, {})), \
+                 patch.object(fixture, 'owned_argv', return_value=argv), \
+                 patch.object(fixture, 'unit_snapshot', return_value=origin['unit']), \
+                 patch.dict(os.environ, {'XDG_RUNTIME_DIR': str(directory)}), \
+                 patch.object(fixture, 'retire_original_unit') as stop:
+                with self.assertRaises(FileNotFoundError):
+                    fixture.retire_example(directory, 'abcdef')
+                stop.assert_not_called()
+
+    def test_forwarding_wrapper_retirement_carries_original_pre_exec_invocation(self):
+        name, argv, origin = authority('run-owned.service')
+        event = {'cgroup': origin['unit']['group'], 'operation': 'action',
+                 'uris': ['file:///owned/one'], 'origin': origin}
+        with tempfile.TemporaryDirectory() as name:
+            directory = Path(name)
+            fixture.private(directory / 'events.lock', b'')
+            with patch.object(fixture, 'context', return_value=(directory, {})), \
+                 patch.object(fixture, 'events', return_value=[event]), \
+                 patch.object(fixture, 'retire_example'), \
+                 patch.object(fixture, 'retire_entry'), \
+                 patch.object(fixture, 'retirement_drained', return_value=True), \
+                 patch.object(fixture, 'retire_original_unit') as stop:
+                fixture.retire(directory, 'abcdef')
+                self.assertEqual(stop.call_args.args[2], origin)
+                self.assertEqual(stop.call_args.kwargs['max_executable_bytes'], 512 * 1024 * 1024)
+
+    def test_initial_presence_refuses_start_without_stopping_foreign_unit(self):
+        with patch.object(fixture, 'context'), \
+             patch.object(fixture, 'unit_snapshot', return_value={'load': 'loaded'}), \
+             patch.object(fixture, 'retire_unit') as stop:
+            with self.assertRaises(ValueError):
+                fixture.initial_absence('/owned', 'abcdef')
+        stop.assert_not_called()
+
+    def test_original_receipt_is_durable_before_example_exec_and_not_replaced(self):
+        _, argv, origin = authority()
+        manifest = {'example_sha256': fixture.digest(b'owned binary'), 'app_id': 'owned.desktop',
+                    'files': [{'name': 'one'}, {'name': 'two'}]}
+        with tempfile.TemporaryDirectory() as name:
+            directory = Path(name)
+            fixture.private(directory / 'events.lock', b'')
+            fixture.private(directory / 'application-intent', b'owned binary')
+            def exec_observation(executable, arguments):
+                self.assertEqual(fixture.original_receipt(directory, 'example-origin.json'), origin)
+                self.assertEqual(arguments, [str(directory / 'application-intent'), '--app', 'owned.desktop',
+                    '--action', 'Probe', '--target', str(directory / 'one'), '--target', str(directory / 'two')])
+                raise RuntimeError('exec reached')
+            with patch.object(fixture, 'context', return_value=(directory, manifest)), \
+                 patch.object(fixture, 'owned_argv', return_value=argv), \
+                 patch.object(fixture, 'capture_unit_origin', return_value=origin), \
+                 patch.object(fixture.signal, 'alarm'), \
+                 patch.object(fixture.os, 'execv', side_effect=exec_observation) as execute:
+                with self.assertRaisesRegex(RuntimeError, 'exec reached'):
+                    fixture.start_example(directory, 'abcdef')
+                changed = dict(origin, unit=dict(origin['unit'], invocation='2' * 32))
+                with patch.object(fixture, 'capture_unit_origin', return_value=changed):
+                    with self.assertRaises(ValueError):
+                        fixture.start_example(directory, 'abcdef')
+                self.assertEqual(execute.call_count, 1)
+
+    def test_legacy_name_only_entrypoint_cannot_bypass_intent_receipts(self):
+        body = units.RETIRE.removeprefix(units.UNIT_IDENTITY)
+        for prefix in ('lucent-application-intent-', 'lucent-application-intent-watchdog-'):
+            stop = Mock()
+            with patch.object(sys, 'argv', ['-c', prefix, prefix + 'abcdef.service', '/owned/application-intent', 'abcdef']):
+                with self.subTest(prefix=prefix), self.assertRaises(AssertionError):
+                    exec(body, dict(vars(units), retire_unit=stop))
+            stop.assert_not_called()
+
+
+if __name__ == '__main__':
+    unittest.main()

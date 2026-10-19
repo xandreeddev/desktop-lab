@@ -1,10 +1,19 @@
 # Vulkan in the Lucent test VM
 
-The prepared Lucent VM runs the full native desktop through **software Vulkan**:
-wgpu selects Mesa lavapipe, reported as `llvmpipe` with `device_type: Cpu`.
-Hyprland retains the guest's original virtio/virgl graphics device. The selected
-renderer is observable in `lucent-cli inspect` and Lucent's startup log; using
-the Vulkan backend does not establish hardware acceleration.
+The Lucent test VM currently runs the coherent `8e6d074b` release through guest
+**AMD RADV RENOIR** Vulkan using the retained AMD DRM native-context candidate.
+The earlier `a7f41ecc` hardware-path liveness trial remains recorded below.
+The final release's guarded deployment and uninstrumented 120-second resource
+observation preserve the selected media and user/security state. Observed RSS is
+217.28 MiB mean / 221.92 MiB sampled peak, but host swap/I/O-pressure eligibility
+fails, so the 300 MiB acceptance result remains unset. Sustained FPS, animation
+pacing and hardware video decoding are not established.
+[Current readiness](current-readiness.md) separates these evidence scopes.
+
+Earlier Venus and AMD attempts recovered to Mesa lavapipe, reported as
+`llvmpipe` with `device_type: Cpu`; those dated results remain below. The selected
+renderer is observable in `lucent-cli inspect` and Lucent's startup log. Using the
+Vulkan backend alone does not establish hardware acceleration.
 
 One wgpu device serves the desktop's native surfaces and shared resource cache.
 The renderer requests Vulkan explicitly. Live-video decoding and fitting use
@@ -71,7 +80,92 @@ This distinction matters: changing Lucent's adapter preference or forcing a gues
 ICD cannot repair a host renderer that failed to initialize. The failed trial
 should not be repeated unchanged as a performance test.
 
-## A hardware path still needs implementation and acceptance
+## AMD native-context trial on 2026-10-19
+
+The earlier bounded AMD trial used DRM native context rather than Venus. It kept
+one virtio GPU, EGL, 3 GiB RAM, four vCPUs, shared memfd backing, blob resources
+and a 512 MiB host-visible aperture. The candidate enabled
+`drm_native_context=true` with `venus=false`; the host's global sandbox and
+existing security arguments stayed unchanged. The guest's matching RADV package
+was an owned, reversible addition.
+
+The RADV-only driver probe ran first and passed: Mesa 26.2.2 enumerated
+**AMD Radeon Graphics (RADV RENOIR)** as an integrated GPU. Candidate boot, native
+login, Lucent's hardware-adapter gate and initial rendered shell frames also
+passed for the identified `a7f41ecc` release. This is actual guest hardware-path
+initialization evidence, beyond the earlier host-only offscreen checks.
+
+The next preservation check rejected the candidate because the home Btrfs
+filesystem's observed `st_dev` changed from 56 to 57. It stopped before the
+planned three-second liveness gate; the initial frames do not establish stable
+hardware presentation. The original failed preservation result remains recorded.
+
+Independent recovery verified the original software graphics semantics, all 963
+original package versions, removal of the owned RADV addition, and exact settings,
+media, sources and other non-device identity fields. Across 189 captured
+identities, only the acknowledged device remap remained. The baseline did not
+record a mount UUID, so this is a qualified device-remap recovery proof rather
+than a claim that every raw identity field remained equal. The original
+`a7f41ecc` desktop ran again on software Vulkan at the end of that recovery.
+
+### Later mount-anchored liveness trial
+
+A subsequent bounded trial at 2026-10-19 20:11 UTC uses controller
+`a413558a19b59b72111892739d4c4c1067e3804b72e8b160d5f9a59aac968fb6`
+and guest worker
+`532a548359d2c16e4334fab940189d33b6b29429311a1fb2f227e17347e156d4`.
+It records filesystem UUID and Btrfs subvolume anchors across reboot before
+comparing persistent identities. This corrects the guard's unstable kernel
+`st_dev` assumption; the original rejected trial is not relabeled passed.
+
+RADV-only enumeration reports **AMD Radeon Graphics (RADV RENOIR)** with Mesa
+26.2.2 and Vulkan. Secure login, Lucent's actual hardware-adapter gate and native
+frame-counter advancement over three seconds pass at source
+`a7f41eccdcd8eca51e8e5ee878d8f489d8d4bde5`, desktop SHA256
+`2fb52754e75c34d9d73fff26d72a240f3e9a8d8672563bb6e0e404e9427a4f78`.
+The output remains Virtual-1, 1920×1080, scale1, 60 Hz. User/source/settings/media,
+critical file and monitor preservation passes with the anchored mount authority.
+The matching owned RADV addition and native-context candidate are retained.
+The private receipt is `reports/local/daily-amd-native-radv-liveness.json`.
+
+These scoped observations establish startup and frame advancement on the named
+older binary. They do not measure distinct video-source frames, compositor
+presentation intervals, sustained FPS, animation pacing, RSS, GPU memory or
+hardware decoding. The software-Vulkan resource measurements retain their
+original scope. The later `8e6d074b` deployment and resource observation below
+remain separate from this older-binary trial.
+
+### Coherent release and normal resource observation
+
+The guarded `8e6d074b` deployment verifies all six managed user executables and
+the root greeter, changes only the required compatibility helper, preserves the
+existing user/security configuration and verifies rendered supervision beyond
+its startup deadline. Acceptance executables are staged separately. Greetd and
+the graphics configuration are not restarted or replaced by this deployment.
+
+On the same retained RADV adapter, the uninstrumented normal-video phase collects
+120.000492 seconds and 480 RSS samples at 0.25-second spacing: **217.28 MiB mean /
+221.92 MiB sampled peak**, 112.25% of one logical CPU core and zero process swap.
+The original H.264/yuv420p 3840×2160 60/1-FPS video remains selected with source-rate
+playback on one 1920×1080 scale-1 60-Hz output. Full source/settings/media/export,
+critical-file, process and output preservation checks pass within the interval.
+
+The host records 674 swap-in pages, zero swap-out pages and an I/O full-stall
+fraction of 0.5081, with at least 4152.29 MiB available memory. These exceed the
+reviewed eligibility bounds: the report retains `eligible=false`, reasons
+`host_swap_activity` and `host_full_stall_pressure`, and
+`normal_uninstrumented_rss_target_met=null`. It does not accept the 300 MiB target
+or automatically retry. Presentation/PTS tracing is off, so this phase supplies
+no video-delivery or compositor-FPS evidence. It is not a matched comparison
+with the historical 384.82/403.88 MiB software-Vulkan cohort.
+
+The private receipts are
+`reports/local/daily-text-8e-deployment-33ba0219a8a4a8a4c924f896.json` and
+`.cache/final-cohort-measurement-v2/measurement-8e-radv-1792442023-resources.json`.
+Native text/application/clipboard/tray/multi-output and physical-device acceptance,
+instrumented presentation and hardware decoding remain separate pending work.
+
+## A separate external-renderer integration remains unimplemented
 
 Keep the host's global sandbox policy. Libvirt documents
 [its seccomp boundary](https://libvirt.org/kbase/qemu-passthrough-security.html)
@@ -111,4 +205,7 @@ release rollback.
 stock-shell restoration. [Current readiness](current-readiness.md) records the
 remaining resource and presentation targets. Software-Vulkan functional tests,
 host offscreen GPU checks and visible changing pixels retain their individual
-scopes; none proves guest hardware acceleration or sustained 60 FPS.
+scopes. The later AMD trial additionally establishes guest hardware-path startup
+and three-second native frame advancement on `a7f41ecc`. The later `8e6d074b`
+release is deployed and its normal resource interval is collected but ineligible;
+sustained presentation, 60 FPS and resource-target acceptance remain unverified.

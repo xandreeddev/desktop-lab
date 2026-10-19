@@ -1,5 +1,17 @@
 # Standard application activation
 
+Source scope: accepted main `b474d1fe` includes normally merged PR87 and the coherent
+deployed `8e6d074b` runtime, including Application integration `bb304907`. Fresh
+intent tokens, explicit file/URI Open and the expanded XDG parser/observer are
+implemented and included in that release. Its six CI checks pass. A later native
+Chromium run passes all nine feature and eight restoration checks using the
+unmerged independent `d1fff2d8` consumer and `b6323e9` harness; deployed desktop
+and CLI remain unchanged. Focus is observed without a compositor forced-focus
+command. Earlier failed and partial reports retain their results. This scoped
+result does not establish other applications, remote URI handlers or Chromium's
+consumption of a particular token. See [current readiness](current-readiness.md)
+and [the source-specific report](../reports/measurements/lucent-native-application-intents-d1.json).
+
 An application can now declare a command or standard desktop-service activation.
 `ApplicationLaunch::Command` carries its parsed argument vector.
 `ApplicationLaunch::DesktopService` carries an optional executable fallback.
@@ -120,21 +132,32 @@ with observed focus or file loading.
 ## Verification scope
 
 Declared desktop actions predate this milestone and already have owned native
-acceptance; see [application-actions.md](application-actions.md). The new token,
-Open, parser and observation changes require their own final strict, protocol,
-visual and native application acceptance. Do not treat source implementation as
-proof of broad third-party compatibility. Current evidence and remaining checks
+acceptance; see [application-actions.md](application-actions.md). The token,
+Open, parser and observation changes are merged in the deployed `8e` release,
+whose full workspace/protocol CI and 832 visual cases pass. A later real-Chromium
+run with the unmerged `d1fff2d8` independent consumer passes nine feature and
+eight restoration checks, including observed first-launch focus. This verifies
+one local-document workload, not broad third-party compatibility. Current evidence and remaining checks
 are tracked in `docs/daily-use-completion.json`.
 
 `vm/test-application-intent.py` prepares an owned desktop entry and private real
 Chromium profile, then exercises physical launch/open/action and socket/CLI
 opening. The fixture records token **presence**, observes owned window/focus
 state, and checks actual file URI/title loading through that profile's loopback
-DevTools endpoint. Child-environment delivery and observed focus do not prove
+DevTools endpoint. Each physical Open, declared Action, later socket Open and
+desktop CLI Open must create **two new CDP target IDs**, each with its exact
+literal file URI and title; old matching tabs and partial new results cannot
+satisfy a later request. The fixture action explicitly names both owned files.
+Only those two fresh targets are closed after that request's assertion, keeping
+the original blank control window, admitted browser process and private endpoint
+identity. This bounds the browser workload to the control plus two documents
+without silently reducing the requested application behavior. Child-environment
+delivery and observed focus do not prove
 that Chromium consumed a specific activation protocol message. The run requires
 an identified release containing the independent example, an unlocked idle
-single-output VM and bounded owned-process cleanup. Its existence is not an
-executed result; no native pass is claimed here.
+single-output VM and bounded owned-process cleanup. Earlier failed attempts below
+retain their results; the later source-specific successful run is recorded in
+its own section.
 
 The admission snapshot binds the desktop, supervisor and compositor to their
 captured lifetimes. The independent example must match the release digest and
@@ -153,10 +176,207 @@ and finite example unit lifetime provide bounded process cleanup if transport is
 lost. Host SIGKILL while a physical button is down still requires console/QMP
 release by the operator; the guest watchdog cannot inject host input.
 
+Before `exec`, each owned example, browser wrapper and watchdog durably records
+its original transient unit invocation, main PID, process birth and cgroup in the
+private run directory. The example additionally persists its admitted release
+digest and socket identity. Host fallback and watchdog retirement reuse those
+immutable receipts; refusing a replaced unit or socket never permits a retry
+with only its current name or command. A lost start reply can retire the original
+wrapper only when that wrapper already wrote its receipt. A loaded unit without
+that proof is retained for bounded expiry/private recovery rather than adopted.
+Completed-unit observations also keep the original invocation check. Those
+source-only regression checks are distinct from the later native result below.
+
+Browser page retirement rechecks the original unit invocation/process birth,
+admitted executable metadata, exact `DevToolsActivePort` file identity and the
+fresh target's URL/title before each target-specific close. It refuses redirects,
+extra or replaced pages, endpoint replacement and profile-wide closing. A failed
+page close retains the original ownership receipts for guarded unit cleanup.
+
 Lightweight checks in `tests/test_application_intent_admission.py` exercise
 foreign layer and socket peers, replaced sockets, stale layer/hit identity,
 catch-all interception, cursor loss and captured-process retirement. They use
 pure policy, mocked transport boundaries and an actual read-only fingerprint of
 the test runner's `/proc` entry; they do not launch a guest, browser or native
-surface. A future source-specific native run must still pass preservation and
-owned cleanup before acceptance.
+surface. Preservation and owned cleanup are checked separately in the later
+source-specific native result; pure checks alone do not establish acceptance.
+
+`tests/test_owned_application_units.py` additionally covers original receipt
+publication before `exec`, lost-reply cleanup, fallback/watchdog refusal,
+same-name unit reuse after stopping, and cold manifest reads. File read identity
+excludes access time alone: device, inode, mode, owner, group, size, modification
+time and change time remain checked, including actual mid-read content mutation
+and path replacement. Chromium may explicitly use the helper's bounded 512 MiB
+executable limit; its normal default remains 128 MiB. Per-input observation uses
+stable executable metadata and process birth after the admitted hash, avoiding
+repeated full Chromium hashing.
+
+`tests/test_application_intent_browser.py` covers fresh two-document success,
+reuse of old matching tabs, only one fresh document, duplicate/unexpected pages,
+control replacement, and target-specific cleanup refusals. These checks use
+pure policy, temporary endpoint files and mocked browser transport; they do not
+establish native Chromium interoperability.
+
+The `1c3d500` native attempt did start a real owned Chromium window during the
+first physical Launch. Its private child event records fresh token presence and
+no legacy startup value. The original report nevertheless contains no passed
+checks and fails cleanup; it remains unchanged. Independent process diagnostics
+show the same original wrapper PID/birth and service invocation while Chromium
+moved itself into its normal registered application scope. Its executable is
+319,274,072 bytes, below the explicit 512 MiB limit. The fixture's strict original
+cgroup check rejected that lifecycle; neither a size-limit failure nor an SDK
+defect is established. No focus, document-loading or complete application pass
+is inferred from that partial observation. Supporting normal application-scope
+migration requires separately reviewed exact execution ownership; disabling the
+browser's integration or accepting arbitrary new cgroups is not a substitute.
+
+Failure reporting now retains the primary interaction phase and fixed error
+independently from each cleanup failure. Failed fixture subprocesses retain their
+operation, exit/deadline metadata and stderr byte count/hash. At most 64 KiB of
+stderr per failure is stored in a mode-0600 file under a new mode-0700 ignored
+host diagnostics directory. The private report records those files and the guest
+scratch/origin/admission receipt locations, including the latest failed fixture
+observation when a readiness loop subsequently times out. It never includes raw
+exception/traceback text in diagnostic metadata or stdout. These bounded evidence
+files are not authority to bypass a failed guard or adopt another process.
+
+An earlier interaction failure survives cleanup failure instead of being replaced
+by the generic preservation label. Cleanup failures remain separately named;
+they still fail acceptance when the interaction itself passed. Reports are born
+mode 0600 and refuse to overwrite an existing receipt. Stdout gives only the
+fixed outcome/check summary and report location, leaving private artifact paths
+inside the report. The reporting correction has local tests; it does not rerun
+or relabel the original failed native attempt.
+
+The later `d28fbe6b` attempt used the unchanged coherent `8e` desktop/example and
+the corrected test-owned Chromium lease. It failed
+`first_launch_native_focus` / `fresh_owned_browser_focus_observed`, with no guest
+guard exception or failed fixture-stderr artifact. This is an actual unsuccessful
+focus assertion, distinct from the earlier scope/duplicate-platform guard failures.
+Its checks remain empty and its overall result remains failed. Automatic cleanup
+retired the exact example, browser and watchdog, preserved settings/wallpaper and
+output/workspace/cursor, and retained private diagnostic artifacts as intended.
+It did not establish file loading, protocol-token consumption or complete App
+interoperability. The original private report remains unchanged.
+
+The host now keeps one bounded last focus observation before cleanup: whether an
+active window exists, whether its class/PID/address match the admitted owned
+clients, and whether the original combined focus predicate succeeds. It also
+copies the submitted example's keyboard policy, logical/buffer sizes and layer
+geometry, including comparison with its admitted geometry. It records no raw
+window title, class, process identity, native address or field payload. Separate
+fixed phases distinguish a false focus predicate from a guard exception or failed
+focus observation. These diagnostics neither change the acceptance criterion nor
+issue a focus command. Their source/pure checks do not rerun the failed attempt.
+
+The prepared harness now records first-child token delivery independently from
+first-launch focus. Its focus observation window remains bounded to 35 seconds.
+A clean false predicate may proceed to the existing independent file/Open,
+declared Action, socket and CLI assertions only after the same complete normal
+interaction guard passes again. Any guard, identity, focus-read or transport
+exception aborts immediately; it is never converted into a clean false timeout.
+Those independent assertions remain unchanged. Their results can be collected
+while focus is unresolved, but the combined token-and-focus check stays false.
+The original first-launch focus requirement is enforced again at the end before
+overall success. A later Open/action acquiring focus does not retrospectively
+satisfy that first-launch checkpoint. No new native result follows from this
+source/pure-test change.
+
+Process retirement and published-artifact retirement are now separate required
+cleanup observations. An admitted example's original PID birth and recursive
+cgroup must drain even if systemd has already collected its unit. Only its exact
+captured socket device/inode/mode/owner can be retired: a bounded connection must
+be refused, the identity must still match afterward, and a live/replaced or
+uncaptured socket is left intact. An already absent admitted socket is valid;
+startup never adopts or clears an unknown stale socket. The host requires a
+separate `example_socket_retired` flag for every admitted example.
+
+The fixture captures its newly published desktop entry's identity from the
+creating file descriptor, alongside its exact path and content hash in a private
+receipt. After all owned example/browser lifetimes drain, retirement removes
+only that unchanged entry, including on an unsuccessful test. The host requires
+the separate `desktop_entry_retired` flag. A replaced entry, even with identical
+contents, is refused. Repeating retirement accepts absence, and successful final
+cleanup remains compatible with the already removed entry. Failed runs preserve
+their private profile, documents and origin/admission receipts.
+
+The original `d28fbe6b` report's successful process-retirement flags did not prove
+socket or entry retirement. The next `3d961e32` attempt refused admission at
+`independent_example_not_already_running` before mutations because the earlier
+captured refused socket remained. Both reports retain their original results;
+the new mandatory artifact flags are not retroactively added to them. The
+artifact correction has local boundary tests, not a new native pass.
+
+The frozen `8e6d074b` independent example keeps its Overlay/OnDemand surface
+visible; the production launcher closes after requesting a launch. The later
+`d1fff2d8` example source yields keyboard interaction in that same Request update
+and retains the yielded state through token preparation and adapter completion.
+Only a subsequent deliberate idle pointer press re-arms its keyboard policy;
+hover, socket commands and completion cannot take it back. This uses the existing
+SurfaceSpec contract, with no compositor focus command or framework policy.
+Its separate bounded build and later native verification pass as recorded below.
+That later result does not isolate the cause of earlier focus failures. The
+compositor remains responsible for deciding whether to grant application focus.
+
+
+## Fresh real-application result: file opening passes, focus remains failed
+
+The frozen `f6d004d9` harness ran against the unchanged deployed `8e6d074b`
+desktop and independent intent example. Seven independent behavior checks pass:
+fresh physical-input tokens reach the owned child; physical Open and declared
+Action, later socket Open and desktop CLI Open each create both new local
+documents. The documents include spaces, percent signs, Unicode and literal
+shell-like filename characters. Exact new page IDs, file URLs and loaded titles
+are checked for every request. Only those fresh targets retire; the original
+blank control page survives. Socket/CLI requests do not reuse earlier physical
+activation authority.
+
+All eight restoration flags pass, including original example socket and published
+entry removal, exact owned unit retirement, unchanged settings/wallpaper and
+original output/workspace/cursor. Private failure evidence is retained.
+
+The first-launch focus check remains **failed**: eleven coherent observations
+find one owned mapped browser and no active managed window. The independent
+example continues to advertise its on-demand keyboard layer. Production closes
+its launcher on dispatch; that lifecycle difference is under investigation and
+is not an established cause. No test forces compositor focus or changes the
+acceptance predicate. Overall native acceptance remains failed.
+
+The [sanitized result](../reports/measurements/lucent-native-application-intents.json)
+identifies source/artifact hashes and exact check/restoration flags. The owner
+observed 111.318 seconds for the bounded run; this is not a performance benchmark.
+Token delivery does not prove Chromium consumed the Wayland activation token.
+Other applications, remote URI handlers and physical hardware remain outside
+this local-document workload. Earlier failed reports remain unchanged.
+
+## Later d1 consumer: Chromium launch and file intents pass
+
+The unchanged deployed `8e6d074b` desktop and CLI pass a later scoped native run
+with harness `b6323e95` and the separately rebuilt `d1fff2d8` independent SDK
+consumer. The consumer is **not merged into accepted main**. Its binary is
+identified by the separate build and manifest hashes in
+[the sanitized report](../reports/measurements/lucent-native-application-intents-d1.json);
+the original coherent production archive remains unchanged.
+
+All nine feature checks pass. The first coherent focus observation finds the
+real owned Chromium window active, matching its admitted class, process and
+native window identity. The example has submitted keyboard `None`, with its
+448 × 384 surface and buffer geometry unchanged. No test command forces
+compositor focus. Fresh physical-input tokens reach the owned child; observed
+focus and child delivery do not prove Chromium consumed a particular protocol
+token, nor does this one later result establish the cause of earlier failures.
+
+Physical Open, declared Action, later socket Open and desktop CLI Open each
+create both new local documents with exact fresh page IDs, file URLs and loaded
+titles. Spaces, percent signs, Unicode and literal shell-like filename characters
+are covered. Only those new targets retire, preserving the original blank
+control target and admitted browser lifetime. Socket and CLI opening do not
+reuse earlier physical activation authority.
+
+All eight restoration checks pass: original example socket, example, browser,
+published desktop entry and watchdog retire; settings/wallpaper and original
+output/workspace/cursor remain preserved; owned scratch and entry are removed.
+The owner observed 75.660 seconds for this bounded run, not a performance
+benchmark. The earlier failed and partial reports above remain unchanged.
+Other applications, arbitrary remote URI handlers, physical hardware and broader
+launcher/catalog/dock workflows still need their own acceptance.
