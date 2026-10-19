@@ -547,3 +547,52 @@ class RestorationAdmissionTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class BrowserCopyFailureDiagnostics(unittest.TestCase):
+    def harness(self):
+        h = driver.Harness.__new__(driver.Harness)
+        h.phase = 'browser_copy'
+        h.input_guard = Mock()
+        h.clip = Mock(return_value={'sha256': driver.sha('previous selection')})
+        h.key = Mock()
+        self.primary = driver.CheckFailure('real_browser_copy_offer')
+        h.eventually = Mock(side_effect=self.primary)
+        h.call_peer = Mock(side_effect=[{
+            'sha256': driver.sha(driver.SOURCE_TEXT), 'focused': True, 'selection_complete': True,
+            'events': {'trusted_copy': 1, 'ctrl_c_down': 1}},
+            {'list_status': 'available', 'other_mime_count': 1,
+             'payloads': {'text/plain': 'fixture_source'}}])
+        return h
+
+    def test_failed_copy_captures_only_fixture_equality_events_and_bounded_offer_metadata(self):
+        h = self.harness(); result = {}
+        with self.assertRaises(driver.CheckFailure) as failure:
+            h.wait_browser_copy_offer(result)
+        self.assertIs(failure.exception, self.primary)
+        observation = result['browser_copy_diagnostics']
+        self.assertEqual(observation['document'], {'focused': True, 'fixture_source_selected': True,
+                                                  'events': {'trusted_copy': 1, 'ctrl_c_down': 1}})
+        self.assertEqual(observation['clipboard']['payloads'], {'text/plain': 'fixture_source'})
+        self.assertNotIn(driver.sha(driver.SOURCE_TEXT), json.dumps(result))
+        self.assertEqual(h.call_peer.call_args_list, [unittest.mock.call('dom', 'read'),
+                                                      unittest.mock.call('clipboard-observe')])
+        h.input_guard.assert_called_once_with();h.key.assert_not_called()
+
+    def test_diagnostic_guard_failure_preserves_primary_failure_and_sends_no_key_or_peer_call(self):
+        h = self.harness();result = {}
+        h.input_guard.side_effect = ValueError('private input authority detail')
+        with self.assertRaises(driver.CheckFailure) as failure:
+            h.wait_browser_copy_offer(result)
+        self.assertIs(failure.exception, self.primary)
+        self.assertIn('diagnostic_failure', result['browser_copy_diagnostics'])
+        self.assertNotIn('private input authority detail', json.dumps(result))
+        h.call_peer.assert_not_called();h.key.assert_not_called()
+
+    def test_success_does_not_add_diagnostics_or_change_existing_acceptance(self):
+        h = self.harness();result = {}
+        h.eventually = lambda predicate, label: self.assertEqual(label, 'real_browser_copy_offer') or self.assertTrue(predicate())
+        h.clip.return_value = {'sha256': driver.sha(driver.SOURCE_TEXT)}
+        h.wait_browser_copy_offer(result)
+        self.assertEqual(result, {})
+        h.input_guard.assert_not_called();h.call_peer.assert_not_called();h.key.assert_not_called()

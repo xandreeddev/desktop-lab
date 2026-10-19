@@ -370,3 +370,133 @@ class FixedPeerDiagnostics(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ClipboardOfferDiagnostics(unittest.TestCase):
+    def observation(self, types, payloads):
+        commands = []
+        def read(command, limit, deadline):
+            commands.append(command)
+            self.assertGreater(deadline, peer.time.monotonic())
+            if command == ['wl-paste', '--list-types']:
+                self.assertEqual(limit, 16384)
+                return 0, ('\n'.join(types) + '\n').encode(), b''
+            self.assertEqual(limit, 65536)
+            return 0, payloads[command[-1]], b''
+        return peer.clipboard_observation(read), commands
+
+    def test_extra_browser_mimes_are_counted_but_never_requested_or_disclosed(self):
+        result, commands = self.observation(
+            ['text/plain;charset=utf-8', 'text/html', 'private/type-bearing-sensitive-value'],
+            {'text/plain;charset=utf-8': peer.SOURCE_TEXT.encode()})
+        self.assertEqual(result['payloads'], {'text/plain;charset=utf-8': 'fixture_source'})
+        self.assertEqual(result['other_mime_count'], 2)
+        self.assertFalse(result['strict_text_only'])
+        self.assertTrue(result['all_read_alias_payloads_identical'])
+        self.assertEqual(len(commands), 2)
+        self.assertNotIn('text/html', json.dumps(result))
+        self.assertNotIn('private/', json.dumps(result))
+
+    def test_legacy_alias_differences_are_reported_without_decoding_or_exposing_them(self):
+        secret = b'private original clipboard\xff'
+        result, _commands = self.observation(
+            ['text/plain', 'STRING'], {'text/plain': peer.SOURCE_TEXT.encode(), 'STRING': secret})
+        self.assertEqual(result['payloads'], {'text/plain': 'fixture_source', 'STRING': 'other_non_utf8'})
+        self.assertFalse(result['all_read_alias_payloads_identical'])
+        self.assertTrue(result['strict_text_only'])
+        self.assertNotIn('private original', json.dumps(result))
+        self.assertNotIn(peer.digest(secret), json.dumps(result))
+
+    def test_fixture_line_ending_variants_are_diagnostic_only_and_unknown_data_is_private(self):
+        for fixture_name, fixture in (('source', peer.SOURCE_TEXT), ('destination', peer.DESTINATION_TEXT)):
+            for suffix, value in (('', fixture), ('_crlf', fixture.replace('\n', '\r\n')),
+                                  ('_without_final_lf', fixture.removesuffix('\n'))):
+                with self.subTest(fixture=fixture_name, suffix=suffix):
+                    self.assertEqual(peer.fixture_payload_status(value.encode()), 'fixture_' + fixture_name + suffix)
+        self.assertEqual(peer.fixture_payload_status(b''), 'empty')
+        self.assertEqual(peer.fixture_payload_status(b'private original text'), 'other')
+
+    def test_empty_clipboard_and_failed_list_do_not_expose_stderr(self):
+        result = peer.clipboard_observation(lambda *_args: (1, b'', b'Nothing is copied'))
+        self.assertEqual(result['list_status'], 'empty')
+        self.assertEqual(result['payloads'], {})
+        for response in ((2, b'private output', b'private error'),
+                         (0, b'\xff', b'private error'),
+                         (0, b'text/plain\ntext/plain\n', b''),
+                         (0, ('\n'.join('type/' + str(i) for i in range(65))).encode(), b'')):
+            with self.subTest(response=response):
+                result = peer.clipboard_observation(lambda *_args: response)
+                self.assertEqual(result['list_status'], 'unavailable')
+                self.assertNotIn('private', json.dumps(result))
+
+    def test_unavailable_alias_does_not_hide_other_alias_fixture_or_leak_exception(self):
+        def read(command, _limit, _deadline):
+            if command[-1] == '--list-types':
+                return 0, b'text/plain\nSTRING\n', b''
+            if command[-1] == 'STRING':
+                raise ValueError('private clipboard exception')
+            return 0, peer.SOURCE_TEXT.encode(), b''
+        result = peer.clipboard_observation(read)
+        self.assertEqual(result['payloads'], {'text/plain': 'fixture_source', 'STRING': 'unavailable'})
+        self.assertNotIn('private', json.dumps(result))
+
+    def test_owned_browser_lease_is_checked_before_and_after_read_only_observation(self):
+        proof = {'identity': {'owned': True}}
+        with patch.object(peer, 'context', return_value=(Path('/owned'), {})), \
+             patch.object(peer, 'owned_unit') as owned, \
+             patch.object(peer, 'clipboard_observation', return_value={'list_status': 'empty'}) as read, \
+             patch('builtins.print') as output:
+            peer.clipboard_observe('/owned', 'a' * 24, proof)
+        self.assertEqual(owned.call_args_list, [unittest.mock.call(Path('/owned'), 'a' * 24, proof['identity'])] * 2)
+        read.assert_called_once_with()
+        self.assertEqual(json.loads(output.call_args.args[0]), {'list_status': 'empty'})
+        with patch.object(peer, 'context', return_value=(Path('/owned'), {})), \
+             patch.object(peer, 'owned_unit', side_effect=ValueError('retired')), \
+             patch.object(peer, 'clipboard_observation') as read:
+            with self.assertRaises(ValueError):
+                peer.clipboard_observe('/owned', 'a' * 24, proof)
+        read.assert_not_called()
+
+    def test_bounded_reader_drains_both_pipes_and_refuses_oversize_or_expired_child(self):
+        command = [sys.executable, '-c', 'import sys;sys.stdout.buffer.write(b"owned");sys.stderr.write("status")']
+        self.assertEqual(peer.bounded_clipboard_read(command, 5, peer.time.monotonic() + 3),
+                         (0, b'owned', b'status'))
+        with self.assertRaises(ValueError):
+            peer.bounded_clipboard_read(command, 4, peer.time.monotonic() + 3)
+        with self.assertRaises(ValueError):
+            peer.bounded_clipboard_read(command, 5, peer.time.monotonic() - 1)
+
+
+class BrowserEventObservation(unittest.TestCase):
+    def observe(self, events):
+        client = Mock()
+        client.call.return_value = {'result': {'value': {'value': peer.SOURCE_TEXT,
+            'focused': True, 'start': 0, 'end': len(peer.SOURCE_TEXT.encode('utf-16-le')) // 2,
+            'events': events}}}
+        with patch.object(peer, 'context', return_value=(Path('/owned'), {
+                'uri': 'file:///owned/document.html', 'title': 'Owned'})), \
+             patch.object(peer, 'owned_unit'), patch.object(peer, 'page', return_value=client), \
+             patch('builtins.print') as output:
+            peer.dom('/owned', 'a' * 24, 'read', {'identity': {'owned': True}})
+        client.close.assert_called_once_with()
+        expression = client.call.call_args.args[1]['expression']
+        self.assertNotIn('navigator.clipboard', expression)
+        self.assertNotIn('dispatchKeyEvent', expression)
+        self.assertNotIn('execCommand', expression)
+        return json.loads(output.call_args.args[0])
+
+    def test_observed_trusted_copy_counts_are_bounded_data_and_not_input_synthesis(self):
+        events = dict.fromkeys(peer.EVENT_KEYS, 0)
+        events.update(trusted_copy=1, ctrl_c_down=1)
+        result = self.observe(events)
+        self.assertEqual(result['events'], events)
+        self.assertTrue(result['selection_complete'])
+        self.assertNotIn(peer.SOURCE_TEXT, json.dumps(result, ensure_ascii=False))
+
+    def test_missing_extra_boolean_negative_and_overbound_event_counters_are_refused(self):
+        valid = dict.fromkeys(peer.EVENT_KEYS, 0)
+        for events in (None, {}, dict(valid, private_unknown_counter=1),
+                       dict(valid, trusted_copy=True), dict(valid, trusted_copy=-1),
+                       dict(valid, trusted_copy=4097)):
+            with self.subTest(events=events), self.assertRaises(ValueError):
+                self.observe(events)

@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import re
+import selectors
 import shutil
 import signal
 import stat
@@ -28,7 +29,12 @@ from owned_application_units import (assert_unit_origin, capture_unit_origin,
 import owned_chromium_lease as chromium
 
 SOURCE_TEXT = 'browser one\n雪 e\u0301 👩\u200d💻\nlast line\n'
-OPERATIONS = ('initialize', 'absent', 'serve', 'origin', 'admit', 'clients', 'dom', 'retire', 'cleanup', 'watchdog')
+DESTINATION_TEXT = 'notes one\n\nnotes two\n'
+TEXT_ALIASES = ('text/plain;charset=utf-8', 'text/plain;charset=UTF-8',
+                'text/plain', 'UTF8_STRING', 'STRING', 'TEXT')
+EVENT_KEYS = ('trusted_copy', 'untrusted_copy', 'trusted_paste', 'untrusted_paste',
+              'ctrl_c_down', 'ctrl_c_up', 'ctrl_v_down', 'ctrl_v_up')
+OPERATIONS = ('initialize', 'absent', 'serve', 'origin', 'admit', 'clients', 'dom', 'clipboard-observe', 'retire', 'cleanup', 'watchdog')
 
 
 def failure_details(error, operation):
@@ -161,7 +167,16 @@ def initialize(directory, run_id):
     document = ('<!doctype html><meta charset="utf-8"><title>' + title + '</title>'
                 '<label for="clipboard">Owned clipboard acceptance</label>'
                 '<textarea id="clipboard" autofocus style="display:block;width:80vw;'
-                'height:65vh;font:24px monospace"></textarea>').encode()
+                'height:65vh;font:24px monospace"></textarea>'
+                '<script>const clipboardEvents=Object.seal(' + json.dumps(dict.fromkeys(EVENT_KEYS, 0)) + ');'
+                'for(const type of ["copy","paste"])document.addEventListener(type,event=>{'
+                'const key=(event.isTrusted?"trusted_":"untrusted_")+type;'
+                'clipboardEvents[key]=Math.min(4096,clipboardEvents[key]+1);});'
+                'for(const type of ["keydown","keyup"])document.addEventListener(type,event=>{'
+                'if(!event.isTrusted||!event.ctrlKey||event.altKey||event.metaKey||event.shiftKey)return;'
+                'const key=event.code==="KeyC"?"ctrl_c_":event.code==="KeyV"?"ctrl_v_":null;'
+                'if(key!==null){const counter=key+(type==="keydown"?"down":"up");'
+                'clipboardEvents[counter]=Math.min(4096,clipboardEvents[counter]+1);}});</script>').encode()
     manifest = {'run_id': run_id, 'title': title, 'class': 'LucentClipboard' + run_id,
                 'uri': (directory / 'document.html').as_uri(),
                 'helpers': {name: digest(regular(directory / name))
@@ -333,7 +348,7 @@ def dom(directory, run_id, operation, request):
                   'const e=document.getElementById("clipboard");'
                   'if(!(e instanceof HTMLTextAreaElement))throw 1;' + prepare
                   + 'return {value:e.value,focused:document.hasFocus()&&document.activeElement===e,'
-                  'start:e.selectionStart,end:e.selectionEnd};})()')
+                  'start:e.selectionStart,end:e.selectionEnd,events:{...clipboardEvents}};})()')
     peer = page(directory, manifest, expected=request['identity'])
     try:
         result = peer.call('Runtime.evaluate', {'expression': expression, 'returnByValue': True})
@@ -342,9 +357,100 @@ def dom(directory, run_id, operation, request):
     value = result.get('result', {}).get('value')
     require(isinstance(value, dict) and isinstance(value.get('value'), str)
             and len(value['value'].encode()) <= 65536)
+    events = value.get('events')
+    require(type(events) is dict and set(events) == set(EVENT_KEYS)
+            and all(type(count) is int and 0 <= count <= 4096 for count in events.values()))
     print(json.dumps({'sha256': digest(value['value'].encode()), 'focused': value['focused'],
                       'selection_complete': value['start'] == 0 and value['end'] == len(value['value'].encode('utf-16-le')) // 2,
-                      'bytes': len(value['value'].encode())}))
+                      'bytes': len(value['value'].encode()), 'events': events}))
+
+
+def bounded_clipboard_read(command, limit, deadline):
+    """Read-only child with bounded bytes/time; never put payloads in errors."""
+    child = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    selector = selectors.DefaultSelector()
+    output = [bytearray(), bytearray()]
+    try:
+        for index, stream in enumerate((child.stdout, child.stderr)):
+            os.set_blocking(stream.fileno(), False)
+            selector.register(stream, selectors.EVENT_READ, index)
+        while selector.get_map():
+            require(time.monotonic() < deadline)
+            for key, _mask in selector.select(.05):
+                data = os.read(key.fd, 4096)
+                if not data:
+                    selector.unregister(key.fileobj)
+                    continue
+                output[key.data].extend(data)
+                require(len(output[key.data]) <= (limit if key.data == 0 else 4096))
+        return child.wait(timeout=max(.01, deadline - time.monotonic())), bytes(output[0]), bytes(output[1])
+    finally:
+        selector.close()
+        if child.poll() is None:
+            child.kill()
+            child.wait(timeout=1)
+        child.stdout.close()
+        child.stderr.close()
+
+
+def fixture_payload_status(data):
+    """Classify only public fixture equality; unknown/original bytes stay private."""
+    for name, fixture in (('source', SOURCE_TEXT), ('destination', DESTINATION_TEXT)):
+        for suffix, candidate in (('', fixture), ('_crlf', fixture.replace('\n', '\r\n')),
+                                  ('_without_final_lf', fixture.removesuffix('\n'))):
+            if data == candidate.encode():
+                return 'fixture_' + name + suffix
+    if not data:
+        return 'empty'
+    try:
+        data.decode('utf-8')
+    except UnicodeDecodeError:
+        return 'other_non_utf8'
+    return 'other'
+
+
+def clipboard_observation(read=bounded_clipboard_read):
+    """Diagnose MIME compatibility without accepting offers or exposing user data."""
+    result = {'list_status': 'unavailable', 'known_text_aliases': [],
+              'other_mime_count': 0, 'payloads': {}, 'strict_text_only': None,
+              'all_read_alias_payloads_identical': None}
+    deadline = time.monotonic() + 10
+    try:
+        code, data, error = read(['wl-paste', '--list-types'], 16384, deadline)
+        if code == 1 and b'Nothing is copied' in error:
+            result['list_status'] = 'empty'
+            return result
+        require(code == 0)
+        types = data.decode('utf-8').splitlines()
+        require(len(types) <= 64 and len(types) == len(set(types))
+                and all(0 < len(value) <= 256 for value in types))
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return result
+    result['list_status'] = 'available'
+    result['known_text_aliases'] = [value for value in TEXT_ALIASES if value in types]
+    result['other_mime_count'] = sum(value not in TEXT_ALIASES for value in types)
+    result['strict_text_only'] = bool(types) and result['other_mime_count'] == 0
+    payloads = []
+    for mime in result['known_text_aliases']:
+        try:
+            code, data, _error = read(['wl-paste', '--no-newline', '--type', mime], 65536, deadline)
+            require(code == 0)
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            result['payloads'][mime] = 'unavailable'
+            continue
+        result['payloads'][mime] = fixture_payload_status(data)
+        payloads.append(data)
+    if payloads:
+        result['all_read_alias_payloads_identical'] = all(value == payloads[0] for value in payloads)
+    return result
+
+
+def clipboard_observe(directory, run_id, request):
+    directory, _manifest = context(directory, run_id)
+    owned_unit(directory, run_id, request['identity'])
+    observation = clipboard_observation()
+    owned_unit(directory, run_id, request['identity'])
+    print(json.dumps(observation))
 
 
 def retire_owned(directory, run_id, request):
@@ -406,6 +512,8 @@ def main():
     args = parser.parse_args()
     if args.operation in ('clients', 'retire', 'cleanup'):
         globals()[args.operation](args.directory, args.run_id, json.load(sys.stdin))
+    elif args.operation == 'clipboard-observe':
+        clipboard_observe(args.directory, args.run_id, json.load(sys.stdin))
     elif args.operation == 'dom':
         dom(args.directory, args.run_id, args.extra, json.load(sys.stdin))
     else:

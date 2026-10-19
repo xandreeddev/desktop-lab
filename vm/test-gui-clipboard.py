@@ -200,10 +200,10 @@ class Harness(notes.Harness):
         self.browser_workspace = 'lucent-clipboard-browser-' + self.tag
 
     def call_peer(self, operation, *arguments, data=None):
-        require(operation in ('initialize', 'absent', 'origin', 'admit', 'clients', 'dom', 'retire', 'cleanup'),
+        require(operation in ('initialize', 'absent', 'origin', 'admit', 'clients', 'dom', 'clipboard-observe', 'retire', 'cleanup'),
                 'fixed_gui_peer_operation')
         require(self.peer_initialized or operation == 'initialize', 'owned_peer_initialized')
-        if operation in ('dom', 'retire', 'cleanup'):
+        if operation in ('dom', 'clipboard-observe', 'retire', 'cleanup'):
             require(data is None, 'one_fixed_peer_authority_payload')
             data = json.dumps({'origin': self.browser_origin, 'identity': self.browser_identity}).encode()
         try:
@@ -383,6 +383,28 @@ class Harness(notes.Harness):
         finally:
             self.browser_focus_snapshot = None
 
+    def wait_browser_copy_offer(self, result):
+        try:
+            self.eventually(lambda: self.clip('read')['sha256'] == sha(SOURCE_TEXT),
+                            'real_browser_copy_offer')
+        except CheckFailure:
+            # Observational only. Never broaden accepted MIME/bytes, replace
+            # the original failure, send another key or change restoration.
+            observation = {}
+            try:
+                self.input_guard()
+                document = self.call_peer('dom', 'read')
+                observation['document'] = {
+                    'focused': document['focused'],
+                    'fixture_source_selected': document['sha256'] == sha(SOURCE_TEXT)
+                        and document['selection_complete'],
+                    'events': document['events']}
+                observation['clipboard'] = self.call_peer('clipboard-observe')
+            except Exception as error:
+                observation['diagnostic_failure'] = failure_details(error, self.phase)
+            result['browser_copy_diagnostics'] = observation
+            raise
+
     def current_browser_target(self):
         clients = json.loads(self.session('hyprctl', '-j', 'clients'))
         target = browser_focus_target(clients, self.browser_window)
@@ -500,7 +522,7 @@ def suite(h, result):
     source = h.focus_browser('seed')
     require(source['sha256'] == sha(SOURCE_TEXT), 'owned_browser_source_selected')
     h.key(29, notes.LETTERS['c'])
-    h.eventually(lambda: h.clip('read')['sha256'] == sha(SOURCE_TEXT), 'real_browser_copy_offer')
+    h.wait_browser_copy_offer(result)
     h.phase = 'browser_to_notes'
     h.focus_notes()
     h.notes.add(SOURCE_TEXT)
