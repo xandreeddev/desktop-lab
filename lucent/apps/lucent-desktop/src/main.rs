@@ -7,6 +7,7 @@ mod bar;
 mod bluetooth;
 mod catalog;
 mod desktop;
+mod displays;
 mod dock;
 mod launcher;
 mod live_wallpaper;
@@ -33,6 +34,9 @@ mod work;
 mod workspaces;
 use desktop::Desktop;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if std::env::args().nth(1).as_deref() == Some("--display-guard") {
+        return lucent_services::displays::run_guard().map_err(Into::into);
+    }
     lucent_wayland::run(Desktop::new(platform::desktop_adapters()))
 }
 

@@ -1,5 +1,5 @@
 mod session_lock;
-mod wire;
+pub(crate) mod wire;
 use lucent_domain::*;
 use serde_json::Value;
 use std::{

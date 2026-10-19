@@ -68,6 +68,10 @@ pub fn bluetooth_panel(viewport: (f32, f32)) -> Rect {
     use lucent_design::component::bluetooth;
     control_panel(viewport, (bluetooth::WIDTH, bluetooth::HEIGHT))
 }
+pub fn display_panel(viewport: (f32, f32)) -> Rect {
+    use lucent_design::component::displays;
+    control_panel(viewport, (displays::WIDTH, displays::HEIGHT))
+}
 pub fn power_panel(viewport: (f32, f32)) -> Rect {
     use lucent_design::component::power;
     control_panel(viewport, (power::WIDTH, power::HEIGHT))

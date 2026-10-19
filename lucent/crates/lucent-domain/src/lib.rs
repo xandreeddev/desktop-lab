@@ -49,3 +49,6 @@ pub use values::*;
 
 mod live_wallpaper;
 pub use live_wallpaper::*;
+
+mod displays;
+pub use displays::*;

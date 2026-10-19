@@ -37,6 +37,7 @@ pub enum Message {
     Network(crate::network::Message),
     Bluetooth(crate::bluetooth::Message),
     Power(crate::power::Message),
+    Displays(crate::displays::Message),
     Tray(crate::tray::Message),
     Media(crate::media::Message),
     Weather(crate::weather::Message),
@@ -131,6 +132,7 @@ pub struct Desktop {
     pub network: crate::network::Network,
     pub bluetooth: crate::bluetooth::Bluetooth,
     pub power: crate::power::Power,
+    pub displays: crate::displays::Displays,
     pub tray: crate::tray::Tray,
     pub media: crate::media::Media,
     pub weather: crate::weather::Weather,
@@ -191,6 +193,7 @@ impl Desktop {
             network: crate::network::Network::new(adapters.network.clone()),
             bluetooth: crate::bluetooth::Bluetooth::new(adapters.bluetooth.clone()),
             power: crate::power::Power::new(adapters.power.clone()),
+            displays: crate::displays::Displays::new(adapters.displays.clone()),
             tray: crate::tray::Tray::new(adapters.tray.clone(), adapters.assets.clone()),
             media: crate::media::Media::new(adapters.media.clone(), adapters.assets.clone()),
             weather: crate::weather::Weather::new(adapters.weather.clone()),
@@ -569,6 +572,7 @@ impl Desktop {
             "network",
             "bluetooth",
             "power",
+            "displays",
         ] {
             effects.redraw(id);
         }
@@ -808,6 +812,7 @@ impl Desktop {
             "network",
             "bluetooth",
             "power",
+            "displays",
             "tray",
             "notifications",
             "osd",
@@ -1128,6 +1133,7 @@ impl Component for Desktop {
                 .view(cx, self.theme())
                 .map(Message::Bluetooth),
             "power" => self.power.view(cx, self.theme()).map(Message::Power),
+            "displays" => self.displays.view(cx, self.theme()).map(Message::Displays),
             "tray" => self.tray.view(cx, self.theme()).map(Message::Tray),
             "osd" => self.osd.view(cx, self.theme()),
             "background" => self
@@ -1220,6 +1226,7 @@ impl Component for Desktop {
                     "network",
                     "bluetooth",
                     "power",
+                    "displays",
                     "tray",
                     "notifications",
                     "osd",
@@ -1549,6 +1556,14 @@ impl Component for Desktop {
                 let was_open = self.tray.open();
                 effects.delegate(|child| self.tray.update(message, child), Message::Tray);
                 self.panel_opened(Panel::Tray, was_open, effects);
+            }
+            Message::Displays(message) => {
+                let was_open = self.displays.open();
+                effects.delegate(
+                    |child| self.displays.update(message, child),
+                    Message::Displays,
+                );
+                self.panel_opened(Panel::Displays, was_open, effects);
             }
             Message::Power(message) => {
                 if let crate::power::Message::Observed(result) = &message {
@@ -2078,6 +2093,29 @@ impl api::Application for Desktop {
                 },
             },
             SurfaceSpec {
+                id: "displays",
+                instance: None,
+                output: None,
+                layer: Layer::Overlay,
+                anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
+                width: 0,
+                height: 0,
+                exclusive_zone: -1,
+                keyboard: if self.displays.open() {
+                    Keyboard::Exclusive
+                } else {
+                    Keyboard::None
+                },
+                visible: self.displays.visible(),
+                pointer_input: if self.displays.open() {
+                    PointerInput::All
+                } else {
+                    PointerInput::None
+                },
+            },
+            SurfaceSpec {
                 id: "bluetooth",
                 instance: None,
                 output: None,
@@ -2338,6 +2376,7 @@ impl api::Application for Desktop {
         let network = self.adapters.network.clone();
         let bluetooth = self.adapters.bluetooth.clone();
         let power = self.adapters.power.clone();
+        let displays = self.adapters.displays.clone();
         let tray = self.adapters.tray.clone();
         let mut s = vec![
             Subscription::stream("applications", move |out, cancel| {
@@ -2355,6 +2394,14 @@ impl api::Application for Desktop {
                     &mut |value| out.send(Message::Tray(crate::tray::Message::Observed(value))),
                     &WatchStop(cancel),
                 )
+            }),
+            Subscription::stream("displays", move |out, cancel| {
+                displays.watch(
+                    &mut |value| {
+                        out.send(Message::Displays(crate::displays::Message::Observed(value)))
+                    },
+                    &WatchStop(cancel),
+                );
             }),
             Subscription::stream("power", move |out, cancel| {
                 power.watch(
@@ -2453,6 +2500,14 @@ impl api::Application for Desktop {
                     Emitter::new(move |message| out.send(Message::Tray(message))),
                     cancel,
                 )
+            }));
+        }
+        for subscription in self.displays.subscriptions() {
+            s.push(Subscription::stream(subscription.id, move |out, cancel| {
+                (subscription.run)(
+                    Emitter::new(move |message| out.send(Message::Displays(message))),
+                    cancel,
+                );
             }));
         }
         for subscription in self.power.subscriptions() {
@@ -2659,6 +2714,14 @@ impl api::Application for Desktop {
             } => Some(Message::Tray(self.tray.escape())),
             Event::Key {
                 surface: "tray", ..
+            } => None,
+            Event::Key {
+                surface: "displays",
+                key: Key::Escape,
+            } => Some(Message::Displays(self.displays.escape())),
+            Event::Key {
+                surface: "displays",
+                ..
             } => None,
             Event::Key {
                 surface: "power",
@@ -2990,6 +3053,9 @@ impl api::Application for Desktop {
             "tray open"=>Message::Tray(crate::tray::Message::Open),
             "tray toggle"=>Message::Tray(crate::tray::Message::Toggle),
             "tray close"=>Message::Tray(crate::tray::Message::Close),
+            "displays open"=>Message::Displays(crate::displays::Message::Open),
+            "displays toggle"=>Message::Displays(crate::displays::Message::Toggle),
+            "displays close"=>Message::Displays(crate::displays::Message::Close),
             "power open"=>Message::Power(crate::power::Message::Open),
             "power toggle"=>Message::Power(crate::power::Message::Toggle),
             "power close"=>Message::Power(crate::power::Message::Close),
@@ -3043,6 +3109,7 @@ impl api::Application for Desktop {
         value["network"] = self.network.inspect();
         value["bluetooth"] = self.bluetooth.inspect();
         value["power"] = self.power.inspect();
+        value["displays"] = self.displays.inspect();
         value["tray"] = self.tray.inspect();
         value["catalog"] = self.catalog.inspect();
         value["application_actions"] = self.launcher.actions_inspect();
@@ -3081,6 +3148,7 @@ impl api::Application for Desktop {
             || (surface == "audio" && self.audio.animating(now))
             || (surface == "media-controls" && self.media.animating(now))
             || (surface == "power" && self.power.animating(now))
+            || (surface == "displays" && self.displays.animating(now))
             || (surface == "tray" && self.tray.animating(now))
             || (surface == "bluetooth" && self.bluetooth.animating(now))
             || (surface == "network" && self.network.animating(now))

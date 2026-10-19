@@ -65,15 +65,7 @@ def bluetooth():
 
 
 def monitor():
-    while True:
-        monitors = json.loads(output('hyprctl','-j','monitors'))
-        rows = [(m['name'],f"{m['width']} × {m['height']} · scale {m['scale']}",None) for m in monitors]
-        rows.extend((f'Scale {scale}×','Focused display',('omarchy-hyprland-monitor-scaling',scale)) for scale in ['1','1.25','1.6','2','3','4'])
-        rows.extend([('Brightness up','+5%',('omarchy-brightness-display','+5%')),
-                     ('Brightness down','−5%',('omarchy-brightness-display','5%-'))])
-        action = choose('Displays',rows)
-        if action is None: return
-        output(*action)
+    output(str(Path.home()/'.local/bin/lucent-cli'), 'displays', 'open')
 
 
 def power():
