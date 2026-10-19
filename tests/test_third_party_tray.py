@@ -367,7 +367,7 @@ class OwnedKernelFilesAndCleanup(unittest.TestCase):
         for name, text in (('cgroup.procs', ''), ('cgroup.threads', ''), ('cgroup.events', f'populated {populated}\n')):
             (group / name).write_text(text)
         saved = {'unit': unit}
-        intent = {'unit': unit, 'cgroup': group_name, 'invocation': 'aa',
+        intent = {'unit': unit, 'cgroup': group_name, 'invocation': 'aa', 'pid': 99999999, 'start': '1',
                   'group_identity': guest.identity(group.stat())[:2]}
         properties = {'MainPID': '0', 'InvocationID': 'aa', 'ActiveState': 'inactive'}
         real_path = Path
@@ -400,6 +400,53 @@ class OwnedKernelFilesAndCleanup(unittest.TestCase):
                 with self.assertRaisesRegex(policy.Blocked, 'pid_recycled'):
                     guest.stop(Path(scratch))
                 command.assert_not_called()
+
+    def test_only_typed_no_such_unit_maps_to_absent_without_systemctl_fallback(self):
+        class NoSuchUnit(Exception):
+            def get_dbus_name(self):
+                return 'org.freedesktop.systemd1.NoSuchUnit'
+        manager = Mock();manager.GetUnit.side_effect = NoSuchUnit()
+        fake = types.SimpleNamespace(SessionBus=Mock(), Interface=Mock(return_value=manager), DBusException=NoSuchUnit)
+        unit = 'lucent-third-party-tray-' + 'b' * 24 + '.service'
+        with patch.dict(sys.modules, {'dbus': fake}), patch.object(guest, 'run') as command:
+            value = guest.unit_properties(unit)
+        self.assertEqual(value, {'LoadState': 'not-found', 'ActiveState': 'inactive', 'MainPID': '0',
+                                'ControlGroup': '', 'InvocationID': ''})
+        command.assert_not_called()
+
+    def test_acknowledged_stop_followed_by_typed_absence_requires_original_group_and_pid_drained(self):
+        with tempfile.TemporaryDirectory(prefix='lucent-tray-cgroup-') as scratch:
+            saved, intent, _, paths = self.fixture(scratch)
+            active = {'load': 'loaded', 'active': 'active', 'main_pid': intent['pid'],
+                      'group': intent['cgroup'], 'invocation': intent['invocation']}
+            for drained in (True, False):
+                with self.subTest(drained=drained), patch.object(guest, 'Path', side_effect=paths), \
+                     patch.object(guest, 'read', side_effect=lambda _d, name: saved if name == 'checkpoint.json' else intent), \
+                     patch.object(guest, 'unit_snapshot', side_effect=[active, {'load': 'not-found'}]), \
+                     patch.object(guest, 'original_retirement_drained', return_value=drained) as check, \
+                     patch.object(guest, 'owner'), patch.object(guest, 'run') as command:
+                    if drained:
+                        self.assertTrue(guest.stop(Path(scratch))['exact_owned_unit_quiescent'])
+                    else:
+                        with self.assertRaisesRegex(policy.Blocked, 'original_applet_process_or_group_not_drained'):
+                            guest.stop(Path(scratch))
+                    command.assert_called_once_with('systemctl', '--user', 'stop', saved['unit'])
+                    self.assertEqual(check.call_args.args[0]['process']['start'], intent['start'])
+
+    def test_active_successor_after_acknowledged_stop_is_refused_without_second_stop(self):
+        with tempfile.TemporaryDirectory(prefix='lucent-tray-cgroup-') as scratch:
+            saved, intent, _, paths = self.fixture(scratch)
+            active = {'load': 'loaded', 'active': 'active', 'main_pid': intent['pid'],
+                      'group': intent['cgroup'], 'invocation': intent['invocation']}
+            successor = dict(active, main_pid=999, invocation='foreign')
+            with patch.object(guest, 'Path', side_effect=paths), \
+                 patch.object(guest, 'read', side_effect=lambda _d, name: saved if name == 'checkpoint.json' else intent), \
+                 patch.object(guest, 'unit_snapshot', side_effect=[active, successor]), \
+                 patch.object(guest, 'original_retirement_drained', return_value=True), \
+                 patch.object(guest, 'owner'), patch.object(guest, 'run') as command:
+                with self.assertRaisesRegex(policy.Blocked, 'owned_unit_not_finally_quiescent'):
+                    guest.stop(Path(scratch))
+            command.assert_called_once_with('systemctl', '--user', 'stop', saved['unit'])
 
 
 class DriverOrdering(unittest.TestCase):

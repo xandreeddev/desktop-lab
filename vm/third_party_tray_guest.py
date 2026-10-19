@@ -19,7 +19,8 @@ import sys
 import time
 
 sys.dont_write_bytecode = True
-from owned_application_units import process_snapshot, unit_snapshot
+from owned_application_units import (_retirement_drained as original_retirement_drained,
+                                     process_snapshot, unit_snapshot)
 from third_party_tray_policy import (Blocked, Unsupported, cgroup_path, digest,
                                      information_entry, owned_process, require, unique, unit_name,
                                      unbound_input)
@@ -141,10 +142,15 @@ def process(pid, private_token=False):
 
 def unit_properties(unit):
     unit_name(unit)
-    value = run('systemctl', '--user', 'show', unit, '--property=ActiveState', '--property=SubState',
-                '--property=MainPID', '--property=ControlGroup', '--property=InvocationID',
-                '--property=LoadState')
-    return dict(line.split('=', 1) for line in value.splitlines())
+    value = unit_snapshot(unit)
+    if value == {'load': 'not-found'}:
+        # Only systemd's typed NoSuchUnit observation supplies this state. No
+        # arbitrary systemctl exit code, stderr or missing text grants it.
+        return {'LoadState': 'not-found', 'ActiveState': 'inactive', 'MainPID': '0',
+                'ControlGroup': '', 'InvocationID': ''}
+    return {'LoadState': value['load'], 'ActiveState': value['active'],
+            'MainPID': str(value['main_pid']), 'ControlGroup': value['group'],
+            'InvocationID': value['invocation']}
 
 
 def desktop_parent(pid):
@@ -538,6 +544,12 @@ def stop(directory):
     else:
         require(properties.get('InvocationID', '') in ('', intent['invocation'])
                 and properties.get('ActiveState') in ('inactive', 'failed'), 'owned_unit_not_retired')
+    # Unit garbage collection alone does not prove process death. The original
+    # PID birth must be gone and the original recursive group drained, even if
+    # its typed unit observation is already NoSuchUnit after the acknowledged stop.
+    require(original_retirement_drained({'unit': {'group': intent['cgroup']},
+                'process': {'pid': intent['pid'], 'start': intent['start'], 'group': intent['cgroup']}}),
+            'original_applet_process_or_group_not_drained')
     group = Path('/sys/fs/cgroup') / intent['cgroup'].lstrip('/')
     if group.exists():
         require(group.resolve(strict=True) == group and identity(group.stat())[:2] == intent['group_identity'],
