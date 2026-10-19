@@ -76,7 +76,7 @@ mod tests {
     fn delegated_request_maps_one_completion_without_exposing_the_token() {
         let mut parent = Effects::<(u8, ActivationOutcome)>::default();
         parent.delegate(
-            |child| child.activation_token("org.example.App", |outcome| outcome),
+            |child| child.activation_token("org.example.App", std::convert::identity),
             |outcome| (7, outcome),
         );
         let request = parent.activation.pop().unwrap();

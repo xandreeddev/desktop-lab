@@ -144,12 +144,11 @@ impl<A: Application> Dispatch<XdgActivationV1, ()> for State<A> {
     fn event(
         _: &mut Self,
         _: &XdgActivationV1,
-        event: xdg_activation_v1::Event,
+        _: xdg_activation_v1::Event,
         _: &(),
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        match event {}
     }
 }
 impl<A: Application> Dispatch<XdgActivationTokenV1, u64> for State<A> {
