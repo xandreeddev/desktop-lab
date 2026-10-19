@@ -398,7 +398,12 @@ finally:os.close(descriptor)
         finally:
             try:
                 restoration=recovery('stop')
-                assert fingerprint(session)==before_preservation, 'Preserved settings/media/exports/history/supervisor/binary state changed; no automatic restore'
+                after_preservation=fingerprint(session)
+                descriptor=os.open(report_path.with_suffix('.fingerprints.json'),os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+                with os.fdopen(descriptor,'w') as stream:
+                    json.dump({'before':before_preservation,'after':after_preservation,'process_before':desktop_process,'process_after':locals().get('recovered')},stream,indent=2)
+                    stream.write('\n')
+                assert after_preservation==before_preservation, 'Preserved settings/media/exports/history/supervisor/binary state changed; no automatic restore'
                 preservation_verified=True
             finally:
                 report={'desktop_sha256':args.desktop_sha256,'checks':checks,'restoration':restoration,'crash_test_requested':args.test_crash,'preservation_verified':preservation_verified,'scope':'single-output QEMU native panel input and observed layout; no physical/multi-output claims'}
