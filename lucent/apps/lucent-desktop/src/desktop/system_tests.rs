@@ -274,6 +274,12 @@ fn system_resize_capture_keeps_source_bounds_while_updating_the_painted_preview(
         Message::Widgets(widgets::Message::Edit(true)),
         &mut Effects::default(),
     );
+    // Entering edit mode cancels stale gestures. A fresh physical press admits
+    // the next resize, matching the native pointer path and sizing fixtures.
+    app.update(
+        Message::Widgets(widgets::Message::Press),
+        &mut Effects::default(),
+    );
     let initial = app.widgets.surfaces(&app.settings.layout, app.viewport);
     let original_size = app
         .widgets
