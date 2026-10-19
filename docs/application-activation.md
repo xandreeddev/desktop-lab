@@ -160,6 +160,17 @@ and finite example unit lifetime provide bounded process cleanup if transport is
 lost. Host SIGKILL while a physical button is down still requires console/QMP
 release by the operator; the guest watchdog cannot inject host input.
 
+Before `exec`, each owned example, browser wrapper and watchdog durably records
+its original transient unit invocation, main PID, process birth and cgroup in the
+private run directory. The example additionally persists its admitted release
+digest and socket identity. Host fallback and watchdog retirement reuse those
+immutable receipts; refusing a replaced unit or socket never permits a retry
+with only its current name or command. A lost start reply can retire the original
+wrapper only when that wrapper already wrote its receipt. A loaded unit without
+that proof is retained for bounded expiry/private recovery rather than adopted.
+Completed-unit observations also keep the original invocation check. These are
+tooling changes with source-only regression evidence, not a new native pass.
+
 Lightweight checks in `tests/test_application_intent_admission.py` exercise
 foreign layer and socket peers, replaced sockets, stale layer/hit identity,
 catch-all interception, cursor loss and captured-process retirement. They use
@@ -167,3 +178,13 @@ pure policy, mocked transport boundaries and an actual read-only fingerprint of
 the test runner's `/proc` entry; they do not launch a guest, browser or native
 surface. A future source-specific native run must still pass preservation and
 owned cleanup before acceptance.
+
+`tests/test_owned_application_units.py` additionally covers original receipt
+publication before `exec`, lost-reply cleanup, fallback/watchdog refusal,
+same-name unit reuse after stopping, and cold manifest reads. File read identity
+excludes access time alone: device, inode, mode, owner, group, size, modification
+time and change time remain checked, including actual mid-read content mutation
+and path replacement. Chromium may explicitly use the helper's bounded 512 MiB
+executable limit; its normal default remains 128 MiB. Per-input observation uses
+stable executable metadata and process birth after the admitted hash, avoiding
+repeated full Chromium hashing.

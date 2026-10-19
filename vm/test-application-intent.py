@@ -21,7 +21,6 @@ import sys
 import time
 
 from native_surfaces import find_surface
-from owned_application_units import RETIRE
 from application_intent_policy import CursorOwnership, absolute_move, same_target, target as native_target
 
 
@@ -241,11 +240,9 @@ def suite(args, results):
             pressed = False
 
     def retire_example():
-        arguments = ['lucent-application-intent-', unit, binary, run_id]
-        if example_identity is not None:
-            arguments.append(json.dumps(example_identity))
-        require(json.loads(session('python3', '-c', RETIRE, *arguments))['retired'],
-                'independent_example_retired')
+        arguments = [json.dumps(example_identity)] if example_identity is not None else []
+        require(json.loads(call('retire-example', *arguments))['retired'],
+                'original_independent_example_retired')
 
     try:
         h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(fixture)],
@@ -255,7 +252,8 @@ def suite(args, results):
         h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(scratch + '/application_intent_policy.py')],
                  data=(ROOT / 'vm/application_intent_policy.py').read_bytes(), timeout=20)
         initialized = True
-        entry = json.loads(call('initialize'))
+        entry = json.loads(call('initialize', manifest['binaries']['application-intent']['sha256']))
+        require(json.loads(call('initial-absence'))['absent'], 'owned_units_initially_absent')
         baseline = observe_native(False)['baseline']
         h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(binary)],
                  data=example.read_bytes(), timeout=30)
@@ -269,9 +267,7 @@ def suite(args, results):
         example_attempted = True
         session('systemd-run', '--user', '--collect', '--unit=' + unit,
                 '--property=RuntimeMaxSec=240', '--property=MemoryMax=768M',
-                '--property=UMask=0077', binary, '--app', entry['app_id'], '--action', 'Probe',
-                '--target', scratch + '/' + entry['files'][0]['name'],
-                '--target', scratch + '/' + entry['files'][1]['name'])
+                '--property=UMask=0077', '/usr/bin/python3', fixture, 'start-example', scratch, run_id)
         admitted = None
         def ready():
             nonlocal admitted
@@ -354,8 +350,7 @@ def suite(args, results):
                 failures.append('browser_retirement')
         if guard_attempted and cleanup.get('browser_retired', False) and cleanup.get('example_retired', False):
             try:
-                require(json.loads(session('python3', '-c', RETIRE,
-                    'lucent-application-intent-watchdog-', guard, fixture, run_id))['retired'],
+                require(json.loads(call('retire-watchdog'))['retired'],
                     'owned_watchdog_retired')
                 cleanup['watchdog_retired'] = True
             except Exception:

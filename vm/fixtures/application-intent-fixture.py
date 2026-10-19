@@ -24,7 +24,9 @@ import tempfile
 import time
 
 sys.dont_write_bytecode = True
-from owned_application_units import (assert_unit_identity, owned_argv, process_snapshot, retire_unit, unit_snapshot)
+from owned_application_units import (assert_unit_origin, capture_unit_origin,
+                                     owned_argv, process_snapshot, retire_original_unit, retire_unit,
+                                     unit_snapshot)
 from application_intent_policy import owned_layers, socket_peer, unbound_pointer
 
 
@@ -44,7 +46,11 @@ def regular(path, limit=131072):
         require(stat.S_ISREG(value.st_mode) and value.st_uid == os.getuid()
                 and value.st_size <= limit)
         data = stream.read(limit + 1)
-        require(len(data) <= limit)
+        def identity(meta):
+            return (meta.st_dev, meta.st_ino, meta.st_mode, meta.st_uid, meta.st_gid,
+                    meta.st_size, meta.st_mtime_ns, meta.st_ctime_ns)
+        require(len(data) <= limit and identity(value) == identity(os.fstat(stream.fileno()))
+                == identity(path.lstat()))
         return data
 
 
@@ -52,6 +58,13 @@ def private(path, data):
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, 'wb') as stream:
         stream.write(data)
+        stream.flush()
+        os.fsync(stream.fileno())
+    parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(parent)
+    finally:
+        os.close(parent)
 
 
 def atomic(path, data):
@@ -60,7 +73,14 @@ def atomic(path, data):
         with os.fdopen(descriptor, 'wb') as stream:
             os.fchmod(stream.fileno(), 0o600)
             stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
         os.replace(name, path)
+        parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(parent)
+        finally:
+            os.close(parent)
     finally:
         Path(name).unlink(missing_ok=True)
 
@@ -89,8 +109,19 @@ def encoded(value):
     return '"' + value.replace('\\', '\\\\') + '"'
 
 
-def initialize(directory, run_id):
+def original_receipt(directory, name, value=None):
+    require(name in ('example-origin.json', 'example-admission.json', 'watchdog-origin.json'))
+    path = directory / name
+    if value is not None and not os.path.lexists(path):
+        private(path, json.dumps(value, sort_keys=True).encode())
+    original = json.loads(regular(path))
+    require(value is None or original == value)
+    return original
+
+
+def initialize(directory, run_id, example_sha256):
     directory, _ = context(directory, run_id, False)
+    require(re.fullmatch('[a-f0-9]{64}', example_sha256) is not None)
     require(Path('/usr/bin/chromium').is_file() and os.access('/usr/bin/chromium', os.X_OK))
     data_home = Path(os.environ.get('XDG_DATA_HOME', str(Path.home() / '.local/share')))
     applications = (data_home / 'applications').resolve(strict=True)
@@ -114,7 +145,8 @@ def initialize(directory, run_id):
              + 'StartupWMClass=LucentIntent' + run_id + '\nExec=' + command + ' open %U\n'
              + 'Actions=Probe;\n\n[Desktop Action Probe]\nName=Open owned document\nExec='
              + command + ' action ' + encoded(files[0]['uri']) + '\n').encode()
-    manifest = {'run_id': run_id, 'script_sha256': digest(regular(directory / 'fixture.py')),
+    manifest = {'run_id': run_id, 'example_sha256': example_sha256,
+                'script_sha256': digest(regular(directory / 'fixture.py')),
                 'units_sha256': digest(regular(directory / 'owned_application_units.py')),
                 'policy_sha256': digest(regular(directory / 'application_intent_policy.py')),
                 'app_id': app_id, 'name': 'Lucent intent ' + run_id.lower(),
@@ -138,6 +170,26 @@ def events(directory):
     return value
 
 
+def start_example(directory, run_id):
+    directory, manifest = context(directory, run_id)
+    binary = directory / 'application-intent'
+    require(digest(regular(binary, 64 * 1024 * 1024)) == manifest['example_sha256'])
+    unit = 'lucent-application-intent-' + run_id + '.service'
+    argv = owned_argv('lucent-application-intent-', str(binary), run_id)
+    descriptor = os.open(directory / 'events.lock', os.O_RDWR | os.O_NOFOLLOW)
+    with os.fdopen(descriptor, 'r+b') as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        require(not os.path.lexists(directory / 'closing'))
+        original_receipt(directory, 'example-origin.json', capture_unit_origin(unit, argv))
+    arguments = [str(binary), '--app', manifest['app_id'], '--action', 'Probe']
+    require(len(manifest['files']) == 2)
+    for item in manifest['files']:
+        require(Path(item['name']).name == item['name'])
+        arguments += ['--target', str(directory / item['name'])]
+    signal.alarm(0)
+    os.execv(arguments[0], arguments)
+
+
 def execute(directory, run_id, arguments):
     directory, manifest = context(directory, run_id)
     require(arguments and arguments[0] in ('open', 'action'))
@@ -154,6 +206,9 @@ def execute(directory, run_id, arguments):
               'fresh_token_present': bool(os.environ.get('XDG_ACTIVATION_TOKEN')),
               'legacy_startup_present': bool(os.environ.get('DESKTOP_STARTUP_ID')),
               'cgroup': groups[0]}
+    unit = groups[0].rsplit('/', 1)[1]
+    require(re.fullmatch(r'run-[A-Za-z0-9_-]+\.service', unit))
+    record['origin'] = capture_unit_origin(unit, event_argv(directory, run_id, record))
     descriptor = os.open(directory / 'events.lock', os.O_RDWR | os.O_NOFOLLOW)
     with os.fdopen(descriptor, 'r+b') as stream:
         fcntl.flock(stream, fcntl.LOCK_EX)
@@ -198,14 +253,16 @@ def owned_clients(directory, run_id, clients):
         unit = groups[0].rsplit('/', 1)[1]
         require(re.fullmatch(r'run-[A-Za-z0-9_-]+\.service', unit))
         value = unit_snapshot(unit)
-        assert_unit_identity(value, unit, event_argv(directory, run_id, event), groups[0])
+        assert_unit_origin(value, unit, event_argv(directory, run_id, event), event['origin'],
+                           max_executable_bytes=512 * 1024 * 1024)
         require(value['active'] not in ('inactive', 'failed'))
     print(json.dumps({'owned_clients': len(clients)}))
 
 
 def admission(directory, run_id, request):
     """Observe real process/unit/layer authority; no input or compositor mutation."""
-    directory, _ = context(directory, run_id)
+    directory, manifest = context(directory, run_id)
+    require(request['example_sha256'] is None or request['example_sha256'] == manifest['example_sha256'])
     require(set(request) == {'desktop_sha256', 'example_sha256'})
     require(re.fullmatch('[a-f0-9]{64}', request['desktop_sha256']) is not None)
     def command(*args):
@@ -244,8 +301,9 @@ def admission(directory, run_id, request):
         require(re.fullmatch('[a-f0-9]{64}', request['example_sha256']) is not None)
         unit = 'lucent-application-intent-' + run_id + '.service'
         value = unit_snapshot(unit)
-        assert_unit_identity(value, unit, owned_argv('lucent-application-intent-',
-                             str(directory / 'application-intent'), run_id))
+        argv = owned_argv('lucent-application-intent-', str(directory / 'application-intent'), run_id)
+        origin = original_receipt(directory, 'example-origin.json')
+        assert_unit_origin(value, unit, argv, origin)
         require(value['active'] == 'active' and value['main_pid'] > 1)
         process = process_snapshot(value['main_pid'], hashed=True)
         require(process['sha256'] == request['example_sha256'] and process['group'] == value['group'])
@@ -261,6 +319,7 @@ def admission(directory, run_id, request):
     require(process_snapshot(desktop['pid'], hashed=True) == desktop)
     if example:
         require(process_snapshot(example['process']['pid'], hashed=True) == example['process'])
+        original_receipt(directory, 'example-admission.json', example)
     print(json.dumps({'baseline': baseline, 'example': example, 'intent_layer': layer, 'example_state': state}))
 
 
@@ -300,10 +359,42 @@ def example_command(directory, run_id, command, expected):
     return response.decode()
 
 
-def retire_example(directory, run_id):
+def retire_example(directory, run_id, captured=None):
+    directory, _ = context(directory, run_id)
     binary = str(directory / 'application-intent')
-    retire_unit('lucent-application-intent-' + run_id + '.service',
-                owned_argv('lucent-application-intent-', binary, run_id))
+    unit = 'lucent-application-intent-' + run_id + '.service'
+    argv = owned_argv('lucent-application-intent-', binary, run_id)
+    value = unit_snapshot(unit)
+    if value['load'] == 'not-found':
+        return
+    origin = original_receipt(directory, 'example-origin.json')
+    admission = directory / 'example-admission.json'
+    if os.path.lexists(admission):
+        original = original_receipt(directory, 'example-admission.json')
+        require(captured is None or original == captured)
+        assert_unit_origin(value, unit, argv, origin)
+        require(original['unit']['invocation'] == origin['unit']['invocation']
+                and all(original['process'][key] == origin['process'][key]
+                        for key in ('pid', 'start', 'group')))
+        path = Path(os.environ['XDG_RUNTIME_DIR']) / 'application-intent.sock'
+        if os.path.lexists(path):
+            value = path.lstat()
+            require([value.st_dev, value.st_ino, value.st_mode, value.st_uid] == original['socket'])
+        retire_unit(unit, argv, origin['unit']['group'], captured=original)
+    else:
+        require(captured is None)
+        # Lost StartUnit reply or failed-before-socket startup: the original
+        # wrapper's durable invocation/birth is enough to retire only its unit.
+        retire_original_unit(unit, argv, origin)
+
+
+def retire_watchdog(directory, run_id):
+    directory, _ = context(directory, run_id)
+    unit = 'lucent-application-intent-watchdog-' + run_id + '.service'
+    if unit_snapshot(unit)['load'] != 'not-found':
+        original = original_receipt(directory, 'watchdog-origin.json')
+        argv = owned_argv('lucent-application-intent-watchdog-', str(directory / 'fixture.py'), run_id)
+        retire_original_unit(unit, argv, original)
 
 
 def retire(directory, run_id):
@@ -319,14 +410,24 @@ def retire(directory, run_id):
             require(regular(marker) == b'retiring\n')
         else:
             private(marker, b'retiring\n')
-    retire_example(directory, run_id)
+    failed = False
+    try:
+        retire_example(directory, run_id)
+    except Exception:
+        failed = True
     recorded = events(directory)
     for group in sorted({event['cgroup'] for event in recorded}):
         unit = group.rsplit('/', 1)[1]
         require(re.fullmatch(r'run-[A-Za-z0-9_-]+\.service', unit))
         matching = [event for event in recorded if event['cgroup'] == group]
         require(len(matching) == 1)
-        retire_unit(unit, event_argv(directory, run_id, matching[0]), group)
+        event = matching[0]
+        try:
+            retire_original_unit(unit, event_argv(directory, run_id, event), event['origin'],
+                                 max_executable_bytes=512 * 1024 * 1024)
+        except Exception:
+            failed = True
+    require(not failed)
     print(json.dumps({'owned_browser_units_retired': True}))
 
 
@@ -340,7 +441,8 @@ def cleanup(directory, run_id):
         require(digest(regular(directory / item['name'])) == item['sha256'])
     require(set(path.name for path in directory.iterdir()) <= {
         'fixture.py', 'manifest.json', 'events.json', 'events.lock', 'closing', 'profile', 'application_intent_policy.py',
-        'application-intent', 'application-intent.sha256', 'owned_application_units.py', *[item['name'] for item in manifest['files']]})
+        'application-intent', 'application-intent.sha256', 'owned_application_units.py',
+        'example-origin.json', 'example-admission.json', 'watchdog-origin.json', *[item['name'] for item in manifest['files']]})
     profile = directory / 'profile'
     if profile.exists():
         value = profile.lstat()
@@ -349,17 +451,54 @@ def cleanup(directory, run_id):
     shutil.rmtree(directory)
 
 
+def initial_absence(directory, run_id):
+    context(directory, run_id)
+    for prefix in ('lucent-application-intent-', 'lucent-application-intent-watchdog-'):
+        require(unit_snapshot(prefix + run_id + '.service')['load'] == 'not-found')
+    print(json.dumps({'absent': True}))
+
+
+def watchdog(directory, run_id):
+    directory, _ = context(directory, run_id)
+    unit = 'lucent-application-intent-watchdog-' + run_id + '.service'
+    argv = owned_argv('lucent-application-intent-watchdog-', str(directory / 'fixture.py'), run_id)
+    original_receipt(directory, 'watchdog-origin.json', capture_unit_origin(unit, argv))
+    signal.alarm(295)
+    time.sleep(210)
+    # Independent expiry has the same immutable origin/admission receipts as
+    # host cleanup. Repeated failures never grant authority over a successor.
+    for attempt in range(6):
+        try:
+            retire(directory, run_id)
+            return
+        except Exception:
+            if attempt == 5:
+                raise
+            time.sleep(5)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('operation', choices=('initialize', 'execute', 'state', 'retire', 'cleanup', 'watchdog', 'guard',
-                                             'admission', 'example-command'))
+                                             'admission', 'example-command', 'initial-absence', 'start-example',
+                                             'retire-example', 'retire-watchdog'))
     parser.add_argument('directory')
     parser.add_argument('run_id')
     parser.add_argument('arguments', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     signal.alarm(55)
-    if args.operation == 'initialize' and not args.arguments:
-        initialize(args.directory, args.run_id)
+    if args.operation == 'initialize' and len(args.arguments) == 1:
+        initialize(args.directory, args.run_id, args.arguments[0])
+    elif args.operation == 'initial-absence' and not args.arguments:
+        initial_absence(args.directory, args.run_id)
+    elif args.operation == 'start-example' and not args.arguments:
+        start_example(args.directory, args.run_id)
+    elif args.operation == 'retire-example' and len(args.arguments) in (0, 1):
+        retire_example(args.directory, args.run_id, json.loads(args.arguments[0]) if args.arguments else None)
+        print(json.dumps({'retired': True}))
+    elif args.operation == 'retire-watchdog' and not args.arguments:
+        retire_watchdog(args.directory, args.run_id)
+        print(json.dumps({'retired': True}))
     elif args.operation == 'execute':
         execute(args.directory, args.run_id, args.arguments)
     elif args.operation == 'state' and not args.arguments:
@@ -374,19 +513,7 @@ def main():
     elif args.operation == 'retire' and not args.arguments:
         retire(args.directory, args.run_id)
     elif args.operation == 'watchdog' and not args.arguments:
-        context(args.directory, args.run_id)
-        signal.alarm(295)
-        time.sleep(210)
-        # Keep attempting retirement when the host disappears or one bus call
-        # fails. No new request is admitted after the exact example is stopped.
-        for attempt in range(6):
-            try:
-                retire(args.directory, args.run_id)
-                break
-            except Exception:
-                if attempt == 5:
-                    raise
-                time.sleep(5)
+        watchdog(args.directory, args.run_id)
     elif args.operation == 'cleanup' and not args.arguments:
         cleanup(args.directory, args.run_id)
     else:
