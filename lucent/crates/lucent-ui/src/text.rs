@@ -102,12 +102,16 @@ impl Fallback {
     }
 }
 fn fallbacks() -> &'static [Fallback] {
-    static FONTS: [Fallback; 5] = [
+    static FONTS: [Fallback; 9] = [
         Fallback::new(include_bytes!("../assets/NotoSansArabic-Regular.ttf")),
         Fallback::new(include_bytes!("../assets/NotoSansDevanagari-Regular.ttf")),
         Fallback::new(include_bytes!("../assets/NotoSansHebrew-Regular.ttf")),
         Fallback::new(include_bytes!("../assets/NotoSansCJK.ttf")),
         Fallback::new(include_bytes!("../assets/NotoSansHangul.ttf")),
+        Fallback::new(include_bytes!("../assets/NotoSans-Regular.ttf")),
+        Fallback::new(include_bytes!("../assets/NotoSansThai-Regular.ttf")),
+        Fallback::new(include_bytes!("../assets/NotoSansBengali-Regular.ttf")),
+        Fallback::new(include_bytes!("../assets/NotoSansTamil-Regular.ttf")),
     ];
     &FONTS
 }
@@ -138,23 +142,33 @@ impl ShapedLine {
     }
     /// A logical selection can cover disjoint visual fragments in mixed text.
     pub fn selection(&self, range: Range<usize>) -> Vec<(f32, f32)> {
-        let mut fragments: Vec<(f32, f32)> = self
-            .segments
-            .iter()
-            .filter(|(segment, _, _)| segment.start < range.end && segment.end > range.start)
-            .map(|(_, a, b)| (a.min(*b), a.max(*b)))
-            .collect();
-        fragments.sort_by(|a, b| a.0.total_cmp(&b.0));
-        let mut joined: Vec<(f32, f32)> = Vec::new();
-        for (a, b) in fragments {
-            if let Some(last) = joined.last_mut().filter(|last| a <= last.1 + 0.01) {
-                last.1 = last.1.max(b);
-            } else {
-                joined.push((a, b));
-            }
-        }
-        joined
+        selection_fragments(&self.segments, range)
     }
+}
+
+/// Merge adjacent visual coverage without spanning another directional run.
+pub fn selection_fragments(
+    segments: &[(Range<usize>, f32, f32)],
+    range: Range<usize>,
+) -> Vec<(f32, f32)> {
+    let mut fragments: Vec<(f32, f32)> = segments
+        .iter()
+        .filter(|(segment, _, _)| segment.start < range.end && segment.end > range.start)
+        .map(|(_, a, b)| (a.min(*b), a.max(*b)))
+        .collect();
+    fragments.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut joined: Vec<(f32, f32)> = Vec::new();
+    for (a, b) in fragments {
+        if let Some(last) = joined
+            .last_mut()
+            .filter(|last| a <= last.1 + f32::EPSILON * last.1.abs().max(1.) * 4.)
+        {
+            last.1 = last.1.max(b);
+        } else {
+            joined.push((a, b));
+        }
+    }
+    joined
 }
 
 /// Retained for explicit legacy ASCII metrics; Unicode callers use `shape`.
@@ -176,8 +190,109 @@ pub fn glyph_positions<'a>(
     })
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Direction {
+    LeftToRight,
+    RightToLeft,
+}
+/// Bounded joining context: rustybuzz 0.20.1 consumes five scalars on each side.
+/// Context remains presentation data; Debug never includes its text.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct ShapingContext {
+    before: [char; 5],
+    before_len: u8,
+    after: [char; 5],
+    after_len: u8,
+}
+impl std::fmt::Debug for ShapingContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ShapingContext")
+            .field("before_scalars", &self.before_len)
+            .field("after_scalars", &self.after_len)
+            .finish_non_exhaustive()
+    }
+}
+impl ShapingContext {
+    pub fn new(before: &str, after: &str) -> Self {
+        let mut context = Self {
+            before: ['\0'; 5],
+            before_len: 0,
+            after: ['\0'; 5],
+            after_len: 0,
+        };
+        for character in before.chars().rev().take(5) {
+            context.before[context.before_len as usize] = character;
+            context.before_len += 1;
+        }
+        context.before[..context.before_len as usize].reverse();
+        for character in after.chars().take(5) {
+            context.after[context.after_len as usize] = character;
+            context.after_len += 1;
+        }
+        context
+    }
+    pub fn before_text(self) -> String {
+        self.before[..self.before_len as usize].iter().collect()
+    }
+    pub fn after_text(self) -> String {
+        self.after[..self.after_len as usize].iter().collect()
+    }
+    fn for_span(self, before: &str, after: &str) -> Self {
+        let mut context = Self::new("", "");
+        for character in before
+            .chars()
+            .rev()
+            .chain(
+                self.before[..self.before_len as usize]
+                    .iter()
+                    .rev()
+                    .copied(),
+            )
+            .take(5)
+        {
+            context.before[context.before_len as usize] = character;
+            context.before_len += 1;
+        }
+        context.before[..context.before_len as usize].reverse();
+        for character in after
+            .chars()
+            .chain(self.after[..self.after_len as usize].iter().copied())
+            .take(5)
+        {
+            context.after[context.after_len as usize] = character;
+            context.after_len += 1;
+        }
+        context
+    }
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LayoutOptions {
+    pub direction: Option<Direction>,
+    pub metrics: Option<LineMetrics>,
+    pub context: Option<ShapingContext>,
+}
 pub fn shape(font: &Font, line: &str, size: f32) -> ShapedLine {
-    if line.is_ascii() {
+    shape_directed(font, line, size, None)
+}
+pub fn shape_directed(
+    font: &Font,
+    line: &str,
+    size: f32,
+    direction: Option<Direction>,
+) -> ShapedLine {
+    shape_with_layout(
+        font,
+        line,
+        size,
+        LayoutOptions {
+            direction,
+            ..Default::default()
+        },
+    )
+}
+pub fn shape_with_layout(font: &Font, line: &str, size: f32, layout: LayoutOptions) -> ShapedLine {
+    let direction = layout.direction;
+    if line.is_ascii() && direction != Some(Direction::RightToLeft) {
         let mut result = ShapedLine::default();
         let boundaries: Vec<_> = TextSelection::boundaries(line).collect();
         for ((byte, c), (_, x)) in line.char_indices().zip(glyph_positions(font, line, size)) {
@@ -203,7 +318,13 @@ pub fn shape(font: &Font, line: &str, size: f32) -> ShapedLine {
         }
         return result;
     }
-    let bidi = unicode_bidi::BidiInfo::new(line, None);
+    let bidi = unicode_bidi::BidiInfo::new(
+        line,
+        direction.map(|direction| match direction {
+            Direction::LeftToRight => unicode_bidi::Level::ltr(),
+            Direction::RightToLeft => unicode_bidi::Level::rtl(),
+        }),
+    );
     let mut result = ShapedLine::default();
     for paragraph in &bidi.paragraphs {
         let (levels, runs) = bidi.visual_runs(paragraph, paragraph.range.clone());
@@ -230,6 +351,12 @@ pub fn shape(font: &Font, line: &str, size: f32) -> ShapedLine {
                 let scale = size / face.units_per_em() as f32;
                 let mut buffer = rustybuzz::UnicodeBuffer::new();
                 buffer.push_str(&line[range.clone()]);
+                let context = layout
+                    .context
+                    .unwrap_or_else(|| ShapingContext::new("", ""))
+                    .for_span(&line[..range.start], &line[range.end..]);
+                buffer.set_pre_context(&context.before_text());
+                buffer.set_post_context(&context.after_text());
                 buffer.set_direction(if rtl {
                     rustybuzz::Direction::RightToLeft
                 } else {
@@ -336,7 +463,7 @@ pub fn width(font: &Font, text: &str, size: f32) -> f32 {
         })
         .fold(0., f32::max)
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LineMetrics {
     pub height: f32,
     pub baseline: f32,
@@ -356,6 +483,76 @@ pub fn line_metrics(font: &Font, size: f32) -> LineMetrics {
         ascent: metrics.ascent,
         descent: metrics.descent,
     }
+}
+
+/// A fallback mark can extend beyond the primary face's ordinary line box.
+/// Measure actual positioned ink, keeping ASCII's established metrics exact.
+pub fn run_metrics(
+    font: &Font,
+    value: &str,
+    size: f32,
+    direction: Option<Direction>,
+) -> LineMetrics {
+    run_metrics_with_layout(
+        font,
+        value,
+        size,
+        LayoutOptions {
+            direction,
+            ..Default::default()
+        },
+    )
+}
+pub fn run_metrics_with_layout(
+    font: &Font,
+    value: &str,
+    size: f32,
+    layout: LayoutOptions,
+) -> LineMetrics {
+    let base = line_metrics(font, size);
+    if value.is_ascii() {
+        return base;
+    }
+    let mut ascent = base.ascent;
+    let mut descent = base.descent;
+    for line in value.lines() {
+        for glyph in shape_with_layout(font, line, size, layout).glyphs {
+            let face = font.shaping_face(glyph.face);
+            if let Some(bounds) = face.glyph_bounding_box(rustybuzz::ttf_parser::GlyphId(glyph.id))
+            {
+                let scale = size / face.units_per_em() as f32;
+                ascent = ascent.max(f32::from(bounds.y_max) * scale - glyph.y);
+                descent = descent.min(f32::from(bounds.y_min) * scale - glyph.y);
+            }
+        }
+    }
+    let height = base.height.max((ascent - descent).ceil());
+    LineMetrics {
+        height,
+        baseline: (height - ascent + descent) / 2. + ascent,
+        ascent,
+        descent,
+    }
+}
+pub fn width_directed(font: &Font, value: &str, size: f32, direction: Option<Direction>) -> f32 {
+    width_with_layout(
+        font,
+        value,
+        size,
+        LayoutOptions {
+            direction,
+            ..Default::default()
+        },
+    )
+}
+pub fn width_with_layout(font: &Font, value: &str, size: f32, layout: LayoutOptions) -> f32 {
+    if layout.direction.is_none() && layout.context.is_none() {
+        return width(font, value, size);
+    }
+    value
+        .lines()
+        .map(|line| shape_with_layout(font, line, size, layout).width)
+        .fold(0., f32::max)
 }
 
 #[cfg(test)]

@@ -529,6 +529,14 @@ impl lucent_wayland::LockApplication for SessionScreen {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn secure_session_clients_never_grant_input_method_or_clipboard_authority() {
+        for mode in [Mode::Login, Mode::Lock, Mode::Authorization] {
+            let app = SessionScreen::new(mode, "identity-fixture".into(), Arc::new(Deny));
+            assert!(!app.input_method_enabled());
+            assert!(!app.clipboard_enabled());
+        }
+    }
     struct Deny;
     impl AuthenticationPort for Deny {
         fn authenticate(&self, _: &str, _: &mut dyn AuthConversation) -> domain::Result<()> {

@@ -154,7 +154,7 @@ impl<A: Application> Drop for State<A> {
             self.handle.remove(token);
         }
         self.clipboard_drop();
-        self.input_method.remove_seat();
+        self.input_method.shutdown();
         // Drop GPU surfaces before their protocol roles, then send the queued
         // destroy requests while the connection is still alive. A caller such
         // as a permission agent can outlive this individual runtime invocation.
@@ -239,6 +239,7 @@ fn run_inner<A: Application>(
     } else {
         None
     };
+    let input_method_allowed = authorize_unlock.is_none() && app.input_method_enabled();
     let mut state = State {
         surfaces: BTreeMap::new(),
         retiring: Default::default(),
@@ -263,7 +264,7 @@ fn run_inner<A: Application>(
         keyboard_surface: None,
         input_serial: None,
         clipboard: clipboard::Clipboard::new(clipboard_manager),
-        input_method: input_method::InputMethod::bind(&globals, &qh, authorize_unlock.is_some()),
+        input_method: input_method::InputMethod::bind(&globals, &qh, !input_method_allowed),
         modifiers: Modifiers::default(),
         epoch: Instant::now(),
         profile_frames: std::env::var_os("LUCENT_PROFILE_FRAMES").is_some_and(|value| value == "1"),
@@ -1581,6 +1582,9 @@ impl<A: Application> PointerHandler for State<A> {
             let Some(id) = self.id_for(&event.surface) else {
                 continue;
             };
+            if matches!(event.kind, PointerEventKind::Press { .. }) {
+                self.input_method_cancel_preedit(qh);
+            }
             for message in self.refresh_input_scene(&id, false, false) {
                 if self.id_for(&event.surface).as_ref() != Some(&id) {
                     break;

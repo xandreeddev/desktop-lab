@@ -63,37 +63,55 @@ impl State {
             emit(json!({"id":id,"ok":false,"error":"bounded_native_text_required"}));
             return;
         }
+        let endpoint = |key: &str, text: &str| -> Option<i32> {
+            let value = command
+                .get(key)
+                .and_then(Value::as_i64)
+                .unwrap_or(text.len() as i64);
+            if value == -1 {
+                return Some(-1);
+            }
+            let value = usize::try_from(value).ok()?;
+            (value <= text.len() && text.is_char_boundary(value)).then_some(value as i32)
+        };
+        let endpoints = if let Some(text) = preedit {
+            endpoint("begin", text).zip(endpoint("end", text))
+        } else {
+            Some((0, 0))
+        };
+        let delete = if let Some(delete) = command.get("delete") {
+            delete
+                .get(0)
+                .and_then(Value::as_u64)
+                .and_then(|v| u32::try_from(v).ok())
+                .zip(
+                    delete
+                        .get(1)
+                        .and_then(Value::as_u64)
+                        .and_then(|v| u32::try_from(v).ok()),
+                )
+        } else {
+            Some((0, 0))
+        };
+        let Some((begin, end)) = endpoints else {
+            emit(json!({"id":id,"ok":false,"error":"valid_preedit_cursor_required"}));
+            return;
+        };
+        let Some((before, after)) = delete.filter(|(before, after)| {
+            *before <= self.cursor.min(self.anchor)
+                && *after as usize <= self.text.len() - self.cursor.max(self.anchor) as usize
+        }) else {
+            emit(json!({"id":id,"ok":false,"error":"bounded_delete_required"}));
+            return;
+        };
         if let Some(text) = preedit {
-            self.method.set_preedit_string(
-                text.to_owned(),
-                command
-                    .get("begin")
-                    .and_then(Value::as_i64)
-                    .unwrap_or(text.len() as i64) as i32,
-                command
-                    .get("end")
-                    .and_then(Value::as_i64)
-                    .unwrap_or(text.len() as i64) as i32,
-            );
+            self.method.set_preedit_string(text.to_owned(), begin, end);
         }
         if let Some(text) = commit {
             self.method.commit_string(text.to_owned());
         }
-        if let Some(delete) = command.get("delete") {
-            let before = delete
-                .get(0)
-                .and_then(Value::as_u64)
-                .and_then(|v| u32::try_from(v).ok());
-            let after = delete
-                .get(1)
-                .and_then(Value::as_u64)
-                .and_then(|v| u32::try_from(v).ok());
-            if let (Some(before), Some(after)) = (before, after) {
-                self.method.delete_surrounding_text(before, after);
-            } else {
-                emit(json!({"id":id,"ok":false,"error":"bounded_delete_required"}));
-                return;
-            }
+        if before != 0 || after != 0 {
+            self.method.delete_surrounding_text(before, after);
         }
         self.method.commit(self.serial);
         emit(json!({"id":id,"ok":true,"posted":true,"serial":self.serial}));
@@ -208,11 +226,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             channel::Event::Closed => state.exit = true,
         })?;
     std::thread::spawn(move || {
-        for line in io::stdin().lock().split(b'\n') {
-            let Ok(line) = line else {
+        let mut reader = io::stdin().lock();
+        loop {
+            let mut line = Vec::new();
+            let result = std::io::Read::take(&mut reader, 16_385).read_until(b'\n', &mut line);
+            let Ok(count) = result else {
                 break;
             };
-            if line.len() > 16384 {
+            if count == 0 || line.len() > 16_384 {
                 break;
             }
             if let Ok(value) = serde_json::from_slice(&line) {

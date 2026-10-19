@@ -12,6 +12,7 @@ Private captures are retained only below ignored reports/local. Import is inert.
 """
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -91,14 +92,24 @@ print(data.decode())
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--source-commit', required=True)
     parser.add_argument('--example-bin', required=True)
     parser.add_argument('--peer-bin', required=True)
     parser.add_argument('--example-sha256', required=True)
     parser.add_argument('--peer-sha256', required=True)
     args = parser.parse_args()
+    require(re.fullmatch('[a-f0-9]{40}', args.source_commit), 'full_source_commit_required')
     for digest in (args.example_sha256, args.peer_sha256):
         require(re.fullmatch('[a-f0-9]{64}', digest), 'full_binary_digest_required')
-    import lab
+    # Worktrees share the prepared VM inventory with their canonical checkout.
+    common = Path(run(['git', '-C', str(ROOT), 'rev-parse', '--path-format=absolute',
+                       '--git-common-dir']).decode().strip()).resolve(strict=True)
+    lab_path = common.parent / 'vm/lab.py'
+    require(lab_path.is_file(), 'canonical_lab_helper_required')
+    spec = importlib.util.spec_from_file_location('international_text_lab', lab_path)
+    require(spec is not None and spec.loader is not None, 'canonical_lab_loader_required')
+    lab = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lab)
     inventory = lab.inventory()
     require(inventory['user'] == 'omarchy' and inventory['uri'] == 'qemu:///session'
             and inventory['vms']['lucent']['port'] == 2243, 'prepared_guest_required')
@@ -111,7 +122,7 @@ def main():
     unit_started = False
     pressed = False
     original_cursor = last_cursor = original = monitor = None
-    report = {'passed': False, 'checks': {}, 'restoration': {},
+    report = {'passed': False, 'source_commit': args.source_commit, 'checks': {}, 'restoration': {},
               'helper_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               'binaries': {'example': args.example_sha256, 'peer': args.peer_sha256},
               'scope': 'One prepared native output; independent controlled input-method peer, no third-party IME/hardware claim'}
@@ -258,7 +269,11 @@ def main():
         eventually(lambda: inspect()['client']['single'] == '日本語' and status('日本語')['matches'], 'native_cjk_commit')
         send('日本語', commit='人', delete=[3, 0])
         eventually(lambda: inspect()['client']['single'] == '日本人' and status('日本人')['matches'], 'native_delete_commit_batch')
-        report['checks']['commit_and_surrounding_delete'] = True
+        key(29, 44)
+        eventually(lambda: inspect()['client']['single'] == '日本語', 'native_ime_undo_is_atomic')
+        key(29, 42, 44)
+        eventually(lambda: inspect()['client']['single'] == '日本人', 'native_ime_redo_is_atomic')
+        report['checks']['commit_and_surrounding_delete_and_history'] = True
         send('日本人', preedit='مرحبا')
         click('masked')
         eventually(lambda: not status('')['active'], 'masked_ime_disabled')

@@ -5,6 +5,7 @@ use lucent_design::{
     component::{input, scroll, scroll_example as token},
     font, radius, space,
 };
+use zeroize::Zeroize;
 #[derive(Clone)]
 enum Message {
     Single(TextEdit),
@@ -118,13 +119,20 @@ impl Component for Example {
                     .is_err()
             }
             Message::Scroll(event) => self.offset = event.offset,
-            Message::Secret(edit) => drop(edit),
+            Message::Secret(edit) => match edit {
+                InputEdit::Insert(mut value) | InputEdit::Replace(mut value) => value.zeroize(),
+                _ => {}
+            },
             Message::Quit => effects.quit(),
         }
         effects.redraw("international");
     }
 }
 impl Application for Example {
+    fn input_method_enabled(&self) -> bool {
+        true
+    }
+
     fn name(&self) -> &'static str {
         "lucent-international-text"
     }

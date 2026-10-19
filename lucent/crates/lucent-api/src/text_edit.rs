@@ -1209,3 +1209,69 @@ mod input_method_edits {
         );
     }
 }
+
+#[cfg(test)]
+mod input_method_history {
+    use super::*;
+    #[test]
+    fn delete_commit_and_directional_selection_are_one_undoable_transaction() {
+        let mut value = "ab日c".to_string();
+        let mut selection = TextSelection {
+            anchor: 2,
+            caret: 2,
+        };
+        let before = selection;
+        let mut history = TextHistory::default();
+        history.reconcile(&value);
+        history
+            .apply(
+                &mut selection,
+                &mut value,
+                TextEdit::InputMethod {
+                    before: 1,
+                    after: 1,
+                    commit: "語".into(),
+                },
+                64,
+                true,
+                false,
+            )
+            .unwrap();
+        assert_eq!(value, "a語c");
+        history
+            .apply(&mut selection, &mut value, TextEdit::Undo, 64, true, false)
+            .unwrap();
+        assert_eq!(value, "ab日c");
+        assert_eq!(selection, before);
+        history
+            .apply(&mut selection, &mut value, TextEdit::Redo, 64, true, false)
+            .unwrap();
+        assert_eq!(value, "a語c");
+    }
+    #[test]
+    fn multiline_input_method_normalizes_newlines_before_admission_and_history() {
+        let mut value = String::new();
+        let mut selection = TextSelection::default();
+        let mut history = TextHistory::default();
+        history.reconcile(&value);
+        history
+            .apply(
+                &mut selection,
+                &mut value,
+                TextEdit::InputMethod {
+                    before: 0,
+                    after: 0,
+                    commit: "日\r\n語\r".into(),
+                },
+                8,
+                true,
+                true,
+            )
+            .unwrap();
+        assert_eq!(value, "日\n語\n");
+        history
+            .apply(&mut selection, &mut value, TextEdit::Undo, 8, true, true)
+            .unwrap();
+        assert!(value.is_empty());
+    }
+}

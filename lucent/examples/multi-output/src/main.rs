@@ -155,6 +155,10 @@ impl Component for Example {
     }
 }
 impl Application for Example {
+    fn input_method_enabled(&self) -> bool {
+        true
+    }
+
     fn name(&self) -> &'static str {
         "lucent-multi-output"
     }

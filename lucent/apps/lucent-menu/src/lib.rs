@@ -337,6 +337,10 @@ impl Component for Menu {
 }
 
 impl Application for Menu {
+    fn input_method_enabled(&self) -> bool {
+        true
+    }
+
     fn clipboard_enabled(&self) -> bool {
         true
     }

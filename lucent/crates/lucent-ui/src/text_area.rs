@@ -56,6 +56,7 @@ impl Row {
 pub(super) struct AreaGeometry {
     pub rows: Arc<[Row]>,
     pub line_height: f32,
+    pub metrics: text::LineMetrics,
     pub caret_row: usize,
     pub caret_stop: usize,
     pub content_height: f32,
@@ -128,21 +129,34 @@ fn measured_row(font: &crate::text::Font, value: &str, range: Range<usize>, size
     }
     map.push((display.len(), range.end));
     let shaped = text::shape(font, &display, size);
-    let source = |byte| {
-        map.iter()
-            .rev()
-            .find(|(at, _)| *at <= byte)
-            .map_or(range.start, |(_, source)| *source)
-    };
     let stops = shaped
         .stops
         .iter()
-        .map(|(byte, x)| (source(*byte), *x))
+        .filter_map(|(byte, x)| {
+            map.binary_search_by_key(byte, |(display, _)| *display)
+                .ok()
+                .map(|index| (map[index].1, *x))
+        })
         .collect::<Vec<_>>();
-    let segments = shaped
-        .segments
-        .iter()
-        .map(|(r, a, b)| (source(r.start)..source(r.end), *a, *b))
+    let mut coverage = vec![None; map.len().saturating_sub(1)];
+    for (range, a, b) in &shaped.segments {
+        let index = map
+            .partition_point(|(display, _)| *display <= range.start)
+            .saturating_sub(1);
+        if let Some(entry) = coverage.get_mut(index) {
+            let (low, high, _) = entry.get_or_insert((a.min(*b), a.max(*b), a > b));
+            *low = low.min(a.min(*b));
+            *high = high.max(a.max(*b));
+        }
+    }
+    let segments = map
+        .windows(2)
+        .zip(coverage)
+        .filter_map(|(pair, coverage)| {
+            let (low, high, rtl) = coverage?;
+            let (a, b) = if rtl { (high, low) } else { (low, high) };
+            Some((pair[0].1..pair[1].1, a, b))
+        })
         .collect::<Vec<_>>();
     Row {
         range,
@@ -154,6 +168,26 @@ fn measured_row(font: &crate::text::Font, value: &str, range: Range<usize>, size
 
 fn rows(font: &crate::text::Font, value: &str, size: f32, width: f32) -> Vec<Row> {
     let boundaries: Vec<_> = TextSelection::boundaries(value).collect();
+    // Shape Unicode once for candidate advances. Re-shaping every growing
+    // prefix made international documents quadratic even before row painting.
+    let advances = (!value.is_ascii()).then(|| {
+        let mut display = String::new();
+        let mut projections = Vec::new();
+        for pair in boundaries.windows(2) {
+            projections.push(display.len());
+            display.push_str(&display_grapheme(&value[pair[0]..pair[1]]));
+        }
+        let mut advances = vec![0.; projections.len()];
+        for (range, a, b) in text::shape(font, &display, size).segments {
+            let index = projections
+                .partition_point(|at| *at <= range.start)
+                .saturating_sub(1);
+            if let Some(advance) = advances.get_mut(index) {
+                *advance += (b - a).abs();
+            }
+        }
+        advances
+    });
     let mut result = Vec::new();
     let mut start = 0;
     while start + 1 < boundaries.len() {
@@ -170,17 +204,16 @@ fn rows(font: &crate::text::Font, value: &str, size: f32, width: f32) -> Vec<Row
             }
             let mut end = x;
             let mut last = previous;
-            for c in display_grapheme(grapheme).chars() {
-                if let Some(p) = last {
-                    end += font.horizontal_kern(p, c, size).unwrap_or(0.);
+            if let Some(advances) = &advances {
+                end += advances[index];
+            } else {
+                for c in display_grapheme(grapheme).chars() {
+                    if let Some(p) = last {
+                        end += font.horizontal_kern(p, c, size).unwrap_or(0.);
+                    }
+                    end += font.metrics(c, size).advance_width;
+                    last = Some(c);
                 }
-                end += font.metrics(c, size).advance_width;
-                last = Some(c);
-            }
-            if !value.is_ascii() {
-                let candidate =
-                    value[boundaries[start]..boundaries[index + 1]].replace('\t', "    ");
-                end = text::width(font, &candidate, size);
             }
             // Always admit one whole grapheme, even in a zero-width viewport.
             if end > width && index > start {
@@ -193,17 +226,22 @@ fn rows(font: &crate::text::Font, value: &str, size: f32, width: f32) -> Vec<Row
                 whitespace = Some(index);
             }
         }
-        let end = if hard_end.is_some() || index + 1 == boundaries.len() {
+        let mut end = if hard_end.is_some() || index + 1 == boundaries.len() {
             index
         } else {
             whitespace.filter(|last| *last > start).unwrap_or(index)
         };
-        result.push(measured_row(
-            font,
-            value,
-            boundaries[start]..boundaries[end],
-            size,
-        ));
+        let mut row = measured_row(font, value, boundaries[start]..boundaries[end], size);
+        // Joining at an actual wrap edge can change an advance. Confirm the
+        // selected row, retreating by whole graphemes if its final shape grows.
+        while advances.is_some()
+            && end > start + 1
+            && row.stops.iter().map(|(_, x)| *x).fold(0., f32::max) > width
+        {
+            end -= 1;
+            row = measured_row(font, value, boundaries[start]..boundaries[end], size);
+        }
+        result.push(row);
         start = if hard_end == Some(end) { end + 1 } else { end };
     }
     // Empty values and trailing hard lines are real editable rows.
@@ -222,9 +260,11 @@ pub(super) fn geometry(
     spec: ScrollSpec,
     id: &str,
     navigation: Option<&Navigation>,
+    caret_width: f32,
 ) -> TextHit {
     let selection = selection.reconciled(value);
-    let line_height = text::line_metrics(font, size).height;
+    let metrics = text::run_metrics(font, value, size, None);
+    let line_height = metrics.height;
     let rows = rows(font, value, size, inner.w);
     let default = rows
         .iter()
@@ -256,9 +296,12 @@ pub(super) fn geometry(
         boundaries: Arc::from([]),
         composition_cursor: None,
         caret_stop: 0,
+        caret_width,
+        metrics,
         area: Some(Arc::new(AreaGeometry {
             rows: rows.into(),
             line_height,
+            metrics,
             caret_row,
             caret_stop,
             content_height,
@@ -454,7 +497,7 @@ pub(super) fn paint<M>(
     };
     let area = hit.area.as_ref().expect("prepared text area");
     let style = &element.style;
-    let metrics = text::line_metrics(font, style.font_size);
+    let metrics = area.metrics;
     let range = hit.selection.range(value);
     let first = ((hit.scroll / area.line_height).floor() as usize).saturating_sub(1);
     let end =
@@ -469,12 +512,7 @@ pub(super) fn paint<M>(
         if focused
             && ((range.start < row.range.end && range.end > row.range.start) || hard_break_selected)
         {
-            let mut fragments: Vec<_> = row
-                .segments
-                .iter()
-                .filter(|(r, _, _)| r.start < range.end && r.end > range.start)
-                .map(|(_, a, b)| (a.min(*b), a.max(*b)))
-                .collect();
+            let mut fragments = text::selection_fragments(&row.segments, range.clone());
             if hard_break_selected {
                 let a = row.x(row.range.end);
                 fragments.push((a, a + font.metrics(' ', style.font_size).advance_width));
@@ -502,6 +540,11 @@ pub(super) fn paint<M>(
         };
         if !content.is_empty() {
             scene.paint.push(Paint::Text {
+                layout: text::LayoutOptions {
+                    direction: None,
+                    metrics: Some(metrics),
+                    context: None,
+                },
                 rect: Rect::new(hit.inner.x, y, hit.inner.w, area.line_height),
                 clip: clip.clone(),
                 text: content,

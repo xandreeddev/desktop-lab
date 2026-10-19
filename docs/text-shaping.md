@@ -28,6 +28,20 @@ extended-grapheme boundaries. A ligature containing several editable graphemes
 gets interpolated interior caret stops; this initial implementation does not read
 optional OpenType GDEF ligature-caret tables.
 
+Visual stop affinity is transient framework state: one logical byte boundary can
+have two positions where directional runs meet. Walking the visual stops keeps
+that affinity, including at soft wraps. Word movement continues to use the
+component's logical word-boundary editing rules. Native candidate-window bounds
+come from the same caret rectangle as the painted cursor.
+
+Rich text resolves bidi for the complete paragraph before splitting its visual
+runs into styles and links. Small bounded shaping contexts retain Arabic joining
+across a color boundary. Each resulting fragment carries its resolved direction
+and shared row metrics to the renderer; links keep their own visual hit regions.
+Actual positioned glyph extents can expand a row's ascent and descent, so stacked
+marks share a baseline without clipping. Ordinary ASCII retains its prior metric
+envelope.
+
 ASCII preserves the prior character advances and pair kerning exactly. Density
 changes do not reflow text or change logical positions. The native renderer keeps
 its existing size, glyph and mask allocation checks and coverage supersampling.
@@ -42,7 +56,8 @@ removed. Bundled fonts and their separate license files live in
 `lucent/crates/lucent-ui/assets`.
 
 The fallback set includes Arabic, Devanagari, Hebrew, common Han ideographs and
-Extension A, Kana/Bopomofo and Hangul syllables/Jamo. CJK and Hangul are static
+Extension A, Kana/Bopomofo, Hangul syllables/Jamo, Greek/Cyrillic, Thai, Bengali
+and Tamil. CJK and Hangul are static
 400-weight subsets derived from the official Google Fonts Noto sources, with
 renamed derivative family names. The asset manifest records source and derived
 SHA256 values, Unicode ranges, codepoint counts and individual OFL license files.
@@ -69,7 +84,10 @@ the selected keyboard seat. It enables input only when both native keyboard
 focus and text-input `enter` identify the exact current surface, and the freshly
 resolved focused element is an ordinary controlled field. A surface role alone
 never grants authority. Focus loss, hidden/recreated controls and seat retirement
-remove authority. Secure-session runtimes do not bind the manager.
+remove authority. Applications explicitly opt in with
+`Application::input_method_enabled()`. Its default is `false`; the desktop, menu
+and ordinary text examples opt in. Login, lock and authorization clients retain
+the default and do not bind the manager.
 
 Masked inputs expose only a count and redacted edits. They never supply a
 canonical text hit, surrounding text, preedit string or clipboard authority.
@@ -87,8 +105,11 @@ Preedit is transient UI-thread presentation. It replaces the selected span only
 in the painted projection, supports a composition caret/selection and underline,
 and never enters persisted text or inspector hit values. The next committed edit
 still applies through the component's normal update callback. Content and focus
-changes retire stale composition. Native serials defer protocol state updates
-when the compositor is behind, while retaining the current field lifetime guard.
+changes retire stale composition. A `done` batch with an older serial still
+applies to the current field, as required by text-input-v3. It defers outgoing
+state requests until a matching `done` arrives; focus/control retirement still
+revokes that field's authority immediately. Delete and commit are validated as a
+single batch before component admission, including UTF-8 and grapheme boundaries.
 
 ## Independent consumer and verification
 
@@ -98,12 +119,19 @@ cargo run --manifest-path lucent/Cargo.toml --locked -p international-text
 
 This example imports the API, design system and Wayland runtime only. It presents
 mixed Arabic, Hebrew, Devanagari and CJK text in single/multiline fields plus a
-count-only masked probe. It uses the same controlled API as the desktop; there
-is no special client-side IME registration or renderer dependency.
+count-only masked probe. It uses the same controlled API as the desktop and opts
+in once through the application capability; individual fields need no IME
+registration or renderer dependency. `vm/test-international-text.py` exercises
+the example with a controlled, non-replacing native input-method peer. It refuses
+an existing input-method owner and requires exact deployed binary hashes and an
+idle unlocked guest before sending native input.
 
-The implementation is under development. Source regression cases are being
-added for shaping, source stops, mixed selections, atomic edit admission,
-surrounding UTF-8 windows and focus retirement. Their existence is not evidence
-of successful compilation, native compositor IME interoperability, 1×/2× pixel
-acceptance or performance. Those checks will be recorded after execution.
+The initial source cohort compiled the core crates and executed targeted API,
+Wayland and raster tests. It exposed incorrect test assumptions about Arabic
+glyph counts and bidi caret affinity, and a fixture assertion that read the
+intentionally empty legacy hit value. Subsequent source changes correct those
+tests, preserve visual affinity and add paragraph, metrics, atomic-edit and native
+protocol regression cases. This final cohort still requires its own compile,
+test and 1×/2× visual runs. No native compositor IME interoperability or memory
+acceptance is claimed by the presence of the harness or these source cases.
 Accessibility bridging remains explicitly deferred by the user.

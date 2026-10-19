@@ -373,12 +373,14 @@ impl Gpu {
             .insert(key, texture.clone(), texture.bytes);
         texture
     }
+    #[allow(clippy::too_many_arguments)]
     fn text(
         &self,
         text: &str,
         size: f32,
         scale: f32,
         face: usize,
+        layout: lucent_ui::text::LayoutOptions,
         profile: &mut ResourceProfile,
         enabled: bool,
     ) -> Result<Rc<TextureResource>, Error> {
@@ -387,17 +389,24 @@ impl Gpu {
             .get(face)
             .or_else(|| self.fonts.first())
             .ok_or("text requires at least one font")?;
-        let key = format!("text:{face}:{}:{scale}:{text}", size.to_bits());
+        let context_key = layout
+            .context
+            .map(|context| (context.before_text(), context.after_text()));
+        let key = format!(
+            "text:{face}:{}:{scale}:{layout:?}:{context_key:?}:{text}",
+            size.to_bits()
+        );
         if let Some(v) = self.cache.borrow_mut().get(&key) {
             return Ok(v);
         }
         let started = profiling::start(enabled);
-        let (pixels, width, height, origin_x) = raster::text(
+        let (pixels, width, height, origin_x) = raster::text_with_layout(
             font,
             text,
             size,
             scale,
             self.device.limits().max_texture_dimension_2d,
+            layout,
         )?;
         if enabled {
             profile.text_raster += profiling::elapsed(started);
@@ -629,6 +638,7 @@ impl Canvas {
                     face,
                     color,
                     align,
+                    layout,
                 } => {
                     if text.is_empty() {
                         continue;
@@ -640,6 +650,7 @@ impl Canvas {
                             *size,
                             scale,
                             *face,
+                            *layout,
                             &mut profile.resources,
                             self.profiling,
                         )
@@ -1131,6 +1142,7 @@ mod resource_tests {
             tint: Color::hex(0xffffff),
         };
         let text = |size| Paint::Text {
+            layout: Default::default(),
             rect,
             clip: rect.into(),
             text: "W".into(),

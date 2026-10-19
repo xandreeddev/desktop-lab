@@ -10,6 +10,8 @@ pub struct TextHit {
     pub(super) area: Option<Arc<super::text_area::AreaGeometry>>,
     pub(super) composition_cursor: Option<Rect>,
     pub(super) caret_stop: usize,
+    pub(super) caret_width: f32,
+    pub(super) metrics: text::LineMetrics,
 }
 impl TextHit {
     /// Logical cursor bounds for native input-method candidate placement.
@@ -18,23 +20,29 @@ impl TextHit {
             return rect;
         }
         if let Some(area) = &self.area {
-            let row = &area.rows[area.caret_row];
-            let x = row.stops[area.caret_stop].1;
+            let x = area.rows[area.caret_row].stops[area.caret_stop].1;
             Rect::new(
-                self.inner.x + x,
-                self.inner.y + area.caret_row as f32 * area.line_height - self.scroll,
-                1.,
-                area.line_height,
+                (self.inner.x + x)
+                    .min(self.inner.x + (self.inner.w - self.caret_width).max(0.))
+                    .max(self.inner.x),
+                self.inner.y + area.caret_row as f32 * area.line_height - self.scroll
+                    + area.metrics.baseline
+                    - area.metrics.ascent,
+                self.caret_width,
+                area.metrics.ascent - area.metrics.descent,
             )
         } else {
+            let top = self.inner.y + (self.inner.h - self.metrics.height).max(0.) / 2.;
             Rect::new(
-                self.inner.x + self.advance(self.selection.caret()) - self.scroll,
-                self.inner.y,
-                1.,
-                self.inner.h,
+                (self.inner.x + self.advance(self.selection.caret()) - self.scroll)
+                    .min(self.inner.x + self.inner.w - self.caret_width),
+                top + self.metrics.baseline - self.metrics.ascent,
+                self.caret_width,
+                self.metrics.ascent - self.metrics.descent,
             )
         }
     }
+
     pub fn is_multiline(&self) -> bool {
         self.area.is_some()
     }
@@ -48,6 +56,8 @@ impl TextHit {
     pub(super) fn same_geometry(&self, other: &Self) -> bool {
         self.value == other.value
             && self.inner == other.inner
+            && self.metrics == other.metrics
+            && self.caret_width == other.caret_width
             && match (&self.area, &other.area) {
                 (Some(a), Some(b)) => {
                     a.line_height == b.line_height
@@ -102,7 +112,12 @@ pub(super) fn geometry(
     };
     let selection = selection.reconciled(value);
     let shaped = text::shape(font, &display, size);
-    let boundaries = shaped.stops.clone();
+    let source_boundaries = TextSelection::boundaries(value).collect::<Vec<_>>();
+    let boundaries = shaped
+        .stops
+        .into_iter()
+        .filter(|(byte, _)| source_boundaries.binary_search(byte).is_ok())
+        .collect::<Vec<_>>();
     let caret_stop = navigation
         .filter(|nav| {
             nav.id == id
@@ -148,6 +163,8 @@ pub(super) fn geometry(
         area: None,
         composition_cursor: None,
         caret_stop,
+        caret_width,
+        metrics: text::run_metrics(font, &display, size, None),
     }
 }
 pub(super) fn paint<M>(
@@ -169,7 +186,7 @@ pub(super) fn paint<M>(
     };
     let style = &element.style;
     let inner = hit.inner;
-    let metrics = text::line_metrics(font, style.font_size);
+    let metrics = hit.metrics;
     let top = inner.y + (inner.h - metrics.height).max(0.) / 2.;
     let range = selection.range(value);
     if focused && !range.is_empty() {
@@ -192,6 +209,7 @@ pub(super) fn paint<M>(
         }
     }
     scene.paint.push(Paint::Text {
+        layout: Default::default(),
         rect: Rect::new(inner.x - hit.scroll, inner.y, inner.w, inner.h),
         clip: clip.clone(),
         text: if value.is_empty() {
@@ -776,5 +794,53 @@ mod bidi_navigation {
             apply(&mut input, &scene, Key::Right, &mut value, &mut selection);
         }
         assert_eq!(value, source);
+    }
+}
+
+#[cfg(test)]
+mod shared_caret_bounds {
+    use super::*;
+    #[test]
+    fn native_cursor_rectangle_matches_the_painted_caret_for_tall_fallback_marks() {
+        let layout = Layout::new(Arc::new(vec![
+            text::Font::from_bytes(
+                include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf").as_slice(),
+                Default::default(),
+            )
+            .unwrap(),
+        ]));
+        for multiline in [false, true] {
+            let value = "مَرْحَبًا क्षि";
+            let selection = TextSelection::at_end(value);
+            let mut tree = if multiline {
+                Element::text_area(
+                    value,
+                    selection,
+                    "",
+                    ScrollSpec::new(0., 24.).unwrap(),
+                    |edit| edit,
+                    |_| TextEdit::Clear,
+                )
+            } else {
+                Element::text_input(value, selection, "", |edit| edit)
+            }
+            .id("field")
+            .autofocus()
+            .size(320., 100.)
+            .font(24.);
+            tree.style.caret_width = 2.;
+            let mut input = Interaction::default();
+            let scene = layout.build(&tree, 320., 100., &input, 0.);
+            input.synchronize(&scene);
+            let scene = layout.build(&tree, 320., 100., &input, 0.);
+            let rect = scene.hits[0].text.as_ref().unwrap().caret_rect();
+            assert!(
+                scene
+                    .paint
+                    .iter()
+                    .any(|paint| matches!(paint,Paint::Shape {rect:painted,..} if *painted==rect)),
+                "native and painted cursor geometry must be identical"
+            );
+        }
     }
 }

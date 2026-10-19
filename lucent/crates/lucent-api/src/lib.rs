@@ -900,6 +900,12 @@ pub trait Component: 'static {
 }
 /// An application supplies surfaces and subscriptions in addition to its component tree.
 pub trait Application: Component {
+    /// Compositor input methods require explicit ordinary-client authority.
+    /// Authentication clients leave this disabled, independently of clipboard/IPC.
+    fn input_method_enabled(&self) -> bool {
+        false
+    }
+
     /// Clipboard protocol integration is opt-in. Secure clients keep it disabled.
     fn clipboard_enabled(&self) -> bool {
         false

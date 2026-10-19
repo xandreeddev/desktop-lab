@@ -40,6 +40,7 @@ pub enum Paint {
         blur: f32,
     },
     Text {
+        layout: text::LayoutOptions,
         rect: Rect,
         clip: Clip,
         text: String,
@@ -233,9 +234,11 @@ impl Layout {
                 let t = wrapped.as_deref().unwrap_or(t);
                 (
                     self.text_width(t, e.style.font_size, e.style.font_face),
-                    text::line_metrics(
+                    text::run_metrics(
                         self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
+                        t,
                         e.style.font_size,
+                        None,
                     )
                     .height
                         * t.lines().count().max(1) as f32,
@@ -403,6 +406,7 @@ impl Layout {
                 *scroll,
                 &id,
                 interaction.text_navigation.as_ref(),
+                e.style.caret_width,
             ))
         } else {
             None
@@ -620,6 +624,7 @@ impl Layout {
                 &id,
             ),
             Kind::Text(text) => scene.paint.push(Paint::Text {
+                layout: Default::default(),
                 rect: inner,
                 clip: own_clip.intersect(rect),
                 text: e
@@ -657,6 +662,7 @@ impl Layout {
                     fg.3 *= e.style.placeholder_opacity;
                 }
                 scene.paint.push(Paint::Text {
+                    layout: Default::default(),
                     rect: inner,
                     clip: own_clip.intersect(inner),
                     text,
@@ -667,7 +673,7 @@ impl Layout {
                 });
                 if interaction.focus.as_deref() == Some(&id) {
                     let font = self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]);
-                    let line = text::line_metrics(font, e.style.font_size);
+                    let line = text::run_metrics(font, &value, e.style.font_size, None);
                     let top = inner.y + (inner.h - line.height).max(0.) / 2.;
                     let advance = self.text_width(&value, e.style.font_size, e.style.font_face);
                     let scroll = (advance + e.style.caret_width - inner.w).max(0.);

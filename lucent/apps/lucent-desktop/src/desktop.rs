@@ -1877,6 +1877,10 @@ impl Component for Desktop {
     }
 }
 impl api::Application for Desktop {
+    fn input_method_enabled(&self) -> bool {
+        true
+    }
+
     fn clipboard_enabled(&self) -> bool {
         true
     }

@@ -200,6 +200,7 @@ pub(super) fn project<M: Clone>(
                 *scroll,
                 id,
                 None,
+                element.style.caret_width,
             )
         }
         _ => return None,

@@ -12,3 +12,4 @@ wayland-protocols-misc = { version = "0.3.12", features = ["client"] }
 serde_json = "1"
 calloop = "0.14"
 calloop-wayland-source = "0.4"
+zeroize = "1"

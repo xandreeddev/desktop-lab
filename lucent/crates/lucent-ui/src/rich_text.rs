@@ -7,8 +7,12 @@ struct Run {
     text: String,
     x: f32,
     width: f32,
+    source: std::ops::Range<usize>,
+    direction: Option<text::Direction>,
+    context: Option<text::ShapingContext>,
 }
 struct Line {
+    origin: usize,
     runs: Vec<Run>,
     width: f32,
     baseline: f32,
@@ -29,6 +33,7 @@ fn font<'a>(
         .get(spans[span].face.unwrap_or(face))
         .unwrap_or(&fonts[0])
 }
+#[allow(clippy::too_many_arguments)]
 fn add(
     line: &mut Line,
     spans: &[TextSpan],
@@ -37,24 +42,34 @@ fn add(
     size: f32,
     span: usize,
     value: &str,
+    source: usize,
 ) {
     let font = font(fonts, spans, span, face);
     if let Some(run) = line.runs.last_mut().filter(|run| run.span == span) {
         let previous = run.width;
         run.text.push_str(value);
+        run.source.end = source + value.len();
         run.width = text::width(font, &run.text, size);
         line.width += run.width - previous;
     } else {
         let width = text::width(font, value, size);
         line.runs.push(Run {
             span,
+            source: source..source + value.len(),
+            direction: None,
+            context: None,
             text: value.into(),
             x: line.width,
             width,
         });
         line.width += width;
     }
-    let metrics = text::line_metrics(font, size);
+    let metrics = text::run_metrics(
+        font,
+        line.runs.last().map_or(value, |run| run.text.as_str()),
+        size,
+        None,
+    );
     let descent = (line.height - line.baseline).max(metrics.height - metrics.baseline);
     line.baseline = line.baseline.max(metrics.baseline);
     line.height = line.baseline + descent;
@@ -62,12 +77,19 @@ fn add(
 fn line(fonts: &[crate::text::Font], face: usize, size: f32) -> Line {
     let metrics = text::line_metrics(fonts.get(face).unwrap_or(&fonts[0]), size);
     Line {
+        origin: 0,
         runs: vec![],
         width: 0.,
         baseline: metrics.baseline,
         height: metrics.height,
     }
 }
+fn line_at(fonts: &[text::Font], face: usize, size: f32, origin: usize) -> Line {
+    let mut line = line(fonts, face, size);
+    line.origin = origin;
+    line
+}
+
 pub(super) fn flow(
     spans: &[TextSpan],
     fonts: &[crate::text::Font],
@@ -92,25 +114,27 @@ pub(super) fn flow(
     // Preserve grapheme boundaries, including combining marks, when a long
     // word cannot fit. Style boundaries remain explicit client choices.
     let mut clusters = vec![];
+    let mut source = String::new();
     for (index, span) in spans.iter().enumerate() {
         let mut boundaries = TextSelection::boundaries(&span.text);
         let mut start = boundaries.next().unwrap_or(0);
         for end in boundaries {
-            clusters.push((index, &span.text[start..end]));
+            clusters.push((index, &span.text[start..end], source.len() + start));
             start = end;
         }
+        source.push_str(&span.text);
     }
     let mut lines = vec![line(fonts, face, size)];
     let mut index = 0;
     let mut truncated = false;
     while index < clusters.len() {
-        let (_, value) = clusters[index];
+        let (_, value, source_at) = clusters[index];
         if value == "\n" || value == "\r\n" {
             if lines.len() == limit {
                 truncated = index + 1 < clusters.len();
                 break;
             }
-            lines.push(line(fonts, face, size));
+            lines.push(line_at(fonts, face, size, source_at + value.len()));
             index += 1;
             continue;
         }
@@ -125,8 +149,8 @@ pub(super) fn flow(
                 .unwrap_or(clusters.len())
         };
         let mut word = line(fonts, face, size);
-        for &(span, value) in &clusters[index..end] {
-            add(&mut word, spans, fonts, face, size, span, value);
+        for &(span, value, at) in &clusters[index..end] {
+            add(&mut word, spans, fonts, face, size, span, value, at);
         }
         if !whitespace
             && lines.last().unwrap().width > 0.
@@ -136,9 +160,9 @@ pub(super) fn flow(
                 truncated = true;
                 break;
             }
-            lines.push(line(fonts, face, size));
+            lines.push(line_at(fonts, face, size, clusters[index].2));
         }
-        for &(span, value) in &clusters[index..end] {
+        for &(span, value, at) in &clusters[index..end] {
             if lines.last().unwrap().width == 0. && value.chars().all(char::is_whitespace) {
                 continue;
             }
@@ -165,7 +189,7 @@ pub(super) fn flow(
                     truncated = true;
                     break;
                 }
-                lines.push(line(fonts, face, size));
+                lines.push(line_at(fonts, face, size, at));
                 if value.chars().all(char::is_whitespace) {
                     continue;
                 }
@@ -178,6 +202,7 @@ pub(super) fn flow(
                 size,
                 span,
                 value,
+                at,
             );
         }
         if truncated {
@@ -196,6 +221,7 @@ pub(super) fn flow(
                 .last()
                 .unwrap_or(0);
             run.text.truncate(at);
+            run.source.end = run.source.start + at;
             let next = text::width(font(fonts, spans, run.span, face), &run.text, size);
             last.width -= run.width - next;
             run.width = next;
@@ -203,12 +229,96 @@ pub(super) fn flow(
                 last.runs.pop();
             }
         }
-        add(last, spans, fonts, face, size, span, "…");
+        let at = last.runs.last().map_or(last.origin, |run| run.source.end);
+        source.truncate(at);
+        source.push('…');
+        add(last, spans, fonts, face, size, span, "…", at);
+    }
+    let bidi = unicode_bidi::BidiInfo::new(&source, None);
+    for line in &mut lines {
+        reorder(line, spans, fonts, face, size, &bidi);
     }
     Flow {
         width: lines.iter().map(|line| line.width).fold(0., f32::max),
         height: lines.iter().map(|line| line.height).sum(),
         lines,
+    }
+}
+
+fn reorder(
+    line: &mut Line,
+    spans: &[TextSpan],
+    fonts: &[text::Font],
+    default_face: usize,
+    size: f32,
+    bidi: &unicode_bidi::BidiInfo<'_>,
+) {
+    if !bidi.has_rtl() {
+        return;
+    }
+    let Some(start) = line.runs.iter().map(|run| run.source.start).min() else {
+        return;
+    };
+    let end = line.runs.iter().map(|run| run.source.end).max().unwrap();
+    let Some(paragraph) = bidi
+        .paragraphs
+        .iter()
+        .find(|paragraph| paragraph.range.start <= start && paragraph.range.end >= end)
+    else {
+        return;
+    };
+    let (levels, visual) = bidi.visual_runs(paragraph, start..end);
+    let old = std::mem::take(&mut line.runs);
+    line.width = 0.;
+    let base = text::line_metrics(fonts.get(default_face).unwrap_or(&fonts[0]), size);
+    line.height = base.height;
+    line.baseline = base.baseline;
+    for visual in visual {
+        let rtl = levels[visual.start].is_rtl();
+        let direction = Some(if rtl {
+            text::Direction::RightToLeft
+        } else {
+            text::Direction::LeftToRight
+        });
+        let mut parts = old
+            .iter()
+            .filter_map(|run| {
+                let start = run.source.start.max(visual.start);
+                let end = run.source.end.min(visual.end);
+                (end > start).then_some((run, start..end))
+            })
+            .collect::<Vec<_>>();
+        if rtl {
+            parts.reverse();
+        }
+        for (run, range) in parts {
+            let value = &run.text[range.start - run.source.start..range.end - run.source.start];
+            let font = font(fonts, spans, run.span, default_face);
+            let context = Some(text::ShapingContext::new(
+                &bidi.text[start..range.start],
+                &bidi.text[range.end..end],
+            ));
+            let options = text::LayoutOptions {
+                direction,
+                context,
+                ..Default::default()
+            };
+            let width = text::width_with_layout(font, value, size, options);
+            let metrics = text::run_metrics_with_layout(font, value, size, options);
+            let descent = (line.height - line.baseline).max(metrics.height - metrics.baseline);
+            line.baseline = line.baseline.max(metrics.baseline);
+            line.height = line.baseline + descent;
+            line.runs.push(Run {
+                span: run.span,
+                text: value.to_owned(),
+                x: line.width,
+                width,
+                source: range,
+                direction,
+                context,
+            });
+            line.width += width;
+        }
     }
 }
 
@@ -242,8 +352,16 @@ pub(super) fn paint<M: Clone>(
         for run in line.runs {
             let span = &spans[run.span];
             let face = span.face.unwrap_or(e.style.font_face);
-            let metrics =
-                text::line_metrics(fonts.get(face).unwrap_or(&fonts[0]), e.style.font_size);
+            let metrics = text::run_metrics_with_layout(
+                fonts.get(face).unwrap_or(&fonts[0]),
+                &run.text,
+                e.style.font_size,
+                text::LayoutOptions {
+                    direction: run.direction,
+                    context: run.context,
+                    ..Default::default()
+                },
+            );
             let rect = Rect::new(
                 x + run.x,
                 y + line.baseline - metrics.baseline,
@@ -291,6 +409,11 @@ pub(super) fn paint<M: Clone>(
                 }
             }
             scene.paint.push(Paint::Text {
+                layout: text::LayoutOptions {
+                    direction: run.direction,
+                    metrics: Some(metrics),
+                    context: run.context,
+                },
                 rect,
                 clip: clip.clone(),
                 text: run.text,
@@ -509,5 +632,99 @@ mod tests {
         scene.hits[0].clip = Rect::new(0., 40., 40., 20.).into();
         input.key(&scene, &Key::Tab);
         assert!(input.focus.is_some());
+    }
+}
+
+#[cfg(test)]
+mod international_paragraphs {
+    use super::*;
+    fn fonts() -> Arc<Vec<text::Font>> {
+        Arc::new(vec![
+            text::Font::from_bytes(
+                include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf").as_slice(),
+                Default::default(),
+            )
+            .unwrap(),
+        ])
+    }
+    #[test]
+    fn paragraph_bidi_reorders_across_style_and_link_boundaries() {
+        let fonts = fonts();
+        let spans = [
+            TextSpan::new("abc "),
+            TextSpan::new("אב").link("first"),
+            TextSpan::new("ג").underline(true),
+            TextSpan::new(" def"),
+        ];
+        let result = flow(&spans, &fonts, 0, 20., 600., 10);
+        let line = &result.lines[0];
+        let second = line.runs.iter().find(|run| run.span == 2).unwrap();
+        let first = line.runs.iter().find(|run| run.span == 1).unwrap();
+        assert!(
+            second.x < first.x,
+            "style runs must share one paragraph resolution"
+        );
+        assert_eq!(first.direction, Some(text::Direction::RightToLeft));
+        assert!((line.width - text::width(&fonts[0], "abc אבג def", 20.)).abs() < 0.01);
+        let scene = Layout::new(fonts).build(
+            &Element::rich_text(spans.to_vec())
+                .on_link(|_| ())
+                .id("body")
+                .size(600., 80.)
+                .font(20.),
+            600.,
+            80.,
+            &Interaction::default(),
+            0.,
+        );
+        let first = scene
+            .hits
+            .iter()
+            .find(|hit| hit.id == "body/link/first")
+            .unwrap();
+        assert!(first.parts.as_ref().unwrap().iter().all(|rect| rect.w > 0.));
+    }
+    #[test]
+    fn arabic_joining_uses_context_across_color_boundaries() {
+        let fonts = fonts();
+        let spans = [
+            TextSpan::new("سل").color(Color::hex(0xff0000)),
+            TextSpan::new("ام").color(Color::hex(0x0000ff)),
+        ];
+        let result = flow(&spans, &fonts, 0, 24., 600., 10);
+        let mut actual = Vec::new();
+        for run in &result.lines[0].runs {
+            let shaped = text::shape_with_layout(
+                &fonts[0],
+                &run.text,
+                24.,
+                text::LayoutOptions {
+                    direction: run.direction,
+                    context: run.context,
+                    ..Default::default()
+                },
+            );
+            actual.extend(shaped.glyphs.iter().map(|glyph| glyph.id));
+        }
+        let expected = text::shape(&fonts[0], "سلام", 24.)
+            .glyphs
+            .iter()
+            .map(|glyph| glyph.id)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            actual, expected,
+            "color changes cannot isolate Arabic joining forms"
+        );
+    }
+    #[test]
+    fn truncating_an_empty_later_line_preserves_earlier_rtl_paragraphs() {
+        let fonts = fonts();
+        let result = flow(&[TextSpan::new("אבג\n\nmore")], &fonts, 0, 20., 200., 2);
+        assert_eq!(result.lines.len(), 2);
+        assert_eq!(
+            result.lines[0].runs[0].direction,
+            Some(text::Direction::RightToLeft)
+        );
+        assert_eq!(result.lines[1].runs[0].text, "…");
     }
 }

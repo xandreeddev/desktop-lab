@@ -2,7 +2,8 @@
 use crate::Error;
 #[cfg(test)]
 use lucent_ui::text::glyph_positions;
-use lucent_ui::text::{line_metrics, shape, width};
+#[cfg(test)]
+use lucent_ui::text::width;
 
 // Existing physical text-mask limits, before the 2× coverage supersample.
 const MAX_WIDTH: u32 = 4096;
@@ -47,6 +48,7 @@ pub(super) fn validate_glyph(glyph: &fontdue::Metrics) -> Result<(), Error> {
 /// Rasterize coverage at twice the physical pixel density, then area-resolve once.
 /// Glyph advances are computed in logical coordinates, so scale does not reflow text.
 /// Returns one alpha byte per pixel; the renderer supplies premultiplied white.
+#[cfg(test)]
 pub fn text(
     font: &lucent_ui::text::Font,
     text: &str,
@@ -54,13 +56,25 @@ pub fn text(
     scale: f32,
     texture_limit: u32,
 ) -> Result<(Vec<u8>, u32, u32, f32), Error> {
+    text_with_layout(font, text, size, scale, texture_limit, Default::default())
+}
+pub(super) fn text_with_layout(
+    font: &lucent_ui::text::Font,
+    text: &str,
+    size: f32,
+    scale: f32,
+    texture_limit: u32,
+    layout: lucent_ui::text::LayoutOptions,
+) -> Result<(Vec<u8>, u32, u32, f32), Error> {
     validate_request(text, size, scale)?;
     let density = scale * SUPERSAMPLE as f32;
     if font.horizontal_line_metrics(size).is_none() {
         return Err("font has no horizontal line metrics".into());
     }
-    let measured_width = width(font, text, size);
-    let metrics = line_metrics(font, size);
+    let measured_width = lucent_ui::text::width_with_layout(font, text, size, layout);
+    let metrics = layout
+        .metrics
+        .unwrap_or_else(|| lucent_ui::text::run_metrics_with_layout(font, text, size, layout));
     if !measured_width.is_finite()
         || !metrics.height.is_finite()
         || metrics.height <= 0.
@@ -73,7 +87,7 @@ pub fn text(
     let mut left_edge = 0f32;
     let mut right_edge = measured_width * density;
     for line in text.lines() {
-        for positioned in shape(font, line, size).glyphs {
+        for positioned in lucent_ui::text::shape_with_layout(font, line, size, layout).glyphs {
             let x = positioned.x;
             let selected = font.raster_face(positioned.face);
             if x * density >= MAX_WIDTH as f32 * density {
@@ -112,7 +126,7 @@ pub fn text(
     // fontdue's bitmap allocation is infallible, so bound its dimensions first.
     let mut glyphs = Vec::new();
     for (line_index, line) in text.lines().enumerate() {
-        for positioned in shape(font, line, size).glyphs {
+        for positioned in lucent_ui::text::shape_with_layout(font, line, size, layout).glyphs {
             let x = positioned.x;
             let selected = font.raster_face(positioned.face);
             if !x.is_finite() {
@@ -288,6 +302,62 @@ mod international_raster {
             assert!(one.iter().any(|a| *a > 0));
             assert!(two.iter().any(|a| *a > 0));
             assert!(w as f32 + x >= logical);
+        }
+    }
+}
+
+#[cfg(test)]
+mod fallback_line_envelope {
+    use super::*;
+    #[test]
+    fn arabic_and_indic_mark_coverage_matches_an_expanded_unclipped_line_box() {
+        let font = lucent_ui::text::Font::from_bytes(
+            include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf").as_slice(),
+            Default::default(),
+        )
+        .unwrap();
+        for value in ["مَرْحَبًا", "क्षि", "العَرَبِيَّةُ"] {
+            let metrics = lucent_ui::text::run_metrics(&font, value, 24., None);
+            let mut expanded = metrics;
+            expanded.height += 16.;
+            expanded.baseline += 8.;
+            for scale in [1., 2.] {
+                let (natural, w, h, _) = text_with_layout(
+                    &font,
+                    value,
+                    24.,
+                    scale,
+                    8192,
+                    lucent_ui::text::LayoutOptions {
+                        metrics: Some(metrics),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+                let (reference, rw, rh, _) = text_with_layout(
+                    &font,
+                    value,
+                    24.,
+                    scale,
+                    8192,
+                    lucent_ui::text::LayoutOptions {
+                        metrics: Some(expanded),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+                assert_eq!(w, rw);
+                let shift = (8. * scale) as usize;
+                let w = w as usize;
+                let h = h as usize;
+                assert_eq!(natural, &reference[shift * w..(shift + h) * w]);
+                assert!(reference[..shift * w].iter().all(|a| *a == 0));
+                assert!(
+                    reference[(shift + h) * w..rh as usize * w]
+                        .iter()
+                        .all(|a| *a == 0)
+                );
+            }
         }
     }
 }
