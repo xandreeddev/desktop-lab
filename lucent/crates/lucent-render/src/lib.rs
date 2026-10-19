@@ -23,6 +23,8 @@ mod fallback;
 mod font_resources;
 mod raster;
 mod scene;
+#[cfg(test)]
+mod wrapped_bidi_tests;
 pub use cache::CacheStats;
 use cache::ResourceCache;
 use extent::{PhysicalExtent, ReadbackLayout};
@@ -387,7 +389,7 @@ impl Gpu {
         size: f32,
         scale: f32,
         face: usize,
-        layout: lucent_ui::text::LayoutOptions,
+        mut layout: lucent_ui::text::LayoutOptions,
         profile: &mut ResourceProfile,
         enabled: bool,
     ) -> Result<Rc<TextureResource>, Error> {
@@ -396,6 +398,12 @@ impl Gpu {
             .get(face)
             .or_else(|| self.fonts.first())
             .ok_or("text requires at least one font")?;
+        // Canonicalize rejected context before lookup as well as shaping.
+        // Otherwise a stale same-length context could share the Debug run key
+        // of a valid context while requiring a different raster order.
+        if layout.bidi.as_ref().is_some_and(|bidi| !bidi.is_for(text)) {
+            layout.bidi = None;
+        }
         let key = format!("text:{face}:{}:{scale}:{layout:?}:{text}", size.to_bits());
         if let Some(v) = self.cache.borrow_mut().get(&key) {
             return Ok(v);
@@ -656,7 +664,7 @@ impl Canvas {
                             *size,
                             scale,
                             *face,
-                            *layout,
+                            layout.clone(),
                             &mut profile.resources,
                             self.profiling,
                         )
