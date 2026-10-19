@@ -316,8 +316,11 @@ print(json.dumps(matches[0]))
     report_path=ROOT/'reports/local'/('display-settings-native-'+uuid.uuid4().hex+'.json')
     report_path.parent.mkdir(parents=True,exist_ok=True)
     def original(): return signature(monitor())==signature(observed)
-    def open_panel():
+    def open_panel(reset_draft=False):
         cli('displays','open');eventually(lambda:state()['open'] and panel()['frames']>0,'Display panel did not submit');time.sleep(.3)
+        if reset_draft:
+            click('display-reset')
+            assert not state()['dirty'], 'Reset draft did not import the current observation'
     def apply(expected):
         global INPUT_ALLOWED
         INPUT_ALLOWED=[signature(monitor()),signature(expected)]
@@ -332,7 +335,7 @@ print(json.dumps(matches[0]))
         eventually(lambda:state()['open'],'Compatibility display action did not open native child')
         key(1);eventually(lambda:not state()['open'],'Escape did not close the display panel')
         assert original();checks.append('compatibility_open_and_escape')
-        open_panel()
+        open_panel(reset_draft=True)
         modes=[]
         current=f"{observed['width']}x{observed['height']}@{observed['refreshRate']:.3f}"
         def normalized(value):
@@ -357,7 +360,10 @@ print(json.dumps(matches[0]))
         restoration=recovery('restore');assert all(restoration.values())
         checks.append('keep_file_and_native_independent_restore');INPUT_ALLOWED=[signature(observed)]
         if args.test_crash:
-            open_panel();click(field(0));enter('16');apply({**observed,'x':16})
+            # The independent restoration is an external layout change. Start
+            # this scenario from an explicitly reset draft, as a user must do
+            # after another program changes the retained baseline.
+            open_panel(reset_draft=True);click(field(0));enter('16');apply({**observed,'x':16})
             # Match only the preflight-verified desktop binary with no arguments;
             # the --display-guard child must remain alive and restore on pipe EOF.
             script=r"""
