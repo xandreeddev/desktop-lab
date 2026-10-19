@@ -61,6 +61,55 @@ def record_restoration_failure(report, phase, error):
     report.setdefault('restoration_failures', {})[phase] = details
 
 
+def move_pointer(session, guard, cursor, point, diagnostics, *, restoring=False):
+    """Declare one global warp; never turn another observed position into authority."""
+    command = policy.compositor_move(point)
+    require(len(diagnostics) < 16, 'bounded_pointer_move_diagnostics')
+    event = {'primitive': 'hyprland_global_lua', 'requested': list(point),
+             'before': None, 'observed': [], 'restoring': restoring, 'confirmed': False}
+    diagnostics.append(event)
+    try:
+        guard(owned=not restoring, restoring=restoring)
+        before = json.loads(session('hyprctl', '-j', 'cursorpos', timeout=3))
+        event['before'] = before
+        cursor.begin(before, point)
+        deadline = time.monotonic() + 3
+        require(session('hyprctl', 'dispatch', command, timeout=3).strip() == b'ok',
+                'compositor_pointer_move_rejected')
+        while time.monotonic() < deadline:
+            require(len(event['observed']) < 32, 'bounded_pointer_arrival_observations')
+            current = json.loads(session('hyprctl', '-j', 'cursorpos',
+                                         timeout=max(.01, deadline-time.monotonic())))
+            event['observed'].append(current)
+            if cursor.observe(current) == tuple(point):
+                cursor.finish(current)
+                event['confirmed'] = True
+                return
+            time.sleep(min(.12, max(0, deadline-time.monotonic())))
+        raise Failure('exact_owned_pointer_arrival')
+    except Exception as error:
+        event['failure'] = policy.diagnostic_error(error)
+        raise
+    finally:
+        event['authority_lost'] = cursor.lost
+
+
+def admit_field_press(session, guard, observe, cursor, field, target):
+    """After slow general guards, bind fresh native geometry before physical down."""
+    require(field in ('single', 'body', 'masked') and target is not None,
+            'owned_field_button_target_required')
+    guard()
+    latest = observe()
+    layer = policy.owned_layers(json.loads(session('hyprctl', '-j', 'layers')),
+                                latest['authority']['desktop']['pid'],
+                                latest['authority']['example']['process']['pid'])
+    fresh = policy.field_geometry(latest['example'], layer, field)[2]
+    require(fresh == target, 'same_current_field_and_layer_before_press')
+    current = json.loads(session('hyprctl', '-j', 'cursorpos'))
+    require(cursor.pending is None and cursor.observe(current) == tuple(target['point']),
+            'exact_owned_pointer_before_button')
+
+
 def run(argv, *, data=None, timeout=20, label='bounded_subprocess_failed'):
     require(re.fullmatch('[a-z_]+', label) is not None, 'fixed_subprocess_step_label')
     try:
@@ -147,7 +196,7 @@ def main():
     input_deadline = None
     sequence = 0
     report = {'passed': False, 'source_commit': args.source_commit, 'source_commits': provenance,
-              'checks': {}, 'restoration': {},
+              'checks': {}, 'restoration': {}, 'pointer_moves': [],
               'helper_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               'policy_sha256': hashlib.sha256((ROOT / 'vm/international_text_policy.py').read_bytes()).hexdigest(),
               'pixel_proof_sha256': hashlib.sha256((ROOT / 'vm/international_text_pixels.py').read_bytes()).hexdigest(),
@@ -155,11 +204,12 @@ def main():
               'scope': 'One prepared native output; independent non-replacing input-method peer, no third-party IME/hardware claim',
               'host_crash_policy': 'Both exact owned transient units expire after210seconds. Private evidence remains; cursor restoration requires a guarded live host.'}
 
-    def remote(*argv, data=None, label='bounded_subprocess_failed'):
-        return run(lab.ssh_args('lucent') + [shlex.join(argv)], data=data, label=label)
+    def remote(*argv, data=None, label='bounded_subprocess_failed', timeout=20):
+        return run(lab.ssh_args('lucent') + [shlex.join(argv)], data=data, label=label, timeout=timeout)
 
-    def session(*argv, data=None, label='bounded_subprocess_failed'):
-        return remote('python3', 'desktop-lab/scripts/in-session.py', *argv, data=data, label=label)
+    def session(*argv, data=None, label='bounded_subprocess_failed', timeout=20):
+        return remote('python3', 'desktop-lab/scripts/in-session.py', *argv,
+                      data=data, label=label, timeout=timeout)
 
     def configuration(owned=True):
         expected = authority if owned else {k: v for k, v in authority.items() if k.startswith('desktop')}
@@ -257,10 +307,13 @@ def main():
         run(['virsh', '-c', lab.URI, 'send-key', name, '--codeset', 'linux', '--holdtime', '25', *map(str, codes)])
         time.sleep(.1)
 
-    def qmp(events, *, restoring=False):
+    def qmp(events, *, restoring=False, field=None, target=None):
         releasing = all(event['type'] == 'btn' and event['data']['down'] is False for event in events)
         if not releasing:
-            guard(owned=not restoring, restoring=restoring)
+            require(not restoring and len(events) == 1 and events[0]['type'] == 'btn'
+                    and events[0]['data'] == {'button': 'left', 'down': True},
+                    'only_owned_physical_button_down')
+            admit_field_press(session, guard, observe, cursor, field, target)
         value = json.loads(run(['virsh', '-c', lab.URI, 'qemu-monitor-command', name,
                                json.dumps({'execute': 'input-send-event', 'arguments': {'events': events}})]))
         require('error' not in value, 'native_pointer_delivery')
@@ -270,11 +323,7 @@ def main():
         return policy.field_geometry(value['example'], layer, field)
 
     def move(point, *, restoring=False):
-        cursor.begin(json.loads(session('hyprctl', '-j', 'cursorpos')), point)
-        qmp(policy.absolute_move(point), restoring=restoring)
-        eventually(lambda: cursor.observe(json.loads(session('hyprctl', '-j', 'cursorpos'))) == point,
-                   'exact_owned_pointer_arrival', timeout=3)
-        cursor.finish(json.loads(session('hyprctl', '-j', 'cursorpos')))
+        move_pointer(session, guard, cursor, point, report['pointer_moves'], restoring=restoring)
 
     def click(field):
         nonlocal pressed, focused
@@ -284,7 +333,7 @@ def main():
         _, _, fresh = geometry(field)
         require(fresh == target, 'same_current_field_and_layer_before_press')
         pressed = True
-        qmp([{'type': 'btn', 'data': {'button': 'left', 'down': True}}])
+        qmp([{'type': 'btn', 'data': {'button': 'left', 'down': True}}], field=field, target=target)
         qmp([{'type': 'btn', 'data': {'button': 'left', 'down': False}}])
         pressed = False
         eventually(lambda: geometry(field)[0]['focus'] == field, 'native_field_focus_' + field)

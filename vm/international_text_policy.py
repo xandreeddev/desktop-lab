@@ -1,7 +1,7 @@
 """Pure admission and owned-process checks for the native text fixture only."""
 import math
 
-from application_intent_policy import CursorOwnership, absolute_move
+from application_intent_policy import CursorOwnership, absolute_move, compositor_move
 from owned_application_units import UNIT_IDENTITY
 
 
@@ -112,7 +112,7 @@ def field_geometry(state, layer, field):
             'fully_visible_owned_field')
     point = (round(layer['x'] + (left+right)/2), round(layer['y'] + (top+bottom)/2))
     absolute_move(point)
-    return surface, hit, {'point': point, 'layer': layer, 'hit': hit,
+    return surface, hit, {'point': point, 'layer': dict(layer), 'hit': dict(hit, clip=dict(clip)),
                           'surface': {key: surface.get(key) for key in ('id', 'role', 'instance', 'output', 'width', 'height')}}
 
 

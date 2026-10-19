@@ -122,6 +122,159 @@ class InputPolicy(unittest.TestCase):
         self.assertNotEqual(policy.workspace_state({'id': 1}), policy.workspace_state({'id': 2}))
 
 
+class CompositorPointerPositioning(unittest.TestCase):
+    def move(self, *, point=(960, 138), arrival=None, dispatch_error=None,
+             dispatch_reply=b'ok', restoring=False, guard_action=None):
+        driver = driver_module()
+        cursor = policy.CursorOwnership({'x': 960, 'y': 540})
+        diagnostics, calls = [], []
+        position = {'x': 960, 'y': 540}
+
+        def session(*argv, **options):
+            calls.append((argv, options))
+            if argv == ('hyprctl', '-j', 'cursorpos'):
+                return json.dumps(position).encode()
+            self.assertEqual(argv, ('hyprctl', 'dispatch',
+                                   'hl.dsp.cursor.move({x='+str(point[0])+',y='+str(point[1])+'})'))
+            if dispatch_error is not None:
+                raise dispatch_error
+            position.update(arrival or {'x': point[0], 'y': point[1]})
+            return dispatch_reply
+
+        def guard(**options):
+            calls.append(('guard', options))
+            if guard_action is not None:
+                guard_action(position)
+
+        return driver, cursor, diagnostics, calls, session, guard
+
+    def test_actual_move_uses_exact_global_lua_coordinates_without_qmp_normalization(self):
+        driver, cursor, diagnostics, calls, session, guard = self.move()
+        with patch.object(policy, 'absolute_move', side_effect=AssertionError('QMP motion forbidden')):
+            driver.move_pointer(session, guard, cursor, (960, 138), diagnostics)
+        self.assertEqual([call[0] for call in calls], ['guard',
+                         ('hyprctl', '-j', 'cursorpos'),
+                         ('hyprctl', 'dispatch', 'hl.dsp.cursor.move({x=960,y=138})'),
+                         ('hyprctl', '-j', 'cursorpos')])
+        self.assertEqual(cursor.expected, (960, 138))
+        self.assertIsNone(cursor.pending)
+        self.assertEqual(diagnostics[0]['requested'], [960, 138])
+        self.assertEqual(diagnostics[0]['before'], {'x': 960, 'y': 540})
+        self.assertEqual(diagnostics[0]['observed'], [{'x': 960, 'y': 138}])
+        self.assertTrue(diagnostics[0]['confirmed'])
+        self.assertTrue(all(0 < call[1]['timeout'] <= 3 for call in calls if call[0] != 'guard'))
+
+    def test_restoration_uses_same_global_primitive_and_explicit_restoration_guard(self):
+        driver, cursor, diagnostics, calls, session, guard = self.move(point=(960, 540), restoring=True)
+        driver.move_pointer(session, guard, cursor, (960, 540), diagnostics, restoring=True)
+        self.assertEqual(calls[0], ('guard', {'owned': False, 'restoring': True}))
+        self.assertEqual(calls[2][0], ('hyprctl', 'dispatch', 'hl.dsp.cursor.move({x=960,y=540})'))
+        self.assertTrue(diagnostics[0]['restoring'])
+
+    def test_foreign_movement_before_dispatch_blocks_the_warp(self):
+        driver, cursor, diagnostics, calls, session, guard = self.move(
+            guard_action=lambda position: position.update(x=959))
+        with self.assertRaisesRegex(ValueError, 'cursor_authority_lost'):
+            driver.move_pointer(session, guard, cursor, (960, 138), diagnostics)
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(cursor.lost)
+        self.assertFalse(diagnostics[0]['confirmed'])
+        self.assertEqual(diagnostics[0]['before'], {'x': 959, 'y': 540})
+
+    def test_wrong_arrival_never_becomes_authority_or_authorizes_a_restore_warp(self):
+        driver, cursor, diagnostics, calls, session, guard = self.move(arrival={'x': 959, 'y': 138})
+        with self.assertRaisesRegex(ValueError, 'cursor_authority_lost'):
+            driver.move_pointer(session, guard, cursor, (960, 138), diagnostics)
+        with self.assertRaisesRegex(ValueError, 'cursor_authority_lost'):
+            cursor.begin({'x': 960, 'y': 540}, cursor.initial)
+        self.assertTrue(diagnostics[0]['authority_lost'])
+        self.assertEqual(diagnostics[0]['observed'], [{'x': 959, 'y': 138}])
+        self.assertEqual(len([v for v in calls if v[0][0] == 'hyprctl' and v[0][1] == 'dispatch']), 1)
+
+    def test_lost_or_rejected_warp_reply_never_falls_back_to_other_input(self):
+        for options in ({'dispatch_error': TimeoutError('lost reply')}, {'dispatch_reply': b'unknown dispatcher'}):
+            with self.subTest(options=options):
+                driver, cursor, diagnostics, calls, session, guard = self.move(**options)
+                with self.assertRaises((TimeoutError, driver.Failure)):
+                    driver.move_pointer(session, guard, cursor, (960, 138), diagnostics)
+                self.assertEqual(len(calls), 3)
+                self.assertFalse(diagnostics[0]['confirmed'])
+                self.assertEqual(cursor.expected, (960, 540))
+
+    def test_unchanged_cursor_hits_deadline_without_retrying_mutation(self):
+        driver, cursor, diagnostics, calls, session, guard = self.move(arrival={'x': 960, 'y': 540})
+        with patch.object(driver.time, 'monotonic', side_effect=[0, 1, 1.1, 1.2, 4]), \
+             patch.object(driver.time, 'sleep'), self.assertRaisesRegex(driver.Failure, '^exact_owned_pointer_arrival$'):
+            driver.move_pointer(session, guard, cursor, (960, 138), diagnostics)
+        self.assertEqual(len(calls), 4)
+        self.assertEqual(diagnostics[0]['observed'], [{'x': 960, 'y': 540}])
+        self.assertFalse(diagnostics[0]['confirmed'])
+
+    def test_invalid_destination_and_full_trace_refuse_before_native_calls(self):
+        for point in ((True, 138), (960.0, 138), (1920, 138), (-1, 0), (0, 1080), ('1;bad', 0)):
+            driver, cursor, diagnostics, calls, session, guard = self.move(point=point)
+            with self.subTest(point=point), self.assertRaises(ValueError):
+                driver.move_pointer(session, guard, cursor, point, diagnostics)
+            self.assertEqual(calls, [])
+        driver, cursor, diagnostics, calls, session, guard = self.move()
+        with self.assertRaisesRegex(driver.Failure, 'bounded_pointer_move_diagnostics'):
+            driver.move_pointer(session, guard, cursor, (960, 138), [{}]*16)
+        self.assertEqual(calls, [])
+
+
+class FinalPointerPressAdmission(unittest.TestCase):
+    def attempt(self, change=None, position=None):
+        driver = driver_module()
+        state, layer = scene()
+        target = policy.field_geometry(state, layer, 'single')[2]
+        cursor = policy.CursorOwnership(dict(zip(('x', 'y'), target['point'])))
+        order = []
+
+        def guard():
+            order.append('general_guard')
+            if change:
+                change(state, layer)
+
+        def observe():
+            order.append('fresh_owned_observation')
+            return {'authority': {'desktop': {'pid': 101}, 'example': {'process': {'pid': 202}}},
+                    'example': state}
+
+        def session(*argv):
+            order.append(argv[-1])
+            return json.dumps([layer] if argv[-1] == 'layers' and layer else
+                              [] if argv[-1] == 'layers' else
+                              position or dict(zip(('x', 'y'), target['point']))).encode()
+
+        return driver, target, cursor, order, session, guard, observe
+
+    def test_exact_target_is_rebound_after_general_guard_and_cursor_is_checked_last(self):
+        driver, target, cursor, order, session, guard, observe = self.attempt()
+        driver.admit_field_press(session, guard, observe, cursor, 'single', target)
+        self.assertEqual(order, ['general_guard', 'fresh_owned_observation', 'layers', 'cursorpos'])
+
+    def test_moved_recreated_clipped_or_retired_field_after_slow_guard_refuses_down(self):
+        changes = (lambda state, layer: state['surfaces'][0]['hits'][0].update(x=25),
+                   lambda state, layer: layer.update(address='0xreplacement'),
+                   lambda state, layer: state['surfaces'][0]['hits'][0]['clip'].update(height=90),
+                   lambda state, layer: state['surfaces'].clear(),
+                   lambda state, layer: layer.clear())
+        for change in changes:
+            driver, target, cursor, order, session, guard, observe = self.attempt(change)
+            deliver = MagicMock()
+            with self.subTest(change=change), self.assertRaises((driver.Failure, ValueError)):
+                driver.admit_field_press(session, guard, observe, cursor, 'single', target)
+                deliver()
+            deliver.assert_not_called()
+
+    def test_pointer_movement_after_final_hit_observation_refuses_physical_down(self):
+        driver, target, cursor, order, session, guard, observe = self.attempt(position={'x': 959, 'y': 100})
+        with self.assertRaisesRegex(ValueError, 'cursor_authority_lost'):
+            driver.admit_field_press(session, guard, observe, cursor, 'single', target)
+        self.assertTrue(cursor.lost)
+        self.assertEqual(order[-1], 'cursorpos')
+
+
 class IndependentFixtureProvenance(unittest.TestCase):
     desktop = '8e6d074bfcb30a0bcc0b371afddcd50c08993af0'
     peer = 'b4d67a4560948b78549a371d3ef00ef06089f4f1'

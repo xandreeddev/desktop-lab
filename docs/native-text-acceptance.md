@@ -33,6 +33,26 @@ and retained pointer authority. Keys require both the exact component field focu
 and a fresh active/matching input-method observation. Pointer targets use current
 submitted, fully visible hit geometry and a frozen native layer lifetime.
 
+Pointer positioning uses the already-tested compositor-global dispatcher
+`hyprctl dispatch 'hl.dsp.cursor.move({x=960,y=138})'`, with bounded integer
+coordinates derived from the captured layer origin and local hit. It does not
+normalize these coordinates into a desktop-wide absolute QMP device. Before
+each warp the ordinary/secure UI guard and exact declared `CursorOwnership`
+transition must pass. Arrival is observed through `cursorpos` for at most three
+seconds; any foreign position permanently retires authority rather than becoming
+a new baseline. A lost or rejected warp reply admits no alternate input method.
+Private bounded `pointer_moves` diagnostics retain the requested, before and
+observed positions, confirmation and fixed failure class.
+
+The actual click still uses QMP left-button down/up, and keys still use native
+`virsh send-key` plus the owned IME peer. After the general guard, a new owned
+observation and native layer capture must match the frozen field/clip/layer
+immediately before each button down, followed by an exact cursor check. A moved,
+recreated, clipped or retired target prevents the press. The existing balanced
+release path remains in place. This harness correction has pure regressions;
+it has not rerun or passed native composition, and does not relabel the earlier
+`exact_owned_pointer_arrival` failure as a successful QMP-motion test.
+
 The example and non-replacing peer run in distinct random transient systemd
 units. Typed `ExecStart` arguments, invocation identity, executable and process
 birth/cgroup are authority; command substrings and namespaces alone are not.
