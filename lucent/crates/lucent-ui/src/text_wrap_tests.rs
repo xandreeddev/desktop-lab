@@ -189,7 +189,7 @@ fn actual_wrapping_paint_hits_selection_and_candidate_share_resolved_order() {
         let expected_selection =
             text::selection_fragments(&row.segments, start..start + body.len());
         assert_eq!(expected_selection, painted.selection(0..body.len()));
-        for (range, a, b) in &row.segments {
+        for (range, a, b) in row.segments.iter() {
             if range.start >= start && range.end <= start + body.len() && (b - a).abs() > 0.01 {
                 let x = text_hit.inner.x + (a + b) / 2.;
                 let y = text_hit.inner.y + index as f32 * area.line_height + area.line_height / 2.;
