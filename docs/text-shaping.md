@@ -3,11 +3,13 @@
 Source scope: accepted main `d00014509f13125fe4ccab3ce2e1fa3961a40dd3` includes the
 verified Display milestone. The implemented, unmerged Text cohort is
 `8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, including the soft-wrap bidi correction.
-Focused formatting, strict Clippy and named UI/panel/Vulkan checks pass at this
-source. Final full workspace/protocol/desktop CI and native acceptance remain
-pending. Earlier `5d3501eb` results retain their original source scope and do not
-establish this correction's full acceptance or native IME interoperability. See
-[current readiness](current-readiness.md) for delivery and acceptance boundaries.
+Focused checks and [final CI](https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281)
+pass at this source: full workspace, six controlled service-protocol filters and
+all 832 Vulkan desktop cases. The coherent six-client/three-example release is
+built and archived, but has not been deployed. Native IME and interoperability
+acceptance remain pending. Earlier results retain their own source scope. See
+[current readiness](current-readiness.md) for the separate runtime, documentation
+and native-harness snapshots and remaining acceptance boundaries.
 
 The component still owns its ordinary `String` and `TextFieldState`. It declares
 `Element::text_input` or `Element::text_area`; the framework emits relative
@@ -164,10 +166,13 @@ densities. The stale-context cache comparison remains byte exact. This reference
 adjustment changes neither global desktop golden thresholds nor production
 rendering.
 
-These are focused checks, not full workspace/protocol/desktop CI or native IME
-acceptance. Those final gates remain pending for this combined source. The
-earlier [full 832-case visual CI at `5d3501eb`](https://github.com/xandreeddev/desktop-lab/actions/runs/39306754599)
-passes only for that historical cohort.
+The later complete [push CI](https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281)
+and [PR CI](https://github.com/xandreeddev/desktop-lab/actions/runs/39313659557)
+pass at exact `8e6d074b`: all six checks, full workspace and controlled protocols,
+the explicit wrapped/cache filters and all 832 Vulkan desktop cases. The earlier
+[passing `5d3501eb` run](https://github.com/xandreeddev/desktop-lab/actions/runs/39306754599)
+retains its historical scope. Native compositor IME acceptance remains pending;
+CI does not establish that interoperability.
 
 ## Input-method ownership
 
@@ -234,8 +239,9 @@ to the host display or claiming interoperability with a compositor input method.
 The explicit local Vulkan filters pass on RADV, including the Arabic style-mask
 comparison at 1×/2× and actual texture-alias/pixel tracing. The complete desktop
 CI render completed at 832 cases; 423 intentionally changed typography references
-were reviewed selectively, preserving 409 passing references. The final
-updated-reference full CI remains a separate gate; see the linked review.
+were reviewed selectively, preserving 409 passing references. Updated-reference
+CI subsequently passed at `5d3501eb` and, after the wrap correction, at exact
+`8e6d074b`; see the linked review. The original failed comparison remains failed.
 No native compositor IME interoperability or desktop memory acceptance is claimed
 by these controlled results.
 Accessibility bridging remains explicitly deferred by the user.
@@ -253,7 +259,8 @@ separate bounded media-PTS associations. These distinguish repeated references
 from distinct prepared-frame advancement, with no pixel-visibility claim. None
 of this changes text density,
 frame demand or the domain/component contracts. See [daily-performance.md](daily-performance.md)
-for the matched static/video workloads and protocol-flag limits. Compilation and
-controlled alias/pixel tests pass for the named earlier cohorts above; they do not
-validate the later `8e6d074b` correction. Measured desktop
-resource/presentation acceptance remains pending.
+for the matched static/video workloads and protocol-flag limits. Final exact
+`8e6d074b` CI also executes the controlled alias/pixel, Arabic-style and wrapped
+cache/coverage tests. Measured desktop resource/presentation acceptance remains
+pending. The separate three-second RADV liveness observation uses the older
+`a7f41ecc` binary and does not validate this new release or its resource targets.

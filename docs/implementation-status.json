@@ -9,7 +9,7 @@
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted main d0001450 includes merged Display PR86. Separately identified implemented, unmerged cohorts are Text 8e6d074b and Application bb304907; those are not counted as delivered or natively accepted. Historical reports retain their exact execution sources and limitations.",
+    "scope": "Accepted main d0001450 includes merged Display PR86. Text runtime 8e6d074b and Application bb304907 remain implemented and unmerged; building does not establish delivery or native acceptance. The documentation/native-harness reconciliation is based on cd883719, separately from compilation source 8e6d074b. Final 8e6d074b passes six CI checks and all 832 visual cases; its release of all nine executables is built and archived, not yet deployed. Actual later RADV liveness uses the older deployed a7f41ecc binary. Historical reports retain their own sources and limitations.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -55,13 +55,13 @@
           "actual_60_fps_presentation_established": false,
           "comparison_scope": "Separate read-only uninstrumented same-binary sample; different source/workload cohort from Weather, no isolated speedup claim."
         },
-        "remaining": "Mean 384.82 / peak 403.88 MiB remains above 300 MiB. Matched idle/animated and cold/warm optimization/presentation evidence is still needed. Preserve density, antialiasing, effects and motion; submit counts are not scanout or actual FPS."
+        "remaining": "Mean 384.82 / peak 403.88 MiB remains above 300 MiB. Matched idle/animated and cold/warm optimization/presentation evidence is still needed. Preserve density, antialiasing, effects and motion; submit counts are not scanout or actual FPS. Later native RADV startup and three-second frame advancement pass on the same older a7f binary; this is no new RSS/FPS result and does not replace the software baseline. Final 8e6d074b resource acceptance remains pending."
       },
       {
         "id": "international-text",
         "status": "implemented_unmerged_native_pending",
         "implemented": "Accepted main retains controlled editing/clipboard and the earlier shaping path. Implemented unmerged Text 8e6d074b adds script/fallback shaping and ordinary IME plus hard-paragraph levels across soft wraps, exact row-bound resolved context, line-local L1/L2, tab separator projection and stale-context cache canonicalization.",
-        "remaining": "Final full workspace/protocol/desktop CI at 8e6d074b, merge/deployment and native compositor IME acceptance; native pixel/scroll details, delayed clipboard/focus races and third-party GUI clipboard. Focused formatting/Clippy, UI/reference/panel and two 1x/2x Vulkan checks pass at this source. Earlier 5d3501eb results retain historical scope. Accessibility remains user-deferred.",
+        "remaining": "Merge/deployment and native compositor IME acceptance; native pixel/scroll details, delayed clipboard/focus races and third-party GUI clipboard. Exact 8e6d074b passes all six CI checks, full workspace, six controlled service-protocol filters and 832/832 Vulkan desktop cases, plus focused UI/reference/panel and 1x/2x wrap/cache checks. The release of all nine executables is built and archived, not deployed. Earlier evidence retains historical scope; accessibility remains user-deferred.",
         "guides": [
           "docs/text-editing.md",
           "docs/multiline-text.md",
@@ -82,13 +82,13 @@
       {
         "id": "real-world-validation",
         "status": "partial_owned_native_evidence",
-        "implemented": "Source-specific owned native Notes/clipboard, SNI/DBusMenu tray, single-output video density fit, live previews, System invalidation, virtual Bluetooth and other recorded workflows. Seven one-output native Display draft/Apply/Keep/Revert/deadline/EOF-recovery flows also pass with exact file preservation and explicit expected one-restart validation.",
+        "implemented": "Source-specific owned native Notes/clipboard, SNI/DBusMenu tray, single-output video density fit, live previews, System invalidation, virtual Bluetooth and other recorded workflows. Seven one-output native Display draft/Apply/Keep/Revert/deadline/EOF-recovery flows also pass with exact file preservation and explicit expected one-restart validation. Later a7f RADV hardware-path startup and three-second native frame advancement pass with anchored user/source/settings/media/critical-file and monitor preservation.",
         "remaining": "Simultaneous monitors, hotplug, suspend/resume, physical Bluetooth/audio/power/radio hardware, third-party tray applications and GUI clipboard interoperability. No blanket hardware, secure-output or 60 FPS claim."
       },
       {
         "id": "documentation-accuracy",
         "status": "source_reconciled_remote_site_ci_pending",
-        "implemented": "Current guides and skills distinguish accepted main d0001450/merged Display from implemented, unmerged Text and Application cohorts. Historical native reports retain scope, current software-video RSS exceeds 300 MiB, and native IME/application/GUI clipboard/tray/multi-output/suspend/hardware acceptance remains pending.",
+        "implemented": "Current guides distinguish accepted main d0001450, the compiled 8e6d074b archive of all nine executables, documentation/harness base cd883719 and older a7f41ecc native RADV liveness. Exact 8e6d074b CI passes six checks and 832 visual cases; deployment, native IME/application/GUI clipboard/tray/multi-output and performance acceptance remain pending. Original failed Venus/device-remap trials and software RSS failure retain scope.",
         "remaining": "Astro/site checks for this branch and continued source-specific reconciliation after later PRs merge. Historical reports remain unchanged."
       }
     ],
@@ -162,14 +162,14 @@
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
-    "validation": "Display strict source a770: 821 Rust / 76 ignored, 109 Python and 582 tokens; compiled a7f differs only by four reviewed loading PNGs. Twenty-eight final non-updating Vulkan Display comparisons, guarded four-artifact deployment and seven actual native flows at c43 pass. Tooling b259 passes 116 Python checks, then one read-only proof validates the exact expected crash transition offline. Display merged through PR86 at d0001450. This documentation branch has not rerun Rust, GPU or native checks; its site/exact-head CI remain separate delivery gates. Text 8e6d074b has independent source review and passing focused formatting/strict all-target Clippy, six wrapped UI cases, one upstream line-reference case, six panel cases and two explicit Vulkan regressions at 1x/2x. This final integration preserves the exact runtime trees; full workspace/protocol/desktop CI and native acceptance remain pending. The prior 5d3501eb full 832-case visual CI passes only at its historical source. The later AMD native-context candidate passed actual RADV RENOIR enumeration, native login and initial hardware shell rendering before the home Btrfs st_dev 56-to-57 preservation rejection, prior to the three-second liveness gate. Independent recovery verifies original software semantics, all 963 original package versions and exact non-device state with 189 device-only remaps. This is no stable presentation, FPS or RSS acceptance; the original failed preservation result remains recorded.",
+    "validation": "Exact runtime 8e6d074b passes both push 39313647281 and PR 39313659557 CI: all six required checks, full workspace, six controlled service-protocol filters, explicit 1x/2x wrapped/cache regressions and 832/832 Vulkan desktop comparisons. Focused local strict/UI/reference/panel/Vulkan checks pass. One locked/offline coherent release builds all six managed clients and three acceptance examples; all nine archived hashes are verified, not deployed. Documentation/harness base cd883719 is a separate source snapshot; editing these docs executes no Rust, GPU or native checks. Later AMD native-context controller a413558a and worker 532a5483 (see gpu_candidate) establish actual RADV RENOIR enumeration, secure login, hardware selection and three-second frame advancement on older deployed a7f41ecc, with anchored preservation and the candidate retained. This establishes no sustained FPS, source cadence, RSS or animation target, or newer-release native acceptance. Earlier 5d3501eb/eec582ab visual evidence, the failed Venus trial and the rejected device-remap attempt retain their original scope. Current documentation-site/exact-head checks remain separate delivery gates.",
     "accepted_main_base_commit": "d00014509f13125fe4ccab3ce2e1fa3961a40dd3",
     "implemented_unmerged_cohorts": [
       {
         "feature": "international-text",
         "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
         "implementation": "Script shaping, deterministic fallback and ordinary opt-in IME, plus hard-paragraph levels across soft wraps, exact row-bound context, line-local upstream L1/L2, canonical tab separator projection and a stale-context text-cache guard.",
-        "pending": "Final full workspace/protocol/desktop CI; merge/deployment; native compositor IME and wider native text/GUI clipboard acceptance.",
+        "pending": "Merge/deployment; native compositor IME and wider native text/GUI clipboard acceptance. Full exact 8e6d074b CI and the release build of all nine executables pass.",
         "historical_executable_checks_source_commit": "eec582ab0aa7c06b4ed30d24a0670c6a1df91e21",
         "historical_full_visual_source_commit": "5d3501ebd9e02dccca62f7c2f9cae59056e40a7a",
         "historical_full_visual_cases": 832,
@@ -185,8 +185,19 @@
             1,
             2
           ],
-          "full_workspace_protocol_desktop_ci_established": false,
-          "native_ime_acceptance_established": false
+          "native_ime_acceptance_established": false,
+          "full_workspace_protocol_desktop_ci_established_by_this_focused_run": false
+        },
+        "full_ci": {
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "push_run": 39313647281,
+          "pull_request_run": 39313659557,
+          "checks_passed": 6,
+          "workspace_passed": true,
+          "controlled_service_protocol_filters_passed": 6,
+          "desktop_visual_cases_passed": 832,
+          "native_ime_acceptance_established": false,
+          "visual_artifact_sha256": "ff1e0e4e6649a0f7ba20b4f8f6cd5714decec2917c92b60f4be3f6004a37b0b6"
         }
       },
       {
@@ -196,7 +207,9 @@
         "pending": "Merge/deployment and executed native real-application launch/open/action proof."
       }
     ],
-    "gpu_candidate": {
+    "documentation_harness_base_commit": "cd88371923b43c53f5b48d4bafe78131ea6df8c3",
+    "runtime_compilation_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+    "historical_gpu_candidate_preservation_rejection": {
       "status": "hardware_initialization_observed_preservation_rejected_software_restored",
       "driver_install_rollback_verified": true,
       "xml_candidate_executed": true,
@@ -217,6 +230,45 @@
       "hardware_acceptance": false,
       "performance_acceptance": false,
       "scope": "Actual hardware enumeration and initial rendered shell passed, then the device-identity preservation guard rejected the candidate before the liveness gate. The original failed result is retained; independent recovery acknowledges only the observed device remap, with no stable presentation, FPS or RSS claim."
+    },
+    "gpu_candidate": {
+      "status": "radv_native_startup_and_three_second_frame_advancement_verified_candidate_retained",
+      "source_commit": "a7f41eccdcd8eca51e8e5ee878d8f489d8d4bde5",
+      "desktop_sha256": "2fb52754e75c34d9d73fff26d72a240f3e9a8d8672563bb6e0e404e9427a4f78",
+      "controller_sha256": "a413558a19b59b72111892739d4c4c1067e3804b72e8b160d5f9a59aac968fb6",
+      "guest_worker_sha256": "532a548359d2c16e4334fab940189d33b6b29429311a1fb2f227e17347e156d4",
+      "verified_at": "2026-10-19T20:11:03.602470+00:00",
+      "guide": "docs/lucent-vulkan.md",
+      "private_receipt": "reports/local/daily-amd-native-radv-liveness.json",
+      "radv_renoir_enumeration_passed": true,
+      "secure_login_hardware_adapter_passed": true,
+      "native_frames_advanced_over_three_seconds": true,
+      "anchored_preservation_passed": true,
+      "candidate_retained": true,
+      "fps_rss_or_scanout_acceptance": false,
+      "new_8e_runtime_deployed": false,
+      "scope": "Actual older-binary guest hardware-path liveness. No sustained FPS, distinct source cadence, animation/RSS/GPU-memory/hardware-decoding or newer-release native acceptance. Prior rejection remains unchanged in historical_gpu_candidate_preservation_rejection."
+    },
+    "coherent_release_build": {
+      "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+      "managed_executables": [
+        "lucent-desktop",
+        "lucent-cli",
+        "lucent-menu",
+        "lucent-lock",
+        "lucent-greeter",
+        "lucent-polkit"
+      ],
+      "acceptance_executables": [
+        "international-text",
+        "input-method-peer",
+        "application-intent"
+      ],
+      "locked_offline_build_passed": true,
+      "archive_manifest_sha256": "b7a1d92c4e0e186fca4e2e7e67523763c0c57bc4b91bd3ef18247c5b5cc996c9",
+      "all_nine_binary_hashes_verified": true,
+      "deployed": false,
+      "native_acceptance": false
     }
   },
   "requirements": [

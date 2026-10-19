@@ -5,6 +5,30 @@ animations. Source-level bounds, texture payload counts and green tests do not
 prove that target. A software-Vulkan guest also includes driver mappings in the
 process; RSS cannot be relabeled as independent GPU memory.
 
+## Current source and native backend
+
+Exact compilation source `8e6d074bfcb30a0bcc0b371afddcd50c08993af0` passes both
+[push](https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281) and
+[PR](https://github.com/xandreeddev/desktop-lab/actions/runs/39313659557) CI, including
+all 832 desktop comparisons and the controlled stream/pixel tracing checks. Its
+coherent six-managed-client/three-example release is archived with binary hashes
+but has not been deployed. The later documentation/native-harness snapshot is
+separate from that compilation source; see [current readiness](current-readiness.md).
+
+On 2026-10-19 the older deployed `a7f41ecc` binary selected guest RADV RENOIR,
+logged in through the secure session and advanced native frame counters over
+three seconds. Mount-anchored preservation checks passed, and the hardware
+candidate was retained. This establishes backend liveness, not measured FPS,
+distinct video-source cadence, scanout, animation pacing or RSS. The earlier
+preservation-rejected attempt and failed Venus trial retain their original
+results in [the graphics report](lucent-vulkan.md).
+
+The recorded 120-second `a7f41ecc` software-Vulkan video sample remains
+384.82 MiB mean / 403.88 MiB peak RSS and 101.466% of one core, above the 300 MiB
+target. It does not become a RADV result after changing the backend. The final
+release needs its own identified static/video and cold/warm native measurements;
+compare the same backend/workload before attributing a source-code improvement.
+
 ## Current concrete allocation path
 
 Fontdue eagerly enumerates a font's cmap/GSUB glyphs and stores their flattened
@@ -122,8 +146,10 @@ Arabic-style filters also pass locally on RADV. Twelve pure Python
 collector-policy cases passed locally, including one
 revision repeated at 60 Hz with zero distinct advancement, and 24 source revisions
 referenced at 60 Hz remaining 24 unique revisions. These controlled policy cases
-are not measured compositor/video performance. Actual matched desktop resource
-runs and native presentation/source-cadence acceptance remain pending.
+are not measured compositor/video performance. Exact `8e6d074b` CI subsequently
+passes the full workspace and explicit alias/pixel filters too. Actual matched
+desktop resource runs and native presentation/source-cadence acceptance remain
+pending; the older binary's three-second RADV liveness does not close them.
 
 The [isolated font-preparation report](../reports/measurements/lucent-font-preparation.json)
 records five fresh processes at the same source and 2× density. Their warm RSS is

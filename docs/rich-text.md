@@ -3,11 +3,13 @@
 Source scope: accepted main `d00014509f13125fe4ccab3ce2e1fa3961a40dd3` includes the
 verified Display milestone. The implemented, unmerged Text cohort is
 `8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, including the soft-wrap bidi correction.
-Focused formatting, strict Clippy and named UI/panel/Vulkan checks pass at this
-source. Final full workspace/protocol/desktop CI and native acceptance remain
-pending. Earlier `5d3501eb` results retain their original source scope and do not
-establish this correction's full acceptance or native IME interoperability. See
-[current readiness](current-readiness.md) for delivery and acceptance boundaries.
+Focused checks and [final CI](https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281)
+pass at this source: full workspace, six controlled service-protocol filters and
+all 832 Vulkan desktop cases. The coherent six-client/three-example release is
+built and archived, but has not been deployed. Native IME and interoperability
+acceptance remain pending. Earlier results retain their own source scope. See
+[current readiness](current-readiness.md) for the separate runtime, documentation
+and native-harness snapshots and remaining acceptance boundaries.
 
 `Element::rich_text(Vec<TextSpan>)` is a framework control. It knows registered
 font indices, colors, underline and opaque action identities. It does not parse
