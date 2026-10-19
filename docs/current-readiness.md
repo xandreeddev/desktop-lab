@@ -4,11 +4,12 @@ Accepted main for this reconciliation is `d00014509f13125fe4ccab3ce2e1fa3961a40d
 (PR86, including the verified Display milestone), dated 2026-10-19. Its Display
 executable source is `a7f41ecc`; the earlier documentation/native-tool snapshot
 was `d0611935`. Implemented, unmerged Text and Application cohorts are identified
-separately below and are not counted as delivered. Publication and deployment
+separately below and are not counted as accepted main. Publication and deployment
 remain separate from merging. This documentation/native-harness reconciliation
 starts from `cd88371923b43c53f5b48d4bafe78131ea6df8c3`; it is not a newly compiled
-runtime. The coherent release was compiled at exact `8e6d074b`, while the actual
-RADV liveness observation below still uses deployed `a7f41ecc`. The seven
+runtime. The coherent release compiled at exact `8e6d074b` is now deployed on
+RADV RENOIR; its normal resource observation is recorded below. The earlier
+three-second RADV liveness trial remains scoped to `a7f41ecc`. The seven
 requested gaps all remain in scope. Accessibility is separately deferred by the user.
 
 The shell's launcher, dock, widgets, notifications, lock/login and service panels
@@ -39,9 +40,9 @@ ledger's requirement history remains useful for the broader backlog.
 | --- | --- | --- |
 | Saved Wi-Fi recovery | Merged native masked SecretAgent repair retains the saved profile UUID and storage policy. Fourteen native NetworkManager/GUI checks pass against owned simulated WPA2/hidden radios, including cancellation, repair, DHCP, saved reconnection and exact restoration. | Enterprise/WEP provisioning, agent-owned vaults and physical-radio acceptance remain separate gaps; they are not implied by the owned fixture. |
 | Safe display settings | Native whole-layout drafts, fresh ordered observations, Apply → Keep/Revert and independent 15-second/UI-crash EOF rollback. Seven actual one-output QEMU flows pass for mode, scale, position, persistence and recovery. File preservation is exact; the expected one-restart service transition is validated explicitly. | Physical/multiple outputs, native enable/disable/rotation, fractional display-settings input, hotplug, suspend/resume, compositor restart and secure-output acceptance remain open. The Keep-to-file-identity-capture host-loss interval retains manual recovery. |
-| Resources and animation | Event-driven redraw, bounded image/preview ownership and live-video physical-cover conversion are implemented. | The separate 120-second normal-video sample of the Display binary measures 384.82 MiB mean / 403.88 MiB peak RSS and 101.466% of one core on llvmpipe, above the 300 MiB target. This differs from the Weather cohort and establishes no isolated improvement. Actual 60 FPS presentation and consistent cold/warm animation timing are not established. |
-| International text | Accepted main retains controlled editing/clipboard and the earlier shaping path. Unmerged Text `8e6d074b` implements script shaping, hard-paragraph context across soft wraps, exact row-bound visual source/caret maps, tab separator projection, deterministic fallback and opt-in text-input-v3 composition. | Final `8e6d074b` passes all six CI checks, the full workspace, six controlled service-protocol filters and all 832 Vulkan desktop cases. Its coherent release is built; merge/deployment and native compositor IME acceptance remain pending. Earlier `5d3501eb` checks retain their separate source scope. Native pixel/scroll details, delayed clipboard/focus races and third-party GUI clipboard still need acceptance; controlled protocol checks do not establish those results. |
-| Application integration | Accepted main includes catalog, pins, ordinary activation and declared actions. Unmerged Application `bb304907` implements fresh input-bound activation context, explicit file/URI Open and expanded XDG parsing/observation, with a prepared real-application harness. | Merge/deployment and native third-party launch/open/action acceptance remain pending. An intent token, dispatch acknowledgement or prepared harness does not prove focus, document loading or application interoperability. |
+| Resources and animation | Event-driven redraw, bounded image/preview ownership and live-video physical-cover conversion are implemented. The deployed `8e6d074b` RADV cohort records 217.28 MiB mean / 221.92 MiB sampled peak RSS over 120 seconds. | The result is ineligible for the 300 MiB acceptance gate because host swap activity and I/O full-stall pressure exceed the reviewed bounds. Presentation tracing was off: no FPS or smoothness result. Historical llvmpipe 384.82/403.88 MiB remains a different cohort, without a matched speedup comparison. |
+| International text | Accepted main retains controlled editing/clipboard and the earlier shaping path. Unmerged Text `8e6d074b` implements script shaping, hard-paragraph context across soft wraps, exact row-bound visual source/caret maps, tab separator projection, deterministic fallback and opt-in text-input-v3 composition. | Final `8e6d074b` passes all six CI checks, the full workspace, six controlled service-protocol filters and all 832 Vulkan desktop cases. Its coherent release is deployed; merging and final-cohort native compositor IME acceptance remain pending. Earlier checks retain their separate source scope. Native pixel/scroll details, delayed clipboard/focus races and third-party GUI clipboard still need acceptance; controlled protocol checks do not establish those results. |
+| Application integration | Accepted main includes catalog, pins, ordinary activation and declared actions. Unmerged Application `bb304907`, included in deployed `8e6d074b`, implements fresh input-bound activation context, explicit file/URI Open and expanded XDG parsing/observation, with a prepared real-application harness. | Merging and native third-party launch/open/action acceptance remain pending. An intent token, dispatch acknowledgement or prepared harness does not prove focus, document loading or application interoperability. |
 | Real-world validation | Several owned native workflows already pass, as listed below. | Simultaneous monitors, hotplug, suspend/resume, physical Bluetooth/audio and other power/radio hardware, third-party tray applications and GUI clipboard interoperability need broader testing. Implementation and an owned fixture are separate from this acceptance. |
 | Documentation accuracy | This reconciliation updates current summaries and repository skills against source-specific evidence. | Keep summaries and the ledger current when later PRs merge; site validation is required for this documentation change. Historical evidence must retain its original scope. |
 
@@ -55,8 +56,8 @@ their stated source; delivery and acceptance must be identified separately.
 
 | Cohort | Implemented scope | Delivery and acceptance boundary |
 | --- | --- | --- |
-| Text `8e6d074b` | Shared glyph/source geometry, script/fallback shaping and ordinary IME, plus hard-paragraph levels across wraps, exact row-bound resolved context, line-local L1/L2, tab separator projection and a stale-context cache guard. | Implemented, source-reviewed and unmerged. Focused formatting/Clippy, six wrapped UI, one upstream reference, six panel and two 1×/2× Vulkan checks pass. Final full workspace/protocol/832-case CI and the coherent release build also pass at `8e6d074b`; deployment and native acceptance remain pending. Earlier `5d3501eb` evidence retains its own source scope. The [text guide](text-shaping.md) and [typography review](text-baseline-review.md) preserve those sources. |
-| Application `bb304907` | Domain open/context values, XDG adapter dispatch/revalidation and generic opt-in Wayland activation effects; standalone intent consumer and owned native harness. | Implemented, unmerged. Native launch/open/action proof has not run; [activation](application-activation.md) separates physical input from socket commands. |
+| Text `8e6d074b` | Shared glyph/source geometry, script/fallback shaping and ordinary IME, plus hard-paragraph levels across wraps, exact row-bound resolved context, line-local L1/L2, tab separator projection and a stale-context cache guard. | Implemented, source-reviewed, deployed and unmerged. Focused formatting/Clippy, six wrapped UI, one upstream reference, six panel and two 1×/2× Vulkan checks pass. Final full workspace/protocol/832-case CI and the coherent release build also pass at `8e6d074b`; final-cohort native text acceptance remains pending. Earlier evidence retains its own source scope. The [text guide](text-shaping.md) and [typography review](text-baseline-review.md) preserve those sources. |
+| Application `bb304907` | Domain open/context values, XDG adapter dispatch/revalidation and generic opt-in Wayland activation effects; standalone intent consumer and owned native harness. | Implemented, included in deployed `8e6d074b`, unmerged. Native launch/open/action proof remains pending; [activation](application-activation.md) separates physical input from socket commands. |
 | Documentation/native-harness base `cd883719` | Includes guarded tools for real applications, GUI clipboard, third-party tray, simultaneous outputs and suspend/recovery, plus the reviewed IME lifetime/input guards from `6282122f`. Runtime compilation remains `8e6d074b`. | Tool existence and passing ownership-policy tests are not native acceptance. These workflows, physical devices and hardware pacing remain pending. |
 
 Exact `8e6d074bfcb30a0bcc0b371afddcd50c08993af0` passes both
@@ -70,6 +71,14 @@ hash. The private archive manifest SHA256 is
 `b7a1d92c4e0e186fca4e2e7e67523763c0c57bc4b91bd3ef18247c5b5cc996c9`.
 Build success is separate from deployment and native acceptance.
 
+The later guarded deployment verifies all six managed user clients and the root
+greeter as one coherent `8e6d074b` release; only the changed compatibility helper
+is replaced. Original settings, media, exports, clipboard and security configuration
+remain preserved, greetd is not restarted, and rendered supervision continues
+beyond its startup deadline. The three acceptance executables are staged privately,
+not installed as user applications. The successful private receipt is
+`reports/local/daily-text-8e-deployment-33ba0219a8a4a8a4c924f896.json`.
+
 The later AMD native-context trial passes RADV RENOIR enumeration, secure login,
 Lucent hardware-adapter selection and advancing native frame counters over three
 seconds at the older deployed `a7f41ecc` binary. Mount-anchored preservation of
@@ -79,11 +88,11 @@ candidate is retained. Its receipt is private
 preservation failure and its recovery remain historical evidence, as does the
 failed Venus trial. See [the dated graphics report](lucent-vulkan.md).
 
-This establishes hardware-path liveness on that named binary, not measured FPS,
-video-source cadence, smoothness, RSS, GPU memory or hardware decoding. It does
-not supersede the software-Vulkan resource failure or test the newly built
-`8e6d074b` release. Native IME, real application launch/Open/action, GUI clipboard,
-third-party tray, simultaneous outputs and matched performance remain pending.
+That earlier trial establishes hardware-path liveness on its named binary; the
+later `8e6d074b` deployment and resource observation have their own scope. Native
+IME, real application launch/Open/action, GUI clipboard, third-party tray,
+simultaneous outputs, physical-device and instrumented presentation acceptance
+remain pending.
 
 ## Source-specific native evidence
 
@@ -110,6 +119,22 @@ table as a replacement for every acceptance record.
 
 ## Reading resource and animation claims
 
+The deployed `8e6d074b` RADV cohort records an uninstrumented 120.000492-second
+interval with 480 RSS samples at 0.25-second spacing: **217.28 MiB mean /
+221.92 MiB sampled peak**, 112.25% CPU of one logical core and zero guest-process
+swap. The unchanged 4K60 H.264 video, source-rate setting and single 1080p60 output
+pass the full preservation checks. Process-lifetime high-water RSS is 223.75 MiB,
+separate from the sampled interval peak.
+
+This observation is **ineligible for the 300 MiB acceptance gate**: the host
+records 674 swap-in pages and an I/O full-stall fraction of 0.5081; host available
+memory stays above 4152.29 MiB. The retained result has `eligible=false` and
+`normal_uninstrumented_rss_target_met=null`, with no automatic retry. Profiling is
+off and no PTS/presentation samples are collected. Its private wrapper report is
+`.cache/final-cohort-measurement-v2/measurement-8e-radv-1792442023-resources.json`.
+It establishes neither accepted resource targets, a matched improvement over
+llvmpipe nor actual FPS, animation pacing, GPU memory or hardware decoding.
+
 The [Display report](../reports/measurements/lucent-display-settings.json) records
 the separate 120-second normal-video sample of the same `a7f41ecc` binary:
 384.82/403.88 MiB mean/peak RSS, 101.466% of one core and zero swap. A 4K H.264
@@ -127,9 +152,9 @@ Prepared CPU pixels, cached texture payload, process RSS/PSS and GPU/driver
 allocations measure different things. Successful submission counters and
 compositor frame callbacks do not establish monitor presentation or 60 FPS.
 Preserve physical density, antialiasing, effects and motion while measuring
-normal idle, animated, cold and warm workloads. The cited samples used software
-Vulkan; later RADV liveness supplies no physical-GPU pacing or hardware-decode
-result and does not change those measurements.
+normal idle, animated, cold and warm workloads. Historical samples used software
+Vulkan; the later RADV resource observation does not change those measurements
+or supply physical-GPU pacing or hardware-decode acceptance.
 
 ## Maintaining this reconciliation
 

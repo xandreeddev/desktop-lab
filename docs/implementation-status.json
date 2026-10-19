@@ -9,7 +9,7 @@
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted main d0001450 includes merged Display PR86. Text runtime 8e6d074b and Application bb304907 remain implemented and unmerged; building does not establish delivery or native acceptance. The documentation/native-harness reconciliation is based on cd883719, separately from compilation source 8e6d074b. Final 8e6d074b passes six CI checks and all 832 visual cases; its release of all nine executables is built and archived, not yet deployed. Actual later RADV liveness uses the older deployed a7f41ecc binary. Historical reports retain their own sources and limitations.",
+    "scope": "Accepted main d0001450 includes merged Display PR86. Text runtime 8e6d074b and Application bb304907 remain unmerged, but their coherent 8e release is now deployed: all six user clients and root greeter match the immutable archive, with only the changed compatibility helper replaced and original user/security state preserved. Exact 8e passes six CI checks and 832 visual cases. A later uninstrumented 120-second RADV resource interval is collected but host-pressure-ineligible, with no accepted 300 MiB result or presentation/FPS proof. Earlier a7f RADV liveness and software measurements retain their original scopes.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -41,10 +41,40 @@
       },
       {
         "id": "resources-and-animation",
-        "status": "target_unmet",
+        "status": "interval_collected_acceptance_ineligible",
         "implemented": "Event-driven redraw, bounded image/preview ownership and physical-cover video conversion.",
         "normal_desktop_rss_target_mib": 300,
         "latest_recorded_video_sample": {
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "private_report": ".cache/final-cohort-measurement-v2/measurement-8e-radv-1792442023-resources.json",
+          "private_report_sha256": "6483e8b942030b52ad5bfa7841bbf7f7ebec64549806d1bd812b96995a154bd7",
+          "seconds": 120.00049190599998,
+          "rss_sample_count": 480,
+          "sample_period_seconds": 0.25,
+          "mean_rss_mib": 217.28193359375,
+          "peak_rss_mib": 221.921875,
+          "process_lifetime_high_water_mib": 223.74609375,
+          "main_cpu_percent_one_core": 112.24953986481536,
+          "guest_process_swap_mib_max": 0.0,
+          "environment": "AMD RADV RENOIR Vulkan, Mesa 26.2.2; one 1920x1080 scale-1 60-Hz output. Unchanged H.264/yuv420p 3840x2160 60/1-FPS video with source-rate setting. CPU/presentation tracing off.",
+          "preservation_verified": true,
+          "eligible": false,
+          "ineligible_reasons": [
+            "host_swap_activity",
+            "host_full_stall_pressure"
+          ],
+          "normal_uninstrumented_rss_target_met": null,
+          "host_swap_in_pages": 674,
+          "host_swap_out_pages": 0,
+          "host_io_full_stall_fraction": 0.5081035071995643,
+          "host_minimum_available_mib": 4152.29296875,
+          "source_pts_samples": 0,
+          "presentation_samples": 0,
+          "actual_60_fps_presentation_established": false,
+          "comparison_scope": "Observed normal-resource interval only. Host eligibility failed; no automatic retry, accepted RSS target, matched llvmpipe speedup, animation/presentation or hardware-decoding claim."
+        },
+        "remaining": "The historical llvmpipe sample remains 384.82/403.88 MiB above the 300 MiB target. Current 8e RADV sampled RSS is 217.28/221.92 MiB, but host swap activity and I/O full-stall pressure make that observation ineligible, leaving RSS acceptance null. Instrumented presentation, matched idle/animated and cold/warm evidence remain pending; preserve density, effects and motion. No automatic retry or FPS claim.",
+        "historical_software_video_sample": {
           "source_commit": "a7f41eccdcd8eca51e8e5ee878d8f489d8d4bde5",
           "report": "reports/measurements/lucent-display-settings.json",
           "seconds": 120.0008014269988,
@@ -54,14 +84,13 @@
           "environment": "One-output QEMU, llvmpipe LLVM 22.1.8 / Mesa 26.2.2 software Vulkan; 1920x1080 scale 1 at 60 Hz. H.264 yuv420p 3840x2160 at 60/1 FPS, duration 28.333333 s, source-rate setting, fitted to 1920x1080.",
           "actual_60_fps_presentation_established": false,
           "comparison_scope": "Separate read-only uninstrumented same-binary sample; different source/workload cohort from Weather, no isolated speedup claim."
-        },
-        "remaining": "Mean 384.82 / peak 403.88 MiB remains above 300 MiB. Matched idle/animated and cold/warm optimization/presentation evidence is still needed. Preserve density, antialiasing, effects and motion; submit counts are not scanout or actual FPS. Later native RADV startup and three-second frame advancement pass on the same older a7f binary; this is no new RSS/FPS result and does not replace the software baseline. Final 8e6d074b resource acceptance remains pending."
+        }
       },
       {
         "id": "international-text",
         "status": "implemented_unmerged_native_pending",
         "implemented": "Accepted main retains controlled editing/clipboard and the earlier shaping path. Implemented unmerged Text 8e6d074b adds script/fallback shaping and ordinary IME plus hard-paragraph levels across soft wraps, exact row-bound resolved context, line-local L1/L2, tab separator projection and stale-context cache canonicalization.",
-        "remaining": "Merge/deployment and native compositor IME acceptance; native pixel/scroll details, delayed clipboard/focus races and third-party GUI clipboard. Exact 8e6d074b passes all six CI checks, full workspace, six controlled service-protocol filters and 832/832 Vulkan desktop cases, plus focused UI/reference/panel and 1x/2x wrap/cache checks. The release of all nine executables is built and archived, not deployed. Earlier evidence retains historical scope; accessibility remains user-deferred.",
+        "remaining": "Merging and final-cohort native compositor IME acceptance; native pixel/scroll details, delayed clipboard/focus races and third-party GUI clipboard. Exact 8e passes all six CI checks, full workspace, six controlled service-protocol filters and 832 visual cases, plus focused wrap/cache checks. All six managed clients and root greeter are deployed coherently; acceptance examples are staged separately. Earlier evidence retains historical scope; accessibility remains user-deferred.",
         "guides": [
           "docs/text-editing.md",
           "docs/multiline-text.md",
@@ -72,7 +101,7 @@
         "id": "application-integration",
         "status": "implemented_unmerged_native_pending",
         "implemented": "Accepted main includes catalog/pins, ordinary activation and declared actions. Implemented unmerged Application bb304907 adds fresh input-bound activation context, explicit file/URI Open and expanded XDG parsing/observation; its owned real-application harness has not executed.",
-        "remaining": "Merge/deployment and native third-party launch/open/action acceptance. Dispatch acknowledgement and token presence do not establish application focus or document loading.",
+        "remaining": "Merging and native third-party launch/open/action acceptance. The implementation is included in deployed 8e; dispatch acknowledgement and token presence do not establish application focus or document loading.",
         "guides": [
           "docs/application-activation.md",
           "docs/application-catalog.md",
@@ -82,13 +111,13 @@
       {
         "id": "real-world-validation",
         "status": "partial_owned_native_evidence",
-        "implemented": "Source-specific owned native Notes/clipboard, SNI/DBusMenu tray, single-output video density fit, live previews, System invalidation, virtual Bluetooth and other recorded workflows. Seven one-output native Display draft/Apply/Keep/Revert/deadline/EOF-recovery flows also pass with exact file preservation and explicit expected one-restart validation. Later a7f RADV hardware-path startup and three-second native frame advancement pass with anchored user/source/settings/media/critical-file and monitor preservation.",
+        "implemented": "Source-specific owned native Notes/clipboard, SNI/DBusMenu tray, single-output video density fit, live previews, System invalidation, virtual Bluetooth and other recorded workflows. Seven one-output native Display draft/Apply/Keep/Revert/deadline/EOF-recovery flows also pass with exact file preservation and explicit expected one-restart validation. Later a7f RADV hardware-path startup and three-second native frame advancement pass with anchored user/source/settings/media/critical-file and monitor preservation. The coherent 8e release is now deployed on retained RADV, and its normal 120-second resource interval passes preservation while failing host-pressure eligibility.",
         "remaining": "Simultaneous monitors, hotplug, suspend/resume, physical Bluetooth/audio/power/radio hardware, third-party tray applications and GUI clipboard interoperability. No blanket hardware, secure-output or 60 FPS claim."
       },
       {
         "id": "documentation-accuracy",
         "status": "source_reconciled_remote_site_ci_pending",
-        "implemented": "Current guides distinguish accepted main d0001450, the compiled 8e6d074b archive of all nine executables, documentation/harness base cd883719 and older a7f41ecc native RADV liveness. Exact 8e6d074b CI passes six checks and 832 visual cases; deployment, native IME/application/GUI clipboard/tray/multi-output and performance acceptance remain pending. Original failed Venus/device-remap trials and software RSS failure retain scope.",
+        "implemented": "Current guides distinguish accepted main d0001450, the compiled/deployed coherent 8e release, earlier a7f RADV liveness and historical software samples. Exact 8e CI passes six checks and 832 visual cases. The new normal resource interval is collected but host-pressure-ineligible; native IME/application/GUI clipboard/tray/multi-output, physical-device and presentation acceptance remain pending. Original failed Venus/device-remap trials and software RSS failure retain scope.",
         "remaining": "Astro/site checks for this branch and continued source-specific reconciliation after later PRs merge. Historical reports remain unchanged."
       }
     ],
@@ -162,14 +191,14 @@
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
-    "validation": "Exact runtime 8e6d074b passes both push 39313647281 and PR 39313659557 CI: all six required checks, full workspace, six controlled service-protocol filters, explicit 1x/2x wrapped/cache regressions and 832/832 Vulkan desktop comparisons. Focused local strict/UI/reference/panel/Vulkan checks pass. One locked/offline coherent release builds all six managed clients and three acceptance examples; all nine archived hashes are verified, not deployed. Documentation/harness base cd883719 is a separate source snapshot; editing these docs executes no Rust, GPU or native checks. Later AMD native-context controller a413558a and worker 532a5483 (see gpu_candidate) establish actual RADV RENOIR enumeration, secure login, hardware selection and three-second frame advancement on older deployed a7f41ecc, with anchored preservation and the candidate retained. This establishes no sustained FPS, source cadence, RSS or animation target, or newer-release native acceptance. Earlier 5d3501eb/eec582ab visual evidence, the failed Venus trial and the rejected device-remap attempt retain their original scope. Current documentation-site/exact-head checks remain separate delivery gates.",
+    "validation": "Exact 8e runtime passes push 39313647281 and PR 39313659557 CI: six required checks, full workspace, six controlled service-protocol filters, explicit 1x/2x wrapped/cache regressions and 832 desktop visuals. Its coherent locked/offline release builds all nine executables; all six managed user clients and root greeter are now deployed with only changed compat.py, exact original user/security state and supervision beyond startup deadline verified. Acceptance examples are staged privately. A normal uninstrumented 120.000492-second RADV interval records 480 samples, mean 217.281934 / peak 221.921875 MiB, CPU 112.24954% of one core and zero guest-process swap; full preservation passes. Host swap-in of 674 pages and I/O full-stall fraction 0.5081035 make it ineligible, with RSS-target acceptance null. Presentation/PTS are off; no FPS, smoothness, matched historical improvement, GPU-memory or hardware-decode proof. Earlier a7f hardware liveness, software RSS failure and failed/recovered trials retain their sources. Final native feature, site and exact-head delivery gates remain separate; editing docs executes none of them.",
     "accepted_main_base_commit": "d00014509f13125fe4ccab3ce2e1fa3961a40dd3",
     "implemented_unmerged_cohorts": [
       {
         "feature": "international-text",
         "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
         "implementation": "Script shaping, deterministic fallback and ordinary opt-in IME, plus hard-paragraph levels across soft wraps, exact row-bound context, line-local upstream L1/L2, canonical tab separator projection and a stale-context text-cache guard.",
-        "pending": "Merge/deployment; native compositor IME and wider native text/GUI clipboard acceptance. Full exact 8e6d074b CI and the release build of all nine executables pass.",
+        "pending": "Merging and final-cohort native compositor IME/wider text/GUI clipboard acceptance. Exact 8e full CI and all-nine release build pass; six managed clients and root greeter are deployed, examples staged separately.",
         "historical_executable_checks_source_commit": "eec582ab0aa7c06b4ed30d24a0670c6a1df91e21",
         "historical_full_visual_source_commit": "5d3501ebd9e02dccca62f7c2f9cae59056e40a7a",
         "historical_full_visual_cases": 832,
@@ -204,7 +233,7 @@
         "feature": "application-integration",
         "source_commit": "bb3049078768ac195af49b41cf3f6f8044dd5726",
         "implementation": "Fresh input-bound intent, explicit file/URI Open, XDG parser/observer expansion and an owned real-application acceptance harness.",
-        "pending": "Merge/deployment and executed native real-application launch/open/action proof."
+        "pending": "Merging and executed native real-application launch/open/action proof. This implementation is included in the deployed coherent 8e release."
       }
     ],
     "documentation_harness_base_commit": "cd88371923b43c53f5b48d4bafe78131ea6df8c3",
@@ -246,8 +275,8 @@
       "anchored_preservation_passed": true,
       "candidate_retained": true,
       "fps_rss_or_scanout_acceptance": false,
-      "new_8e_runtime_deployed": false,
-      "scope": "Actual older-binary guest hardware-path liveness. No sustained FPS, distinct source cadence, animation/RSS/GPU-memory/hardware-decoding or newer-release native acceptance. Prior rejection remains unchanged in historical_gpu_candidate_preservation_rejection."
+      "new_8e_runtime_deployed": true,
+      "scope": "This trial remains actual older-a7f guest hardware-path liveness, without sustained FPS, cadence, animation/RSS/GPU-memory/hardware-decoding acceptance. Later coherent 8e deployment and its host-pressure-ineligible resource observation are recorded separately; the prior rejection remains unchanged."
     },
     "coherent_release_build": {
       "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
@@ -267,8 +296,28 @@
       "locked_offline_build_passed": true,
       "archive_manifest_sha256": "b7a1d92c4e0e186fca4e2e7e67523763c0c57bc4b91bd3ef18247c5b5cc996c9",
       "all_nine_binary_hashes_verified": true,
-      "deployed": false,
-      "native_acceptance": false
+      "deployed": true,
+      "native_acceptance": false,
+      "acceptance_examples_staged_only": true
+    },
+    "coherent_runtime_deployment": {
+      "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+      "private_receipt": "reports/local/daily-text-8e-deployment-33ba0219a8a4a8a4c924f896.json",
+      "private_receipt_sha256": "d65610c695efd51731d9190489419a1a225dbc3b6a77f6d5344a4846bead4523",
+      "success": true,
+      "managed_user_clients_verified": 6,
+      "root_greeter_verified": true,
+      "changed_support": [
+        "compat.py"
+      ],
+      "acceptance_examples_staged_only": true,
+      "supervised_beyond_startup_deadline": true,
+      "user_state_preserved": true,
+      "secure_configuration_preserved": true,
+      "greetd_restarted": false,
+      "graphics_configuration_changed": false,
+      "rollback_required": false,
+      "native_feature_acceptance_complete": false
     }
   },
   "requirements": [

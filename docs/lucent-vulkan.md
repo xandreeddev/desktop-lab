@@ -1,13 +1,14 @@
 # Vulkan in the Lucent test VM
 
-The Lucent test VM currently runs the older `a7f41ecc` desktop through guest
+The Lucent test VM currently runs the coherent `8e6d074b` release through guest
 **AMD RADV RENOIR** Vulkan using the retained AMD DRM native-context candidate.
-RADV-only enumeration, secure login, hardware-adapter selection, advancing native
-frame counters over three seconds and mount-anchored preservation checks pass.
-This is backend liveness; sustained FPS, animation pacing, RSS and hardware video
-decoding are not established. The new coherent `8e6d074b` release is built and
-archived but has not been deployed. [Current readiness](current-readiness.md)
-keeps those runtime and documentation/native-harness cohorts separate.
+The earlier `a7f41ecc` hardware-path liveness trial remains recorded below.
+The final release's guarded deployment and uninstrumented 120-second resource
+observation preserve the selected media and user/security state. Observed RSS is
+217.28 MiB mean / 221.92 MiB sampled peak, but host swap/I/O-pressure eligibility
+fails, so the 300 MiB acceptance result remains unset. Sustained FPS, animation
+pacing and hardware video decoding are not established.
+[Current readiness](current-readiness.md) separates these evidence scopes.
 
 Earlier Venus and AMD attempts recovered to Mesa lavapipe, reported as
 `llvmpipe` with `device_type: Cpu`; those dated results remain below. The selected
@@ -131,8 +132,38 @@ These scoped observations establish startup and frame advancement on the named
 older binary. They do not measure distinct video-source frames, compositor
 presentation intervals, sustained FPS, animation pacing, RSS, GPU memory or
 hardware decoding. The software-Vulkan resource measurements retain their
-original scope. The newly built `8e6d074b` release still needs deployment and its
-own native/resource acceptance.
+original scope. The later `8e6d074b` deployment and resource observation below
+remain separate from this older-binary trial.
+
+### Coherent release and normal resource observation
+
+The guarded `8e6d074b` deployment verifies all six managed user executables and
+the root greeter, changes only the required compatibility helper, preserves the
+existing user/security configuration and verifies rendered supervision beyond
+its startup deadline. Acceptance executables are staged separately. Greetd and
+the graphics configuration are not restarted or replaced by this deployment.
+
+On the same retained RADV adapter, the uninstrumented normal-video phase collects
+120.000492 seconds and 480 RSS samples at 0.25-second spacing: **217.28 MiB mean /
+221.92 MiB sampled peak**, 112.25% of one logical CPU core and zero process swap.
+The original H.264/yuv420p 3840×2160 60/1-FPS video remains selected with source-rate
+playback on one 1920×1080 scale-1 60-Hz output. Full source/settings/media/export,
+critical-file, process and output preservation checks pass within the interval.
+
+The host records 674 swap-in pages, zero swap-out pages and an I/O full-stall
+fraction of 0.5081, with at least 4152.29 MiB available memory. These exceed the
+reviewed eligibility bounds: the report retains `eligible=false`, reasons
+`host_swap_activity` and `host_full_stall_pressure`, and
+`normal_uninstrumented_rss_target_met=null`. It does not accept the 300 MiB target
+or automatically retry. Presentation/PTS tracing is off, so this phase supplies
+no video-delivery or compositor-FPS evidence. It is not a matched comparison
+with the historical 384.82/403.88 MiB software-Vulkan cohort.
+
+The private receipts are
+`reports/local/daily-text-8e-deployment-33ba0219a8a4a8a4c924f896.json` and
+`.cache/final-cohort-measurement-v2/measurement-8e-radv-1792442023-resources.json`.
+Native text/application/clipboard/tray/multi-output and physical-device acceptance,
+instrumented presentation and hardware decoding remain separate pending work.
 
 ## A separate external-renderer integration remains unimplemented
 
@@ -175,5 +206,6 @@ stock-shell restoration. [Current readiness](current-readiness.md) records the
 remaining resource and presentation targets. Software-Vulkan functional tests,
 host offscreen GPU checks and visible changing pixels retain their individual
 scopes. The later AMD trial additionally establishes guest hardware-path startup
-and three-second native frame advancement on `a7f41ecc`; sustained presentation,
-60 FPS, resource targets and the newer release remain separately unverified.
+and three-second native frame advancement on `a7f41ecc`. The later `8e6d074b`
+release is deployed and its normal resource interval is collected but ineligible;
+sustained presentation, 60 FPS and resource-target acceptance remain unverified.
