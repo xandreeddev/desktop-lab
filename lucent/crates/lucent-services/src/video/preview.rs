@@ -206,11 +206,10 @@ fn fit(
         for pixel in row.as_chunks_mut::<4>().0 {
             let alpha = u32::from(pixel[3]);
             for channel in &mut pixel[..3] {
-                *channel = if alpha == 0 {
-                    0
-                } else {
-                    ((u32::from(*channel) * 255 + alpha / 2) / alpha).min(255) as u8
-                };
+                *channel = (u32::from(*channel) * 255 + alpha / 2)
+                    .checked_div(alpha)
+                    .unwrap_or(0)
+                    .min(255) as u8;
             }
         }
     }
