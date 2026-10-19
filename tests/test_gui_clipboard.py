@@ -20,6 +20,7 @@ class InputAdmissionTests(unittest.TestCase):
         h.original_monitor = {'name': 'Virtual-1', 'width': 1920, 'height': 1080, 'scale': 1}
         h.workspace, h.notes_workspace, h.browser_workspace = 1, 'owned-notes', 'owned-browser'
         h.target = 'browser'
+        h.verify_binary = lambda: 42
         self.native_client = {'pid': 100, 'address': '0x123', 'class': 'owned'}
         self.current_workspace = {'id': -2, 'name': 'owned-browser'}
         self.document_focused = focused
@@ -91,6 +92,7 @@ class BindingAdmissionTests(unittest.TestCase):
     def test_plain_text_pointer_control_and_catchall_bindings_are_rejected(self):
         for value in ({'key': 'n'}, {'key': 'space'}, {'key': 'Return'}, {'key': 'mouse:272'},
                       {'key': 'code:57'}, {'keycode': 65}, {'key': 'catchall'},
+                      {'key': 'unused', 'catch_all': True}, {'key': 'any'}, {'key': 'mouse:left'},
                       {'modmask': 4, 'key': 'v'}, {'modmask': 4, 'key': 'catchall'}):
             with self.subTest(value=value), self.assertRaises(driver.CheckFailure):
                 driver.require_safe_bindings([value])
@@ -98,6 +100,23 @@ class BindingAdmissionTests(unittest.TestCase):
     def test_unrelated_omarchy_window_management_binding_remains_usable(self):
         driver.require_safe_bindings([{'modmask': 64, 'key': 'Return'},
                                       {'modmask': 64, 'key': 'n'}, {'modmask': 4, 'key': 'q'}])
+
+
+class NativeLayerAdmissionTests(unittest.TestCase):
+    def test_foreign_same_namespace_layer_cannot_intercept_input(self):
+        layers = {'Virtual-1': {'levels': {'2': [
+            {'namespace': 'lucent-bar', 'pid': 42}, {'namespace': 'lucent-panel', 'pid': 99}]}}}
+        with self.assertRaisesRegex(driver.CheckFailure, 'no_foreign_native_layer_before_input'):
+            driver.require_desktop_layers(layers, 42)
+
+    def test_current_desktop_layers_on_nested_native_levels_are_admitted(self):
+        driver.require_desktop_layers({'Virtual-1': {'levels': {'0': [
+            {'namespace': 'lucent-background', 'pid': 42}], '2': [
+            {'namespace': 'lucent-bar', 'pid': 42}]}}}, 42)
+
+    def test_authorization_layer_is_refused_even_with_same_process_owner(self):
+        with self.assertRaises(driver.CheckFailure):
+            driver.require_desktop_layers({'namespace': 'lucent-authorization-test', 'pid': 42}, 42)
 
 
 if __name__ == '__main__':

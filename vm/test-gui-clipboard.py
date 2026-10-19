@@ -51,9 +51,30 @@ def require_safe_bindings(bindings):
         mask = binding.get('modmask', 0) & ~(2 | 16)
         key = str(binding.get('key', '')).lower()
         for expected, symbol, code in chords:
-            require(mask != expected or (key not in (symbol, 'catchall', f'code:{code}', f'code:{code + 8}')
+            aliases = (symbol, 'catchall', 'any', f'code:{code}', f'code:{code + 8}')
+            if code == 272:
+                aliases += ('mouse:left',)
+            require(mask != expected or (not binding.get('catch_all', False) and key not in aliases
                     and binding.get('keycode', 0) not in (code, code + 8)),
                     'injected_keys_and_pointer_have_no_compositor_bindings')
+
+
+def require_desktop_layers(layers, pid):
+    """A shell-like namespace is not ownership; bind every layer to its PID."""
+    require(type(pid) is int and pid > 1, 'actual_desktop_layer_owner')
+    def visit(value):
+        if isinstance(value, dict):
+            if 'namespace' in value:
+                name = value['namespace']
+                require(isinstance(name, str) and name.startswith('lucent-')
+                        and not name.startswith('lucent-authorization-')
+                        and value.get('pid') == pid, 'no_foreign_native_layer_before_input')
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+    visit(layers)
 
 
 class Harness(notes.Harness):
@@ -78,8 +99,7 @@ class Harness(notes.Harness):
         if self.input_deadline is not None:
             require(time.monotonic() < self.input_deadline, 'bounded_native_input_window')
         require(self.session('omarchy-shell', 'lock', 'isLocked').strip() == b'false', 'unlocked_before_each_input')
-        require(b'lucent-authorization-' not in self.session('hyprctl', '-j', 'layers'),
-                'no_authorization_before_each_input')
+        require_desktop_layers(json.loads(self.session('hyprctl', '-j', 'layers')), self.verify_binary())
         require_safe_bindings(json.loads(self.session('hyprctl', '-j', 'binds')))
         clients = json.loads(self.session('hyprctl', '-j', 'clients'))
         if self.browser_started:

@@ -46,6 +46,8 @@ without changing tiling rules or introducing an always-on-top test surface.
 
 Before each input the driver checks lock/authorization state, native output
 geometry, current workspace, closed shell panels, and every managed window.
+Every native layer must also belong to the current verified desktop executable;
+a matching `lucent-` namespace alone never grants input authority.
 Only the exact browser class with the original typed systemd `ExecStart` argv
 and process cgroup is admitted. A native active window alone is insufficient:
 the owned page must also report `document.hasFocus()` and the correct active
