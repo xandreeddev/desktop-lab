@@ -120,15 +120,46 @@ global Escape exits only after the popover has had the chance to dismiss.
 
 ## Validation scope
 
-Written behavior cases cover edge placement, invalid/duplicate anchors, dwell/focus,
-passive input regions, source geometry retirement, scope navigation/restoration,
-outside-press capture, policy validation and synthetic-ID collisions. Additional
-cases cover fractional filled bounds, old dwell retirement after an anchor
-returns, scoped wheel consumption, multiline focus navigation and wrapped-height
-remeasurement at the actual capped width. Six new
-rendered scenarios cover actual tray/dock hints and the generic popover recipe,
-at regular and narrow dimensions. The existing runner generates both reference palettes
-at 1×/2×; references must be generated, inspected and rerun. The existing tray
-hover-only fixture stays before tooltip dwell to retain its original purpose.
-Compilation, visual/native acceptance, current resource/pacing measurements and publication
-remain pending until actually executed on the integrated revision.
+Strict checks at `8b2956ed` pass 717 regular Rust tests, with 76 opt-in fixtures
+ignored, 103 Python checks, formatting, strict all-target Clippy, 573 generated
+design tokens and the independent example's help command. Cases cover placement,
+invalid/duplicate/clipped anchors, dwell/focus, passive input, scope restoration,
+outside-press capture and synthetic-ID collisions. Fractional bounds, retired
+hover deadlines, scoped wheel input, multiline focus navigation and capped-width
+wrapping have regression coverage.
+
+Source `28bdf070` passes all 712 software-Vulkan visual comparisons and the
+existing `compact_dock_pixels` regression. The 24 new references cover six
+regular/narrow tray, dock and popover scenarios in both palettes at 1×/2×.
+All were reviewed; existing references and tolerances are unchanged. The final
+comparison ran without updating references. The original tray hover fixture
+continues to cover its pre-tooltip state.
+
+The release desktop and CLI from `28bdf070` were deployed to the existing VM.
+Running-binary identity, readiness and 36.531 seconds of stable supervision pass.
+The existing supervisor and effective `KillMode=mixed` remain unchanged; settings
+bytes and selected wallpaper are preserved without preference restoration.
+
+A separate pointer-only native check passes on one 1920 × 1080 output at 1× in
+its current palette. The bar reserves 48 logical pixels while its buffer is
+144 pixels high. Bar and dock hint hits/focus remain unchanged, pointer leave
+retires each label, and the dock's empty hint band causes native pointer leave.
+Each settled bar/dock sample submits zero additional frames over two seconds.
+Exact cursor/dock state, settings bytes/inode, wallpaper/source/theme artifacts,
+empty clipboard/history, monitor/workspace and the running process are preserved
+during that workload. The acceptance helper and its reused Notes helper have
+separate hashes in the [sanitized report](../reports/measurements/lucent-anchored-overlays.json).
+
+Four private native captures were reviewed: both labels are fully visible with
+readable contrast, clear spacing and rounded shapes, and absent after leaving.
+These are static observations. RPC sampling missed the early dwell window and
+visible-scene frame progression, so it does not establish dwell/fade duration,
+animation smoothness or scanout. The configured 0.5-second dwell and 0.16-second
+enter transition remain source values rather than measured timings.
+
+Native generic-popover focus, keyboard, dismissal and clipboard acceptance remain
+pending. Actual bar hint-band click-through is also pending because the inspector
+does not expose native input regions. Current RSS/CPU, sustained pacing, hardware,
+fractional/multi-output behavior and shaping/bidi/fallback/IME remain separate
+work; accessibility stays deferred. Final docs-site checks, published-head CI,
+merge and GitHub Pages publication remain pending.

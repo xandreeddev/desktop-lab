@@ -1,0 +1,205 @@
+{
+  "schema": 1,
+  "milestone": "surface-local-anchored-tooltips-and-popover-scope",
+  "source_commit": "28bdf070bdd3a377757dea6405f193aca28edfe5",
+  "status": "local_software_visual_and_scoped_native_tooltip_acceptance_passed",
+  "implemented": [
+    "Generic AnchoredSpec placement validates finite geometry, flips the preferred side and clamps within the current surface viewport; no global coordinate or desktop identity inference.",
+    "Tooltip content is paint-only. The generic runtime uses one cancellable dwell deadline and ordinary frame callbacks for active motion, without a new polling worker.",
+    "One explicit Popover focus scope supports scoped control keys and wheel input, outside-press dismissal, reachable opener restoration and current-anchor/capture retirement.",
+    "Multiline geometry, overlay admission and clipboard authority share one optional current CPU scene; clipboard requests and completions validate the admitted field and exact native lifetime.",
+    "Tray descriptions/overflow and closed-dock application labels use generated semantic recipes, while hint buffer room stays separate from input coverage and reserved display area."
+  ],
+  "local_checks": {
+    "source_commit": "8b2956ed8e9eb737da14e153ec31767b1d556e95",
+    "status": "passed",
+    "workspace_regular_passed": 717,
+    "workspace_failed": 0,
+    "workspace_ignored": 76,
+    "python_passed": 103,
+    "generated_design_tokens": 573,
+    "format_passed": true,
+    "strict_clippy_workspace_all_targets_passed": true,
+    "independent_example_help_passed": true
+  },
+  "visual_acceptance": {
+    "source_commit": "28bdf070bdd3a377757dea6405f193aca28edfe5",
+    "status": "passed",
+    "software_vulkan_comparisons_passed": 712,
+    "final_run_wall_seconds": 641.99,
+    "final_comparison_updated_references": false,
+    "reference_review_source_commit": "8b2956ed8e9eb737da14e153ec31767b1d556e95",
+    "new_references_reviewed": 24,
+    "scenarios": 6,
+    "palettes": [
+      "dark",
+      "light"
+    ],
+    "densities": [
+      1,
+      2
+    ],
+    "existing_references_changed": 0,
+    "tolerances_changed": false,
+    "scope": "Reviewed offscreen software-Vulkan fixtures, distinct from actual native tooltip pixels, frame pacing, memory and generic popover acceptance."
+  },
+  "compact_dock_regression": {
+    "source_commit": "28bdf070bdd3a377757dea6405f193aca28edfe5",
+    "status": "passed",
+    "test": "compact_dock_pixels",
+    "targeted_tests_passed": 1,
+    "wall_seconds": 9.09,
+    "updated_references": false,
+    "scope": "Existing targeted offscreen dock comparison; no native reopen, input or RSS claim."
+  },
+  "release_deployment": {
+    "status": "passed",
+    "source_commit": "28bdf070bdd3a377757dea6405f193aca28edfe5",
+    "desktop_sha256": "21fd11892f7c9a3570265c0bfa3db1c03692c5db5bc680d790b8205bceb6e737",
+    "cli_sha256": "94d45e25be64d264203179b619f84c0f847e629227c9ed3a2b357c9a415ab881",
+    "binaries_deployed": 2,
+    "running_binary_hash_verified": true,
+    "accepted_previous_binary_cohort_verified_before_activation": true,
+    "rollback_attempted": false,
+    "rollback_required": false,
+    "existing_supervisor_sha256": "4238b8fbc096a353e88619cf4da2bb4f4b47e150be4a12b67c61181d59e2461c",
+    "effective_kill_mode": "mixed",
+    "supervisor_or_unit_modified": false,
+    "supervisor_stable_seconds": 36.531,
+    "settings_bytes_preserved": true,
+    "selected_wallpaper_preserved": true,
+    "settings_restored_automatically": false,
+    "scope": "Desktop and CLI replacement only, followed by native readiness and stable supervisor checks. This deployment report does not establish settings inode identity across deployment; the separate pointer acceptance checks exact state during its own workload."
+  },
+  "native_acceptance": {
+    "status": "passed_with_explicit_pointer_only_scope",
+    "source_commit": "28bdf070bdd3a377757dea6405f193aca28edfe5",
+    "desktop_sha256": "21fd11892f7c9a3570265c0bfa3db1c03692c5db5bc680d790b8205bceb6e737",
+    "tray_or_overflow_hint": {
+      "status": "passed",
+      "visible_in_reviewed_static_capture": true,
+      "absent_after_pointer_leave_in_reviewed_capture": true,
+      "hit_geometry_and_focus_unchanged": true,
+      "pointer_leave_retires_tooltip_scene": true,
+      "idle_sample_seconds": 2,
+      "idle_submitted_frames": 0,
+      "early_dwell_observation": "pending_rpc_sampling_missed_early_window",
+      "visible_scene_frame_progression": "not_observed_in_rpc_samples"
+    },
+    "dock_application_hint": {
+      "status": "passed",
+      "visible_in_reviewed_static_capture": true,
+      "absent_after_pointer_leave_in_reviewed_capture": true,
+      "hit_geometry_and_focus_unchanged": true,
+      "pointer_leave_retires_tooltip_scene": true,
+      "idle_sample_seconds": 2,
+      "idle_submitted_frames": 0,
+      "early_dwell_observation": "pending_rpc_sampling_missed_early_window",
+      "visible_scene_frame_progression": "not_observed_in_rpc_samples"
+    },
+    "scoped_frame_counter_evidence": {
+      "status": "completed_short_observation",
+      "bar_idle_submissions": 0,
+      "dock_idle_submissions": 0,
+      "sample_seconds_each": 2,
+      "scope": "Both surfaces submitted zero additional frames in their two-second settled samples. RPC sampling missed the early dwell window and visible-scene progression; these counters establish neither precise dwell/fade duration nor smoothness, scanout, long idle or general zero repainting."
+    },
+    "dock_empty_hint_band_pointer_leave": {
+      "status": "passed",
+      "scope": "The pointer entered a hit-free part of the dock buffer and the native client reported pointer leave; this does not establish bar click-through."
+    },
+    "bar_native_hint_band_click_through": {
+      "status": "pending_inspector_does_not_expose_native_regions"
+    },
+    "private_screenshot_human_review": {
+      "status": "passed_static_only",
+      "captures_reviewed": 4,
+      "observations": [
+        "Bar and dock labels are fully visible with readable contrast, rounded shape and clear spacing.",
+        "Each label is absent after pointer leave.",
+        "Bar capsule geometry, dock placement and wallpaper remain coherent in the reviewed captures."
+      ],
+      "limits": "Static captures do not establish fade timing or shape over time, smoothness, scanout, other palettes/densities, hardware or generic popover behavior."
+    },
+    "exact_cursor_and_dock_transient_restoration": {
+      "status": "passed",
+      "exact_cursor_position_restored": true,
+      "dock_pointer_visibility_and_hide_state_restored": true
+    },
+    "exact_settings_bytes_inode_artifacts_clipboard_monitor_workspace_and_process_preservation": {
+      "status": "passed",
+      "scope": "Exact settings bytes/inode, wallpaper/source/theme export hashes and identities, initially empty clipboard/history/helper state, UI state, monitor/workspace and the supplied running process are preserved during the pointer-only acceptance workload. No settings, clipboard offer, lifecycle or monitor operations are performed by that helper."
+    },
+    "initial_clipboard_scope": "Initially empty selection; history and its helper state remained unchanged. No clipboard transfer or third-party GUI application interoperability claim.",
+    "generic_popover": {
+      "status": "pending",
+      "scope": "The pointer-only production tooltip helper does not exercise the standalone popover client."
+    },
+    "acceptance_helper_sha256": "668a2dc46b37232c04fb3059a34958618ccdcf831d3c0aca7270743fc086d07a",
+    "reused_notes_harness_sha256": "a2c5b493965eb909ef222432077b71e7bafd4145172fcefefef3d69c83304d88",
+    "output_scope": {
+      "logical_size": [
+        1920,
+        1080
+      ],
+      "density": 1,
+      "palettes": "one_current_palette",
+      "outputs": 1
+    },
+    "observed_bar_geometry": {
+      "top_reserved_logical_pixels": 48,
+      "native_buffer_logical_height": 144,
+      "hint_room_logical_pixels": 96,
+      "reserved_order_primary_source": "https://github.com/hyprwm/Hyprland/blob/v0.56.2/src/debug/HyprCtl.cpp#L231-L259"
+    },
+    "precise_dwell_fade_timing_and_smoothness": {
+      "status": "pending",
+      "reason": "RPC sampling missed both the early dwell window and visible-scene frame progression. The source tokens are dwell 0.5 seconds and enter 0.16 seconds; these are configuration values, not measured durations."
+    }
+  },
+  "docs_site": {
+    "status": "pending_final_evidence_revision",
+    "source_commit": null,
+    "root_prefix": {
+      "status": "pending",
+      "pages": null,
+      "links": null
+    },
+    "github_pages_prefix": {
+      "status": "pending",
+      "pages": null,
+      "links": null
+    }
+  },
+  "performance": {
+    "status": "unmeasured_for_this_milestone",
+    "normal_desktop_rss_target_mib": 300,
+    "current_rss_or_cpu_measurement": null,
+    "native_60_fps_or_output_refresh_pacing_established": false,
+    "gpu_allocations_or_scanout_measurement": null,
+    "scope": "Frame counters from a short tooltip interaction cannot establish current process RSS, GPU completion, scanout latency, idle CPU, sustained pacing or a resource improvement."
+  },
+  "limits": [
+    "One popover scope per surface; native xdg_popup roles, nested menus and secure-session behavior are outside this contract.",
+    "Native generic popover focus/keyboard/outside-dismiss/clipboard interoperability remains separate from local behavior fixtures and production tooltip testing.",
+    "Native static label visibility and pointer leave are reviewed, but precise dwell/fade timing, animation smoothness and scanout remain unmeasured. A bar clock can legitimately submit frames outside the observed two-second settled sample.",
+    "Current resource targets, physical/hardware GPU behavior, multi-output/hotplug/fractional native acceptance and broader launcher/tray requirements remain open.",
+    "Complex-script shaping, bidirectional layout, font fallback and preedit/IME remain open; accessibility remains deferred by user request.",
+    "Prior Notes native acceptance and CPU measurements retain their own source revisions and scopes; this milestone does not relabel or extend those results."
+  ],
+  "requirement_ledger": {
+    "requirements_count": 24,
+    "original_ids_and_statuses_preserved": true
+  },
+  "delivery": {
+    "status": "pending_final_head_checks_and_merge",
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/77",
+    "final_head": null,
+    "merge_commit": null,
+    "github_pages_publication": "pending"
+  },
+  "privacy": {
+    "original_document_or_clipboard_contents_published": false,
+    "private_native_screenshots_paths_checkpoint_identifiers_or_credentials_published": false
+  }
+}
