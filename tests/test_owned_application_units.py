@@ -84,6 +84,123 @@ class OriginalUnitAuthority(unittest.TestCase):
                 units.process_snapshot(os.getpid(), max_executable_bytes=limit)
 
 
+class AcknowledgedRetirement(unittest.TestCase):
+    def cleared(self, original, active='deactivating', **changes):
+        return dict(original['unit'], active=active, transient=False, main_pid=0,
+                    invocation='', group='', **changes)
+
+    def run_retirement(self, observations, *, drained=True, stop_error=None, clock=None):
+        name, argv, original = authority()
+        manager, bus = Mock(), Mock()
+        manager.StopUnit.side_effect = stop_error
+        dbus = types.SimpleNamespace(SessionBus=Mock(return_value=bus), Interface=Mock(return_value=manager))
+        with patch.dict(sys.modules, {'dbus': dbus}), \
+             patch.object(units, 'unit_snapshot', side_effect=[original['unit'], *observations]) as observe, \
+             patch.object(units, 'process_snapshot', return_value=original['process']), \
+             patch.object(units, '_retirement_drained', side_effect=drained if isinstance(drained, list) else None,
+                          return_value=drained) as lifetime, \
+             patch.object(units.time, 'sleep') as sleep, \
+             patch.object(units.time, 'monotonic', side_effect=clock, return_value=0):
+            units.retire_unit(name, argv, captured=original)
+        manager.StopUnit.assert_called_once_with(name, 'replace', timeout=5)
+        return observe, lifetime, sleep
+
+    def test_acknowledged_stop_may_clear_metadata_while_draining_then_disappear(self):
+        _, _, original = authority()
+        observed, lifetime, sleep = self.run_retirement([self.cleared(original), {'load': 'not-found'}])
+        self.assertEqual(observed.call_count, 3)
+        lifetime.assert_called_once_with(original)
+        sleep.assert_called_once_with(.1)
+
+    def test_acknowledged_stop_may_finish_with_cleared_inactive_or_failed_metadata(self):
+        _, _, original = authority()
+        for state in ('inactive', 'failed'):
+            with self.subTest(state=state):
+                _, lifetime, _ = self.run_retirement([self.cleared(original), self.cleared(original, state)])
+                lifetime.assert_called_once_with(original)
+
+    def test_absent_name_does_not_finish_until_original_process_and_cgroup_drain(self):
+        observed, lifetime, sleep = self.run_retirement([{'load': 'not-found'}]*2, drained=[False, True])
+        self.assertEqual(observed.call_count, 3)
+        self.assertEqual(lifetime.call_count, 2)
+        sleep.assert_called_once_with(.1)
+
+    def test_foreign_successor_after_cleared_transition_is_never_stopped_or_adopted(self):
+        _, _, original = authority()
+        for successor in (dict(original['unit'], invocation='2'*32),
+                          dict(original['unit'], active='inactive', invocation='2'*32, main_pid=0, group=''),
+                          self.cleared(original, 'active'),
+                          dict(self.cleared(original), argv=['/foreign'])):
+            manager = Mock()
+            dbus = types.SimpleNamespace(SessionBus=Mock(), Interface=Mock(return_value=manager))
+            with self.subTest(successor=successor), patch.dict(sys.modules, {'dbus': dbus}), \
+                 patch.object(units, 'unit_snapshot', side_effect=[original['unit'], self.cleared(original), successor]), \
+                 patch.object(units, 'process_snapshot', return_value=original['process']), \
+                 patch.object(units, '_retirement_drained') as lifetime, patch.object(units.time, 'sleep'):
+                with self.assertRaises(AssertionError):
+                    units.retire_unit(authority()[0], authority()[1], captured=original)
+            manager.StopUnit.assert_called_once()
+            lifetime.assert_not_called()
+
+    def test_cleared_metadata_is_not_initial_stop_authority(self):
+        name, argv, original = authority()
+        dbus = types.SimpleNamespace(SessionBus=Mock())
+        with patch.dict(sys.modules, {'dbus': dbus}), \
+             patch.object(units, 'unit_snapshot', return_value=self.cleared(original)), \
+             patch.object(units, '_retirement_drained') as lifetime:
+            with self.assertRaises(AssertionError):
+                units.retire_unit(name, argv, captured=original)
+        dbus.SessionBus.assert_not_called()
+        lifetime.assert_not_called()
+
+    def test_lost_stop_reply_never_enables_cleared_metadata_completion(self):
+        with self.assertRaisesRegex(TimeoutError, 'lost_stop_reply'):
+            self.run_retirement([], stop_error=TimeoutError('lost_stop_reply'))
+
+    def test_drained_transition_and_live_original_remain_bounded(self):
+        _, _, original = authority()
+        for observations, drained in (([self.cleared(original)]*2, True),
+                                      ([{'load': 'not-found'}]*2, False)):
+            with self.subTest(observations=observations), self.assertRaises(AssertionError):
+                self.run_retirement(observations, drained=drained, clock=[0, 1, 16])
+
+
+class CapturedLifetimeDrain(unittest.TestCase):
+    def tree(self, directory, *, birth=None, populated=None):
+        _, _, original = authority()
+        proc = directory/'proc'/'202';proc.mkdir(parents=True)
+        if birth is not None:
+            (proc/'stat').write_bytes(b'202 (owned fixture) '+b' '.join([b'S']+[b'0']*18+[birth.encode()]))
+        group = directory/'cgroup'/'app.slice'/authority()[0];group.mkdir(parents=True)
+        if populated is not None:
+            (group/'cgroup.events').write_bytes(populated)
+        def rooted(value):
+            return directory/{'/proc':'proc', '/sys/fs/cgroup':'cgroup'}.get(str(value), str(value))
+        return original, rooted
+
+    def test_missing_original_and_recursively_empty_cgroup_are_drained(self):
+        for birth in (None, '43'):
+            for populated in (None, b'populated 0\nfrozen 0\n'):
+                with self.subTest(birth=birth, populated=populated), tempfile.TemporaryDirectory() as name:
+                    original, rooted = self.tree(Path(name), birth=birth, populated=populated)
+                    with patch.object(units, 'Path', side_effect=rooted):
+                        self.assertTrue(units._retirement_drained(original))
+
+    def test_original_pid_birth_or_recursive_descendants_block_completion(self):
+        for birth, populated in (('42', b'populated 0\n'), (None, b'populated 1\n'), ('43', b'populated 1\n')):
+            with self.subTest(birth=birth, populated=populated), tempfile.TemporaryDirectory() as name:
+                original, rooted = self.tree(Path(name), birth=birth, populated=populated)
+                with patch.object(units, 'Path', side_effect=rooted):
+                    self.assertFalse(units._retirement_drained(original))
+
+    def test_malformed_or_oversized_drain_evidence_is_not_absence(self):
+        for populated in (b'frozen 0\n', b'populated 0\npopulated 0\n', b'populated 2\n', b'populated 0\n'+b'x'*4096):
+            with self.subTest(populated_bytes=len(populated)), tempfile.TemporaryDirectory() as name:
+                original, rooted = self.tree(Path(name), populated=populated)
+                with patch.object(units, 'Path', side_effect=rooted), self.assertRaises(AssertionError):
+                    units._retirement_drained(original)
+
+
 class OwnedFileAuthority(unittest.TestCase):
     def make_manifest(self, directory):
         path = directory / 'manifest.json'

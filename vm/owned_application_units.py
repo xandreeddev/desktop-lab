@@ -132,8 +132,35 @@ def retire_original_unit(unit,argv,captured,max_executable_bytes=128*1024*1024):
  # again for the final StopUnit admission and every completion observation.
  retire_unit(unit,argv,captured['unit']['group'],{'unit':value,'process':current},max_executable_bytes)
 
+def _retirement_drained(captured):
+ # A cleared transient unit is not authority over any process. Independently
+ # observe that the captured PID birth and its recursive cgroup have drained.
+ process=captured['process'];pid=process['pid'];birth=process['start']
+ assert type(pid) is int and pid>1 and isinstance(birth,str) and birth.isdigit()
+ group=captured['unit']['group']
+ assert group==process['group'] and group.startswith('/') and '..' not in Path(group).parts
+ assert group not in ('','/')
+ try:
+  with (Path('/proc')/str(pid)/'stat').open('rb') as stream:raw=stream.read(65537)
+ except FileNotFoundError:raw=None
+ if raw is not None:
+  assert len(raw)<=65536
+  current=raw.rsplit(b')',1)[1].split()[19].decode('ascii')
+  assert current.isdigit()
+  if current==birth:return False
+ try:
+  with (Path('/sys/fs/cgroup')/group.lstrip('/')/'cgroup.events').open('rb') as stream:raw=stream.read(4097)
+ except FileNotFoundError:return True
+ assert len(raw)<=4096
+ rows=[row.split() for row in raw.splitlines()]
+ assert all(len(row)==2 for row in rows)
+ populated=[row[1] for row in rows if row[0]==b'populated']
+ assert len(populated)==1 and populated[0] in (b'0',b'1')
+ return populated[0]==b'0'
+
 def retire_unit(unit,argv,group=None,captured=None,max_executable_bytes=128*1024*1024):
  import dbus
+ acknowledged=False
  value=unit_snapshot(unit)
  if value['load']=='not-found':return
  assert_unit_identity(value,unit,argv,group)
@@ -148,14 +175,21 @@ def retire_unit(unit,argv,group=None,captured=None,max_executable_bytes=128*1024
    manager=dbus.Interface(bus.get_object('org.freedesktop.systemd1','/org/freedesktop/systemd1'),
                           'org.freedesktop.systemd1.Manager')
    manager.StopUnit(unit,'replace',timeout=5)
+   acknowledged=True
   finally:bus.close()
  deadline=time.monotonic()+15
  while True:
   value=unit_snapshot(unit)
-  if value['load']=='not-found':return
-  assert_unit_identity(value,unit,argv,group)
-  if captured is not None:_same_invocation(value,captured)
-  if value['active'] in ('inactive','failed'):return
+  cleared=acknowledged and captured is not None and value=={
+   'load':captured['unit']['load'],'active':value.get('active'),'transient':False,
+   'executable':argv[0],'argv':argv,'main_pid':0,'invocation':'','group':''}
+  if cleared:
+   assert value['active'] in ('deactivating','inactive','failed')
+  elif value['load']!='not-found':
+   assert_unit_identity(value,unit,argv,group)
+   if captured is not None:_same_invocation(value,captured)
+  terminal=value['load']=='not-found' or value.get('active') in ('inactive','failed')
+  if terminal and (not acknowledged or captured is None or _retirement_drained(captured)):return
   assert time.monotonic()<deadline
   time.sleep(.1)
 '''
