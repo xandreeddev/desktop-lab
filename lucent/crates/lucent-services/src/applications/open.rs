@@ -7,6 +7,7 @@ pub(super) fn open(
     request: &ApplicationOpenRequest,
     context: &ApplicationLaunchContext,
 ) -> Result<()> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     let (current, path, text) = catalog::resolve(source, &app.id)?;
     if current != *app {
         return Err(DomainError::Invalid(
@@ -24,7 +25,7 @@ pub(super) fn open(
             activation::Operation::Open(&uris),
             context.activation_token(),
             None,
-            std::time::Duration::from_secs(5),
+            deadline.saturating_duration_since(std::time::Instant::now()),
         ) {
             Ok(()) => return Ok(()),
             Err(activation::ActivationError::Unsupported) => (),
@@ -36,8 +37,15 @@ pub(super) fn open(
         }
     }
     let commands = commands(&current, &path.to_string_lossy(), &text, request)?;
-    for command in commands {
-        launch::executable_with_context(&command, context)?;
+    for (index, command) in commands.into_iter().enumerate() {
+        // A token represents this one user intent, not fresh authority for every
+        // window spawned by a single-file template.
+        let empty = ApplicationLaunchContext::default();
+        launch::executable_before(
+            &command,
+            if index == 0 { context } else { &empty },
+            deadline,
+        )?;
     }
     Ok(())
 }

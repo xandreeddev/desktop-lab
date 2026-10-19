@@ -59,7 +59,9 @@ The native protocol is documented in the upstream
 ## Explicit files and URIs
 
 `ApplicationOpenTarget` distinguishes checked absolute local paths from explicit
-`ExternalUri` values. `ApplicationOpenRequest` admits 1–64 targets with a 128 KiB
+application URIs. Explicit application targets support valid URI schemes such as
+`smb` or `steam`; this does not widen the separate notification-link policy.
+`ApplicationOpenRequest` admits 1–64 targets with a 128 KiB
 encoded-content bound. It performs no filesystem or transport work. The selected
 application stays explicit: failure never silently opens a different default handler.
 
@@ -71,7 +73,10 @@ normal priority/masking rules and rejects changed captured descriptors.
 
 For a command fallback, the adapter re-expands its current `Exec` template. `%F` and
 `%U` preserve a list as separate arguments; `%f` and `%u` create separate invocations
-for multiple targets. Name, icon and desktop-file fields expand exactly once. File
+for multiple targets. One shared five-second dispatch budget bounds the request;
+an error can follow earlier successful invocations, so it is never automatically
+replayed. Only the first invocation receives the intent token. Name, icon and
+desktop-file fields expand exactly once. File
 fields accept local paths/file URIs; they explicitly refuse remote resources rather
 than claiming to download them. URI fields retain URI encoding. Quoted field codes,
 multiple file/URI fields and multi-argument fields embedded inside another argument

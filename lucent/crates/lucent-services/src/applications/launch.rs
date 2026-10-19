@@ -97,6 +97,17 @@ pub(super) fn executable_with_context(
     launch: &LaunchCommand,
     context: &lucent_domain::ApplicationLaunchContext,
 ) -> Result<()> {
+    executable_before(
+        launch,
+        context,
+        std::time::Instant::now() + std::time::Duration::from_secs(5),
+    )
+}
+pub(super) fn executable_before(
+    launch: &LaunchCommand,
+    context: &lucent_domain::ApplicationLaunchContext,
+    deadline: std::time::Instant,
+) -> Result<()> {
     let terminal = if launch.terminal {
         Some(
             ["xdg-terminal-exec", "foot", "alacritty", "kitty"]
@@ -109,16 +120,28 @@ pub(super) fn executable_with_context(
     } else {
         None
     };
-    command_with_context(launch, terminal, context)
+    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+    if remaining.is_zero() {
+        return Err(DomainError::Failed(
+            "Application request deadline exceeded; earlier files may already be open".into(),
+        ));
+    }
+    command_with_context(launch, terminal, context, remaining)
 }
 
 pub(super) fn command(command: &LaunchCommand, terminal: Option<&str>) -> Result<()> {
-    command_with_context(command, terminal, &Default::default())
+    command_with_context(
+        command,
+        terminal,
+        &Default::default(),
+        std::time::Duration::from_secs(5),
+    )
 }
 fn command_with_context(
     command: &LaunchCommand,
     terminal: Option<&str>,
     context: &lucent_domain::ApplicationLaunchContext,
+    timeout: std::time::Duration,
 ) -> Result<()> {
     let environment = std::env::vars_os().filter_map(|(name, _)| name.into_string().ok());
     let args = arguments_with_activation(
@@ -135,14 +158,9 @@ fn command_with_context(
         .activation_token()
         .map(|token| vec![("XDG_ACTIVATION_TOKEN", token)])
         .unwrap_or_default();
-    crate::command_with_environment(
-        "systemd-run",
-        &refs,
-        std::time::Duration::from_secs(5),
-        &environment,
-    )
-    .map(|_| ())
-    .map_err(|_| DomainError::Failed("Application could not be started".into()))
+    crate::command_with_environment("systemd-run", &refs, timeout, &environment)
+        .map(|_| ())
+        .map_err(|_| DomainError::Failed("Application could not be started".into()))
 }
 
 #[cfg(test)]

@@ -30,7 +30,7 @@ impl fmt::Debug for ApplicationLaunchContext {
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Target {
     File(String),
-    Uri(ExternalUri),
+    Uri(String),
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ApplicationOpenTarget(Target);
@@ -45,7 +45,27 @@ impl ApplicationOpenTarget {
         Ok(Self(Target::File(path)))
     }
     pub fn uri(uri: ExternalUri) -> Self {
-        Self(Target::Uri(uri))
+        Self(Target::Uri(uri.value().to_owned()))
+    }
+    /// An explicitly selected application can handle its own URI schemes. This
+    /// does not widen the separate policy for opening notification hyperlinks.
+    pub fn uri_value(value: impl Into<String>) -> Result<Self> {
+        let value = value.into();
+        let valid = value.len() <= 8192
+            && !value.chars().any(|c| c.is_control() || c.is_whitespace())
+            && value.split_once(':').is_some_and(|(scheme, rest)| {
+                let mut bytes = scheme.bytes();
+                !rest.is_empty()
+                    && scheme.len() <= 64
+                    && bytes.next().is_some_and(|byte| byte.is_ascii_alphabetic())
+                    && bytes.all(|byte| byte.is_ascii_alphanumeric() || b"+-.".contains(&byte))
+            });
+        if !valid {
+            return Err(DomainError::Invalid(
+                "An absolute application URI is required".into(),
+            ));
+        }
+        Ok(Self(Target::Uri(value)))
     }
     pub fn local_file(&self) -> Option<&str> {
         match &self.0 {
@@ -55,7 +75,7 @@ impl ApplicationOpenTarget {
     }
     pub fn as_uri(&self) -> String {
         match &self.0 {
-            Target::Uri(uri) => uri.value().to_owned(),
+            Target::Uri(uri) => uri.clone(),
             Target::File(path) => {
                 let mut out = String::from("file://");
                 for byte in path.bytes() {
@@ -116,5 +136,26 @@ mod tests {
             ApplicationLaunchContext::with_activation_token("private-token".into()).unwrap();
         assert_eq!(context.activation_token(), Some("private-token"));
         assert!(!format!("{context:?}").contains("private-token"));
+    }
+    #[test]
+    fn explicit_application_uris_keep_their_scheme_without_widening_link_policy() {
+        for uri in [
+            "steam://run/123",
+            "smb://example.test/share",
+            "ftp://example.test/file",
+            "file:/tmp/a",
+        ] {
+            assert_eq!(ApplicationOpenTarget::uri_value(uri).unwrap().as_uri(), uri);
+        }
+        for uri in [
+            "relative",
+            "1bad:value",
+            "http:",
+            "http://example.test/a b",
+            "file:/tmp/a\0",
+        ] {
+            assert!(ApplicationOpenTarget::uri_value(uri).is_err());
+        }
+        assert!(ExternalUri::new("steam://run/123").is_err());
     }
 }

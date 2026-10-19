@@ -104,11 +104,17 @@ fn local(target: &ApplicationOpenTarget) -> Result<String> {
     }
     let uri = target.as_uri();
     let path = uri
-        .strip_prefix("file:///")
-        .map(|rest| format!("/{rest}"))
-        .or_else(|| {
-            uri.strip_prefix("file://localhost/")
-                .map(|rest| format!("/{rest}"))
+        .split_once(':')
+        .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("file"))
+        .and_then(|(_, rest)| {
+            let path = rest.split(['?', '#']).next()?;
+            if let Some(authority) = path.strip_prefix("//") {
+                let (host, tail) = authority.split_once('/')?;
+                (host.is_empty() || host.eq_ignore_ascii_case("localhost"))
+                    .then(|| format!("/{tail}"))
+            } else {
+                path.starts_with('/').then(|| path.to_owned())
+            }
         })
         .ok_or_else(|| {
             DomainError::Unavailable("This application accepts local files only".into())
@@ -303,5 +309,14 @@ mod tests {
             expand("app %f", "", "", "", Some(&request)).unwrap(),
             vec![vec!["app", "/tmp/a b%f"]]
         );
+        for uri in ["FILE:/tmp/a%20b#page", "file://LOCALHOST/tmp/a%20b?ignored"] {
+            let request =
+                ApplicationOpenRequest::new(vec![ApplicationOpenTarget::uri_value(uri).unwrap()])
+                    .unwrap();
+            assert_eq!(
+                expand("app %f", "", "", "", Some(&request)).unwrap(),
+                vec![vec!["app", "/tmp/a b"]]
+            );
+        }
     }
 }

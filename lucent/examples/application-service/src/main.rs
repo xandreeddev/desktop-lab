@@ -68,7 +68,7 @@ fn run() -> Result<()> {
                     targets.push(if value.starts_with('/') {
                         ApplicationOpenTarget::file(value)?
                     } else {
-                        ApplicationOpenTarget::uri(ExternalUri::new(value)?)
+                        ApplicationOpenTarget::uri_value(value)?
                     });
                     i += 1;
                 }

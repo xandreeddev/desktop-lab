@@ -26,7 +26,7 @@ pub fn parse_open(json: &str) -> Result<(AppId, ApplicationOpenRequest)> {
             if value.starts_with('/') {
                 ApplicationOpenTarget::file(value)
             } else {
-                ExternalUri::new(value).map(ApplicationOpenTarget::uri)
+                ApplicationOpenTarget::uri_value(value)
             }
         })
         .collect::<Result<Vec<_>>>()?;
