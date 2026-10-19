@@ -1,0 +1,189 @@
+{
+  "schema": 1,
+  "milestone": "native-simultaneous-output-input-and-lifetime",
+  "status": "scoped-owned-headless-native-verified",
+  "recorded_date": "2026-10-19",
+  "implementation_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+  "desktop_sha256": "ecb557a094b583b45cfa07aeb9eb4284dc0bb2b86fdad3b1dbd5f4afc7b6b4ff",
+  "native_harness_source_commit": "f16cb591b01d362ef4297e939ef22aa06bc371e9",
+  "tooling_sha256": {
+    "test-native-multi-output.py": "c1fc9b0aecd910cc9e7e46247bb883f86bc3cb675c44216943f5f03f12fe0829",
+    "multi_output_guard.py": "05cc165f9b823becd28e8a631920e120ceb75afd73e026a3b91a64404729d765",
+    "multi_output_policy.py": "25c0e45f87c25363220cffdfd901774856c8792f7e4298946fc9011dbb2ebb58"
+  },
+  "scope": "Actual two-output compositor execution in the existing Lucent QEMU guest, with one owned headless output, native QMP button actions and exact restoration. No runtime source change was needed for this acceptance run.",
+  "environment": {
+    "hyprland_version": "0.56.2",
+    "hyprland_commit": "efb50993780079460b0cbed1363e2166a2de1d9f",
+    "hyprland_dirty": false,
+    "original_output": {
+      "physical_size": [
+        1920,
+        1080
+      ],
+      "scale": 1,
+      "refresh_hz": 60
+    },
+    "owned_headless_output": {
+      "physical_size": [
+        1280,
+        960
+      ],
+      "refresh_hz": 60,
+      "position": "right of original output"
+    },
+    "simultaneous_outputs": 2
+  },
+  "native_checks": {
+    "passed": 16,
+    "labels": [
+      "release_supervisor_config_media_and_idle_guards",
+      "simultaneous_native_scale_1",
+      "actual_qmp_audio_open_close_owned",
+      "actual_qmp_audio_open_close_original",
+      "simultaneous_native_scale_2",
+      "actual_qmp_audio_open_close_owned",
+      "actual_qmp_audio_open_close_original",
+      "simultaneous_native_scale_1_25",
+      "actual_qmp_audio_open_close_owned",
+      "actual_qmp_audio_open_close_original",
+      "simultaneous_native_scale_1",
+      "actual_qmp_audio_open_close_owned",
+      "actual_qmp_audio_open_close_original",
+      "native_output_removal_retires_pressed_surface_and_host",
+      "actual_qmp_audio_open_close_owned",
+      "same_name_new_wayland_global_and_client_generation"
+    ],
+    "scale_cases": [
+      {
+        "owned_scale": 1,
+        "original_logical_size": [
+          1920,
+          1080
+        ],
+        "owned_logical_size": [
+          1280,
+          960
+        ],
+        "owned_background_buffer_size": [
+          1280,
+          960
+        ],
+        "owned_density": 1.0,
+        "original_host_lifetime_unchanged": true,
+        "actual_qmp_audio_open_and_escape_close_both_outputs": true
+      },
+      {
+        "owned_scale": 2,
+        "original_logical_size": [
+          1920,
+          1080
+        ],
+        "owned_logical_size": [
+          640,
+          480
+        ],
+        "owned_background_buffer_size": [
+          1280,
+          960
+        ],
+        "owned_density": 2.0,
+        "original_host_lifetime_unchanged": true,
+        "actual_qmp_audio_open_and_escape_close_both_outputs": true
+      },
+      {
+        "owned_scale": 1.25,
+        "original_logical_size": [
+          1920,
+          1080
+        ],
+        "owned_logical_size": [
+          1024,
+          768
+        ],
+        "owned_background_buffer_size": [
+          1280,
+          960
+        ],
+        "owned_density": 1.25,
+        "original_host_lifetime_unchanged": true,
+        "actual_qmp_audio_open_and_escape_close_both_outputs": true
+      },
+      {
+        "owned_scale": 1,
+        "original_logical_size": [
+          1920,
+          1080
+        ],
+        "owned_logical_size": [
+          1280,
+          960
+        ],
+        "owned_background_buffer_size": [
+          1280,
+          960
+        ],
+        "owned_density": 1.0,
+        "original_host_lifetime_unchanged": true,
+        "actual_qmp_audio_open_and_escape_close_both_outputs": true
+      }
+    ],
+    "held_button_removal": {
+      "pressed_surface_and_host_retired": true,
+      "physical_release_after_removal_did_not_open_surviving_panel": true,
+      "pending_native_retirements_cleared": true,
+      "shared_dock_may_retarget_to_surviving_output": true
+    },
+    "same_name_recreation": {
+      "same_generated_name": true,
+      "wayland_global_changed": true,
+      "client_host_generation_increased": true,
+      "new_lifetime_accepted_real_panel_input": true,
+      "diagnostic_surface_id_reuse_is_not_lifetime_authority": true
+    }
+  },
+  "restoration": {
+    "passed": true,
+    "removed_only_owned_output": true,
+    "original_monitor_workspace_cursor_restored": true,
+    "same_supervisor_and_desktop_lifetimes": true,
+    "hyprland_user_configuration_preserved": true,
+    "foreign_state_overwritten": false,
+    "settings_wallpaper_referenced_media_and_idle_marker_preserved": true
+  },
+  "private_evidence": {
+    "report": "reports/local/native-multi-output-6af175c89b164acba9c385d36c8916f6/report.json",
+    "report_sha256": "d393150d4cf4d161efc805c2512c1d9d87537ae112e96e29294460a6c7a46761",
+    "cleanup_sha256": "3b56b9bf6fb93215f143e8d8de8060054eef5c5f4decde8612218d43145b95c1",
+    "raw_receipts_not_published": true,
+    "omitted": "Process IDs/births, native addresses, generated output names, guest runtime paths, settings and clipboard payloads."
+  },
+  "prior_attempts": [
+    {
+      "private_report": "reports/local/native-multi-output-b46a3b6479db46b2a6e4d59d992c1597/report.json",
+      "private_report_sha256": "8f500aadd278bc590a6bf92ac6df96a35def26b40b4afab807a448cc238c3acb",
+      "original_status": "blocked",
+      "passed_checks_before_refusal": 2,
+      "original_refusal": "hit_outside_target_output",
+      "original_result_relabelled": false,
+      "cleanup_preserved_original_state": true
+    },
+    {
+      "private_report": "reports/local/native-multi-output-935421b7bf9f4aa3a87ae90090a43fe8/report.json",
+      "private_report_sha256": "5689dbd43fd65d196e28395bf37488d2b9af7cedeb82aa7bb1aade682d5e39dc",
+      "original_status": "blocked",
+      "passed_checks_before_refusal": 13,
+      "original_refusal": "removed_host_still_has_live_surfaces",
+      "original_result_relabelled": false,
+      "cleanup_preserved_original_state": true
+    }
+  ],
+  "not_established": [
+    "Physical cable/display hotplug, real monitor modes, multi-GPU and driver/hardware compatibility beyond this guest workload.",
+    "Suspend/resume, compositor restart, secure-lock output changes and per-output authentication.",
+    "Multi-output Display settings Apply/Keep/Revert, native enable/disable/rotation and persistent profile edits.",
+    "Cross-output keyboard/text/clipboard, arbitrary applications and broader workspace routing.",
+    "Presentation/scanout FPS, distinct video-frame cadence, animation smoothness, GPU memory and normal RSS targets. Submission counters are not presentation FPS."
+  ],
+  "guide": "docs/native-multi-output-acceptance.md"
+}

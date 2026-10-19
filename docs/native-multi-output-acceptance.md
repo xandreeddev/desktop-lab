@@ -5,11 +5,13 @@ Lucent VM. It adds one uniquely named native Hyprland headless output alongside
 the guest's original output. It changes no Rust API, desktop preference,
 configuration file, original output mode, wallpaper selection or application.
 
-**Native execution is pending.** The tooling has source checks and owned-fixture
-tests; those do not establish that this guest/backend accepts headless input.
-A successful future run establishes two simultaneous compositor outputs and
-native button interaction. It does not establish physical cable hotplug,
-hardware GPU rendering, suspend/resume, multi-GPU behavior or scanout FPS.
+**The scoped native run passes all 16 checks** on the coherent `8e6d074b`
+desktop, using harness `f16cb591`. It establishes two simultaneous compositor
+outputs, including one owned headless output, real panel input at 1×, 2× and
+1.25×, held-button output retirement and same-name lifetime recreation. Exact
+original-state restoration passes. See [the sanitized report](../reports/measurements/lucent-native-multi-output.json).
+Physical cable hotplug, hardware compatibility, suspend/resume, multi-GPU
+behavior and presentation/scanout FPS remain unverified.
 
 ## Prerequisites and execution
 
@@ -189,9 +191,9 @@ rendered background/bar/widget surfaces at 1×, and the original host lifetime.
 Before any physical button injection, its hit guard refused a double-added
 monitor origin. The original failed report is retained. The independent owner
 removed only its output and verified configuration/settings/media preservation
-and original cursor restoration. Corrected coordinate regressions do not by
-themselves establish panel interaction, other scales or hotplug acceptance;
-the native rerun remains pending.
+and original cursor restoration. That initial blocked report
+`native-multi-output-b46a3b6479db46b2a6e4d59d992c1597` remains unchanged;
+corrected coordinate regressions alone established no later native result.
 
 A subsequent coherent 8e attempt passed 13 checks, including real audio-panel
 opening and closing on both outputs at 1×, 2× and 1.25×. Removal then failed the
@@ -206,7 +208,37 @@ instance before removal. It still refuses any captured scoped ID anywhere,
 retained old host/instance or output, any surface still bound to the removed
 output (including the shared dock), and pending native retirement. A stale
 surface cannot evade the check by moving to another output or dropping its
-instance. The next native removal/recreation run remains pending.
+instance. The second blocked report
+`native-multi-output-935421b7bf9f4aa3a87ae90090a43fe8` remains unchanged.
+
+The fresh run `native-multi-output-6af175c89b164acba9c385d36c8916f6` passes all
+16 checks using that corrected `f16cb591` harness and production
+`8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, desktop SHA256
+`ecb557a094b583b45cfa07aeb9eb4284dc0bb2b86fdad3b1dbd5f4afc7b6b4ff`.
+The original 1920×1080/1×/60-Hz output remains present while the owned
+1280×960/60-Hz output changes through 1×, 2×, 1.25× and back to 1×. Its observed
+logical sizes are 1280×960, 640×480 and 1024×768; physical background buffers
+remain 1280×960. Actual QMP clicks open the audio panel on each exact host,
+and Escape closes it, at every scale.
+
+Removal while the owned network button is held retires the old native output,
+scoped surfaces and host before release; no surviving panel opens. Recreating
+the same generated name yields a different Wayland registry global and a larger
+client-host generation, followed by another successful real panel click. The
+original host lifetime survives. The shared dock is allowed to retarget to the
+surviving output; this does not permit an old scoped surface to survive.
+
+The independent owner's final receipt confirms that it removed only its output,
+restored the original monitor/workspace/cursor and preserved the supervisor,
+desktop process, user configuration, settings, wallpaper target, referenced live media and idle
+marker. The original failed receipts and their cleanup results remain historical
+evidence. The public report contains hashes and sanitized observations, without
+private process identities, native addresses or guest runtime paths.
+
+This is owned headless-output placement, density, pointer interaction and native
+lifetime acceptance. Physical monitors, suspend/resume, secure-client output
+changes, Display settings Apply/Keep/Revert across multiple outputs, cross-output
+text/clipboard and presentation/resource targets need their own acceptance.
 
 ## Checks available without a VM
 
