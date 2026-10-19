@@ -195,81 +195,10 @@ pub enum Direction {
     LeftToRight,
     RightToLeft,
 }
-/// Bounded joining context: rustybuzz 0.20.1 consumes five scalars on each side.
-/// Context remains presentation data; Debug never includes its text.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct ShapingContext {
-    before: [char; 5],
-    before_len: u8,
-    after: [char; 5],
-    after_len: u8,
-}
-impl std::fmt::Debug for ShapingContext {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ShapingContext")
-            .field("before_scalars", &self.before_len)
-            .field("after_scalars", &self.after_len)
-            .finish_non_exhaustive()
-    }
-}
-impl ShapingContext {
-    pub fn new(before: &str, after: &str) -> Self {
-        let mut context = Self {
-            before: ['\0'; 5],
-            before_len: 0,
-            after: ['\0'; 5],
-            after_len: 0,
-        };
-        for character in before.chars().rev().take(5) {
-            context.before[context.before_len as usize] = character;
-            context.before_len += 1;
-        }
-        context.before[..context.before_len as usize].reverse();
-        for character in after.chars().take(5) {
-            context.after[context.after_len as usize] = character;
-            context.after_len += 1;
-        }
-        context
-    }
-    pub fn before_text(self) -> String {
-        self.before[..self.before_len as usize].iter().collect()
-    }
-    pub fn after_text(self) -> String {
-        self.after[..self.after_len as usize].iter().collect()
-    }
-    fn for_span(self, before: &str, after: &str) -> Self {
-        let mut context = Self::new("", "");
-        for character in before
-            .chars()
-            .rev()
-            .chain(
-                self.before[..self.before_len as usize]
-                    .iter()
-                    .rev()
-                    .copied(),
-            )
-            .take(5)
-        {
-            context.before[context.before_len as usize] = character;
-            context.before_len += 1;
-        }
-        context.before[..context.before_len as usize].reverse();
-        for character in after
-            .chars()
-            .chain(self.after[..self.after_len as usize].iter().copied())
-            .take(5)
-        {
-            context.after[context.after_len as usize] = character;
-            context.after_len += 1;
-        }
-        context
-    }
-}
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct LayoutOptions {
     pub direction: Option<Direction>,
     pub metrics: Option<LineMetrics>,
-    pub context: Option<ShapingContext>,
     /// Bound raster coverage without changing shaping or logical source geometry.
     pub raster_width: Option<f32>,
 }
@@ -353,12 +282,10 @@ pub fn shape_with_layout(font: &Font, line: &str, size: f32, layout: LayoutOptio
                 let scale = size / face.units_per_em() as f32;
                 let mut buffer = rustybuzz::UnicodeBuffer::new();
                 buffer.push_str(&line[range.clone()]);
-                let context = layout
-                    .context
-                    .unwrap_or_else(|| ShapingContext::new("", ""))
-                    .for_span(&line[..range.start], &line[range.end..]);
-                buffer.set_pre_context(&context.before_text());
-                buffer.set_post_context(&context.after_text());
+                // Joining context belongs to this source line, not a public
+                // fragment API. rustybuzz retains only its bounded scalar window.
+                buffer.set_pre_context(&line[..range.start]);
+                buffer.set_post_context(&line[range.end..]);
                 buffer.set_direction(if rtl {
                     rustybuzz::Direction::RightToLeft
                 } else {
@@ -548,7 +475,7 @@ pub fn width_directed(font: &Font, value: &str, size: f32, direction: Option<Dir
     )
 }
 pub fn width_with_layout(font: &Font, value: &str, size: f32, layout: LayoutOptions) -> f32 {
-    if layout.direction.is_none() && layout.context.is_none() {
+    if layout.direction.is_none() {
         return width(font, value, size);
     }
     value

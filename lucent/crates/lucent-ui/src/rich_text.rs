@@ -9,7 +9,6 @@ struct Run {
     width: f32,
     source: std::ops::Range<usize>,
     direction: Option<text::Direction>,
-    context: Option<text::ShapingContext>,
     shared: Option<(f32, f32)>,
 }
 struct Line {
@@ -58,7 +57,6 @@ fn add(
             span,
             source: source..source + value.len(),
             direction: None,
-            context: None,
             shared: None,
             text: value.into(),
             x: line.width,
@@ -340,7 +338,6 @@ fn reorder(
                     width: b - a,
                     source,
                     direction,
-                    context: None,
                     shared: Some((origin, shaped.width)),
                 });
             }
@@ -386,7 +383,6 @@ pub(super) fn paint<M: Clone>(
                 e.style.font_size,
                 text::LayoutOptions {
                     direction: run.direction,
-                    context: run.context,
                     ..Default::default()
                 },
             );
@@ -466,7 +462,6 @@ pub(super) fn paint<M: Clone>(
                 layout: text::LayoutOptions {
                     direction: run.direction,
                     metrics: Some(metrics),
-                    context: run.context,
                     ..Default::default()
                 },
                 rect: text_rect,
@@ -740,7 +735,7 @@ mod international_paragraphs {
         assert!(first.parts.as_ref().unwrap().iter().all(|rect| rect.w > 0.));
     }
     #[test]
-    fn arabic_joining_uses_context_across_color_boundaries() {
+    fn arabic_styles_share_complete_shaping_buffer() {
         let fonts = fonts();
         let spans = [
             TextSpan::new("سل").color(Color::hex(0xff0000)),

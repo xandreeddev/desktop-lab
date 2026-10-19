@@ -522,7 +522,6 @@ pub(super) fn paint<M>(
                 layout: text::LayoutOptions {
                     direction: None,
                     metrics: Some(metrics),
-                    context: None,
                     raster_width: row
                         .stops
                         .last()

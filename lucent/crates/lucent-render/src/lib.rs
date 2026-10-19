@@ -396,13 +396,7 @@ impl Gpu {
             .get(face)
             .or_else(|| self.fonts.first())
             .ok_or("text requires at least one font")?;
-        let context_key = layout
-            .context
-            .map(|context| (context.before_text(), context.after_text()));
-        let key = format!(
-            "text:{face}:{}:{scale}:{layout:?}:{context_key:?}:{text}",
-            size.to_bits()
-        );
+        let key = format!("text:{face}:{}:{scale}:{layout:?}:{text}", size.to_bits());
         if let Some(v) = self.cache.borrow_mut().get(&key) {
             return Ok(v);
         }

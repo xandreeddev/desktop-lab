@@ -47,6 +47,11 @@ envelope. An oversized textarea grapheme keeps its complete canonical shaping
 buffer while `LayoutOptions::raster_width` bounds only the generated mask's
 coverage. Culling does not slice strings or change the editing source map.
 
+`LayoutOptions` exposes only implemented controls: paragraph direction, shared
+line metrics and optional raster coverage width. Joining context is borrowed
+internally from the complete source line when shaping its font spans; consumers
+do not assemble context fragments or maintain a second shaping state.
+
 ASCII preserves the prior character advances and pair kerning exactly. Density
 changes do not reflow text or change logical positions. The native renderer keeps
 its existing size, glyph and mask allocation checks and coverage supersampling.
