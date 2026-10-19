@@ -771,6 +771,31 @@ mod international_paragraphs {
         assert!((edge - line.width).abs() < 0.01);
     }
     #[test]
+    fn same_font_mixed_script_styles_keep_one_complete_client_mask() {
+        let fonts = vec![
+            text::Font::from_bytes(
+                include_bytes!("../assets/Hind-Regular.test.ttf").as_slice(),
+                Default::default(),
+            )
+            .unwrap(),
+        ];
+        let source = "Latin नमस्ते";
+        let spans = [
+            TextSpan::new("Latin नम").color(Color::hex(0xff0000)),
+            TextSpan::new("स्ते").color(Color::hex(0x0000ff)),
+        ];
+        let result = flow(&spans, &fonts, 0, 24., 600., 10);
+        let line = &result.lines[0];
+        assert_eq!(line.runs.len(), 2);
+        assert_eq!(line.width, text::shape(&fonts[0], source, 24.).width);
+        for run in &line.runs {
+            assert_eq!(run.text, source);
+            assert_eq!(run.shared, Some((0., line.width)));
+        }
+        assert!((line.runs[0].width + line.runs[1].width - line.width).abs() < 0.001);
+    }
+
+    #[test]
     fn truncating_an_empty_later_line_preserves_earlier_rtl_paragraphs() {
         let fonts = fonts();
         let result = flow(&[TextSpan::new("אבג\n\nmore")], &fonts, 0, 20., 200., 2);

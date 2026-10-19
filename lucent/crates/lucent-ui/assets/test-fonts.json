@@ -1,0 +1,16 @@
+{
+  "purpose": "Test-only primary face covering Latin and Devanagari; never registered in production fallback order.",
+  "fonts": {
+    "Hind-Regular.test.ttf": {
+      "source_url": "https://raw.githubusercontent.com/google/fonts/main/ofl/hind/Hind-Regular.ttf",
+      "asset_sha256": "01de158022f53077b52303e46de3b0ab5fb245222a7ffe25a2a57fdd9e969162",
+      "asset_bytes": 299532,
+      "modification": "Unmodified upstream font; local filename marks its test-only use.",
+      "copyright": "Copyright (c) 2014, Indian Type Foundry (info@indiantypefoundry.com).",
+      "license": "SIL Open Font License 1.1",
+      "license_file": "Hind-OFL.txt",
+      "license_source_url": "https://raw.githubusercontent.com/google/fonts/main/ofl/hind/OFL.txt",
+      "license_sha256": "f62ef357d3a1c3d27edd35a6e1ba350e8a8d13499797964eeadefbf0b3b15d1f"
+    }
+  }
+}

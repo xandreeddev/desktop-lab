@@ -15,7 +15,15 @@ contextual substitutions, ligatures or script positioning.
 ## One source map
 
 `text::shape` resolves visual directional runs with Unicode bidi, then shapes
-script runs through rustybuzz. A shaped line contains actual glyph IDs, fallback
+script runs through rustybuzz. Direction, selected font and Unicode
+Script_Extensions each participate in internal itemization: one consumer-supplied
+font covering both Latin and Devanagari still receives separate script buffers.
+Common punctuation inherits a compatible neighboring script, inherited marks
+stay with their extended grapheme, and no script boundary splits that grapheme.
+These are internal shaping details, not another public component API. The
+[HarfBuzz responsibilities](https://harfbuzz.github.io/what-harfbuzz-doesnt-do.html)
+explain why the layout engine must itemize scripts before shaping. A shaped line
+contains actual glyph IDs, fallback
 face identities, logical positions, source byte clusters, visual grapheme stops
 and selection segments. The renderer rasterizes those glyph IDs at the existing
 2× physical coverage density. It does not shape characters independently.
@@ -67,6 +75,10 @@ the framework tries its bundled Noto faces in a fixed order. Missing unsupported
 characters remain the primary face's missing glyph; they are not silently
 removed. Bundled fonts and their separate license files live in
 `lucent/crates/lucent-ui/assets`.
+The test-only unmodified Hind Regular face covers Latin and Devanagari in one
+primary font; it proves that fallback face changes cannot hide a missing script
+boundary. `assets/test-fonts.json` records its official source, SHA256 and separate
+OFL license. It is not part of the production fallback set.
 
 The fallback set includes Arabic, Devanagari, Hebrew, common Han ideographs and
 Extension A, Kana/Bopomofo, Hangul syllables/Jamo, Greek/Cyrillic, Thai, Bengali

@@ -202,6 +202,46 @@ pub struct LayoutOptions {
     /// Bound raster coverage without changing shaping or logical source geometry.
     pub raster_width: Option<f32>,
 }
+// Bidi resolves direction, not script. A single font can cover several
+// shaping systems; each rustybuzz buffer must still have one script.
+fn script_runs(line: &str, range: Range<usize>) -> Vec<(Range<usize>, rustybuzz::Script)> {
+    use unicode_script::{Script, ScriptExtension, UnicodeScript};
+    let boundaries = TextSelection::boundaries(&line[range.clone()])
+        .map(|byte| range.start + byte)
+        .collect::<Vec<_>>();
+    let mut runs: Vec<(Range<usize>, ScriptExtension)> = vec![];
+    for pair in boundaries.windows(2) {
+        let extension = ScriptExtension::for_str(&line[pair[0]..pair[1]]);
+        if let Some((run, previous)) = runs.last_mut()
+            && !previous.intersection(extension).is_empty()
+        {
+            run.end = pair[1];
+            previous.intersect_with(extension);
+        } else {
+            runs.push((pair[0]..pair[1], extension));
+        }
+    }
+    runs.into_iter()
+        .map(|(range, extension)| {
+            // Common/Inherited intersect all scripts. Leading punctuation waits
+            // for its first strong script; trailing punctuation stays with it.
+            // A whole extended grapheme remains indivisible even when its mark
+            // has several Script_Extensions.
+            let script = line[range.clone()]
+                .chars()
+                .map(|character| character.script())
+                .find(|script| {
+                    !matches!(script, Script::Common | Script::Inherited | Script::Unknown)
+                        && extension.contains_script(*script)
+                })
+                .or_else(|| extension.iter().next())
+                .unwrap_or(Script::Unknown);
+            let tag = rustybuzz::ttf_parser::Tag::from_bytes_lossy(script.short_name().as_bytes());
+            (range, rustybuzz::Script::from_iso15924_tag(tag).unwrap())
+        })
+        .collect()
+}
+
 pub fn shape(font: &Font, line: &str, size: f32) -> ShapedLine {
     shape_directed(font, line, size, None)
 }
@@ -261,23 +301,30 @@ pub fn shape_with_layout(font: &Font, line: &str, size: f32, layout: LayoutOptio
         let (levels, runs) = bidi.visual_runs(paragraph, paragraph.range.clone());
         for run in runs {
             let rtl = levels[run.start].is_rtl();
-            let boundaries: Vec<_> = TextSelection::boundaries(&line[run.clone()])
-                .map(|b| b + run.start)
-                .collect();
-            let mut spans: Vec<(Range<usize>, usize)> = Vec::new();
-            for pair in boundaries.windows(2) {
-                let face = font.choose(&line[pair[0]..pair[1]]);
-                if let Some((range, _)) = spans.last_mut().filter(|(_, previous)| *previous == face)
-                {
-                    range.end = pair[1];
-                } else {
-                    spans.push((pair[0]..pair[1], face));
+            let mut spans: Vec<(Range<usize>, usize, rustybuzz::Script)> = Vec::new();
+            for (script_range, script) in script_runs(line, run) {
+                let boundaries = TextSelection::boundaries(&line[script_range.clone()])
+                    .map(|byte| byte + script_range.start)
+                    .collect::<Vec<_>>();
+                for pair in boundaries.windows(2) {
+                    let face = font.choose(&line[pair[0]..pair[1]]);
+                    if let Some((range, _, _)) =
+                        spans
+                            .last_mut()
+                            .filter(|(_, previous_face, previous_script)| {
+                                *previous_face == face && *previous_script == script
+                            })
+                    {
+                        range.end = pair[1];
+                    } else {
+                        spans.push((pair[0]..pair[1], face, script));
+                    }
                 }
             }
             if rtl {
                 spans.reverse();
             }
-            for (range, face_id) in spans {
+            for (range, face_id, script) in spans {
                 let face = font.shaping_face(face_id);
                 let scale = size / face.units_per_em() as f32;
                 let mut buffer = rustybuzz::UnicodeBuffer::new();
@@ -291,6 +338,7 @@ pub fn shape_with_layout(font: &Font, line: &str, size: f32, layout: LayoutOptio
                 } else {
                     rustybuzz::Direction::LeftToRight
                 });
+                buffer.set_script(script);
                 buffer.guess_segment_properties();
                 let output = rustybuzz::shape(&face, &[], buffer);
                 let mut clusters: Vec<_> = output
@@ -530,6 +578,91 @@ mod international_tests {
         );
         assert!(shaped.width > 0.);
     }
+    #[test]
+    fn one_primary_font_itemizes_latin_and_devanagari_before_shaping() {
+        let font = Font::from_bytes(
+            include_bytes!("../assets/Hind-Regular.test.ttf").as_slice(),
+            Default::default(),
+        )
+        .unwrap();
+        let indic = "नमस्ते";
+        let face = font.shaping_face(0);
+        let mut reference = rustybuzz::UnicodeBuffer::new();
+        reference.push_str(indic);
+        reference.set_direction(rustybuzz::Direction::LeftToRight);
+        reference.set_script(rustybuzz::script::DEVANAGARI);
+        reference.guess_segment_properties();
+        let reference = rustybuzz::shape(&face, &[], reference);
+        let scale = 24. / face.units_per_em() as f32;
+        for source in ["Latin नमस्ते", "नमस्ते Latin"] {
+            for pair in TextSelection::boundaries(source)
+                .collect::<Vec<_>>()
+                .windows(2)
+            {
+                assert_eq!(font.choose(&source[pair[0]..pair[1]]), 0);
+            }
+            let start = source.find(indic).unwrap();
+            let actual = shape(&font, source, 24.);
+            let indic_glyphs = actual
+                .glyphs
+                .iter()
+                .filter(|glyph| {
+                    glyph.cluster.start >= start && glyph.cluster.start < start + indic.len()
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(indic_glyphs.len(), reference.glyph_infos().len());
+            let origin = indic_glyphs[0].x;
+            let mut x = 0.;
+            let first_offset = reference.glyph_positions()[0].x_offset as f32 * scale;
+            for ((glyph, info), position) in indic_glyphs
+                .iter()
+                .zip(reference.glyph_infos())
+                .zip(reference.glyph_positions())
+            {
+                assert_eq!(
+                    glyph.face, 0,
+                    "fallback cannot hide a missing script boundary"
+                );
+                assert_eq!(glyph.id, info.glyph_id as u16);
+                assert_eq!(glyph.cluster.start - start, info.cluster as usize);
+                assert!(
+                    (glyph.x - origin - (x + position.x_offset as f32 * scale - first_offset))
+                        .abs()
+                        < 0.0001
+                );
+                assert_eq!(glyph.y, -position.y_offset as f32 * scale);
+                assert_eq!(glyph.advance, position.x_advance as f32 * scale);
+                x += position.x_advance as f32 * scale;
+            }
+            assert!(actual.glyphs.iter().all(|glyph| glyph.id != 0));
+            for boundary in TextSelection::boundaries(source) {
+                assert!(actual.stops.iter().any(|(byte, _)| *byte == boundary));
+            }
+        }
+    }
+
+    #[test]
+    fn script_runs_keep_common_inherited_and_whole_graphemes_with_their_script() {
+        let source = "…cafe\u{301} · क्षि!";
+        let split = source.find('क').unwrap();
+        let runs = script_runs(source, 0..source.len());
+        assert_eq!(
+            runs,
+            [
+                (0..split, rustybuzz::script::LATIN),
+                (split..source.len(), rustybuzz::script::DEVANAGARI),
+            ]
+        );
+        let boundaries = TextSelection::boundaries(source).collect::<Vec<_>>();
+        for (range, _) in runs {
+            assert!(boundaries.contains(&range.start) && boundaries.contains(&range.end));
+        }
+        assert_eq!(
+            script_runs("…क्षि!", 0.."…क्षि!".len()),
+            [(0.."…क्षि!".len(), rustybuzz::script::DEVANAGARI),]
+        );
+    }
+
     #[test]
     fn mixed_bidi_selection_is_disjoint_and_stops_cover_graphemes() {
         let font = font();
