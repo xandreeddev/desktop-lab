@@ -75,6 +75,47 @@ class DisplayRecoveryTests(unittest.TestCase):
         self.assertEqual(self.config.stat().st_ino, identity)
         self.assertEqual(self.commands, [])
 
+    def test_raced_foreign_symlink_returns_to_original_path(self):
+        self.kept()
+        actual_library = ctypes.CDLL(None, use_errno=True)
+        actual_rename = actual_library.renameat2
+        actual_rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+        actual_rename.restype = ctypes.c_int
+        foreign_target = self.config.with_name('foreign-content')
+        foreign_target.write_bytes(b'user content must stay untouched')
+        captured = []
+        config = self.config
+        class RacedRename:
+            calls = 0
+            def __call__(self, *args):
+                if self.calls == 0:
+                    foreign = config.with_name('foreign-link')
+                    foreign.symlink_to(foreign_target)
+                    foreign.replace(config)
+                    captured.append(config.lstat().st_ino)
+                self.calls += 1
+                return actual_rename(*args)
+        rename = RacedRename()
+        class Library:
+            renameat2 = rename
+        class Native:
+            @staticmethod
+            def CDLL(*args, **kwargs):
+                return Library()
+            get_errno = staticmethod(ctypes.get_errno)
+            c_int = ctypes.c_int
+            c_char_p = ctypes.c_char_p
+            c_uint = ctypes.c_uint
+        self.ns['ctypes'] = Native
+        with self.assertRaises(AssertionError):
+            self.ns['restore'](self.value)
+        self.assertEqual(rename.calls, 2)
+        self.assertTrue(config.is_symlink())
+        self.assertEqual(config.lstat().st_ino, captured[0])
+        self.assertEqual(config.readlink(), foreign_target)
+        self.assertEqual(foreign_target.read_bytes(), b'user content must stay untouched')
+        self.assertEqual(self.commands, [])
+
     def test_unrelated_cross_product_layout_is_preserved(self):
         self.kept()
         self.observed = {**self.monitor, 'x': 16, 'scale': 2}

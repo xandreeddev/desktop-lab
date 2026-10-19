@@ -111,7 +111,9 @@ real panel input and observed compositor state, with an independent SSH-started
 recovery process and private exact-file checkpoints. It is not executed by
 ordinary unit tests. Native acceptance is separate from these source fixtures;
 record actual commands, executable identity, checks and restoration results when
-it runs. Multi-output hardware, output unplugging, suspend/resume and monitor
+it runs. Host loss between successful Keep and capturing its new file identity
+can retain the original hard-link checkpoint for manual recovery; automatic
+file restoration is not claimed for that interval. Multi-output hardware, output unplugging, suspend/resume and monitor
 modes not exposed by the test guest require their own acceptance records.
 
 This feature does not add custom modelines, HDR/color-management editing,

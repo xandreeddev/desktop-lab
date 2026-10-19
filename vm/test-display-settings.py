@@ -41,13 +41,15 @@ meta=directory.lstat(); assert stat.S_ISDIR(meta.st_mode) and meta.st_uid==os.ge
 manifest=directory/'manifest.json'; backup=directory/'monitors.original'
 config=Path.home()/'.config/hypr/monitors.lua'
 state=Path.home()/'.local/state/lucent/desktop.json'
+def file_identity(meta):return [meta.st_dev,meta.st_ino,meta.st_mtime_ns,meta.st_size,meta.st_mode,meta.st_uid]
 def read(path,limit):
     descriptor=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
     with os.fdopen(descriptor,'rb') as stream:
         before=os.fstat(stream.fileno()); assert stat.S_ISREG(before.st_mode) and before.st_uid==os.getuid() and before.st_size<=limit
-        data=stream.read(limit+1); after=os.fstat(stream.fileno())
-        assert len(data)<=limit and (before.st_dev,before.st_ino,before.st_mtime_ns,before.st_size,before.st_mode,before.st_uid)==(after.st_dev,after.st_ino,after.st_mtime_ns,after.st_size,after.st_mode,after.st_uid)==(path.lstat().st_dev,path.lstat().st_ino,path.lstat().st_mtime_ns,path.lstat().st_size,path.lstat().st_mode,path.lstat().st_uid)
-        return data,[before.st_dev,before.st_ino,before.st_mtime_ns,before.st_size,before.st_mode,before.st_uid]
+        data=stream.read(limit+1); after=os.fstat(stream.fileno()); path_meta=path.lstat()
+        assert len(data)<=limit and file_identity(before)==file_identity(after)==file_identity(path_meta)
+        return data,file_identity(before)
+
 def session(*args):
     result=subprocess.run(['python3',str(Path.home()/'desktop-lab/scripts/in-session.py'),*args],capture_output=True,text=True,timeout=10)
     assert result.returncode==0
@@ -99,12 +101,18 @@ def restore(value):
         def exchange():
             if rename(-100,os.fsencode(replacement),-100,os.fsencode(config),2)!=0:raise OSError(ctypes.get_errno(),'Monitor checkpoint exchange failed')
         exchange()
-        outgoing,outgoing_id=read(replacement,256*1024)
-        if outgoing!=current or outgoing_id!=current_id:
+        try:
+            # Inspect identity before opening: a raced symlink/directory must be
+            # exchanged back too, even though read() deliberately refuses it.
+            outgoing_meta=replacement.lstat()
+            assert file_identity(outgoing_meta)==current_id
+            outgoing,outgoing_id=read(replacement,256*1024)
+            assert outgoing==current and outgoing_id==current_id
+        except BaseException:
             installed,installed_id=read(config,256*1024)
             assert installed==original and installed_id==original_id, 'Concurrent replacement retained beside the recovery checkpoint'
             exchange()
-            raise AssertionError('Concurrent monitor replacement preserved')
+            raise AssertionError('Concurrent monitor replacement preserved') from None
         restored,restored_id=read(config,256*1024)
         assert restored==original and restored_id==original_id
         replacement.unlink()

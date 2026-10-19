@@ -80,8 +80,7 @@ fn final_phase(bytes: &[u8]) -> DisplayTransactionPhase {
     serde_json::from_slice::<DisplayTransaction>(
         bytes
             .split(|b| *b == b'\n')
-            .filter(|line| !line.is_empty())
-            .next_back()
+            .rfind(|line| !line.is_empty())
             .unwrap(),
     )
     .unwrap()
