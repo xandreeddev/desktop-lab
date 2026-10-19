@@ -3,11 +3,14 @@
 Source scope: accepted main `b474d1fe` includes normally merged PR87 and the coherent
 deployed `8e6d074b` runtime, including Application integration `bb304907`. Fresh
 intent tokens, explicit file/URI Open and the expanded XDG parser/observer are
-implemented and included in that release. Its six CI checks pass. The newer native
-application harness has executed failed attempts; the latest `d28fbe6b` run fails
-its actual focus assertion while owned cleanup and caller preservation pass. No
-complete native application acceptance follows from implementation, delivery or
-CI. See [current readiness](current-readiness.md).
+implemented and included in that release. Its six CI checks pass. A later native
+Chromium run passes all nine feature and eight restoration checks using the
+unmerged independent `d1fff2d8` consumer and `b6323e9` harness; deployed desktop
+and CLI remain unchanged. Focus is observed without a compositor forced-focus
+command. Earlier failed and partial reports retain their results. This scoped
+result does not establish other applications, remote URI handlers or Chromium's
+consumption of a particular token. See [current readiness](current-readiness.md)
+and [the source-specific report](../reports/measurements/lucent-native-application-intents-d1.json).
 
 An application can now declare a command or standard desktop-service activation.
 `ApplicationLaunch::Command` carries its parsed argument vector.
@@ -131,9 +134,10 @@ with observed focus or file loading.
 Declared desktop actions predate this milestone and already have owned native
 acceptance; see [application-actions.md](application-actions.md). The token,
 Open, parser and observation changes are merged in the deployed `8e` release,
-whose full workspace/protocol CI and 832 visual cases pass. Complete native
-application acceptance remains pending. Do not treat source implementation as
-proof of broad third-party compatibility. Current evidence and remaining checks
+whose full workspace/protocol CI and 832 visual cases pass. A later real-Chromium
+run with the unmerged `d1fff2d8` independent consumer passes nine feature and
+eight restoration checks, including observed first-launch focus. This verifies
+one local-document workload, not broad third-party compatibility. Current evidence and remaining checks
 are tracked in `docs/daily-use-completion.json`.
 
 `vm/test-application-intent.py` prepares an owned desktop entry and private real
@@ -151,8 +155,9 @@ without silently reducing the requested application behavior. Child-environment
 delivery and observed focus do not prove
 that Chromium consumed a specific activation protocol message. The run requires
 an identified release containing the independent example, an unlocked idle
-single-output VM and bounded owned-process cleanup. The native attempt described
-below failed; no complete native pass is claimed here.
+single-output VM and bounded owned-process cleanup. Earlier failed attempts below
+retain their results; the later source-specific successful run is recorded in
+its own section.
 
 The admission snapshot binds the desktop, supervisor and compositor to their
 captured lifetimes. The independent example must match the release digest and
@@ -179,8 +184,8 @@ immutable receipts; refusing a replaced unit or socket never permits a retry
 with only its current name or command. A lost start reply can retire the original
 wrapper only when that wrapper already wrote its receipt. A loaded unit without
 that proof is retained for bounded expiry/private recovery rather than adopted.
-Completed-unit observations also keep the original invocation check. These are
-tooling changes with source-only regression evidence, not a new native pass.
+Completed-unit observations also keep the original invocation check. Those
+source-only regression checks are distinct from the later native result below.
 
 Browser page retirement rechecks the original unit invocation/process birth,
 admitted executable metadata, exact `DevToolsActivePort` file identity and the
@@ -193,8 +198,8 @@ foreign layer and socket peers, replaced sockets, stale layer/hit identity,
 catch-all interception, cursor loss and captured-process retirement. They use
 pure policy, mocked transport boundaries and an actual read-only fingerprint of
 the test runner's `/proc` entry; they do not launch a guest, browser or native
-surface. A future source-specific native run must still pass preservation and
-owned cleanup before acceptance.
+surface. Preservation and owned cleanup are checked separately in the later
+source-specific native result; pure checks alone do not establish acceptance.
 
 `tests/test_owned_application_units.py` additionally covers original receipt
 publication before `exec`, lost-reply cleanup, fallback/watchdog refusal,
@@ -309,9 +314,9 @@ and retains the yielded state through token preparation and adapter completion.
 Only a subsequent deliberate idle pointer press re-arms its keyboard policy;
 hover, socket commands and completion cannot take it back. This uses the existing
 SurfaceSpec contract, with no compositor focus command or framework policy.
-Its separate bounded build and native verification remain pending. The lifecycle
-difference is not yet an established cause of the observed failure. The compositor
-remains responsible for deciding whether to grant application focus.
+Its separate bounded build and later native verification pass as recorded below.
+That later result does not isolate the cause of earlier focus failures. The
+compositor remains responsible for deciding whether to grant application focus.
 
 
 ## Fresh real-application result: file opening passes, focus remains failed
@@ -343,3 +348,35 @@ observed 111.318 seconds for the bounded run; this is not a performance benchmar
 Token delivery does not prove Chromium consumed the Wayland activation token.
 Other applications, remote URI handlers and physical hardware remain outside
 this local-document workload. Earlier failed reports remain unchanged.
+
+## Later d1 consumer: Chromium launch and file intents pass
+
+The unchanged deployed `8e6d074b` desktop and CLI pass a later scoped native run
+with harness `b6323e95` and the separately rebuilt `d1fff2d8` independent SDK
+consumer. The consumer is **not merged into accepted main**. Its binary is
+identified by the separate build and manifest hashes in
+[the sanitized report](../reports/measurements/lucent-native-application-intents-d1.json);
+the original coherent production archive remains unchanged.
+
+All nine feature checks pass. The first coherent focus observation finds the
+real owned Chromium window active, matching its admitted class, process and
+native window identity. The example has submitted keyboard `None`, with its
+448 × 384 surface and buffer geometry unchanged. No test command forces
+compositor focus. Fresh physical-input tokens reach the owned child; observed
+focus and child delivery do not prove Chromium consumed a particular protocol
+token, nor does this one later result establish the cause of earlier failures.
+
+Physical Open, declared Action, later socket Open and desktop CLI Open each
+create both new local documents with exact fresh page IDs, file URLs and loaded
+titles. Spaces, percent signs, Unicode and literal shell-like filename characters
+are covered. Only those new targets retire, preserving the original blank
+control target and admitted browser lifetime. Socket and CLI opening do not
+reuse earlier physical activation authority.
+
+All eight restoration checks pass: original example socket, example, browser,
+published desktop entry and watchdog retire; settings/wallpaper and original
+output/workspace/cursor remain preserved; owned scratch and entry are removed.
+The owner observed 75.660 seconds for this bounded run, not a performance
+benchmark. The earlier failed and partial reports above remain unchanged.
+Other applications, arbitrary remote URI handlers, physical hardware and broader
+launcher/catalog/dock workflows still need their own acceptance.

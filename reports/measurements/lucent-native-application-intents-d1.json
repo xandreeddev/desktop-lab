@@ -1,0 +1,103 @@
+{
+  "schema": 1,
+  "status": "scoped_real_application_native_acceptance_passed",
+  "overall_passed": true,
+  "production_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+  "production_modified": false,
+  "harness_source_commit": "b6323e95de838d3bb4e6725d287b93ddb384c79b",
+  "desktop_sha256": "ecb557a094b583b45cfa07aeb9eb4284dc0bb2b86fdad3b1dbd5f4afc7b6b4ff",
+  "cli_sha256": "4779a67d85f8c61e144a33e49030c5a63086de8ee5eb3c6fa8ce9de79ae46c28",
+  "independent_consumer": {
+    "source_commit": "d1fff2d88e9f19f9805125ef25d43ace03bef20d",
+    "merged_into_accepted_main": false,
+    "binary_sha256": "415cc6dea43c3131500d89f69dc35d5dd6b7772b936e8d2ccf212709c468f7e4",
+    "binary_bytes": 26318336,
+    "source_sha256": "68dc9e2243115047696097bc4480be581215a17f6d5374dff96d291177e8182d",
+    "build_passed": true,
+    "build_receipt_sha256": "ce365e30212b32b775f34994e52902db45477c0bb34ee5644c51435dce0ae74b",
+    "combined_manifest_sha256": "057a2efe63800b10f337df9f528273420ca4aa06c7aea30627a20b4de399a87b",
+    "scope": "Rebuilt independent graphical acceptance consumer only; deployed desktop, CLI and the original coherent production archive remain unchanged."
+  },
+  "private_report_sha256": "cdf3f869102430aa78a18642d5502b668fc6b47da70bf444a3a4723524b72788",
+  "checks": {
+    "fresh_token_delivered_to_first_owned_child": true,
+    "fresh_browser_focus_observed": true,
+    "fresh_token_child_delivery_and_fresh_browser_focus_observed": true,
+    "real_browser_opened_space_percent_unicode_and_shell_literal_filenames": true,
+    "physical_launch_open_and_declared_action_deliver_fresh_tokens_to_children": true,
+    "later_socket_request_created_both_fresh_documents": true,
+    "each_open_action_socket_and_cli_created_both_fresh_documents": true,
+    "fresh_targets_retired_with_original_browser_control_preserved": true,
+    "desktop_cli_open_and_no_stale_token_reuse": true
+  },
+  "restoration": {
+    "example_socket_retired": true,
+    "example_retired": true,
+    "browser_retired": true,
+    "desktop_entry_retired": true,
+    "watchdog_retired": true,
+    "settings_and_wallpaper_preserved": true,
+    "output_workspace_and_cursor_preserved": true,
+    "owned_scratch_and_entry_removed": true
+  },
+  "focus_observation": {
+    "observations": 1,
+    "phase": "first_launch_focus_predicate",
+    "last_observation": {
+      "active_window_present": true,
+      "owned_client_count": 1,
+      "active_class_matches_owned": true,
+      "active_pid_matches_owned": true,
+      "active_address_matches_owned": true,
+      "matches_owned_browser": true,
+      "submitted_example": {
+        "keyboard": "none",
+        "surface_size": [
+          448,
+          384
+        ],
+        "buffer_size": [
+          448,
+          384
+        ],
+        "submitted": true,
+        "native_submitted": true,
+        "layer_geometry": {
+          "x": 736,
+          "y": 372,
+          "w": 448,
+          "h": 384
+        },
+        "layer_geometry_unchanged": true,
+        "layer_matches_surface_size": true
+      }
+    },
+    "last_outcome": "focused",
+    "focus_observed": true
+  },
+  "helper_sources_sha256": {
+    "fixture.py": "38f4734456a757f388e6626cecd880b4521622744ed1b43d9c8c13ec82445a87",
+    "owned_application_units.py": "0082d9c4c87c36a7cc65f361304a2fbda174af83f30d6713720d709a9193d5b7",
+    "application_intent_policy.py": "c8903d689234c4c238303a579306bf8ec5ec0df1ca68dcdfed4021998de353be",
+    "application_intent_browser.py": "9f65cd623e387ef0afb18fca4ae6cf289f62b897f43716300602a9ed0e281d13",
+    "owned_chromium_lease.py": "393501ef04a9a9f6fab21ad154bcffe810ebe95774e47e7c759cf36cb180de4b"
+  },
+  "host_harness_sha256": "7737cebe4deca35f93e46034f8d4ef0b684f9a2d988a1cc7555dd3812fc14faa",
+  "owner_observed_runtime_seconds": 75.66,
+  "scope": "One prepared native output, independent SDK graphical consumer and real owned Chromium profile. Native browser focus is observed at the first coherent sample while the consumer advertises keyboard None. Each physical Open, declared Action, later socket Open and desktop CLI Open creates both fresh exact local-file targets, then retires only those targets while preserving original browser control. Fresh physical tokens reach owned children and later socket/CLI requests do not reuse them. No compositor forced-focus command is used.",
+  "remaining": [
+    "Token presence and observed focus do not establish Chromium consumption of a specific activation protocol token.",
+    "This single later consumer result does not isolate the cause of earlier focus failures.",
+    "Other applications, arbitrary remote URI handlers, physical hardware and broader launcher/catalog/dock workflows remain separate acceptance.",
+    "The independent d1 acceptance consumer has not been merged into accepted main; this result does not change deployed production source."
+  ],
+  "privacy": {
+    "private_paths_tokens_profiles_or_user_content_published": false
+  },
+  "historical_failures_unchanged": true,
+  "historical_partial_report": {
+    "report": "reports/measurements/lucent-native-application-intents.json",
+    "sha256": "da241c306b53e1d577c83475ad307e9cd5b8367c1ce978a93c47614b67bb8578",
+    "overall_passed": false
+  }
+}
