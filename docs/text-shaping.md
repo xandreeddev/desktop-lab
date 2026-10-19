@@ -98,8 +98,14 @@ orders cover Latin-first paragraphs with Hebrew-first wraps, an override and an
 isolate crossing a wrap, and tabs between Hebrew runs. Further tests compare
 bounded line-local reordering with the upstream whole-document reference, and
 exercise actual controlled-field paint, selection, hits and candidate geometry.
-Explicit Vulkan regressions compare wrapped pixels with separate visual runs and
-exercise stale-context cache reuse at both densities.
+Explicit Vulkan regressions compare wrapped coverage with independently drawn
+visual runs and exercise stale-context cache reuse at both densities. Separate
+run masks start at independent raster origins, so a fractional run advance can
+shift their sampling phase relative to one combined mask. This fixture permits
+at most one physical pixel of coverage displacement in both directions, bounds
+total ink quantization error, and must reject a deliberately reversed run order.
+The stale-context cache comparison remains byte exact; desktop golden thresholds
+are unchanged.
 
 This wrapped-paragraph correction follows the fully passing `5d3501ebd9e` cohort;
 its new source and tests require their own strict/visual execution. Earlier
