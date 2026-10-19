@@ -13,9 +13,6 @@ pub trait ClockPort: Send + Sync {
 pub trait SystemPort: Send + Sync {
     fn sample(&self) -> Result<SystemSnapshot>;
 }
-pub trait WeatherPort: Send + Sync {
-    fn snapshot(&self) -> Result<WeatherSnapshot>;
-}
 pub trait WallpaperPort: Send + Sync {
     fn list(&self) -> Vec<Wallpaper>;
     fn current(&self) -> Result<Option<WallpaperAsset>>;

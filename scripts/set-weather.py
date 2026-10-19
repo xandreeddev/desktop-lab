@@ -39,4 +39,7 @@ else:
     write(path, text)
     run('noctalia', 'config', 'validate')
 write(STATE / 'weather.json', json.dumps(place, indent=2)+'\n')
-print('Selected weather location applied. Restart the shell to load it.')
+if args.profile == 'lucent':
+    print('Legacy location prepared. Lucent imports it only while saved weather preferences are absent; use Weather and location for later changes.')
+else:
+    print('Selected weather location applied. Restart the shell to load it.')

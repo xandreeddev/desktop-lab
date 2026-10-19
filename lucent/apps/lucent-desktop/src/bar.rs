@@ -172,16 +172,17 @@ impl Desktop {
                 .width(Length::Fixed(component::bar::DATE_WIDTH))
                 .align(Align::Center),
                 time,
-                bar_icon("cloud"),
-                self.label(
+                bar_icon(
                     self.weather
-                        .as_ref()
-                        .map(|w| format!("{:.0}°", w.temperature))
-                        .unwrap_or_else(|| "—".into()),
-                    font::CAPTION,
-                )
-                .width(Length::Fixed(component::bar::CONTROL_SIZE))
-                .align(Align::Center),
+                        .report()
+                        .map(|report| {
+                            crate::weather::condition_symbol(report.condition, report.is_day)
+                        })
+                        .unwrap_or("cloud"),
+                ),
+                self.label(self.weather.bar_summary(), font::CAPTION)
+                    .width(Length::Fixed(component::bar::CONTROL_SIZE))
+                    .align(Align::Center),
             ])
             // Keep this capsule in the native input region without making it
             // a launcher control or handing clicks to the application below.

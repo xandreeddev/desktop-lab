@@ -484,6 +484,9 @@
   --component-media-panel-height: var(--component-audio-height);
   --component-media-panel-artwork: 168px;
   --component-media-panel-slide-distance: var(--component-audio-slide-distance);
+  --component-weather-panel-width: var(--component-network-width);
+  --component-weather-panel-height: var(--component-network-height);
+  --component-weather-panel-text-lines: var(--component-network-status-lines);
   --icon-tiny: 16px;
   --icon-small: 17px;
   --icon-compact: 18px;

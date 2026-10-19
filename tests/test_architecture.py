@@ -212,6 +212,15 @@ class Boundaries(unittest.TestCase):
         self.assert_no_imports([ROOT/'lucent/crates/lucent-services/src/video.rs'],
                                ('lucent_desktop', 'lucent_design', 'lucent_wayland', 'lucent_render'))
 
+    def test_weather_domain_adapter_and_child_preserve_service_boundaries(self):
+        root = ROOT / 'lucent/apps/lucent-desktop/src/weather'
+        self.assert_no_platform_operations(sources(root, ('tests.rs',)),
+            ('crate::desktop', 'crate::adapters', 'crate::platform',
+             'lucent_services', 'lucent_wayland', 'lucent_render'))
+        self.assert_no_imports([ROOT / 'lucent/crates/lucent-services/src/weather.rs'],
+            ('lucent_desktop', 'lucent_design', 'lucent_wayland', 'lucent_render'))
+        self.assert_no_platform_operations([ROOT / 'lucent/crates/lucent-domain/src/weather.rs'])
+
     def test_compositor_consumer_and_adapter_preserve_monitor_policy_boundaries(self):
         self.assertNotIn('lucent-wayland', reachable(self.graph, 'compositor-service'))
         self.assertNotIn('lucent-render', reachable(self.graph, 'compositor-service'))

@@ -18,12 +18,7 @@ impl SystemPort for LinuxSystem {
             .sample()
     }
 }
-pub struct OpenMeteo;
-impl WeatherPort for OpenMeteo {
-    fn snapshot(&self) -> Result<WeatherSnapshot> {
-        crate::weather()
-    }
-}
+pub use crate::weather::OpenMeteo;
 pub struct LucentTheme;
 impl ThemePort for LucentTheme {
     fn apply(&self, palette: &ThemePalette) -> Result<()> {

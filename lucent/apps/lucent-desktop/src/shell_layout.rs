@@ -53,6 +53,10 @@ pub fn network_panel(viewport: (f32, f32)) -> Rect {
     use lucent_design::component::network;
     control_panel(viewport, (network::WIDTH, network::HEIGHT))
 }
+pub fn weather_panel(viewport: (f32, f32)) -> Rect {
+    use lucent_design::component::weather_panel;
+    control_panel(viewport, (weather_panel::WIDTH, weather_panel::HEIGHT))
+}
 pub fn bluetooth_panel(viewport: (f32, f32)) -> Rect {
     use lucent_design::component::bluetooth;
     control_panel(viewport, (bluetooth::WIDTH, bluetooth::HEIGHT))

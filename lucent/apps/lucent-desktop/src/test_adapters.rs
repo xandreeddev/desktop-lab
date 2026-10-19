@@ -87,7 +87,10 @@ impl NetworkPort for Fake {
     }
 }
 impl WeatherPort for Fake {
-    fn snapshot(&self) -> Result<WeatherSnapshot> {
+    fn legacy_preferences(&self) -> Result<Option<WeatherPreferences>> {
+        Ok(None)
+    }
+    fn forecast(&self, _: WeatherCoordinates, _: &dyn StopSignal) -> Result<WeatherSnapshot> {
         Err(DomainError::Unavailable("offline fixture".into()))
     }
 }

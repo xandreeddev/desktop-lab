@@ -1797,6 +1797,42 @@
         "bounded_cpu_measurement": "e67a8955a600063b87bd64dcf2806fccfb641b1d",
         "quiescence_harness_and_supervisor_follow_up": "7445c1cfb27c4665403f41f60e505c67e8e9be1b"
       }
+    },
+    {
+      "milestone": "native-weather-current-forecast-and-configuration",
+      "status": "source_unvalidated",
+      "base_source": "6ec372e6ebf",
+      "scope": [
+        "Checked manual coordinates, location labels, Celsius/Fahrenheit preferences and provider-neutral current/three-day values",
+        "Bounded read-only legacy import, response validation, deadline/cancellation and coordinate-free process arguments/errors",
+        "Native Weather child, root-only preference saves, same-location last-good state, opaque generations and coalesced refresh",
+        "Explicit weather widget/Commands actions; center clock/weather bar remains passive; generated token recipes and original monochrome weather artwork"
+      ],
+      "written_checks": [
+        "Domain checked values/date/temperature cases",
+        "Adapter malformed units/arrays/overflow and bounded regular legacy-file cases",
+        "Client last-good/recovery/coalescing/stale result/disabled precedence/form/clipboard cases",
+        "Preference roundtrip/invalid-file preservation",
+        "Thirteen new visual scenarios across both reference themes at 1x/2x"
+      ],
+      "pending": [
+        "Cargo compilation, formatting/clippy workspace gates and all new Rust test execution",
+        "Rendered visual generation/review/comparison and narrow input/focus reachability",
+        "Native HTTP/provider interoperability, settings reload/off/units and keyboard/pointer/clipboard acceptance",
+        "Current memory/CPU/pacing measurements and CI/publication"
+      ],
+      "limitations": [
+        "One in-memory last-good report; no disk offline cache",
+        "Manual coordinates only; no automatic location or city search",
+        "Provider model conditions and fixed response timezone offset",
+        "Existing shaping/IME/accessibility scope remains separately pending/deferred"
+      ],
+      "executed_source_checks": [
+        "Cached rustfmt parsed/formatted 25 scoped Rust files without compilation",
+        "Python suite: 104 tests passed; two modified Python files also parsed with ast",
+        "Generated design token check: 557 tokens verified; git diff --check passed",
+        "Original 24 requirement IDs/statuses remain unchanged"
+      ]
     }
   ],
   "performance_targets": {

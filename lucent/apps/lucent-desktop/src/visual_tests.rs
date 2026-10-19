@@ -1708,6 +1708,19 @@ fn visual_regressions() {
             ),
             ("media-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("media-paused", Mode::Apps, 0, 0, "", 1., 390.),
+            ("weather-unconfigured", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-loading", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-ready", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-night", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-rain", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-stale", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-offline", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-error", Mode::Apps, 0, 0, "", 1., 390.),
+            ("weather-invalid", Mode::Apps, 0, 0, "", 1., 390.),
+            ("weather-narrow", Mode::Apps, 0, 0, "", 1., 390.),
+            ("weather-form-bottom", Mode::Apps, 0, 0, "", 1., 390.),
+            ("weather-widget", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-widget-resized", Mode::Apps, 0, 0, "", 1., 640.),
             ("audio-loading", Mode::Apps, 0, 0, "", 1., 640.),
             ("tray-loading", Mode::Apps, 0, 0, "", 1., 640.),
             ("tray-bar-wide", Mode::Apps, 0, 0, "", 1., 1920.),
@@ -1975,6 +1988,64 @@ fn visual_regressions() {
                 interaction.focus = Some("text-sample".into());
                 interaction.focus_visible = true;
                 layout.build(&tree, width, height, &interaction, now)
+            } else if let Some(state) = name.strip_prefix("weather-") {
+                app.weather = crate::weather::tests::visual_fixture(
+                    if matches!(
+                        state,
+                        "narrow" | "form-bottom" | "widget" | "widget-resized"
+                    ) {
+                        "ready"
+                    } else {
+                        state
+                    },
+                );
+                app.settings_writable = true;
+                if matches!(state, "form-bottom" | "invalid") {
+                    app.weather.update(
+                        crate::weather::Message::Scroll(ScrollEvent { offset: 10000. }),
+                        &mut Effects::default(),
+                    );
+                }
+                if state.starts_with("widget") {
+                    app.weather
+                        .update(crate::weather::Message::Close, &mut Effects::default());
+                    app.settings.layout.visible_widgets = vec!["weather".into()];
+                    app.settings.layout.positions.insert(
+                        "weather".into(),
+                        lucent_domain::Placement::new(64., 96.).unwrap(),
+                    );
+                    if state == "widget-resized" {
+                        app.settings.layout.widget_sizes.insert(
+                            "weather".into(),
+                            lucent_domain::WidgetSize::new(384., 240.).unwrap(),
+                        );
+                    }
+                }
+                let cx = ViewContext {
+                    surface: if state.starts_with("widget") {
+                        "widgets"
+                    } else {
+                        "weather"
+                    },
+                    instance: None,
+                    width,
+                    height,
+                    now,
+                    density: Density::ONE,
+                };
+                let mut input = Interaction::default();
+                if matches!(state, "invalid" | "form-bottom") {
+                    input.focus = Some(
+                        if state == "invalid" {
+                            "weather-latitude-1"
+                        } else {
+                            "weather-disable"
+                        }
+                        .into(),
+                    );
+                    input.focus_visible = true;
+                }
+                layout.build(&app.view(&cx), width, height, &input, now)
             } else if let Some(state) = name.strip_prefix("notes-") {
                 let app = notes_fixture(state, light);
                 let mut interaction = Interaction::default();
