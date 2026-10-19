@@ -1132,6 +1132,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "international-text"
+version = "0.1.0"
+dependencies = [
+ "calloop",
+ "calloop-wayland-source",
+ "lucent-api",
+ "lucent-design",
+ "lucent-wayland",
+ "serde_json",
+ "wayland-client",
+ "wayland-protocols-misc",
+]
+
+[[package]]
 name = "itertools"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

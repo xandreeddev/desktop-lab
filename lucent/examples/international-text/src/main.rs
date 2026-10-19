@@ -150,7 +150,7 @@ impl Application for Example {
             exclusive_zone: -1,
             keyboard: Keyboard::OnDemand,
             visible: true,
-            pointer_input: PointerInput::Full,
+            pointer_input: PointerInput::Content,
         }]
     }
     fn inspect(&self) -> String {
