@@ -49,8 +49,8 @@ The actual click still uses QMP left-button down/up, and keys still use native
 observation and native layer capture must match the frozen field/clip/layer
 immediately before each button down, followed by an exact cursor check. A moved,
 recreated, clipped or retired target prevents the press. The existing balanced
-release path remains in place. This harness correction has pure regressions;
-it has not rerun or passed native composition, and does not relabel the earlier
+release path remains in place. The corrected global positioning path passes in the fresh owned native suite
+recorded below. That result does not relabel the earlier
 `exact_owned_pointer_arrival` failure as a successful QMP-motion test.
 
 The example and non-replacing peer run in distinct random transient systemd
@@ -164,7 +164,7 @@ records a concrete acknowledged-stop transition, described below; a separate
 correction addresses only that observed lifecycle state.
 
 
-## Latest mapped-peer attempt
+## Earlier mapped-peer attempt
 
 The fresh attempt `international-text-native-5231c104b8c1b3a738b1f268` used the
 `8e6d074b` desktop/example and independently built `3beda617` mapped peer. It
@@ -185,7 +185,8 @@ cleared stopping/terminal shape, then independently proves that the captured
 PID birth and recursive cgroup have drained. A cleared unit is never initial
 stop authority; changed argv or a same-name successor remains refused, and a
 lost stop reply does not authorize this completion path. All 26 focused ownership
-checks pass. Native verification of the corrected cleanup path is pending.
+checks pass. Native verification was still pending at that point; the fresh
+full-suite result below exercises the later cleanup observer too.
 
 Separate independent receipts in the same private attempt directory establish
 recovery without changing the failed result:
@@ -197,8 +198,47 @@ recovery without changing the failed result:
   original cursor and unlocked session retained.
 
 These observations verify their stated recovery scope. They do not rerun the
-composition sequence or turn it into native IME acceptance. A fresh guarded run
-is still needed for actual popup/caret/preedit ink, commit/delete/undo,
-multiline, masked-field deactivation and RTL navigation. Third-party IMEs and
-secure authentication remain separate acceptance; no presentation/FPS or
-resource result follows from this attempt.
+composition sequence or turn that attempt into native IME acceptance. The fresh
+guarded run below supplies separate evidence for the owned sequence. Third-party
+IMEs and secure authentication remain separate acceptance; no presentation/FPS
+or resource result follows from the earlier attempt.
+
+
+## Fresh owned native suite: five feature and five restoration checks pass
+
+The fresh `8776afc2` run passes the complete controlled sequence and all five
+restoration checks in 108.776 seconds of host-observed bounded execution. Its
+[public evidence](../reports/measurements/lucent-international-text.json) pins the
+unchanged production desktop and SDK example at `8e6d074b`, the independent
+mapped peer at `3beda617`, the harness at `6bb80e5942` and the shared owned-unit
+observer at `89604f6ef2`. This is a new native run, not a reinterpretation of an
+earlier failed report.
+
+The five feature checks establish:
+
+- Visible preedit before canonical commit: 70 new non-caret ink pixels and a
+  42-pixel caret advance, using the mapped-popup reconstruction above.
+- CJK commit, surrounding deletion and atomic undo/redo.
+- Composition retirement when focus enters the masked field.
+- Multiline composition and the corresponding caret rectangle.
+- Native RTL visual navigation.
+
+The five restoration checks separately pass: both exact example/peer units
+retire, the owned peer transport closes, original settings/wallpaper remain
+preserved, output/workspace remain preserved, and the original pointer is
+restored. The bounded unit observer reads consistent systemd property frames
+through acknowledged-stop completion and garbage collection; it still refuses a
+same-name successor and requires original process/cgroup drainage. No installed
+input-method owner was replaced.
+
+The earlier `9b7a7bd0` run had all five feature checks true but failed peer-unit
+cleanup during completed-unit metadata/garbage collection. Its original overall
+and restoration flags remain failed. Its separate guarded recovery remains
+independent evidence. The new pass supplies the previously missing owned-suite
+cleanup acceptance without changing either older result.
+
+This acceptance covers one owned peer and one prepared native output. Third-party
+IMEs, physical devices, cross-output text/clipboard, third-party GUI clipboard,
+broader text pixel/scroll and delayed focus/transfer races remain pending. Secure
+authentication remains opted out. The elapsed duration is not an FPS, latency or
+resource benchmark.

@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "milestone": "native-international-text",
+  "status": "scoped-owned-native-verified",
+  "recorded_date": "2026-10-19",
+  "implementation_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+  "example_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+  "peer_source_commit": "3beda6172b8ce7eeb7be77b7ebd055511388f6de",
+  "binaries_sha256": {
+    "desktop": "ecb557a094b583b45cfa07aeb9eb4284dc0bb2b86fdad3b1dbd5f4afc7b6b4ff",
+    "example": "3e9658d49d5ea480bdce05a4736b527786047f019364af9893079d5a8ec40dfe",
+    "peer": "5e823533c49713b1c5f488bd51564cf84838cd3df6e39384ac276749c53d93cc"
+  },
+  "native_harness_source_commit": "6bb80e5942bb05050f9a1532497080a98b429226",
+  "owned_unit_helper_source_commit": "89604f6ef20127ae7f84d716dbb923999da5d77c",
+  "tooling_sha256": {
+    "test-international-text.py": "2a82f25ec8520e63db314053b01b8ff91571411b85a28ddaeb200a266a99db55",
+    "owned_application_units.py": "0082d9c4c87c36a7cc65f361304a2fbda174af83f30d6713720d709a9193d5b7",
+    "international_text_policy.py": "7f248944c390a7cb3e3f4ba49c8484feebf175584f2374f606cbd58c05cf5455",
+    "international_text_pixels.py": "5de1178e3b94c4552bfd768edcf827ceb4ad3ee7424d7d347dcc29a195139d6b"
+  },
+  "scope": "One prepared native output in the existing Lucent QEMU guest; independent non-replacing mapped input-method peer and SDK example. The production desktop/example remain the coherent 8e release; the separately corrected acceptance peer does not relabel or rebuild that release.",
+  "native_checks": {
+    "passed": 5,
+    "checks": {
+      "native_preedit_ink_and_caret_advance_without_commit": true,
+      "commit_and_surrounding_delete_and_history": true,
+      "masked_focus_retires_composition": true,
+      "multiline_commit_and_cursor_rectangle": true,
+      "native_rtl_visual_navigation": true
+    }
+  },
+  "restoration": {
+    "passed": true,
+    "checks": {
+      "owned_example_and_peer_units_retired": true,
+      "owned_peer_transport_closed": true,
+      "settings_and_wallpaper_preserved": true,
+      "output_and_workspace_preserved": true,
+      "pointer_restored": true
+    }
+  },
+  "preedit_pixel_evidence": {
+    "new_noncaret_ink_pixels": 70,
+    "caret_advance_pixels": 42,
+    "canonical_text_unchanged_before_commit": true,
+    "scope": "Owned mapped-popup position and popup-local hints reconstruct advancing caret. New foreground ink lies between excluded old/new caret strips with stable field background; a blinking caret alone cannot satisfy this check."
+  },
+  "host_bounded_run": {
+    "elapsed_seconds": 108.776,
+    "duration_source": "Host bounded-run completion observation; not a rendering or latency benchmark."
+  },
+  "ownership_and_cleanup": {
+    "native_input_and_exact_owned_lifetimes_guarded": true,
+    "units_expire_after_seconds": 210,
+    "input_admission_ends_after_seconds": 170,
+    "captured_units_and_transport_retired": true,
+    "settings_wallpaper_output_workspace_and_pointer_restored": true,
+    "non_replacing_input_method": true,
+    "host_crash_cursor_restoration_established": false
+  },
+  "private_evidence": {
+    "report": "reports/local/international-text-native-8776afc2e1d7d3f6673bd4ef/report.json",
+    "report_sha256": "0daf30e5afb707ace4ff28f8c0d571ff2a69d86dbf208f089714854949cbdfb4",
+    "raw_receipts_not_published": true,
+    "omitted": "Process IDs/births, invocation IDs, native addresses, raw pointer/caret coordinates, guest runtime paths, text payloads and screenshots."
+  },
+  "prior_attempts": [
+    {
+      "private_report": "reports/local/international-text-native-5231c104b8c1b3a738b1f268/report.json",
+      "private_report_sha256": "de13a6a576b147aa0b236115d324977c0fcd44ea9c64d3993a0a42cc113d5308",
+      "original_status": "failed_before_composition",
+      "composition_checks_passed": 0,
+      "original_result_relabelled": false
+    },
+    {
+      "private_report": "reports/local/international-text-native-9b7a7bd02706f328fcd6770a/report.json",
+      "private_report_sha256": "36c28b62e1cff63345fa75d19c20d1fd5f2e97de37bfb9864e09a0a3592d9375",
+      "original_status": "five_feature_checks_passed_cleanup_failed",
+      "feature_checks_passed": 5,
+      "original_result_relabelled": false,
+      "separate_guarded_recovery_passed": true
+    }
+  ],
+  "not_established": [
+    "Third-party IME implementations, physical input devices, hardware hotplug and arbitrary applications.",
+    "Cross-output text/clipboard and third-party GUI clipboard interoperability.",
+    "Secure authentication/session-lock input methods; secure clients retain their default opt-out.",
+    "General native text pixels/scrolling, delayed clipboard/focus races or every script/font/layout.",
+    "Presentation FPS, animation smoothness, GPU memory, normal RSS acceptance or host-crash cursor recovery."
+  ],
+  "guide": "docs/native-text-acceptance.md"
+}

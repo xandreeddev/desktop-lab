@@ -9,7 +9,7 @@
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted main b474d1fe includes PR87, merged normally after all six required checks passed on exact 8e6d074b and CLEAN mergeability. Text and Application integration are merged and their coherent 8e release is deployed: six user clients and root greeter match the archive with original user/security state preserved. Exact 8e passes six CI checks and 832 visual cases. A 120-second RADV resource interval records 217.28/221.92 MiB mean/peak RSS but is host-pressure-ineligible; presentation/FPS remains unproven. A source-specific 16-check native run passes two-output density/input/retirement/recreation with one owned headless output and exact restoration, not physical or secure cross-output acceptance. The latest owned IME run has five feature checks true including preedit ink/caret evidence, but its overall cleanup result remains failed; separate guarded recovery passes. Earlier failed reports retain their original scope.",
+    "scope": "Accepted main b474d1fe includes PR87, merged normally after all six required checks passed on exact 8e6d074b and CLEAN mergeability. Text and Application integration are merged and their coherent 8e release is deployed: six user clients and root greeter match the archive with original user/security state preserved. Exact 8e passes six CI checks and 832 visual cases. A 120-second RADV resource interval records 217.28/221.92 MiB mean/peak RSS but is host-pressure-ineligible; presentation/FPS remains unproven. A source-specific 16-check native run passes two-output density/input/retirement/recreation with one owned headless output and exact restoration, not physical or secure cross-output acceptance. The fresh owned IME run passes all five feature and five restoration checks, including preedit ink/caret evidence and exact unit/transport retirement. Earlier failed reports and their independent recoveries retain their original scope; third-party IME, physical and cross-output text remain pending.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -88,9 +88,9 @@
       },
       {
         "id": "international-text",
-        "status": "merged_native_features_verified_cleanup_failed",
-        "implemented": "Merged 8e6d074b implements script/fallback shaping and ordinary opt-in IME, hard-paragraph levels across soft wraps, exact row-bound context, line-local L1/L2 and tab separator projection. Five owned native feature checks pass: real preedit ink/caret advance, CJK commit/surrounding-delete/history, masked-focus retirement, multiline composition and RTL navigation.",
-        "remaining": "Full native IME suite acceptance remains pending because the original five-feature run fails peer-unit cleanup on completed-unit metadata/GC. Separate independent guarded restoration passes without changing original failed/restoration flags. Broader native pixel/scroll, delayed clipboard/focus races, third-party IME and GUI clipboard acceptance remain pending. Exact merged 8e passes six CI checks, full workspace, six controlled service-protocol filters and 832 desktop visual cases; accessibility stays user-deferred.",
+        "status": "merged_scoped_owned_native_verified",
+        "implemented": "Merged 8e6d074b implements script/fallback shaping and ordinary opt-in IME, hard-paragraph levels across soft wraps, exact row-bound context, line-local L1/L2 and tab separator projection. Five owned native feature checks pass: real preedit ink/caret advance, CJK commit/surrounding-delete/history, masked-focus retirement, multiline composition and RTL navigation. A fresh controlled run also passes all five restoration checks, including exact unit/transport retirement and original settings/wallpaper/output/workspace/pointer restoration.",
+        "remaining": "Third-party IME, broader native pixel/scroll details, delayed clipboard/focus races, physical/cross-output text and third-party GUI clipboard acceptance remain pending. Exact merged 8e passes six CI checks, full workspace, six controlled service-protocol filters and 832 desktop visual cases; accessibility stays user-deferred. Earlier native failures and their separate guarded recovery retain their original flags.",
         "guides": [
           "docs/text-editing.md",
           "docs/multiline-text.md",
@@ -98,6 +98,72 @@
           "docs/native-text-acceptance.md"
         ],
         "latest_native_attempt": {
+          "status": "five_feature_and_five_restoration_checks_passed",
+          "private_report": "reports/local/international-text-native-8776afc2e1d7d3f6673bd4ef/report.json",
+          "private_report_sha256": "0daf30e5afb707ace4ff28f8c0d571ff2a69d86dbf208f089714854949cbdfb4",
+          "report": "reports/measurements/lucent-international-text.json",
+          "desktop_and_example_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "peer_source_commit": "3beda6172b8ce7eeb7be77b7ebd055511388f6de",
+          "native_harness_source_commit": "6bb80e5942bb05050f9a1532497080a98b429226",
+          "owned_unit_helper_source_commit": "89604f6ef20127ae7f84d716dbb923999da5d77c",
+          "peer_sha256": "5e823533c49713b1c5f488bd51564cf84838cd3df6e39384ac276749c53d93cc",
+          "feature_checks": {
+            "native_preedit_ink_and_caret_advance_without_commit": true,
+            "commit_and_surrounding_delete_and_history": true,
+            "masked_focus_retires_composition": true,
+            "multiline_commit_and_cursor_rectangle": true,
+            "native_rtl_visual_navigation": true
+          },
+          "feature_checks_passed": 5,
+          "restoration_checks": {
+            "owned_example_and_peer_units_retired": true,
+            "owned_peer_transport_closed": true,
+            "settings_and_wallpaper_preserved": true,
+            "output_and_workspace_preserved": true,
+            "pointer_restored": true
+          },
+          "restoration_checks_passed": 5,
+          "native_preedit_pixel_proof": {
+            "new_noncaret_ink_pixels": 70,
+            "caret_advance_pixels": 42,
+            "canonical_text_unchanged_before_commit": true,
+            "scope": "Owned mapped-popup position and popup-local hints reconstruct advancing caret. New foreground ink lies between excluded old/new caret strips with stable field background; a blinking caret alone cannot satisfy this check."
+          },
+          "overall_passed": true,
+          "scoped_owned_native_ime_acceptance_established": true,
+          "third_party_ime_acceptance_established": false,
+          "host_observed_elapsed_seconds": 108.776,
+          "original_historical_failure_and_restoration_flags_retained": true,
+          "guide": "docs/native-text-acceptance.md"
+        },
+        "historical_failed_before_composition_attempt": {
+          "status": "failed_before_composition",
+          "private_report": "reports/local/international-text-native-5231c104b8c1b3a738b1f268/report.json",
+          "private_report_sha256": "de13a6a576b147aa0b236115d324977c0fcd44ea9c64d3993a0a42cc113d5308",
+          "desktop_and_example_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "peer_source_commit": "3beda6172b8ce7eeb7be77b7ebd055511388f6de",
+          "peer_sha256": "5e823533c49713b1c5f488bd51564cf84838cd3df6e39384ac276749c53d93cc",
+          "fixed_failure": "exact_owned_pointer_arrival",
+          "composition_checks_passed": 0,
+          "sdk_fault_proven": false,
+          "native_ime_acceptance_established": false,
+          "original_failure_and_restoration_flags_retained": true,
+          "independent_recovery": {
+            "owned_units_and_processes_absent": true,
+            "same_original_8e_desktop_and_cursor": true,
+            "only_captured_refused_stale_socket_retired": true,
+            "readonly_receipt_sha256": "98715622f4116feac7edd615652a4a811a8828697ca47f6e2892564378b098bc",
+            "guarded_socket_receipt_sha256": "6919749f78ccd8984b8a26096675e10c00e8f31464d68f3a6546b0d0f3150ead"
+          },
+          "cleanup_correction": {
+            "source_commit": "47fa3ac96d76e3880fdf4fe70dba24ab98a9cef3",
+            "scope": "Acknowledged StopUnit may clear transient metadata while deactivating; original PID birth and recursive cgroup must drain. Original stop admission and successor refusal remain strict.",
+            "focused_ownership_checks_passed": 26,
+            "native_rerun_passed": false
+          },
+          "guide": "docs/native-text-acceptance.md"
+        },
+        "historical_five_feature_cleanup_failed_attempt": {
           "status": "five_feature_checks_passed_cleanup_failed",
           "private_report": "reports/local/international-text-native-9b7a7bd02706f328fcd6770a/report.json",
           "private_report_sha256": "36c28b62e1cff63345fa75d19c20d1fd5f2e97de37bfb9864e09a0a3592d9375",
@@ -133,33 +199,6 @@
           },
           "cleanup_correction_native_rerun_pending": true,
           "guide": "docs/native-text-acceptance.md"
-        },
-        "historical_failed_before_composition_attempt": {
-          "status": "failed_before_composition",
-          "private_report": "reports/local/international-text-native-5231c104b8c1b3a738b1f268/report.json",
-          "private_report_sha256": "de13a6a576b147aa0b236115d324977c0fcd44ea9c64d3993a0a42cc113d5308",
-          "desktop_and_example_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
-          "peer_source_commit": "3beda6172b8ce7eeb7be77b7ebd055511388f6de",
-          "peer_sha256": "5e823533c49713b1c5f488bd51564cf84838cd3df6e39384ac276749c53d93cc",
-          "fixed_failure": "exact_owned_pointer_arrival",
-          "composition_checks_passed": 0,
-          "sdk_fault_proven": false,
-          "native_ime_acceptance_established": false,
-          "original_failure_and_restoration_flags_retained": true,
-          "independent_recovery": {
-            "owned_units_and_processes_absent": true,
-            "same_original_8e_desktop_and_cursor": true,
-            "only_captured_refused_stale_socket_retired": true,
-            "readonly_receipt_sha256": "98715622f4116feac7edd615652a4a811a8828697ca47f6e2892564378b098bc",
-            "guarded_socket_receipt_sha256": "6919749f78ccd8984b8a26096675e10c00e8f31464d68f3a6546b0d0f3150ead"
-          },
-          "cleanup_correction": {
-            "source_commit": "47fa3ac96d76e3880fdf4fe70dba24ab98a9cef3",
-            "scope": "Acknowledged StopUnit may clear transient metadata while deactivating; original PID birth and recursive cgroup must drain. Original stop admission and successor refusal remain strict.",
-            "focused_ownership_checks_passed": 26,
-            "native_rerun_passed": false
-          },
-          "guide": "docs/native-text-acceptance.md"
         }
       },
       {
@@ -182,7 +221,7 @@
       {
         "id": "documentation-accuracy",
         "status": "source_reconciled_remote_site_ci_pending",
-        "implemented": "Current guides reconcile accepted main b474d1fe/PR87 with exact compiled/deployed 8e, six passing checks and 832 visuals, five actual IME feature checks with failed cleanup plus separate verified recovery, scoped 16-check owned-headless two-output acceptance and the 217.28/221.92 MiB host-ineligible normal resource observation. No complete IME suite, real-application/GUI clipboard/tray, physical/secure-output/suspend or presentation/FPS acceptance is inferred. Historical failures retain their scopes.",
+        "implemented": "Current guides reconcile accepted main b474d1fe/PR87 with exact compiled/deployed 8e, six passing checks and 832 visuals, five actual owned IME feature and five restoration checks, retaining earlier failed cleanup and separate recovery as history, scoped 16-check owned-headless two-output acceptance and the 217.28/221.92 MiB host-ineligible normal resource observation. No third-party IME, real-application/GUI clipboard/tray, physical/secure-output/suspend or presentation/FPS acceptance is inferred. Historical failures retain their scopes.",
         "remaining": "Astro/site checks for this branch and continued source-specific reconciliation after later PRs merge. Historical reports remain unchanged."
       }
     ],
@@ -261,10 +300,20 @@
         "report": "reports/measurements/lucent-native-multi-output.json",
         "accepted": "16 actual compositor/QMP checks: original output plus one owned headless output; 1x/2x/1.25x simultaneous density/geometry and audio-panel input on both; held-button output/host/scoped-surface retirement; same-name new Wayland global/host generation and fresh input. Full supervisor/configuration/settings/media/output/workspace/cursor preservation passes.",
         "not_established": "Physical monitors/cable hotplug, suspend/resume, secure outputs, multi-output Display settings transactions, cross-output text/clipboard, resource targets or actual presentation FPS. Earlier blocked coordinate/shared-dock reports retain their original results."
+      },
+      {
+        "feature": "owned-native-international-text",
+        "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+        "peer_source_commit": "3beda6172b8ce7eeb7be77b7ebd055511388f6de",
+        "native_harness_source_commit": "6bb80e5942bb05050f9a1532497080a98b429226",
+        "owned_unit_helper_source_commit": "89604f6ef20127ae7f84d716dbb923999da5d77c",
+        "report": "reports/measurements/lucent-international-text.json",
+        "accepted": "Five native feature and five restoration checks: visible preedit (70 new non-caret ink pixels/42-pixel caret advance), CJK commit/delete/history, masked-focus retirement, multiline composition and RTL visual navigation. Both exact units and owned transport retire; original settings/wallpaper/output/workspace/pointer restore.",
+        "not_established": "Third-party IME, physical devices, cross-output text/clipboard, GUI clipboard, secure authentication, broader pixel/scroll/focus races, presentation FPS or resource acceptance. Earlier failed reports remain unchanged."
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
-    "validation": "PR87 merged normally at b474d1fe after fresh all-six SUCCESS and CLEAN mergeability on exact 8e6d074b. Exact 8e runtime passes push 39313647281 and PR 39313659557 CI: six required checks, full workspace, six controlled service-protocol filters, explicit 1x/2x wrapped/cache regressions and 832 desktop visuals. Its coherent locked/offline release builds all nine executables; all six managed user clients and root greeter are now deployed with only changed compat.py, exact original user/security state and supervision beyond startup deadline verified. Acceptance examples are staged privately. A normal uninstrumented 120.000492-second RADV interval records 480 samples, mean 217.281934 / peak 221.921875 MiB, CPU 112.24954% of one core and zero guest-process swap; full preservation passes. Host swap-in of 674 pages and I/O full-stall fraction 0.5081035 make it ineligible, with RSS-target acceptance null. Presentation/PTS are off; no FPS, smoothness, matched historical improvement, GPU-memory or hardware-decode proof. Earlier a7f hardware liveness, software RSS failure and failed/recovered trials retain their sources. Final native feature, site and exact-head delivery gates remain separate; editing docs executes none of them. Native f16cb591 on exact 8e separately passes 16 two-output checks with real input, pressed-surface retirement and same-name new lifetime; full restoration passes. This does not establish physical/suspend/secure-output or presentation/resource acceptance. The latest owned IME attempt has all five functional checks true, including 70 non-caret preedit ink pixels and 42-pixel caret advance, but its original overall/cleanup flags remain failed. Separate guarded restoration succeeds and does not relabel the run; corrected cleanup still needs a fresh native gate. Profiling-enable work is not a completed presentation measurement.",
+    "validation": "PR87 merged normally at b474d1fe after fresh all-six SUCCESS and CLEAN mergeability on exact 8e6d074b. Exact 8e runtime passes push 39313647281 and PR 39313659557 CI: six required checks, full workspace, six controlled service-protocol filters, explicit 1x/2x wrapped/cache regressions and 832 desktop visuals. Its coherent locked/offline release builds all nine executables; all six managed user clients and root greeter are now deployed with only changed compat.py, exact original user/security state and supervision beyond startup deadline verified. Acceptance examples are staged privately. A normal uninstrumented 120.000492-second RADV interval records 480 samples, mean 217.281934 / peak 221.921875 MiB, CPU 112.24954% of one core and zero guest-process swap; full preservation passes. Host swap-in of 674 pages and I/O full-stall fraction 0.5081035 make it ineligible, with RSS-target acceptance null. Presentation/PTS are off; no FPS, smoothness, matched historical improvement, GPU-memory or hardware-decode proof. Earlier a7f hardware liveness, software RSS failure and failed/recovered trials retain their sources. Final native feature, site and exact-head delivery gates remain separate; editing docs executes none of them. Native f16cb591 on exact 8e separately passes 16 two-output checks with real input, pressed-surface retirement and same-name new lifetime; full restoration passes. This does not establish physical/suspend/secure-output or presentation/resource acceptance. The fresh owned IME suite at harness 6bb80e5942/shared observer 89604f6ef2 passes all five feature and five restoration checks on the unchanged 8e desktop/example and 3beda617 peer, including 70 non-caret preedit ink pixels and 42-pixel caret advance. Earlier failed reports and separate recovery retain their flags; third-party/physical/cross-output IME acceptance is not implied. Profiling-enable work is not a completed presentation measurement.",
     "accepted_main_base_commit": "b474d1fe845a7cfd716daf7c382de0769fbf3849",
     "documentation_harness_base_commit": "cd88371923b43c53f5b48d4bafe78131ea6df8c3",
     "runtime_compilation_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
@@ -363,7 +412,7 @@
         "feature": "international-text",
         "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
         "implementation": "Script shaping, deterministic fallback and ordinary opt-in IME, plus hard-paragraph levels across soft wraps, exact row-bound context, line-local upstream L1/L2, canonical tab separator projection and a stale-context text-cache guard.",
-        "pending": "Complete native IME cleanup/acceptance, wider text and GUI clipboard acceptance. Five owned native feature checks pass but their original run is failed on peer-unit cleanup; separate guarded restoration succeeds. Exact 8e CI and all-nine release build pass and the coherent runtime is deployed.",
+        "pending": "Third-party IME, wider native pixel/scroll/focus-race, physical/cross-output text and GUI clipboard acceptance. The fresh owned suite passes five feature and five restoration checks; earlier failed cleanup and separate guarded recovery retain their flags. Exact 8e CI and all-nine release build pass and the coherent runtime is deployed.",
         "historical_executable_checks_source_commit": "eec582ab0aa7c06b4ed30d24a0670c6a1df91e21",
         "historical_full_visual_source_commit": "5d3501ebd9e02dccca62f7c2f9cae59056e40a7a",
         "historical_full_visual_cases": 832,
@@ -394,7 +443,8 @@
           "visual_artifact_sha256": "ff1e0e4e6649a0f7ba20b4f8f6cd5714decec2917c92b60f4be3f6004a37b0b6"
         },
         "merged_pull_request": 87,
-        "accepted_main_merge_commit": "b474d1fe845a7cfd716daf7c382de0769fbf3849"
+        "accepted_main_merge_commit": "b474d1fe845a7cfd716daf7c382de0769fbf3849",
+        "scoped_native_report": "reports/measurements/lucent-international-text.json"
       },
       {
         "feature": "application-integration",

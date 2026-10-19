@@ -10,10 +10,10 @@ compiled runtime; editing its guides does not rebuild or repeat runtime tests.
 
 The earlier three-second RADV liveness trial remains scoped to `a7f41ecc`.
 A later 16-check native run on `8e6d074b` passes two-output density/input and
-lifetime retirement with one owned headless output and full restoration. Five
-owned IME feature checks also pass, including visible preedit/caret evidence,
-but that run fails its cleanup gate; separate guarded recovery passes without
-changing the original failed report. The normal resource observation remains
+lifetime retirement with one owned headless output and full restoration. The fresh
+owned IME suite passes five feature and five restoration checks, including visible
+preedit/caret evidence and exact fixture retirement. Earlier failed runs and their
+separate guarded recovery retain their original results. The normal resource observation remains
 host-pressure-ineligible and presentation FPS is unproven. The seven requested
 gaps all remain in scope. Accessibility is separately deferred by the user.
 
@@ -46,7 +46,7 @@ ledger's requirement history remains useful for the broader backlog.
 | Saved Wi-Fi recovery | Merged native masked SecretAgent repair retains the saved profile UUID and storage policy. Fourteen native NetworkManager/GUI checks pass against owned simulated WPA2/hidden radios, including cancellation, repair, DHCP, saved reconnection and exact restoration. | Enterprise/WEP provisioning, agent-owned vaults and physical-radio acceptance remain separate gaps; they are not implied by the owned fixture. |
 | Safe display settings | Native whole-layout drafts, fresh ordered observations, Apply → Keep/Revert and independent 15-second/UI-crash EOF rollback. Seven actual one-output QEMU flows pass for mode, scale, position, persistence and recovery. File preservation is exact; the expected one-restart service transition is validated explicitly. | Physical/multiple outputs, native enable/disable/rotation, fractional display-settings input, hotplug, suspend/resume, compositor restart and secure-output acceptance remain open. The Keep-to-file-identity-capture host-loss interval retains manual recovery. |
 | Resources and animation | Event-driven redraw, bounded image/preview ownership and live-video physical-cover conversion are implemented. The deployed `8e6d074b` RADV cohort records 217.28 MiB mean / 221.92 MiB sampled peak RSS over 120 seconds. | The result is ineligible for the 300 MiB acceptance gate because host swap activity and I/O full-stall pressure exceed the reviewed bounds. Presentation tracing was off: no FPS or smoothness result. Historical llvmpipe 384.82/403.88 MiB remains a different cohort, without a matched speedup comparison. |
-| International text | Merged `8e6d074b` implements script shaping, hard-paragraph context across soft wraps, exact row-bound visual source/caret maps, tab separator projection, deterministic fallback and opt-in text-input-v3 composition. Five owned native feature checks pass: visible preedit/caret advance, CJK commit/delete/history, masked-focus retirement, multiline composition and RTL navigation. | The original native run remains failed at cleanup; separate independent guarded restoration passes. Full IME suite acceptance, broader native pixel/scroll details, delayed clipboard/focus races and third-party GUI clipboard remain pending. Exact merged `8e6d074b` passes six CI checks, full workspace, six controlled service-protocol filters and 832 Vulkan desktop cases; those checks retain their own scope. |
+| International text | Merged `8e6d074b` implements script shaping, hard-paragraph context across soft wraps, exact row-bound visual source/caret maps, tab separator projection, deterministic fallback and opt-in text-input-v3 composition. Five owned native feature checks pass: visible preedit/caret advance, CJK commit/delete/history, masked-focus retirement, multiline composition and RTL navigation. | The fresh owned native suite passes all five feature and five restoration checks; earlier cleanup failures retain their original results. Third-party IME, broader native pixel/scroll details, delayed clipboard/focus races, physical/cross-output text and third-party GUI clipboard remain pending. Exact merged `8e6d074b` passes six CI checks, full workspace, six controlled service-protocol filters and 832 Vulkan desktop cases; those checks retain their own scope. |
 | Application integration | Accepted main includes catalog, pins, ordinary activation, declared actions and Application `bb304907` through merged/deployed `8e6d074b`: fresh input-bound activation context, explicit file/URI Open and expanded XDG parsing/observation. | Native third-party launch/open/action acceptance remains pending. An intent token, dispatch acknowledgement or prepared harness does not prove focus, document loading or application interoperability. |
 | Real-world validation | Several owned native workflows already pass. The coherent `8e6d074b` also passes 16 checks for two simultaneous compositor outputs, one headless, including real panel input at 1×/2×/1.25×, held-button retirement, same-name recreation and exact restoration. | Physical monitors/cable hotplug, suspend/resume, secure-output changes, physical Bluetooth/audio and other power/radio hardware, third-party tray applications and GUI clipboard interoperability need broader testing. The owned output test establishes no presentation FPS or multi-output Display settings transaction. |
 | Documentation accuracy | This reconciliation updates current summaries and repository skills against source-specific evidence. | Keep summaries and the ledger current when later PRs merge; site validation is required for this documentation change. Historical evidence must retain its original scope. |
@@ -61,7 +61,7 @@ their stated source; delivery and acceptance must be identified separately.
 
 | Cohort | Implemented scope | Delivery and acceptance boundary |
 | --- | --- | --- |
-| Text `8e6d074b` | Shared glyph/source geometry, script/fallback shaping and ordinary IME, plus hard-paragraph levels across wraps, exact row-bound resolved context, line-local L1/L2, tab separator projection and a stale-context cache guard. | Merged through PR87, source-reviewed and deployed. Focused formatting/Clippy, six wrapped UI, one upstream reference, six panel and two 1×/2× Vulkan checks pass. Final full workspace/protocol/832-case CI and the coherent release build also pass at `8e6d074b`; five owned native feature checks pass but overall native text cleanup/acceptance remains pending. Earlier evidence retains its own source scope. The [text guide](text-shaping.md) and [typography review](text-baseline-review.md) preserve those sources. |
+| Text `8e6d074b` | Shared glyph/source geometry, script/fallback shaping and ordinary IME, plus hard-paragraph levels across wraps, exact row-bound resolved context, line-local L1/L2, tab separator projection and a stale-context cache guard. | Merged through PR87, source-reviewed and deployed. Focused formatting/Clippy, six wrapped UI, one upstream reference, six panel and two 1×/2× Vulkan checks pass. Final full workspace/protocol/832-case CI and the coherent release build also pass at `8e6d074b`; five owned native feature checks and all five restoration checks pass in the fresh controlled suite. Third-party IME and wider text acceptance remain pending. Earlier evidence retains its own source scope. The [text guide](text-shaping.md) and [typography review](text-baseline-review.md) preserve those sources. |
 | Application `bb304907` | Domain open/context values, XDG adapter dispatch/revalidation and generic opt-in Wayland activation effects; standalone intent consumer and owned native harness. | Merged through PR87 and included in deployed `8e6d074b`. Native launch/open/action proof remains pending; [activation](application-activation.md) separates physical input from socket commands. |
 | Documentation/native-harness base `cd883719` | Includes guarded tools for real applications, GUI clipboard, third-party tray, simultaneous outputs and suspend/recovery, plus the reviewed IME lifetime/input guards from `6282122f`. Runtime compilation remains `8e6d074b`. | Tool existence alone is not native acceptance. The later `f16cb591` simultaneous-output harness passes its scoped 16-check native run on production `8e6d074b`; other workflows, physical devices and hardware pacing remain pending. |
 
@@ -84,22 +84,22 @@ beyond its startup deadline. The three acceptance executables are staged private
 not installed as user applications. The successful private receipt is
 `reports/local/daily-text-8e-deployment-33ba0219a8a4a8a4c924f896.json`.
 
-The latest mapped-peer IME attempt uses the merged `8e` desktop/example and
-independent peer `3beda617`. All five feature checks are true: real preedit
-adds 70 non-caret ink pixels with 42-pixel caret advance before commit, CJK
-commit/surrounding-delete/history, masked-focus composition retirement,
-multiline commit/cursor rectangle and native RTL visual navigation. This is one
-owned peer/output, not third-party IME or physical-device acceptance.
+The fresh mapped-peer IME suite uses the merged `8e` desktop/example and
+independent peer `3beda617`, with harness `6bb80e5942` and shared unit observer
+`89604f6ef2`. All five feature checks pass: preedit adds 70 non-caret ink pixels
+with 42-pixel caret advance before commit, CJK commit/surrounding-delete/history,
+masked-focus composition retirement, multiline commit/cursor rectangle and native
+RTL visual navigation. All five restoration checks also pass: exact fixture
+units retire, the owned peer transport closes, settings/wallpaper and
+output/workspace remain preserved, and the original pointer is restored. The
+host-observed bounded run takes 108.776 seconds; this is no timing benchmark.
 
-The run's overall result is **failed** because peer-unit cleanup encounters a
-completed-unit metadata/garbage-collection assertion; original restoration flags
-remain false. A separate independent guarded restoration verifies both captured
-units/PIDs absent, the same desktop and exact settings/wallpaper/output/workspace,
-only the captured refused socket retired, and original cursor restored. That
-successful recovery does not turn the original run into a passed full suite.
-The earlier failed-before-composition attempt remains historical. Cleanup tooling
-is being corrected; its fresh native gate remains pending. See
-[the native text evidence](native-text-acceptance.md).
+The [sanitized report](../reports/measurements/lucent-international-text.json)
+records this owned one-output acceptance. It does not establish third-party IME,
+physical-device, cross-output text or GUI clipboard behavior. The earlier
+five-feature run failed peer-unit cleanup, and its separate guarded recovery
+passed; both keep their original flags. Earlier failed-before-composition runs
+also remain historical. See [the native text evidence](native-text-acceptance.md).
 
 The later AMD native-context trial passes RADV RENOIR enumeration, secure login,
 Lucent hardware-adapter selection and advancing native frame counters over three
@@ -111,8 +111,8 @@ preservation failure and its recovery remain historical evidence, as does the
 failed Venus trial. See [the dated graphics report](lucent-vulkan.md).
 
 That earlier trial establishes hardware-path liveness on its named binary; the
-later `8e6d074b` deployment and resource observation have their own scope. Complete native
-IME cleanup acceptance, real application launch/Open/action, GUI clipboard, third-party tray,
+later `8e6d074b` deployment and resource observation have their own scope. Third-party
+IME, real application launch/Open/action, GUI clipboard, third-party tray,
 physical-device and instrumented presentation acceptance remain pending. The
 later [two-output report](../reports/measurements/lucent-native-multi-output.json)
 records its separate owned-headless native density/input/removal acceptance;
@@ -130,6 +130,7 @@ executions caused by editing this guide.
 | [Saved Wi-Fi recovery, `c17d6e7d`](../reports/measurements/lucent-wifi-credential-recovery.json) | Fourteen native NetworkManager and panel checks against owned WPA2/hidden simulated radios: incorrect-password cancellation, missing-secret masked repair on the same UUID without duplicates, DHCP, subsequent prompt-free reconnect, targeted disconnect/Forget and original routes/profiles/radio/preferences restored. | Physical Wi-Fi, SAE/OWE/enterprise/WPS, agent-owned vaults, captive portals and suspend remain unverified. Executable source is `c17d6e7d`; final documentation head `0c7c8e98` merged in PR82. |
 | [Displays, `a7f41ecc`](../reports/measurements/lucent-display-settings.json) | Seven actual native input flows: compatibility open/Escape, draft-only mode, mode Apply/Revert, scale timeout, position Keep, original file/native restoration and deliberate UI-crash EOF rollback. All file hashes/identities are exact; the expected one-restart process transition passes explicit unit/process/recovery validation. | One QEMU output. Actual input source `c43df300`; offline validator `b259ea29` uses captured evidence plus one read-only probe. The original generic fingerprint assertion failed after the expected restart and is retained; this contract correction does not replay the inputs. Physical/multiple outputs, native enable/disable/rotation, hotplug/suspend and secure-output acceptance remain open. |
 | [Two simultaneous outputs, `8e6d074b`](../reports/measurements/lucent-native-multi-output.json) | 16 native checks with harness `f16cb591`: original output plus one owned headless output, real audio-panel clicks on both at 1×/2×/1.25×, held-button removal, scoped host/surface retirement, same-name new global/generation and real input afterward. Original monitor/workspace/cursor, supervisor, configuration/settings/referenced media and idle marker restore exactly. | Owned QEMU output workload. No physical cable/display, secure-output, suspend, multi-output Display settings transactions, cross-output text/clipboard or presentation/resource acceptance. Earlier coordinate and shared-dock assertion failures remain failed reports. |
+| [Owned international text, `8e6d074b`](../reports/measurements/lucent-international-text.json) | Five native feature checks and five restoration checks pass with harness `6bb80e5942`, owned-unit observer `89604f6ef2` and mapped peer `3beda617`: real preedit ink/caret advance, CJK commit/delete/history, masked-focus retirement, multiline composition and RTL navigation; exact fixtures/transport retire and original settings/wallpaper/output/workspace/pointer restore. | One owned non-replacing peer and one prepared output. Third-party IMEs, physical/cross-output text, GUI clipboard, secure authentication and broader pixel/scroll/focus-race acceptance remain separate. Earlier failed reports retain their original flags. |
 | [Notes, `3806bcfc`](../reports/measurements/lucent-multiline-notes.json) | 17 functional and nine restoration checks: native editing/navigation/selection, grapheme deletion, undo, copy/cut/paste with `wl-copy`/`wl-paste`, resized editing geometry, restart persistence and stable restored supervision. | One output. No third-party GUI clipboard interoperability or general native pixel-level caret/selection/clipping proof, scrollbar-thumb drag, exact soft-wrap/scroll affinity, Page Up/Down/edge-autoscroll or delayed clipboard/focus-retirement race acceptance. The report retains an initial restoration failure and the later successful fresh run. |
 | [Tray, `b8a69c8f`](../reports/measurements/lucent-tray-bar.json) | Owned SNI/DBusMenu fixture with actual VM pointer/keyboard input: primary/middle/vertical-wheel actions, right-click menu, menu-only fallback, overflow, item status/owner retirement and stale-reply handling. | No third-party application compatibility. Application-owned popups use neutral position hints; horizontal/high-resolution wheel coverage is automated rather than this native test. No XEmbed or hardware/performance claim. |
 | [Live display fit, `83a02372`](../reports/measurements/lucent-live-display-fit.json) | One-output live video follows actual resize, integer/fractional density and rapid target changes; old producer generations retire and fitted frames continue. Original output/preferences/source restore. | No simultaneous-output placement/input, alpha-safe fitting, seamless playhead retargeting, hardware decode or actual 60 FPS presentation proof. Software resource targets remain unmet. |
