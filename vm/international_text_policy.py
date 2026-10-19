@@ -124,6 +124,19 @@ def focused_field(state, field, status):
             'native_input_method_confirms_owned_field_focus')
 
 
+def captured_cleanup(configuration, attempted):
+    """A lost/refused start reply never grants cleanup over a lookalike unit."""
+    expected = configuration.get('expected', {})
+    result = dict(configuration)
+    missing = []
+    for name in ('example', 'peer'):
+        if name not in expected:
+            result[name] = None
+            if name in attempted:
+                missing.append(name)
+    return result, missing
+
+
 # Invoked only by the prepared harness through the guest session. Reuses typed
 # systemd ExecStart/InvocationID/cgroup and /proc identity checks from App tooling.
 OBSERVATION_FUNCTIONS = UNIT_IDENTITY + r'''
@@ -190,6 +203,15 @@ result['authority']=authority
 print(json.dumps(result))
 '''
 
+ABSENT = UNIT_IDENTITY + r'''
+import sys
+units=json.loads(sys.argv[1]);assert len(units)==2 and len(set(units))==2
+for unit in units:
+ assert re.fullmatch(r'lucent-international-(test|peer)-[a-f0-9]{24}\.service',unit)
+ assert unit_snapshot(unit)=={'load':'not-found'},'initial_owned_unit_name_must_be_absent'
+print(json.dumps({'initial_units_absent':True}))
+'''
+
 RETIRE = OBSERVATION_FUNCTIONS + r'''
 import sys
 config=json.loads(sys.argv[1]);failures=[]
@@ -199,7 +221,7 @@ for name in ('example','peer'):
  try:
   assert re.fullmatch(r'lucent-international-(test|peer)-[a-f0-9]{24}\.service',spec['unit'])
   assert len(spec['argv'])==1 and Path(spec['argv'][0]).is_absolute()
-  captured=config.get('expected',{}).get(name)
+  captured=config.get('expected',{}).get(name);assert captured is not None,'captured_owned_invocation_required'
   retire_unit(spec['unit'],spec['argv'],group=captured['unit']['group'] if captured else None,captured=captured)
  except Exception:
   # Continue retiring the other exact owned unit, then fail closed. No input or

@@ -91,6 +91,15 @@ class InputPolicy(unittest.TestCase):
         with self.assertRaises(ValueError):
             policy.field_geometry(state, layer, 'single')
 
+    def test_lost_or_refused_start_never_authorizes_cleanup_of_a_lookalike_unit(self):
+        config = {'desktop_sha256': 'hash', 'example': {'unit': 'existing', 'argv': ['/exact']},
+                  'peer': {'unit': 'ours', 'argv': ['/peer']}, 'expected': {'peer': {'unit': {}, 'process': {}}}}
+        cleanup, uncertain = policy.captured_cleanup(config, ['example', 'peer'])
+        self.assertIsNone(cleanup['example'])
+        self.assertEqual(cleanup['peer'], config['peer'])
+        self.assertEqual(uncertain, ['example'])
+        self.assertIsNotNone(config['example'])
+
     def test_output_and_active_workspace_changes_are_visible_to_the_guard(self):
         monitor = {'name': 'Virtual-1', 'activeWorkspace': {'id': 1}, 'width': 1920, 'height': 1080,
                    'scale': 1, 'transform': 0, 'refreshRate': 60, 'dpmsStatus': True}
@@ -164,7 +173,7 @@ class OwnedGuestBoundary(unittest.TestCase):
         expected = {'unit': {'group': '/owned/'+unit}, 'process': {}}
         config = {'example': {'unit': unit, 'argv': ['/owned/international-text']},
                   'peer': {'unit': peer, 'argv': ['/owned/input-method-peer']},
-                  'expected': {'example': expected, 'example_socket': identity}}
+                  'expected': {'example': expected, 'peer': {'unit': {'group': '/owned/'+peer}, 'process': {}}, 'example_socket': identity}}
         path = MagicMock();path.__truediv__.return_value = path
         actual = copy.copy(info)
         if replaced:
@@ -195,6 +204,16 @@ class OwnedGuestBoundary(unittest.TestCase):
         events, path = self.retirement(replaced=True)
         self.assertEqual(len(events), 2)
         path.unlink.assert_not_called()
+
+    def test_initial_typed_unit_preflight_refuses_existing_even_with_exact_arguments(self):
+        namespace = self.functions()
+        calls = []
+        namespace['unit_snapshot'] = lambda name: calls.append(name) or {'load': 'loaded', 'argv': ['/exact']}
+        units = ['lucent-international-test-'+'a'*24+'.service', 'lucent-international-peer-'+'a'*24+'.service']
+        with patch.object(sys, 'argv', ['fixture', json.dumps(units)]), patch('builtins.print'):
+            with self.assertRaisesRegex(AssertionError, 'initial_owned_unit_name_must_be_absent'):
+                exec(policy.ABSENT.removeprefix(policy.UNIT_IDENTITY), namespace)
+        self.assertEqual(calls, units[:1])
 
     def test_helpers_import_without_native_or_process_actions(self):
         spec = importlib.util.spec_from_file_location('native_text_driver', ROOT/'vm/test-international-text.py')

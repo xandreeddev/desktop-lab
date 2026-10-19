@@ -108,7 +108,7 @@ def main():
     unit = 'lucent-international-test-' + tag + '.service'
     peer_unit = 'lucent-international-peer-' + tag + '.service'
     peer = peer_log = None
-    example_attempted = peer_attempted = pressed = False
+    example_attempted = peer_attempted = example_confirmed = peer_confirmed = pressed = False
     original = original_outputs = original_workspace = cursor = None
     authority = {}
     frozen_layer = None
@@ -132,9 +132,9 @@ def main():
         expected = authority if owned else {k: v for k, v in authority.items() if k.startswith('desktop')}
         return {'desktop_sha256': args.desktop_sha256, 'expected': expected,
                 'example': {'unit': unit, 'argv': [args.example_bin], 'sha256': args.example_sha256}
-                           if owned and example_attempted else None,
+                           if owned and example_confirmed else None,
                 'peer': {'unit': peer_unit, 'argv': [args.peer_bin], 'sha256': args.peer_sha256}
-                        if owned and peer_attempted else None}
+                        if owned and peer_confirmed else None}
 
     def observe(owned=True):
         value = json.loads(session('python3', '-c', policy.OBSERVE, json.dumps(configuration(owned))))
@@ -157,7 +157,7 @@ def main():
         policy.safe_bindings(json.loads(session('hyprctl', '-j', 'binds')))
         layer = policy.owned_layers(json.loads(session('hyprctl', '-j', 'layers')),
                     value['authority']['desktop']['pid'],
-                    value['authority']['example']['process']['pid'] if owned and example_attempted else None)
+                    value['authority']['example']['process']['pid'] if owned and example_confirmed else None)
         if layer is not None:
             if frozen_layer is None:
                 frozen_layer = layer
@@ -293,6 +293,8 @@ def main():
         peer_log = (directory / 'peer-private.log').open('xb')
         os.chmod(directory / 'peer-private.log', 0o600)
         input_deadline = time.monotonic() + 170
+        require(json.loads(session('python3', '-c', policy.ABSENT, json.dumps([unit, peer_unit])))['initial_units_absent'],
+                'initial_owned_unit_names_absent')
         peer_attempted = True
         peer = subprocess.Popen(lab.ssh_args('lucent') + [shlex.join([
             'python3', 'desktop-lab/scripts/in-session.py', 'systemd-run', '--user', '--quiet', '--pipe', '--wait',
@@ -300,11 +302,17 @@ def main():
             '--property=CPUQuota=100%', '--property=MemoryMax=256M', '--unit=' + peer_unit, '--', args.peer_bin])],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=peer_log, bufsize=0)
         require(not command(action='status', expected='').get('unavailable'), 'nonreplacing_peer_available')
+        # A reply on this newly attached child stdio confirms its own launch;
+        # a refused systemd-run cannot attach us to an existing service's pipes.
+        peer_confirmed = True
         observe()
         example_attempted = True
         session('systemd-run', '--user', '--quiet', '--collect', '--property=Type=exec',
                 '--property=RuntimeMaxSec=210s', '--property=TimeoutStopSec=10s',
                 '--property=CPUQuota=100%', '--property=MemoryMax=768M', '--unit=' + unit, '--', args.example_bin)
+        # A failed/lost start reply leaves this false: only captured successful
+        # invocations are eligible for cleanup, never a matching preexisting unit.
+        example_confirmed = True
         eventually(lambda: len(inspect()['surfaces']) == 1, 'owned_example_ready')
         guard()
         private(directory / 'owned-authority-private.json', authority)
@@ -363,8 +371,13 @@ def main():
             except Failure:
                 report['restoration']['pointer_released'] = False
         try:
-            session('python3', '-c', policy.RETIRE, json.dumps(configuration()))
-            report['restoration']['owned_example_and_peer_units_retired'] = True
+            cleanup, uncertain = policy.captured_cleanup(configuration(),
+                [name for name, attempted in (('example', example_attempted), ('peer', peer_attempted)) if attempted])
+            session('python3', '-c', policy.RETIRE, json.dumps(cleanup))
+            report['restoration']['owned_example_and_peer_units_retired'] = not uncertain
+            if uncertain:
+                report['unconfirmed_start_attempts_not_retired'] = uncertain
+                report['unconfirmed_start_policy'] = 'No cleanup authority inferred after a refused/lost launch reply or missing captured lifetime. Any actually created unit remains bounded by its independent210second watchdog.'
         except (Failure, ValueError):
             report['restoration']['owned_example_and_peer_units_retired'] = False
         if peer is not None:

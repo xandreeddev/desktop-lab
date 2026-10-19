@@ -28,6 +28,10 @@ submitted, fully visible hit geometry and a frozen native layer lifetime.
 The example and non-replacing peer run in distinct random transient systemd
 units. Typed `ExecStart` arguments, invocation identity, executable and process
 birth/cgroup are authority; command substrings and namespaces alone are not.
+Both names must be absent by typed systemd inspection before startup. A refused
+or lost start reply, or a missing captured invocation, never authorizes stopping a
+lookalike existing unit; uncertain launches remain explicit failures and any
+actually created fixture unit keeps its independent watchdog.
 Both units expire after210seconds independently of the host harness, with a
 10-second stop timeout. Input admission ends after170seconds. Cleanup retires the
 exact example before the peer, removes only its captured socket inode, and
