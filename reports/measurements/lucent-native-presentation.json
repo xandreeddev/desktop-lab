@@ -1,0 +1,426 @@
+{
+  "analysis": {
+    "collector_request_lower_bound": {
+      "adjacent_repeated_prepared_revisions": 0,
+      "distinct_prepared_revisions_referenced": 3276,
+      "distinct_revision_advances": 3275,
+      "distinct_revision_advances_per_second": 26.999176710600853,
+      "feedback_intervals_per_second": 26.999176710600853,
+      "feedback_samples": 3276,
+      "flags_histogram": {
+        "7": 3276
+      },
+      "joined_source_samples": 3276,
+      "prepared_catalog_between_first_and_last_reference": {
+        "observed_prepared_revisions_not_referenced_in_this_feedback_set": 128,
+        "records": 3404,
+        "revision_positions": 3404,
+        "source_pts": {
+          "adjacent_repeated_revisions": 0,
+          "cycle_or_generation_crossings_excluded": 5,
+          "nominal_rate_unaligned_intervals": 0,
+          "nominal_source_rate": "60",
+          "nominal_source_slots_not_referenced_between_same_cycle_samples_estimate": 3840,
+          "prepared_revision_step_histogram": {
+            "1": 3398
+          },
+          "pts_gap_ns_histogram": {
+            "100000000": 39,
+            "116666666": 5,
+            "116666667": 10,
+            "133333333": 2,
+            "150000000": 1,
+            "16666666": 340,
+            "16666667": 710,
+            "33333333": 1012,
+            "33333334": 489,
+            "50000000": 451,
+            "66666666": 79,
+            "66666667": 147,
+            "83333333": 69,
+            "83333334": 44
+          },
+          "same_cycle_positive_pts_intervals": {
+            "count": 3398,
+            "max_ns": 150000000,
+            "mean_ns": 35501275.26015303,
+            "min_ns": 16666666,
+            "p50_ns": 33333333,
+            "p95_ns": 83333333,
+            "p99_ns": 100000000
+          }
+        },
+        "unobserved_revision_positions": 0
+      },
+      "presentation_clock_id": 1,
+      "presentation_interval": {
+        "count": 3275,
+        "max_ns": 150000000,
+        "mean_ns": 37038166.41221374,
+        "min_ns": 16666000,
+        "p50_ns": 33333000,
+        "p95_ns": 50000000,
+        "p99_ns": 83333000
+      },
+      "presentation_span_ns": 121299995000,
+      "referenced_source_pts": {
+        "adjacent_repeated_revisions": 0,
+        "cycle_or_generation_crossings_excluded": 5,
+        "nominal_rate_unaligned_intervals": 0,
+        "nominal_source_rate": "60",
+        "nominal_source_slots_not_referenced_between_same_cycle_samples_estimate": 3968,
+        "prepared_revision_step_histogram": {
+          "1": 3146,
+          "2": 120,
+          "3": 4
+        },
+        "pts_gap_ns_histogram": {
+          "100000000": 39,
+          "116666666": 5,
+          "116666667": 10,
+          "133333333": 2,
+          "150000000": 1,
+          "16666666": 271,
+          "16666667": 592,
+          "33333333": 1018,
+          "33333334": 480,
+          "50000000": 507,
+          "66666666": 79,
+          "66666667": 152,
+          "83333333": 70,
+          "83333334": 44
+        },
+        "same_cycle_positive_pts_intervals": {
+          "count": 3270,
+          "max_ns": 150000000,
+          "mean_ns": 36890927.62507645,
+          "min_ns": 16666666,
+          "p50_ns": 33333333,
+          "p95_ns": 83333333,
+          "p99_ns": 100000000
+        }
+      },
+      "refresh_ns_histogram": {
+        "16666666": 3276
+      },
+      "scope": "Successful compositor feedback with bound prepared-resource references; not pixel visibility, decoder completeness, scanout or accepted performance."
+    },
+    "desktop_sha256": "ecb557a094b583b45cfa07aeb9eb4284dc0bb2b86fdad3b1dbd5f4afc7b6b4ff",
+    "eligibility": {
+      "host_io_full_stall_fraction": 0.5662335736330203,
+      "host_swap_in_pages": 610,
+      "measurement_eligible": false,
+      "normal_uninstrumented_rss_target_met": null,
+      "reasons": [
+        "host_swap_activity",
+        "host_full_stall_pressure",
+        "resource_reference_ineligible",
+        "host_psi_not_matched_io_full",
+        "host_psi_not_matched_io_some"
+      ],
+      "target_acceptance_established": false
+    },
+    "input_sha256": "fdf910d9b250681fe0436ebbcbbb7460cd1a3e7263d9fe2a831cc7769729af28",
+    "instrumented_resources": {
+      "cpu_percent_one_core": 113.64946646879173,
+      "rss_mib_max_interval": 219.49609375,
+      "rss_mib_mean": 219.49544270833334,
+      "swap_mib_max": 0.0
+    },
+    "nominal_resource_duration_request_window": {
+      "adjacent_repeated_prepared_revisions": 0,
+      "distinct_prepared_revisions_referenced": 3239,
+      "distinct_revision_advances": 3238,
+      "distinct_revision_advances_per_second": 26.990831836264643,
+      "feedback_intervals_per_second": 26.990831836264643,
+      "feedback_samples": 3239,
+      "flags_histogram": {
+        "7": 3239
+      },
+      "joined_source_samples": 3239,
+      "prepared_catalog_between_first_and_last_reference": {
+        "observed_prepared_revisions_not_referenced_in_this_feedback_set": 128,
+        "records": 3367,
+        "revision_positions": 3367,
+        "source_pts": {
+          "adjacent_repeated_revisions": 0,
+          "cycle_or_generation_crossings_excluded": 5,
+          "nominal_rate_unaligned_intervals": 0,
+          "nominal_source_rate": "60",
+          "nominal_source_slots_not_referenced_between_same_cycle_samples_estimate": 3798,
+          "prepared_revision_step_histogram": {
+            "1": 3361
+          },
+          "pts_gap_ns_histogram": {
+            "100000000": 39,
+            "116666666": 4,
+            "116666667": 10,
+            "133333333": 2,
+            "150000000": 1,
+            "16666666": 337,
+            "16666667": 703,
+            "33333333": 999,
+            "33333334": 482,
+            "50000000": 448,
+            "66666666": 78,
+            "66666667": 146,
+            "83333333": 69,
+            "83333334": 43
+          },
+          "same_cycle_positive_pts_intervals": {
+            "count": 3361,
+            "max_ns": 150000000,
+            "mean_ns": 35500347.1190122,
+            "min_ns": 16666666,
+            "p50_ns": 33333333,
+            "p95_ns": 66666667,
+            "p99_ns": 100000000
+          }
+        },
+        "unobserved_revision_positions": 0
+      },
+      "presentation_clock_id": 1,
+      "presentation_interval": {
+        "count": 3238,
+        "max_ns": 150000000,
+        "mean_ns": 37049617.665225446,
+        "min_ns": 16666000,
+        "p50_ns": 33333000,
+        "p95_ns": 50000000,
+        "p99_ns": 83333000
+      },
+      "presentation_span_ns": 119966662000,
+      "referenced_source_pts": {
+        "adjacent_repeated_revisions": 0,
+        "cycle_or_generation_crossings_excluded": 5,
+        "nominal_rate_unaligned_intervals": 0,
+        "nominal_source_rate": "60",
+        "nominal_source_slots_not_referenced_between_same_cycle_samples_estimate": 3926,
+        "prepared_revision_step_histogram": {
+          "1": 3109,
+          "2": 120,
+          "3": 4
+        },
+        "pts_gap_ns_histogram": {
+          "100000000": 39,
+          "116666666": 4,
+          "116666667": 10,
+          "133333333": 2,
+          "150000000": 1,
+          "16666666": 268,
+          "16666667": 585,
+          "33333333": 1005,
+          "33333334": 473,
+          "50000000": 504,
+          "66666666": 78,
+          "66666667": 151,
+          "83333333": 70,
+          "83333334": 43
+        },
+        "same_cycle_positive_pts_intervals": {
+          "count": 3233,
+          "max_ns": 150000000,
+          "mean_ns": 36905866.58428704,
+          "min_ns": 16666666,
+          "p50_ns": 33333333,
+          "p95_ns": 83333333,
+          "p99_ns": 100000000
+        }
+      },
+      "refresh_ns_histogram": {
+        "16666666": 3239
+      },
+      "scope": "Successful compositor feedback with bound prepared-resource references; not pixel visibility, decoder completeness, scanout or accepted performance."
+    },
+    "retained_all_background_history": {
+      "adjacent_repeated_prepared_revisions": 0,
+      "distinct_prepared_revisions_referenced": 3397,
+      "distinct_revision_advances": 3396,
+      "distinct_revision_advances_per_second": 27.034630382350315,
+      "feedback_intervals_per_second": 27.034630382350315,
+      "feedback_samples": 3397,
+      "flags_histogram": {
+        "7": 3397
+      },
+      "joined_source_samples": 3397,
+      "prepared_catalog_between_first_and_last_reference": {
+        "observed_prepared_revisions_not_referenced_in_this_feedback_set": 134,
+        "records": 3531,
+        "revision_positions": 3531,
+        "source_pts": {
+          "adjacent_repeated_revisions": 0,
+          "cycle_or_generation_crossings_excluded": 5,
+          "nominal_rate_unaligned_intervals": 0,
+          "nominal_source_rate": "60",
+          "nominal_source_slots_not_referenced_between_same_cycle_samples_estimate": 3973,
+          "prepared_revision_step_histogram": {
+            "1": 3525
+          },
+          "pts_gap_ns_histogram": {
+            "100000000": 42,
+            "116666666": 5,
+            "116666667": 10,
+            "133333333": 2,
+            "150000000": 1,
+            "16666666": 359,
+            "16666667": 735,
+            "33333333": 1047,
+            "33333334": 509,
+            "50000000": 467,
+            "66666666": 80,
+            "66666667": 151,
+            "83333333": 70,
+            "83333334": 47
+          },
+          "same_cycle_positive_pts_intervals": {
+            "count": 3525,
+            "max_ns": 150000000,
+            "mean_ns": 35451536.643120565,
+            "min_ns": 16666666,
+            "p50_ns": 33333333,
+            "p95_ns": 83333333,
+            "p99_ns": 100000000
+          }
+        },
+        "unobserved_revision_positions": 0
+      },
+      "presentation_clock_id": 1,
+      "presentation_interval": {
+        "count": 3396,
+        "max_ns": 150000000,
+        "mean_ns": 36989593.93404005,
+        "min_ns": 16666000,
+        "p50_ns": 33333000,
+        "p95_ns": 50000000,
+        "p99_ns": 83333000
+      },
+      "presentation_span_ns": 125616661000,
+      "referenced_source_pts": {
+        "adjacent_repeated_revisions": 0,
+        "cycle_or_generation_crossings_excluded": 5,
+        "nominal_rate_unaligned_intervals": 0,
+        "nominal_source_rate": "60",
+        "nominal_source_slots_not_referenced_between_same_cycle_samples_estimate": 4107,
+        "prepared_revision_step_histogram": {
+          "1": 3261,
+          "2": 126,
+          "3": 4
+        },
+        "pts_gap_ns_histogram": {
+          "100000000": 42,
+          "116666666": 5,
+          "116666667": 10,
+          "133333333": 2,
+          "150000000": 1,
+          "16666666": 286,
+          "16666667": 613,
+          "33333333": 1053,
+          "33333334": 498,
+          "50000000": 527,
+          "66666666": 80,
+          "66666667": 156,
+          "83333333": 71,
+          "83333334": 47
+        },
+        "same_cycle_positive_pts_intervals": {
+          "count": 3391,
+          "max_ns": 150000000,
+          "mean_ns": 36852452.57062814,
+          "min_ns": 16666666,
+          "p50_ns": 33333333,
+          "p95_ns": 83333333,
+          "p99_ns": 100000000
+        }
+      },
+      "refresh_ns_histogram": {
+        "16666666": 3397
+      },
+      "scope": "Successful compositor feedback with bound prepared-resource references; not pixel visibility, decoder completeness, scanout or accepted performance."
+    },
+    "schema": 1,
+    "scope": "Sanitized offline analysis of opt-in metadata. No submission-counter FPS, visible-pixel, physical scanout, decoder-completeness or eligible performance claim.",
+    "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+    "window_definition": {
+      "collector": "request_at >= first observed desktop uptime; ending at last captured feedback.",
+      "history_before_collector_boundary": 121,
+      "nominal_resource_duration": "first desktop-uptime request boundary <= request_at < boundary + measured resource seconds; not synchronized resource/presentation clocks.",
+      "nominal_slot_estimate": "Only same-cycle gaps within1us of an integer nominal-rate period; not a count of decoded, visible, or definitively dropped frames.",
+      "quantiles": "Nearest rank ceil(N*p), integer nanoseconds; no interpolation.",
+      "rate_denominator": "Own compositor last-first timestamp span; numerator is interval/advance count, not sample count.",
+      "resource_seconds": 120.0005633439996,
+      "retained": "All retained history, including pre-observation samples.",
+      "source_cycle": "Non-increasing prepared PTS marks a cycle; all cross-cycle differences excluded."
+    },
+    "workload": {
+      "codec": "h264",
+      "fps_setting": "source",
+      "height": 2160,
+      "media_sha256": "9bfaece1a34f02067005190a26c9dc5ba0e83e74875653c8336c022d133ebc35",
+      "nominal_source_rate": "60/1",
+      "output_height": 1080,
+      "output_refresh_hz": 60.0,
+      "output_scale": 1,
+      "output_width": 1920,
+      "width": 3840
+    }
+  },
+  "evidence": {
+    "analysis_helper_sha256": "ea55a19d104a701fd30fce860fb3df6e2884e02965912d42e5a7000931017ca8",
+    "binding_sha256": "ed8d036c0aa7d7e5d9274ec29285e1acb7b58258b0bfc764a7bcdd9b9bcf6ddb",
+    "private_collector_report_sha256": "2848085982f95d92f447fe146e11b206b304c54a58f5e01b2873e72f35f8b5aa",
+    "private_measurement_sha256": "fdf910d9b250681fe0436ebbcbbb7460cd1a3e7263d9fe2a831cc7769729af28",
+    "wrapper_sha256": "13aadae45cea9128ca4558f3e50c75a1a2eaa6155eba0c100e7302f3212e542d"
+  },
+  "limits": [
+    "Host swap-in610pages and I/O full-stall fraction0.5662336 make performance target acceptance ineligible.",
+    "Presentation interval analysis measures compositor-reported successful background commits and bound resource revisions; pixel visibility and physical scanout are not established.",
+    "Normal and instrumented resource phases are separate and both ineligible; no RSS-budget acceptance or causal comparison.",
+    "Prepared media PTS histories are after decoder scheduling/frame admission and conversion, not a complete decoder frame census.",
+    "Nominal60Hz PTS-slot gaps are estimates within observed same-cycle endpoints, not proved lost-decoder-frame counts.",
+    "All failed V1/V2 profiling attempts and prior failed native receipts remain historical evidence."
+  ],
+  "normal_uninstrumented_reference": {
+    "eligible": false,
+    "input_sha256": "6483e8b942030b52ad5bfa7841bbf7f7ebec64549806d1bd812b96995a154bd7",
+    "normal_uninstrumented_rss_target_met": null,
+    "reasons": [
+      "host_swap_activity",
+      "host_full_stall_pressure"
+    ],
+    "resources": {
+      "cpu_percent_one_core": 112.24953986481536,
+      "rss_mib_max_interval": 221.921875,
+      "rss_mib_mean": 217.28193359375,
+      "seconds": 120.00049190599998,
+      "swap_mib_max": 0.0
+    }
+  },
+  "offline_verification": {
+    "builds": false,
+    "command": "python3 -m unittest discover -s tests -p test_presentation_metadata_analysis.py -v",
+    "guest_actions": false,
+    "network_actions": false,
+    "tests_passed": 12
+  },
+  "restoration": {
+    "current_recovery": {
+      "runtime_flags_off": true,
+      "status": "verified-restored"
+    },
+    "new_lifetimes_stable_seconds": 35,
+    "original_source_settings_media_security_preserved": true,
+    "owner_reported_elapsed_seconds": 42.774,
+    "phase": "restored",
+    "receipt_sha256": "8213cc0fb63f20e28ec60de1b28dc76ee0d01e50ed6da0c32a24ef9f440307c2",
+    "recovery_incomplete": false,
+    "runtime_profiling": {
+      "frames": false,
+      "presentation": false,
+      "source_pts": false
+    },
+    "same_pid_preservation_claimed": false,
+    "success": true
+  },
+  "schema": 1,
+  "status": "measured-host-ineligible"
+}
