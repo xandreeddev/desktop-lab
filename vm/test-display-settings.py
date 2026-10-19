@@ -2,7 +2,7 @@
 """Guarded real-input acceptance for the native Displays transaction.
 
 Requires a deliberately idle, unlocked single-output QEMU guest at 1920x1080/1x,
-with 1280x720 advertised. Uses the already deployed executable: no build/deploy.
+with 1280x800 advertised. Uses the already deployed executable: no build/deploy.
 A separate SSH-started recovery process holds a private original-inode checkpoint
 before the first UI change. Reports remain private. Physical hardware and multiple
 outputs are outside this harness. --test-crash explicitly also kills only the
@@ -126,8 +126,8 @@ if operation=='create':
     config_data,config_id=read(config,256*1024); settings,settings_id=read(state,4*1024*1024)
     current=monitors(); assert len(current)==1
     os.link(config,backup)
-    base=current[0]; mode=next(mode for mode in base['availableModes'] if mode.startswith('1280x720@'))
-    mode_monitor={**base,'width':1280,'height':720,'refreshRate':float(mode.removesuffix('Hz').split('@')[1])}
+    base=current[0]; mode=next(mode for mode in base['availableModes'] if mode.startswith('1280x800@'))
+    mode_monitor={**base,'width':1280,'height':800,'refreshRate':float(mode.removesuffix('Hz').split('@')[1])}
     allowed=[signature(base),signature(mode_monitor),signature({**base,'scale':2}),signature({**base,'x':base['x']+16})]
     value={'allowed_native':allowed,'monitor':current[0],'config_sha256':hashlib.sha256(config_data).hexdigest(),'config_identity':config_id,'settings_sha256':hashlib.sha256(settings).hexdigest(),'settings_identity':settings_id}
     private(manifest,value)
@@ -273,7 +273,7 @@ def main():
     observed=monitor();assert changed(observed)==(1920,1080,0,0,1,0)
     global INPUT_ALLOWED
     INPUT_ALLOWED=[signature(observed)]
-    assert any(mode.startswith('1280x720@') for mode in observed['availableModes'])
+    assert any(mode.startswith('1280x800@') for mode in observed['availableModes'])
     assert remote('sha256sum','/home/omarchy/.local/bin/lucent-desktop').split()[0]==args.desktop_sha256
     before_preservation=fingerprint(session)
     process_script=r"""
@@ -337,9 +337,9 @@ print(json.dumps(matches[0]))
             parsed=normalized(value)
             if parsed not in modes:modes.append(parsed)
         if normalized(current) not in modes:modes.insert(0,normalized(current))
-        index=next(i for i,mode in enumerate(modes) if mode[0]=='1280x720')
+        index=next(i for i,mode in enumerate(modes) if mode[0]=='1280x800')
         click('display-mode-'+str(index));assert original() and state()['dirty'];checks.append('mode_draft_performs_no_native_change')
-        expected_mode={**observed,'width':1280,'height':720,'refreshRate':modes[index][1]/1000}
+        expected_mode={**observed,'width':1280,'height':800,'refreshRate':modes[index][1]/1000}
         apply(expected_mode)
         click('display-revert');eventually(original,'Explicit Revert did not restore full baseline');checks.append('mode_apply_and_explicit_revert');INPUT_ALLOWED=[signature(observed)]
         open_panel();click(field(2));enter('2');apply({**observed,'scale':2})
