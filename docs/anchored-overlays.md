@@ -118,8 +118,8 @@ global Escape exits only after the popover has had the chance to dismiss.
 
 Written behavior cases cover edge placement, invalid/duplicate anchors, dwell/focus,
 passive input regions, source geometry retirement, scope navigation/restoration,
-outside-press capture, policy validation and synthetic-ID collisions. Six new
-cases also cover fractional filled bounds, old dwell retirement after an anchor
+outside-press capture, policy validation and synthetic-ID collisions. Additional
+cases cover fractional filled bounds, old dwell retirement after an anchor
 returns, scoped wheel consumption, multiline focus navigation and wrapped-height
 remeasurement at the actual capped width. Six new
 rendered scenarios cover actual tray/dock hints and the generic popover recipe,
