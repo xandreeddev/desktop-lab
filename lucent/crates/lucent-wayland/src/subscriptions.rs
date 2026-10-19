@@ -85,6 +85,7 @@ impl Workers {
             let outgoing = delivery.scoped(cancel.clone());
             let failures = outgoing.clone();
             let worker_cancel = cancel.clone();
+            let admission_source = source.clone();
             std::thread::Builder::new()
                 .name("lucent-subscription".into())
                 .spawn(move || {
@@ -112,7 +113,7 @@ impl Workers {
                     }
                 })
                 .map_err(|error| RuntimeFailure {
-                    source: "subscriptions".into(),
+                    source: admission_source,
                     reason: format!("cannot start worker: {error}"),
                 })?;
             self.active.insert(subscription.id, cancel);

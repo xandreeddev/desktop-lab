@@ -25,6 +25,7 @@ mod shell_layout;
 mod tray;
 mod views;
 mod wallpaper_browser;
+mod wallpaper_carousel;
 mod wallpaper_selection;
 mod weather;
 mod widgets;

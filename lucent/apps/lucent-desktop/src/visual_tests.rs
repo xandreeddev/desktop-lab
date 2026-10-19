@@ -1,6 +1,7 @@
 //! Deterministic fixtures use the production layout, fonts, shaders and Vulkan renderer.
 //! Run ignored snapshots explicitly; no session, D-Bus service or compositor is needed.
 mod application_actions;
+mod live_previews;
 mod overlays;
 use crate::desktop::{Desktop, Message};
 use crate::launcher::{self, Mode};
@@ -231,6 +232,15 @@ fn open_media_fixture(app: &mut Desktop, name: &str) {
 }
 struct FixturePlaybackLibrary(Arc<dyn lucent_domain::WallpaperPlaybackPort>);
 impl lucent_domain::WallpaperPlaybackPort for FixturePlaybackLibrary {
+    fn preview(
+        &self,
+        source: &lucent_domain::Wallpaper,
+        options: lucent_domain::WallpaperPreviewOptions,
+        emit: &mut dyn FnMut(lucent_domain::Result<lucent_domain::MediaFrame>) -> bool,
+        stop: Arc<dyn lucent_domain::StopSignal>,
+    ) {
+        live_previews::preview(source, options, emit, stop, false, false);
+    }
     fn library(&self) -> lucent_domain::Result<Vec<lucent_domain::Wallpaper>> {
         Ok([
             ("amber-lake.mp4", "Amber Lake"),
@@ -1876,6 +1886,60 @@ fn visual_regressions() {
             ("live-wallpaper-narrow", Mode::Apps, 0, 0, "", 1., 390.),
             ("live-wallpaper-library", Mode::Apps, 0, 0, "", 1., 960.),
             (
+                "live-wallpaper-preview-ready",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                960.,
+            ),
+            (
+                "live-wallpaper-preview-loading",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                960.,
+            ),
+            (
+                "live-wallpaper-preview-error",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                960.,
+            ),
+            (
+                "live-wallpaper-preview-alpha",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                960.,
+            ),
+            (
+                "live-wallpaper-preview-narrow",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            (
+                "live-wallpaper-preview-unapplied",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                960.,
+            ),
+            (
                 "live-wallpaper-library-narrow",
                 Mode::Apps,
                 0,
@@ -3349,7 +3413,9 @@ fn visual_regressions() {
                 };
                 layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
             } else if name.starts_with("live-wallpaper") {
-                if name.contains("library") {
+                if name.starts_with("live-wallpaper-preview-") {
+                    live_previews::install(&mut app, name);
+                } else if name.contains("library") {
                     install_live_library_fixture(&mut app);
                 }
                 if name.contains("selected")
@@ -3432,6 +3498,11 @@ fn visual_regressions() {
                 }
                 app.live_wallpaper.path = "/media/synthetic-loop.mp4".into();
                 app.live_wallpaper.field.reset(&app.live_wallpaper.path);
+                if name.starts_with("live-wallpaper-preview-") {
+                    live_previews::prepare(&mut app, name, width, height);
+                } else if name.contains("library") {
+                    live_previews::complete(&mut app);
+                }
                 let cx = ViewContext {
                     surface: "live-wallpaper",
                     instance: None,
@@ -3662,7 +3733,13 @@ fn visual_regressions() {
             }
             if name.starts_with("live-wallpaper-library") {
                 assert_visible("live-library-0");
-                assert_visible("live-library-1");
+                // Neighbor cards intentionally continue past the stage clip.
+                for id in ["live-previous", "live-apply", "live-next"] {
+                    assert_visible(id);
+                }
+            }
+            if name.starts_with("live-wallpaper-preview-") {
+                live_previews::assert_scene(&scene, name);
             }
             if name.starts_with("live-wallpaper-source-rate") {
                 for id in [

@@ -21,8 +21,10 @@ your display. A still image from Wallhaven is still a static wallpaper.
 
 Open **Wallpapers → Live**, **Style → Live wallpapers** in the native menu,
 or **Commands → Live wallpapers**. The picker lists local MP4, WebM and GIF
-files from `~/Videos/Wallpapers`; choose an option to import and play it. Use
-**Refresh** after adding files. Discovery runs on a service worker, keeps the last
+files from `~/Videos/Wallpapers`. Click a carousel card to select and preview it;
+use **Previous** and **Next** to browse, then **Apply wallpaper** to import and
+select it for the chosen target. Clicking an already selected card only previews
+it. Use **Refresh** after adding files. Discovery runs on a service worker, keeps the last
 good list on errors and is bounded to 32 choices. The path field remains available
 for media elsewhere.
 
@@ -48,12 +50,15 @@ lucent-cli wallpaper live rate 60
 lucent-cli wallpaper live off
 ```
 
-The native panel accepts a local path with ordinary keyboard selection, editing
-and clipboard behavior. **Import wallpaper** copies the source to private owned
-storage, actually decodes it and creates a PNG poster before a preference is
-accepted. An invalid file does not replace the current configuration. The source
+The native panel also accepts a local path with ordinary keyboard selection,
+editing and clipboard behavior. **Import wallpaper** and the carousel's separate
+**Apply wallpaper** action admit owned media before changing preferences. A new
+import copies the source to private owned storage, actually decodes it and creates
+a PNG poster. An unchanged matching owned import can be reused as described
+below. An invalid file does not replace the current configuration. The source
 is preserved. Closing the panel cancels pending delivery; already-running native
-file work may finish and retain an unused owned asset.
+import work may finish and retain an unused owned asset. Preview work has its
+own cancellation and does not import a file.
 
 Choose the default wallpaper or a connected monitor. Monitor overrides take
 precedence over the default. **Use static wallpaper** disables that monitor's
@@ -107,6 +112,102 @@ accepted static commits can finish without clearing a newer live preference.
 Selecting a different current successfully committed default static wallpaper
 removes the default live selection. Closing the panel or turning off that target
 retires its pending import, so a late result cannot turn playback back on.
+
+## Previewing without importing
+
+The live and regular wallpaper selectors share the desktop client's
+`wallpaper_carousel` composition: the same card geometry, spacing, captions and
+Previous/Next/Apply controls. It is a client component, separate from the reusable
+framework. A card action chooses a source; the live Apply action is a separate
+message. The live panel keeps a fixed token-sized preview stage above its path,
+target, FPS, pause and save controls. Those controls remain inside a controlled
+scroll viewport. Narrow cards keep an inset around their rounded images.
+
+The selected live card animates at the source's timestamps, looping until it is
+retired. Up to two adjacent sources contribute first-frame stills. Only one
+preview worker calls the adapter at a time: finite still calls return before the
+selected loop starts. Changing selection requests cancellation, keeps ownership
+of the retiring worker, and starts the next request only after its terminal
+message confirms that decoder body returned. Generation checks reject late
+frames. Existing background playback has its own producers; this is a bound on
+preview work, not a global one-decoder limit.
+
+The transient cache holds at most five entries and supplies prepared neighbor
+images to the view. Closing the panel clears its cache and asks the current
+preview to retire. Cancellation is cooperative: native codec and image-resize
+calls are not interrupted halfway through a call. A retiring worker can briefly
+retain its in-flight pixels; closing does not claim immediate memory reclamation.
+**Retry preview** handles preview errors independently of **Retry playback** for
+the saved background.
+
+The controller derives physical preview demand from the same logical hero
+geometry that the view uses, together with its actual rendering density.
+`WallpaperPreviewOptions` checks positive bounds up to 1024 pixels per edge.
+The adapter contains both output edges within those bounds, never enlarges the
+source, and preserves original source aspect metadata and timestamps. Opaque
+formats fit during native conversion. Alpha/paletted frames are converted at
+source size, then resized with premultiplied color and alpha before publication;
+straight-alpha interpolation would create colored fringes. Source-sized decode
+and conversion scratch still exist. The 1024-pixel output cap is not a total
+process-memory guarantee or a frame-rate measurement.
+
+The domain `WallpaperPlaybackPort.preview` reads an unimported source.
+`NativeVideoWallpapers` pins a validated, read-only, nonblocking regular-file
+descriptor, decodes that same file through its descriptor path and rejects
+in-place changes. It creates no media directory, poster or asset metadata.
+The client's `live_wallpaper::preview::Preview` owns request identity, worker
+retirement, cache and bounded mailbox delivery. Views receive prepared
+`ImageData`; they never open or decode a file. Browsing does not call `prepare`,
+change the selected background, or ask the root to save preferences.
+
+```text
+card / Previous / Next
+  → transient client selection and preview demand
+  → one serial preview subscription
+  → WallpaperPlaybackPort.preview(source, checked physical bounds)
+  → NativeVideoWallpapers reads the pinned local file
+  → bounded MediaFrame → SDK ImageStream → current mailbox revision
+  → prepared carousel image → existing renderer
+
+Apply wallpaper / Import wallpaper
+  → WallpaperPlaybackPort.prepare(source)
+  → reuse an exact valid owned import, or create a new immutable asset/poster
+  → existing root selection transaction and persistence coordinator
+```
+
+The preview/carousel source and its regression tests are added in this revision.
+Integrated checks, real VM input/pixels, rapid-switch cancellation and exact
+storage/preferences preservation still require acceptance for this source.
+Earlier playback measurements below do not validate preview FPS, smoothness or
+resource use.
+
+## Owned import storage
+
+The former 32-import store quota is removed. It was separate from the library's
+32 displayed choices and could prevent applying a clip despite available disk
+space. Imports do not delete historical media or rewrite existing metadata.
+There is no automatic garbage collection or cleanup of configured/rollback
+assets.
+
+Before copying, `prepare` checks at most 1024 existing directory entries for a
+reusable import. The entire `Wallpaper` source descriptor and every source byte
+must match. Comparison streams bounded chunks from regular files; it does not
+load a 512 MiB source into memory or use a custom digest. Reuse retains the full
+owned-path/metadata guard and requires immutable regular media and poster files.
+Foreign or invalid descriptors, linked metadata, and linked or writable
+media/poster files are skipped. Source bytes
+that changed, even with the same path and size, produce a fresh immutable copy.
+The original source and every historical asset remain intact.
+
+Lookup is opportunistic. A match outside the 1024-entry scan window can be missed,
+and new explicit imports still work after that window; it is not a replacement
+quota. Separate concurrent imports can also race. Bounded matching reuse prevents
+ordinary repeated selections from producing another copy when their matching
+asset is found, but does not promise unlimited or concurrent global deduplication.
+The source descriptor stays open across lookup and copying, with identity checks
+to reject replacement or mutation during that operation. Disk exhaustion and
+ordinary filesystem errors remain possible and are reported without deleting
+old media.
 
 ## Source changes and animation
 
@@ -188,9 +289,13 @@ Initial envelopes:
 - Local regular sources up to 512 MiB; MP4, WebM and GIF containers only.
 - Source decoded dimensions at most 4096 per edge and 64 MiB per RGBA frame;
   a smaller playback destination does not admit a larger source.
-- At most four enabled profiles, 32 retained monitor preference entries and
-  32 imported assets. Remove unused owned media when the asset store is full;
-  there is no automatic deletion of configured/rollback media.
+- At most four enabled profiles and 32 retained monitor preference entries.
+  Library discovery scans at most 1024 entries and returns at most 32 choices;
+  these are discovery limits, not a durable import quota. Import reuse has its
+  own bounded 1024-entry lookup. Historical assets are never automatically deleted.
+- Preview output contains both edges within checked physical bounds of at most
+  1024 pixels. One serial preview worker, up to two adjacent stills and a
+  five-entry transient cache are separate from saved background producers.
 - One latest mailbox frame and one wake notice per producer. A slow UI does not
   queue a sequence of full video frames.
 - One immutable current frame per player and one reusable GPU stream texture.

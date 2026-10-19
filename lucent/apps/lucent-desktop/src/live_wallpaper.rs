@@ -9,6 +9,7 @@ use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
 };
+pub(crate) mod preview;
 mod view;
 struct PlaybackStopAdapter(Cancellation);
 impl StopSignal for PlaybackStopAdapter {
@@ -26,6 +27,12 @@ pub enum Message {
     Ignore,
     RefreshLibrary,
     LibraryLoaded(u64, Result<Vec<Wallpaper>>),
+    SelectSource(usize),
+    Browse(i32),
+    ApplySelection,
+    RetryPreview,
+    Preview(preview::Message),
+    PreviewViewport(f32, f32, lucent_api::Density),
     EditPath(TextEdit),
     Target(LiveWallpaperTarget),
     Import(LiveWallpaperTarget),
@@ -123,6 +130,10 @@ pub struct LiveWallpaper {
     pub scroll: f32,
     pub mounted: bool,
     pub motion: lucent_api::Motion,
+    pub selection: usize,
+    pub carousel: lucent_api::Motion,
+    pub preview: preview::Preview,
+    preview_options: WallpaperPreviewOptions,
     awaiting_first_frame: Option<f64>,
     first_frame_submitted: bool,
     importing: Option<Import>,
@@ -151,6 +162,14 @@ impl LiveWallpaper {
             scroll: 0.,
             mounted: false,
             motion: lucent_api::Motion::fixed(0.),
+            selection: 0,
+            carousel: lucent_api::Motion::fixed(0.),
+            preview: preview::Preview::new(adapter.clone()),
+            preview_options: WallpaperPreviewOptions::new(
+                WallpaperPreviewOptions::MAX_EDGE,
+                WallpaperPreviewOptions::MAX_EDGE,
+            )
+            .expect("preview resource envelope is valid"),
             awaiting_first_frame: None,
             first_frame_submitted: false,
             importing: None,
@@ -312,7 +331,8 @@ impl LiveWallpaper {
         !self.routes.is_empty()
     }
     pub fn subscriptions(&self) -> Vec<Subscription<Message>> {
-        self.players
+        let mut subscriptions: Vec<_> = self
+            .players
             .iter()
             .filter(|(_, p)| p.error.is_empty() && (p.running || p.frame.is_none()))
             .map(|(key, player)| {
@@ -378,7 +398,14 @@ impl LiveWallpaper {
                     );
                 })
             })
-            .collect()
+            .collect();
+        subscriptions.extend(
+            self.preview
+                .subscriptions()
+                .into_iter()
+                .map(|subscription| subscription.map(Message::Preview)),
+        );
+        subscriptions
     }
     pub fn update(&mut self, message: Message, effects: &mut Effects<Message>) -> Option<Intent> {
         match message {
@@ -406,6 +433,8 @@ impl LiveWallpaper {
                 }
                 self.mounted = true;
                 self.scroll = 0.;
+                self.selection = self.selection.min(self.library.len().saturating_sub(1));
+                self.carousel = lucent_api::Motion::fixed(self.selection as f32);
                 self.refresh_library(effects);
             }
             Message::RefreshLibrary => {
@@ -420,11 +449,97 @@ impl LiveWallpaper {
                 self.library_loading = false;
                 match result {
                     Ok(mut library) => {
+                        let selected_path =
+                            self.selected_source().map(|source| source.path.clone());
                         library.truncate(32);
                         self.library = library;
+                        self.selection = selected_path
+                            .as_ref()
+                            .and_then(|path| {
+                                self.library.iter().position(|source| &source.path == path)
+                            })
+                            .or_else(|| {
+                                self.library
+                                    .iter()
+                                    .position(|source| source.path == self.path)
+                            })
+                            .unwrap_or(0);
+                        self.carousel = lucent_api::Motion::fixed(self.selection as f32);
+                        self.sync_preview();
                         self.library_error.clear();
                     }
                     Err(error) => self.library_error = error.to_string(),
+                }
+            }
+            Message::SelectSource(index) => {
+                if !self.open || index >= self.library.len() {
+                    return None;
+                }
+                self.selection = index;
+                self.carousel.target(
+                    index as f32,
+                    effects.now,
+                    lucent_design::motion::PANEL,
+                    lucent_design::motion::SPATIAL,
+                );
+                self.sync_preview();
+            }
+            Message::Browse(delta) => {
+                if !self.open || self.library.is_empty() {
+                    return None;
+                }
+                let index = self
+                    .selection
+                    .saturating_add_signed(delta as isize)
+                    .min(self.library.len() - 1);
+                return self.update(Message::SelectSource(index), effects);
+            }
+            Message::ApplySelection => {
+                if !self.open {
+                    return None;
+                }
+                let source = self.selected_source()?;
+                return self.update(
+                    Message::ImportPath(self.target.clone(), source.path.clone()),
+                    effects,
+                );
+            }
+            Message::RetryPreview => {
+                if !self.open || !self.preview.retry() {
+                    return None;
+                }
+            }
+            Message::Preview(message) => {
+                if self.preview.update(message) {
+                    effects.redraw("live-wallpaper");
+                }
+                return None;
+            }
+            Message::PreviewViewport(width, height, density) => {
+                if !width.is_finite() || !height.is_finite() || width <= 0. || height <= 0. {
+                    return None;
+                }
+                let (width, height) = view::preview_size((width, height));
+                let factor = f64::from(density.numerator()) / f64::from(density.denominator());
+                let width = f64::from(width) * factor;
+                let height = f64::from(height) * factor;
+                if !width.is_finite() || !height.is_finite() || width <= 0. || height <= 0. {
+                    return None;
+                }
+                let limit = f64::from(WallpaperPreviewOptions::MAX_EDGE);
+                let fit = (limit / width.max(height)).min(1.);
+                let options = WallpaperPreviewOptions::new(
+                    (width * fit).ceil().clamp(1., limit) as u32,
+                    (height * fit).ceil().clamp(1., limit) as u32,
+                )
+                .ok()?;
+                if self.preview_options == options {
+                    return None;
+                }
+                self.preview_options = options;
+                self.sync_preview();
+                if !self.open {
+                    return None;
                 }
             }
             Message::Frame(now) => {
@@ -467,6 +582,7 @@ impl LiveWallpaper {
                 self.retire_import();
                 self.library_cancel.cancel();
                 self.library_loading = false;
+                self.preview.clear();
             }
             Message::EditPath(edit) => {
                 if let Err(error) = self.field.update(
@@ -644,7 +760,40 @@ impl LiveWallpaper {
         effects.redraw("live-wallpaper");
         None
     }
+    pub fn selected_source(&self) -> Option<&Wallpaper> {
+        self.library.get(self.selection)
+    }
+    fn sync_preview(&mut self) {
+        if !self.open || self.library_loading {
+            self.preview.clear();
+            return;
+        }
+        let Some(source) = self.selected_source().cloned() else {
+            self.preview.clear();
+            return;
+        };
+        let neighbors: Vec<_> = self
+            .selection
+            .checked_sub(1)
+            .into_iter()
+            .chain(
+                self.selection
+                    .checked_add(1)
+                    .filter(|index| *index < self.library.len()),
+            )
+            .filter_map(|index| self.library.get(index).cloned())
+            .collect();
+        self.preview
+            .select(source, self.preview_options, &neighbors);
+    }
+    pub fn animating(&self, now: f64) -> bool {
+        self.mounted && (self.motion.active(now) || self.carousel.active(now))
+    }
     fn refresh_library(&mut self, effects: &mut Effects<Message>) {
+        // Discovery is also explicit invalidation: a local file may have been
+        // replaced without changing its path. Drop cached pixels/failures and
+        // demand, but retain a retiring decoder until its explicit Ended ACK.
+        self.preview.clear();
         self.library_cancel.cancel();
         let Some(revision) = self.library_revision.checked_add(1) else {
             self.library_loading = false;
@@ -796,7 +945,7 @@ impl LiveWallpaper {
                 .filter_map(|player| player.frame.as_ref())
                 .chain(self.routes.values().filter_map(|route| route.held.as_ref())),
         );
-        serde_json::json!({"open":self.open,"awaiting_first_frame":self.awaiting_first_frame.is_some(),"importing":self.importing.is_some(),"library_loading":self.library_loading,"library_count":self.library.len(),"library_error":self.library_error,"players":self.players.len(),"running":self.players.values().filter(|p|p.running&&p.error.is_empty()).count(),"retained_frame_bytes":retained.bytes,"producers":self.players.values().map(|player|serde_json::json!({"revision":player.revision,"running":player.running,"target":player.target.map(WallpaperPixelTarget::size),"frame_size":player.frame.as_ref().map(|frame|(frame.width(),frame.height())),"source_aspect":player.frame.as_ref().map(|frame|frame.aspect_size())})).collect::<Vec<_>>(),"error":self.status(),"outputs":self.routes.iter().map(|(target,route)| serde_json::json!({"monitor":target.monitor().map(MonitorId::as_str),"pause_reason":route.pause})).collect::<Vec<_>>()})
+        serde_json::json!({"open":self.open,"awaiting_first_frame":self.awaiting_first_frame.is_some(),"importing":self.importing.is_some(),"library_loading":self.library_loading,"library_count":self.library.len(),"library_error":self.library_error,"selection":self.selection,"preview":self.preview.inspect(),"players":self.players.len(),"running":self.players.values().filter(|p|p.running&&p.error.is_empty()).count(),"retained_frame_bytes":retained.bytes,"producers":self.players.values().map(|player|serde_json::json!({"revision":player.revision,"running":player.running,"target":player.target.map(WallpaperPixelTarget::size),"frame_size":player.frame.as_ref().map(|frame|(frame.width(),frame.height())),"source_aspect":player.frame.as_ref().map(|frame|frame.aspect_size())})).collect::<Vec<_>>(),"error":self.status(),"outputs":self.routes.iter().map(|(target,route)| serde_json::json!({"monitor":target.monitor().map(MonitorId::as_str),"pause_reason":route.pause})).collect::<Vec<_>>()})
     }
 }
 #[cfg(test)]

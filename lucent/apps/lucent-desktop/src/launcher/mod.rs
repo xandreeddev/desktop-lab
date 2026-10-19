@@ -6,6 +6,7 @@
 //! here, and neither domain policy nor the renderer depends on this component.
 mod application_actions;
 mod view;
+pub use crate::wallpaper_carousel::visible_wallpapers;
 use crate::{
     actions::{Action, COMMANDS},
     shell_layout, wallpaper_browser,
@@ -18,16 +19,6 @@ use lucent_domain::{
     Wallpaper, WidgetLayout,
 };
 pub use view::View;
-/// The same range drives painting and worker demand; no scan of the full library.
-pub fn visible_wallpapers(count: usize, center: f32) -> std::ops::Range<usize> {
-    if !center.is_finite() {
-        return 0..0;
-    }
-    let distance = lucent_design::component::wallpaper::VISIBLE_DISTANCE;
-    let start = ((center - distance).floor() + 1.).max(0.) as usize;
-    let end = (center + distance).ceil().max(0.) as usize;
-    start.min(count)..end.min(count)
-}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
     Apps,

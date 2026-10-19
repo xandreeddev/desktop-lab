@@ -596,112 +596,49 @@ impl View<'_> {
             .size(width, height)
     }
     fn wallpaper_strip(&self, cx: &ViewContext, width: f32, height: f32) -> Element<Message> {
-        if self.input.wallpapers.is_empty() {
-            return self
-                .label("Add pictures to ~/Pictures/Wallpapers", font::LABEL)
-                .size(width, height)
-                .align(Align::Center);
-        }
-        let selected = self.carousel.value(cx.now);
-        let mut cards = vec![];
-        // Render distant cards first so the central hero remains on top.
-        let mut order: Vec<_> = visible_wallpapers(self.input.wallpapers.len(), selected).collect();
-        order.sort_by(|a, b| {
-            ((*b as f32 - selected).abs()).total_cmp(&(*a as f32 - selected).abs())
-        });
-        for i in order {
-            let wall = &self.input.wallpapers[i];
-            let distance = i as f32 - selected;
-            let abs = distance.abs();
-            let size = component::wallpaper::HERO_WIDTH
-                - (abs.min(1.) * component::wallpaper::NEAR_SHRINK)
-                - ((abs - 1.).clamp(0., 1.) * component::wallpaper::FAR_SHRINK);
-            let h = size * component::wallpaper::ASPECT_RATIO;
-            let center = width / 2.
-                + distance.signum()
-                    * (abs.min(1.) * component::wallpaper::NEAR_STEP
-                        + (abs - 1.).max(0.) * component::wallpaper::FAR_STEP);
-            let image = self
-                .previews
-                .get(&wall.path)
-                .cloned()
-                .map(|data| Element::image(data).contain())
-                .unwrap_or_else(|| {
-                    if self.previews.error(&wall.path).is_some() {
-                        self.label("Preview unavailable", font::SMALL)
-                            .align(Align::Center)
-                            .background(self.widget_color())
+        use crate::wallpaper_carousel::{Action, Card, Carousel, Controls};
+        let center = self.carousel.value(cx.now);
+        let cards = visible_wallpapers(self.input.wallpapers.len(), center)
+            .map(|index| {
+                let wallpaper = &self.input.wallpapers[index];
+                Card {
+                    index,
+                    caption: &wallpaper.name,
+                    image: self.previews.get(&wallpaper.path).cloned(),
+                    unavailable: self.previews.error(&wallpaper.path).is_some(),
+                    select: Message::Request(Intent::Wallpaper(
+                        index,
+                        index == self.input.wallpaper_index,
+                    )),
+                    id: format!("wallpaper-{index}"),
+                }
+            })
+            .collect();
+        let applied = self
+            .input
+            .wallpapers
+            .get(self.input.wallpaper_index)
+            .is_some_and(|wallpaper| self.current_wallpaper == wallpaper.path);
+        Carousel {
+            cards,
+            center,
+            artwork: self.artwork,
+            controls: Controls {
+                previous: ("wallpaper-previous", Message::Navigate(-1)),
+                next: ("wallpaper-next", Message::Navigate(1)),
+                apply: Action {
+                    label: if applied {
+                        "Applied"
                     } else {
-                        Element::empty().background(self.widget_color())
-                    }
-                });
-            let active = i == self.input.wallpaper_index;
-            cards.push(
-                Element::stack(vec![
-                    image.size(size, h).radius(radius::CARD),
-                    self.label(&wall.name, font::SMALL)
-                        .size(
-                            size - component::wallpaper::CAPTION_INSETS,
-                            component::wallpaper::CAPTION_HEIGHT,
-                        )
-                        .at(
-                            component::wallpaper::CAPTION_INSET,
-                            h + component::wallpaper::CAPTION_GAP,
-                        )
-                        .align(Align::Center),
-                ])
-                .size(size, h + component::wallpaper::FOOTER_HEIGHT)
-                .at(
-                    center - size / 2.,
-                    (component::wallpaper::STAGE_HEIGHT - h) / 2.,
-                )
-                .on_click(Message::Request(Intent::Wallpaper(i, active)))
-                .id(format!("wallpaper-{i}")),
-            );
-        }
-        cards.push(
-            self.icon_button("wallpaper-previous", "left", Message::Navigate(-1))
-                .size(
-                    component::wallpaper::CONTROL_SIZE,
-                    component::wallpaper::CONTROL_SIZE,
-                )
-                .padding(space::MD)
-                .at(0., height - component::wallpaper::FOOTER_HEIGHT),
-        );
-        let apply_width = component::wallpaper::BUTTON_WIDTH.min(
-            (width - component::wallpaper::CONTROL_SIZE * 2. - layout::SECTION_GAP * 2.).max(0.),
-        );
-        cards.push(
-            self.button(
-                if self.current_wallpaper == self.input.wallpapers[self.input.wallpaper_index].path
-                {
-                    "Applied"
-                } else {
-                    "Apply wallpaper"
+                        "Apply wallpaper"
+                    },
+                    message: Message::Request(Intent::Wallpaper(self.input.wallpaper_index, true)),
+                    enabled: true,
+                    id: "apply-wallpaper",
                 },
-                Message::Request(Intent::Wallpaper(self.input.wallpaper_index, true)),
-            )
-            .size(apply_width, component::wallpaper::BUTTON_HEIGHT)
-            .background(self.accent())
-            .color(self.theme().on_primary)
-            .id("apply-wallpaper")
-            .at(
-                (width - apply_width) / 2.,
-                height - component::wallpaper::FOOTER_HEIGHT,
-            ),
-        );
-        cards.push(
-            self.icon_button("wallpaper-next", "right", Message::Navigate(1))
-                .size(
-                    component::wallpaper::CONTROL_SIZE,
-                    component::wallpaper::CONTROL_SIZE,
-                )
-                .padding(space::MD)
-                .at(
-                    width - component::wallpaper::CONTROL_SIZE,
-                    height - component::wallpaper::FOOTER_HEIGHT,
-                ),
-        );
-        Element::stack(cards).size(width, height).clip()
+            },
+            empty: "Add pictures to ~/Pictures/Wallpapers",
+        }
+        .render(width, height)
     }
 }
