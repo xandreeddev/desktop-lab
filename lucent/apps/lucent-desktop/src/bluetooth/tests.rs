@@ -171,7 +171,7 @@ fn device_actions_are_reachable_and_radio_authority_lives_on_its_own_tab() {
         include_bytes!("../../assets/GoogleSansFlex.ttf").as_slice(),
     ]
     .into_iter()
-    .map(|bytes| fontdue::Font::from_bytes(bytes, Default::default()).unwrap())
+    .map(|bytes| lucent_ui::text::Font::from_bytes(bytes, Default::default()).unwrap())
     .collect();
     let layout = lucent_ui::Layout::new(Arc::new(fonts));
     let scene = layout.build(
@@ -525,7 +525,7 @@ fn pending_connection_cancel_is_reachable_while_ordinary_controls_are_disabled()
         include_bytes!("../../assets/GoogleSansFlex.ttf").as_slice(),
     ]
     .into_iter()
-    .map(|bytes| fontdue::Font::from_bytes(bytes, Default::default()).unwrap())
+    .map(|bytes| lucent_ui::text::Font::from_bytes(bytes, Default::default()).unwrap())
     .collect();
     let layout = lucent_ui::Layout::new(Arc::new(fonts));
     for width in [320., 640.] {

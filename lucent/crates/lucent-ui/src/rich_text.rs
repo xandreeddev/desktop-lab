@@ -20,11 +20,11 @@ pub(super) struct Flow {
     pub height: f32,
 }
 fn font<'a>(
-    fonts: &'a [fontdue::Font],
+    fonts: &'a [crate::text::Font],
     spans: &[TextSpan],
     span: usize,
     face: usize,
-) -> &'a fontdue::Font {
+) -> &'a crate::text::Font {
     fonts
         .get(spans[span].face.unwrap_or(face))
         .unwrap_or(&fonts[0])
@@ -32,7 +32,7 @@ fn font<'a>(
 fn add(
     line: &mut Line,
     spans: &[TextSpan],
-    fonts: &[fontdue::Font],
+    fonts: &[crate::text::Font],
     face: usize,
     size: f32,
     span: usize,
@@ -65,7 +65,7 @@ fn add(
     line.baseline = line.baseline.max(metrics.baseline);
     line.height = line.baseline + descent;
 }
-fn line(fonts: &[fontdue::Font], face: usize, size: f32) -> Line {
+fn line(fonts: &[crate::text::Font], face: usize, size: f32) -> Line {
     let metrics = text::line_metrics(fonts.get(face).unwrap_or(&fonts[0]), size);
     Line {
         runs: vec![],
@@ -76,7 +76,7 @@ fn line(fonts: &[fontdue::Font], face: usize, size: f32) -> Line {
 }
 pub(super) fn flow(
     spans: &[TextSpan],
-    fonts: &[fontdue::Font],
+    fonts: &[crate::text::Font],
     face: usize,
     size: f32,
     width: f32,
@@ -216,7 +216,7 @@ pub(super) fn paint<M: Clone>(
     scene: &mut Scene<M>,
     e: &Element<M>,
     spans: &[TextSpan],
-    fonts: &[fontdue::Font],
+    fonts: &[crate::text::Font],
     inner: Rect,
     clip: Clip,
     alpha: f32,
@@ -364,9 +364,9 @@ pub(super) fn paint<M: Clone>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn fonts() -> Arc<Vec<fontdue::Font>> {
+    fn fonts() -> Arc<Vec<crate::text::Font>> {
         Arc::new(vec![
-            fontdue::Font::from_bytes(
+            crate::text::Font::from_bytes(
                 include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
                 fontdue::FontSettings::default(),
             )

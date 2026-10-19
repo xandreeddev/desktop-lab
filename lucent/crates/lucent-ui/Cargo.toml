@@ -6,3 +6,5 @@ license.workspace = true
 [dependencies]
 lucent-api = { path = "../lucent-api" }
 fontdue = "0.9"
+rustybuzz = "=0.20.1"
+unicode-bidi = "=0.3.18"

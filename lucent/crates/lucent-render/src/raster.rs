@@ -1,6 +1,8 @@
 //! Cached CPU raster work. The presentation framebuffer stays at output density.
 use crate::Error;
-use lucent_ui::text::{glyph_positions, line_metrics, width};
+#[cfg(test)]
+use lucent_ui::text::glyph_positions;
+use lucent_ui::text::{line_metrics, shape, width};
 
 // Existing physical text-mask limits, before the 2× coverage supersample.
 const MAX_WIDTH: u32 = 4096;
@@ -46,7 +48,7 @@ fn validate_glyph(glyph: &fontdue::Metrics) -> Result<(), Error> {
 /// Glyph advances are computed in logical coordinates, so scale does not reflow text.
 /// Returns one alpha byte per pixel; the renderer supplies premultiplied white.
 pub fn text(
-    font: &fontdue::Font,
+    font: &lucent_ui::text::Font,
     text: &str,
     size: f32,
     scale: f32,
@@ -71,11 +73,13 @@ pub fn text(
     let mut left_edge = 0f32;
     let mut right_edge = measured_width * density;
     for line in text.lines() {
-        for (c, x) in glyph_positions(font, line, size) {
+        for positioned in shape(font, line, size).glyphs {
+            let x = positioned.x;
+            let selected = font.raster_face(positioned.face);
             if x * density >= MAX_WIDTH as f32 * density {
                 break;
             }
-            let glyph = font.metrics(c, size * density);
+            let glyph = selected.metrics_indexed(positioned.id, size * density);
             validate_glyph(&glyph)?;
             let left = (x * density).round() + glyph.xmin as f32;
             left_edge = left_edge.min(left);
@@ -108,18 +112,21 @@ pub fn text(
     // fontdue's bitmap allocation is infallible, so bound its dimensions first.
     let mut glyphs = Vec::new();
     for (line_index, line) in text.lines().enumerate() {
-        for (c, x) in glyph_positions(font, line, size) {
+        for positioned in shape(font, line, size).glyphs {
+            let x = positioned.x;
+            let selected = font.raster_face(positioned.face);
             if !x.is_finite() {
                 return Err("invalid glyph position".into());
             }
             if x * density >= w as f32 {
                 break;
             }
-            let glyph = font.metrics(c, size * density);
+            let glyph = selected.metrics_indexed(positioned.id, size * density);
             validate_glyph(&glyph)?;
             let left = f64::from((x * density).round() + left_padding) + f64::from(glyph.xmin);
             let top = f64::from(
-                ((line_index as f32 * metrics.height + metrics.baseline) * density).round(),
+                ((line_index as f32 * metrics.height + metrics.baseline + positioned.y) * density)
+                    .round(),
             ) - glyph.height as f64
                 - f64::from(glyph.ymin);
             if !left.is_finite() || !top.is_finite() {
@@ -136,14 +143,20 @@ pub fn text(
             }
             // Intersection plus bounded glyph dimensions makes these casts safe.
             glyphs.try_reserve(1)?;
-            glyphs.push((c, glyph, left as i64, top as i64));
+            glyphs.push((
+                positioned.face,
+                positioned.id,
+                glyph,
+                left as i64,
+                top as i64,
+            ));
         }
     }
     let mut pixels = Vec::new();
     pixels.try_reserve_exact((w * h) as usize)?;
     pixels.resize((w * h) as usize, 0);
-    for (c, glyph, left, top) in glyphs {
-        let (_, bitmap) = font.rasterize(c, size * density);
+    for (face, id, glyph, left, top) in glyphs {
+        let (_, bitmap) = font.raster_face(face).rasterize_indexed(id, size * density);
         let x0 = left.max(0);
         let y0 = top.max(0);
         let x1 = (left + glyph.width as i64).min(i64::from(w));
@@ -166,7 +179,7 @@ mod tests {
     use super::*;
     #[test]
     fn fractional_text_keeps_logical_advance_and_bounds_coverage_allocations() {
-        let font = fontdue::Font::from_bytes(
+        let font = lucent_ui::text::Font::from_bytes(
             include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
             Default::default(),
         )
@@ -185,7 +198,7 @@ mod tests {
     }
     #[test]
     fn italic_ink_overhang_is_inside_the_mask_without_changing_advance() {
-        let font = fontdue::Font::from_bytes(
+        let font = lucent_ui::text::Font::from_bytes(
             include_bytes!("../../../apps/lucent-desktop/assets/LucentItalic.ttf") as &[u8],
             Default::default(),
         )
@@ -218,7 +231,7 @@ mod tests {
     }
     #[test]
     fn density_changes_resolution_without_reflow_or_losing_coverage() {
-        let font = fontdue::Font::from_bytes(
+        let font = lucent_ui::text::Font::from_bytes(
             include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
             fontdue::FontSettings::default(),
         )
@@ -237,7 +250,7 @@ mod tests {
 
     #[test]
     fn invalid_text_requests_and_glyphs_fail_before_bitmap_allocation() {
-        let font = fontdue::Font::from_bytes(
+        let font = lucent_ui::text::Font::from_bytes(
             include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
             fontdue::FontSettings::default(),
         )

@@ -8,6 +8,7 @@ pub(super) struct Row {
     pub range: Range<usize>,
     pub stops: Arc<[(usize, f32)]>,
     display: String,
+    pub(super) segments: Arc<[(Range<usize>, f32, f32)]>,
 }
 impl Row {
     fn at(&self, x: f32) -> usize {
@@ -16,8 +17,8 @@ impl Row {
             .min_by(|(_, a), (_, b)| (a - x).abs().total_cmp(&(b - x).abs()))
             .map_or(self.range.start, |(at, _)| *at)
     }
-    fn visible_display(&self, font: &fontdue::Font, size: f32, width: f32) -> String {
-        if self.stops.last().is_none_or(|(_, end)| *end <= width) {
+    fn visible_display(&self, font: &crate::text::Font, size: f32, width: f32) -> String {
+        if !self.display.is_ascii() || self.stops.last().is_none_or(|(_, end)| *end <= width) {
             return self.display.clone();
         }
         // A whole grapheme may be wider than its viewport. Clipping geometry
@@ -106,40 +107,43 @@ fn display_grapheme(grapheme: &str) -> std::borrow::Cow<'_, str> {
         std::borrow::Cow::Borrowed(grapheme)
     }
 }
-fn measured_row(font: &fontdue::Font, value: &str, range: Range<usize>, size: f32) -> Row {
+fn measured_row(font: &crate::text::Font, value: &str, range: Range<usize>, size: f32) -> Row {
     let mut display = String::new();
-    let mut stops = Vec::new();
-    let mut x = 0.;
-    let mut previous = None;
+    let mut map = Vec::new();
     let boundaries: Vec<_> = TextSelection::boundaries(&value[range.clone()]).collect();
     for pair in boundaries.windows(2) {
-        let at = range.start + pair[0];
-        let text = display_grapheme(&value[at..range.start + pair[1]]);
-        // The first glyph's kerning belongs to this grapheme boundary, matching
-        // the same pair positioning used by the rasterizer for this row.
-        if let (Some(p), Some(c)) = (previous, text.chars().next()) {
-            x += font.horizontal_kern(p, c, size).unwrap_or(0.);
-        }
-        stops.push((at, x));
-        for (index, c) in text.chars().enumerate() {
-            if index > 0
-                && let Some(p) = previous
-            {
-                x += font.horizontal_kern(p, c, size).unwrap_or(0.);
-            }
-            x += font.metrics(c, size).advance_width;
-            previous = Some(c);
-        }
-        display.push_str(&text);
+        map.push((display.len(), range.start + pair[0]));
+        display.push_str(&display_grapheme(
+            &value[range.start + pair[0]..range.start + pair[1]],
+        ));
     }
-    stops.push((range.end, x));
+    map.push((display.len(), range.end));
+    let shaped = text::shape(font, &display, size);
+    let source = |byte| {
+        map.iter()
+            .rev()
+            .find(|(at, _)| *at <= byte)
+            .map_or(range.start, |(_, source)| *source)
+    };
+    let stops = shaped
+        .stops
+        .iter()
+        .map(|(byte, x)| (source(*byte), *x))
+        .collect::<Vec<_>>();
+    let segments = shaped
+        .segments
+        .iter()
+        .map(|(r, a, b)| (source(r.start)..source(r.end), *a, *b))
+        .collect::<Vec<_>>();
     Row {
         range,
         stops: stops.into(),
         display,
+        segments: segments.into(),
     }
 }
-fn rows(font: &fontdue::Font, value: &str, size: f32, width: f32) -> Vec<Row> {
+
+fn rows(font: &crate::text::Font, value: &str, size: f32, width: f32) -> Vec<Row> {
     let boundaries: Vec<_> = TextSelection::boundaries(value).collect();
     let mut result = Vec::new();
     let mut start = 0;
@@ -163,6 +167,11 @@ fn rows(font: &fontdue::Font, value: &str, size: f32, width: f32) -> Vec<Row> {
                 }
                 end += font.metrics(c, size).advance_width;
                 last = Some(c);
+            }
+            if !value.is_ascii() {
+                let candidate =
+                    value[boundaries[start]..boundaries[index + 1]].replace('\t', "    ");
+                end = text::width(font, &candidate, size);
             }
             // Always admit one whole grapheme, even in a zero-width viewport.
             if end > width && index > start {
@@ -196,7 +205,7 @@ fn rows(font: &fontdue::Font, value: &str, size: f32, width: f32) -> Vec<Row> {
 }
 #[allow(clippy::too_many_arguments)]
 pub(super) fn geometry(
-    font: &fontdue::Font,
+    font: &crate::text::Font,
     value: &str,
     selection: TextSelection,
     size: f32,
@@ -315,8 +324,26 @@ pub(super) fn key<M>(
         (area.rows[target].at(goal_x), target, Some(goal_x))
     } else {
         match key {
-            Key::Home if !modifiers.control => (area.rows[row].range.start, row, None),
-            Key::End if !modifiers.control => (area.rows[row].range.end, row, None),
+            Key::Left | Key::Right if !modifiers.control && !text.value.is_ascii() => {
+                let stops = &area.rows[row].stops;
+                let index = stops
+                    .iter()
+                    .position(|(byte, _)| *byte == text.selection.caret())
+                    .unwrap_or(0);
+                if matches!(key, Key::Left) {
+                    if index == 0 && row > 0 {
+                        (area.rows[row - 1].stops.last().unwrap().0, row - 1, None)
+                    } else {
+                        (stops[index.saturating_sub(1)].0, row, None)
+                    }
+                } else if index + 1 == stops.len() && row + 1 < area.rows.len() {
+                    (area.rows[row + 1].stops[0].0, row + 1, None)
+                } else {
+                    (stops[(index + 1).min(stops.len() - 1)].0, row, None)
+                }
+            }
+            Key::Home if !modifiers.control => (area.rows[row].stops[0].0, row, None),
+            Key::End if !modifiers.control => (area.rows[row].stops.last().unwrap().0, row, None),
             _ => {
                 *navigation = None;
                 return super::text_input::key(input_key);
@@ -377,7 +404,7 @@ pub(super) fn paint<M>(
     clip: Clip,
     alpha: f32,
     focused: bool,
-    font: &fontdue::Font,
+    font: &crate::text::Font,
 ) {
     let Kind::TextArea {
         value, placeholder, ..
@@ -402,26 +429,31 @@ pub(super) fn paint<M>(
         if focused
             && ((range.start < row.range.end && range.end > row.range.start) || hard_break_selected)
         {
-            let a = row.x(range.start.max(row.range.start).min(row.range.end));
-            let b = row.x(range.end.min(row.range.end))
-                + if hard_break_selected {
-                    font.metrics(' ', style.font_size).advance_width
-                } else {
-                    0.
-                };
-            scene.paint.push(Paint::Shape {
-                rect: Rect::new(
-                    hit.inner.x + a,
-                    y + metrics.baseline - metrics.ascent,
-                    (b - a).max(0.),
-                    metrics.ascent - metrics.descent,
-                ),
-                clip: clip.clone(),
-                color: style
-                    .text_selection_color
-                    .alpha(style.text_selection_color.3 * alpha),
-                radius: 0.,
-            });
+            let mut fragments: Vec<_> = row
+                .segments
+                .iter()
+                .filter(|(r, _, _)| r.start < range.end && r.end > range.start)
+                .map(|(_, a, b)| (a.min(*b), a.max(*b)))
+                .collect();
+            if hard_break_selected {
+                let a = row.x(row.range.end);
+                fragments.push((a, a + font.metrics(' ', style.font_size).advance_width));
+            }
+            for (a, b) in fragments {
+                scene.paint.push(Paint::Shape {
+                    rect: Rect::new(
+                        hit.inner.x + a,
+                        y + metrics.baseline - metrics.ascent,
+                        (b - a).max(0.),
+                        metrics.ascent - metrics.descent,
+                    ),
+                    clip: clip.clone(),
+                    color: style
+                        .text_selection_color
+                        .alpha(style.text_selection_color.3 * alpha),
+                    radius: 0.,
+                });
+            }
         }
         let content = if value.is_empty() {
             placeholder.lines().next().unwrap_or("").to_owned()
@@ -480,7 +512,7 @@ mod tests {
     }
     fn layout() -> Layout {
         Layout::new(Arc::new(vec![
-            fontdue::Font::from_bytes(
+            crate::text::Font::from_bytes(
                 include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
                 fontdue::FontSettings::default(),
             )
@@ -1050,7 +1082,7 @@ mod regression_tests {
     use super::*;
     fn layout() -> Layout {
         Layout::new(Arc::new(vec![
-            fontdue::Font::from_bytes(
+            crate::text::Font::from_bytes(
                 include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
                 fontdue::FontSettings::default(),
             )
@@ -1394,7 +1426,7 @@ mod oversized_grapheme_tests {
     use super::*;
     #[test]
     fn one_oversized_grapheme_paints_only_visible_ink_without_splitting_caret_geometry() {
-        let font = fontdue::Font::from_bytes(
+        let font = crate::text::Font::from_bytes(
             include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
             fontdue::FontSettings::default(),
         )

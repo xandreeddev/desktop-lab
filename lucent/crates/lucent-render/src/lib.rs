@@ -52,7 +52,7 @@ pub struct Gpu {
     texture_layout: BindGroupLayout,
     frame_layout: BindGroupLayout,
     sampler: Sampler,
-    fonts: Arc<Vec<fontdue::Font>>,
+    fonts: Arc<Vec<lucent_ui::text::Font>>,
     cache: RefCell<ResourceCache<TextureResource>>,
     white: RefCell<Option<Rc<TextureResource>>>,
     device_failure: Arc<Mutex<Option<String>>>,
@@ -61,21 +61,21 @@ pub struct Gpu {
 impl Gpu {
     pub fn new(
         display: impl HasDisplayHandle + std::fmt::Debug + Send + Sync + 'static,
-        fonts: Arc<Vec<fontdue::Font>>,
+        fonts: Arc<Vec<lucent_ui::text::Font>>,
     ) -> Result<Rc<Self>, Error> {
         let mut desc = InstanceDescriptor::new_with_display_handle_from_env(Box::new(display));
         desc.backends = Backends::VULKAN;
         Self::from_instance(Instance::new(desc), fonts)
     }
     /// Use the same Vulkan pipeline without a compositor for deterministic component tests.
-    pub fn headless(fonts: Arc<Vec<fontdue::Font>>) -> Result<Rc<Self>, Error> {
+    pub fn headless(fonts: Arc<Vec<lucent_ui::text::Font>>) -> Result<Rc<Self>, Error> {
         let mut desc = InstanceDescriptor::new_without_display_handle();
         desc.backends = Backends::VULKAN;
         Self::from_instance(Instance::new(desc), fonts)
     }
     fn from_instance(
         instance: Instance,
-        fonts: Arc<Vec<fontdue::Font>>,
+        fonts: Arc<Vec<lucent_ui::text::Font>>,
     ) -> Result<Rc<Self>, Error> {
         let adapter =
             pollster::block_on(instance.request_adapter(&RequestAdapterOptions::default()))
@@ -981,7 +981,7 @@ mod resource_tests {
     #[ignore = "requires Vulkan; run explicitly with --ignored"]
     fn fractional_pixels_use_actual_per_axis_density_and_keep_integer_convenience_identical() {
         let fonts = Arc::new(vec![
-            fontdue::Font::from_bytes(
+            lucent_ui::text::Font::from_bytes(
                 include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
                 Default::default(),
             )
@@ -1106,7 +1106,7 @@ mod resource_tests {
     #[test]
     #[ignore = "requires a Vulkan driver"]
     fn scene_rejection_preserves_pixels_resources_and_subsequent_rendering() {
-        let font = fontdue::Font::from_bytes(
+        let font = lucent_ui::text::Font::from_bytes(
             include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
             Default::default(),
         )

@@ -461,7 +461,7 @@ mod tests {
             let fonts = menu
                 .fonts()
                 .iter()
-                .map(|b| fontdue::Font::from_bytes(*b, Default::default()).unwrap())
+                .map(|b| lucent_ui::text::Font::from_bytes(*b, Default::default()).unwrap())
                 .collect();
             let layout = Layout::new(Arc::new(fonts));
             menu.init(&mut Effects::default());

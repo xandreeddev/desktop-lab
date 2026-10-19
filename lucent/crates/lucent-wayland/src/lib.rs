@@ -51,6 +51,7 @@ mod delivery;
 mod effects;
 mod fractional;
 mod handoff;
+mod input_method;
 mod ipc;
 mod keyboard;
 mod layer_commit;
@@ -134,6 +135,7 @@ struct State<A: Application> {
     keyboard_surface: Option<api::SurfaceAddress>,
     input_serial: Option<u32>,
     clipboard: clipboard::Clipboard<A::Message>,
+    input_method: input_method::InputMethod,
     modifiers: Modifiers,
     epoch: Instant,
     profile_frames: bool,
@@ -152,6 +154,7 @@ impl<A: Application> Drop for State<A> {
             self.handle.remove(token);
         }
         self.clipboard_drop();
+        self.input_method.remove_seat();
         // Drop GPU surfaces before their protocol roles, then send the queued
         // destroy requests while the connection is still alive. A caller such
         // as a permission agent can outlive this individual runtime invocation.
@@ -198,7 +201,7 @@ fn run_inner<A: Application>(
     let mut fonts = Vec::new();
     for bytes in app.fonts() {
         fonts.push(
-            fontdue::Font::from_bytes(bytes, fontdue::FontSettings::default())
+            lucent_ui::text::Font::from_bytes(bytes, fontdue::FontSettings::default())
                 .map_err(std::io::Error::other)?,
         );
     }
@@ -210,7 +213,7 @@ fn run_inner<A: Application>(
             return Err("Fontconfig could not select a font".into());
         }
         fonts.push(
-            fontdue::Font::from_bytes(
+            lucent_ui::text::Font::from_bytes(
                 fs::read(String::from_utf8(matched.stdout)?.trim())?,
                 fontdue::FontSettings::default(),
             )
@@ -260,6 +263,7 @@ fn run_inner<A: Application>(
         keyboard_surface: None,
         input_serial: None,
         clipboard: clipboard::Clipboard::new(clipboard_manager),
+        input_method: input_method::InputMethod::bind(&globals, &qh, authorize_unlock.is_some()),
         modifiers: Modifiers::default(),
         epoch: Instant::now(),
         profile_frames: std::env::var_os("LUCENT_PROFILE_FRAMES").is_some_and(|value| value == "1"),
@@ -1530,6 +1534,7 @@ impl<A: Application> SeatHandler for State<A> {
             if self.keyboard.is_some() {
                 self.keyboard_seat = Some(seat.clone());
                 self.clipboard_seat(&seat, qh);
+                self.input_method.seat(&seat, qh);
             }
         }
     }
@@ -1554,6 +1559,7 @@ impl<A: Application> SeatHandler for State<A> {
             k.release();
             self.keyboard_surface = None;
             self.keyboard_seat = None;
+            self.input_method.remove_seat();
             self.clipboard_cancel(qh, true);
             self.clipboard_drop();
         }
@@ -1741,6 +1747,7 @@ impl<A: Application> KeyboardHandler for State<A> {
         // can grant authority to the still-current lifetime.
         if self.id_for(surface).as_ref() == Some(&id) {
             self.keyboard_surface = Some(id);
+            self.input_method_observe();
         }
     }
     fn leave(
@@ -1759,6 +1766,7 @@ impl<A: Application> KeyboardHandler for State<A> {
         }
         self.keyboard_surface = None;
         self.input_serial = None;
+        self.input_method_observe();
         self.clipboard_cancel(qh, false);
     }
     fn press_key(

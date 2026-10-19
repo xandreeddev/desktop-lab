@@ -2,7 +2,7 @@ use super::*;
 
 fn layout() -> Layout {
     Layout::new(Arc::new(vec![
-        fontdue::Font::from_bytes(
+        crate::text::Font::from_bytes(
             include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
             fontdue::FontSettings::default(),
         )

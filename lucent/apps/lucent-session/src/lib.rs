@@ -691,7 +691,7 @@ mod tests {
         use lucent_ui::{Interaction, Layout, Paint};
         let mut app = SessionScreen::new(Mode::Lock, "fixture".into(), Arc::new(Deny));
         let fonts = Arc::new(vec![
-            fontdue::Font::from_bytes(api::Application::fonts(&app)[0], Default::default())
+            lucent_ui::text::Font::from_bytes(api::Application::fonts(&app)[0], Default::default())
                 .unwrap(),
         ]);
         let layout = Layout::new(fonts);
@@ -735,7 +735,7 @@ mod tests {
         let fonts = Arc::new(
             api::Application::fonts(&app)
                 .iter()
-                .map(|bytes| fontdue::Font::from_bytes(*bytes, Default::default()).unwrap())
+                .map(|bytes| lucent_ui::text::Font::from_bytes(*bytes, Default::default()).unwrap())
                 .collect(),
         );
         let layout = Layout::new(fonts);

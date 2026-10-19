@@ -40,7 +40,7 @@ fn header_client(item_is_menu: bool) -> (Tray, Arc<HeaderAdapter>) {
     (tray, adapter)
 }
 fn header_scene(tray: &Tray, input: &Interaction<Message>) -> Scene<Message> {
-    let font = fontdue::Font::from_bytes(
+    let font = lucent_ui::text::Font::from_bytes(
         include_bytes!("../../assets/LucentSans.ttf") as &[u8],
         Default::default(),
     )
@@ -91,7 +91,7 @@ fn header_message(tray: &mut Tray, keyboard: bool) -> Message {
 }
 
 fn bar_message(tray: &Tray, button: MouseButton) -> Message {
-    let font = fontdue::Font::from_bytes(
+    let font = lucent_ui::text::Font::from_bytes(
         include_bytes!("../../assets/LucentSans.ttf") as &[u8],
         Default::default(),
     )

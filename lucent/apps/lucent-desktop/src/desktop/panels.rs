@@ -298,7 +298,7 @@ mod tests {
         let layout = Layout::new(std::sync::Arc::new(
             app.fonts()
                 .into_iter()
-                .map(|bytes| fontdue::Font::from_bytes(bytes, Default::default()).unwrap())
+                .map(|bytes| lucent_ui::text::Font::from_bytes(bytes, Default::default()).unwrap())
                 .collect(),
         ));
         let cx = context("bar");

@@ -10,6 +10,30 @@ pub struct TextHit {
     pub(super) area: Option<Arc<super::text_area::AreaGeometry>>,
 }
 impl TextHit {
+    /// Logical cursor bounds for native input-method candidate placement.
+    pub fn caret_rect(&self) -> Rect {
+        if let Some(area) = &self.area {
+            let row = &area.rows[area.caret_row];
+            let x = row
+                .stops
+                .iter()
+                .find(|(byte, _)| *byte == self.selection.caret())
+                .map_or(0., |(_, x)| *x);
+            Rect::new(
+                self.inner.x + x,
+                self.inner.y + area.caret_row as f32 * area.line_height - self.scroll,
+                1.,
+                area.line_height,
+            )
+        } else {
+            Rect::new(
+                self.inner.x + self.advance(self.selection.caret()) - self.scroll,
+                self.inner.y,
+                1.,
+                self.inner.h,
+            )
+        }
+    }
     pub fn is_multiline(&self) -> bool {
         self.area.is_some()
     }
@@ -55,7 +79,7 @@ impl TextHit {
     }
 }
 pub(super) fn geometry(
-    font: &fontdue::Font,
+    font: &crate::text::Font,
     value: &str,
     selection: TextSelection,
     size: f32,
@@ -69,22 +93,8 @@ pub(super) fn geometry(
         std::borrow::Cow::Borrowed(value)
     };
     let selection = selection.reconciled(value);
-    let mut stops = TextSelection::boundaries(value).peekable();
-    let mut boundaries = vec![];
-    let mut end = 0.;
-    for ((byte, c), (_, x)) in value
-        .char_indices()
-        .zip(text::glyph_positions(font, &display, size))
-    {
-        end = x + font
-            .metrics(if matches!(c, '\r' | '\n') { ' ' } else { c }, size)
-            .advance_width;
-        if stops.peek() == Some(&byte) {
-            boundaries.push((byte, x));
-            stops.next();
-        }
-    }
-    boundaries.push((value.len(), end));
+    let shaped = text::shape(font, &display, size);
+    let boundaries = shaped.stops.clone();
     let advance = boundaries
         .iter()
         .find(|(byte, _)| *byte == selection.caret())
@@ -119,7 +129,7 @@ pub(super) fn paint<M>(
     clip: Clip,
     alpha: f32,
     focused: bool,
-    font: &fontdue::Font,
+    font: &crate::text::Font,
 ) {
     let Kind::TextInput {
         value,
@@ -135,21 +145,23 @@ pub(super) fn paint<M>(
     let top = inner.y + (inner.h - metrics.height).max(0.) / 2.;
     let range = selection.range(value);
     if focused && !range.is_empty() {
-        let a = hit.advance(range.start);
-        let b = hit.advance(range.end);
-        scene.paint.push(Paint::Shape {
-            rect: Rect::new(
-                inner.x + a.min(b) - hit.scroll,
-                top + metrics.baseline - metrics.ascent,
-                (b - a).abs(),
-                metrics.ascent - metrics.descent,
-            ),
-            clip: clip.clone(),
-            color: style
-                .text_selection_color
-                .alpha(style.text_selection_color.3 * alpha),
-            radius: 0.,
-        });
+        for (a, b) in
+            text::shape(font, &value.replace(['\n', '\r'], " "), style.font_size).selection(range)
+        {
+            scene.paint.push(Paint::Shape {
+                rect: Rect::new(
+                    inner.x + a - hit.scroll,
+                    top + metrics.baseline - metrics.ascent,
+                    b - a,
+                    metrics.ascent - metrics.descent,
+                ),
+                clip: clip.clone(),
+                color: style
+                    .text_selection_color
+                    .alpha(style.text_selection_color.3 * alpha),
+                radius: 0.,
+            });
+        }
     }
     scene.paint.push(Paint::Text {
         rect: Rect::new(inner.x - hit.scroll, inner.y, inner.w, inner.h),
@@ -187,6 +199,40 @@ pub(super) fn paint<M>(
             radius: 0.,
         });
     }
+}
+pub(super) fn visual_key(hit: &TextHit, key: &Key) -> Option<TextEdit> {
+    let (key, modifiers) = match key {
+        Key::Modified { key, modifiers } => (key.as_ref(), *modifiers),
+        _ => (key, KeyModifiers::default()),
+    };
+    if modifiers.control
+        || modifiers.alt
+        || modifiers.logo
+        || !matches!(key, Key::Left | Key::Right | Key::Home | Key::End)
+    {
+        return None;
+    }
+    // Only the prepared visual source map may determine a visual move.
+    let stops = &hit.boundaries;
+    let current = stops
+        .iter()
+        .position(|(byte, _)| *byte == hit.selection.caret())?;
+    let index = match key {
+        Key::Left => current.saturating_sub(1),
+        Key::Right => (current + 1).min(stops.len() - 1),
+        Key::Home => 0,
+        Key::End => stops.len() - 1,
+        _ => unreachable!(),
+    };
+    let caret = stops[index].0;
+    Some(TextEdit::Select {
+        anchor: if modifiers.shift {
+            hit.selection.anchor()
+        } else {
+            caret
+        },
+        caret,
+    })
 }
 pub(super) fn key(key: &Key) -> Option<TextEdit> {
     let (key, modifiers) = match key {
@@ -261,7 +307,7 @@ mod clipboard_keys {
     use super::*;
     fn test_layout() -> Layout {
         Layout::new(Arc::new(vec![
-            fontdue::Font::from_bytes(
+            crate::text::Font::from_bytes(
                 include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
                 fontdue::FontSettings::default(),
             )
@@ -430,7 +476,7 @@ mod placeholder_styling {
     #[test]
     fn placeholder_opacity_is_explicit_and_entered_text_keeps_its_own_alpha() {
         let layout = Layout::new(Arc::new(vec![
-            fontdue::Font::from_bytes(
+            crate::text::Font::from_bytes(
                 include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
                 fontdue::FontSettings::default(),
             )

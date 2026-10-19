@@ -78,7 +78,7 @@ fn color(color: Color) -> Result<(), Error> {
 pub(super) fn validate(
     paint: &[Paint],
     scale: f32,
-    fonts: &[fontdue::Font],
+    fonts: &[lucent_ui::text::Font],
     limits: &wgpu::Limits,
     current_instances: usize,
     current_clips: usize,

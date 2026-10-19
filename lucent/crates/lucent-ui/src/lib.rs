@@ -12,6 +12,7 @@ mod slider;
 mod text_area;
 mod text_input;
 pub use text_input::TextHit;
+mod composition;
 pub mod text;
 pub use slider::SliderHit;
 use std::{collections::BTreeMap, sync::Arc};
@@ -113,10 +114,10 @@ impl<M> Default for Scene<M> {
 }
 
 pub struct Layout {
-    fonts: Arc<Vec<fontdue::Font>>,
+    fonts: Arc<Vec<crate::text::Font>>,
 }
 impl Layout {
-    pub fn new(fonts: Arc<Vec<fontdue::Font>>) -> Self {
+    pub fn new(fonts: Arc<Vec<crate::text::Font>>) -> Self {
         Self { fonts }
     }
     fn text_width(&self, s: &str, size: f32, face: usize) -> f32 {
@@ -589,23 +590,21 @@ impl Layout {
                 &child_focus_clips,
                 &id,
             ),
-            Kind::TextArea { .. } => text_area::paint(
+            Kind::TextArea { .. } | Kind::TextInput { .. } => composition::paint(
                 scene,
                 e,
-                prepared_text.as_ref().expect("prepared text area"),
-                own_clip.intersect(prepared_text.as_ref().expect("prepared text area").inner),
+                prepared_text.as_ref().expect("prepared ordinary field"),
+                own_clip.intersect(
+                    prepared_text
+                        .as_ref()
+                        .expect("prepared ordinary field")
+                        .inner,
+                ),
                 alpha,
                 interaction.focus.as_deref() == Some(&id),
                 self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
-            ),
-            Kind::TextInput { .. } => text_input::paint(
-                scene,
-                e,
-                prepared_text.as_ref().expect("prepared text input"),
-                own_clip.intersect(inner),
-                alpha,
-                interaction.focus.as_deref() == Some(&id),
-                self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
+                interaction,
+                &id,
             ),
             Kind::Text(text) => scene.paint.push(Paint::Text {
                 rect: inner,
@@ -904,6 +903,7 @@ pub struct Interaction<M> {
     scroll_buffer: BTreeMap<String, f32>,
     overlays: overlay::State<M>,
     text_navigation: Option<text_area::Navigation>,
+    composition: Option<composition::Composition>,
 }
 impl<M> Default for Interaction<M> {
     fn default() -> Self {
@@ -921,11 +921,22 @@ impl<M> Default for Interaction<M> {
             scroll_buffer: BTreeMap::new(),
             overlays: overlay::State::default(),
             text_navigation: None,
+            composition: None,
         }
     }
 }
 impl<M: Clone> Interaction<M> {
     pub fn synchronize(&mut self, scene: &Scene<M>) {
+        if self.composition.as_ref().is_some_and(|c| {
+            self.focus.as_deref() != Some(&c.id)
+                || !scene
+                    .hits
+                    .iter()
+                    .any(|hit| hit.id == c.id && hit.text_edit.is_some() && hit.text.is_some())
+        }) {
+            self.composition = None;
+        }
+
         self.synchronize_buttons(scene);
         if self.press.as_ref().is_some_and(|press| {
             press.hit.parts.is_some()
@@ -1375,6 +1386,13 @@ impl<M: Clone> Interaction<M> {
             .iter()
             .find(|h| Some(&h.id) == self.focus.as_ref())
         {
+            if let (Some(text), Some(callback)) = (&hit.text, &hit.text_edit) {
+                if !text.is_multiline() && !text.value.is_ascii() {
+                    if let Some(edit) = text_input::visual_key(text, key) {
+                        return vec![callback(edit)];
+                    }
+                }
+            }
             let scroll = hit.scroll.as_ref().or_else(|| {
                 matches!(key, Key::PageUp | Key::PageDown)
                     .then(|| hit.scroll_ancestors.last())
