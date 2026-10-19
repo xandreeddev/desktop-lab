@@ -98,11 +98,12 @@ impl Fallback {
     }
 }
 fn fallbacks() -> &'static [Fallback] {
-    static FONTS: [Fallback; 4] = [
+    static FONTS: [Fallback; 5] = [
         Fallback::new(include_bytes!("../assets/NotoSansArabic-Regular.ttf")),
         Fallback::new(include_bytes!("../assets/NotoSansDevanagari-Regular.ttf")),
         Fallback::new(include_bytes!("../assets/NotoSansHebrew-Regular.ttf")),
         Fallback::new(include_bytes!("../assets/NotoSansCJK.ttf")),
+        Fallback::new(include_bytes!("../assets/NotoSansHangul.ttf")),
     ];
     &FONTS
 }
@@ -410,7 +411,7 @@ mod international_tests {
     #[test]
     fn cjk_fallback_covers_full_common_ideographs_and_kana() {
         let font = font();
-        let value = "日本語 中文 あいうえお アイウエオ 龍 龥";
+        let value = "日本語 中文 あいうえお アイウエオ 龍 龥 한국어 한글";
         let shaped = shape(&font, value, 20.);
         assert!(shaped.glyphs.iter().all(|glyph| glyph.id != 0));
         assert!(shaped.glyphs.iter().any(|glyph| glyph.face == 4));

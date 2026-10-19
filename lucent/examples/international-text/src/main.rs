@@ -154,14 +154,7 @@ impl Application for Example {
         }]
     }
     fn inspect(&self) -> String {
-        format!(
-            "{{\"single\":{:?},\"body\":{:?},\"single_caret\":{},\"body_caret\":{},\"error\":{}}}",
-            self.single,
-            self.body,
-            self.single_field.selection().caret(),
-            self.body_field.selection().caret(),
-            self.error
-        )
+        serde_json::json!({"single":self.single,"body":self.body,"single_caret":self.single_field.selection().caret(),"body_caret":self.body_field.selection().caret(),"error":self.error}).to_string()
     }
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {

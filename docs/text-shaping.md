@@ -41,10 +41,15 @@ characters remain the primary face's missing glyph; they are not silently
 removed. Bundled fonts and their separate license files live in
 `lucent/crates/lucent-ui/assets`.
 
-The current development milestone includes Arabic, Devanagari and Hebrew faces.
-A CJK source asset has been acquired from the official Google Fonts repository;
-its static subset and runtime registration are still in progress. This document
-must be updated after those changes and the compiled/native verification.
+The fallback set includes Arabic, Devanagari, Hebrew, common Han ideographs and
+Extension A, Kana/Bopomofo and Hangul syllables/Jamo. CJK and Hangul are static
+400-weight subsets derived from the official Google Fonts Noto sources, with
+renamed derivative family names. The asset manifest records source and derived
+SHA256 values, Unicode ranges, codepoint counts and individual OFL license files.
+The CJK subset contains 28,323 codepoints in 10,167,004 bytes; Hangul contains
+11,623 in 2,697,016 bytes. Each rasterizer initializes independently only when
+that fallback is actually selected. A missing emoji therefore does not parse all
+CJK outlines. Coverage tables are borrowed from immutable embedded bytes.
 
 ## Input-method ownership
 
