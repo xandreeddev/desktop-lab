@@ -77,6 +77,14 @@ when the compositor has not allowed another GPU submission. Affected-surface
 refresh also follows asynchronous/IPC updates and reconciliation before
 clipboard requests or focus observation, so an old editor does not retain
 clipboard authority after a scope opens.
+The runtime shares `current_tree` and one optional `current_scene` CPU layout for
+multiline editing, scope admission and clipboard authority. A post-reconciliation
+caret-reveal/dismissal batch carries pending clipboard requests forward before
+their admission. Native input has one refresh path; text and overlays are not
+laid out separately. Clipboard transfer callbacks force that same path before
+their epoch and exact native-surface checks. Eligibility comes from one unique
+ordinary editor hit in the admitted scene, so passive tooltip fields, rejected
+scopes and masked inputs have no clipboard authority.
 The outside press cannot release an action underneath. Closing restores the
 previous focus only if that element still exists and is reachable; retiring the
 anchor cancels captured presses and emits the supplied dismissal. Moving/removing
@@ -111,6 +119,9 @@ global Escape exits only after the popover has had the chance to dismiss.
 Written behavior cases cover edge placement, invalid/duplicate anchors, dwell/focus,
 passive input regions, source geometry retirement, scope navigation/restoration,
 outside-press capture, policy validation and synthetic-ID collisions. Six new
+cases also cover fractional filled bounds, old dwell retirement after an anchor
+returns, scoped wheel consumption, multiline focus navigation and wrapped-height
+remeasurement at the actual capped width. Six new
 rendered scenarios cover actual tray/dock hints and the generic popover recipe,
 at regular and narrow dimensions. The existing runner generates both reference palettes
 at 1×/2×; references must be generated, inspected and rerun. The existing tray

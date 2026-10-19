@@ -132,21 +132,54 @@ bounds, single-line/masked submit compatibility, Notes save policy and stale
 clipboard retirement. New visual fixtures cover empty, multiline, selected,
 scrolled, narrow and resized Notes in both themes at 1×/2×.
 
-Source `e67a8955a600063b87bd64dcf2806fccfb641b1d` passes 686 regular Rust
-workspace tests, with 76 opt-in fixtures ignored, strict all-target Clippy,
-formatting, 95 Python checks and verification of 554 generated design tokens.
-Those checks establish model, framework and client policy behavior; the new
-visual fixtures still need rendered comparison and review on the integrated
-revision. Real Notes focus, Enter/Shift navigation, external clipboard transfer,
-thumb dragging, restart persistence and exact settings/wallpaper restoration
-also remain pending in the prepared VM. No document contents should be exported
-in public native evidence.
+Integrated source `97c6c651` passes 689 regular Rust workspace tests, with 76
+opt-in fixtures ignored, strict all-target Clippy, formatting, 95 Python checks
+and verification of 554 generated design tokens. Both Astro URL prefixes pass
+13 pages and 488 links each with zero diagnostics. Runtime source `3806bcfc`
+passes all 688 software-Vulkan visual comparisons. The 24 new and 48 intentionally
+changed references were reviewed; unrelated references and tolerances are
+unchanged, and the final comparison did not update references.
+
+The release binary from `3806bcfc` also passes 17 native Notes functional checks
+and nine restoration checks in the single-output software-Vulkan VM. These cover
+real focus, Enter/Shift+Enter, hard-row Up/Down and Home/End, document endpoints,
+selection replacement, undo, grapheme deletion, normalized paste, copy/cut,
+non-saving selection/copy/wheel behavior, resized field geometry and multiline
+content surviving a 35-second stable restart. External clipboard peers were
+`wl-copy` and `wl-paste`; the original clipboard was empty. Exact original
+settings were restored while persistence was stopped, along with wallpaper,
+source/exports, workspace, monitor, idle marker and clipboard history. This does
+not establish GTK, Chrome or other third-party GUI clipboard interoperability.
+
+The first native attempt passed its 17 functional cases but failed restoration:
+its inactive-only unit-status guard rejected the old supervisor's quiescent
+failed state after orderly child termination. The failed attempt is retained.
+Manual recovery was verified before the fresh complete run passed with a guard
+that checks the exact unit cgroup, zero main/control PIDs and no desktop process
+before restoring settings. Follow-up source `7445c1cf` adds the supervisor exit
+handling and canonical `KillMode=mixed`; all 103 Python checks, including eight
+new owned-child cases, pass locally. A separate pinned supervisor-only VM
+upgrade now also passes: its new parent stops with `Result=success` and exit 0
+under effective `KillMode=mixed`, with exact cgroup quiescence proved. Both normal
+starts remain stable for 35 seconds. The accepted Notes binary, exact settings
+bytes/inode, wallpaper/source/theme, empty clipboard and history are preserved
+without rewriting preferences. This follow-up validates the stop policy; it does
+not broaden Notes editing coverage or establish crash/device-loss recovery.
+
+Native pixel-level caret/selection clipping, thumb dragging, soft-wrap affinity,
+exact scroll offsets, PageUp/PageDown and delayed clipboard/focus-retirement
+races remain unverified by this run. Public evidence contains check labels and
+source hashes, without original document contents, clipboard contents or private
+capture paths. The [sanitized report](../reports/measurements/lucent-multiline-notes.json)
+records each validation revision separately.
 
 ### Bounded CPU measurement
 
-An optimized `--release` run on an AMD Ryzen 5 7430U measured three synthetic
-8192-byte documents in a 96 × 80 logical viewport with a 20-unit font. The process
-ran under a one-CPU quota while the existing video-wallpaper VM remained running.
+An optimized `--release` run of source
+`e67a8955a600063b87bd64dcf2806fccfb641b1d` on an AMD Ryzen 5 7430U measured
+three synthetic 8192-byte documents in a 96 × 80 logical viewport with a 20-unit
+font. The process ran under a one-CPU quota while the existing video-wallpaper VM
+remained running.
 Each case contains 32 layout samples, 16 content replacements and 128 keyboard
 navigation samples. These are observations from one run with contention, rather
 than timing thresholds or a statistical performance guarantee.

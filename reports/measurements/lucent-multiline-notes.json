@@ -1,16 +1,21 @@
 {
   "schema": 1,
   "milestone": "controlled-multiline-text-area-and-notes",
-  "source_commit": "e67a8955a600063b87bd64dcf2806fccfb641b1d",
-  "status": "local_checks_and_bounded_cpu_measurement_passed_visual_and_native_acceptance_pending",
+  "source_commit": "3806bcfc00e54842022d4f274a092f132c284de8",
+  "status": "software_visual_scoped_native_notes_and_supervisor_acceptance_passed",
   "local_checks": {
-    "workspace_regular_passed": 686,
+    "source_commit": "97c6c651e1297ef8b30dcd7f0c100a4305563824",
+    "workspace_regular_passed": 689,
     "workspace_failed": 0,
     "workspace_ignored": 76,
     "python_passed": 95,
     "generated_design_tokens": 554,
     "format_passed": true,
-    "strict_clippy_workspace_all_targets_passed": true
+    "strict_clippy_workspace_all_targets_passed": true,
+    "astro_prefixes_checked": 2,
+    "astro_pages_each_prefix": 13,
+    "astro_links_each_prefix": 488,
+    "astro_diagnostics": 0
   },
   "implemented": [
     "Element::text_area reuses the controlled TextFieldState/TextEdit, ScrollSpec and clipboard contracts; canonical text, selection, scroll and byte policy remain client-owned.",
@@ -122,23 +127,114 @@
     ]
   },
   "visual_acceptance": {
-    "status": "pending",
-    "scope": "New multiline and resized Notes fixtures require rendered comparisons and review on the integrated revision."
+    "status": "passed",
+    "source_commit": "3806bcfc00e54842022d4f274a092f132c284de8",
+    "software_vulkan_comparisons_passed": 688,
+    "new_references_reviewed": 24,
+    "changed_existing_references_reviewed": 48,
+    "unrelated_reference_changes": 0,
+    "tolerances_changed": false,
+    "final_comparison_updated_references": false,
+    "scope": "Software-Vulkan fixture comparisons in both themes at 1x/2x, including multiline and resized Notes. This is separate from native caret/selection pixel acceptance."
   },
   "native_acceptance": {
-    "status": "pending",
-    "scope": "Real compositor focus, Enter/Shift navigation, external clipboard, thumb dragging, restart persistence and exact settings/wallpaper restoration."
+    "status": "passed_with_explicit_scope",
+    "source_commit": "3806bcfc00e54842022d4f274a092f132c284de8",
+    "desktop_sha256": "21a4fa58204e64dba45026ade0fd55c8a075bcd44b58e82762fa2142392e9408",
+    "harness_sha256": "a2c5b493965eb909ef222432077b71e7bafd4145172fcefefef3d69c83304d88",
+    "functional_checks_passed": 17,
+    "restoration_checks_passed": 9,
+    "checks": {
+      "real_native_notes_focus": true,
+      "enter_and_shift_enter_insert_lf": true,
+      "hard_row_up_down_sticky_x": true,
+      "row_home_end": true,
+      "document_home_end": true,
+      "shift_up_selection_replacement": true,
+      "native_undo": true,
+      "selection_and_navigation_do_not_save": true,
+      "keyboard_focus_visible_without_hover": true,
+      "external_paste_crlf_and_cr_normalize": true,
+      "empty_lines_and_trailing_lf": true,
+      "native_copy_cut_paste": true,
+      "copy_does_not_save": true,
+      "native_utf8_grapheme_delete_and_backspace": true,
+      "native_wheel_preserves_content_and_does_not_save": true,
+      "resized_card_updates_field_geometry_and_preserves_content": true,
+      "multiline_content_survives_restart_35s_stability": true
+    },
+    "restoration": {
+      "clipboard_history_and_service": true,
+      "exact_original_settings_stopped_service": true,
+      "normal_desktop_35s_stability": true,
+      "original_workspace": true,
+      "original_monitor": true,
+      "exact_wallpaper_source_exports_and_settings": true,
+      "clipboard_history_preserved_after_restart": true,
+      "original_idle_marker": true,
+      "owned_guest_checkpoint_removed": true
+    },
+    "scope": "Native single-output ordinary Notes editing on the prepared software-Vulkan VM; no hardware GPU or performance claim.",
+    "clipboard": {
+      "initial_selection": "empty",
+      "external_protocol_peers": [
+        "wl-copy",
+        "wl-paste"
+      ],
+      "original_selection_history_and_watcher_restored": true,
+      "third_party_gui_application_interoperability_tested": false
+    },
+    "history": {
+      "first_attempt_status": "failed_restoration",
+      "first_attempt_functional_checks_passed": 17,
+      "cause": "The restoration guard required the inactive unit label. Orderly child termination left the old supervisor unit failed with exit status 241, although it was quiescent; the guard correctly refused to restore settings without its required stop proof.",
+      "manual_recovery_verified_before_final_run": true,
+      "correction": "The harness now captures the exact unit cgroup before stopping and requires no desktop process, zero main/control PIDs and an absent or recursively empty cgroup before restoring owned settings. A quiescent failed unit is admitted; a live process is not.",
+      "fresh_complete_run_status": "passed"
+    },
+    "not_covered": [
+      "native scrollbar thumb and rendered caret/selection clipping",
+      "native soft-wrap affinity and exact scroll-offset assertions",
+      "native PageUp/PageDown and stationary edge-drag autoscroll",
+      "clipboard delayed-source/focus-retirement races",
+      "IME/bidi/shaping/accessibility",
+      "GTK, Chrome or other third-party GUI application clipboard interoperability"
+    ]
   },
   "limits": [
     "One optimized host run with a one-CPU quota and a running video VM. These observations are not timing thresholds, a statistically repeatable result or a before/after CPU improvement.",
     "Layout/edit/navigation timings cover CPU view/layout/input synchronization and current-model updates/reveal; they exclude GPU, native input delivery, count/geometry assertions and scene teardown.",
     "Visible-row painting is bounded, but layout still measures the full client-owned document. This is an 8192-byte Notes editor, not virtualized large-document layout.",
     "No current desktop RSS, GPU completion, scanout, end-to-end input latency or native 60 FPS result is established by this measurement.",
-    "Complex-script shaping, bidirectional layout, font fallback, preedit/IME and native interoperability remain separate requirements. Accessibility remains deferred by the user.",
-    "There is no stationary-pointer selection autoscroll timer. Selection reveal remains input-driven."
+    "Complex-script shaping, bidirectional layout, font fallback, preedit/IME and third-party GUI application clipboard interoperability remain separate requirements. Accessibility remains deferred by the user.",
+    "There is no stationary-pointer selection autoscroll timer. Selection reveal remains input-driven.",
+    "Native pixel-level caret/selection clipping, scrollbar thumb dragging, soft-wrap affinity, exact scroll offsets, PageUp/PageDown and delayed clipboard/focus-retirement races remain unverified by this run."
   ],
   "privacy": {
     "document_contents_or_private_paths_published": false,
     "native_captures_or_credentials_published": false
+  },
+  "supervisor_follow_up": {
+    "source_commit": "7445c1cfb27c4665403f41f60e505c67e8e9be1b",
+    "local_python_passed": 103,
+    "new_owned_child_supervisor_tests": 8,
+    "canonical_systemd_kill_mode": "mixed",
+    "vm_script_upgrade_and_clean_mixed_stop_acceptance": "passed",
+    "scope": "The committed supervisor script and one owned KillMode=mixed user drop-in were upgraded separately in the existing VM. Two 35-second stable starts and an intervening clean exit-0 stop passed while retaining the accepted Notes UI binary. Settings, wallpaper/source/theme and the initially empty clipboard/history were verified without rewriting them. This does not broaden Notes native coverage or establish crash/device-loss recovery.",
+    "script_sha256": "4238b8fbc096a353e88619cf4da2bb4f4b47e150be4a12b67c61181d59e2461c",
+    "readiness_import_sha256": "c0074ece3388723608430e98ffaec82811acea278c0160e9de014abfcef48baf",
+    "vm_acceptance": {
+      "effective_kill_mode": "mixed",
+      "new_parent_stop_result": "success",
+      "new_parent_stop_exit_status": 0,
+      "exact_cgroup_quiescence_verified": true,
+      "stable_starts": 2,
+      "stability_seconds_each": 35,
+      "ui_binary_unchanged": true,
+      "exact_settings_bytes_and_inode_preserved": true,
+      "wallpaper_source_theme_preserved": true,
+      "empty_clipboard_and_history_preserved": true,
+      "rollback_required": false
+    }
   }
 }
