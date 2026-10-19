@@ -349,14 +349,17 @@ def suite(args, results):
                 'original_independent_example_retired')
 
     try:
-        h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(fixture)],
-                 data=(ROOT / 'vm/fixtures/application-intent-fixture.py').read_bytes(), timeout=20)
-        h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(scratch + '/owned_application_units.py')],
-                 data=(ROOT / 'vm/owned_application_units.py').read_bytes(), timeout=20)
-        h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(scratch + '/application_intent_policy.py')],
-                 data=(ROOT / 'vm/application_intent_policy.py').read_bytes(), timeout=20)
-        h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(scratch + '/application_intent_browser.py')],
-                 data=(ROOT / 'vm/application_intent_browser.py').read_bytes(), timeout=20)
+        sources = {name: path.read_bytes() for name, path in (
+            ('fixture.py', ROOT / 'vm/fixtures/application-intent-fixture.py'),
+            ('owned_application_units.py', ROOT / 'vm/owned_application_units.py'),
+            ('application_intent_policy.py', ROOT / 'vm/application_intent_policy.py'),
+            ('application_intent_browser.py', ROOT / 'vm/application_intent_browser.py'),
+            ('owned_chromium_lease.py', ROOT / 'vm/owned_chromium_lease.py'))}
+        results['helper_sources_sha256'] = {name: hashlib.sha256(raw).hexdigest() for name, raw in sources.items()}
+        results['host_harness_sha256'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+        for filename, raw in sources.items():
+            h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(scratch + '/' + filename)],
+                     data=raw, timeout=20)
         initialized = True
         entry = json.loads(call('initialize', manifest['binaries']['application-intent']['sha256']))
         require(json.loads(call('initial-absence'))['absent'], 'owned_units_initially_absent')
