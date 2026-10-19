@@ -662,21 +662,22 @@ print('safe')
         bounds = visible(hits[0])
         require(bounds[2] - bounds[0] > 4 and bounds[3] - bounds[1] > 4, 'visible_current_native_hit_required')
         return value, hits[0], origin(value), bounds
-    def key_tab():
+    def key_tab(*, backward=False):
         safe()
         persistence_guard()
         input_guard()
         require(last_cursor is not None and cursor() == last_cursor, 'cursor_ownership_lost_before_tab')
-        run(['virsh', '-c', lab.URI, 'send-key', name, '--codeset', 'linux', '--holdtime', '25', '15'])
+        run(['virsh', '-c', lab.URI, 'send-key', name, '--codeset', 'linux', '--holdtime', '25',
+             *(['42', '15'] if backward else ['15'])])
         time.sleep(.045)
-    def reveal(identifier):
+    def reveal(identifier, *, backward=False):
         for _ in range(64):
             state = safe()
             if surface(state).get('focus') == identifier and surface(state).get('focus_visible'):
                 _, _, _, bounds = target(identifier)
                 if bounds[3] - bounds[1] > 4:
                     return
-            key_tab()
+            key_tab(backward=backward)
         raise Failure('keyboard_reveal_or_focus_visibility_failed')
     def click(identifier):
         value, _, where, bounds = target(identifier)
@@ -730,7 +731,11 @@ print('safe')
             current = safe()['client']['live_wallpaper']['selection']
             if current == index:
                 identifier = 'live-library-' + str(index)
-                reveal(identifier)
+                candidate = surface()
+                hits = [hit for hit in candidate['hits'] if hit['id'] == identifier]
+                if (len(hits) != 1 or visible(hits[0])[2] - visible(hits[0])[0] <= 4
+                        or visible(hits[0])[3] - visible(hits[0])[1] <= 4):
+                    reveal(identifier)
                 click(identifier)
                 return
             identifier = 'live-next' if current < index else 'live-previous'
@@ -864,7 +869,7 @@ print('safe')
         wheel(False)
         after_scroll = next(hit for hit in surface()['hits'] if hit['id'] == 'live-library-refresh')['y']
         require(after_scroll > before_scroll, 'native_scroll_did_not_move_content')
-        reveal('live-previous')
+        reveal('live-previous', backward=True)
         report['checks']['native_tab_reveal_focus_and_wheel_scroll'] = True
         phase = 'same_path_failure_retry_refresh'
         click('live-next')
@@ -902,7 +907,7 @@ print('safe')
         target_id = 'live-target-' + original_monitor['name']
         reveal(target_id)
         click(target_id)
-        reveal('live-apply')
+        reveal('live-apply', backward=True)
         guest('arm', {'index': 0})
         click('live-apply')
         # No further foreground input until this one explicitly armed profile
