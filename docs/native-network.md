@@ -83,6 +83,11 @@ answers cannot target it. Response delivery acknowledges only the answer, not
 successful association, DHCP or durable storage. There is no automatic credential
 retry, silent profile replacement, terminal wizard, or invented connected state.
 
+Secret replies use deterministic map traversal during both D-Bus sizing and
+serialization. Reconstructing a randomized map per serialization pass can change
+aligned body length and corrupt the native stream; a wire-level regression checks
+the header/body length and decoded fields across supported passphrase lengths.
+
 The form and domain `WifiCredentials` retain zeroizing owned storage through
 response serialization. Native incoming and outgoing D-Bus buffers and
 NetworkManager's own copies/storage have independent lifetimes and are not

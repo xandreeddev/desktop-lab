@@ -412,14 +412,16 @@ impl serde::Serialize for Reply {
         &self,
         serializer: S,
     ) -> std::result::Result<S::Ok, S::Error> {
-        let values = std::collections::HashMap::from([
+        // zbus sizes and serializes separately. Deterministic traversal is
+        // required: variant strings make entry-order padding observable.
+        let values = BTreeMap::from([
             ("name", Value::from(SECURITY)),
             (
                 "psk",
                 Value::from(self.0.password().map(Secret::expose).unwrap_or("")),
             ),
         ]);
-        std::collections::HashMap::from([(SECURITY, values)]).serialize(serializer)
+        BTreeMap::from([(SECURITY, values)]).serialize(serializer)
     }
 }
 #[zbus::interface(name = "org.freedesktop.NetworkManager.SecretAgent")]
@@ -631,5 +633,48 @@ impl Drop for Session {
         self.agent.hub.retire();
         // Registration is connection-owned; dropping this complete native
         // lifetime unregisters it. No method replay against a replacement owner.
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn secret_reply_wire_length_is_stable_across_sizing_and_serialization() {
+        let call = zbus::Message::method_call(PATH, "GetSecrets")
+            .unwrap()
+            .build(&())
+            .unwrap();
+        // D-Bus sizes and serializes independently. Each pass must preserve map
+        // iteration order because variant strings change alignment/padding.
+        for length in 8..=63 {
+            for _ in 0..16 {
+                let reply = Reply(
+                    WifiCredentials::new(
+                        WifiSecurity::WpaPersonal,
+                        Some(Secret::new("a".repeat(length))),
+                    )
+                    .unwrap(),
+                );
+                let message = zbus::Message::method_return(&call.header())
+                    .unwrap()
+                    .build(&reply)
+                    .unwrap();
+                assert_eq!(
+                    message.header().primary().body_len() as usize,
+                    message.body().len()
+                );
+                let values: Settings = message.body().deserialize().unwrap();
+                assert_eq!(
+                    <&str>::try_from(&values[SECURITY]["psk"]).unwrap().len(),
+                    length
+                );
+                assert_eq!(
+                    <&str>::try_from(&values[SECURITY]["name"]).unwrap(),
+                    SECURITY
+                );
+            }
+        }
     }
 }
