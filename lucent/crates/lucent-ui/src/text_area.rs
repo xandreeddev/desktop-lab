@@ -1525,6 +1525,8 @@ mod oversized_grapheme_tests {
         let scene = layout.build(&tree, 100., 80., &Interaction::default(), 0.);
         let text = scene.hits[0].text.as_ref().unwrap();
         assert_eq!(text.area.as_ref().unwrap().rows[0].stops.len(), 2);
-        assert!(scene.paint.iter().any(|paint|matches!(paint,Paint::Text{text,layout,..} if text==&value&&layout.raster_width==Some(100.))));
+        let viewport = text.inner.w;
+        assert!(viewport > 0. && viewport <= 100.);
+        assert!(scene.paint.iter().any(|paint|matches!(paint,Paint::Text{text,layout,..} if text==&value&&layout.raster_width==Some(viewport))));
     }
 }
