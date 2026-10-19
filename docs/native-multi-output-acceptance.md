@@ -91,14 +91,14 @@ actually open on the exact target host and render before Escape closes it.
 There is no `lucent-cli audio open` fallback. If real input cannot be established,
 the result remains blocked.
 
-Hyprland layer `x/y` are **output-local**, while `cursorpos` is global. Therefore
-the tested mapping is:
+The pinned Hyprland build's arranged layer `x/y` and `cursorpos` are **global
+logical coordinates**. SDK hit coordinates are surface-local. The mapping is:
 
 ```text
-global cursor = monitor logical origin + native layer local origin + local hit
+global cursor = native layer global logical origin + local logical hit
 ```
 
-The fractional scale is not applied a second time. Hit centers use the visible
+The monitor origin and fractional scale are not applied a second time. Hit centers use the visible
 intersection of hit bounds, clip bounds and surface bounds. Selection is by
 explicit output, host instance and native namespace/PID; the helper never picks
 whichever host happens to be focused.
@@ -182,6 +182,17 @@ or supervisor restart, concurrent layout/config change, blocked guard or lost
 creation acknowledgement remains explicit incomplete/blocked evidence. Do not
 blindly remove an output by a copied name or call a global reset.
 
+## Current native evidence
+
+The initial coherent 8e VM attempt observed two simultaneous compositor outputs,
+rendered background/bar/widget surfaces at 1×, and the original host lifetime.
+Before any physical button injection, its hit guard refused a double-added
+monitor origin. The original failed report is retained. The independent owner
+removed only its output and verified configuration/settings/media preservation
+and original cursor restoration. Corrected coordinate regressions do not by
+themselves establish panel interaction, other scales or hotplug acceptance;
+the native rerun remains pending.
+
 ## Checks available without a VM
 
 ```sh
@@ -207,10 +218,11 @@ Primary sources checked for the command/coordinate contract:
   documents `hl.dsp.cursor.move({x,y})` and workspace focus.
 - [Hyprland monitor Lua reference](https://wiki.hypr.land/0.55.0/Configuring/Basics/Monitors/)
   documents logical layout positioning and explicit scale.
-- [Hyprland command implementation](https://github.com/hyprwm/Hyprland/blob/main/src/ipc/s1/Commands.cpp)
-  confirms Lua dispatch wraps `hl.dispatch(...)`, layer serialization and global cursorpos.
-- [Hyprland layer implementation](https://github.com/hyprwm/Hyprland/blob/main/src/desktop/view/LayerSurface.cpp)
-  adds monitor position to layer-local geometry when constructing global damage.
+- [Pinned Hyprland layer serialization](https://github.com/hyprwm/Hyprland/blob/efb50993780079460b0cbed1363e2166a2de1d9f/src/debug/HyprCtl.cpp#L601)
+  returns the arranged `m_geometry` box directly.
+- [Pinned Hyprland layer arrangement](https://github.com/hyprwm/Hyprland/blob/efb50993780079460b0cbed1363e2166a2de1d9f/src/render/Renderer.cpp#L2343)
+  starts with the monitor's global logical position and stores the resulting box
+  in `m_geometry`. Unrelated damage paths are not the JSON coordinate contract.
 - [Reviewed v0.56.2 output removal](https://github.com/hyprwm/Hyprland/blob/efb50993780079460b0cbed1363e2166a2de1d9f/src/output/Monitor.cpp#L439)
   defines the exact declared backup-center cursor transition. Runtime admission
   requires this source commit, rather than inferring installed behavior from main.

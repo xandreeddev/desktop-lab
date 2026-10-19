@@ -98,18 +98,42 @@ class Backend:
 
 
 class NativeGeometry(unittest.TestCase):
-    def test_fractional_density_keeps_layer_and_hit_logical_then_adds_global_origin(self):
+    def test_fractional_density_keeps_global_layer_and_hit_in_logical_coordinates(self):
         native = monitor(NAME, 1, 1920, 1.25)
         native.update(width=1280, height=960, y=-500)
         source = {'pointer_input': 'content', 'width': 1024, 'height': 48,
                   'hits': [{'id': 'audio', 'x': 40, 'y': 8, 'width': 24, 'height': 24,
                             'clip': {'x': 0, 'y': 0, 'width': 1024, 'height': 48}}]}
-        point = policy.hit_center(native, source, {'x': 12, 'y': 8}, 'audio')
+        layer = {'x': 1932, 'y': -492}
+        point = policy.hit_center(native, source, layer, 'audio')
         self.assertEqual(point, (1984, -472))
         self.assertTrue(policy.cursor_matches({'x': 1984, 'y': -472}, point))
         self.assertFalse(policy.cursor_matches({'x': 64, 'y': 28}, point))
         source['hits'][0]['clip'].update(x=50, width=30)
-        self.assertEqual(policy.hit_center(native, source, {'x': 12, 'y': 8}, 'audio'), (1989, -472))
+        self.assertEqual(policy.hit_center(native, source, layer, 'audio'), (1989, -472))
+
+    def test_observed_second_output_global_layer_does_not_repeat_monitor_offset(self):
+        # Sanitized geometry from the actual 8e two-output VM attempt. The old
+        # monitor+layer+hit mapping refused this visible button before input.
+        native = monitor(NAME, 1, 1952, 1)
+        native.update(width=1280, height=960)
+        source = {'pointer_input': 'content', 'width': 1280, 'height': 144,
+                  'hits': [{'id': 'bar-audio', 'x': 1196, 'y': 24.5,
+                            'width': 24, 'height': 15,
+                            'clip': {'x': 0, 'y': 0, 'width': 1280, 'height': 144}}]}
+        self.assertEqual(policy.hit_center(native, source, {'x': 1952, 'y': 0}, 'bar-audio'),
+                         (3160, 32))
+        with self.assertRaisesRegex(policy.Blocked, 'hit_outside_target_output'):
+            policy.hit_center(native, source, {'x': 0, 'y': 0}, 'bar-audio')
+
+    def test_negative_output_origin_remains_global_at_fractional_scale(self):
+        native = monitor(NAME, 1, -1500, 1.25)
+        native.update(width=1280, height=960, y=-900)
+        source = {'pointer_input': 'content', 'width': 1024, 'height': 48,
+                  'hits': [{'id': 'audio', 'x': 40, 'y': 8, 'width': 24, 'height': 24,
+                            'clip': {'x': 0, 'y': 0, 'width': 1024, 'height': 48}}]}
+        self.assertEqual(policy.hit_center(native, source, {'x': -1488, 'y': -892}, 'audio'),
+                         (-1436, -872))
 
     def test_invisible_nonfinite_or_ambiguous_hits_never_gain_input_authority(self):
         source = {'pointer_input': 'content', 'width': 100, 'height': 48,
@@ -357,7 +381,7 @@ class RealInputAdmission(unittest.TestCase):
         value = {'monitor': monitor(NAME, 1, 1920),
                  'host': {'id': NAME, 'instance': 'owned', 'generation': 1},
                  'output': {'name': NAME, 'global': 101}, 'bar': bar,
-                 'layers': {'bar-owned': {'x': 0, 'y': 0}}}
+                 'layers': {'bar-owned': {'x': 1920, 'y': 0}}}
         run.settled = lambda _name: copy.deepcopy(value)
         vm.inspect = lambda: {'client': {'named_monitor_hosts': True, 'monitor_hosts': [value['host']]},
                               'outputs': [value['output']], 'surfaces': [value['bar']]}

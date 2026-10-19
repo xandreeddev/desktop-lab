@@ -136,8 +136,11 @@ def hit_center(monitor, source, layer, identifier):
                  finite(clip['y']) + finite(clip['height']), finite(source['height']))
     require(right - left >= 4 and bottom - top >= 4, 'hit_not_safely_visible')
     local = ((left + right) / 2, (top + bottom) / 2)
-    x = round(finite(monitor['x']) + finite(layer['x']) + local[0])
-    y = round(finite(monitor['y']) + finite(layer['y']) + local[1])
+    # The pinned Hyprland layers JSON reports the arranged global logical box.
+    # SDK hits are surface-local logical values; neither the monitor origin nor
+    # its fractional density belongs in this addition a second time.
+    x = round(finite(layer['x']) + local[0])
+    y = round(finite(layer['y']) + local[1])
     require(monitor['x'] <= x < monitor['x'] + monitor['width'] / monitor['scale']
             and monitor['y'] <= y < monitor['y'] + monitor['height'] / monitor['scale'],
             'hit_outside_target_output')
