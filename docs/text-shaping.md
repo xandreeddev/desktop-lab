@@ -61,7 +61,14 @@ internally from the complete source line when shaping its font spans; consumers
 do not assemble context fragments or maintain a second shaping state.
 
 ASCII preserves the prior character advances and pair kerning exactly. Density
-changes do not reflow text or change logical positions. The native renderer keeps
+changes do not reflow text or change logical positions. Within each explicit
+monotone script/font run, cluster-end lookup uses a binary search and adjacent
+same-cluster glyphs merge directly. A test-only slow collector of raw rustybuzz
+output checks exact glyph positions, source stops, selection segments and ink
+metrics on long CJK, combining-Latin, Devanagari, Arabic and Hebrew rows. This
+removes two quadratic scans without introducing a retained cache. It is a source
+complexity correction; runtime latency remains a separate measured result.
+The native renderer keeps
 its existing size, glyph and mask allocation checks and coverage supersampling.
 
 See [the baseline review](text-baseline-review.md) for the row-local typography

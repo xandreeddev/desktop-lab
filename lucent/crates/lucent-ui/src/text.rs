@@ -329,6 +329,9 @@ pub fn shape_with_layout(font: &Font, line: &str, size: f32, layout: LayoutOptio
                 let scale = size / face.units_per_em() as f32;
                 let mut buffer = rustybuzz::UnicodeBuffer::new();
                 buffer.push_str(&line[range.clone()]);
+                // Keep each source cluster contiguous in this one script/font
+                // run, including RTL output and reordered marks.
+                buffer.set_cluster_level(rustybuzz::BufferClusterLevel::MonotoneGraphemes);
                 // Joining context belongs to this source line, not a public
                 // fragment API. rustybuzz retains only its bounded scalar window.
                 buffer.set_pre_context(&line[..range.start]);
@@ -355,9 +358,8 @@ pub fn shape_with_layout(font: &Font, line: &str, size: f32, layout: LayoutOptio
                 for (info, position) in output.glyph_infos().iter().zip(output.glyph_positions()) {
                     let start = range.start + info.cluster as usize;
                     let end = clusters
-                        .iter()
+                        .get(clusters.partition_point(|at| *at <= start))
                         .copied()
-                        .find(|at| *at > start)
                         .unwrap_or(range.end);
                     let advance = position.x_advance as f32 * scale;
                     result.glyphs.push(Glyph {
@@ -369,8 +371,8 @@ pub fn shape_with_layout(font: &Font, line: &str, size: f32, layout: LayoutOptio
                         advance,
                     });
                     if let Some((_, a, b)) = extents
-                        .iter_mut()
-                        .find(|(range, _, _)| range.start == start)
+                        .last_mut()
+                        .filter(|(range, _, _)| range.start == start)
                     {
                         *a = a.min(x);
                         *b = b.max(x + advance);
@@ -715,3 +717,7 @@ mod international_tests {
         assert_eq!(shaped.glyphs.len(), value.len());
     }
 }
+
+#[cfg(test)]
+#[path = "text_long_regressions.rs"]
+mod long_cluster_regressions;
