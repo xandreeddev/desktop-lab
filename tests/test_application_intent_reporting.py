@@ -248,5 +248,93 @@ class FocusEvidence(unittest.TestCase):
                 driver.focus_observation(focused,clients,admitted,'Owned',layer)
 
 
+class RequiredFocusCheckpoint(unittest.TestCase):
+    def require(self, condition, label):
+        if not condition:raise CheckFailure(label)
+
+    def test_clean_false_continues_independent_checks_but_final_focus_gate_still_fails(self):
+        driver=load();layer,admitted,clients,_=FocusEvidence().fixture();diagnostics={}
+        guard=unittest.mock.Mock(return_value=(clients,admitted));independent=[]
+        with patch.object(driver.time,'monotonic',side_effect=[0,35]),patch.object(driver.time,'sleep') as sleep:
+            focused=driver.wait_for_owned_browser_focus(diagnostics,guard,lambda:{},'Owned',layer)
+        self.assertFalse(focused);self.assertEqual(guard.call_count,2);sleep.assert_not_called()
+        self.assertTrue(diagnostics['clean_focus_timeout'] and diagnostics['independent_checks_admitted'])
+        checks={'fresh_token_delivered_to_first_owned_child':True,
+                'fresh_token_child_delivery_and_fresh_browser_focus_observed':focused}
+        independent.extend(['open','action','socket','cli'])
+        checks['independent_document_checks']=True
+        with patch.object(driver,'require',self.require,create=True),self.assertRaisesRegex(
+                CheckFailure,'^fresh_owned_browser_focus_observed$'):
+            driver.require_first_launch_focus(checks)
+        self.assertEqual(independent,['open','action','socket','cli'])
+        self.assertTrue(checks['independent_document_checks'])
+        self.assertFalse(checks['fresh_token_child_delivery_and_fresh_browser_focus_observed'])
+
+    def test_guard_error_aborts_immediately_without_read_retry_or_independent_admission(self):
+        driver=load();layer,_,_,_=FocusEvidence().fixture();diagnostics={};continued=[]
+        guard=unittest.mock.Mock(side_effect=ValueError('identity changed'));read=unittest.mock.Mock()
+        with patch.object(driver.time,'monotonic',return_value=0),patch.object(driver.time,'sleep') as sleep, \
+             self.assertRaises(ValueError):
+            driver.wait_for_owned_browser_focus(diagnostics,guard,read,'Owned',layer)
+            continued.append(True)
+        guard.assert_called_once_with();read.assert_not_called();sleep.assert_not_called()
+        self.assertEqual(continued,[]);self.assertNotIn('independent_checks_admitted',diagnostics)
+        self.assertEqual(diagnostics['last_outcome'],'guard_exception')
+
+    def test_focus_transport_error_is_fatal_rather_than_a_clean_false_timeout(self):
+        driver=load();layer,admitted,clients,_=FocusEvidence().fixture();diagnostics={}
+        read=unittest.mock.Mock(side_effect=OSError('private transport detail'))
+        with patch.object(driver.time,'monotonic',return_value=0),patch.object(driver.time,'sleep') as sleep, \
+             self.assertRaises(OSError):
+            driver.wait_for_owned_browser_focus(diagnostics,lambda:(clients,admitted),read,'Owned',layer)
+        read.assert_called_once_with();sleep.assert_not_called()
+        self.assertNotIn('independent_checks_admitted',diagnostics)
+        self.assertEqual(diagnostics['last_outcome'],'observation_exception')
+
+    def test_fresh_complete_guard_failure_after_clean_timeout_also_aborts(self):
+        driver=load();layer,admitted,clients,_=FocusEvidence().fixture();diagnostics={}
+        guard=unittest.mock.Mock(side_effect=[(clients,admitted),ValueError('foreign input')])
+        with patch.object(driver.time,'monotonic',side_effect=[0,35]),self.assertRaises(ValueError):
+            driver.wait_for_owned_browser_focus(diagnostics,guard,lambda:{},'Owned',layer)
+        self.assertEqual(guard.call_count,2)
+        self.assertEqual(diagnostics['phase'],'first_launch_focus_continue_guard')
+        self.assertEqual(diagnostics['last_outcome'],'guard_exception')
+        self.assertNotIn('independent_checks_admitted',diagnostics)
+
+    def test_genuine_focus_passes_the_original_final_criterion_without_extra_guard_or_command(self):
+        driver=load();layer,admitted,clients,focused=FocusEvidence().fixture();diagnostics={}
+        guard=unittest.mock.Mock(return_value=(clients,admitted))
+        with patch.object(driver.time,'monotonic',return_value=0),patch.object(driver.time,'sleep') as sleep:
+            self.assertTrue(driver.wait_for_owned_browser_focus(diagnostics,guard,lambda:focused,'Owned',layer))
+        guard.assert_called_once_with();sleep.assert_not_called()
+        with patch.object(driver,'require',self.require,create=True):
+            driver.require_first_launch_focus({'fresh_token_child_delivery_and_fresh_browser_focus_observed':True})
+        self.assertNotIn('clean_focus_timeout',diagnostics)
+
+    def test_no_focus_cannot_produce_a_success_report_after_independent_checks_pass(self):
+        driver=load();layer,admitted,clients,_=FocusEvidence().fixture()
+        with tempfile.TemporaryDirectory() as name:
+            path=Path(name)/'report.json';output=io.StringIO()
+            def suite(_args,result):
+                result['checks']['fresh_token_delivered_to_first_owned_child']=True
+                diagnostics=result['first_launch_focus']={}
+                focused=driver.wait_for_owned_browser_focus(diagnostics,lambda:(clients,admitted),lambda:{},'Owned',layer)
+                result['checks']['fresh_token_child_delivery_and_fresh_browser_focus_observed']=focused
+                result['checks']['independent_document_checks']=True
+                driver.require_first_launch_focus(result['checks'])
+            with patch.object(driver,'load_helpers'),patch.object(driver,'suite',side_effect=suite), \
+                 patch.object(driver,'CheckFailure',CheckFailure,create=True), \
+                 patch.object(driver,'require',self.require,create=True),patch.object(driver,'remote',None,create=True), \
+                 patch.object(driver.runpy,'run_path',return_value={'stay_awake':lambda _:nullcontext()}), \
+                 patch.object(driver.time,'monotonic',side_effect=[0,35]),patch.object(driver.signal,'signal'), \
+                 patch.object(sys,'argv',['test','--release-manifest','/unused','--report',str(path)]), \
+                 redirect_stdout(output),self.assertRaises(SystemExit):driver.main()
+            result=json.loads(path.read_text());summary=json.loads(output.getvalue())
+            self.assertFalse(result['passed']);self.assertFalse(summary['passed'])
+            self.assertTrue(result['checks']['independent_document_checks'])
+            self.assertFalse(result['checks']['fresh_token_child_delivery_and_fresh_browser_focus_observed'])
+            self.assertEqual(result['failure'],'fresh_owned_browser_focus_observed')
+
+
 if __name__ == '__main__':
     unittest.main()

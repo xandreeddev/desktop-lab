@@ -264,6 +264,19 @@ fixed phases distinguish a false focus predicate from a guard exception or faile
 focus observation. These diagnostics neither change the acceptance criterion nor
 issue a focus command. Their source/pure checks do not rerun the failed attempt.
 
+The prepared harness now records first-child token delivery independently from
+first-launch focus. Its focus observation window remains bounded to 35 seconds.
+A clean false predicate may proceed to the existing independent file/Open,
+declared Action, socket and CLI assertions only after the same complete normal
+interaction guard passes again. Any guard, identity, focus-read or transport
+exception aborts immediately; it is never converted into a clean false timeout.
+Those independent assertions remain unchanged. Their results can be collected
+while focus is unresolved, but the combined token-and-focus check stays false.
+The original first-launch focus requirement is enforced again at the end before
+overall success. A later Open/action acquiring focus does not retrospectively
+satisfy that first-launch checkpoint. No new native result follows from this
+source/pure-test change.
+
 The independent example currently keeps its Overlay/OnDemand surface visible;
 the production launcher closes after requesting a launch. That client difference
 is under investigation, not an established cause of the observed failure. The

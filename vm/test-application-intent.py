@@ -110,6 +110,39 @@ def guarded_focus_observation(diagnostics, guard, read_focus, expected_class, or
     return observation['matches_owned_browser']
 
 
+def wait_for_owned_browser_focus(diagnostics, guard, read_focus, expected_class, original_layer, timeout=35):
+    """A clean false may continue coverage; any failed admission remains fatal."""
+    if type(timeout) not in (int, float) or not math.isfinite(timeout) or not 0 < timeout <= 35:
+        raise ValueError('bounded_first_launch_focus_timeout_required')
+    deadline = time.monotonic() + timeout
+    while True:
+        if guarded_focus_observation(diagnostics, guard, read_focus, expected_class, original_layer):
+            diagnostics['focus_observed'] = True
+            return True
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            # Full normal admission, not a weaker focus-only fallback. Do not
+            # catch this guard's error or adopt a changed browser/surface/input.
+            diagnostics['phase'] = 'first_launch_focus_continue_guard'
+            try:
+                guard()
+            except BaseException as error:
+                diagnostics['last_outcome'] = 'guard_exception'
+                diagnostics['last_failure'] = failure_details(error, diagnostics['phase'])
+                raise
+            diagnostics['focus_observed'] = False
+            diagnostics['clean_focus_timeout'] = True
+            diagnostics['independent_checks_admitted'] = True
+            return False
+        time.sleep(min(.2, remaining))
+
+
+def require_first_launch_focus(checks):
+    # Independent document checks cannot replace the original focus criterion.
+    require(checks.get('fresh_token_child_delivery_and_fresh_browser_focus_observed') is True,
+            'fresh_owned_browser_focus_observed')
+
+
 def fixture_command(argv, operation, directory, sequence):
     """Retain failed fixture transport evidence without dropping its operation."""
     if re.fullmatch('[a-z][a-z-]{0,47}', operation) is None or type(sequence) is not int or not 1 <= sequence <= 512:
@@ -459,17 +492,17 @@ def suite(args, results):
         require(event['operation'] == 'open' and event['uris'] == []
                 and event['fresh_token_present'] and not event['legacy_startup_present']
                 and example_state()['client']['fresh_token'], 'first_physical_token_delivered_to_owned_child')
+        results['checks']['fresh_token_delivered_to_first_owned_child'] = True
         focus_diagnostics = results['first_launch_focus'] = {}
-        def focused_owned_browser():
-            return guarded_focus_observation(focus_diagnostics, interaction_guard,
-                lambda: json.loads(session('hyprctl', '-j', 'activewindow')), entry['class'], example_layer)
         phase = 'first_launch_native_focus'
         try:
-            eventually(focused_owned_browser, 'fresh_owned_browser_focus_observed')
+            focus_observed = wait_for_owned_browser_focus(focus_diagnostics, interaction_guard,
+                lambda: json.loads(session('hyprctl', '-j', 'activewindow')), entry['class'], example_layer)
         except BaseException:
             phase = focus_diagnostics.get('phase', phase)
             raise
-        results['checks']['fresh_token_child_delivery_and_fresh_browser_focus_observed'] = True
+        results['checks']['fresh_browser_focus_observed'] = focus_observed
+        results['checks']['fresh_token_child_delivery_and_fresh_browser_focus_observed'] = focus_observed
         phase = 'first_browser_control_admission'
         eventually(lambda: bool(browser_snapshot()), 'original_blank_browser_control_target_admitted')
 
@@ -509,6 +542,8 @@ def suite(args, results):
         results['checks']['fresh_targets_retired_with_original_browser_control_preserved'] = True
         interaction_guard()
         results['checks']['desktop_cli_open_and_no_stale_token_reuse'] = True
+        phase = 'first_launch_focus_acceptance'
+        require_first_launch_focus(results['checks'])
         completed_success = True
         results['source_commit'] = manifest['source_commit']
     except BaseException as error:
