@@ -943,9 +943,11 @@ mod tests {
     }
     #[test]
     fn popover_scopes_tab_escape_and_restores_only_a_live_opener() {
-        let mut input = Interaction::default();
-        input.focus = Some("trigger".into());
-        input.focus_visible = true;
+        let mut input = Interaction {
+            focus: Some("trigger".into()),
+            focus_visible: true,
+            ..Default::default()
+        };
         let open = scene(&tree(true), &input, 0.);
         input.synchronize(&open);
         assert_eq!(input.focus.as_deref(), Some("first"));
@@ -1111,24 +1113,22 @@ mod tests {
             input.scroll(&open, first.x + 4., first.y + 4., 1.),
             Some(vec![Message::Second])
         );
-        root.popovers[0].content = Box::new(
-            Element::scroll(
-                ScrollSpec::new(0., 20.).unwrap(),
-                Element::column(
-                    (0..5)
-                        .map(|n| {
-                            Element::empty()
-                                .size(100., 40.)
-                                .on_click(Message::First)
-                                .id(format!("row-{n}"))
-                        })
-                        .collect(),
-                ),
-                |_| Message::Under,
-            )
-            .size(140., 80.)
-            .id("list"),
-        );
+        *root.popovers[0].content = Element::scroll(
+            ScrollSpec::new(0., 20.).unwrap(),
+            Element::column(
+                (0..5)
+                    .map(|n| {
+                        Element::empty()
+                            .size(100., 40.)
+                            .on_click(Message::First)
+                            .id(format!("row-{n}"))
+                    })
+                    .collect(),
+            ),
+            |_| Message::Under,
+        )
+        .size(140., 80.)
+        .id("list");
         let open = scene(&root, &input, 2.);
         input.synchronize(&open);
         let panel = open.overlays.popover.as_ref().unwrap().rect;
@@ -1203,9 +1203,11 @@ mod tests {
             };
             let popup = tree(true).popovers.remove(0);
             let root = Element::stack(vec![parent]).popover(popup);
-            let mut input = Interaction::default();
-            input.focus = Some("trigger".into());
-            input.focus_visible = true;
+            let mut input = Interaction {
+                focus: Some("trigger".into()),
+                focus_visible: true,
+                ..Default::default()
+            };
             let result = scene(&root, &input, 1.);
             input.synchronize(&result);
             assert!(result.overlays.popover.is_none());
@@ -1275,25 +1277,23 @@ mod tests {
     #[test]
     fn initial_popup_focus_skips_scrolled_out_controls() {
         let mut root = tree(true);
-        root.popovers[0].content = Box::new(
-            Element::scroll(
-                ScrollSpec::new(80., 40.).unwrap(),
-                Element::column(
-                    (0..4)
-                        .map(|n| {
-                            Element::empty()
-                                .size(100., 40.)
-                                .on_click(Message::Input(format!("row{n}")))
-                                .id(format!("row-{n}"))
-                        })
-                        .collect(),
-                ),
-                |_| Message::Under,
-            )
-            .size(140., 80.)
-            .tab_stop(false)
-            .id("list"),
-        );
+        *root.popovers[0].content = Element::scroll(
+            ScrollSpec::new(80., 40.).unwrap(),
+            Element::column(
+                (0..4)
+                    .map(|n| {
+                        Element::empty()
+                            .size(100., 40.)
+                            .on_click(Message::Input(format!("row{n}")))
+                            .id(format!("row-{n}"))
+                    })
+                    .collect(),
+            ),
+            |_| Message::Under,
+        )
+        .size(140., 80.)
+        .tab_stop(false)
+        .id("list");
         let mut input = Interaction::default();
         let current = scene(&root, &input, 0.);
         input.synchronize(&current);
@@ -1345,11 +1345,11 @@ mod tests {
     #[test]
     fn narrow_popup_remeasures_wrapped_height_and_keeps_its_last_control_visible() {
         let mut root = tree(true);
-        root.popovers[0].content=Box::new(Element::column(vec![
+        *root.popovers[0].content=Element::column(vec![
             Element::text("A long description wraps across the available popup width before its final action.")
                 .font(12.).width(Length::Fill).wrap(8),
             Element::text("Final action").font(12.).on_click(Message::First).id("last-action"),
-        ]).padding(8.).gap(8.).width(Length::Fixed(600.)));
+        ]).padding(8.).gap(8.).width(Length::Fixed(600.));
         let mut input = Interaction::default();
         let layout = layout();
         let current = layout.build(&root, 160., 300., &input, 0.);
@@ -1374,8 +1374,7 @@ mod tests {
     #[test]
     fn passive_popup_content_cannot_duplicate_the_source_anchor() {
         let mut root = tree(true);
-        root.popovers[0].content =
-            Box::new(Element::text("Passive duplicate").font(12.).id("trigger"));
+        *root.popovers[0].content = Element::text("Passive duplicate").font(12.).id("trigger");
         let mut input = Interaction::default();
         let current = scene(&root, &input, 0.);
         input.synchronize(&current);
