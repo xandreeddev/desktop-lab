@@ -1,5 +1,6 @@
 //! Native NetworkManager adapter. One subscription worker owns its connection.
 //! Commands use that worker; no subprocess, toolkit or network UI is involved.
+mod agent;
 mod control;
 mod native;
 mod snapshot;
@@ -30,6 +31,8 @@ pub struct NetworkManager {
     next_id: AtomicU64,
     address: Option<String>,
     timeout: Duration,
+    credentials: Arc<agent::Hub>,
+    secret_agent: bool,
 }
 impl Default for NetworkManager {
     fn default() -> Self {
@@ -39,6 +42,8 @@ impl Default for NetworkManager {
             next_id: AtomicU64::new(1),
             address: None,
             timeout: OPERATION_TIMEOUT,
+            credentials: Arc::new(agent::Hub::default()),
+            secret_agent: false,
         }
     }
 }
@@ -50,6 +55,12 @@ impl NetworkManager {
             address: Some(address.into()),
             ..Self::default()
         }
+    }
+    /// Enable the native personal-Wi-Fi SecretAgent explicitly. Plain service
+    /// observation remains free of credential-agent registration side effects.
+    pub fn with_secret_agent(mut self) -> Self {
+        self.secret_agent = true;
+        self
     }
     fn allocate(&self) -> Result<NetworkObjectId> {
         self.next_id
@@ -67,6 +78,14 @@ impl NetworkManager {
     ) -> Result<()> {
         let (transport, mut signals) =
             native::connect(self.address.as_deref(), self.timeout).await?;
+        let _agent = if self.secret_agent {
+            Some(
+                agent::Session::register(&transport, self.credentials.clone(), self.timeout)
+                    .await?,
+            )
+        } else {
+            None
+        };
         let (send, receive) = async_channel::bounded(REQUEST_LIMIT);
         let mut objects = Objects::default();
         let mut notices = Notices::default();
@@ -110,6 +129,9 @@ impl NetworkManager {
                         continue;
                     }
                     let value = objects.replace(raw?, &mut || self.allocate())?;
+                    if self.secret_agent {
+                        self.credentials.refresh(&objects, &value);
+                    }
                     dirty = notices.dirty;
                     *self
                         .online
@@ -201,6 +223,20 @@ impl NetworkPort for NetworkManager {
                 stop.wait(RECONNECT_DELAY);
             }
         }
+    }
+    fn watch_credentials(
+        &self,
+        emit: &mut dyn FnMut(Result<Vec<NetworkCredentialRequest>>),
+        stop: &dyn StopSignal,
+    ) {
+        self.credentials.watch(emit, stop);
+    }
+    fn answer_credentials(
+        &self,
+        request: NetworkCredentialRequestId,
+        credentials: Option<WifiCredentials>,
+    ) -> Result<()> {
+        self.credentials.answer(request, credentials)
     }
     fn control(&self, command: NetworkCommand) -> Result<()> {
         let send = self

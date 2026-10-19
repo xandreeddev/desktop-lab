@@ -76,6 +76,9 @@ struct State {
     flood: usize,
     oversized: bool,
     missing_read: Option<zbus::fdo::Error>,
+    credential_agent: Option<String>,
+    secret_replies: usize,
+    activations: usize,
 }
 impl Default for State {
     fn default() -> Self {
@@ -97,6 +100,9 @@ impl Default for State {
             flood: 0,
             oversized: false,
             missing_read: None,
+            credential_agent: None,
+            secret_replies: 0,
+            activations: 0,
         }
     }
 }
@@ -162,6 +168,43 @@ impl Manager {
             let mut state = self.0.lock().unwrap();
             state.active = 1;
             state.state = 40;
+            state.activations += 1;
+        }
+        changed(conn, ROOT, NM).await;
+        let agent = self.0.lock().unwrap().credential_agent.clone();
+        if let Some(agent) = agent {
+            // Deliberately hold Activate's reply until the interactive callback
+            // returns. A single blocked control lane cannot deliver this answer.
+            let reply = conn
+                .call_method(
+                    Some(agent.as_str()),
+                    agent::PATH,
+                    Some("org.freedesktop.NetworkManager.SecretAgent"),
+                    "GetSecrets",
+                    &(
+                        secret_settings(),
+                        path(SAVED),
+                        "802-11-wireless-security",
+                        Vec::<String>::new(),
+                        3u32,
+                    ),
+                )
+                .await
+                .map_err(|_| {
+                    zbus::fdo::Error::Failed("Credential request did not complete".into())
+                })?;
+            let reply: Settings = reply
+                .body()
+                .deserialize()
+                .map_err(|_| zbus::fdo::Error::Failed("Invalid secret reply".into()))?;
+            assert_eq!(
+                <&str>::try_from(&reply["802-11-wireless-security"]["psk"]).unwrap(),
+                "test-password"
+            );
+            let mut state = self.0.lock().unwrap();
+            state.secret_replies += 1;
+            state.active = 2;
+            state.state = 100;
         }
         changed(conn, ROOT, NM).await;
         Ok(path(LIVE))
@@ -494,8 +537,12 @@ struct Watch {
 }
 impl Watch {
     fn new(bus: &Bus, timeout: Duration) -> Self {
+        Self::configured(bus, timeout, false)
+    }
+    fn configured(bus: &Bus, timeout: Duration, secret_agent: bool) -> Self {
         let adapter = Arc::new(NetworkManager {
             timeout,
+            secret_agent,
             ..NetworkManager::with_address(bus.address.clone())
         });
         let stop = Arc::new(Stop::default());
@@ -896,4 +943,260 @@ fn command_admission_is_bounded_and_stale_kind_and_security_intent_fail() {
     ] {
         assert_eq!(snapshot::security(flags, wpa, rsn), expected);
     }
+}
+
+fn secret_settings() -> Settings {
+    Settings::from([
+        (
+            "connection".into(),
+            Properties::from([
+                ("uuid".into(), value("test-stable-profile")),
+                ("type".into(), value("802-11-wireless")),
+            ]),
+        ),
+        (
+            "802-11-wireless".into(),
+            Properties::from([("ssid".into(), value(vec![b'a', b';', 0xff, b'\n']))]),
+        ),
+        (
+            "802-11-wireless-security".into(),
+            Properties::from([
+                ("key-mgmt".into(), value("wpa-psk")),
+                ("psk-flags".into(), value(0u32)),
+            ]),
+        ),
+    ])
+}
+#[derive(Clone)]
+struct AgentManager(Shared);
+#[zbus::interface(name = "org.freedesktop.NetworkManager.AgentManager")]
+impl AgentManager {
+    fn register_with_capabilities(
+        &self,
+        identifier: &str,
+        capabilities: u32,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+    ) {
+        assert_eq!(identifier, "org.lucent.Network");
+        assert_eq!(capabilities, 0);
+        self.0.lock().unwrap().credential_agent = Some(header.sender().unwrap().to_string());
+    }
+}
+fn agent_service(service: &Service) {
+    service
+        .connection
+        .object_server()
+        .at(
+            "/org/freedesktop/NetworkManager/AgentManager",
+            AgentManager(service.state.clone()),
+        )
+        .unwrap();
+}
+fn current_request(adapter: &NetworkManager) -> NetworkCredentialRequest {
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        if let Some(request) = adapter.credentials.state_for_test() {
+            return request;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Interactive secret request was not observed"
+        );
+        thread::sleep(Duration::from_millis(5));
+    }
+}
+fn secret_call(
+    connection: zbus::blocking::Connection,
+    target: String,
+    settings: Settings,
+    flags: u32,
+) -> thread::JoinHandle<zbus::Result<zbus::Message>> {
+    thread::spawn(move || {
+        connection.call_method(
+            Some(target.as_str()),
+            agent::PATH,
+            Some("org.freedesktop.NetworkManager.SecretAgent"),
+            "GetSecrets",
+            &(
+                settings,
+                path(SAVED),
+                "802-11-wireless-security",
+                Vec::<String>::new(),
+                flags,
+            ),
+        )
+    })
+}
+#[test]
+fn network_secret_agent_answer_is_independent_of_pending_activation_and_keeps_saved_profile() {
+    let bus = Bus::new();
+    let service = Service::new(&bus);
+    agent_service(&service);
+    let watch = Watch::configured(&bus, Duration::from_secs(5), true);
+    let snapshot = watch.ready();
+    let profile = snapshot.profiles[0].id;
+    let device = snapshot.devices[0].id;
+    let adapter = watch.adapter.clone();
+    let operation = thread::spawn(move || {
+        adapter.control(NetworkCommand::Activate {
+            profile,
+            device: Some(device),
+        })
+    });
+    let request = current_request(&watch.adapter);
+    assert_eq!(request.profile.as_str(), "test-stable-profile");
+    assert!(request.new_secret_required);
+    assert!(
+        !operation.is_finished(),
+        "The fixture must actually hold native activation for human input"
+    );
+    watch
+        .adapter
+        .answer_credentials(
+            request.id,
+            Some(
+                WifiCredentials::new(
+                    WifiSecurity::WpaPersonal,
+                    Some(Secret::new("test-password".into())),
+                )
+                .unwrap(),
+            ),
+        )
+        .unwrap();
+    operation.join().unwrap().unwrap();
+    let result = watch.until(|s| s.devices[0].state == NetworkDeviceState::Connected);
+    assert_eq!(result.profiles[0].id, profile);
+    assert_eq!(result.profiles.len(), 1);
+    let state = service.state.lock().unwrap();
+    assert_eq!(state.activations, 1);
+    assert_eq!(state.secret_replies, 1);
+    assert!(state.joins.is_empty());
+    drop(state);
+    assert!(watch.adapter.answer_credentials(request.id, None).is_err());
+}
+#[test]
+fn network_secret_agent_rejects_untrusted_senders_flags_hints_vaults_and_profile_changes() {
+    let bus = Bus::new();
+    let service = Service::new(&bus);
+    agent_service(&service);
+    let watch = Watch::configured(&bus, Duration::from_secs(3), true);
+    watch.ready();
+    let target = service
+        .state
+        .lock()
+        .unwrap()
+        .credential_agent
+        .clone()
+        .unwrap();
+    let stranger = zbus::blocking::connection::Builder::address(bus.address.as_str())
+        .unwrap()
+        .build()
+        .unwrap();
+    let result = secret_call(stranger, target.clone(), secret_settings(), 3)
+        .join()
+        .unwrap();
+    assert!(
+        matches!(result, Err(zbus::Error::MethodError(name, _, _)) if name.as_str().ends_with("PermissionDenied"))
+    );
+    for flags in [0, 2, 8, 0x100] {
+        let result = secret_call(
+            service.connection.clone(),
+            target.clone(),
+            secret_settings(),
+            flags,
+        )
+        .join()
+        .unwrap();
+        assert!(
+            matches!(result, Err(zbus::Error::MethodError(name, _, _)) if name.as_str().ends_with("NoSecrets"))
+        );
+    }
+    for (setting, key, replacement) in [
+        ("connection", "uuid", value("replaced-profile")),
+        ("802-11-wireless-security", "psk-flags", value(1u32)),
+        ("802-11-wireless-security", "key-mgmt", value("wpa-eap")),
+    ] {
+        let mut settings = secret_settings();
+        settings
+            .get_mut(setting)
+            .unwrap()
+            .insert(key.into(), replacement);
+        assert!(
+            secret_call(service.connection.clone(), target.clone(), settings, 3)
+                .join()
+                .unwrap()
+                .is_err()
+        );
+    }
+    let result = service.connection.call_method(
+        Some(target.as_str()),
+        agent::PATH,
+        Some("org.freedesktop.NetworkManager.SecretAgent"),
+        "GetSecrets",
+        &(
+            secret_settings(),
+            path(SAVED),
+            "802-11-wireless-security",
+            vec!["unsupported-hint"],
+            3u32,
+        ),
+    );
+    assert!(result.is_err());
+    assert!(watch.adapter.credentials.state_for_test().is_none());
+}
+#[test]
+fn network_secret_agent_cancel_profile_retirement_and_daemon_loss_retire_exact_reply_authority() {
+    let bus = Bus::new();
+    let service = Service::new(&bus);
+    agent_service(&service);
+    let watch = Watch::configured(&bus, Duration::from_secs(3), true);
+    watch.ready();
+    let target = service
+        .state
+        .lock()
+        .unwrap()
+        .credential_agent
+        .clone()
+        .unwrap();
+    let pending = secret_call(
+        service.connection.clone(),
+        target.clone(),
+        secret_settings(),
+        3,
+    );
+    let request = current_request(&watch.adapter);
+    service
+        .connection
+        .call_method(
+            Some(target.as_str()),
+            agent::PATH,
+            Some("org.freedesktop.NetworkManager.SecretAgent"),
+            "CancelGetSecrets",
+            &(path(SAVED), "802-11-wireless-security"),
+        )
+        .unwrap();
+    assert!(
+        matches!(pending.join().unwrap(), Err(zbus::Error::MethodError(name, _, _)) if name.as_str().ends_with("UserCanceled"))
+    );
+    assert!(watch.adapter.answer_credentials(request.id, None).is_err());
+    let pending = secret_call(
+        service.connection.clone(),
+        target.clone(),
+        secret_settings(),
+        3,
+    );
+    let request = current_request(&watch.adapter);
+    service.state.lock().unwrap().saved = false;
+    service.changed(SETTINGS, "org.freedesktop.NetworkManager.Settings");
+    watch.until(|s| s.profiles.is_empty());
+    assert!(pending.join().unwrap().is_err());
+    assert!(watch.adapter.answer_credentials(request.id, None).is_err());
+    service.state.lock().unwrap().saved = true;
+    service.changed(SETTINGS, "org.freedesktop.NetworkManager.Settings");
+    watch.until(|s| !s.profiles.is_empty());
+    let pending = secret_call(service.connection.clone(), target, secret_settings(), 3);
+    let request = current_request(&watch.adapter);
+    service.connection.release_name(NM).unwrap();
+    assert!(pending.join().unwrap().is_err());
+    assert!(watch.adapter.answer_credentials(request.id, None).is_err());
 }

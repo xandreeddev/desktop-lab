@@ -13,6 +13,14 @@ pub enum Target {
     Hidden {
         device: NetworkObjectId,
     },
+    Credentials {
+        request: NetworkCredentialRequest,
+        device: NetworkObjectId,
+    },
+}
+pub enum Submission {
+    Join(NetworkCommand),
+    Credentials(NetworkCredentialRequestId, WifiCredentials),
 }
 pub struct Form {
     pub generation: u64,
@@ -28,6 +36,7 @@ impl Form {
         let (name, security) = match &target {
             Target::Visible { ssid, security, .. } => (ssid.display_name(), *security),
             Target::Hidden { .. } => (String::new(), WifiSecurity::WpaPersonal),
+            Target::Credentials { request, .. } => (request.name.clone(), request.security),
         };
         let mut name_field = TextFieldState::default();
         name_field.reset(&name);
@@ -43,7 +52,9 @@ impl Form {
     }
     pub fn device(&self) -> NetworkObjectId {
         match self.target {
-            Target::Visible { device, .. } | Target::Hidden { device } => device,
+            Target::Visible { device, .. }
+            | Target::Hidden { device }
+            | Target::Credentials { device, .. } => device,
         }
     }
     pub fn valid(&self, s: Option<&NetworkSnapshot>) -> bool {
@@ -68,6 +79,10 @@ impl Form {
                     && a.device == self.device()
             }),
             Target::Hidden { .. } => true,
+            Target::Credentials { request, .. } => s
+                .profiles
+                .iter()
+                .any(|p| p.key == request.profile && p.ssid.as_ref() == Some(&request.ssid)),
         }
     }
     pub fn password_length(&self) -> usize {
@@ -98,14 +113,13 @@ impl Form {
             self.security = security;
         }
     }
-    pub fn submit(&mut self) -> Result<NetworkCommand> {
-        let target = match &self.target {
-            Target::Visible { access_point, .. } => NetworkJoinTarget::AccessPoint(*access_point),
-            Target::Hidden { device } => NetworkJoinTarget::Hidden {
-                device: *device,
-                ssid: NetworkSsid::new(self.name.as_bytes().to_vec())?,
-            },
-        };
+    pub fn credential_request(&self) -> Option<NetworkCredentialRequestId> {
+        match &self.target {
+            Target::Credentials { request, .. } => Some(request.id),
+            _ => None,
+        }
+    }
+    pub fn submit(&mut self) -> Result<Submission> {
         let password = if matches!(
             self.security,
             WifiSecurity::Open | WifiSecurity::EnhancedOpen
@@ -115,10 +129,20 @@ impl Form {
             Some(std::mem::take(&mut self.password))
         };
         let credentials = WifiCredentials::new(self.security, password)?;
-        Ok(NetworkCommand::Join {
+        let target = match &self.target {
+            Target::Credentials { request, .. } => {
+                return Ok(Submission::Credentials(request.id, credentials));
+            }
+            Target::Visible { access_point, .. } => NetworkJoinTarget::AccessPoint(*access_point),
+            Target::Hidden { device } => NetworkJoinTarget::Hidden {
+                device: *device,
+                ssid: NetworkSsid::new(self.name.as_bytes().to_vec())?,
+            },
+        };
+        Ok(Submission::Join(NetworkCommand::Join {
             target,
             credentials,
             remember: self.remember,
-        })
+        }))
     }
 }

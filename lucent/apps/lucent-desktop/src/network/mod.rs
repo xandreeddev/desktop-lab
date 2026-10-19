@@ -5,7 +5,7 @@ mod form;
 pub(crate) mod tests;
 mod view;
 pub use control::Control;
-use form::{Form, Target};
+use form::{Form, Submission, Target};
 use lucent_api::{
     ClipboardTarget, Effects, InputEdit, Motion, ScrollEvent, Subscription, TextEdit,
 };
@@ -32,6 +32,8 @@ impl Tab {
 #[derive(Clone)]
 pub enum Message {
     Observed(Result<NetworkSnapshot>),
+    Credentials(Result<Vec<NetworkCredentialRequest>>),
+    Answered(NetworkCredentialRequestId, Result<()>),
     Open,
     Toggle,
     Close,
@@ -95,6 +97,11 @@ pub struct Network {
     failure: Option<Failure>,
     scan: Option<Scan>,
     notice: String,
+    credential_requests: Vec<NetworkCredentialRequest>,
+    credential_reply: Option<NetworkCredentialRequestId>,
+    retired_request: u64,
+    activation_profile: Option<NetworkProfileKey>,
+    dismissed_profile: Option<NetworkProfileKey>,
 }
 impl Network {
     pub fn new(adapter: Arc<dyn NetworkPort>) -> Self {
@@ -116,6 +123,11 @@ impl Network {
             failure: None,
             scan: None,
             notice: String::new(),
+            credential_requests: vec![],
+            credential_reply: None,
+            retired_request: 0,
+            activation_profile: None,
+            dismissed_profile: None,
         }
     }
     pub fn open(&self) -> bool {
@@ -233,6 +245,119 @@ impl Network {
         self.failure = None;
         self.notice.clear();
     }
+    fn answer(
+        &mut self,
+        request: NetworkCredentialRequestId,
+        credentials: Option<WifiCredentials>,
+        effects: &mut Effects<Message>,
+    ) {
+        self.retired_request = self.retired_request.max(request.value());
+        let adapter = self.adapter.clone();
+        let submitting = credentials.is_some();
+        if submitting {
+            self.credential_reply = Some(request);
+        }
+        effects.task_on_with_failure(
+            crate::work::CONTROLS,
+            move || Message::Answered(request, adapter.answer_credentials(request, credentials)),
+            move |_| {
+                Message::Answered(
+                    request,
+                    Err(DomainError::Unavailable(
+                        "Network credential answer could not be delivered; it will not be retried"
+                            .into(),
+                    )),
+                )
+            },
+        );
+    }
+    fn cancel_form(&mut self, effects: &mut Effects<Message>) {
+        if let Some(request) = self.form.take().and_then(|f| f.credential_request()) {
+            self.answer(request, None, effects);
+        }
+    }
+    fn close(&mut self, now: f64, effects: &mut Effects<Message>) {
+        self.dismissed_profile = self.activation_profile.clone();
+        self.cancel_form(effects);
+        // Retire requests already observed, including a second queued callback.
+        let requests: Vec<_> = self
+            .credential_requests
+            .iter()
+            .filter(|r| r.id.value() > self.retired_request)
+            .map(|r| r.id)
+            .collect();
+        for request in requests {
+            self.answer(request, None, effects);
+        }
+        self.set_open(false, now);
+    }
+    fn credentials(
+        &mut self,
+        value: Result<Vec<NetworkCredentialRequest>>,
+        effects: &mut Effects<Message>,
+    ) {
+        self.credential_requests = value.unwrap_or_default();
+        if self
+            .form
+            .as_ref()
+            .and_then(Form::credential_request)
+            .is_some_and(|id| !self.credential_requests.iter().any(|r| r.id == id))
+        {
+            self.form = None; // daemon cancellation/timeout must drop secret immediately
+        }
+        let Some(request) = self
+            .credential_requests
+            .iter()
+            .find(|r| r.id.value() > self.retired_request)
+            .cloned()
+        else {
+            return;
+        };
+        if self.dismissed_profile.as_ref() == Some(&request.profile) {
+            self.answer(request.id, None, effects);
+            return;
+        }
+        if self.form.as_ref().and_then(Form::credential_request) == Some(request.id) {
+            return;
+        }
+        let device = self.device.filter(|id| {
+            self.snapshot()
+                .and_then(|s| s.device(*id))
+                .is_some_and(|d| d.managed && d.kind == NetworkKind::Wifi)
+        });
+        let Some(device) = device else {
+            if !matches!(self.observation, Observation::Loading) {
+                self.answer(request.id, None, effects);
+            }
+            return;
+        };
+        // The prompt can arrive before Activate's method acknowledgement. It
+        // bypasses that command lane; its exact request supplies reply authority.
+        self.form_generation = match self.form_generation.checked_add(1) {
+            Some(n) => n,
+            None => {
+                self.answer(request.id, None, effects);
+                return;
+            }
+        };
+        let form = Form::new(
+            self.form_generation,
+            Target::Credentials {
+                request: request.clone(),
+                device,
+            },
+        );
+        if !form.valid(self.snapshot()) {
+            self.answer(request.id, None, effects);
+            return;
+        }
+        self.form = Some(form);
+        self.forget = None;
+        self.failure = None;
+        self.notice.clear();
+        self.scroll = 0.;
+        self.set_open(true, effects.now);
+    }
     fn observe(&mut self, result: Result<NetworkSnapshot>) -> bool {
         let next = match result {
             Ok(s) => Observation::Ready(s),
@@ -290,6 +415,8 @@ impl Network {
             && !matches!(
                 message,
                 Message::Observed(_)
+                    | Message::Credentials(_)
+                    | Message::Answered(..)
                     | Message::Open
                     | Message::Toggle
                     | Message::Close
@@ -307,18 +434,38 @@ impl Network {
                 if !self.observe(result) {
                     return;
                 }
+                if self.snapshot().is_some() {
+                    self.credentials(Ok(self.credential_requests.clone()), effects);
+                } else {
+                    self.credential_requests.clear();
+                    self.activation_profile = None;
+                    self.dismissed_profile = None;
+                }
+            }
+            Message::Credentials(value) => self.credentials(value, effects),
+            Message::Answered(id, result) => {
+                if self.credential_reply == Some(id) {
+                    self.credential_reply = None;
+                    match result {
+                        Ok(()) => {
+                            self.notice = "Password delivered; waiting for connection state.".into()
+                        }
+                        Err(e) => self.fail(None, e.to_string()),
+                    }
+                }
             }
             Message::Open => self.set_open(true, effects.now),
-            Message::Toggle => self.set_open(!self.open, effects.now),
-            Message::Close => self.set_open(false, effects.now),
+            Message::Toggle if self.open => self.close(effects.now, effects),
+            Message::Toggle => self.set_open(true, effects.now),
+            Message::Close => self.close(effects.now, effects),
             Message::Closed(generation) => {
                 if !self.open && generation == self.close_generation {
                     self.mounted = false;
                 }
             }
             Message::Tab(tab) => {
+                self.cancel_form(effects);
                 self.tab = tab;
-                self.form = None;
                 self.forget = None;
                 self.scroll = 0.;
             }
@@ -328,14 +475,22 @@ impl Network {
                     .and_then(|s| s.device(id))
                     .is_some_and(|d| d.kind == NetworkKind::Wifi && d.managed)
                 {
+                    self.cancel_form(effects);
                     self.device = Some(id);
-                    self.form = None;
                     self.scroll = 0.;
                 }
             }
             Message::Scroll(event) => self.scroll = event.offset,
             Message::Request(control) => {
                 if control.valid(self.snapshot()) {
+                    self.cancel_form(effects);
+                    if let Control::Activate(profile, _) = &control {
+                        self.activation_profile = self
+                            .snapshot()
+                            .and_then(|s| s.profile(*profile))
+                            .map(|p| p.key.clone());
+                        self.dismissed_profile = None;
+                    }
                     self.start(Some(control.clone()), control.command(), effects);
                 } else {
                     self.fail(
@@ -394,6 +549,7 @@ impl Network {
                 self.notice.clear();
             }
             Message::Join(id) => {
+                self.cancel_form(effects);
                 let target = self
                     .snapshot()
                     .and_then(|s| s.access_point(id))
@@ -412,12 +568,13 @@ impl Network {
                 }
             }
             Message::Hidden => {
+                self.cancel_form(effects);
                 if let Some(device) = self.device {
                     self.begin(Target::Hidden { device });
                 }
             }
             Message::Cancel => {
-                self.form = None;
+                self.cancel_form(effects);
                 self.forget = None;
                 self.scroll = 0.;
             }
@@ -446,12 +603,21 @@ impl Network {
                 }
             }
             Message::Remember(generation) => {
-                if let Some(f) = self.form.as_mut().filter(|f| f.generation == generation) {
+                if let Some(f) = self
+                    .form
+                    .as_mut()
+                    .filter(|f| f.generation == generation && f.credential_request().is_none())
+                {
                     f.remember = !f.remember;
                 }
             }
             Message::Submit(generation) => {
-                if self.active.is_some() {
+                let credential_form = self
+                    .form
+                    .as_ref()
+                    .and_then(Form::credential_request)
+                    .is_some();
+                if self.credential_reply.is_some() || (self.active.is_some() && !credential_form) {
                     self.fail(None, "Wait for the current request before connecting");
                 } else if self
                     .form
@@ -459,9 +625,13 @@ impl Network {
                     .is_some_and(|f| f.generation == generation && f.valid(self.snapshot()))
                 {
                     match self.form.as_mut().unwrap().submit() {
-                        Ok(command) => {
+                        Ok(Submission::Join(command)) => {
                             self.form = None;
                             self.start(None, command, effects);
+                        }
+                        Ok(Submission::Credentials(id, credentials)) => {
+                            self.form = None;
+                            self.answer(id, Some(credentials), effects);
                         }
                         Err(error) => self.fail(None, error.to_string()),
                     }
@@ -469,8 +639,8 @@ impl Network {
             }
             Message::AskForget(id) => {
                 if self.snapshot().and_then(|s| s.profile(id)).is_some() {
+                    self.cancel_form(effects);
                     self.forget = Some(id);
-                    self.form = None;
                     self.scroll = 0.;
                 }
             }
@@ -501,7 +671,16 @@ impl Network {
         }
     }
     pub fn subscriptions(&self) -> Vec<Subscription<Message>> {
-        let mut result = vec![];
+        let adapter = self.adapter.clone();
+        let mut result = vec![Subscription::stream(
+            "network-credentials",
+            move |out, cancel| {
+                adapter.watch_credentials(
+                    &mut |value| out.send(Message::Credentials(value)),
+                    &crate::adapters::WatchStop(cancel),
+                );
+            },
+        )];
         if self.mounted && !self.open {
             let generation = self.close_generation;
             result.push(Subscription::stream(
@@ -529,7 +708,7 @@ impl Network {
         result
     }
     pub fn inspect(&self) -> serde_json::Value {
-        serde_json::json!({"status":match &self.observation{Observation::Loading=>"loading",Observation::Ready(_)=>"ready",Observation::Unavailable(_)=>"unavailable"},"label":self.status(),"open":self.open,"visible":self.mounted,"tab":self.tab.name(),"scroll":self.scroll,"selected_device":self.device.map(|id|id.value()),"busy":self.active.is_some(),"error":self.failure.as_ref().map(|f|&f.reason),"notice":self.notice,"scan_pending":self.scan.is_some(),"form":self.form.as_ref().map(|f|serde_json::json!({"generation":f.generation,"hidden":matches!(f.target,Target::Hidden{..}),"remember":f.remember,"security":view::security_name(f.security)})),
+        serde_json::json!({"status":match &self.observation{Observation::Loading=>"loading",Observation::Ready(_)=>"ready",Observation::Unavailable(_)=>"unavailable"},"label":self.status(),"open":self.open,"visible":self.mounted,"tab":self.tab.name(),"scroll":self.scroll,"selected_device":self.device.map(|id|id.value()),"busy":self.active.is_some(),"error":self.failure.as_ref().map(|f|&f.reason),"notice":self.notice,"scan_pending":self.scan.is_some(),"form":self.form.as_ref().map(|f|serde_json::json!({"generation":f.generation,"credential_request":f.credential_request().map(|id|id.value()),"hidden":matches!(f.target,Target::Hidden{..}),"remember":f.remember,"security":view::security_name(f.security)})),
             "wifi_enabled":self.snapshot().map(|s|s.wifi_enabled),"devices":self.snapshot().map(|s|s.devices.iter().map(|d|serde_json::json!({"id":d.id.value(),"interface":d.interface,"kind":format!("{:?}",d.kind),"state":format!("{:?}",d.state),"failure":format!("{:?}",d.failure),"scan_generation":d.scan_generation})).collect::<Vec<_>>()),
             "profiles":self.snapshot().map(|s|s.profiles.iter().map(|p|serde_json::json!({"id":p.id.value(),"key":p.key.as_str(),"name":p.name,"ssid":p.ssid.as_ref().map(|s|s.bytes())})).collect::<Vec<_>>()),
             "access_points":self.snapshot().map(|s|s.access_points.iter().map(|a|serde_json::json!({"id":a.id.value(),"device":a.device.value(),"ssid":a.ssid.as_ref().map(|s|s.bytes()),"security":view::security_name(a.security),"strength":a.strength.percent()})).collect::<Vec<_>>()),
