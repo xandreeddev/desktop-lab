@@ -4,12 +4,12 @@
   "status": "in_progress",
   "completion_rule": "An item is verified only when its behavior, boundary checks, documentation and applicable native integration checks have evidence. Implemented without verification remains incomplete.",
   "current_rollup": {
-    "snapshot_source_commit": "9a3a51fce0d61a331c2c887ec02a60c31293049e",
+    "snapshot_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
     "snapshot_date": "2026-10-19",
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted main d0001450 includes merged Display PR86. Separately identified implemented, unmerged cohorts are Text 9a3a51fc and Application bb304907; those are not counted as delivered or natively accepted. Historical reports retain their exact execution sources and limitations.",
+    "scope": "Accepted main d0001450 includes merged Display PR86. Separately identified implemented, unmerged cohorts are Text 8e6d074b and Application bb304907; those are not counted as delivered or natively accepted. Historical reports retain their exact execution sources and limitations.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -60,8 +60,8 @@
       {
         "id": "international-text",
         "status": "implemented_unmerged_native_pending",
-        "implemented": "Accepted main retains controlled editing/clipboard and the earlier shaping path. Implemented unmerged Text 9a3a51fc adds script/fallback shaping and ordinary IME plus hard-paragraph levels across soft wraps, exact row-bound resolved context, line-local L1/L2, tab separator projection and stale-context cache canonicalization.",
-        "remaining": "Strict Rust/visual execution at 9a3a51fc, merge/deployment and native compositor IME acceptance; native pixel/scroll details, delayed clipboard/focus races and third-party GUI clipboard. Earlier 5d3501eb checks do not validate this correction. Accessibility remains user-deferred.",
+        "implemented": "Accepted main retains controlled editing/clipboard and the earlier shaping path. Implemented unmerged Text 8e6d074b adds script/fallback shaping and ordinary IME plus hard-paragraph levels across soft wraps, exact row-bound resolved context, line-local L1/L2, tab separator projection and stale-context cache canonicalization.",
+        "remaining": "Final full workspace/protocol/desktop CI at 8e6d074b, merge/deployment and native compositor IME acceptance; native pixel/scroll details, delayed clipboard/focus races and third-party GUI clipboard. Focused formatting/Clippy, UI/reference/panel and two 1x/2x Vulkan checks pass at this source. Earlier 5d3501eb results retain historical scope. Accessibility remains user-deferred.",
         "guides": [
           "docs/text-editing.md",
           "docs/multiline-text.md",
@@ -162,17 +162,32 @@
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
-    "validation": "Display strict source a770: 821 Rust / 76 ignored, 109 Python and 582 tokens; compiled a7f differs only by four reviewed loading PNGs. Twenty-eight final non-updating Vulkan Display comparisons, guarded four-artifact deployment and seven actual native flows at c43 pass. Tooling b259 passes 116 Python checks, then one read-only proof validates the exact expected crash transition offline. Display merged through PR86 at d0001450. This documentation branch has not rerun Rust, GPU or native checks; its site/exact-head CI remain separate delivery gates. Text 9a3a51fc has independent source review only at this snapshot; its strict Rust/visual and native checks remain pending. The prior 5d3501eb full 832-case visual CI passes only at its historical source. The later AMD native-context candidate passed actual RADV RENOIR enumeration, native login and initial hardware shell rendering before the home Btrfs st_dev 56-to-57 preservation rejection, prior to the three-second liveness gate. Independent recovery verifies original software semantics, all 963 original package versions and exact non-device state with 189 device-only remaps. This is no stable presentation, FPS or RSS acceptance; the original failed preservation result remains recorded.",
+    "validation": "Display strict source a770: 821 Rust / 76 ignored, 109 Python and 582 tokens; compiled a7f differs only by four reviewed loading PNGs. Twenty-eight final non-updating Vulkan Display comparisons, guarded four-artifact deployment and seven actual native flows at c43 pass. Tooling b259 passes 116 Python checks, then one read-only proof validates the exact expected crash transition offline. Display merged through PR86 at d0001450. This documentation branch has not rerun Rust, GPU or native checks; its site/exact-head CI remain separate delivery gates. Text 8e6d074b has independent source review and passing focused formatting/strict all-target Clippy, six wrapped UI cases, one upstream line-reference case, six panel cases and two explicit Vulkan regressions at 1x/2x. This final integration preserves the exact runtime trees; full workspace/protocol/desktop CI and native acceptance remain pending. The prior 5d3501eb full 832-case visual CI passes only at its historical source. The later AMD native-context candidate passed actual RADV RENOIR enumeration, native login and initial hardware shell rendering before the home Btrfs st_dev 56-to-57 preservation rejection, prior to the three-second liveness gate. Independent recovery verifies original software semantics, all 963 original package versions and exact non-device state with 189 device-only remaps. This is no stable presentation, FPS or RSS acceptance; the original failed preservation result remains recorded.",
     "accepted_main_base_commit": "d00014509f13125fe4ccab3ce2e1fa3961a40dd3",
     "implemented_unmerged_cohorts": [
       {
         "feature": "international-text",
-        "source_commit": "9a3a51fce0d61a331c2c887ec02a60c31293049e",
+        "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
         "implementation": "Script shaping, deterministic fallback and ordinary opt-in IME, plus hard-paragraph levels across soft wraps, exact row-bound context, line-local upstream L1/L2, canonical tab separator projection and a stale-context text-cache guard.",
-        "pending": "Strict Rust/visual execution at 9a3a51fc; merge/deployment; native compositor IME and wider native text/GUI clipboard acceptance.",
+        "pending": "Final full workspace/protocol/desktop CI; merge/deployment; native compositor IME and wider native text/GUI clipboard acceptance.",
         "historical_executable_checks_source_commit": "eec582ab0aa7c06b4ed30d24a0670c6a1df91e21",
         "historical_full_visual_source_commit": "5d3501ebd9e02dccca62f7c2f9cae59056e40a7a",
-        "historical_full_visual_cases": 832
+        "historical_full_visual_cases": 832,
+        "focused_checks": {
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "formatting_passed": true,
+          "strict_all_target_clippy_passed": true,
+          "wrapped_ui_cases_passed": 6,
+          "upstream_line_reference_cases_passed": 1,
+          "panel_dismissal_cases_passed": 6,
+          "vulkan_regressions_passed": 2,
+          "vulkan_densities": [
+            1,
+            2
+          ],
+          "full_workspace_protocol_desktop_ci_established": false,
+          "native_ime_acceptance_established": false
+        }
       },
       {
         "feature": "application-integration",
@@ -369,7 +384,7 @@
         "Cold launcher opening included a 246.42 ms maximum frame interval; warmed samples were near 16.5 ms median with up to 19.56 ms observed maximum. Detailed stage profiling, hardware GPU, scaling/hotplug and sleep/resume remain open.",
         "Opt-in bounded CPU-stage profiling verified natively, including default-off behavior and runtime-override restoration after intentional failure; 113 Rust tests, 52 Python checks and focused GPU cold/warm test passed.",
         "Profiled 120-second run: 0.600% main-process CPU, 588.68 MiB mean RSS, zero background/closed-dock idle frames. Cold launcher gap 101.35 ms while maximum measured dock frame work was 10.63 ms; the gap is not explained by its view/layout/text work alone.",
-        "Same-binary normal-mode 120-second comparison: 0.592% main-process CPU, 589.60 MiB mean RSS, zero background/closed-dock idle frames. First-open maximum interval 24.25 ms; warm maxima 18.26\u201321.18 ms. This is not a controlled overhead estimate or proof the earlier hitch is fixed.",
+        "Same-binary normal-mode 120-second comparison: 0.592% main-process CPU, 589.60 MiB mean RSS, zero background/closed-dock idle frames. First-open maximum interval 24.25 ms; warm maxima 18.26–21.18 ms. This is not a controlled overhead estimate or proof the earlier hitch is fixed.",
         "Five focused offscreen renderer tests passed on Radeon hardware Vulkan. Visual comparison against software baselines passed 80/148 cases; 68 small coverage differences require follow-up. This is not a hardware desktop performance measurement.",
         "Cross-driver coverage follow-up: all 148 existing comparisons and six focused renderer tests pass on both Radeon hardware Vulkan and llvmpipe after selecting fine derivatives. Baselines/tolerances unchanged; hardware desktop performance remains unmeasured.",
         "Static review confirms Desktop.images retains each distinct selected wallpaper preview with no eviction. The 64-item startup preload cap does not cap lifetime retention, and renderer GPU-cache eviction cannot release these CPU-owned images. RSS attribution and bounded demand-loading remain open.",
@@ -1987,7 +2002,7 @@
         "The same runtime binary passes 17 native Notes functional checks and nine restoration checks: real focus, Enter/Shift+Enter, hard-row navigation/selection, undo, grapheme deletion, external wl-copy/wl-paste, non-saving selection/copy/wheel, resize and 35-second restart persistence. The initial clipboard was empty; exact original settings, wallpaper/source/exports, workspace, monitor, idle marker and clipboard history are restored.",
         "The first native attempt passed its 17 functional cases but failed restoration because its inactive-only unit-status guard rejected a quiescent failed supervisor. That failed result is retained. Manual recovery was verified before a fresh complete run passed with exact cgroup/PID quiescence proof.",
         "Supervisor follow-up 7445c1cfb27c4665403f41f60e505c67e8e9be1b passes all 103 Python tests, including eight new owned-child cases. It adds canonical KillMode=mixed and the quiescence harness. A separate pinned supervisor-only VM upgrade also passes two 35-second stable starts and an intervening clean exit-0 mixed-mode stop, with exact cgroup quiescence. UI binary, settings bytes/inode, wallpaper/source/theme and empty clipboard/history are preserved without preference writes.",
-        "The unchanged optimized CPU-only measurement at e67a8955a600063b87bd64dcf2806fccfb641b1d covers three synthetic 8192-byte cases on an AMD Ryzen 5 7430U under a one-CPU quota with the video VM running. Mean layout is 0.697\u20131.140 ms; worst content-edit p95 is 8.994 ms and navigation p95 is 6.134 ms."
+        "The unchanged optimized CPU-only measurement at e67a8955a600063b87bd64dcf2806fccfb641b1d covers three synthetic 8192-byte cases on an AMD Ryzen 5 7430U under a one-CPU quota with the video VM running. Mean layout is 0.697–1.140 ms; worst content-edit p95 is 8.994 ms and navigation p95 is 6.134 ms."
       ],
       "pending": [
         "Native pixel caret/selection clipping, scrollbar thumb dragging, soft-wrap affinity, exact scroll offsets, PageUp/PageDown and delayed clipboard/focus-retirement races.",

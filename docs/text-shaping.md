@@ -2,10 +2,11 @@
 
 Source scope: accepted main `d00014509f13125fe4ccab3ce2e1fa3961a40dd3` includes the
 verified Display milestone. The implemented, unmerged Text cohort is
-`9a3a51fce0d61a331c2c887ec02a60c31293049e`, including the soft-wrap bidi correction.
-Its Rust/visual and native acceptance remain pending. The earlier `5d3501eb`
-cohort's passing checks retain their original source scope; they do not validate
-this correction or establish native compositor IME interoperability. See
+`8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, including the soft-wrap bidi correction.
+Focused formatting, strict Clippy and named UI/panel/Vulkan checks pass at this
+source. Final full workspace/protocol/desktop CI and native acceptance remain
+pending. Earlier `5d3501eb` results retain their original source scope and do not
+establish this correction's full acceptance or native IME interoperability. See
 [current readiness](current-readiness.md) for delivery and acceptance boundaries.
 
 The component still owns its ordinary `String` and `TextFieldState`. It declares
@@ -82,43 +83,6 @@ its existing size, glyph and mask allocation checks and coverage supersampling.
 See [the baseline review](text-baseline-review.md) for the row-local typography
 changes, unchanged visual tolerances and source-specific acceptance boundaries.
 
-### Soft lines keep their hard paragraph
-
-A visual wrap does not create a new bidi paragraph. The text-area engine resolves
-the original canonical document first, then retains its resolved embedding and
-isolate levels when it chooses each soft line. Tab expansion projects the
-original tab's separator class and levels into its four displayed spaces; it
-does not substitute whitespace before resolving text direction. Canonical UTF-8
-offsets remain separate from those displayed bytes, including CRLF boundaries.
-
-The engine creates an opaque `ResolvedBidiLine` for each displayed row and shares
-its exact row allocation with the row geometry. `LayoutOptions` carries that
-order through `Paint::Text`; it is clonable rather than `Copy`. Components do not
-construct bidi fragments or register context. Measurement, hit/selection/caret
-positions and raster preparation consume the same resolved order. Arabic joining
-still ends at actual line edges. The renderer rejects stale context for different
-row bytes before both cache lookup and shaping.
-
-The maintained bidi library applies its line-reordering rules to a line-local
-view of already-resolved levels, original classes and the hard paragraph's base
-level. This avoids cloning the full document once per row. Independent expected
-orders cover Latin-first paragraphs with Hebrew-first wraps, an override and an
-isolate crossing a wrap, and tabs between Hebrew runs. Further tests compare
-bounded line-local reordering with the upstream whole-document reference, and
-exercise actual controlled-field paint, selection, hits and candidate geometry.
-Explicit Vulkan regressions compare wrapped coverage with independently drawn
-visual runs and exercise stale-context cache reuse at both densities. Separate
-run masks start at independent raster origins, so a fractional run advance can
-shift their sampling phase relative to one combined mask. This fixture permits
-at most one horizontal physical pixel of coverage displacement in both
-directions, exact vertical bounds and per-run ink quantization error, and must reject a deliberately reversed run order.
-The stale-context cache comparison remains byte exact; desktop golden thresholds
-are unchanged.
-
-This wrapped-paragraph correction follows the fully passing `5d3501ebd9e` cohort;
-its new source and tests require their own strict/visual execution. Earlier
-results below retain their original source scopes.
-
 ## Bounded fallback
 
 Font fallback is deterministic and does not scan the machine during layout.
@@ -158,7 +122,7 @@ regression passes at 1×/2×. Broader native workload results remain separate.
 
 ## Hard paragraphs and soft lines
 
-Text `9a3a51fc` resolves bidi on the canonical document before wrapping. Each
+Text `8e6d074b` resolves bidi on the canonical document before wrapping. Each
 soft row inherits its hard paragraph's resolved embedding/isolate levels and
 base level. A wrap applies line reordering; it does not infer a new paragraph
 from whichever script starts that row.
@@ -184,12 +148,25 @@ stale context, and the renderer canonicalizes it to no context before looking up
 the text-mask cache. Valid run order remains in the cache key; the same row text
 with a different paragraph order cannot reuse the wrong mask.
 
-The source includes independently stated Hebrew/Latin, override and isolate
-orders, tab/CRLF projection, stale same-length context, upstream line-reordering
-equivalence and controlled-field geometry regressions. Explicit Vulkan tests
-cover wrapped order and stale-context cache reuse at 1×/2×. Their presence is not
-a pass: strict Rust, visual and native execution at `9a3a51fc` remain pending.
-The earlier [full 832-case visual CI at `5d3501eb`](https://github.com/xandreeddev/desktop-lab/actions/runs/39306754599)
+Focused checks at exact source `8e6d074b` pass: formatting and strict all-target
+Clippy, six wrapped UI cases, one upstream line-reordering equivalence case, six
+panel-dismissal cases and two explicit Vulkan regressions at 1×/2×. They cover
+independently stated Hebrew/Latin, override and isolate orders, tab/CRLF
+projection, stale same-length context, controlled-field geometry and cache reuse.
+
+The visual reference draws the expected Hebrew and Latin runs independently.
+Separate masks start at their own raster origins, so a fractional run advance
+can shift horizontal sampling phase relative to one combined mask. This fixture
+checks every coverage sample in both directions within one horizontal physical
+pixel, exact per-run vertical bounds, per-run horizontal bounds and ink
+quantization error, and rejects a deliberately reversed run order at both
+densities. The stale-context cache comparison remains byte exact. This reference
+adjustment changes neither global desktop golden thresholds nor production
+rendering.
+
+These are focused checks, not full workspace/protocol/desktop CI or native IME
+acceptance. Those final gates remain pending for this combined source. The
+earlier [full 832-case visual CI at `5d3501eb`](https://github.com/xandreeddev/desktop-lab/actions/runs/39306754599)
 passes only for that historical cohort.
 
 ## Input-method ownership
@@ -278,5 +255,5 @@ of this changes text density,
 frame demand or the domain/component contracts. See [daily-performance.md](daily-performance.md)
 for the matched static/video workloads and protocol-flag limits. Compilation and
 controlled alias/pixel tests pass for the named earlier cohorts above; they do not
-validate the later `9a3a51fc` correction. Measured desktop
+validate the later `8e6d074b` correction. Measured desktop
 resource/presentation acceptance remains pending.
