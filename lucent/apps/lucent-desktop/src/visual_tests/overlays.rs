@@ -12,6 +12,12 @@ pub(super) fn fixture(
 ) -> Scene<Message> {
     let mut input = Interaction::default();
     let (tree, target) = if name.starts_with("tooltip-tray") {
+        // The shared fixture opens the launcher; a standalone bar belongs to
+        // the ordinary desktop only after that foreground panel is closed.
+        app.update(
+            Message::Launcher(launcher::Message::Close),
+            &mut Effects::default(),
+        );
         app.bar_visible = true;
         let mut effects = Effects::default();
         app.update(
