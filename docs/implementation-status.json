@@ -9,7 +9,7 @@
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted main d0001450 includes merged Display PR86. Text runtime 8e6d074b and Application bb304907 remain unmerged, but their coherent 8e release is now deployed: all six user clients and root greeter match the immutable archive, with only the changed compatibility helper replaced and original user/security state preserved. Exact 8e passes six CI checks and 832 visual cases. A later uninstrumented 120-second RADV resource interval is collected but host-pressure-ineligible, with no accepted 300 MiB result or presentation/FPS proof. Earlier a7f RADV liveness and software measurements retain their original scopes. A later source-specific 8e native run passes all 16 simultaneous-output checks using f16cb591: one owned headless output, density/panel input, pressed-surface retirement and same-name recreation, with full original-state restoration; physical/suspend/presentation scope remains open.",
+    "scope": "Accepted main b474d1fe includes PR87, merged normally after all six required checks passed on exact 8e6d074b and CLEAN mergeability. Text and Application integration are merged and their coherent 8e release is deployed: six user clients and root greeter match the archive with original user/security state preserved. Exact 8e passes six CI checks and 832 visual cases. A 120-second RADV resource interval records 217.28/221.92 MiB mean/peak RSS but is host-pressure-ineligible; presentation/FPS remains unproven. A source-specific 16-check native run passes two-output density/input/retirement/recreation with one owned headless output and exact restoration, not physical or secure cross-output acceptance. The latest owned IME run has five feature checks true including preedit ink/caret evidence, but its overall cleanup result remains failed; separate guarded recovery passes. Earlier failed reports retain their original scope.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -88,9 +88,9 @@
       },
       {
         "id": "international-text",
-        "status": "implemented_unmerged_native_pending",
-        "implemented": "Accepted main retains controlled editing/clipboard and the earlier shaping path. Implemented unmerged Text 8e6d074b adds script/fallback shaping and ordinary IME plus hard-paragraph levels across soft wraps, exact row-bound resolved context, line-local L1/L2, tab separator projection and stale-context cache canonicalization.",
-        "remaining": "Merging and final-cohort native compositor IME acceptance; native pixel/scroll details, delayed clipboard/focus races and third-party GUI clipboard. Exact 8e passes all six CI checks, full workspace, six controlled service-protocol filters and 832 visual cases, plus focused wrap/cache checks. All six managed clients and root greeter are deployed coherently; acceptance examples are staged separately. Earlier evidence retains historical scope; accessibility remains user-deferred. The latest mapped-peer attempt failed at exact_owned_pointer_arrival before composition (zero checks); no SDK defect is proven. Independent owned-unit/socket and original desktop/cursor recovery is verified separately. The observed acknowledged-stop metadata transition has a reviewed, 26-test cleanup correction; its native rerun is pending. See docs/native-text-acceptance.md.",
+        "status": "merged_native_features_verified_cleanup_failed",
+        "implemented": "Merged 8e6d074b implements script/fallback shaping and ordinary opt-in IME, hard-paragraph levels across soft wraps, exact row-bound context, line-local L1/L2 and tab separator projection. Five owned native feature checks pass: real preedit ink/caret advance, CJK commit/surrounding-delete/history, masked-focus retirement, multiline composition and RTL navigation.",
+        "remaining": "Full native IME suite acceptance remains pending because the original five-feature run fails peer-unit cleanup on completed-unit metadata/GC. Separate independent guarded restoration passes without changing original failed/restoration flags. Broader native pixel/scroll, delayed clipboard/focus races, third-party IME and GUI clipboard acceptance remain pending. Exact merged 8e passes six CI checks, full workspace, six controlled service-protocol filters and 832 desktop visual cases; accessibility stays user-deferred.",
         "guides": [
           "docs/text-editing.md",
           "docs/multiline-text.md",
@@ -98,6 +98,43 @@
           "docs/native-text-acceptance.md"
         ],
         "latest_native_attempt": {
+          "status": "five_feature_checks_passed_cleanup_failed",
+          "private_report": "reports/local/international-text-native-9b7a7bd02706f328fcd6770a/report.json",
+          "private_report_sha256": "36c28b62e1cff63345fa75d19c20d1fd5f2e97de37bfb9864e09a0a3592d9375",
+          "desktop_and_example_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "peer_source_commit": "3beda6172b8ce7eeb7be77b7ebd055511388f6de",
+          "peer_sha256": "5e823533c49713b1c5f488bd51564cf84838cd3df6e39384ac276749c53d93cc",
+          "feature_checks": {
+            "native_preedit_ink_and_caret_advance_without_commit": true,
+            "commit_and_surrounding_delete_and_history": true,
+            "masked_focus_retires_composition": true,
+            "multiline_commit_and_cursor_rectangle": true,
+            "native_rtl_visual_navigation": true
+          },
+          "feature_checks_passed": 5,
+          "native_preedit_pixel_proof": {
+            "new_noncaret_ink_pixels": 70,
+            "caret_advance_pixels": 42,
+            "scope": "One owned mapped peer and one native output; actual preedit ink and caret advance before commit."
+          },
+          "overall_passed": false,
+          "cleanup_failure": "peer_completed_unit_metadata_or_garbage_collection_assertion",
+          "native_ime_acceptance_established": false,
+          "original_failure_and_restoration_flags_retained": true,
+          "independent_recovery": {
+            "private_receipt": "reports/local/international-text-native-9b7a7bd02706f328fcd6770a/independent-guarded-restoration.json",
+            "private_receipt_sha256": "cee96a77a64ec8fba66ac656426419dca844fdb6c0f193fba2be458f779b5e5b",
+            "success": true,
+            "both_captured_units_and_pids_absent": true,
+            "same_desktop_and_exact_settings_wallpaper_output_workspace": true,
+            "only_captured_refused_socket_retired": true,
+            "original_cursor_restored": true,
+            "original_failed_report_unchanged": true
+          },
+          "cleanup_correction_native_rerun_pending": true,
+          "guide": "docs/native-text-acceptance.md"
+        },
+        "historical_failed_before_composition_attempt": {
           "status": "failed_before_composition",
           "private_report": "reports/local/international-text-native-5231c104b8c1b3a738b1f268/report.json",
           "private_report_sha256": "de13a6a576b147aa0b236115d324977c0fcd44ea9c64d3993a0a42cc113d5308",
@@ -127,9 +164,9 @@
       },
       {
         "id": "application-integration",
-        "status": "implemented_unmerged_native_pending",
-        "implemented": "Accepted main includes catalog/pins, ordinary activation and declared actions. Implemented unmerged Application bb304907 adds fresh input-bound activation context, explicit file/URI Open and expanded XDG parsing/observation; its owned real-application harness has not executed.",
-        "remaining": "Merging and native third-party launch/open/action acceptance. The implementation is included in deployed 8e; dispatch acknowledgement and token presence do not establish application focus or document loading.",
+        "status": "merged_native_pending",
+        "implemented": "Accepted main b474d1fe includes catalog/pins, ordinary activation, declared actions and Application bb304907 through merged/deployed 8e: fresh input-bound context, explicit file/URI Open and expanded XDG parsing/observation.",
+        "remaining": "Native third-party launch/open/action acceptance remains pending. Dispatch acknowledgement and token presence do not establish application focus/document loading; the current real-browser ownership/fresh-document harness still needs its own complete native preservation gate.",
         "guides": [
           "docs/application-activation.md",
           "docs/application-catalog.md",
@@ -145,7 +182,7 @@
       {
         "id": "documentation-accuracy",
         "status": "source_reconciled_remote_site_ci_pending",
-        "implemented": "Current guides distinguish accepted main d0001450, the compiled/deployed coherent 8e release, earlier a7f RADV liveness and historical software samples. Exact 8e CI passes six checks and 832 visual cases. The new normal resource interval is collected but host-pressure-ineligible; the fresh 16-check two-output native run on 8e passes scoped owned-headless input/density/removal/recreation with exact restoration. Native IME/application/GUI clipboard/tray, physical-device/suspend and presentation acceptance remain pending. Original failed Venus/device-remap trials and software RSS failure retain scope.",
+        "implemented": "Current guides reconcile accepted main b474d1fe/PR87 with exact compiled/deployed 8e, six passing checks and 832 visuals, five actual IME feature checks with failed cleanup plus separate verified recovery, scoped 16-check owned-headless two-output acceptance and the 217.28/221.92 MiB host-ineligible normal resource observation. No complete IME suite, real-application/GUI clipboard/tray, physical/secure-output/suspend or presentation/FPS acceptance is inferred. Historical failures retain their scopes.",
         "remaining": "Astro/site checks for this branch and continued source-specific reconciliation after later PRs merge. Historical reports remain unchanged."
       }
     ],
@@ -227,51 +264,8 @@
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
-    "validation": "Exact 8e runtime passes push 39313647281 and PR 39313659557 CI: six required checks, full workspace, six controlled service-protocol filters, explicit 1x/2x wrapped/cache regressions and 832 desktop visuals. Its coherent locked/offline release builds all nine executables; all six managed user clients and root greeter are now deployed with only changed compat.py, exact original user/security state and supervision beyond startup deadline verified. Acceptance examples are staged privately. A normal uninstrumented 120.000492-second RADV interval records 480 samples, mean 217.281934 / peak 221.921875 MiB, CPU 112.24954% of one core and zero guest-process swap; full preservation passes. Host swap-in of 674 pages and I/O full-stall fraction 0.5081035 make it ineligible, with RSS-target acceptance null. Presentation/PTS are off; no FPS, smoothness, matched historical improvement, GPU-memory or hardware-decode proof. Earlier a7f hardware liveness, software RSS failure and failed/recovered trials retain their sources. Final native feature, site and exact-head delivery gates remain separate; editing docs executes none of them. Native f16cb591 on exact 8e separately passes 16 two-output checks with real input, pressed-surface retirement and same-name new lifetime; full restoration passes. This does not establish physical/suspend/secure-output or presentation/resource acceptance.",
-    "accepted_main_base_commit": "d00014509f13125fe4ccab3ce2e1fa3961a40dd3",
-    "implemented_unmerged_cohorts": [
-      {
-        "feature": "international-text",
-        "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
-        "implementation": "Script shaping, deterministic fallback and ordinary opt-in IME, plus hard-paragraph levels across soft wraps, exact row-bound context, line-local upstream L1/L2, canonical tab separator projection and a stale-context text-cache guard.",
-        "pending": "Merging and final-cohort native compositor IME/wider text/GUI clipboard acceptance. Exact 8e full CI and all-nine release build pass; six managed clients and root greeter are deployed, examples staged separately.",
-        "historical_executable_checks_source_commit": "eec582ab0aa7c06b4ed30d24a0670c6a1df91e21",
-        "historical_full_visual_source_commit": "5d3501ebd9e02dccca62f7c2f9cae59056e40a7a",
-        "historical_full_visual_cases": 832,
-        "focused_checks": {
-          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
-          "formatting_passed": true,
-          "strict_all_target_clippy_passed": true,
-          "wrapped_ui_cases_passed": 6,
-          "upstream_line_reference_cases_passed": 1,
-          "panel_dismissal_cases_passed": 6,
-          "vulkan_regressions_passed": 2,
-          "vulkan_densities": [
-            1,
-            2
-          ],
-          "native_ime_acceptance_established": false,
-          "full_workspace_protocol_desktop_ci_established_by_this_focused_run": false
-        },
-        "full_ci": {
-          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
-          "push_run": 39313647281,
-          "pull_request_run": 39313659557,
-          "checks_passed": 6,
-          "workspace_passed": true,
-          "controlled_service_protocol_filters_passed": 6,
-          "desktop_visual_cases_passed": 832,
-          "native_ime_acceptance_established": false,
-          "visual_artifact_sha256": "ff1e0e4e6649a0f7ba20b4f8f6cd5714decec2917c92b60f4be3f6004a37b0b6"
-        }
-      },
-      {
-        "feature": "application-integration",
-        "source_commit": "bb3049078768ac195af49b41cf3f6f8044dd5726",
-        "implementation": "Fresh input-bound intent, explicit file/URI Open, XDG parser/observer expansion and an owned real-application acceptance harness.",
-        "pending": "Merging and executed native real-application launch/open/action proof. This implementation is included in the deployed coherent 8e release."
-      }
-    ],
+    "validation": "PR87 merged normally at b474d1fe after fresh all-six SUCCESS and CLEAN mergeability on exact 8e6d074b. Exact 8e runtime passes push 39313647281 and PR 39313659557 CI: six required checks, full workspace, six controlled service-protocol filters, explicit 1x/2x wrapped/cache regressions and 832 desktop visuals. Its coherent locked/offline release builds all nine executables; all six managed user clients and root greeter are now deployed with only changed compat.py, exact original user/security state and supervision beyond startup deadline verified. Acceptance examples are staged privately. A normal uninstrumented 120.000492-second RADV interval records 480 samples, mean 217.281934 / peak 221.921875 MiB, CPU 112.24954% of one core and zero guest-process swap; full preservation passes. Host swap-in of 674 pages and I/O full-stall fraction 0.5081035 make it ineligible, with RSS-target acceptance null. Presentation/PTS are off; no FPS, smoothness, matched historical improvement, GPU-memory or hardware-decode proof. Earlier a7f hardware liveness, software RSS failure and failed/recovered trials retain their sources. Final native feature, site and exact-head delivery gates remain separate; editing docs executes none of them. Native f16cb591 on exact 8e separately passes 16 two-output checks with real input, pressed-surface retirement and same-name new lifetime; full restoration passes. This does not establish physical/suspend/secure-output or presentation/resource acceptance. The latest owned IME attempt has all five functional checks true, including 70 non-caret preedit ink pixels and 42-pixel caret advance, but its original overall/cleanup flags remain failed. Separate guarded restoration succeeds and does not relabel the run; corrected cleanup still needs a fresh native gate. Profiling-enable work is not a completed presentation measurement.",
+    "accepted_main_base_commit": "b474d1fe845a7cfd716daf7c382de0769fbf3849",
     "documentation_harness_base_commit": "cd88371923b43c53f5b48d4bafe78131ea6df8c3",
     "runtime_compilation_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
     "historical_gpu_candidate_preservation_rejection": {
@@ -354,7 +348,63 @@
       "graphics_configuration_changed": false,
       "rollback_required": false,
       "native_feature_acceptance_complete": false
-    }
+    },
+    "accepted_main_merge": {
+      "pull_request": 87,
+      "merge_commit": "b474d1fe845a7cfd716daf7c382de0769fbf3849",
+      "exact_reviewed_head": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+      "required_checks_passed": 6,
+      "mergeability": "CLEAN",
+      "normal_merge": true
+    },
+    "implemented_unmerged_cohorts": [],
+    "accepted_runtime_cohorts": [
+      {
+        "feature": "international-text",
+        "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+        "implementation": "Script shaping, deterministic fallback and ordinary opt-in IME, plus hard-paragraph levels across soft wraps, exact row-bound context, line-local upstream L1/L2, canonical tab separator projection and a stale-context text-cache guard.",
+        "pending": "Complete native IME cleanup/acceptance, wider text and GUI clipboard acceptance. Five owned native feature checks pass but their original run is failed on peer-unit cleanup; separate guarded restoration succeeds. Exact 8e CI and all-nine release build pass and the coherent runtime is deployed.",
+        "historical_executable_checks_source_commit": "eec582ab0aa7c06b4ed30d24a0670c6a1df91e21",
+        "historical_full_visual_source_commit": "5d3501ebd9e02dccca62f7c2f9cae59056e40a7a",
+        "historical_full_visual_cases": 832,
+        "focused_checks": {
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "formatting_passed": true,
+          "strict_all_target_clippy_passed": true,
+          "wrapped_ui_cases_passed": 6,
+          "upstream_line_reference_cases_passed": 1,
+          "panel_dismissal_cases_passed": 6,
+          "vulkan_regressions_passed": 2,
+          "vulkan_densities": [
+            1,
+            2
+          ],
+          "native_ime_acceptance_established": false,
+          "full_workspace_protocol_desktop_ci_established_by_this_focused_run": false
+        },
+        "full_ci": {
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "push_run": 39313647281,
+          "pull_request_run": 39313659557,
+          "checks_passed": 6,
+          "workspace_passed": true,
+          "controlled_service_protocol_filters_passed": 6,
+          "desktop_visual_cases_passed": 832,
+          "native_ime_acceptance_established": false,
+          "visual_artifact_sha256": "ff1e0e4e6649a0f7ba20b4f8f6cd5714decec2917c92b60f4be3f6004a37b0b6"
+        },
+        "merged_pull_request": 87,
+        "accepted_main_merge_commit": "b474d1fe845a7cfd716daf7c382de0769fbf3849"
+      },
+      {
+        "feature": "application-integration",
+        "source_commit": "bb3049078768ac195af49b41cf3f6f8044dd5726",
+        "implementation": "Fresh input-bound intent, explicit file/URI Open, XDG parser/observer expansion and an owned real-application acceptance harness.",
+        "pending": "Complete native real-application launch/open/action and preservation acceptance; implementation is merged and deployed through coherent 8e.",
+        "merged_pull_request": 87,
+        "accepted_main_merge_commit": "b474d1fe845a7cfd716daf7c382de0769fbf3849"
+      }
+    ]
   },
   "requirements": [
     {
