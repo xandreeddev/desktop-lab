@@ -149,18 +149,13 @@ enum Threads {
 impl Threads {
     fn config(self) -> ffmpeg::codec::threading::Config {
         use ffmpeg::codec::threading::{Config, Type};
-        match self {
-            Self::Serial => Config {
-                kind: Type::None,
-                count: 1,
-                ..Default::default()
-            },
-            Self::Frame2 => Config {
-                kind: Type::Frame,
-                count: 2,
-                ..Default::default()
-            },
-        }
+        let (count, kind) = match self {
+            Self::Serial => (1, Type::None),
+            Self::Frame2 => (2, Type::Frame),
+        };
+        let mut config = Config::count(count);
+        config.kind = kind;
+        config
     }
     fn label(self) -> &'static str {
         match self {
