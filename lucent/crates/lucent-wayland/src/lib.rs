@@ -46,16 +46,19 @@ use wayland_client::{
 use wgpu_handle::HasDisplayHandle;
 // Use the exact raw-window-handle version used by the renderer.
 use lucent_render::display_handle as wgpu_handle;
+mod activation;
 mod clipboard;
 mod delivery;
 mod effects;
 mod fractional;
 mod handoff;
+mod input_method;
 mod ipc;
 mod keyboard;
 mod layer_commit;
 mod outputs;
 mod pointer_input;
+mod presentation;
 mod profiling;
 mod subscriptions;
 
@@ -134,9 +137,12 @@ struct State<A: Application> {
     keyboard_surface: Option<api::SurfaceAddress>,
     input_serial: Option<u32>,
     clipboard: clipboard::Clipboard<A::Message>,
+    input_method: input_method::InputMethod,
+    activation: activation::Activation<A::Message>,
     modifiers: Modifiers,
     epoch: Instant,
     profile_frames: bool,
+    presentation: presentation::Capture,
     exit: bool,
     error: Option<String>,
     handle: LoopHandle<'static, Self>,
@@ -152,6 +158,7 @@ impl<A: Application> Drop for State<A> {
             self.handle.remove(token);
         }
         self.clipboard_drop();
+        self.input_method.shutdown();
         // Drop GPU surfaces before their protocol roles, then send the queued
         // destroy requests while the connection is still alive. A caller such
         // as a permission agent can outlive this individual runtime invocation.
@@ -198,7 +205,7 @@ fn run_inner<A: Application>(
     let mut fonts = Vec::new();
     for bytes in app.fonts() {
         fonts.push(
-            fontdue::Font::from_bytes(bytes, fontdue::FontSettings::default())
+            lucent_ui::text::Font::from_bytes(bytes, fontdue::FontSettings::default())
                 .map_err(std::io::Error::other)?,
         );
     }
@@ -210,7 +217,7 @@ fn run_inner<A: Application>(
             return Err("Fontconfig could not select a font".into());
         }
         fonts.push(
-            fontdue::Font::from_bytes(
+            lucent_ui::text::Font::from_bytes(
                 fs::read(String::from_utf8(matched.stdout)?.trim())?,
                 fontdue::FontSettings::default(),
             )
@@ -236,6 +243,12 @@ fn run_inner<A: Application>(
     } else {
         None
     };
+    let input_method_allowed = authorize_unlock.is_none() && app.input_method_enabled();
+    let activation = activation::Activation::new(
+        &globals,
+        &qh,
+        app.activation_enabled() && authorize_unlock.is_none(),
+    );
     let mut state = State {
         surfaces: BTreeMap::new(),
         retiring: Default::default(),
@@ -260,8 +273,11 @@ fn run_inner<A: Application>(
         keyboard_surface: None,
         input_serial: None,
         clipboard: clipboard::Clipboard::new(clipboard_manager),
+        input_method: input_method::InputMethod::bind(&globals, &qh, !input_method_allowed),
+        activation,
         modifiers: Modifiers::default(),
         epoch: Instant::now(),
+        presentation: presentation::Capture::bind(&globals, &qh, ipc && authorize_unlock.is_none()),
         profile_frames: std::env::var_os("LUCENT_PROFILE_FRAMES").is_some_and(|value| value == "1"),
         exit: false,
         error: None,
@@ -429,7 +445,8 @@ impl<A: Application> State<A> {
             "one_color_buffer_per_surface_bytes": self.surfaces.values().chain(self.retiring.iter().map(|(_, native)| native)).map(|s| s.renderer.single_surface_buffer_bytes()).sum::<u64>(),
             "scope":"Prepared image payloads referenced by current and retiring scenes only; app caches excluded. GPU buffer values are requested payloads, not driver allocations. Actual surface buffer counts and total GPU memory are unknown."
         }));
-        let mut result = serde_json::json!({"profile_memory":profile_memory,"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id.to_string(),"role":s.spec.id,"instance":s.spec.instance.as_ref().map(api::SurfaceInstance::as_str),"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"keyboard":match s.spec.keyboard { api::Keyboard::None=>"none", api::Keyboard::OnDemand=>"on-demand", api::Keyboard::Exclusive=>"exclusive" },"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"density":s.density().factor(),"buffer_scale":if s.fractional.is_some(){1}else{s.scale},"buffer_width":s.density().physical_size(s.width,s.height).ok().map(|size|size.0),"buffer_height":s.density().physical_size(s.width,s.height).ok().map(|size|size.1),"frames":s.history.frames,"native_frames":s.renderer.frames,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.history.frame_times,"frame_profiles":s.history.profiles.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>(),"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)});
+        let surfaces = self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id.to_string(),"role":s.spec.id,"instance":s.spec.instance.as_ref().map(api::SurfaceInstance::as_str),"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"keyboard":match s.spec.keyboard { api::Keyboard::None=>"none", api::Keyboard::OnDemand=>"on-demand", api::Keyboard::Exclusive=>"exclusive" },"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"density":s.density().factor(),"buffer_scale":if s.fractional.is_some(){1}else{s.scale},"buffer_width":s.density().physical_size(s.width,s.height).ok().map(|size|size.0),"buffer_height":s.density().physical_size(s.width,s.height).ok().map(|size|size.1),"frames":s.history.frames,"native_frames":s.renderer.frames,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.history.frame_times,"frame_profiles":s.history.profiles.json(),"presentation":s.history.presentation.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>();
+        let mut result = serde_json::json!({"profile_memory":profile_memory,"presentation_feedback":self.presentation.json(),"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":surfaces,"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)});
         result["outputs"]=serde_json::json!(self.output_bindings.iter().map(|(info,_)|serde_json::json!({"global":info.global,"name":info.name.as_ref().map(api::OutputName::as_str),"logical_size":info.logical_size,"integer_scale":info.integer_scale})).collect::<Vec<_>>());
         result["retiring_native_surfaces"] = serde_json::json!(self.retiring.len());
         result["closed_named_surfaces"] = serde_json::json!(
@@ -541,6 +558,11 @@ impl<A: Application> State<A> {
             }
             self.exit = true;
             return;
+        }
+        // Capture the real input surface before reconciliation closes a launcher.
+        // The token callback is asynchronous and owns no native application policy.
+        for request in effects.activation {
+            self.activation_request(request, qh);
         }
         for task in effects.tasks {
             if let Err(rejected) = self.tasks.submit(task) {
@@ -961,18 +983,27 @@ impl<A: Application> State<A> {
             }
             let input_ms = profiling::elapsed(started);
             s.renderer.enable_profiling(self.profile_frames);
-            let outcome = s
-                .renderer
-                .render_scaled(width, height, density, &scene.paint, || {
-                    if s.committed_spec != s.spec
-                        && let SurfaceRole::Layer(layer) = &s.role
-                    {
-                        configure_layer(layer, &s.spec);
-                    }
-                    // WSI presentation commits the role state, viewport,
-                    // input region and newly rendered buffer together.
-                    surface.frame(qh, FrameCallbackData(surface.clone()));
-                });
+            s.renderer
+                .enable_stream_tracing(self.presentation.tracing());
+            let outcome =
+                s.renderer
+                    .render_scaled(width, height, density, &scene.paint, |streams| {
+                        if s.committed_spec != s.spec
+                            && let SurfaceRole::Layer(layer) = &s.role
+                        {
+                            configure_layer(layer, &s.spec);
+                        }
+                        // WSI presentation commits the role state, viewport,
+                        // input region and newly rendered buffer together.
+                        self.presentation.request(
+                            surface,
+                            qh,
+                            s.history.frames.saturating_add(1),
+                            self.epoch.elapsed().as_secs_f64() * 1000.,
+                            streams.copied(),
+                        );
+                        surface.frame(qh, FrameCallbackData(surface.clone()));
+                    });
             self.retiring.finish_submission(&s.spec.address(), &outcome);
             match outcome {
                 Ok(RenderOutcome::Presented) => {}
@@ -1530,6 +1561,7 @@ impl<A: Application> SeatHandler for State<A> {
             if self.keyboard.is_some() {
                 self.keyboard_seat = Some(seat.clone());
                 self.clipboard_seat(&seat, qh);
+                self.input_method.seat(&seat, qh);
             }
         }
     }
@@ -1551,11 +1583,15 @@ impl<A: Application> SeatHandler for State<A> {
             && self.keyboard_seat.as_ref() == Some(&seat)
             && let Some(k) = self.keyboard.take()
         {
+            self.input_serial = None;
+            self.activation.input = None;
+            self.input_method_remove_seat(qh);
             k.release();
             self.keyboard_surface = None;
             self.keyboard_seat = None;
             self.clipboard_cancel(qh, true);
             self.clipboard_drop();
+            self.draw_all(qh);
         }
     }
     fn remove_seat(&mut self, conn: &Connection, qh: &QueueHandle<Self>, seat: wl_seat::WlSeat) {
@@ -1572,9 +1608,17 @@ impl<A: Application> PointerHandler for State<A> {
         events: &[PointerEvent],
     ) {
         for event in events {
+            // A wl_pointer.frame may contain several distinct native events.
+            // Reconciliation for the next event must not borrow a preceding
+            // button's unused authority (including when it is Motion/Leave).
+            self.input_serial = None;
+            self.activation.input = None;
             let Some(id) = self.id_for(&event.surface) else {
                 continue;
             };
+            if matches!(event.kind, PointerEventKind::Press { .. }) {
+                self.input_method_cancel_preedit(qh);
+            }
             for message in self.refresh_input_scene(&id, false, false) {
                 if self.id_for(&event.surface).as_ref() != Some(&id) {
                     break;
@@ -1592,6 +1636,17 @@ impl<A: Application> PointerHandler for State<A> {
             let mut scroll = None;
             self.input_serial = match event.kind {
                 PointerEventKind::Press { serial, .. } => Some(serial),
+                _ => None,
+            };
+            self.activation.input = match event.kind {
+                PointerEventKind::Press { serial, .. }
+                | PointerEventKind::Release { serial, .. } => {
+                    self.pointer_seat.as_ref().map(|seat| activation::Input {
+                        surface: event.surface.clone(),
+                        seat: seat.clone(),
+                        serial,
+                    })
+                }
                 _ => None,
             };
             if let Some(s) = self.surfaces.get_mut(&id) {
@@ -1718,6 +1773,7 @@ impl<A: Application> PointerHandler for State<A> {
             }
         }
         self.input_serial = None;
+        self.activation.input = None;
         self.draw_all(qh);
     }
 }
@@ -1741,6 +1797,7 @@ impl<A: Application> KeyboardHandler for State<A> {
         // can grant authority to the still-current lifetime.
         if self.id_for(surface).as_ref() == Some(&id) {
             self.keyboard_surface = Some(id);
+            self.input_method_observe();
         }
     }
     fn leave(
@@ -1759,6 +1816,7 @@ impl<A: Application> KeyboardHandler for State<A> {
         }
         self.keyboard_surface = None;
         self.input_serial = None;
+        self.input_method_observe();
         self.clipboard_cancel(qh, false);
     }
     fn press_key(
@@ -1770,8 +1828,19 @@ impl<A: Application> KeyboardHandler for State<A> {
         event: KeyEvent,
     ) {
         self.input_serial = Some(serial);
+        self.activation.input = self
+            .keyboard_surface
+            .as_ref()
+            .and_then(|id| self.surfaces.get(id))
+            .zip(self.keyboard_seat.as_ref())
+            .map(|(native, seat)| activation::Input {
+                surface: native.role.wl_surface().clone(),
+                seat: seat.clone(),
+                serial,
+            });
         self.key(event, qh);
         self.input_serial = None;
+        self.activation.input = None;
     }
     fn repeat_key(
         &mut self,

@@ -78,7 +78,7 @@ fn color(color: Color) -> Result<(), Error> {
 pub(super) fn validate(
     paint: &[Paint],
     scale: f32,
-    fonts: &[fontdue::Font],
+    fonts: &[lucent_ui::text::Font],
     limits: &wgpu::Limits,
     current_instances: usize,
     current_clips: usize,
@@ -154,8 +154,29 @@ pub(super) fn validate(
                     size,
                     face,
                     color,
+                    layout,
                     ..
                 } => {
+                    if let Some(width) = layout.raster_width {
+                        positive(width)?;
+                    }
+                    if let Some(metrics) = layout.metrics {
+                        for value in [
+                            metrics.height,
+                            metrics.baseline,
+                            metrics.ascent,
+                            metrics.descent,
+                        ] {
+                            scalar(value)?;
+                        }
+                        if metrics.height <= 0.
+                            || metrics.baseline < metrics.ascent
+                            || metrics.baseline - metrics.descent
+                                > metrics.height + f32::EPSILON * 8.
+                        {
+                            return Err("invalid shared text line metrics".into());
+                        }
+                    }
                     if !text.is_empty() {
                         raster::validate_request(text, *size, scale)?;
                         if fonts.get(*face).or_else(|| fonts.first()).is_none() {
@@ -319,6 +340,7 @@ mod tests {
         };
         let bounds = Rect::new(0., 0., 16., 16.);
         let text = Paint::Text {
+            layout: Default::default(),
             rect: bounds,
             clip: bounds.into(),
             text: "hello".into(),

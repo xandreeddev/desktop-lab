@@ -629,6 +629,15 @@ class Harness:
         self.stable()
         require(self.verify_binary() != old, 'normal_service_restart_observed')
 
+    def restore_workspace(self):
+        """Do not steal focus from a workspace changed by another participant."""
+        current = json.loads(self.session('hyprctl', '-j', 'activeworkspace'))
+        require(current['id'] == self.workspace or current.get('name') == 'lucent-notes-' + self.tag,
+                'workspace_still_original_or_owned_before_restore')
+        self.session('hyprctl', 'dispatch', 'hl.dsp.focus({ workspace = ' + json.dumps(str(self.workspace)) + ' })')
+        require(json.loads(self.session('hyprctl', '-j', 'activeworkspace'))['id'] == self.workspace,
+                'original_workspace_restored')
+
 
 def preflight(h):
     h.run(['git', '-C', str(ROOT), 'cat-file', '-e', h.args.source_commit + '^{commit}'])
@@ -820,10 +829,7 @@ def restore(h, result):
     finally:
         if h.service_stopped:
             attempt('normal_desktop_35s_stability', lambda: (h.session('systemctl', '--user', 'start', 'lucent.service'), h.stable()))
-    def workspace():
-        h.session('hyprctl', 'dispatch', 'hl.dsp.focus({ workspace = ' + json.dumps(str(h.workspace)) + ' })')
-        require(json.loads(h.session('hyprctl', '-j', 'activeworkspace'))['id'] == h.workspace, 'original_workspace_restored')
-    attempt('original_workspace', workspace)
+    attempt('original_workspace', h.restore_workspace)
     def monitor():
         current = json.loads(h.session('hyprctl', '-j', 'monitors'))
         require(len(current) == 1 and all(current[0][key] == value for key, value in h.original_monitor.items()),

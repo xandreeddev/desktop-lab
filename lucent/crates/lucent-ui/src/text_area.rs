@@ -2,40 +2,31 @@
 //! wrapping, pointer placement, caret painting and visual navigation.
 use super::*;
 use std::ops::Range;
+#[cfg(test)]
+#[path = "text_wrap_tests.rs"]
+mod wrapped_paragraphs;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Row {
     pub range: Range<usize>,
     pub stops: Arc<[(usize, f32)]>,
-    display: String,
+    display: Arc<str>,
+    bidi: Option<text::ResolvedBidiLine>,
+    pub(super) segments: Arc<[(Range<usize>, f32, f32)]>,
 }
 impl Row {
+    fn stop(&self, x: f32) -> usize {
+        self.stops
+            .iter()
+            .enumerate()
+            .min_by(|(_, (_, a)), (_, (_, b))| (a - x).abs().total_cmp(&(b - x).abs()))
+            .map_or(0, |(index, _)| index)
+    }
     fn at(&self, x: f32) -> usize {
         self.stops
             .iter()
             .min_by(|(_, a), (_, b)| (a - x).abs().total_cmp(&(b - x).abs()))
             .map_or(self.range.start, |(at, _)| *at)
-    }
-    fn visible_display(&self, font: &fontdue::Font, size: f32, width: f32) -> String {
-        if self.stops.last().is_none_or(|(_, end)| *end <= width) {
-            return self.display.clone();
-        }
-        // A whole grapheme may be wider than its viewport. Clipping geometry
-        // alone must not rasterize a huge hidden texture for that row. Keep the
-        // exact prefix through the last glyph whose actual ink intersects the
-        // visible horizontal span; source/selection geometry stays untouched.
-        let end = self
-            .display
-            .char_indices()
-            .zip(text::glyph_positions(font, &self.display, size))
-            .filter_map(|((byte, c), (_, x))| {
-                let metrics = font.metrics(c, size);
-                let left = x + metrics.xmin as f32;
-                (left < width && left + metrics.width as f32 > 0.).then_some(byte + c.len_utf8())
-            })
-            .last()
-            .unwrap_or(0);
-        self.display[..end].to_owned()
     }
     fn x(&self, byte: usize) -> f32 {
         self.stops
@@ -48,7 +39,9 @@ impl Row {
 pub(super) struct AreaGeometry {
     pub rows: Arc<[Row]>,
     pub line_height: f32,
+    pub metrics: text::LineMetrics,
     pub caret_row: usize,
+    pub caret_stop: usize,
     pub content_height: f32,
 }
 /// Transient visual affinity and vertical goal; never canonical text state.
@@ -59,6 +52,7 @@ pub(super) struct Navigation {
     anchor: usize,
     caret: usize,
     row: usize,
+    stop: usize,
     goal_x: Option<f32>,
     width: f32,
     height: f32,
@@ -87,7 +81,7 @@ impl Navigation {
         inner: Rect,
         line_height: f32,
         rows: &[Row],
-    ) -> Option<usize> {
+    ) -> Option<(usize, usize)> {
         (self.id == id
             && self.value.as_ref() == value
             && self.anchor == selection.anchor()
@@ -96,7 +90,7 @@ impl Navigation {
             && self.height == inner.h
             && self.line_height == line_height
             && self.rows.as_ref() == rows)
-            .then_some(self.row)
+            .then_some((self.row, self.stop))
     }
 }
 fn display_grapheme(grapheme: &str) -> std::borrow::Cow<'_, str> {
@@ -106,41 +100,173 @@ fn display_grapheme(grapheme: &str) -> std::borrow::Cow<'_, str> {
         std::borrow::Cow::Borrowed(grapheme)
     }
 }
-fn measured_row(font: &fontdue::Font, value: &str, range: Range<usize>, size: f32) -> Row {
-    let mut display = String::new();
-    let mut stops = Vec::new();
-    let mut x = 0.;
-    let mut previous = None;
-    let boundaries: Vec<_> = TextSelection::boundaries(&value[range.clone()]).collect();
-    for pair in boundaries.windows(2) {
-        let at = range.start + pair[0];
-        let text = display_grapheme(&value[at..range.start + pair[1]]);
-        // The first glyph's kerning belongs to this grapheme boundary, matching
-        // the same pair positioning used by the rasterizer for this row.
-        if let (Some(p), Some(c)) = (previous, text.chars().next()) {
-            x += font.horizontal_kern(p, c, size).unwrap_or(0.);
+/// Display projection preserves a stable document-wide byte map, including tabs.
+/// Bidi resolves this complete document once; row slices keep that context.
+struct Projection {
+    display: String,
+    map: Vec<(usize, usize)>,
+}
+impl Projection {
+    fn new(value: &str, boundaries: &[usize]) -> Self {
+        let mut display = String::new();
+        let mut map = Vec::with_capacity(boundaries.len());
+        for pair in boundaries.windows(2) {
+            map.push((display.len(), pair[0]));
+            display.push_str(&display_grapheme(&value[pair[0]..pair[1]]));
         }
-        stops.push((at, x));
-        for (index, c) in text.chars().enumerate() {
-            if index > 0
-                && let Some(p) = previous
-            {
-                x += font.horizontal_kern(p, c, size).unwrap_or(0.);
-            }
-            x += font.metrics(c, size).advance_width;
-            previous = Some(c);
-        }
-        display.push_str(&text);
+        map.push((display.len(), value.len()));
+        Self { display, map }
     }
-    stops.push((range.end, x));
+    fn source_to_display(&self, source: usize) -> usize {
+        let index = self
+            .map
+            .partition_point(|(_, byte)| *byte <= source)
+            .saturating_sub(1);
+        self.map[index].0 + source - self.map[index].1
+    }
+    fn bidi<'a>(&'a self, value: &'a str) -> unicode_bidi::BidiInfo<'a> {
+        let original = unicode_bidi::BidiInfo::new(value, None);
+        if !value.contains('\t') {
+            return unicode_bidi::BidiInfo {
+                text: &self.display,
+                ..original
+            };
+        }
+        // A tab is bidi class S, not four WS characters. Expand its already
+        // resolved byte metadata alongside its displayed spaces; never resolve
+        // a different substituted paragraph and lose separator semantics.
+        let mut levels = Vec::with_capacity(self.display.len());
+        let mut classes = Vec::with_capacity(self.display.len());
+        for pair in self.map.windows(2) {
+            let source = pair[0].1..pair[1].1;
+            if &value[source.clone()] == "\t" {
+                levels.extend(std::iter::repeat_n(original.levels[source.start], 4));
+                classes.extend(std::iter::repeat_n(
+                    original.original_classes[source.start],
+                    4,
+                ));
+            } else {
+                levels.extend_from_slice(&original.levels[source.clone()]);
+                classes.extend_from_slice(&original.original_classes[source]);
+            }
+        }
+        let paragraphs = original
+            .paragraphs
+            .iter()
+            .map(|paragraph| unicode_bidi::ParagraphInfo {
+                range: self.source_to_display(paragraph.range.start)
+                    ..self.source_to_display(paragraph.range.end),
+                level: paragraph.level,
+            })
+            .collect();
+        unicode_bidi::BidiInfo {
+            text: &self.display,
+            original_classes: classes,
+            levels,
+            paragraphs,
+        }
+    }
+}
+fn measured_row(
+    font: &crate::text::Font,
+    projection: &Projection,
+    bidi: Option<&unicode_bidi::BidiInfo<'_>>,
+    range: Range<usize>,
+    size: f32,
+) -> Row {
+    let first = projection
+        .map
+        .binary_search_by_key(&range.start, |(_, source)| *source)
+        .unwrap();
+    let last = projection
+        .map
+        .binary_search_by_key(&range.end, |(_, source)| *source)
+        .unwrap();
+    let display_range = projection.map[first].0..projection.map[last].0;
+    let display: Arc<str> = Arc::from(&projection.display[display_range.clone()]);
+    let map = projection.map[first..=last]
+        .iter()
+        .map(|(byte, source)| (byte - display_range.start, *source))
+        .collect::<Vec<_>>();
+    let bidi = bidi
+        .and_then(|bidi| text::ResolvedBidiLine::from_range(bidi, display_range, display.clone()));
+    let shaped = text::shape_with_layout(
+        font,
+        &display,
+        size,
+        text::LayoutOptions {
+            bidi: bidi.clone(),
+            ..Default::default()
+        },
+    );
+    let stops = shaped
+        .stops
+        .iter()
+        .filter_map(|(byte, x)| {
+            map.binary_search_by_key(byte, |(display, _)| *display)
+                .ok()
+                .map(|index| (map[index].1, *x))
+        })
+        .collect::<Vec<_>>();
+    let mut coverage = vec![None; map.len().saturating_sub(1)];
+    for (range, a, b) in &shaped.segments {
+        let index = map
+            .partition_point(|(display, _)| *display <= range.start)
+            .saturating_sub(1);
+        if let Some(entry) = coverage.get_mut(index) {
+            let (low, high, _) = entry.get_or_insert((a.min(*b), a.max(*b), a > b));
+            *low = low.min(a.min(*b));
+            *high = high.max(a.max(*b));
+        }
+    }
+    let segments = map
+        .windows(2)
+        .zip(coverage)
+        .filter_map(|(pair, coverage)| {
+            let (low, high, rtl) = coverage?;
+            let (a, b) = if rtl { (high, low) } else { (low, high) };
+            Some((pair[0].1..pair[1].1, a, b))
+        })
+        .collect::<Vec<_>>();
     Row {
         range,
         stops: stops.into(),
         display,
+        bidi,
+        segments: segments.into(),
     }
 }
-fn rows(font: &fontdue::Font, value: &str, size: f32, width: f32) -> Vec<Row> {
+
+fn rows(font: &crate::text::Font, value: &str, size: f32, width: f32) -> Vec<Row> {
     let boundaries: Vec<_> = TextSelection::boundaries(value).collect();
+    let projection = Projection::new(value, &boundaries);
+    let bidi = (!value.is_ascii()).then(|| projection.bidi(value));
+    // Candidate advances and final soft-line reordering share the hard-paragraph
+    // source. A wrap changes line reordering (UBA L1/L2), not paragraph identity.
+    let advances = bidi.as_ref().map(|bidi| {
+        let projections = &projection.map[..projection.map.len().saturating_sub(1)];
+        let mut advances = vec![0.; projections.len()];
+        for paragraph in &bidi.paragraphs {
+            let source: Arc<str> = Arc::from(&projection.display[paragraph.range.clone()]);
+            let layout = text::LayoutOptions {
+                bidi: text::ResolvedBidiLine::from_range(
+                    bidi,
+                    paragraph.range.clone(),
+                    source.clone(),
+                ),
+                ..Default::default()
+            };
+            for (range, a, b) in text::shape_with_layout(font, &source, size, layout).segments {
+                let index = projections
+                    .partition_point(|(at, _)| *at <= paragraph.range.start + range.start)
+                    .saturating_sub(1);
+                if let Some(advance) = advances.get_mut(index) {
+                    *advance += (b - a).abs();
+                }
+            }
+        }
+        advances
+    });
     let mut result = Vec::new();
     let mut start = 0;
     while start + 1 < boundaries.len() {
@@ -157,12 +283,16 @@ fn rows(font: &fontdue::Font, value: &str, size: f32, width: f32) -> Vec<Row> {
             }
             let mut end = x;
             let mut last = previous;
-            for c in display_grapheme(grapheme).chars() {
-                if let Some(p) = last {
-                    end += font.horizontal_kern(p, c, size).unwrap_or(0.);
+            if let Some(advances) = &advances {
+                end += advances[index];
+            } else {
+                for c in display_grapheme(grapheme).chars() {
+                    if let Some(p) = last {
+                        end += font.horizontal_kern(p, c, size).unwrap_or(0.);
+                    }
+                    end += font.metrics(c, size).advance_width;
+                    last = Some(c);
                 }
-                end += font.metrics(c, size).advance_width;
-                last = Some(c);
             }
             // Always admit one whole grapheme, even in a zero-width viewport.
             if end > width && index > start {
@@ -175,28 +305,51 @@ fn rows(font: &fontdue::Font, value: &str, size: f32, width: f32) -> Vec<Row> {
                 whitespace = Some(index);
             }
         }
-        let end = if hard_end.is_some() || index + 1 == boundaries.len() {
+        let mut end = if hard_end.is_some() || index + 1 == boundaries.len() {
             index
         } else {
             whitespace.filter(|last| *last > start).unwrap_or(index)
         };
-        result.push(measured_row(
+        let mut row = measured_row(
             font,
-            value,
+            &projection,
+            bidi.as_ref(),
             boundaries[start]..boundaries[end],
             size,
-        ));
+        );
+        // Joining at an actual wrap edge can change an advance. Confirm the
+        // selected row, retreating by whole graphemes if its final shape grows.
+        while advances.is_some()
+            && end > start + 1
+            && row.stops.iter().map(|(_, x)| *x).fold(0., f32::max) > width
+        {
+            end -= 1;
+            row = measured_row(
+                font,
+                &projection,
+                bidi.as_ref(),
+                boundaries[start]..boundaries[end],
+                size,
+            );
+        }
+        result.push(row);
         start = if hard_end == Some(end) { end + 1 } else { end };
     }
     // Empty values and trailing hard lines are real editable rows.
     if result.is_empty() || value.ends_with(['\r', '\n']) {
-        result.push(measured_row(font, value, value.len()..value.len(), size));
+        result.push(measured_row(
+            font,
+            &projection,
+            bidi.as_ref(),
+            value.len()..value.len(),
+            size,
+        ));
     }
     result
 }
 #[allow(clippy::too_many_arguments)]
 pub(super) fn geometry(
-    font: &fontdue::Font,
+    font: &crate::text::Font,
     value: &str,
     selection: TextSelection,
     size: f32,
@@ -204,22 +357,33 @@ pub(super) fn geometry(
     spec: ScrollSpec,
     id: &str,
     navigation: Option<&Navigation>,
+    caret_width: f32,
 ) -> TextHit {
     let selection = selection.reconciled(value);
-    let line_height = text::line_metrics(font, size).height;
+    let metrics = text::run_metrics(font, value, size, None);
+    let line_height = metrics.height;
     let rows = rows(font, value, size, inner.w);
     let default = rows
         .iter()
         .rposition(|row| row.range.start <= selection.caret())
         .unwrap_or(0);
-    let caret_row = navigation
+    let (caret_row, caret_stop) = navigation
         .and_then(|nav| nav.affinity(id, value, selection, inner, line_height, &rows))
-        .filter(|row| {
-            rows.get(*row).is_some_and(|row| {
-                row.range.contains(&selection.caret()) || row.range.end == selection.caret()
-            })
+        .filter(|(row, stop)| {
+            rows.get(*row)
+                .and_then(|row| row.stops.get(*stop))
+                .is_some_and(|(byte, _)| *byte == selection.caret())
         })
-        .unwrap_or(default);
+        .unwrap_or_else(|| {
+            (
+                default,
+                rows[default]
+                    .stops
+                    .iter()
+                    .position(|(byte, _)| *byte == selection.caret())
+                    .unwrap_or(0),
+            )
+        });
     let content_height = rows.len() as f32 * line_height;
     TextHit {
         value: Arc::from(value),
@@ -227,10 +391,16 @@ pub(super) fn geometry(
         inner,
         scroll: spec.offset().min((content_height - inner.h).max(0.)),
         boundaries: Arc::from([]),
+        composition_cursor: None,
+        caret_stop: 0,
+        caret_width,
+        metrics,
         area: Some(Arc::new(AreaGeometry {
             rows: rows.into(),
             line_height,
+            metrics,
             caret_row,
+            caret_stop,
             content_height,
         })),
     }
@@ -272,6 +442,7 @@ pub(super) fn pointer_navigation<M>(
         anchor,
         caret,
         row,
+        stop: text.area.as_ref()?.rows[row].stop(x - text.inner.x),
         goal_x: None,
         width: text.inner.w,
         height: text.inner.h,
@@ -300,9 +471,10 @@ pub(super) fn key<M>(
     }
     let current = navigation.as_ref().filter(|nav| nav.compatible(hit));
     let row = current.map_or(area.caret_row, |nav| nav.row);
+    let stop = current.map_or(area.caret_stop, |nav| nav.stop);
     let goal_x = current
         .and_then(|nav| nav.goal_x)
-        .unwrap_or_else(|| area.rows[row].x(text.selection.caret()));
+        .unwrap_or(area.rows[row].stops[stop].1);
     let page = (text.inner.h / area.line_height).floor().max(1.) as usize;
     let target_row = match key {
         Key::Up if !modifiers.control => Some(row.saturating_sub(1)),
@@ -311,18 +483,52 @@ pub(super) fn key<M>(
         Key::PageDown if !modifiers.control => Some((row + page).min(area.rows.len() - 1)),
         _ => None,
     };
-    let (caret, target_row, goal) = if let Some(target) = target_row {
-        (area.rows[target].at(goal_x), target, Some(goal_x))
+    let (target_row, target_stop, goal) = if let Some(target) = target_row {
+        (target, area.rows[target].stop(goal_x), Some(goal_x))
     } else {
         match key {
-            Key::Home if !modifiers.control => (area.rows[row].range.start, row, None),
-            Key::End if !modifiers.control => (area.rows[row].range.end, row, None),
+            Key::Left | Key::Right if !modifiers.control && !text.value.is_ascii() => {
+                let range = text.selection.range(&text.value);
+                if !modifiers.shift && !range.is_empty() {
+                    let eligible = area
+                        .rows
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(row, line)| {
+                            line.stops
+                                .iter()
+                                .enumerate()
+                                .map(move |(stop, (byte, _))| (row, stop, *byte))
+                        })
+                        .filter(|(_, _, byte)| *byte >= range.start && *byte <= range.end);
+                    let target = if matches!(key, Key::Left) {
+                        eligible.map(|(row, stop, _)| (row, stop)).next()
+                    } else {
+                        eligible.map(|(row, stop, _)| (row, stop)).next_back()
+                    }
+                    .unwrap_or((row, stop));
+                    (target.0, target.1, None)
+                } else if matches!(key, Key::Left) {
+                    if stop == 0 && row > 0 {
+                        (row - 1, area.rows[row - 1].stops.len() - 1, None)
+                    } else {
+                        (row, stop.saturating_sub(1), None)
+                    }
+                } else if stop + 1 == area.rows[row].stops.len() && row + 1 < area.rows.len() {
+                    (row + 1, 0, None)
+                } else {
+                    (row, (stop + 1).min(area.rows[row].stops.len() - 1), None)
+                }
+            }
+            Key::Home if !modifiers.control => (row, 0, None),
+            Key::End if !modifiers.control => (row, area.rows[row].stops.len() - 1, None),
             _ => {
                 *navigation = None;
                 return super::text_input::key(input_key);
             }
         }
     };
+    let caret = area.rows[target_row].stops[target_stop].0;
     let anchor = if modifiers.shift {
         text.selection.anchor()
     } else {
@@ -334,6 +540,7 @@ pub(super) fn key<M>(
         anchor,
         caret,
         row: target_row,
+        stop: target_stop,
         goal_x: goal,
         width: text.inner.w,
         height: text.inner.h,
@@ -377,7 +584,7 @@ pub(super) fn paint<M>(
     clip: Clip,
     alpha: f32,
     focused: bool,
-    font: &fontdue::Font,
+    font: &crate::text::Font,
 ) {
     let Kind::TextArea {
         value, placeholder, ..
@@ -387,7 +594,7 @@ pub(super) fn paint<M>(
     };
     let area = hit.area.as_ref().expect("prepared text area");
     let style = &element.style;
-    let metrics = text::line_metrics(font, style.font_size);
+    let metrics = area.metrics;
     let range = hit.selection.range(value);
     let first = ((hit.scroll / area.line_height).floor() as usize).saturating_sub(1);
     let end =
@@ -402,34 +609,44 @@ pub(super) fn paint<M>(
         if focused
             && ((range.start < row.range.end && range.end > row.range.start) || hard_break_selected)
         {
-            let a = row.x(range.start.max(row.range.start).min(row.range.end));
-            let b = row.x(range.end.min(row.range.end))
-                + if hard_break_selected {
-                    font.metrics(' ', style.font_size).advance_width
-                } else {
-                    0.
-                };
-            scene.paint.push(Paint::Shape {
-                rect: Rect::new(
-                    hit.inner.x + a,
-                    y + metrics.baseline - metrics.ascent,
-                    (b - a).max(0.),
-                    metrics.ascent - metrics.descent,
-                ),
-                clip: clip.clone(),
-                color: style
-                    .text_selection_color
-                    .alpha(style.text_selection_color.3 * alpha),
-                radius: 0.,
-            });
+            let mut fragments = text::selection_fragments(&row.segments, range.clone());
+            if hard_break_selected {
+                let a = row.x(row.range.end);
+                fragments.push((a, a + font.metrics(' ', style.font_size).advance_width));
+            }
+            for (a, b) in fragments {
+                scene.paint.push(Paint::Shape {
+                    rect: Rect::new(
+                        hit.inner.x + a,
+                        y + metrics.baseline - metrics.ascent,
+                        (b - a).max(0.),
+                        metrics.ascent - metrics.descent,
+                    ),
+                    clip: clip.clone(),
+                    color: style
+                        .text_selection_color
+                        .alpha(style.text_selection_color.3 * alpha),
+                    radius: 0.,
+                });
+            }
         }
         let content = if value.is_empty() {
             placeholder.lines().next().unwrap_or("").to_owned()
         } else {
-            row.visible_display(font, style.font_size, hit.inner.w)
+            row.display.to_string()
         };
         if !content.is_empty() {
             scene.paint.push(Paint::Text {
+                layout: text::LayoutOptions {
+                    direction: None,
+                    bidi: row.bidi.clone(),
+                    metrics: Some(metrics),
+                    raster_width: row
+                        .stops
+                        .last()
+                        .filter(|(_, width)| *width > hit.inner.w)
+                        .map(|_| hit.inner.w),
+                },
                 rect: Rect::new(hit.inner.x, y, hit.inner.w, area.line_height),
                 clip: clip.clone(),
                 text: content,
@@ -452,7 +669,7 @@ pub(super) fn paint<M>(
         let row = &area.rows[area.caret_row];
         scene.paint.push(Paint::Shape {
             rect: Rect::new(
-                (hit.inner.x + row.x(hit.selection.caret()))
+                (hit.inner.x + row.stops[area.caret_stop].1)
                     .min(hit.inner.x + (hit.inner.w - style.caret_width).max(0.))
                     .max(hit.inner.x),
                 hit.inner.y + area.caret_row as f32 * area.line_height - hit.scroll
@@ -480,7 +697,7 @@ mod tests {
     }
     fn layout() -> Layout {
         Layout::new(Arc::new(vec![
-            fontdue::Font::from_bytes(
+            crate::text::Font::from_bytes(
                 include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
                 fontdue::FontSettings::default(),
             )
@@ -589,7 +806,7 @@ mod tests {
                 .collect::<Vec<_>>(),
             [" a  ", "", "\tb", ""]
         );
-        assert_eq!(result[2].display, "    b");
+        assert_eq!(result[2].display.as_ref(), "    b");
         assert_eq!(result.last().unwrap().range, source.len()..source.len());
         assert_eq!(rows(font, "", 20., 0.).len(), 1);
         for row in rows(font, "a👩‍💻e\u{301}b", 20., 1.) {
@@ -600,11 +817,11 @@ mod tests {
             );
         }
         let spaces = rows(font, "aa  bb cc", 20., text::width(font, "aa  ", 20.) + 0.1);
-        assert_eq!(spaces[0].display, "aa  ");
+        assert_eq!(spaces[0].display.as_ref(), "aa  ");
         assert_eq!(
             spaces
                 .iter()
-                .map(|row| row.display.as_str())
+                .map(|row| row.display.as_ref())
                 .collect::<String>(),
             "aa  bb cc"
         );
@@ -1050,7 +1267,7 @@ mod regression_tests {
     use super::*;
     fn layout() -> Layout {
         Layout::new(Arc::new(vec![
-            fontdue::Font::from_bytes(
+            crate::text::Font::from_bytes(
                 include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
                 fontdue::FontSettings::default(),
             )
@@ -1394,7 +1611,7 @@ mod oversized_grapheme_tests {
     use super::*;
     #[test]
     fn one_oversized_grapheme_paints_only_visible_ink_without_splitting_caret_geometry() {
-        let font = fontdue::Font::from_bytes(
+        let font = crate::text::Font::from_bytes(
             include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
             fontdue::FontSettings::default(),
         )
@@ -1409,15 +1626,25 @@ mod oversized_grapheme_tests {
             2,
             "the edit model still owns one whole grapheme"
         );
-        let visible = rows[0].visible_display(&font, 20., 100.);
-        assert!(visible.len() < value.len());
-        assert!(text::width(&font, &visible, 20.) < 200.);
-        let expected = text::glyph_positions(&font, &value, 20.)
-            .take(visible.chars().count())
-            .collect::<Vec<_>>();
-        assert_eq!(
-            text::glyph_positions(&font, &visible, 20.).collect::<Vec<_>>(),
-            expected
-        );
+        // Painting retains the complete shaping buffer. Cutting a source
+        // prefix could change ligatures/context or split a canonical grapheme.
+        let layout = Layout::new(Arc::new(vec![font]));
+        let tree = Element::text_area(
+            value.clone(),
+            TextSelection::at_end(&value),
+            "",
+            ScrollSpec::new(0., 24.).unwrap(),
+            |edit| edit,
+            |_| TextEdit::Clear,
+        )
+        .id("field")
+        .size(100., 80.)
+        .font(20.);
+        let scene = layout.build(&tree, 100., 80., &Interaction::default(), 0.);
+        let text = scene.hits[0].text.as_ref().unwrap();
+        assert_eq!(text.area.as_ref().unwrap().rows[0].stops.len(), 2);
+        let viewport = text.inner.w;
+        assert!(viewport > 0. && viewport <= 100.);
+        assert!(scene.paint.iter().any(|paint|matches!(paint,Paint::Text{text,layout,..} if text==&value&&layout.raster_width==Some(viewport))));
     }
 }

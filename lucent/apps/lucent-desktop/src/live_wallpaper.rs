@@ -9,6 +9,7 @@ use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
 };
+mod frame_trace;
 pub(crate) mod preview;
 mod view;
 struct PlaybackStopAdapter(Cancellation);
@@ -77,8 +78,15 @@ enum Delivery {
 struct Mailbox {
     latest: Option<Delivery>,
     notified: bool,
+    source_frames: Option<frame_trace::SourceFrames>,
 }
 impl Mailbox {
+    fn traced(enabled: bool) -> Self {
+        Self {
+            source_frames: enabled.then(frame_trace::SourceFrames::default),
+            ..Default::default()
+        }
+    }
     fn publish(&mut self, item: Delivery) -> bool {
         self.latest = Some(item);
         if self.notified {
@@ -136,6 +144,7 @@ pub struct LiveWallpaper {
     preview_options: WallpaperPreviewOptions,
     awaiting_first_frame: Option<f64>,
     first_frame_submitted: bool,
+    source_frame_profiling: bool,
     importing: Option<Import>,
     revision: u64,
     players: BTreeMap<String, Player>,
@@ -172,6 +181,7 @@ impl LiveWallpaper {
             .expect("preview resource envelope is valid"),
             awaiting_first_frame: None,
             first_frame_submitted: false,
+            source_frame_profiling: false,
             importing: None,
             revision: 0,
             players: BTreeMap::new(),
@@ -186,6 +196,17 @@ impl LiveWallpaper {
             library_revision: 0,
             library_cancel: Cancellation::default(),
             prepared: BTreeMap::new(),
+        }
+    }
+    /// Composition-root diagnostic opt-in; no preferences or playback change.
+    pub fn enable_frame_tracing(&mut self, enabled: bool) {
+        self.source_frame_profiling = enabled;
+        for player in self.players.values() {
+            player
+                .mailbox
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .source_frames = enabled.then(frame_trace::SourceFrames::default);
         }
     }
     #[cfg(test)]
@@ -296,7 +317,8 @@ impl LiveWallpaper {
                     player.running = running;
                     player.target = target;
                     player.error.clear();
-                    player.mailbox = Arc::new(Mutex::new(Mailbox::default()));
+                    player.mailbox =
+                        Arc::new(Mutex::new(Mailbox::traced(self.source_frame_profiling)));
                 }
             } else {
                 self.revision = self.revision.wrapping_add(1);
@@ -312,7 +334,7 @@ impl LiveWallpaper {
                         asset: setting.asset,
                         fps: setting.fps,
                         target,
-                        mailbox: Arc::new(Mutex::new(Mailbox::default())),
+                        mailbox: Arc::new(Mutex::new(Mailbox::traced(self.source_frame_profiling))),
                         frame,
                         running,
                         error: String::new(),
@@ -345,6 +367,7 @@ impl LiveWallpaper {
                 let fps = player.fps;
                 let target = player.target;
                 let running = player.running;
+                let source_frame_profiling = self.source_frame_profiling;
                 Subscription::stream(format!("live-wallpaper:{revision}"), move |out, cancel| {
                     let stream = ImageStream::new();
                     let stop = Arc::new(PlaybackStopAdapter(cancel));
@@ -382,11 +405,22 @@ impl LiveWallpaper {
                                 return false;
                             }
                             let delivery = match result.and_then(|frame| {
+                                let timestamp = frame.timestamp;
                                 let (w, h, bytes, aspect) = frame.into_rgba_with_aspect();
-                                stream
+                                let image = stream
                                     .frame_rgba_with_aspect(w, h, bytes, aspect)
-                                    .map(Arc::new)
-                                    .map_err(|e| DomainError::Failed(e.to_string()))
+                                    .map_err(|e| DomainError::Failed(e.to_string()))?;
+                                if source_frame_profiling
+                                    && let Some(trace) = mailbox
+                                        .lock()
+                                        .unwrap_or_else(|p| p.into_inner())
+                                        .source_frames
+                                        .as_mut()
+                                    && let Some(identity) = image.stream_revision()
+                                {
+                                    trace.record(revision, identity, timestamp);
+                                }
+                                Ok(Arc::new(image))
                             }) {
                                 Ok(image) => Delivery::Frame(image),
                                 Err(error) => Delivery::Error(error.to_string()),
@@ -742,7 +776,8 @@ impl LiveWallpaper {
                     self.revision = self.revision.wrapping_add(1);
                     player.revision = self.revision;
                     player.error.clear();
-                    player.mailbox = Arc::new(Mutex::new(Mailbox::default()));
+                    player.mailbox =
+                        Arc::new(Mutex::new(Mailbox::traced(self.source_frame_profiling)));
                 }
                 self.error.clear();
             }
@@ -945,7 +980,10 @@ impl LiveWallpaper {
                 .filter_map(|player| player.frame.as_ref())
                 .chain(self.routes.values().filter_map(|route| route.held.as_ref())),
         );
-        serde_json::json!({"open":self.open,"awaiting_first_frame":self.awaiting_first_frame.is_some(),"importing":self.importing.is_some(),"library_loading":self.library_loading,"library_count":self.library.len(),"library_error":self.library_error,"selection":self.selection,"preview":self.preview.inspect(),"players":self.players.len(),"running":self.players.values().filter(|p|p.running&&p.error.is_empty()).count(),"retained_frame_bytes":retained.bytes,"producers":self.players.values().map(|player|serde_json::json!({"revision":player.revision,"running":player.running,"target":player.target.map(WallpaperPixelTarget::size),"frame_size":player.frame.as_ref().map(|frame|(frame.width(),frame.height())),"source_aspect":player.frame.as_ref().map(|frame|frame.aspect_size())})).collect::<Vec<_>>(),"error":self.status(),"outputs":self.routes.iter().map(|(target,route)| serde_json::json!({"monitor":target.monitor().map(MonitorId::as_str),"pause_reason":route.pause})).collect::<Vec<_>>()})
+        serde_json::json!({"open":self.open,"awaiting_first_frame":self.awaiting_first_frame.is_some(),"importing":self.importing.is_some(),"library_loading":self.library_loading,"library_count":self.library.len(),"library_error":self.library_error,"selection":self.selection,"preview":self.preview.inspect(),"players":self.players.len(),"running":self.players.values().filter(|p|p.running&&p.error.is_empty()).count(),"retained_frame_bytes":retained.bytes,"producers":self.players.values().map(|player| {
+            let source_frames=player.mailbox.lock().unwrap_or_else(|p|p.into_inner()).source_frames.as_ref().map(frame_trace::SourceFrames::json);
+            serde_json::json!({"revision":player.revision,"running":player.running,"target":player.target.map(WallpaperPixelTarget::size),"frame_size":player.frame.as_ref().map(|frame|(frame.width(),frame.height())),"source_aspect":player.frame.as_ref().map(|frame|frame.aspect_size()),"source_frames":source_frames})
+        }).collect::<Vec<_>>(),"error":self.status(),"outputs":self.routes.iter().map(|(target,route)| serde_json::json!({"monitor":target.monitor().map(MonitorId::as_str),"pause_reason":route.pause})).collect::<Vec<_>>()})
     }
 }
 #[cfg(test)]

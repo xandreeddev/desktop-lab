@@ -42,6 +42,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "application-intent"
+version = "0.1.0"
+dependencies = [
+ "lucent-api",
+ "lucent-design",
+ "lucent-domain",
+ "lucent-services",
+ "lucent-wayland",
+ "serde_json",
+]
+
+[[package]]
 name = "application-service"
 version = "0.1.0"
 dependencies = [
@@ -1132,6 +1144,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "international-text"
+version = "0.1.0"
+dependencies = [
+ "calloop",
+ "calloop-wayland-source",
+ "lucent-api",
+ "lucent-design",
+ "lucent-wayland",
+ "serde_json",
+ "wayland-client",
+ "wayland-protocols-misc",
+ "zeroize",
+]
+
+[[package]]
 name = "itertools"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1316,6 +1343,9 @@ dependencies = [
 [[package]]
 name = "lucent-cli"
 version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
 
 [[package]]
 name = "lucent-design"
@@ -1394,6 +1424,8 @@ dependencies = [
  "lucent-api",
  "lucent-ui",
  "pollster",
+ "tiny-skia",
+ "ttf-parser",
  "wgpu",
 ]
 
@@ -1442,6 +1474,9 @@ version = "0.1.0"
 dependencies = [
  "fontdue",
  "lucent-api",
+ "rustybuzz",
+ "unicode-bidi",
+ "unicode-script",
 ]
 
 [[package]]

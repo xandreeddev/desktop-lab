@@ -319,11 +319,11 @@ fn resize_fixture(app: &mut Desktop, width: f32, height: f32) {
         &mut Effects::default(),
     );
 }
-fn fonts(app: &Desktop) -> Arc<Vec<fontdue::Font>> {
+fn fonts(app: &Desktop) -> Arc<Vec<lucent_ui::text::Font>> {
     Arc::new(
         app.fonts()
             .into_iter()
-            .map(|f| fontdue::Font::from_bytes(f, Default::default()).unwrap())
+            .map(|f| lucent_ui::text::Font::from_bytes(f, Default::default()).unwrap())
             .collect(),
     )
 }

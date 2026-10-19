@@ -330,15 +330,64 @@ impl std::error::Error for DomainError {}
 pub type Result<T> = std::result::Result<T, DomainError>;
 
 /// Implementations launch argument arrays directly, never through a shell.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ApplicationCatalogUpdate {
+    pub applications: Vec<Application>,
+    /// Referenced icon content can change without a desktop descriptor change.
+    pub artwork_changed: bool,
+}
 pub trait ApplicationPort: Send + Sync {
     fn discover(&self) -> Result<Vec<Application>>;
     /// Adapters own catalog updates and observation failure/recovery.
     fn watch(&self, emit: &mut dyn FnMut(Result<Vec<Application>>), stop: &dyn crate::StopSignal);
+    fn watch_updates(
+        &self,
+        emit: &mut dyn FnMut(Result<ApplicationCatalogUpdate>),
+        stop: &dyn crate::StopSignal,
+    ) {
+        self.watch(
+            &mut |result| {
+                emit(result.map(|applications| ApplicationCatalogUpdate {
+                    applications,
+                    artwork_changed: false,
+                }))
+            },
+            stop,
+        );
+    }
     fn launch(&self, app: &Application) -> Result<()>;
+    /// Optional fresh user intent; adapters without activation support may still launch.
+    fn launch_with_context(
+        &self,
+        app: &Application,
+        _context: crate::ApplicationLaunchContext,
+    ) -> Result<()> {
+        self.launch(app)
+    }
+    /// Open explicit targets in this application, rather than silently invoking
+    /// a different default handler. Unsupported adapters return an error.
+    fn open(
+        &self,
+        _app: &Application,
+        _request: &crate::ApplicationOpenRequest,
+        _context: crate::ApplicationLaunchContext,
+    ) -> Result<()> {
+        Err(DomainError::Unavailable(
+            "Application opening is unavailable".into(),
+        ))
+    }
     /// Dispatch an explicitly selected declared action from the captured catalog
     /// descriptor. Adapters reject a descriptor that no longer matches their
     /// current source; action failure never invokes the main application entry.
     fn launch_action(&self, app: &Application, action: &ApplicationActionId) -> Result<()>;
+    fn launch_action_with_context(
+        &self,
+        app: &Application,
+        action: &ApplicationActionId,
+        _context: crate::ApplicationLaunchContext,
+    ) -> Result<()> {
+        self.launch_action(app, action)
+    }
 }
 pub trait CompositorPort: Send + Sync {
     fn snapshot(&self) -> Result<CompositorSnapshot>;

@@ -15,6 +15,7 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 #[derive(Clone)]
 pub enum Message {
     Ignore,
+    DismissPanels,
     BackgroundPresented(Option<SurfaceInstance>, f64),
     Outputs(Vec<DisplayOutput>),
     OnMonitor(crate::monitors::Route, Box<Message>),
@@ -43,6 +44,19 @@ pub enum Message {
     Weather(crate::weather::Message),
     Launcher(launcher::Message),
     Launch(AppId, bool),
+    LaunchPrepared(domain::Application, bool, api::ActivationOutcome),
+    LaunchActionPrepared(
+        u64,
+        domain::Application,
+        ApplicationActionId,
+        api::ActivationOutcome,
+    ),
+    OpenApplication(domain::Application, ApplicationOpenRequest),
+    OpenApplicationPrepared(
+        domain::Application,
+        ApplicationOpenRequest,
+        api::ActivationOutcome,
+    ),
     Workspace(WorkspaceCommand),
     LiveWallpaper(crate::live_wallpaper::Message),
     Action(Action),
@@ -67,6 +81,15 @@ pub enum Message {
     Quit,
 }
 pub const SPATIAL: [f32; 4] = motion::SPATIAL;
+fn launch_context(outcome: api::ActivationOutcome) -> ApplicationLaunchContext {
+    match outcome {
+        api::ActivationOutcome::Token(token) => {
+            ApplicationLaunchContext::with_activation_token(token.into_value())
+                .expect("SDK validated activation token")
+        }
+        _ => ApplicationLaunchContext::default(),
+    }
+}
 fn widget_surface_specs(
     host: &widgets::Host,
     layout: &WidgetLayout,
@@ -976,18 +999,42 @@ impl Desktop {
         let Some(app) = self.apps.iter().find(|a| &a.id == id).cloned() else {
             return;
         };
+        let app_id = app
+            .id
+            .as_str()
+            .strip_suffix(".desktop")
+            .unwrap_or(app.id.as_str())
+            .to_owned();
+        effects.activation_token(app_id, move |outcome| {
+            Message::LaunchPrepared(app, prefer_running, outcome)
+        });
+    }
+    fn launch_prepared(
+        &self,
+        app: domain::Application,
+        prefer_running: bool,
+        outcome: api::ActivationOutcome,
+        effects: &mut Effects<Message>,
+    ) {
+        if !matches!(self.catalog.status(), crate::catalog::Status::Ready)
+            || self.apps.iter().find(|entry| entry.id == app.id) != Some(&app)
+        {
+            return;
+        }
+        let context = launch_context(outcome);
         let apps = self.adapters.apps.clone();
         let hypr = self.adapters.compositor.clone();
         effects.task_on(crate::work::CONTROLS, move || {
             Message::Completed(if let Some(hypr) = hypr {
-                lucent_usecases::activate_application(
+                lucent_usecases::activate_application_with_context(
                     apps.as_ref(),
                     hypr.as_ref(),
                     &app,
                     prefer_running,
+                    context,
                 )
             } else {
-                apps.launch(&app)
+                apps.launch_with_context(&app, context)
             })
         });
     }
@@ -996,6 +1043,24 @@ impl Desktop {
         revision: u64,
         app: domain::Application,
         action: ApplicationActionId,
+        effects: &mut Effects<Message>,
+    ) {
+        let app_id = app
+            .id
+            .as_str()
+            .strip_suffix(".desktop")
+            .unwrap_or(app.id.as_str())
+            .to_owned();
+        effects.activation_token(app_id, move |outcome| {
+            Message::LaunchActionPrepared(revision, app, action, outcome)
+        });
+    }
+    fn launch_application_action_prepared(
+        &mut self,
+        revision: u64,
+        app: domain::Application,
+        action: ApplicationActionId,
+        outcome: api::ActivationOutcome,
         effects: &mut Effects<Message>,
     ) {
         let mut current = self.apps.iter().filter(|entry| entry.id == app.id);
@@ -1015,16 +1080,14 @@ impl Desktop {
             return;
         }
         let apps = self.adapters.apps.clone();
+        let context = launch_context(outcome);
         effects.task_on_with_failure(
             crate::work::CONTROLS,
             move || {
                 Message::Launcher(launcher::Message::ActionFinished {
                     revision,
-                    result: lucent_usecases::launch_application_action(
-                        apps.as_ref(),
-                        &app,
-                        &action,
-                    ),
+                    result: lucent_usecases::applications::application_action(&app, &action)
+                        .and_then(|_| apps.launch_action_with_context(&app, &action, context)),
                 })
             },
             move |failure| {
@@ -1295,6 +1358,7 @@ impl Component for Desktop {
                     }
                 }
             }
+            Message::DismissPanels => self.dismiss_panels(effects),
             Message::Notifications(message) => {
                 let was_open = self.notifications.history_open();
                 effects.delegate(
@@ -1628,6 +1692,33 @@ impl Component for Desktop {
                 self.launch(&id, prefer, effects);
                 self.update_launcher(launcher::Message::Close, effects);
             }
+            Message::LaunchPrepared(app, prefer, outcome) => {
+                self.launch_prepared(app, prefer, outcome, effects)
+            }
+            Message::LaunchActionPrepared(revision, app, action, outcome) => {
+                self.launch_application_action_prepared(revision, app, action, outcome, effects)
+            }
+            Message::OpenApplication(app, request) => {
+                let app_id = app
+                    .id
+                    .as_str()
+                    .strip_suffix(".desktop")
+                    .unwrap_or(app.id.as_str())
+                    .to_owned();
+                effects.activation_token(app_id, move |outcome| {
+                    Message::OpenApplicationPrepared(app, request, outcome)
+                });
+            }
+            Message::OpenApplicationPrepared(app, request, outcome) => {
+                if matches!(self.catalog.status(), crate::catalog::Status::Ready)
+                    && self.apps.iter().find(|entry| entry.id == app.id) == Some(&app)
+                {
+                    let apps = self.adapters.apps.clone();
+                    effects.task_on(crate::work::CONTROLS, move || {
+                        Message::Completed(apps.open(&app, &request, launch_context(outcome)))
+                    });
+                }
+            }
             Message::LiveWallpaper(message) => self.update_live_wallpaper(message, effects),
             Message::Workspace(command) => {
                 // Retained named/special tree actions cannot invent a stale
@@ -1892,6 +1983,13 @@ impl Component for Desktop {
     }
 }
 impl api::Application for Desktop {
+    fn input_method_enabled(&self) -> bool {
+        true
+    }
+
+    fn activation_enabled(&self) -> bool {
+        true
+    }
     fn clipboard_enabled(&self) -> bool {
         true
     }
@@ -2380,11 +2478,9 @@ impl api::Application for Desktop {
         let tray = self.adapters.tray.clone();
         let mut s = vec![
             Subscription::stream("applications", move |out, cancel| {
-                apps.watch(
+                apps.watch_updates(
                     &mut |snapshot| {
-                        out.send(Message::Catalog(crate::catalog::Message::Observed(
-                            snapshot,
-                        )))
+                        out.send(Message::Catalog(crate::catalog::Message::Updated(snapshot)))
                     },
                     &WatchStop(cancel),
                 )
@@ -2766,6 +2862,19 @@ impl api::Application for Desktop {
         }
     }
     fn command(&self, command: &str) -> std::result::Result<Option<Message>, String> {
+        if let Some(json) = command.strip_prefix("applications open ") {
+            let (id, request) =
+                crate::application_requests::parse_open(json).map_err(|error| error.to_string())?;
+            if !matches!(self.catalog.status(), crate::catalog::Status::Ready) {
+                return Err("Application catalog is unavailable".into());
+            }
+            let mut apps = self.apps.iter().filter(|app| app.id == id);
+            let app = apps.next().ok_or("Application is unavailable")?;
+            if apps.next().is_some() {
+                return Err("Application identity is ambiguous".into());
+            }
+            return Ok(Some(Message::OpenApplication(app.clone(), request)));
+        }
         if let Some(value) = command.strip_prefix("launcher actions ") {
             let id = AppId::new(value).map_err(|error| error.to_string())?;
             if !matches!(self.catalog.status(), crate::catalog::Status::Ready) {
@@ -3050,6 +3159,7 @@ impl api::Application for Desktop {
             return Ok(Some(Message::LauncherSize(size)));
         }
         Ok(Some(match command {
+            "shell hide" => Message::DismissPanels,
             "tray open"=>Message::Tray(crate::tray::Message::Open),
             "tray toggle"=>Message::Tray(crate::tray::Message::Toggle),
             "tray close"=>Message::Tray(crate::tray::Message::Close),

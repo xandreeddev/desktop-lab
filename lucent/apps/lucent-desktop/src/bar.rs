@@ -315,7 +315,7 @@ mod tests {
         let fonts = Arc::new(
             app.fonts()
                 .into_iter()
-                .map(|bytes| fontdue::Font::from_bytes(bytes, Default::default()).unwrap())
+                .map(|bytes| lucent_ui::text::Font::from_bytes(bytes, Default::default()).unwrap())
                 .collect(),
         );
         let layout = Layout::new(fonts);
@@ -407,7 +407,7 @@ mod tests {
         let fonts = Arc::new(
             app.fonts()
                 .into_iter()
-                .map(|bytes| fontdue::Font::from_bytes(bytes, Default::default()).unwrap())
+                .map(|bytes| lucent_ui::text::Font::from_bytes(bytes, Default::default()).unwrap())
                 .collect(),
         );
         let engine = Layout::new(fonts);

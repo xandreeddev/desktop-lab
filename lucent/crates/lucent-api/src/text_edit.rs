@@ -24,6 +24,12 @@ pub enum TextEdit {
     ClipboardReply(u64, super::ClipboardOutcome),
     Insert(String),
     Replace(String),
+    /// One atomic compositor edit, relative to the current selected span.
+    InputMethod {
+        before: usize,
+        after: usize,
+        commit: String,
+    },
     Backspace,
     BackspaceWord,
     Delete,
@@ -32,8 +38,14 @@ pub enum TextEdit {
     Undo,
     Redo,
     SelectAll,
-    Move { movement: TextMove, extend: bool },
-    Select { anchor: usize, caret: usize },
+    Move {
+        movement: TextMove,
+        extend: bool,
+    },
+    Select {
+        anchor: usize,
+        caret: usize,
+    },
 }
 impl fmt::Debug for TextEdit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -44,6 +56,11 @@ impl fmt::Debug for TextEdit {
             Self::ClipboardReply(id, _) => f.debug_tuple("ClipboardReply").field(id).finish(),
             Self::Insert(_) => f.write_str("Insert(..)"),
             Self::Replace(_) => f.write_str("Replace(..)"),
+            Self::InputMethod { before, after, .. } => f
+                .debug_struct("InputMethod")
+                .field("before", before)
+                .field("after", after)
+                .finish(),
             Self::Backspace => f.write_str("Backspace"),
             Self::BackspaceWord => f.write_str("BackspaceWord"),
             Self::Delete => f.write_str("Delete"),
@@ -193,6 +210,39 @@ impl TextSelection {
                 }
                 *text = value;
                 selection = Self::at_end(text);
+            }
+            TextEdit::InputMethod {
+                before: delete_before,
+                after: delete_after,
+                commit,
+            } => {
+                let insert = normalized(commit, multiline);
+                let start = floor(text, range.start.saturating_sub(delete_before));
+                let desired = range.end.saturating_add(delete_after).min(text.len());
+                let end = if floor(text, desired) == desired {
+                    desired
+                } else {
+                    next(text, desired)
+                };
+                let retained = text.len() - (end - start);
+                if retained > max_bytes || insert.len() > max_bytes.saturating_sub(retained) {
+                    return Err(TextEditError::ByteLimit);
+                }
+                content = text.get(start..end) != Some(insert.as_str());
+                if record && content {
+                    delta = TextDelta::new(text, start..end, &insert, selection);
+                }
+                text.replace_range(start..end, &insert);
+                let target = start + insert.len();
+                let at = if floor(text, target) == target {
+                    target
+                } else {
+                    next(text, target)
+                };
+                selection = Self {
+                    anchor: at,
+                    caret: at,
+                };
             }
             TextEdit::Insert(insert) => {
                 let insert = normalized(insert, multiline);
@@ -1083,5 +1133,145 @@ mod tests {
         edit(&mut s, &mut value, TextEdit::SelectAll);
         let same = value.clone();
         assert!(!edit(&mut s, &mut value, TextEdit::Insert(same)).content);
+    }
+}
+
+#[cfg(test)]
+mod input_method_edits {
+    use super::*;
+    #[test]
+    fn surrounding_delete_and_commit_are_one_atomic_grapheme_safe_edit() {
+        let mut text = "ab日c".to_owned();
+        let mut selected = TextSelection::default();
+        selected
+            .apply(
+                &mut text,
+                TextEdit::Select {
+                    anchor: 2,
+                    caret: 2,
+                },
+                64,
+            )
+            .unwrap();
+        selected
+            .apply(
+                &mut text,
+                TextEdit::InputMethod {
+                    before: 1,
+                    after: 1,
+                    commit: "語".into(),
+                },
+                64,
+            )
+            .unwrap();
+        assert_eq!(text, "a語c");
+        assert_eq!(selected.caret(), "a語".len());
+    }
+    #[test]
+    fn rejected_input_method_batch_preserves_value_and_directional_selection() {
+        let mut text = "αβγ".to_owned();
+        let mut selected = TextSelection::default();
+        selected
+            .apply(
+                &mut text,
+                TextEdit::Select {
+                    anchor: 4,
+                    caret: 2,
+                },
+                64,
+            )
+            .unwrap();
+        let before = selected;
+        assert_eq!(
+            selected.apply(
+                &mut text,
+                TextEdit::InputMethod {
+                    before: 0,
+                    after: 0,
+                    commit: "too long".into()
+                },
+                6
+            ),
+            Err(TextEditError::ByteLimit)
+        );
+        assert_eq!(text, "αβγ");
+        assert_eq!(selected, before);
+        assert!(
+            !format!(
+                "{:?}",
+                TextEdit::InputMethod {
+                    before: 0,
+                    after: 0,
+                    commit: "private".into()
+                }
+            )
+            .contains("private")
+        );
+    }
+}
+
+#[cfg(test)]
+mod input_method_history {
+    use super::*;
+    #[test]
+    fn delete_commit_and_directional_selection_are_one_undoable_transaction() {
+        let mut value = "ab日c".to_string();
+        let mut selection = TextSelection {
+            anchor: 2,
+            caret: 2,
+        };
+        let before = selection;
+        let mut history = TextHistory::default();
+        history.reconcile(&value);
+        history
+            .apply(
+                &mut selection,
+                &mut value,
+                TextEdit::InputMethod {
+                    before: 1,
+                    after: 1,
+                    commit: "語".into(),
+                },
+                64,
+                true,
+                false,
+            )
+            .unwrap();
+        assert_eq!(value, "a語c");
+        history
+            .apply(&mut selection, &mut value, TextEdit::Undo, 64, true, false)
+            .unwrap();
+        assert_eq!(value, "ab日c");
+        assert_eq!(selection, before);
+        history
+            .apply(&mut selection, &mut value, TextEdit::Redo, 64, true, false)
+            .unwrap();
+        assert_eq!(value, "a語c");
+    }
+    #[test]
+    fn multiline_input_method_normalizes_newlines_before_admission_and_history() {
+        let mut value = String::new();
+        let mut selection = TextSelection::default();
+        let mut history = TextHistory::default();
+        history.reconcile(&value);
+        history
+            .apply(
+                &mut selection,
+                &mut value,
+                TextEdit::InputMethod {
+                    before: 0,
+                    after: 0,
+                    commit: "日\r\n語\r".into(),
+                },
+                8,
+                true,
+                true,
+            )
+            .unwrap();
+        assert_eq!(value, "日\n語\n");
+        history
+            .apply(&mut selection, &mut value, TextEdit::Undo, 8, true, true)
+            .unwrap();
+        assert!(value.is_empty());
     }
 }

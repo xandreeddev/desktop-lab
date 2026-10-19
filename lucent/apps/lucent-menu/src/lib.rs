@@ -337,6 +337,10 @@ impl Component for Menu {
 }
 
 impl Application for Menu {
+    fn input_method_enabled(&self) -> bool {
+        true
+    }
+
     fn clipboard_enabled(&self) -> bool {
         true
     }
@@ -461,7 +465,7 @@ mod tests {
             let fonts = menu
                 .fonts()
                 .iter()
-                .map(|b| fontdue::Font::from_bytes(*b, Default::default()).unwrap())
+                .map(|b| lucent_ui::text::Font::from_bytes(*b, Default::default()).unwrap())
                 .collect();
             let layout = Layout::new(Arc::new(fonts));
             menu.init(&mut Effects::default());

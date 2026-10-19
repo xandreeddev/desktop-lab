@@ -1,5 +1,7 @@
 //! A small declarative shell API. Public types contain no Wayland or GPU handles.
+mod activation;
 mod clipboard;
+pub use activation::{ActivationOutcome, ActivationRequest, ActivationToken};
 mod density;
 mod output;
 mod surface;
@@ -900,6 +902,16 @@ pub trait Component: 'static {
 }
 /// An application supplies surfaces and subscriptions in addition to its component tree.
 pub trait Application: Component {
+    /// Compositor input methods require explicit ordinary-client authority.
+    /// Authentication clients leave this disabled, independently of clipboard/IPC.
+    fn input_method_enabled(&self) -> bool {
+        false
+    }
+
+    /// Fresh native launch-intent tokens are opt-in; secure clients keep this off.
+    fn activation_enabled(&self) -> bool {
+        false
+    }
     /// Clipboard protocol integration is opt-in. Secure clients keep it disabled.
     fn clipboard_enabled(&self) -> bool {
         false
@@ -976,6 +988,7 @@ pub struct Effects<M> {
     pub recreate_surfaces: Vec<SurfaceAddress>,
     pub exit: bool,
     pub clipboard: Vec<ClipboardRequest<M>>,
+    pub activation: Vec<ActivationRequest<M>>,
 }
 impl<M> Default for Effects<M> {
     fn default() -> Self {
@@ -987,6 +1000,7 @@ impl<M> Default for Effects<M> {
             recreate_surfaces: vec![],
             exit: false,
             clipboard: vec![],
+            activation: vec![],
         }
     }
 }
@@ -1074,6 +1088,11 @@ impl<M> Effects<M> {
         self.recreate_surfaces.extend(child.recreate_surfaces);
         self.exit |= child.exit;
         let map = Arc::new(map);
+        for request in child.activation {
+            let map = map.clone();
+            self.activation
+                .push(request.map(move |message| map(message)));
+        }
         for request in child.clipboard {
             let map = map.clone();
             self.clipboard

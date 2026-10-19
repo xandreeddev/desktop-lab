@@ -8,6 +8,7 @@ struct Applications {
     actions: Mutex<Vec<(App, ApplicationActionId)>>,
     main: Mutex<usize>,
     failure: Mutex<Option<DomainError>>,
+    contexts: Mutex<Vec<Option<String>>>,
 }
 impl ApplicationPort for Applications {
     fn discover(&self) -> lucent_domain::Result<Vec<App>> {
@@ -25,6 +26,18 @@ impl ApplicationPort for Applications {
             .push((app.clone(), action.clone()));
         self.failure.lock().unwrap().clone().map_or(Ok(()), Err)
     }
+    fn launch_action_with_context(
+        &self,
+        app: &App,
+        action: &ApplicationActionId,
+        context: lucent_domain::ApplicationLaunchContext,
+    ) -> lucent_domain::Result<()> {
+        self.contexts
+            .lock()
+            .unwrap()
+            .push(context.activation_token().map(str::to_owned));
+        self.launch_action(app, action)
+    }
 }
 
 fn inspect(app: &Desktop) -> serde_json::Value {
@@ -33,6 +46,53 @@ fn inspect(app: &Desktop) -> serde_json::Value {
 fn choose(app: &mut Desktop, effects: &mut Effects<Message>) {
     let message = app.command("launcher action Action-0").unwrap().unwrap();
     app.update(message, effects);
+    assert!(
+        effects.tasks.is_empty(),
+        "native intent resolves before application IO starts"
+    );
+    let request = effects.activation.remove(0);
+    assert_eq!(request.app_id, "foot");
+    app.update(
+        request.finish(lucent_api::ActivationOutcome::NoUserInput),
+        effects,
+    );
+}
+
+#[test]
+fn activation_context_is_forwarded_once_and_catalog_retirement_prevents_late_dispatch() {
+    for retired in [false, true] {
+        let mut app = fixture(2, false);
+        let port = Arc::new(Applications::default());
+        app.adapters.apps = port.clone();
+        prepare_application_actions(&mut app, 2);
+        let message = app.command("launcher action Action-0").unwrap().unwrap();
+        let mut effects = Effects::default();
+        app.update(message, &mut effects);
+        assert!(effects.tasks.is_empty());
+        let request = effects.activation.remove(0);
+        assert_eq!(request.app_id, "foot");
+        if retired {
+            app.apps[0].actions[0].name = "Changed action authority".into();
+        }
+        let token = lucent_api::ActivationToken::new("owned-test-intent".into()).unwrap();
+        app.update(
+            request.finish(lucent_api::ActivationOutcome::Token(token)),
+            &mut effects,
+        );
+        if retired {
+            assert!(effects.tasks.is_empty());
+            assert!(port.contexts.lock().unwrap().is_empty());
+        } else {
+            assert_eq!(effects.tasks.len(), 1);
+            app.update(effects.tasks.remove(0).run(), &mut Effects::default());
+            assert_eq!(
+                *port.contexts.lock().unwrap(),
+                [Some("owned-test-intent".into())]
+            );
+            assert_eq!(port.actions.lock().unwrap().len(), 1);
+        }
+        assert_eq!(*port.main.lock().unwrap(), 0);
+    }
 }
 
 #[test]

@@ -1,0 +1,131 @@
+{
+  "objective": "Close all seven daily-use gaps requested in the supplied task text, retaining the implementation ledger's broader scope and honest verification limits.",
+  "baseline": "24ee05cb10229cb8aeef707e0d8d87f2eb643fc3",
+  "status": "in_progress",
+  "completion_rule": "Every requirement needs source-specific implementation and applicable executed evidence. Fixtures do not prove physical hardware or third-party compatibility. An unmet target or unavailable required acceptance remains open.",
+  "requirements": [
+    {
+      "id": "saved-wifi-recovery",
+      "status": "complete",
+      "acceptance": [
+        "An explicitly activated saved personal Wi-Fi profile can request fresh credentials through the native masked prompt.",
+        "The existing profile UUID is retained and no duplicate profile is created.",
+        "Credentials remain zeroizing, absent from ordinary scenes, inspection, logs and process arguments.",
+        "Cancellation, stale answers, profile retirement and daemon replacement revoke prompt authority.",
+        "Owned protocol/client cases and native saved-profile recovery demonstrate success, denial and cancellation while preserving unrelated connections."
+      ],
+      "evidence": [
+        {
+          "kind": "implementation-and-native-report",
+          "path": "reports/measurements/lucent-wifi-credential-recovery.json",
+          "source_commit": "c17d6e7d56d43834245938f6b0b63832a140ffe3",
+          "scope": "Fourteen actual NetworkManager/native GUI checks using owned simulated WPA2 and hidden radios; saved UUID retained, secret repair/cancel/reconnect and exact restoration. This is not physical-radio/enterprise-Wi-Fi acceptance."
+        },
+        {
+          "kind": "delivery",
+          "url": "https://github.com/xandreeddev/desktop-lab/pull/82",
+          "reviewed_head": "0c7c8e98c0ccd4925f02b06f8a6e9bbb22643ac8",
+          "merge_commit": "24ee05cb10229cb8aeef707e0d8d87f2eb643fc3",
+          "scope": "All six final checks succeeded; normal protected-main merge."
+        },
+        {
+          "kind": "pages-ci",
+          "url": "https://github.com/xandreeddev/desktop-lab/actions/runs/39293812388",
+          "source_commit": "24ee05cb10229cb8aeef707e0d8d87f2eb643fc3",
+          "scope": "Automatic documentation deployment succeeded after the merge; this adds no runtime proof."
+        }
+      ]
+    },
+    {
+      "id": "display-transactions",
+      "status": "in_progress",
+      "acceptance": [
+        "A native token-styled panel edits observed output modes, resolution, refresh, scale and layout through checked domain values and an injected adapter.",
+        "Apply captures and validates the exact baseline, keeps at least one usable output and exposes Keep and Revert.",
+        "Timeout, explicit Revert, cancellation and client failure restore the captured layout independently of the UI process.",
+        "Keep persists only the accepted user-level configuration while preserving unrelated configuration; failed persistence retains recovery.",
+        "Owned tests and native panel interaction verify Keep, Revert, timeout and failure recovery with exact final restoration."
+      ],
+      "evidence": []
+    },
+    {
+      "id": "performance-and-animation",
+      "status": "pending",
+      "acceptance": [
+        "Measure identified current binaries with reproducible static and animated desktop workloads, output/source details and bounded restoration.",
+        "Meet the accepted normal-desktop 300 MiB process RSS target without reducing design density, effects or content quality.",
+        "Measure cold and warm launcher/panel transitions and sustained wallpaper pacing; target 60 FPS on a 60 Hz display for suitable video and follow other source rates.",
+        "Distinguish submission timing from presentation/scanout, CPU image payloads, driver allocations and total process RSS.",
+        "Settled unrelated surfaces and paused/hidden wallpapers do not repaint continuously; memory and decoder lifetimes remain bounded.",
+        "Execute native hardware-GPU acceptance where available and retain any unmet targets explicitly."
+      ],
+      "evidence": []
+    },
+    {
+      "id": "international-text",
+      "status": "in_progress",
+      "acceptance": [
+        "Complex scripts shape into positioned glyphs with source clusters, ligatures and deterministic font fallback.",
+        "Bidirectional text shares visual order, source mapping, caret, selection, pointer hits and multiline geometry with rendering.",
+        "Ordinary fields support native IME preedit, commit, surrounding-text deletion, cursor rectangles and focus retirement.",
+        "Masked authentication/credential fields never expose secret surrounding text or preedit through ordinary input state.",
+        "ASCII and 1x/2x rendering quality remain covered; mixed-script controls and a real input-method flow have executed acceptance."
+      ],
+      "evidence": []
+    },
+    {
+      "id": "application-integration",
+      "status": "in_progress",
+      "acceptance": [
+        "Fresh compositor activation tokens are requested for actual user launch intent and delivered to command, D-Bus Activate/Open and declared-action dispatch without stale ambient reuse.",
+        "Typed explicit file/URI opening uses captured current application authority, bounded inputs, literal argument arrays and conservative uncertain-reply fallback.",
+        "Desktop-entry field codes preserve file/URI semantics, quoting and resource limits; unsupported or invalid combinations fail explicitly.",
+        "Application observation includes relevant executable and icon changes without periodic idle rescans or unbounded watches.",
+        "Owned protocol tests and native real-application launch/open/activation demonstrate the implemented integration."
+      ],
+      "evidence": [
+        {
+          "kind": "automated",
+          "source_commit": "c046da6fae9ece217151874c9615a69ed70d1fc7",
+          "scope": "Local strict all-target Clippy and full workspace:800 Rust passed/76 ignored. Native activation/Open/action transport and real kernel observer regressions passed; graphical real-application acceptance remains pending."
+        },
+        {
+          "kind": "ci",
+          "url": "https://github.com/xandreeddev/desktop-lab/actions/runs/39291825252",
+          "source_commit": "0886b0c69740b30a5a79177da8e24aad059b7c5e",
+          "scope": "Combined application integration and tested Wi-Fi source passed remote checks, including Vulkan visual checks. This is not a graphical activation/file-opening run."
+        }
+      ]
+    },
+    {
+      "id": "real-world-validation",
+      "status": "pending",
+      "acceptance": [
+        "Exercise simultaneous native output input/layout, hotplug and output recreation, integer/fractional density and suspend/resume with preserved preferences.",
+        "Exercise physical Bluetooth pairing/control and audio device/microphone/routing with explicit device authority and restored configuration.",
+        "Exercise actual third-party StatusNotifier/DBusMenu applications and ordinary application clipboard transfers, not only synthetic protocol peers.",
+        "Record runtime/source/hardware identities, actual checks and exact restoration; unavailable hardware is an open acceptance item."
+      ],
+      "evidence": []
+    },
+    {
+      "id": "documentation-accuracy",
+      "status": "pending",
+      "acceptance": [
+        "Reconcile library and desktop guides, ownership map, skills and implementation ledger against latest source-specific evidence.",
+        "Remove stale native-pending claims only where later evidence proves that same behavior; retain broader hardware, interoperability and security limits.",
+        "Document new ports/adapters, initialization, registration, client flow, configuration, rollback and measured performance.",
+        "Pass Astro checks, root and Pages builds/link validation; keep local LAN docs running and publish through protected-main merge CI."
+      ],
+      "evidence": []
+    }
+  ],
+  "invariants": [
+    "Domain contracts are ports; supplied implementations are adapters; production selection belongs in composition roots.",
+    "Views and rendering perform no OS operations; appearance uses generated semantic/component design tokens.",
+    "Preserve user wallpapers, settings, unrelated connections, packaged Omarchy files and secure session recovery.",
+    "One bounded heavy host job at a time; deploy with rollback and stable readiness checks.",
+    "Commit and push working milestones; merge protected-main PRs only after exact final revision checks pass.",
+    "Accessibility remains deferred by the user; text shaping and IME remain in scope."
+  ]
+}

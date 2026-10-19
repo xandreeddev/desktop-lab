@@ -11,6 +11,7 @@ use std::{
 #[derive(Clone)]
 pub enum Message {
     Observed(Result<Vec<Application>>),
+    Updated(Result<ApplicationCatalogUpdate>),
     Prepared(u64, Result<Images>),
 }
 #[derive(Clone, Copy)]
@@ -84,6 +85,23 @@ impl Catalog {
         effects: &mut Effects<Message>,
     ) -> bool {
         match message {
+            Message::Updated(result) => match result {
+                Ok(update) => {
+                    let changed = self.update(
+                        Message::Observed(Ok(update.applications)),
+                        apps,
+                        images,
+                        effects,
+                    );
+                    if update.artwork_changed && !changed {
+                        self.prepare(apps.clone(), effects);
+                    }
+                    return changed;
+                }
+                Err(error) => {
+                    return self.update(Message::Observed(Err(error)), apps, images, effects);
+                }
+            },
             Message::Observed(Ok(next)) => {
                 effects.redraw("dock");
                 let recovered = !self.ready || !self.error.is_empty();

@@ -529,6 +529,14 @@ impl lucent_wayland::LockApplication for SessionScreen {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn secure_session_clients_never_grant_input_method_or_clipboard_authority() {
+        for mode in [Mode::Login, Mode::Lock, Mode::Authorization] {
+            let app = SessionScreen::new(mode, "identity-fixture".into(), Arc::new(Deny));
+            assert!(!lucent_api::Application::input_method_enabled(&app));
+            assert!(!lucent_api::Application::clipboard_enabled(&app));
+        }
+    }
     struct Deny;
     impl AuthenticationPort for Deny {
         fn authenticate(&self, _: &str, _: &mut dyn AuthConversation) -> domain::Result<()> {
@@ -691,7 +699,7 @@ mod tests {
         use lucent_ui::{Interaction, Layout, Paint};
         let mut app = SessionScreen::new(Mode::Lock, "fixture".into(), Arc::new(Deny));
         let fonts = Arc::new(vec![
-            fontdue::Font::from_bytes(api::Application::fonts(&app)[0], Default::default())
+            lucent_ui::text::Font::from_bytes(api::Application::fonts(&app)[0], Default::default())
                 .unwrap(),
         ]);
         let layout = Layout::new(fonts);
@@ -735,7 +743,7 @@ mod tests {
         let fonts = Arc::new(
             api::Application::fonts(&app)
                 .iter()
-                .map(|bytes| fontdue::Font::from_bytes(*bytes, Default::default()).unwrap())
+                .map(|bytes| lucent_ui::text::Font::from_bytes(*bytes, Default::default()).unwrap())
                 .collect(),
         );
         let layout = Layout::new(fonts);

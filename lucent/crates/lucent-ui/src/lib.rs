@@ -12,6 +12,7 @@ mod slider;
 mod text_area;
 mod text_input;
 pub use text_input::TextHit;
+mod composition;
 pub mod text;
 pub use slider::SliderHit;
 use std::{collections::BTreeMap, sync::Arc};
@@ -39,6 +40,7 @@ pub enum Paint {
         blur: f32,
     },
     Text {
+        layout: text::LayoutOptions,
         rect: Rect,
         clip: Clip,
         text: String,
@@ -113,10 +115,10 @@ impl<M> Default for Scene<M> {
 }
 
 pub struct Layout {
-    fonts: Arc<Vec<fontdue::Font>>,
+    fonts: Arc<Vec<crate::text::Font>>,
 }
 impl Layout {
-    pub fn new(fonts: Arc<Vec<fontdue::Font>>) -> Self {
+    pub fn new(fonts: Arc<Vec<crate::text::Font>>) -> Self {
         Self { fonts }
     }
     fn text_width(&self, s: &str, size: f32, face: usize) -> f32 {
@@ -232,9 +234,11 @@ impl Layout {
                 let t = wrapped.as_deref().unwrap_or(t);
                 (
                     self.text_width(t, e.style.font_size, e.style.font_face),
-                    text::line_metrics(
+                    text::run_metrics(
                         self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
+                        t,
                         e.style.font_size,
+                        None,
                     )
                     .height
                         * t.lines().count().max(1) as f32,
@@ -402,6 +406,7 @@ impl Layout {
                 *scroll,
                 &id,
                 interaction.text_navigation.as_ref(),
+                e.style.caret_width,
             ))
         } else {
             None
@@ -449,7 +454,7 @@ impl Layout {
             });
             child_focus_clips = clips.into();
         }
-        let prepared_text = if let Kind::TextInput {
+        let mut prepared_text = if let Kind::TextInput {
             value, selection, ..
         } = &e.kind
         {
@@ -462,10 +467,23 @@ impl Layout {
                 inner,
                 e.style.caret_width,
                 interaction.focus.as_deref() == Some(&id),
+                &id,
+                interaction.text_single_navigation.as_ref(),
             ))
         } else {
             prepared_area
         };
+        if let Some(text) = prepared_text.as_mut()
+            && let Some((_, projected)) = composition::project(
+                e,
+                text,
+                self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
+                interaction,
+                &id,
+            )
+        {
+            text.composition_cursor = Some(projected.caret_rect());
+        }
         let interactive = e.click.is_some()
             || e.secondary_click.is_some()
             || e.middle_click.is_some()
@@ -589,25 +607,24 @@ impl Layout {
                 &child_focus_clips,
                 &id,
             ),
-            Kind::TextArea { .. } => text_area::paint(
+            Kind::TextArea { .. } | Kind::TextInput { .. } => composition::paint(
                 scene,
                 e,
-                prepared_text.as_ref().expect("prepared text area"),
-                own_clip.intersect(prepared_text.as_ref().expect("prepared text area").inner),
+                prepared_text.as_ref().expect("prepared ordinary field"),
+                own_clip.intersect(
+                    prepared_text
+                        .as_ref()
+                        .expect("prepared ordinary field")
+                        .inner,
+                ),
                 alpha,
                 interaction.focus.as_deref() == Some(&id),
                 self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
-            ),
-            Kind::TextInput { .. } => text_input::paint(
-                scene,
-                e,
-                prepared_text.as_ref().expect("prepared text input"),
-                own_clip.intersect(inner),
-                alpha,
-                interaction.focus.as_deref() == Some(&id),
-                self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
+                interaction,
+                &id,
             ),
             Kind::Text(text) => scene.paint.push(Paint::Text {
+                layout: Default::default(),
                 rect: inner,
                 clip: own_clip.intersect(rect),
                 text: e
@@ -645,6 +662,7 @@ impl Layout {
                     fg.3 *= e.style.placeholder_opacity;
                 }
                 scene.paint.push(Paint::Text {
+                    layout: Default::default(),
                     rect: inner,
                     clip: own_clip.intersect(inner),
                     text,
@@ -655,7 +673,7 @@ impl Layout {
                 });
                 if interaction.focus.as_deref() == Some(&id) {
                     let font = self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]);
-                    let line = text::line_metrics(font, e.style.font_size);
+                    let line = text::run_metrics(font, &value, e.style.font_size, None);
                     let top = inner.y + (inner.h - line.height).max(0.) / 2.;
                     let advance = self.text_width(&value, e.style.font_size, e.style.font_face);
                     let scroll = (advance + e.style.caret_width - inner.w).max(0.);
@@ -904,6 +922,8 @@ pub struct Interaction<M> {
     scroll_buffer: BTreeMap<String, f32>,
     overlays: overlay::State<M>,
     text_navigation: Option<text_area::Navigation>,
+    text_single_navigation: Option<text_input::Navigation>,
+    composition: Option<composition::Composition>,
 }
 impl<M> Default for Interaction<M> {
     fn default() -> Self {
@@ -921,11 +941,23 @@ impl<M> Default for Interaction<M> {
             scroll_buffer: BTreeMap::new(),
             overlays: overlay::State::default(),
             text_navigation: None,
+            text_single_navigation: None,
+            composition: None,
         }
     }
 }
 impl<M: Clone> Interaction<M> {
     pub fn synchronize(&mut self, scene: &Scene<M>) {
+        if self.composition.as_ref().is_some_and(|c| {
+            self.focus.as_deref() != Some(&c.id)
+                || !scene
+                    .hits
+                    .iter()
+                    .any(|hit| hit.id == c.id && hit.text_edit.is_some() && hit.text.is_some())
+        }) {
+            self.composition = None;
+        }
+
         self.synchronize_buttons(scene);
         if self.press.as_ref().is_some_and(|press| {
             press.hit.parts.is_some()
@@ -1020,6 +1052,15 @@ impl<M: Clone> Interaction<M> {
                 .any(|hit| Some(&hit.id) == self.focus.as_ref() && navigation.compatible(hit))
         }) {
             self.text_navigation = None;
+            self.text_single_navigation = None;
+        }
+        if self.text_single_navigation.as_ref().is_some_and(|nav| {
+            !scene
+                .hits
+                .iter()
+                .any(|hit| Some(&hit.id) == self.focus.as_ref() && nav.compatible(hit))
+        }) {
+            self.text_single_navigation = None;
         }
         self.input_buffer = self.focus.as_ref().and_then(|id| {
             scene
@@ -1121,9 +1162,14 @@ impl<M: Clone> Interaction<M> {
                 && let Some(caret) = text.at_point(x, y)
             {
                 let navigation = text_area::pointer_navigation(&press.hit, x, y, anchor);
-                if press.text_last != Some(caret) || self.text_navigation != navigation {
+                let single_navigation = text_input::pointer_navigation(&press.hit, x, y, anchor);
+                if press.text_last != Some(caret)
+                    || self.text_navigation != navigation
+                    || self.text_single_navigation != single_navigation
+                {
                     press.text_last = Some(caret);
                     self.text_navigation = navigation;
+                    self.text_single_navigation = single_navigation;
                     out.push(callback(TextEdit::Select { anchor, caret }));
                 }
             }
@@ -1167,6 +1213,7 @@ impl<M: Clone> Interaction<M> {
         self.focus_visible = false;
         self.slider_buffer = None;
         self.text_navigation = None;
+        self.text_single_navigation = None;
         self.press = scene
             .hits
             .iter()
@@ -1231,6 +1278,7 @@ impl<M: Clone> Interaction<M> {
                 .as_ref()
                 .map_or((x, y), |text| text_area::press_point(text, x, y));
             self.text_navigation = text_area::pointer_navigation(&press.hit, x, y, anchor);
+            self.text_single_navigation = text_input::pointer_navigation(&press.hit, x, y, anchor);
             return Some(callback(TextEdit::Select { anchor, caret }));
         }
         if let Some(p) = &self.press
@@ -1258,6 +1306,7 @@ impl<M: Clone> Interaction<M> {
                     .map(|caret| callback(TextEdit::Select { anchor, caret }));
             }
             self.text_navigation = text_area::pointer_navigation(&p.hit, x, y, anchor);
+            self.text_single_navigation = text_input::pointer_navigation(&p.hit, x, y, anchor);
             return text
                 .at_point(x, y)
                 .map(|caret| callback(TextEdit::Select { anchor, caret }));
@@ -1375,6 +1424,14 @@ impl<M: Clone> Interaction<M> {
             .iter()
             .find(|h| Some(&h.id) == self.focus.as_ref())
         {
+            if let (Some(text), Some(callback)) = (&hit.text, &hit.text_edit)
+                && !text.is_multiline()
+                && !text.value.is_ascii()
+                && let Some(edit) =
+                    text_input::visual_key(hit, key, &mut self.text_single_navigation)
+            {
+                return vec![callback(edit)];
+            }
             let scroll = hit.scroll.as_ref().or_else(|| {
                 matches!(key, Key::PageUp | Key::PageDown)
                     .then(|| hit.scroll_ancestors.last())
@@ -1431,6 +1488,7 @@ impl<M: Clone> Interaction<M> {
         };
         self.focus = Some(hit.id.clone());
         self.text_navigation = None;
+        self.text_single_navigation = None;
         self.slider_buffer = None;
         self.select_all = false;
         self.input_buffer = hit

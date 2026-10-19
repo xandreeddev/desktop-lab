@@ -295,7 +295,7 @@ fn grouped_buttons_scroll_and_close_use_actual_sdk_input_routing() {
     );
     center.update(Message::Show, &mut effects);
     let fonts = vec![
-        fontdue::Font::from_bytes(
+        lucent_ui::text::Font::from_bytes(
             include_bytes!("../../assets/LucentSans.ttf").as_slice(),
             Default::default(),
         )
@@ -355,7 +355,7 @@ fn image_toast_scrolling_keeps_the_final_native_action_reachable_on_small_output
     assert_eq!(effects.tasks.len(), 1);
     let artwork = effects.tasks.remove(0).run();
     center.update(artwork, &mut effects);
-    let font = fontdue::Font::from_bytes(
+    let font = lucent_ui::text::Font::from_bytes(
         include_bytes!("../../assets/LucentSans.ttf").as_slice(),
         Default::default(),
     )

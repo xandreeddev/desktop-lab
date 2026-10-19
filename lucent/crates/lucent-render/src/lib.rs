@@ -15,9 +15,16 @@ mod cache;
 mod extent;
 mod presentation;
 mod profiling;
+mod stream_trace;
 pub use profiling::{PaintProfile, RenderProfile, ResourceProfile};
+pub use stream_trace::StreamTrace;
+mod fallback;
+#[cfg(all(test, target_os = "linux"))]
+mod font_resources;
 mod raster;
 mod scene;
+#[cfg(test)]
+mod wrapped_bidi_tests;
 pub use cache::CacheStats;
 use cache::ResourceCache;
 use extent::{PhysicalExtent, ReadbackLayout};
@@ -29,6 +36,7 @@ struct TextureResource {
     height: f32,
     _texture: Texture,
     revision: Cell<u64>,
+    stream_id: Cell<Option<u64>>,
     image_lifetime: RefCell<Option<lucent_api::ImageLifetime>>,
     bytes: u64,
     /// Logical left bearing for text masks; ordinary image resources use zero.
@@ -52,7 +60,7 @@ pub struct Gpu {
     texture_layout: BindGroupLayout,
     frame_layout: BindGroupLayout,
     sampler: Sampler,
-    fonts: Arc<Vec<fontdue::Font>>,
+    fonts: Arc<Vec<lucent_ui::text::Font>>,
     cache: RefCell<ResourceCache<TextureResource>>,
     white: RefCell<Option<Rc<TextureResource>>>,
     device_failure: Arc<Mutex<Option<String>>>,
@@ -61,21 +69,21 @@ pub struct Gpu {
 impl Gpu {
     pub fn new(
         display: impl HasDisplayHandle + std::fmt::Debug + Send + Sync + 'static,
-        fonts: Arc<Vec<fontdue::Font>>,
+        fonts: Arc<Vec<lucent_ui::text::Font>>,
     ) -> Result<Rc<Self>, Error> {
         let mut desc = InstanceDescriptor::new_with_display_handle_from_env(Box::new(display));
         desc.backends = Backends::VULKAN;
         Self::from_instance(Instance::new(desc), fonts)
     }
     /// Use the same Vulkan pipeline without a compositor for deterministic component tests.
-    pub fn headless(fonts: Arc<Vec<fontdue::Font>>) -> Result<Rc<Self>, Error> {
+    pub fn headless(fonts: Arc<Vec<lucent_ui::text::Font>>) -> Result<Rc<Self>, Error> {
         let mut desc = InstanceDescriptor::new_without_display_handle();
         desc.backends = Backends::VULKAN;
         Self::from_instance(Instance::new(desc), fonts)
     }
     fn from_instance(
         instance: Instance,
-        fonts: Arc<Vec<fontdue::Font>>,
+        fonts: Arc<Vec<lucent_ui::text::Font>>,
     ) -> Result<Rc<Self>, Error> {
         let adapter =
             pollster::block_on(instance.request_adapter(&RequestAdapterOptions::default()))
@@ -282,6 +290,7 @@ impl Gpu {
             height: height as f32,
             _texture: texture,
             revision: Cell::new(0),
+            stream_id: Cell::new(None),
             image_lifetime: RefCell::new(None),
             bytes: levels.iter().map(|level| level.pixels.len() as u64).sum(),
             text_origin_x: 0.,
@@ -364,7 +373,8 @@ impl Gpu {
         }
         let texture = self.texture(data.levels(), data.format(), profile, enabled);
         *texture.image_lifetime.borrow_mut() = Some(data.lifetime());
-        if let Some((_, revision)) = streamed {
+        if let Some((id, revision)) = streamed {
+            texture.stream_id.set(Some(id));
             texture.revision.set(revision);
         }
         self.cache
@@ -372,12 +382,14 @@ impl Gpu {
             .insert(key, texture.clone(), texture.bytes);
         texture
     }
+    #[allow(clippy::too_many_arguments)]
     fn text(
         &self,
         text: &str,
         size: f32,
         scale: f32,
         face: usize,
+        mut layout: lucent_ui::text::LayoutOptions,
         profile: &mut ResourceProfile,
         enabled: bool,
     ) -> Result<Rc<TextureResource>, Error> {
@@ -386,17 +398,24 @@ impl Gpu {
             .get(face)
             .or_else(|| self.fonts.first())
             .ok_or("text requires at least one font")?;
-        let key = format!("text:{face}:{}:{scale}:{text}", size.to_bits());
+        // Canonicalize rejected context before lookup as well as shaping.
+        // Otherwise a stale same-length context could share the Debug run key
+        // of a valid context while requiring a different raster order.
+        if layout.bidi.as_ref().is_some_and(|bidi| !bidi.is_for(text)) {
+            layout.bidi = None;
+        }
+        let key = format!("text:{face}:{}:{scale}:{layout:?}:{text}", size.to_bits());
         if let Some(v) = self.cache.borrow_mut().get(&key) {
             return Ok(v);
         }
         let started = profiling::start(enabled);
-        let (pixels, width, height, origin_x) = raster::text(
+        let (pixels, width, height, origin_x) = raster::text_with_layout(
             font,
             text,
             size,
             scale,
             self.device.limits().max_texture_dimension_2d,
+            layout,
         )?;
         if enabled {
             profile.text_raster += profiling::elapsed(started);
@@ -433,6 +452,8 @@ pub struct Canvas {
     clips: Buffer,
     clip_capacity: usize,
     profiling: bool,
+    stream_tracing: bool,
+    last_stream_trace: Option<StreamTrace>,
     last_profile: Option<PaintProfile>,
 }
 struct PreparedScene {
@@ -498,6 +519,8 @@ impl Canvas {
             clips,
             clip_capacity: 1,
             profiling: false,
+            stream_tracing: false,
+            last_stream_trace: None,
             last_profile: None,
         }
     }
@@ -515,6 +538,7 @@ impl Canvas {
         paint: &'a [Paint],
     ) -> Result<ValidatedScene<'a>, Error> {
         self.last_profile = None;
+        self.last_stream_trace = None;
         let started = profiling::start(self.profiling);
         let limits = self.gpu.device.limits();
         PhysicalExtent::density(width, height, density, limits.max_texture_dimension_2d)?;
@@ -628,6 +652,7 @@ impl Canvas {
                     face,
                     color,
                     align,
+                    layout,
                 } => {
                     if text.is_empty() {
                         continue;
@@ -639,6 +664,7 @@ impl Canvas {
                             *size,
                             scale,
                             *face,
+                            layout.clone(),
                             &mut profile.resources,
                             self.profiling,
                         )
@@ -866,6 +892,20 @@ impl Canvas {
         let started = profiling::start(self.profiling);
         // Keep each surface's current scene resident, including while other
         // surfaces redraw. Replacing the scene releases its obsolete references.
+        // Read revisions only after all uploads have finished preparing. Two
+        // draws can share a mutable stream texture; requested revisions are not
+        // necessarily the revisions that its final bindings reference.
+        self.last_stream_trace = self.stream_tracing.then(|| {
+            textures
+                .iter()
+                .filter_map(|texture| {
+                    texture
+                        .stream_id
+                        .get()
+                        .map(|id| (id, texture.revision.get()))
+                })
+                .collect()
+        });
         self.resources = textures;
         self.gpu.cache.borrow_mut().trim(TextureResource::reusable);
         profile.retire = profiling::elapsed(started);
@@ -891,6 +931,7 @@ impl Canvas {
         density: Density,
         paint: &[Paint],
     ) -> Result<Vec<u8>, Error> {
+        self.last_stream_trace = None;
         let limits = self.gpu.device.limits();
         let physical =
             PhysicalExtent::density(width, height, density, limits.max_texture_dimension_2d)?;
@@ -981,7 +1022,7 @@ mod resource_tests {
     #[ignore = "requires Vulkan; run explicitly with --ignored"]
     fn fractional_pixels_use_actual_per_axis_density_and_keep_integer_convenience_identical() {
         let fonts = Arc::new(vec![
-            fontdue::Font::from_bytes(
+            lucent_ui::text::Font::from_bytes(
                 include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
                 Default::default(),
             )
@@ -1106,7 +1147,7 @@ mod resource_tests {
     #[test]
     #[ignore = "requires a Vulkan driver"]
     fn scene_rejection_preserves_pixels_resources_and_subsequent_rendering() {
-        let font = fontdue::Font::from_bytes(
+        let font = lucent_ui::text::Font::from_bytes(
             include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
             Default::default(),
         )
@@ -1130,6 +1171,7 @@ mod resource_tests {
             tint: Color::hex(0xffffff),
         };
         let text = |size| Paint::Text {
+            layout: Default::default(),
             rect,
             clip: rect.into(),
             text: "W".into(),
@@ -2022,13 +2064,21 @@ impl Renderer {
             self.last_profile = None;
         }
     }
+    /// Disabled by default. Captures only bounded IDs/revisions for bound
+    /// streamed resources, independently of CPU-stage profiling.
+    pub fn enable_stream_tracing(&mut self, enabled: bool) {
+        self.canvas.stream_tracing = enabled;
+        if !enabled {
+            self.canvas.last_stream_trace = None;
+        }
+    }
     pub fn render(
         &mut self,
         width: u32,
         height: u32,
         scale: u32,
         paint: &[Paint],
-        before_present: impl FnOnce(),
+        before_present: impl FnOnce(Option<&StreamTrace>),
     ) -> Result<RenderOutcome, Error> {
         if scale == 0 {
             return Ok(RenderOutcome::RetryAfter(self.recovery.retry()));
@@ -2047,12 +2097,13 @@ impl Renderer {
         height: u32,
         density: Density,
         paint: &[Paint],
-        before_present: impl FnOnce(),
+        before_present: impl FnOnce(Option<&StreamTrace>),
     ) -> Result<RenderOutcome, Error> {
         let enabled = self.canvas.profiling;
         let total = profiling::start(enabled);
         let mut profile = RenderProfile::default();
         self.last_profile = None;
+        self.canvas.last_stream_trace = None;
         if let Some(error) = self
             .gpu
             .device_failure
@@ -2119,7 +2170,7 @@ impl Renderer {
         profile.paint = self.canvas.last_profile.unwrap_or_default();
         let started = profiling::start(enabled);
         // Request a Wayland callback only when a buffer will actually be committed.
-        before_present();
+        before_present(self.canvas.last_stream_trace.as_ref());
         self.gpu.queue.present(frame);
         profile.present = profiling::elapsed(started);
         profile.total = profiling::elapsed(total);
@@ -2293,5 +2344,116 @@ mod streaming_tests {
                 .all(|pixel| *pixel == [255, 255, 0, 255])
         );
         assert_eq!(gpu.cache_stats().entries, 1);
+    }
+}
+
+#[cfg(test)]
+mod stream_trace_rendering {
+    use super::*;
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn trace_reports_final_bound_alias_and_clears_when_disabled_or_validation_fails() {
+        let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
+        let mut canvas = Canvas::new(gpu);
+        let stream = lucent_api::ImageStream::new();
+        let old = Arc::new(stream.frame_rgba(1, 1, vec![255, 0, 0, 255]).unwrap());
+        let next = Arc::new(stream.frame_rgba(1, 1, vec![0, 0, 255, 255]).unwrap());
+        let full = Rect::new(0., 0., 8., 4.);
+        let image = |data: Arc<lucent_api::ImageData>, rect| Paint::Image {
+            data,
+            rect,
+            clip: full.into(),
+            uv: Rect::new(0., 0., 1., 1.),
+            radius: 0.,
+            opacity: 1.,
+            tint: lucent_api::Color::hex(0xffffff),
+        };
+        let scene = [
+            image(old, Rect::new(0., 0., 4., 4.)),
+            image(next.clone(), Rect::new(4., 0., 4., 4.)),
+        ];
+        canvas.stream_tracing = true;
+        let pixels = canvas.snapshot(8, 4, 1, &scene).unwrap();
+        assert!(
+            pixels
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|pixel| *pixel == [0, 0, 255, 255])
+        );
+        assert_eq!(
+            canvas.last_stream_trace.unwrap().revisions(),
+            [next.stream_revision().unwrap()]
+        );
+        canvas.stream_tracing = false;
+        canvas.snapshot(8, 4, 1, &scene).unwrap();
+        assert!(canvas.last_stream_trace.is_none());
+        canvas.stream_tracing = true;
+        canvas.snapshot(8, 4, 1, &scene).unwrap();
+        assert!(canvas.last_stream_trace.is_some());
+        assert!(canvas.snapshot(0, 4, 1, &scene).is_err());
+        assert!(canvas.last_stream_trace.is_none());
+    }
+}
+
+#[cfg(test)]
+mod international_style_pixels {
+    use super::*;
+    use lucent_api::{Color, Element, TextSpan};
+    use lucent_ui::{Interaction, Layout};
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn international_style_masks_keep_complete_arabic_coverage_at_both_densities() {
+        let fonts = Arc::new(vec![
+            lucent_ui::text::Font::from_bytes(
+                include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf").as_slice(),
+                Default::default(),
+            )
+            .unwrap(),
+        ]);
+        let layout = Layout::new(fonts.clone());
+        let gpu = Gpu::headless(fonts).unwrap();
+        let mut canvas = Canvas::new(gpu);
+        let make = |spans: Vec<TextSpan>| {
+            let tree: Element<()> = Element::rich_text(spans).size(320., 80.).font(24.);
+            layout
+                .build(&tree, 320., 80., &Interaction::default(), 0.)
+                .paint
+        };
+        let red = Color::hex(0xff0000);
+        let blue = Color::hex(0x0000ff);
+        let whole = make(vec![TextSpan::new("سلام").color(red)]);
+        let styled = make(vec![
+            TextSpan::new("سل").color(red),
+            TextSpan::new("ام").color(blue),
+        ]);
+        for density in [1, 2] {
+            let reference = canvas.snapshot(320, 80, density, &whole).unwrap();
+            let actual = canvas.snapshot(320, 80, density, &styled).unwrap();
+            let mut red_pixels = 0;
+            let mut blue_pixels = 0;
+            for (expected, observed) in reference
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(actual.as_chunks::<4>().0)
+            {
+                assert_eq!(
+                    observed[3], expected[3],
+                    "a style boundary cannot remove or duplicate shaped coverage"
+                );
+                assert_eq!(observed[1], 0);
+                assert_eq!(
+                    u16::from(observed[0]) + u16::from(observed[2]),
+                    u16::from(observed[3])
+                );
+                red_pixels += usize::from(observed[0] > 0);
+                blue_pixels += usize::from(observed[2] > 0);
+            }
+            assert!(
+                red_pixels > 0 && blue_pixels > 0,
+                "both style clips must contribute actual glyph pixels"
+            );
+        }
     }
 }

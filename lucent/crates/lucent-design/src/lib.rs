@@ -489,7 +489,7 @@ mod tests {
         use lucent_ui::{Interaction, Layout, Paint};
         use std::sync::Arc;
         let fonts = Arc::new(vec![
-            fontdue::Font::from_bytes(
+            lucent_ui::text::Font::from_bytes(
                 include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
                 Default::default(),
             )

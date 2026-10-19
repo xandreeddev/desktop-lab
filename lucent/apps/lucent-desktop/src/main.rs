@@ -1,5 +1,6 @@
 mod actions;
 mod adapters;
+mod application_requests;
 mod artwork;
 mod audio;
 mod background_presentation;
@@ -37,7 +38,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if std::env::args().nth(1).as_deref() == Some("--display-guard") {
         return lucent_services::displays::run_guard().map_err(Into::into);
     }
-    lucent_wayland::run(Desktop::new(platform::desktop_adapters()))
+    let mut desktop = Desktop::new(platform::desktop_adapters());
+    desktop.live_wallpaper.enable_frame_tracing(
+        std::env::var_os("LUCENT_PROFILE_PRESENTATION").is_some_and(|value| value == "1"),
+    );
+    lucent_wayland::run(desktop)
 }
 
 #[cfg(test)]

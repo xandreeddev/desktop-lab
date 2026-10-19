@@ -78,55 +78,67 @@ impl Desktop {
             return;
         }
         for other in PANELS.into_iter().filter(|other| *other != panel) {
-            match other {
-                Panel::Launcher => self.update_launcher(crate::launcher::Message::Close, effects),
-                Panel::LiveWallpaper => {
-                    self.update_live_wallpaper(crate::live_wallpaper::Message::Close, effects)
-                }
-                Panel::Weather => effects.delegate(
-                    |child| {
-                        self.weather.update(crate::weather::Message::Close, child);
-                    },
-                    Message::Weather,
-                ),
-                Panel::Media => effects.delegate(
-                    |e| self.media.update(crate::media::Message::Close, e),
-                    Message::Media,
-                ),
-                Panel::Audio => effects.delegate(
-                    |e| self.audio.update(crate::audio::Message::Close, e),
-                    Message::Audio,
-                ),
-                Panel::Network => effects.delegate(
-                    |e| self.network.update(crate::network::Message::Close, e),
-                    Message::Network,
-                ),
-                Panel::Bluetooth => effects.delegate(
-                    |e| self.bluetooth.update(crate::bluetooth::Message::Close, e),
-                    Message::Bluetooth,
-                ),
-                Panel::Displays => effects.delegate(
-                    |e| self.displays.update(crate::displays::Message::Close, e),
-                    Message::Displays,
-                ),
-                Panel::Power => effects.delegate(
-                    |e| self.power.update(crate::power::Message::Close, e),
-                    Message::Power,
-                ),
-                // Close also retires a direct bar action whose panel is closed.
-                Panel::Tray => effects.delegate(
-                    |e| self.tray.update(crate::tray::Message::Close, e),
-                    Message::Tray,
-                ),
-                Panel::Notifications if self.notifications.history_open() => effects.delegate(
-                    |e| {
-                        self.notifications
-                            .update(crate::notifications::Message::Hide, e)
-                    },
-                    Message::Notifications,
-                ),
-                Panel::Notifications => (),
+            self.close_panel(other, effects);
+        }
+    }
+
+    /// Dismiss ordinary foreground UI through each child's lifecycle.
+    /// Visit closed children too: an admission or direct bar action may be pending.
+    pub(super) fn dismiss_panels(&mut self, effects: &mut Effects<Message>) {
+        for panel in PANELS {
+            self.close_panel(panel, effects);
+        }
+    }
+
+    fn close_panel(&mut self, panel: Panel, effects: &mut Effects<Message>) {
+        match panel {
+            Panel::Launcher => self.update_launcher(crate::launcher::Message::Close, effects),
+            Panel::LiveWallpaper => {
+                self.update_live_wallpaper(crate::live_wallpaper::Message::Close, effects)
             }
+            Panel::Weather => effects.delegate(
+                |child| {
+                    self.weather.update(crate::weather::Message::Close, child);
+                },
+                Message::Weather,
+            ),
+            Panel::Media => effects.delegate(
+                |e| self.media.update(crate::media::Message::Close, e),
+                Message::Media,
+            ),
+            Panel::Audio => effects.delegate(
+                |e| self.audio.update(crate::audio::Message::Close, e),
+                Message::Audio,
+            ),
+            Panel::Network => effects.delegate(
+                |e| self.network.update(crate::network::Message::Close, e),
+                Message::Network,
+            ),
+            Panel::Bluetooth => effects.delegate(
+                |e| self.bluetooth.update(crate::bluetooth::Message::Close, e),
+                Message::Bluetooth,
+            ),
+            Panel::Displays => effects.delegate(
+                |e| self.displays.update(crate::displays::Message::Close, e),
+                Message::Displays,
+            ),
+            Panel::Power => effects.delegate(
+                |e| self.power.update(crate::power::Message::Close, e),
+                Message::Power,
+            ),
+            // Close also retires a direct bar action whose panel is closed.
+            Panel::Tray => effects.delegate(
+                |e| self.tray.update(crate::tray::Message::Close, e),
+                Message::Tray,
+            ),
+            Panel::Notifications if self.notifications.history_open() => effects.delegate(
+                |e| {
+                    self.notifications
+                        .update(crate::notifications::Message::Hide, e)
+                },
+                Message::Notifications,
+            ),
+            Panel::Notifications => (),
         }
     }
 
@@ -184,10 +196,13 @@ impl Desktop {
 }
 
 #[cfg(test)]
+mod dismissal_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use lucent_api::{Application, Component, Event, Keyboard, PointerInput};
-    fn open(panel: Panel) -> Message {
+    pub(super) fn open(panel: Panel) -> Message {
         match panel {
             Panel::Launcher => {
                 Message::Launcher(crate::launcher::Message::Mode(crate::launcher::Mode::Apps))
@@ -307,7 +322,7 @@ mod tests {
         let layout = Layout::new(std::sync::Arc::new(
             app.fonts()
                 .into_iter()
-                .map(|bytes| fontdue::Font::from_bytes(bytes, Default::default()).unwrap())
+                .map(|bytes| lucent_ui::text::Font::from_bytes(bytes, Default::default()).unwrap())
                 .collect(),
         ));
         let cx = context("bar");

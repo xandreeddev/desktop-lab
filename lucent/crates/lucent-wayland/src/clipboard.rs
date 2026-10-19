@@ -64,6 +64,7 @@ impl<M> Clipboard<M> {
 }
 impl<A: Application> State<A> {
     pub(super) fn clipboard_observe_focus(&mut self, qh: &QueueHandle<Self>) {
+        self.input_method_observe();
         if self.clipboard.manager.is_none() {
             return;
         }
@@ -498,7 +499,7 @@ mod tests {
     use super::*;
     fn layout() -> lucent_ui::Layout {
         lucent_ui::Layout::new(Arc::new(vec![
-            fontdue::Font::from_bytes(
+            lucent_ui::text::Font::from_bytes(
                 include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
                 Default::default(),
             )
