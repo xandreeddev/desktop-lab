@@ -141,6 +141,42 @@ class InputAdmissionTests(unittest.TestCase):
         self.assertEqual(calls, [('hyprctl', '-j', 'activeworkspace')])
 
 
+class CursorPositioningTests(unittest.TestCase):
+    def harness(self, initial=(20, 30)):
+        h = driver.Harness.__new__(driver.Harness)
+        h.input_guard = Mock()
+        h.qmp = Mock()
+        h.cursor_owner = driver.input_policy.CursorOwnership({'x': 20, 'y': 30})
+        position = list(initial)
+        calls = []
+        def session(*argv):
+            calls.append(argv)
+            if argv == ('hyprctl', 'dispatch', 'hl.dsp.cursor.move({x=960,y=138})'):
+                position[:] = (960, 138)
+                return b'ok'
+            self.assertEqual(argv, ('hyprctl', '-j', 'cursorpos'))
+            return json.dumps(dict(zip(('x', 'y'), position))).encode()
+        h.session = session
+        h.eventually = lambda predicate, *_args, **_kwargs: self.assertTrue(predicate())
+        return h, calls
+
+    def test_compositor_warp_needs_observed_exact_arrival_and_sends_no_physical_button(self):
+        h, calls = self.harness()
+        h.move(960, 138)
+        self.assertEqual(h.cursor_owner.expected, (960, 138))
+        self.assertEqual(h.last_cursor, {'x': 960, 'y': 138})
+        self.assertIn(('hyprctl', 'dispatch', 'hl.dsp.cursor.move({x=960,y=138})'), calls)
+        h.qmp.assert_not_called()
+        h.input_guard.assert_called_once()
+
+    def test_foreign_cursor_movement_blocks_dispatch_without_adopting_it(self):
+        h, calls = self.harness(initial=(21, 30))
+        with self.assertRaisesRegex(ValueError, 'application_cursor_authority_lost'):
+            h.move(960, 138)
+        self.assertEqual(calls, [('hyprctl', '-j', 'cursorpos')])
+        h.qmp.assert_not_called()
+
+
 class BindingAdmissionTests(unittest.TestCase):
     def test_plain_text_pointer_control_and_catchall_bindings_are_rejected(self):
         for value in ({'key': 'n'}, {'key': 'space'}, {'key': 'Return'}, {'key': 'mouse:272'},

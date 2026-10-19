@@ -21,7 +21,7 @@ import sys
 import time
 
 from native_surfaces import find_surface
-from application_intent_policy import CursorOwnership, absolute_move, same_target, target as native_target
+from application_intent_policy import CursorOwnership, compositor_move, same_target, target as native_target
 from application_intent_browser import fresh_documents
 
 
@@ -223,7 +223,7 @@ def suite(args, results):
         initial = observed_target(admitted)
         point = initial['point']
         cursor_owner.begin(json.loads(session('hyprctl', '-j', 'cursorpos')), point)
-        h['qmp'](name, absolute_move(point))
+        session('hyprctl', 'dispatch', compositor_move(point))
         def arrived():
             position = json.loads(session('hyprctl', '-j', 'cursorpos'))
             return cursor_owner.observe(position) == point
@@ -384,7 +384,7 @@ def suite(args, results):
             eventually(lambda: bool(interaction_guard(False)), 'owned_example_layers_retired_before_cursor_restore')
             cursor = json.loads(session('hyprctl', '-j', 'cursorpos'))
             cursor_owner.begin(cursor, cursor_owner.initial)
-            h['qmp'](name, absolute_move(cursor_owner.initial))
+            session('hyprctl', 'dispatch', compositor_move(cursor_owner.initial))
             def restored():
                 cursor = json.loads(session('hyprctl', '-j', 'cursorpos'))
                 return cursor_owner.observe(cursor) == cursor_owner.initial

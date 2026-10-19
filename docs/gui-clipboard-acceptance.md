@@ -40,8 +40,12 @@ worktrees resolve the canonical Git checkout's private VM inventory.
 Chromium must already be installed. The test never installs a browser or opens
 an existing profile. Its new private profile, local HTML file, generated class,
 unique named workspaces and transient unit belong only to that invocation.
-Native layer/hit geometry supplies the Notes pointer destination. The two
-workspaces let the actual browser window and desktop Notes receive focus
+Native layer/hit geometry supplies the Notes pointer destination. Cursor
+positioning uses the compositor's validated global logical-pixel
+cursor dispatcher and require exact observed arrival. Positioning is not a
+physical-input result: QMP button presses and native keyboard delivery exercise
+the actual focus and clipboard interactions.
+The two workspaces let the actual browser window and desktop Notes receive focus
 without changing tiling rules or introducing an always-on-top test surface.
 Notes clicks bind the submitted field, full visible clip, surface instance/output
 and exact native layer address/PID/geometry. They revalidate that lifetime after

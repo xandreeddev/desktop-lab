@@ -200,7 +200,7 @@ class Harness(notes.Harness):
         self.input_guard()
         destination = (round(x), round(y))
         self.cursor_owner.begin(json.loads(self.session('hyprctl', '-j', 'cursorpos')), destination)
-        self.qmp(input_policy.absolute_move(destination))
+        self.session('hyprctl', 'dispatch', input_policy.compositor_move(destination))
         self.eventually(lambda: self.cursor_owner.observe(json.loads(self.session('hyprctl', '-j', 'cursorpos'))) == destination,
                         'owned_cursor_destination_confirmed')
         self.cursor_owner.finish(json.loads(self.session('hyprctl', '-j', 'cursorpos')))

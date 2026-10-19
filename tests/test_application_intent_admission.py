@@ -30,6 +30,14 @@ def geometry():
 
 
 class InputPolicy(unittest.TestCase):
+    def test_compositor_destination_keeps_exact_logical_pixels_and_rejects_code(self):
+        self.assertEqual(policy.compositor_move((960, 138)), 'hl.dsp.cursor.move({x=960,y=138})')
+        self.assertEqual(policy.compositor_move((1919, 1079)), 'hl.dsp.cursor.move({x=1919,y=1079})')
+        for point in ((1920, 0), (0, 1080), (-1, 0), (True, 2), (1.0, 2),
+                      ('1}); os.execute("foreign")', 2), (1,), (1, 2, 3)):
+            with self.subTest(point=point), self.assertRaises(ValueError):
+                policy.compositor_move(point)
+
     def test_all_layers_need_exact_desktop_or_example_pid_and_namespace(self):
         _, layer = geometry()
         baseline = {'Virtual-1': {'layers': [[{'namespace': 'lucent-bar', 'pid': 101}, layer]]}}
