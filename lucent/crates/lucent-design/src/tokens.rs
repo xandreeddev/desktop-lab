@@ -633,6 +633,14 @@ pub mod component {
         pub const HEIGHT: f32 = 640.0;
         pub const TEXT_LINES: f32 = 3.0;
     }
+    pub mod displays {
+        pub const WIDTH: f32 = 560.0;
+        pub const HEIGHT: f32 = 720.0;
+        pub const HEADER_HEIGHT: f32 = 40.0;
+        pub const SLIDE_DISTANCE: f32 = 20.0;
+        pub const TITLE_LINES: f32 = 2.0;
+        pub const STATUS_LINES: f32 = 3.0;
+    }
 }
 pub mod icon {
     pub const TINY: f32 = 16.0;

@@ -4,6 +4,7 @@ pub mod audio;
 pub mod bluetooth;
 pub mod compositor;
 pub mod desktop_adapters;
+pub mod displays;
 pub mod images;
 pub mod media;
 pub mod network;

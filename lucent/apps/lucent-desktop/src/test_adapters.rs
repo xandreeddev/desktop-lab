@@ -141,6 +141,7 @@ pub fn with(fake: Arc<Fake>) -> DesktopAdapters {
         network: fake.clone(),
         bluetooth: fake.clone(),
         power: fake.clone(),
+        displays: fake.clone(),
         tray: fake.clone(),
         media: fake.clone(),
         weather: fake.clone(),
@@ -284,5 +285,27 @@ impl WallpaperPlaybackPort for Fake {
         _: &mut dyn FnMut(Result<MediaFrame>) -> bool,
         _: Arc<dyn StopSignal>,
     ) {
+    }
+}
+
+impl DisplayPort for Fake {
+    fn read(&self) -> Result<DisplaySnapshot> {
+        Err(DomainError::Unavailable("No display fixture".into()))
+    }
+    fn watch(&self, emit: &mut dyn FnMut(Result<DisplaySnapshot>), _: &dyn StopSignal) {
+        emit(Ok(DisplaySnapshot::default()));
+    }
+    fn apply(
+        &self,
+        _: Vec<DisplayConfiguration>,
+        _: Vec<DisplayConfiguration>,
+    ) -> Result<DisplayTransactionId> {
+        Err(DomainError::Unavailable("No display fixture".into()))
+    }
+    fn keep(&self, _: DisplayTransactionId) -> Result<()> {
+        Err(DomainError::Unavailable("No display fixture".into()))
+    }
+    fn revert(&self, _: DisplayTransactionId) -> Result<()> {
+        Err(DomainError::Unavailable("No display fixture".into()))
     }
 }

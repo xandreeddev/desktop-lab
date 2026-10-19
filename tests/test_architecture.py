@@ -227,6 +227,13 @@ class Boundaries(unittest.TestCase):
         self.assert_no_imports(sources(ROOT/'lucent/crates/lucent-services/src/compositor'),
                                ('lucent_desktop','lucent_design','lucent_wayland'))
 
+    def test_display_transactions_preserve_domain_adapter_and_client_boundaries(self):
+        self.assert_no_platform_operations([ROOT/'lucent/crates/lucent-domain/src/displays.rs',ROOT/'lucent/crates/lucent-usecases/src/displays.rs'])
+        self.assert_no_platform_operations(sources(ROOT/'lucent/apps/lucent-desktop/src/displays',('tests.rs',)),
+            ('crate::desktop','crate::adapters','crate::platform','lucent_services','lucent_wayland','lucent_render'))
+        self.assert_no_imports(sources(ROOT/'lucent/crates/lucent-services/src/displays',('tests.rs',)),
+            ('lucent_desktop','lucent_design','lucent_wayland','lucent_render'))
+
     def test_application_catalog_and_dock_preserve_boundaries(self):
         self.assert_no_platform_operations([ROOT / 'lucent/apps/lucent-desktop/src/catalog.rs', ROOT / 'lucent/apps/lucent-desktop/src/dock.rs'],
                                            ('crate::desktop', 'crate::adapters', 'crate::platform'))

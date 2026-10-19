@@ -22,6 +22,7 @@ pub fn desktop_adapters() -> DesktopAdapters {
         audio: Arc::new(lucent_services::audio::PulseAudio::default()),
         network: Arc::new(lucent_services::network::NetworkManager::default().with_secret_agent()),
         bluetooth: Arc::new(lucent_services::bluetooth::BlueZ::default()),
+        displays: Arc::new(lucent_services::displays::HyprlandDisplays::default()),
         power: Arc::new(lucent_services::power::PowerServices::default()),
         tray: Arc::new(lucent_services::tray::StatusNotifier::default()),
         media: Arc::new(lucent_services::media::Mpris::default()),
