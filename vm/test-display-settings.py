@@ -82,8 +82,12 @@ def restore(value):
         marker=b'-- BEGIN LUCENT DISPLAY CONFIGURATION\n'
         prefix=original.split(marker,1)[0]
         assert current.startswith(prefix) and marker in current and current.endswith(b'-- END LUCENT DISPLAY CONFIGURATION\n')
-        body=current[len(prefix):]
-        assert all(line.startswith((b'-- ',b'hl.monitor({ output = ')) or not line for line in body.splitlines())
+        native=value['monitor']
+        mode=str(native['width'])+'x'+str(native['height'])+'@'+format(native['refreshRate'],'.3f')
+        expected_rule='hl.monitor({ output = '+json.dumps(native['name'])+', disabled = false, mode = "'+mode+'", position = "'+str(native['x']+16)+'x'+str(native['y'])+'", scale = '+format(native['scale'],'.3f')+', transform = '+str(native['transform'])+' })\n'
+        expected_prefix=prefix+(b'\n' if prefix and not prefix.endswith(b'\n') else b'')
+        expected=expected_prefix+marker+expected_rule.encode()+b'-- END LUCENT DISPLAY CONFIGURATION\n'
+        assert current==expected, 'A concurrent monitor file edit is never ours to restore'
         replacement=directory/'monitors.restore'
         os.link(backup,replacement); os.replace(replacement,config)
     native_restore(value)
