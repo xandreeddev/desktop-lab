@@ -199,8 +199,10 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
     }
 }
 wayland_client::delegate_noop!(State:WlCompositor);
-wayland_client::delegate_noop!(State:WlSurface);
-wayland_client::delegate_noop!(State:WlSeat);
+// Seat capabilities and surface enter/leave are legitimate fixture events;
+// the eventless form of delegate_noop! would panic instead of ignoring them.
+wayland_client::delegate_noop!(State:ignore WlSurface);
+wayland_client::delegate_noop!(State:ignore WlSeat);
 wayland_client::delegate_noop!(State:ZwpInputMethodManagerV2);
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let connection = Connection::connect_to_env()?;
