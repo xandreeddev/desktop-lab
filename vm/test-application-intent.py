@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Native SDK intent + real Chromium file opening with guarded caller restoration.
+"""Native SDK intent + real Chromium file/opt-in URI opening with caller restoration.
 
 Requires an unlocked idle single-output VM and a release manifest containing
 desktop, CLI and the independent application-intent executable. Physical input
@@ -315,6 +315,7 @@ def suite(args, results):
     completed_success, pressed = False, False
     baseline, example_identity, example_layer = None, None, None
     browser_identity = None
+    http_identity = None
     cleanup = results['cleanup'] = {}
     phase = 'prepare_owned_fixture'
     fixture_sequence = 0
@@ -358,15 +359,25 @@ def suite(args, results):
         require(current == [browser_identity['control']], 'only_original_blank_before_each_document_request')
         return current
 
-    def verify_documents_and_retire(before_pages):
+    def observe_http_server():
+        value = json.loads(call('http-info'))
+        require(value.get('ready') is True, 'owned_loopback_http_server_ready')
+        require(http_identity is None or value['identity'] == http_identity,
+                'frozen_original_loopback_http_server_and_targets')
+        return value['identity']
+
+    def verify_documents_and_retire(before_pages, operation='open'):
+        documents = (http_identity['targets'] if args.http_uris and operation == 'open' else entry['files'])
         selected = None
         def loaded_fresh():
             nonlocal selected
-            selected = fresh_documents(before_pages, browser_snapshot(), entry['files'], browser_identity['control'])
+            selected = fresh_documents(before_pages, browser_snapshot(), documents, browser_identity['control'])
             return selected is not None
         eventually(loaded_fresh, 'request_created_both_new_literal_document_targets')
-        require(json.loads(call('browser-close', json.dumps({'identity': browser_identity,
-                    'before': before_pages, 'targets': selected})))['fresh_owned_targets_retired'],
+        closing = {'identity': browser_identity, 'before': before_pages, 'targets': selected}
+        if args.http_uris:
+            closing['operation'] = operation
+        require(json.loads(call('browser-close', json.dumps(closing)))['fresh_owned_targets_retired'],
                 'only_fresh_document_targets_retired')
         require(browser_snapshot() == [browser_identity['control']], 'original_blank_browser_target_preserved')
 
@@ -382,6 +393,8 @@ def suite(args, results):
         return value
 
     def interaction_guard(with_example=True):
+        if args.http_uris and http_identity is not None and not cleanup.get('http_server_retired', False):
+            observe_http_server()
         require(session('omarchy-shell', 'lock', 'isLocked').strip() == 'false', 'current_unlocked_guest')
         require('lucent-authorization-' not in session('hyprctl', '-j', 'layers'), 'current_no_authentication_prompt')
         current = inspect()['client']
@@ -468,7 +481,10 @@ def suite(args, results):
             h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(scratch + '/' + filename)],
                      data=raw, timeout=20)
         initialized = True
-        entry = json.loads(call('initialize', manifest['binaries']['application-intent']['sha256']))
+        initialization = [manifest['binaries']['application-intent']['sha256']]
+        if args.http_uris:
+            initialization.append('http')
+        entry = json.loads(call('initialize', *initialization))
         require(json.loads(call('initial-absence'))['absent'], 'owned_units_initially_absent')
         baseline = observe_native(False)['baseline']
         h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(binary)],
@@ -480,6 +496,15 @@ def suite(args, results):
         session('systemd-run', '--user', '--collect', '--unit=' + guard,
                 '--property=RuntimeMaxSec=300', '--property=MemoryMax=64M',
                 '/usr/bin/python3', fixture, 'watchdog', scratch, run_id)
+        if args.http_uris:
+            phase = 'loopback_http_server_admission'
+            def http_ready():
+                value = json.loads(call('http-info'))
+                return value.get('ready') is True
+            eventually(http_ready, 'owned_loopback_http_server_ready')
+            http_identity = observe_http_server()
+            results['private_artifacts']['receipt_files'].append('http-origin.json')
+            results['checks']['original_watchdog_owns_loopback_http_listener'] = True
         example_attempted = True
         session('systemd-run', '--user', '--collect', '--unit=' + unit,
                 '--property=RuntimeMaxSec=240', '--property=MemoryMax=768M',
@@ -534,7 +559,7 @@ def suite(args, results):
             require(event['operation'] == operation and event['fresh_token_present']
                     and not event['legacy_startup_present'] and example_state()['client']['fresh_token'],
                     'physical_input_token_delivered_to_selected_child')
-            verify_documents_and_retire(before_pages)
+            verify_documents_and_retire(before_pages, operation)
         results['checks']['real_browser_opened_space_percent_unicode_and_shell_literal_filenames'] = True
         results['checks']['physical_launch_open_and_declared_action_deliver_fresh_tokens_to_children'] = True
         phase = 'later_socket_open'
@@ -549,8 +574,9 @@ def suite(args, results):
         phase = 'desktop_cli_open'
         interaction_guard()
         before_pages = before_request()
-        cli('applications', 'open', entry['app_id'], scratch + '/' + entry['files'][0]['name'],
-            scratch + '/' + entry['files'][1]['name'])
+        targets = ([item['uri'] for item in http_identity['targets']] if args.http_uris else
+                   [scratch + '/' + item['name'] for item in entry['files']])
+        cli('applications', 'open', entry['app_id'], *targets)
         eventually(lambda: len(events()) == 5, 'desktop_cli_open_reaches_real_application')
         require(not events()[-1]['fresh_token_present'] and not events()[-1]['legacy_startup_present'],
                 'desktop_cli_has_no_physical_authority')
@@ -559,6 +585,9 @@ def suite(args, results):
         results['checks']['fresh_targets_retired_with_original_browser_control_preserved'] = True
         interaction_guard()
         results['checks']['desktop_cli_open_and_no_stale_token_reuse'] = True
+        if args.http_uris:
+            observe_http_server()
+            results['checks']['physical_socket_and_cli_opened_both_fresh_owned_http_uris'] = True
         phase = 'first_launch_focus_acceptance'
         require_first_launch_focus(results['checks'])
         completed_success = True
@@ -574,8 +603,10 @@ def suite(args, results):
                 pressed = False
             except Exception as error:
                 failures['pointer_release'] = failure_details(error, 'pointer_release')
-        if example_attempted:
+        if example_attempted or args.http_uris and guard_attempted:
             try:
+                # HTTP readiness can fail before the example starts. Obtain
+                # exact absence/retirement proof so its watchdog can still stop.
                 retire_example()
                 cleanup['example_retired'] = True
             except Exception as error:
@@ -587,8 +618,11 @@ def suite(args, results):
                 failures['browser_retirement'] = failure_details(error, 'browser_retirement')
         if guard_attempted and cleanup.get('browser_retired', False) and cleanup.get('example_retired', False):
             try:
-                require(json.loads(call('retire-watchdog'))['retired'],
-                    'owned_watchdog_retired')
+                retired = json.loads(call('retire-watchdog'))
+                require(retired['retired'], 'owned_watchdog_retired')
+                if args.http_uris:
+                    require(retired.get('http_server_retired') is True, 'owned_loopback_http_server_retired')
+                    cleanup['http_server_retired'] = True
                 cleanup['watchdog_retired'] = True
             except Exception as error:
                 failures['watchdog_retirement'] = failure_details(error, 'watchdog_retirement')
@@ -629,6 +663,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--release-manifest', required=True)
     parser.add_argument('--example-binary')
+    parser.add_argument('--http-uris', action='store_true',
+                        help='Open only two owned loopback HTTP fixtures; default remains literal local files')
     parser.add_argument('--report')
     args = parser.parse_args()
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
@@ -639,6 +675,8 @@ def main():
         raise ValueError('existing_private_report_refused')
     result = {'passed': False, 'checks': {},
               'scope': 'Fresh token delivery to owned children and observed browser focus; no Chromium protocol-consumption claim'}
+    if args.http_uris:
+        result['uri_scope'] = 'Two fixed loopback HTTP targets through %U; no default-handler, external navigation or %u native claim'
     try:
         measure = runpy.run_path(str(ROOT / 'vm/measure-framework.py'))
         with measure['stay_awake'](remote):

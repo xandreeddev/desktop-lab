@@ -22,6 +22,7 @@ import struct
 import sys
 import tempfile
 import time
+import urllib.parse
 import urllib.request
 
 sys.dont_write_bytecode = True
@@ -35,7 +36,7 @@ import owned_chromium_lease as chromium
 
 OPERATIONS = ('initialize', 'execute', 'state', 'retire', 'cleanup', 'watchdog', 'guard',
               'admission', 'example-command', 'initial-absence', 'start-example',
-              'retire-example', 'retire-watchdog', 'browser-snapshot', 'browser-close')
+              'retire-example', 'retire-watchdog', 'browser-snapshot', 'browser-close', 'http-info')
 
 
 def failure_details(error, operation):
@@ -163,7 +164,7 @@ def encoded(value):
 
 def original_receipt(directory, name, value=None):
     require(name in ('example-origin.json', 'example-admission.json', 'watchdog-origin.json',
-                     'browser-admission.json', 'chromium-lease.json', 'entry-origin.json'))
+                     'browser-admission.json', 'chromium-lease.json', 'entry-origin.json', 'http-origin.json'))
     path = directory / name
     if value is not None and not os.path.lexists(path):
         private(path, json.dumps(value, sort_keys=True).encode())
@@ -172,7 +173,7 @@ def original_receipt(directory, name, value=None):
     return original
 
 
-def initialize(directory, run_id, example_sha256):
+def initialize(directory, run_id, example_sha256, http_mode=False):
     directory, _ = context(directory, run_id, False)
     require(re.fullmatch('[a-f0-9]{64}', example_sha256) is not None)
     require(Path('/usr/bin/chromium').is_file() and os.access('/usr/bin/chromium', os.X_OK))
@@ -210,6 +211,8 @@ def initialize(directory, run_id, example_sha256):
                 'settings_sha256': digest(settings_data),
                 'files': [{key: value for key, value in item.items() if key != 'data'}
                           for item in files]}
+    if http_mode:
+        manifest['http_mode'] = True
     manifest['browser_startup'] = chromium.startup(browser_argv(directory, manifest, []))
     private(directory / 'manifest.json', json.dumps(manifest).encode())
     private(directory / 'events.json', b'[]\n')
@@ -220,6 +223,174 @@ def initialize(directory, run_id, example_sha256):
     original_receipt(directory, 'entry-origin.json',
                      {'path': str(entry_path), 'identity': created, 'sha256': digest(entry)})
     print(json.dumps({key: manifest[key] for key in ('app_id', 'name', 'class', 'files')}))
+
+
+def http_enabled(manifest):
+    enabled = manifest.get('http_mode', False)
+    require(type(enabled) is bool)
+    return enabled
+
+
+def http_documents(manifest, port):
+    """Two explicit URI targets; no provider, default-handler or arbitrary URL."""
+    run_id = manifest['run_id']
+    require(re.fullmatch('[A-Za-z0-9]{6,32}', run_id)
+            and type(port) is int and 1024 <= port <= 65535
+            and len(manifest['files']) == 2)
+    routes = ('first%20%25U%E9%9B%AA?encoded=%2520&field=%25u#first',
+              'second%20document?literal=%24%28unused%29%3B#second')
+    return [{'uri': f'http://127.0.0.1:{port}/{run_id}/{route}', 'title': item['title']}
+            for route, item in zip(routes, manifest['files'])]
+
+
+def http_socket_identity(value):
+    require(stat.S_ISSOCK(value.st_mode) and value.st_uid == os.getuid())
+    return [value.st_dev, value.st_ino, value.st_mode, value.st_uid, value.st_gid]
+
+
+def http_tcp_listener(raw, listener):
+    """Join the exact open socket inode to its loopback LISTEN row."""
+    require(type(raw) is bytes and len(raw) <= 262144)
+    lines = raw.decode('ascii').splitlines()
+    require(lines and 'local_address' in lines[0] and 'inode' in lines[0])
+    rows = [line.split() for line in lines[1:]]
+    require(all(10 <= len(row) <= 32 for row in rows))
+    matching = [row for row in rows if row[9] == str(listener['identity'][1])]
+    require(len(matching) == 1)
+    row = matching[0]
+    require(row[1] == '0100007F:' + format(listener['port'], '04X')
+            and row[2] == '00000000:0000' and row[3] == '0A'
+            and row[7] == str(os.getuid()))
+
+
+def http_listener_snapshot(origin, listener):
+    require(set(listener) == {'fd', 'port', 'identity'}
+            and type(listener['fd']) is int and 3 <= listener['fd'] <= 65535
+            and type(listener['port']) is int and 1024 <= listener['port'] <= 65535
+            and type(listener['identity']) is list and len(listener['identity']) == 5
+            and all(type(value) is int and value >= 0 for value in listener['identity']))
+    pid = origin['process']['pid']
+    require(type(pid) is int and pid > 1)
+    path = Path('/proc') / str(pid) / 'fd' / str(listener['fd'])
+    before = http_socket_identity(path.stat())
+    require(before == listener['identity'] and os.readlink(path) == f'socket:[{before[1]}]')
+    with (Path('/proc') / str(pid) / 'net/tcp').open('rb') as stream:
+        raw = stream.read(262145)
+    http_tcp_listener(raw, listener)
+    require(http_socket_identity(path.stat()) == before)
+
+
+def http_authority(directory, run_id, expected=None):
+    directory, manifest = context(directory, run_id)
+    require(http_enabled(manifest))
+    captured = original_receipt(directory, 'http-origin.json')
+    require(set(captured) == {'origin', 'listener', 'targets'}
+            and (expected is None or expected == captured))
+    origin = original_receipt(directory, 'watchdog-origin.json')
+    require(captured['origin'] == origin)
+    unit = 'lucent-application-intent-watchdog-' + run_id + '.service'
+    argv = owned_argv('lucent-application-intent-watchdog-', str(directory / 'fixture.py'), run_id)
+    def live_origin():
+        current = assert_unit_origin(unit_snapshot(unit), unit, argv, origin)
+        require(current is not None and current['executable'] == origin['process']['executable'])
+    live_origin()
+    http_listener_snapshot(origin, captured['listener'])
+    require(captured['targets'] == http_documents(manifest, captured['listener']['port']))
+    live_origin()
+    return captured
+
+
+def request_documents(directory, run_id, manifest, operation):
+    require(operation in ('open', 'action'))
+    if http_enabled(manifest) and operation == 'open':
+        return http_authority(directory, run_id)['targets']
+    return manifest['files']
+
+
+def http_response(request, routes, port):
+    """A closed, fixed-route fixture response, never a general file server."""
+    status, body, head = '400 Bad Request', b'', False
+    if type(request) is bytes and len(request) <= 8192 and request.endswith(b'\r\n\r\n'):
+        try:
+            lines = request[:-4].decode('ascii').split('\r\n')
+            method, target, version = lines[0].split(' ')
+            headers = [line.split(':', 1) for line in lines[1:]]
+            valid = (len(lines) <= 33 and len(lines[0]) <= 4096 and version == 'HTTP/1.1'
+                     and all(len(row) == 2 and re.fullmatch('[!#$%&\'*+.^_`|~A-Za-z0-9-]+', row[0])
+                             and not any(ord(c) < 32 or ord(c) == 127 for c in row[1].strip(' \t'))
+                             for row in headers))
+            values = [(row[0].lower(), row[1].strip(' \t')) for row in headers if len(row) == 2]
+            valid = (valid and [value for key, value in values if key == 'host'] == [f'127.0.0.1:{port}']
+                     and not any(key == 'transfer-encoding' or key == 'content-length' and value != '0'
+                                 for key, value in values))
+            if valid:
+                if method not in ('GET', 'HEAD'):
+                    status = '405 Method Not Allowed'
+                elif target not in routes:
+                    status = '404 Not Found'
+                else:
+                    status, body = '200 OK', routes[target]
+                    head = method == 'HEAD'
+        except (ValueError, UnicodeDecodeError):
+            pass
+    headers = (f'HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\n'
+               f'Content-Length: {len(body)}\r\nConnection: close\r\nCache-Control: no-store\r\n'
+               "Content-Security-Policy: default-src 'none'; base-uri 'none'; form-action 'none'\r\n"
+               'X-Content-Type-Options: nosniff\r\n\r\n').encode('ascii')
+    return headers + (b'' if head else body)
+
+
+def http_connection(connection, routes, port):
+    deadline, request = time.monotonic() + 1, bytearray()
+    try:
+        while not request.endswith(b'\r\n\r\n'):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or len(request) > 8192:
+                return
+            connection.settimeout(min(remaining, .25))
+            try:
+                chunk = connection.recv(min(4096, 8193 - len(request)))
+            except socket.timeout:
+                continue
+            if not chunk:
+                return
+            request.extend(chunk)
+        connection.settimeout(.5)
+        connection.sendall(http_response(bytes(request), routes, port))
+    except (OSError, ValueError):
+        return
+
+
+def http_wait(directory, run_id, manifest, origin, seconds=210):
+    """Serve only during the watchdog's existing wait, with no extra worker."""
+    deadline = time.monotonic() + seconds
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+        server.bind(('127.0.0.1', 0))
+        server.listen(4)
+        host, port = server.getsockname()
+        require(host == '127.0.0.1')
+        documents = http_documents(manifest, port)
+        routes = {}
+        for document, item in zip(documents, manifest['files']):
+            require(Path(item['name']).name == item['name'])
+            body = regular(directory / item['name'], 8192)
+            require(digest(body) == item['sha256'])
+            uri = urllib.parse.urlsplit(document['uri'])
+            routes[uri.path + '?' + uri.query] = body
+        listener = {'fd': server.fileno(), 'port': port,
+                    'identity': http_socket_identity(os.fstat(server.fileno()))}
+        http_listener_snapshot(origin, listener)
+        original_receipt(directory, 'http-origin.json',
+                         {'origin': origin, 'listener': listener, 'targets': documents})
+        while time.monotonic() < deadline:
+            server.settimeout(min(.25, max(.001, deadline - time.monotonic())))
+            try:
+                connection, address = server.accept()
+            except socket.timeout:
+                continue
+            with connection:
+                if address[0] == '127.0.0.1':
+                    http_connection(connection, routes, port)
 
 
 def events(directory):
@@ -241,7 +412,11 @@ def start_example(directory, run_id):
         original_receipt(directory, 'example-origin.json', capture_unit_origin(unit, argv))
     arguments = [str(binary), '--app', manifest['app_id'], '--action', 'Probe']
     require(len(manifest['files']) == 2)
-    for item in manifest['files']:
+    documents = request_documents(directory, run_id, manifest, 'open')
+    for item in documents:
+        if http_enabled(manifest):
+            arguments += ['--target', item['uri']]
+            continue
         require(Path(item['name']).name == item['name'])
         arguments += ['--target', str(directory / item['name'])]
     signal.alarm(0)
@@ -252,8 +427,12 @@ def execute(directory, run_id, arguments):
     directory, manifest = context(directory, run_id)
     require(arguments and arguments[0] in ('open', 'action'))
     operation, *uris = arguments
-    require(len(uris) <= 2 and all(uri in [item['uri'] for item in manifest['files']] for uri in uris)
-            and (operation != 'action' or uris == [item['uri'] for item in manifest['files']]))
+    allowed = [item['uri'] for item in request_documents(directory, run_id, manifest, operation)]
+    if http_enabled(manifest):
+        require(uris == allowed or operation == 'open' and uris == [])
+    else:
+        require(len(uris) <= 2 and all(uri in allowed for uri in uris)
+                and (operation != 'action' or uris == allowed))
     require(digest(regular(Path(manifest['entry']))) == manifest['entry_sha256'])
     for item in manifest['files']:
         require(digest(regular(directory / item['name'])) == item['sha256'])
@@ -508,12 +687,27 @@ def retire_entry(directory, run_id, manifest):
 
 
 def retire_watchdog(directory, run_id):
-    directory, _ = context(directory, run_id)
+    directory, manifest = context(directory, run_id)
     unit = 'lucent-application-intent-watchdog-' + run_id + '.service'
+    if not http_enabled(manifest):
+        if unit_snapshot(unit)['load'] != 'not-found':
+            original = original_receipt(directory, 'watchdog-origin.json')
+            argv = owned_argv('lucent-application-intent-watchdog-', str(directory / 'fixture.py'), run_id)
+            retire_original_unit(unit, argv, original)
+        return None
+    origin_path = directory / 'watchdog-origin.json'
+    ready_path = directory / 'http-origin.json'
+    origin = original_receipt(directory, 'watchdog-origin.json') if os.path.lexists(origin_path) else None
+    if os.path.lexists(ready_path):
+        require(origin is not None and original_receipt(directory, 'http-origin.json')['origin'] == origin)
     if unit_snapshot(unit)['load'] != 'not-found':
-        original = original_receipt(directory, 'watchdog-origin.json')
+        require(origin is not None)
         argv = owned_argv('lucent-application-intent-watchdog-', str(directory / 'fixture.py'), run_id)
-        retire_original_unit(unit, argv, original)
+        retire_original_unit(unit, argv, origin)
+    # Capture precedes bind/publication. A drained original cgroup owns no
+    # surviving listener even if its ready reply/publication was lost.
+    require(origin is None and not os.path.lexists(ready_path) or origin is not None and retirement_drained(origin))
+    return {'http_server_retired': True}
 
 
 def retire(directory, run_id):
@@ -568,6 +762,7 @@ def cleanup(directory, run_id):
         'application-intent', 'application-intent.sha256', 'owned_application_units.py',
         'example-origin.json', 'example-admission.json', 'watchdog-origin.json', 'browser-admission.json',
         'application_intent_browser.py', 'owned_chromium_lease.py', 'chromium-lease.json', 'entry-origin.json',
+        'http-origin.json',
         *[item['name'] for item in manifest['files']]})
     profile = directory / 'profile'
     if profile.exists():
@@ -670,7 +865,8 @@ def browser_close(directory, run_id, request):
     captured = browser_authority(directory, run_id, request['identity'])
     require(request['before'] == [captured['control']])
     current = browser_pages(directory)
-    fresh = fresh_documents(request['before'], current, manifest['files'], captured['control'])
+    documents = request_documents(directory, run_id, manifest, request.get('operation', 'open'))
+    fresh = fresh_documents(request['before'], current, documents, captured['control'])
     require(fresh is not None and fresh == request['targets'])
     remaining = list(fresh)
     for target in fresh:
@@ -699,22 +895,27 @@ def initial_absence(directory, run_id):
 
 
 def watchdog(directory, run_id):
-    directory, _ = context(directory, run_id)
+    directory, manifest = context(directory, run_id)
     unit = 'lucent-application-intent-watchdog-' + run_id + '.service'
     argv = owned_argv('lucent-application-intent-watchdog-', str(directory / 'fixture.py'), run_id)
-    original_receipt(directory, 'watchdog-origin.json', capture_unit_origin(unit, argv))
+    origin = original_receipt(directory, 'watchdog-origin.json', capture_unit_origin(unit, argv))
     signal.alarm(295)
-    time.sleep(210)
-    # Independent expiry has the same immutable origin/admission receipts as
-    # host cleanup. Repeated failures never grant authority over a successor.
-    for attempt in range(6):
-        try:
-            retire(directory, run_id)
-            return
-        except Exception:
-            if attempt == 5:
-                raise
-            time.sleep(5)
+    try:
+        if http_enabled(manifest):
+            http_wait(directory, run_id, manifest, origin)
+        else:
+            time.sleep(210)
+    finally:
+        # Independent expiry has the same immutable receipts as host cleanup.
+        # A server failure still runs retirement; no successor is adopted.
+        for attempt in range(6):
+            try:
+                retire(directory, run_id)
+                break
+            except Exception:
+                if attempt == 5:
+                    raise
+                time.sleep(5)
 
 
 def main():
@@ -725,8 +926,9 @@ def main():
     parser.add_argument('arguments', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     signal.alarm(55)
-    if args.operation == 'initialize' and len(args.arguments) == 1:
-        initialize(args.directory, args.run_id, args.arguments[0])
+    if args.operation == 'initialize' and len(args.arguments) in (1, 2):
+        require(len(args.arguments) == 1 or args.arguments[1] == 'http')
+        initialize(args.directory, args.run_id, args.arguments[0], len(args.arguments) == 2)
     elif args.operation == 'initial-absence' and not args.arguments:
         initial_absence(args.directory, args.run_id)
     elif args.operation == 'start-example' and not args.arguments:
@@ -735,8 +937,15 @@ def main():
         print(json.dumps(retire_example(args.directory, args.run_id,
                          json.loads(args.arguments[0]) if args.arguments else None)))
     elif args.operation == 'retire-watchdog' and not args.arguments:
-        retire_watchdog(args.directory, args.run_id)
-        print(json.dumps({'retired': True}))
+        result = retire_watchdog(args.directory, args.run_id)
+        print(json.dumps({'retired': True, **(result or {})}))
+    elif args.operation == 'http-info' and not args.arguments:
+        directory, manifest = context(args.directory, args.run_id)
+        require(http_enabled(manifest))
+        if not os.path.lexists(directory / 'http-origin.json'):
+            print(json.dumps({'ready': False}))
+        else:
+            print(json.dumps({'ready': True, 'identity': http_authority(directory, args.run_id)}))
     elif args.operation == 'execute':
         execute(args.directory, args.run_id, args.arguments)
     elif args.operation == 'state' and not args.arguments:

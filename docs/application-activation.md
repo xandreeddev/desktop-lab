@@ -319,6 +319,47 @@ That later result does not isolate the cause of earlier focus failures. The
 compositor remains responsible for deciding whether to grant application focus.
 
 
+## Opt-in native HTTP URI acceptance: source prepared
+
+The existing harness additionally accepts `--http-uris`. This mode is prepared
+for a separately scheduled native run; it has **not established a Chromium HTTP
+URI pass**. The default invocation retains the existing local-file workload.
+
+```sh
+python3 vm/test-application-intent.py \
+  --release-manifest /private/source-matched-cohort.json \
+  --http-uris --report /private/absent-uri-report.json
+```
+
+The identified release must include the independent application-intent example.
+That example already accepts typed URI targets, so this harness extension adds
+no framework API, domain contract or production behavior. Its owned `%U`
+desktop entry stays immutable during the run, and no user MIME associations are
+written. The declared Action still opens the two local-file fixtures; physical
+Open, later socket Open and desktop CLI Open instead use two encoded HTTP URIs.
+
+During its existing 210-second wait, the original watchdog process serves only
+two generated, hashed HTML bodies on an ephemeral IPv4 loopback listener. There
+is no additional process or thread, directory listing, redirect or external
+asset. Each connection has a one-second absolute header deadline, an 8192-byte
+request bound and a half-second write timeout. Responses close the connection
+and prohibit external resources with a content security policy. Readiness binds
+the original watchdog invocation/process and exact listener descriptor/inode to
+its current loopback TCP LISTEN row; later guards refuse changed authority.
+
+Each Open still requires two fresh CDP target IDs with exact expected URL and
+title, followed by retirement of only those targets and preservation of the
+original blank control. The original focus observation is retained without
+forcing compositor focus. Cleanup additionally requires the original watchdog
+cgroup to drain, including when HTTP readiness fails before the example starts.
+
+The 19 new pure fixture/admission tests pass alongside existing focused
+application/ownership tests. They create no listener or browser. A direct Rust
+parser test covers successful HTTP `%u` and `%U` expansion with encoded percent,
+Unicode, query and fragment values; its execution requires the next Rust check.
+Native `%u`, default URI handlers, external navigation and broad browser
+compatibility remain outside this `%U` fixture's scope.
+
 ## Fresh real-application result: file opening passes, focus remains failed
 
 The frozen `f6d004d9` harness ran against the unchanged deployed `8e6d074b`
