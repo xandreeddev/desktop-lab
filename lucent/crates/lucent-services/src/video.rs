@@ -200,6 +200,7 @@ impl WallpaperPlaybackPort for NativeVideoWallpapers {
                     looping: false,
                     ..Default::default()
                 },
+                DecodePurpose::Poster,
                 &mut |frame| {
                     poster = Some(frame);
                     false
@@ -250,6 +251,7 @@ impl WallpaperPlaybackPort for NativeVideoWallpapers {
             decode(
                 Path::new(&asset.path),
                 options,
+                DecodePurpose::LiveWallpaper,
                 &mut |frame| emit(Ok(frame)),
                 stop.clone(),
             )
@@ -399,13 +401,33 @@ impl FrameConverter {
         )
     }
 }
+/// Adapter-local decoder policy. Poster extraction and read-only previews keep
+/// their serial decoder even when the underlying source uses H.264.
+#[derive(Clone, Copy)]
+enum DecodePurpose {
+    Poster,
+    LiveWallpaper,
+    Preview(WallpaperPreviewOptions),
+}
+impl DecodePurpose {
+    fn threading(self, codec: ffmpeg::codec::Id) -> ffmpeg::codec::threading::Config {
+        use ffmpeg::codec::threading::{Config, Type};
+        let parallel = matches!(self, Self::LiveWallpaper) && codec == ffmpeg::codec::Id::H264;
+        let mut config = Config::count(if parallel { 2 } else { 1 });
+        // A count alone leaves FFmpeg's threading kind at None. Restrict the
+        // measured frame-threading trial to live H.264; other codecs stay serial.
+        config.kind = if parallel { Type::Frame } else { Type::None };
+        config
+    }
+}
 fn decode(
     path: &Path,
     options: PlaybackOptions,
+    purpose: DecodePurpose,
     emit: &mut dyn FnMut(MediaFrame) -> bool,
     stop: Arc<dyn StopSignal>,
 ) -> Result<()> {
-    decode_inner(path, options, None, emit, stop)
+    decode_inner(path, options, purpose, emit, stop)
 }
 fn decode_preview(
     path: &Path,
@@ -420,7 +442,7 @@ fn decode_preview(
             looping: true,
             target: None,
         },
-        Some(preview),
+        DecodePurpose::Preview(preview),
         emit,
         stop,
     )
@@ -428,7 +450,7 @@ fn decode_preview(
 fn decode_inner(
     path: &Path,
     options: PlaybackOptions,
-    preview: Option<WallpaperPreviewOptions>,
+    purpose: DecodePurpose,
     emit: &mut dyn FnMut(MediaFrame) -> bool,
     stop: Arc<dyn StopSignal>,
 ) -> Result<()> {
@@ -478,7 +500,7 @@ fn decode_inner(
         let rate: f64 = stream.avg_frame_rate().into();
         let mut context = ffmpeg::codec::context::Context::from_parameters(stream.parameters())
             .map_err(|_| failed())?;
-        context.set_threading(ffmpeg::codec::threading::Config::count(1));
+        context.set_threading(purpose.threading(context.id()));
         let mut decoder = context.decoder().video().map_err(|_| failed())?;
         // Reject known oversized declarations before allocating decoded frames,
         // but permit unknown (zero) edges until the first frame establishes them.
@@ -504,9 +526,13 @@ fn decode_inner(
                     return Ok(false);
                 }
                 if converter.is_none() {
-                    converter = Some(match preview {
-                        Some(preview) => FrameConverter::new_sized(&frame, None, Some(preview))?,
-                        None => FrameConverter::new(&frame, options.target)?,
+                    converter = Some(match purpose {
+                        DecodePurpose::Preview(preview) => {
+                            FrameConverter::new_sized(&frame, None, Some(preview))?
+                        }
+                        DecodePurpose::Poster | DecodePurpose::LiveWallpaper => {
+                            FrameConverter::new(&frame, options.target)?
+                        }
                     });
                 }
                 let converter = converter.as_mut().ok_or_else(failed)?;

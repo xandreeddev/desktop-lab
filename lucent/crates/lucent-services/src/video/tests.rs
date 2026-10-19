@@ -1,5 +1,30 @@
 use super::*;
 #[test]
+fn video_frame_threading_is_exclusive_to_live_h264() {
+    use ffmpeg::codec::{Id, threading::Type};
+    for purpose in [
+        DecodePurpose::Poster,
+        DecodePurpose::Preview(WallpaperPreviewOptions::new(64, 48).unwrap()),
+        DecodePurpose::LiveWallpaper,
+    ] {
+        for codec in [
+            Id::H264,
+            Id::HEVC,
+            Id::MPEG4,
+            Id::VP8,
+            Id::VP9,
+            Id::AV1,
+            Id::GIF,
+        ] {
+            let config = purpose.threading(codec);
+            let parallel = matches!(purpose, DecodePurpose::LiveWallpaper) && codec == Id::H264;
+            assert_eq!(config.kind, if parallel { Type::Frame } else { Type::None });
+            assert_eq!(config.count, if parallel { 2 } else { 1 });
+        }
+    }
+}
+
+#[test]
 fn video_source_clock_preserves_actual_integer_and_fractional_cadences() {
     for fps in [15u32, 24, 30, 60, 120] {
         let mut clock = FrameClock::new(WallpaperFrameRate::Source);
@@ -373,6 +398,245 @@ fn fixture(root: &Path, extension: &str) -> PathBuf {
         .expect("ffmpeg is a required media runtime/fixture dependency");
     assert!(result.status.success(), "synthetic fixture encoding failed");
     file
+}
+
+fn h264_fixture(root: &Path) -> PathBuf {
+    use std::process::Stdio;
+    let file = root.join("h264-b-frames.mp4");
+    let mut child = Command::new("ffmpeg")
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=64x48:rate=10",
+            "-frames:v",
+            "8",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "medium",
+            "-threads",
+            "1",
+            "-bf",
+            "2",
+            "-g",
+            "12",
+            "-x264-params",
+            "b-adapt=0",
+            "-pix_fmt",
+            "yuv420p",
+        ])
+        .arg(&file)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("ffmpeg with H.264 encoding is a media fixture dependency");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            assert!(status.success(), "H.264 fixture encoding failed");
+            return file;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("H.264 fixture encoding exceeded its bounded deadline");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+fn frame_snapshot(frame: MediaFrame) -> (Duration, u32, u32, Vec<u8>, (u32, u32)) {
+    let timestamp = frame.timestamp;
+    let (width, height, rgba, aspect) = frame.into_rgba_with_aspect();
+    (timestamp, width, height, rgba, aspect)
+}
+
+#[test]
+fn video_live_h264_preserves_reordered_pixels_timestamps_and_eof_drain() {
+    use ffmpeg::codec::threading::Type;
+    let root = Directory::new();
+    let file = h264_fixture(&root.0);
+    let original = storage_snapshot(&file);
+    ffmpeg::init().unwrap();
+    let input = ffmpeg::format::input(&file).unwrap();
+    let parameters = input
+        .streams()
+        .best(ffmpeg::media::Type::Video)
+        .unwrap()
+        .parameters();
+    for (purpose, kind, count) in [
+        (DecodePurpose::Poster, Type::None, 1),
+        (
+            DecodePurpose::Preview(WallpaperPreviewOptions::new(64, 48).unwrap()),
+            Type::None,
+            1,
+        ),
+        (DecodePurpose::LiveWallpaper, Type::Frame, 2),
+    ] {
+        let mut context =
+            ffmpeg::codec::context::Context::from_parameters(parameters.clone()).unwrap();
+        assert_eq!(context.id(), ffmpeg::codec::Id::H264);
+        context.set_threading(purpose.threading(context.id()));
+        let decoder = context.decoder().video().unwrap();
+        assert_eq!(decoder.threading().kind, kind);
+        assert_eq!(decoder.threading().count, count);
+        assert!(
+            decoder.has_b_frames(),
+            "the fixture must exercise decoder reorder delay"
+        );
+    }
+    drop(input);
+    let source = Wallpaper {
+        path: file.to_string_lossy().into(),
+        name: "H.264 fixture".into(),
+    };
+    let adapter = NativeVideoWallpapers {
+        state: root.0.join("store"),
+        library: root.0.clone(),
+    };
+    let asset = adapter.prepare(&source).unwrap();
+    let stored = storage_snapshot(&adapter.state);
+    let mut full_reference = vec![];
+    for target in [None, Some(WallpaperPixelTarget::new(32, 24).unwrap())] {
+        let options = PlaybackOptions {
+            fps: WallpaperFrameRate::Source,
+            looping: false,
+            target,
+        };
+        let mut reference = vec![];
+        decode(
+            &file,
+            options,
+            DecodePurpose::Poster,
+            &mut |frame| {
+                reference.push(frame_snapshot(frame));
+                true
+            },
+            Arc::new(Never),
+        )
+        .unwrap();
+        assert_eq!(
+            reference.len(),
+            8,
+            "serial decoding must drain delayed EOF frames"
+        );
+        assert_eq!(
+            reference.iter().map(|frame| frame.0).collect::<Vec<_>>(),
+            (0..8)
+                .map(|index| Duration::from_millis(index * 100))
+                .collect::<Vec<_>>()
+        );
+        let mut actual = vec![];
+        adapter.play(
+            &asset,
+            options,
+            &mut |frame| {
+                actual.push(frame_snapshot(frame.unwrap()));
+                true
+            },
+            Arc::new(Never),
+        );
+        assert_eq!(
+            actual, reference,
+            "Frame2 must preserve every reordered frame and fitted pixel"
+        );
+        if target.is_none() {
+            full_reference = reference;
+        }
+    }
+    let poster = image::open(&asset.poster.path).unwrap().into_rgba8();
+    assert_eq!(poster.dimensions(), (64, 48));
+    assert_eq!(poster.as_raw(), &full_reference[0].3);
+    let mut preview = vec![];
+    adapter.preview(
+        &source,
+        WallpaperPreviewOptions::new(64, 48).unwrap(),
+        &mut |frame| {
+            preview.push(frame_snapshot(frame.unwrap()));
+            preview.len() < 8
+        },
+        Arc::new(Never),
+    );
+    assert_eq!(
+        preview, full_reference,
+        "serial preview must retain the same source pixels and PTS"
+    );
+    assert_eq!(storage_snapshot(&adapter.state), stored);
+    assert_eq!(storage_snapshot(&file), original);
+}
+
+#[test]
+fn video_live_h264_callback_and_loop_cancellation_retire_without_storage_changes() {
+    let root = Directory::new();
+    let file = h264_fixture(&root.0);
+    let source = Wallpaper {
+        path: file.to_string_lossy().into(),
+        name: "H.264 retirement".into(),
+    };
+    let adapter = NativeVideoWallpapers {
+        state: root.0.join("store"),
+        library: root.0.clone(),
+    };
+    let asset = adapter.prepare(&source).unwrap();
+    let stored = storage_snapshot(&adapter.state);
+    let original = storage_snapshot(&file);
+    let mut first = vec![];
+    adapter.play(
+        &asset,
+        PlaybackOptions {
+            fps: WallpaperFrameRate::Source,
+            ..Default::default()
+        },
+        &mut |frame| {
+            first.push(frame.unwrap().timestamp);
+            first.len() < 3
+        },
+        Arc::new(Never),
+    );
+    assert_eq!(
+        first.len(),
+        3,
+        "callback false must return with delayed frames still queued"
+    );
+    let stop = Arc::new(Stop(AtomicBool::new(false)));
+    let mut looped = vec![];
+    adapter.play(
+        &asset,
+        PlaybackOptions {
+            fps: WallpaperFrameRate::Source,
+            ..Default::default()
+        },
+        &mut |frame| {
+            looped.push(frame.unwrap().timestamp);
+            if looped.len() == 10 {
+                stop.0.store(true, Ordering::Relaxed);
+            }
+            true
+        },
+        stop.clone(),
+    );
+    assert_eq!(looped.len(), 10);
+    assert!(stop.cancelled());
+    assert_eq!(
+        looped[8],
+        Duration::ZERO,
+        "looping must reset the source timeline"
+    );
+    assert_eq!(&looped[8..], &first[..2]);
+    adapter.play(
+        &asset,
+        PlaybackOptions::default(),
+        &mut |_| panic!("an already-cancelled live decoder emitted"),
+        stop,
+    );
+    assert_eq!(storage_snapshot(&adapter.state), stored);
+    assert_eq!(storage_snapshot(&file), original);
 }
 
 #[derive(Debug, PartialEq, Eq)]
