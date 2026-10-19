@@ -1,17 +1,25 @@
 # Guest suspend/resume preparation
 
-This is a source-only plan and read-only prerequisite inspector. **No guest S3,
+This is an unexecuted suspend plan and a native read-only prerequisite inspector.
+**No guest S3,
 suspend/resume, secure resume or physical hardware acceptance is established.**
 The inspector has no suspend, wakeup, authentication or domain-edit operation.
 
-The approved hardware candidate inspected during preparation is q35 with ACPI,
-but explicitly contains `<suspend-to-mem enabled="no"/>`. Libvirt documents that
-this disables firmware advertisement of ACPI S3. The actual guest power states,
-selected memory mode and logind authorization have not been queried for this
-plan. The current domain therefore lacks an affirmative S3 prerequisite. A
+The actual 2026-10-19 prerequisite capture uses the deployed `8e6d074b` cohort
+and the inspector/policy from `6bb80e59`. The live q35 domain has ACPI, but
+explicitly contains `<suspend-to-mem enabled="no"/>`. The guest reports
+`freeze mem disk`, only `[s2idle]` for memory sleep, and `CanSuspend=challenge`
+for the SSH collector's session context. That authorization result does not
+establish the policy for a physical action in the active graphical session.
+The current domain therefore lacks an affirmative S3 prerequisite. A
 paused libvirt domain, process SIGSTOP, or guest `freeze`/`s2idle` is not guest S3.
 Enabling S3 would be a separate reviewed domain change/reboot with its existing
 conditional XML rollback, not something this helper performs automatically.
+
+The [sanitized prerequisite report](../reports/measurements/lucent-suspend-prerequisites.json)
+records the source hashes, actual capability observations and failed admission
+conditions. The capture changed no policy, unit, XML or power state; no suspend
+request was issued. `mem` alone does not prove that deep/S3 sleep is available.
 
 ## Read-only prerequisites
 
