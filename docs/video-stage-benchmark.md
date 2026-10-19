@@ -138,7 +138,7 @@ python3 -m unittest discover -s tests -p test_video_stage_reports.py -v
 ```
 
 The comparator refuses different source/code/library identities, actual thread
-modes, targets, prefixes, PTS, decoded pixels or converted RGBA. Its five Python
+modes, targets, prefixes, PTS, decoded pixels or converted RGBA. Its 17 Python
 boundary tests pass at source preparation; this is not execution of FFmpeg cases.
 
 ## How to use a future result
