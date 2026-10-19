@@ -137,7 +137,15 @@ are tracked in `docs/daily-use-completion.json`.
 Chromium profile, then exercises physical launch/open/action and socket/CLI
 opening. The fixture records token **presence**, observes owned window/focus
 state, and checks actual file URI/title loading through that profile's loopback
-DevTools endpoint. Child-environment delivery and observed focus do not prove
+DevTools endpoint. Each physical Open, declared Action, later socket Open and
+desktop CLI Open must create **two new CDP target IDs**, each with its exact
+literal file URI and title; old matching tabs and partial new results cannot
+satisfy a later request. The fixture action explicitly names both owned files.
+Only those two fresh targets are closed after that request's assertion, keeping
+the original blank control window, admitted browser process and private endpoint
+identity. This bounds the browser workload to the control plus two documents
+without silently reducing the requested application behavior. Child-environment
+delivery and observed focus do not prove
 that Chromium consumed a specific activation protocol message. The run requires
 an identified release containing the independent example, an unlocked idle
 single-output VM and bounded owned-process cleanup. Its existence is not an
@@ -171,6 +179,12 @@ that proof is retained for bounded expiry/private recovery rather than adopted.
 Completed-unit observations also keep the original invocation check. These are
 tooling changes with source-only regression evidence, not a new native pass.
 
+Browser page retirement rechecks the original unit invocation/process birth,
+admitted executable metadata, exact `DevToolsActivePort` file identity and the
+fresh target's URL/title before each target-specific close. It refuses redirects,
+extra or replaced pages, endpoint replacement and profile-wide closing. A failed
+page close retains the original ownership receipts for guarded unit cleanup.
+
 Lightweight checks in `tests/test_application_intent_admission.py` exercise
 foreign layer and socket peers, replaced sockets, stale layer/hit identity,
 catch-all interception, cursor loss and captured-process retirement. They use
@@ -188,3 +202,9 @@ and path replacement. Chromium may explicitly use the helper's bounded 512 MiB
 executable limit; its normal default remains 128 MiB. Per-input observation uses
 stable executable metadata and process birth after the admitted hash, avoiding
 repeated full Chromium hashing.
+
+`tests/test_application_intent_browser.py` covers fresh two-document success,
+reuse of old matching tabs, only one fresh document, duplicate/unexpected pages,
+control replacement, and target-specific cleanup refusals. These checks use
+pure policy, temporary endpoint files and mocked browser transport; they do not
+establish native Chromium interoperability.

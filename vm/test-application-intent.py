@@ -22,6 +22,7 @@ import time
 
 from native_surfaces import find_surface
 from application_intent_policy import CursorOwnership, absolute_move, same_target, target as native_target
+from application_intent_browser import fresh_documents
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -51,22 +52,6 @@ def load_helpers():
     remote, session, cli, inspect = [h[key] for key in ('remote', 'session', 'cli', 'inspect')]
     require, eventually, CheckFailure = [h[key] for key in ('require', 'eventually', 'CheckFailure')]
 
-BROWSER_TABS = r'''
-import json,stat,sys,urllib.request
-from pathlib import Path
-directory=Path(sys.argv[1]); run_id=sys.argv[2]
-assert directory.resolve()==directory and directory.stat().st_uid==__import__('os').getuid()
-manifest=json.loads((directory/'manifest.json').read_text()); assert manifest['run_id']==run_id
-path=directory/'profile/DevToolsActivePort'; value=path.lstat()
-assert stat.S_ISREG(value.st_mode) and value.st_uid==__import__('os').getuid() and value.st_size<4096
-port=int(path.read_text().splitlines()[0]); assert 1024<=port<=65535
-opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
-with opener.open('http://127.0.0.1:'+str(port)+'/json/list',timeout=3) as response:
- data=response.read(1024*1024+1); assert len(data)<=1024*1024
-tabs=json.loads(data); assert isinstance(tabs,list) and len(tabs)<=32
-print(json.dumps({'loaded':[any(tab.get('type')=='page' and tab.get('title')==item['title']
- and tab.get('url')==item['uri'] for tab in tabs) for item in manifest['files']]}))
-'''
 
 
 def checked_binary(manifest, name, supplied=None):
@@ -141,6 +126,7 @@ def suite(args, results):
     initialized, example_attempted, guard_attempted = False, False, False
     completed_success, pressed = False, False
     baseline, example_identity, example_layer = None, None, None
+    browser_identity = None
     cleanup = results['cleanup'] = {}
 
     def call(operation, *arguments):
@@ -160,8 +146,30 @@ def suite(args, results):
         state = example_state()['client']
         return state['completed'] == count and not state['busy']
 
-    def loaded():
-        return all(json.loads(session('python3', '-c', BROWSER_TABS, scratch, run_id))['loaded'])
+    def browser_snapshot():
+        nonlocal browser_identity
+        value = json.loads(call('browser-snapshot', json.dumps({'identity': browser_identity})))
+        require(browser_identity is None or value['identity'] == browser_identity,
+                'frozen_original_browser_lifetime_and_control_target')
+        browser_identity = value['identity']
+        return value['pages']
+
+    def before_request():
+        current = browser_snapshot()
+        require(current == [browser_identity['control']], 'only_original_blank_before_each_document_request')
+        return current
+
+    def verify_documents_and_retire(before_pages):
+        selected = None
+        def loaded_fresh():
+            nonlocal selected
+            selected = fresh_documents(before_pages, browser_snapshot(), entry['files'], browser_identity['control'])
+            return selected is not None
+        eventually(loaded_fresh, 'request_created_both_new_literal_document_targets')
+        require(json.loads(call('browser-close', json.dumps({'identity': browser_identity,
+                    'before': before_pages, 'targets': selected})))['fresh_owned_targets_retired'],
+                'only_fresh_document_targets_retired')
+        require(browser_snapshot() == [browser_identity['control']], 'original_blank_browser_target_preserved')
 
     def observe_native(with_example=True):
         value = json.loads(call('admission', json.dumps({'desktop_sha256': expected,
@@ -251,6 +259,8 @@ def suite(args, results):
                  data=(ROOT / 'vm/owned_application_units.py').read_bytes(), timeout=20)
         h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(scratch + '/application_intent_policy.py')],
                  data=(ROOT / 'vm/application_intent_policy.py').read_bytes(), timeout=20)
+        h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(scratch + '/application_intent_browser.py')],
+                 data=(ROOT / 'vm/application_intent_browser.py').read_bytes(), timeout=20)
         initialized = True
         entry = json.loads(call('initialize', manifest['binaries']['application-intent']['sha256']))
         require(json.loads(call('initial-absence'))['absent'], 'owned_units_initially_absent')
@@ -299,31 +309,39 @@ def suite(args, results):
                 for client in clients)
         eventually(focused_owned_browser, 'fresh_owned_browser_focus_observed')
         results['checks']['fresh_token_child_delivery_and_fresh_browser_focus_observed'] = True
+        eventually(lambda: bool(browser_snapshot()), 'original_blank_browser_control_target_admitted')
 
         for index, (identifier, operation) in enumerate((
             ('intent-open', 'open'), ('intent-action', 'action'),
         ), start=2):
+            before_pages = before_request()
             physical_click(identifier)
             eventually(lambda: finished(index) and len(events()) == index, 'physical_intent_dispatch_completed')
             event = events()[-1]
             require(event['operation'] == operation and event['fresh_token_present']
                     and not event['legacy_startup_present'] and example_state()['client']['fresh_token'],
                     'physical_input_token_delivered_to_selected_child')
-            eventually(loaded, 'real_browser_loaded_both_literal_file_uris')
+            verify_documents_and_retire(before_pages)
         results['checks']['real_browser_opened_space_percent_unicode_and_shell_literal_filenames'] = True
         results['checks']['physical_launch_open_and_declared_action_deliver_fresh_tokens_to_children'] = True
         interaction_guard()
+        before_pages = before_request()
         example_command('open')
         eventually(lambda: finished(4) and len(events()) == 4, 'later_socket_open_completed')
         require(not events()[-1]['fresh_token_present'] and not events()[-1]['legacy_startup_present']
                 and not example_state()['client']['fresh_token'], 'later_socket_request_cannot_reuse_physical_authority')
+        verify_documents_and_retire(before_pages)
+        results['checks']['later_socket_request_created_both_fresh_documents'] = True
         interaction_guard()
+        before_pages = before_request()
         cli('applications', 'open', entry['app_id'], scratch + '/' + entry['files'][0]['name'],
             scratch + '/' + entry['files'][1]['name'])
         eventually(lambda: len(events()) == 5, 'desktop_cli_open_reaches_real_application')
         require(not events()[-1]['fresh_token_present'] and not events()[-1]['legacy_startup_present'],
                 'desktop_cli_has_no_physical_authority')
-        eventually(loaded, 'desktop_opened_both_real_browser_documents')
+        verify_documents_and_retire(before_pages)
+        results['checks']['each_open_action_socket_and_cli_created_both_fresh_documents'] = True
+        results['checks']['fresh_targets_retired_with_original_browser_control_preserved'] = True
         interaction_guard()
         results['checks']['desktop_cli_open_and_no_stale_token_reuse'] = True
         completed_success = True

@@ -22,12 +22,14 @@ import struct
 import sys
 import tempfile
 import time
+import urllib.request
 
 sys.dont_write_bytecode = True
 from owned_application_units import (assert_unit_origin, capture_unit_origin,
                                      owned_argv, process_snapshot, retire_original_unit, retire_unit,
                                      unit_snapshot)
 from application_intent_policy import owned_layers, socket_peer, unbound_pointer
+from application_intent_browser import fresh_documents, pages
 
 
 def require(condition):
@@ -98,7 +100,8 @@ def context(directory, run_id, initialized=True):
         require(manifest['run_id'] == run_id
                 and manifest['script_sha256'] == digest(regular(directory / 'fixture.py'))
                 and manifest['units_sha256'] == digest(regular(directory / 'owned_application_units.py'))
-                and manifest['policy_sha256'] == digest(regular(directory / 'application_intent_policy.py')))
+                and manifest['policy_sha256'] == digest(regular(directory / 'application_intent_policy.py'))
+                and manifest['browser_policy_sha256'] == digest(regular(directory / 'application_intent_browser.py')))
     return directory, manifest
 
 
@@ -110,7 +113,7 @@ def encoded(value):
 
 
 def original_receipt(directory, name, value=None):
-    require(name in ('example-origin.json', 'example-admission.json', 'watchdog-origin.json'))
+    require(name in ('example-origin.json', 'example-admission.json', 'watchdog-origin.json', 'browser-admission.json'))
     path = directory / name
     if value is not None and not os.path.lexists(path):
         private(path, json.dumps(value, sort_keys=True).encode())
@@ -143,12 +146,13 @@ def initialize(directory, run_id, example_sha256):
     entry = ('[Desktop Entry]\nType=Application\nName=Lucent intent ' + run_id.lower()
              + '\nIcon=web-browser\nTerminal=false\nNoDisplay=false\n'
              + 'StartupWMClass=LucentIntent' + run_id + '\nExec=' + command + ' open %U\n'
-             + 'Actions=Probe;\n\n[Desktop Action Probe]\nName=Open owned document\nExec='
-             + command + ' action ' + encoded(files[0]['uri']) + '\n').encode()
+             + 'Actions=Probe;\n\n[Desktop Action Probe]\nName=Open owned documents\nExec='
+             + command + ' action ' + ' '.join(encoded(item['uri']) for item in files) + '\n').encode()
     manifest = {'run_id': run_id, 'example_sha256': example_sha256,
                 'script_sha256': digest(regular(directory / 'fixture.py')),
                 'units_sha256': digest(regular(directory / 'owned_application_units.py')),
                 'policy_sha256': digest(regular(directory / 'application_intent_policy.py')),
+                'browser_policy_sha256': digest(regular(directory / 'application_intent_browser.py')),
                 'app_id': app_id, 'name': 'Lucent intent ' + run_id.lower(),
                 'class': 'LucentIntent' + run_id, 'entry': str(entry_path),
                 'entry_sha256': digest(entry), 'settings': str(settings),
@@ -195,7 +199,7 @@ def execute(directory, run_id, arguments):
     require(arguments and arguments[0] in ('open', 'action'))
     operation, *uris = arguments
     require(len(uris) <= 2 and all(uri in [item['uri'] for item in manifest['files']] for uri in uris)
-            and (operation != 'action' or uris == [manifest['files'][0]['uri']]))
+            and (operation != 'action' or uris == [item['uri'] for item in manifest['files']]))
     require(digest(regular(Path(manifest['entry']))) == manifest['entry_sha256'])
     for item in manifest['files']:
         require(digest(regular(directory / item['name'])) == item['sha256'])
@@ -224,7 +228,7 @@ def execute(directory, run_id, arguments):
                  '--no-first-run', '--no-default-browser-check', '--disable-sync',
                  '--disable-extensions', '--disable-background-networking',
                  '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0',
-                 '--new-window', *uris]
+                 '--new-window', *(uris or ['about:blank'])]
     signal.alarm(0)
     os.execv(arguments[0], arguments)
 
@@ -442,13 +446,120 @@ def cleanup(directory, run_id):
     require(set(path.name for path in directory.iterdir()) <= {
         'fixture.py', 'manifest.json', 'events.json', 'events.lock', 'closing', 'profile', 'application_intent_policy.py',
         'application-intent', 'application-intent.sha256', 'owned_application_units.py',
-        'example-origin.json', 'example-admission.json', 'watchdog-origin.json', *[item['name'] for item in manifest['files']]})
+        'example-origin.json', 'example-admission.json', 'watchdog-origin.json', 'browser-admission.json',
+        'application_intent_browser.py', *[item['name'] for item in manifest['files']]})
     profile = directory / 'profile'
     if profile.exists():
         value = profile.lstat()
         require(stat.S_ISDIR(value.st_mode) and value.st_uid == os.getuid() and not profile.is_symlink())
     entry.unlink()
     shutil.rmtree(directory)
+
+
+def browser_authority(directory, run_id, expected=None):
+    directory, manifest = context(directory, run_id)
+    recorded = events(directory)
+    require(recorded and recorded[0]['operation'] == 'open' and recorded[0]['uris'] == [])
+    event = recorded[0]
+    unit = event['cgroup'].rsplit('/', 1)[1]
+    require(re.fullmatch(r'run-[A-Za-z0-9_-]+\.service', unit))
+    value = unit_snapshot(unit)
+    argv = event_argv(directory, run_id, event)
+    path = directory / 'browser-admission.json'
+    if os.path.lexists(path):
+        captured = original_receipt(directory, 'browser-admission.json')
+        require(expected is None or expected == captured)
+        require({key: item for key, item in value.items() if key != 'active'} ==
+                {key: item for key, item in captured['unit'].items() if key != 'active'})
+        current = assert_unit_origin(value, unit, argv, event['origin'],
+                                    max_executable_bytes=512 * 1024 * 1024)
+        require(current is not None and value['active'] == 'active'
+                and {key: item for key, item in current.items() if key != 'sha256'} ==
+                    {key: item for key, item in captured['process'].items() if key != 'sha256'})
+        return captured
+    require(expected is None)
+    current = assert_unit_origin(value, unit, argv, event['origin'],
+                                max_executable_bytes=512 * 1024 * 1024, hashed=True)
+    require(current is not None and value['active'] == 'active')
+    endpoint = browser_endpoint(directory)
+    current_pages = browser_pages(directory)
+    require(browser_endpoint(directory) == endpoint)
+    require(len(current_pages) == 1 and current_pages[0]['url'] == 'about:blank')
+    require(unit_snapshot(unit) == value)
+    captured = {'unit': value, 'process': current, 'control': current_pages[0], 'endpoint': endpoint}
+    original_receipt(directory, 'browser-admission.json', captured)
+    return captured
+
+
+def browser_endpoint(directory):
+    path = directory / 'profile/DevToolsActivePort'
+    def identity(value):
+        return [value.st_dev, value.st_ino, value.st_mode, value.st_uid, value.st_gid,
+                value.st_size, value.st_mtime_ns, value.st_ctime_ns]
+    before = identity(path.lstat())
+    data = regular(path, 4096)
+    require(identity(path.lstat()) == before)
+    lines = data.decode('ascii').splitlines()
+    require(len(lines) == 2 and lines[0].isdecimal()
+            and re.fullmatch(r'/devtools/browser/[A-Za-z0-9-]{1,128}', lines[1]))
+    port = int(lines[0])
+    require(1024 <= port <= 65535)
+    return {'port': port, 'browser': lines[1], 'file': before, 'sha256': digest(data)}
+
+
+def browser_http(directory, suffix):
+    endpoint = browser_endpoint(directory)
+    if os.path.lexists(directory / 'browser-admission.json'):
+        require(original_receipt(directory, 'browser-admission.json')['endpoint'] == endpoint)
+    port = endpoint['port']
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *_args, **_kwargs):
+            return None
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    url = 'http://127.0.0.1:' + str(port) + suffix
+    with opener.open(url, timeout=3) as response:
+        require(response.status == 200 and response.geturl() == url)
+        raw = response.read(262145)
+        require(len(raw) <= 262144 and browser_endpoint(directory) == endpoint)
+        return raw
+
+
+def browser_pages(directory):
+    return pages(json.loads(browser_http(directory, '/json/list')))
+
+
+def browser_snapshot(directory, run_id, request):
+    directory, _ = context(directory, run_id)
+    captured = browser_authority(directory, run_id, request.get('identity'))
+    current = browser_pages(directory)
+    browser_authority(directory, run_id, captured)
+    print(json.dumps({'identity': captured, 'pages': current}))
+
+
+def browser_close(directory, run_id, request):
+    directory, manifest = context(directory, run_id)
+    captured = browser_authority(directory, run_id, request['identity'])
+    require(request['before'] == [captured['control']])
+    current = browser_pages(directory)
+    fresh = fresh_documents(request['before'], current, manifest['files'], captured['control'])
+    require(fresh is not None and fresh == request['targets'])
+    remaining = list(fresh)
+    for target in fresh:
+        browser_authority(directory, run_id, captured)
+        require(browser_pages(directory) == sorted([captured['control'], *remaining], key=lambda item: item['id']))
+        # The exact fresh target ID was observed with its expected literal URL
+        # and title. Never close the original blank target or a profile-wide set.
+        require(re.fullmatch(r'[A-Za-z0-9-]{1,128}', target['id']))
+        browser_http(directory, '/json/close/' + target['id'])
+        remaining.remove(target)
+        deadline = time.monotonic() + 3
+        while browser_pages(directory) != sorted([captured['control'], *remaining], key=lambda item: item['id']):
+            require(time.monotonic() < deadline)
+            browser_authority(directory, run_id, captured)
+            time.sleep(.05)
+    browser_authority(directory, run_id, captured)
+    require(browser_pages(directory) == [captured['control']])
+    print(json.dumps({'fresh_owned_targets_retired': True}))
 
 
 def initial_absence(directory, run_id):
@@ -481,7 +592,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('operation', choices=('initialize', 'execute', 'state', 'retire', 'cleanup', 'watchdog', 'guard',
                                              'admission', 'example-command', 'initial-absence', 'start-example',
-                                             'retire-example', 'retire-watchdog'))
+                                             'retire-example', 'retire-watchdog', 'browser-snapshot', 'browser-close'))
     parser.add_argument('directory')
     parser.add_argument('run_id')
     parser.add_argument('arguments', nargs=argparse.REMAINDER)
@@ -510,6 +621,8 @@ def main():
         admission(args.directory, args.run_id, json.loads(args.arguments[0]))
     elif args.operation == 'example-command' and len(args.arguments) == 2:
         print(example_command(args.directory, args.run_id, args.arguments[0], json.loads(args.arguments[1])))
+    elif args.operation in ('browser-snapshot', 'browser-close') and len(args.arguments) == 1:
+        globals()[args.operation.replace('-', '_')](args.directory, args.run_id, json.loads(args.arguments[0]))
     elif args.operation == 'retire' and not args.arguments:
         retire(args.directory, args.run_id)
     elif args.operation == 'watchdog' and not args.arguments:
