@@ -135,3 +135,15 @@ protocol regression cases. This final cohort still requires its own compile,
 test and 1×/2× visual runs. No native compositor IME interoperability or memory
 acceptance is claimed by the presence of the harness or these source cases.
 Accessibility bridging remains explicitly deferred by the user.
+
+
+## Resource observation in this source cohort
+
+Fallback glyph preparation remains on demand, with borrowed immutable tables and
+one bounded outline at a time. The combined source cohort adds the isolated
+`font_resources::cold_and_warm_fallback_preparation_resources` probe and opt-in
+compositor presentation feedback. These observe preparation and actual compositor
+reports separately from CPU submission counters; neither changes text density,
+frame demand or the domain/component contracts. See [daily-performance.md](daily-performance.md)
+for the matched static/video workloads and protocol-flag limits. Compilation and
+measured resource/presentation acceptance for this combined cohort remain pending.

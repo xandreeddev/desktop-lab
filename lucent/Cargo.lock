@@ -1143,6 +1143,7 @@ dependencies = [
  "serde_json",
  "wayland-client",
  "wayland-protocols-misc",
+ "zeroize",
 ]
 
 [[package]]

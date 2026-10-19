@@ -8,6 +8,7 @@ Records stay private until reviewed; Linux RSS is not a GPU-memory measurement.
 """
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -16,12 +17,33 @@ import re
 import runpy
 import shlex
 import statistics
+import sys
 import subprocess
 import time
 
-import lab
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_helpers():
+    """Load canonical read-only guest helpers only when main is requested."""
+    common = subprocess.run(['git', '-C', str(ROOT), 'rev-parse', '--path-format=absolute',
+                             '--git-common-dir'], check=True, capture_output=True, text=True, timeout=5)
+    path = Path(common.stdout.strip()).resolve(strict=True).parent / 'vm/lab.py'
+    spec = importlib.util.spec_from_file_location('daily_resources_lab', path)
+    assert spec is not None and spec.loader is not None
+    lab = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lab)
+    previous = sys.modules.get('lab')
+    try:
+        sys.modules['lab'] = lab
+        helpers = runpy.run_path(str(ROOT / 'vm/test-framework.py'), run_name='harness')
+    finally:
+        if previous is None:
+            sys.modules.pop('lab', None)
+        else:
+            sys.modules['lab'] = previous
+    return lab, helpers
 
 # Runs inside the guest, samples only /proc and the existing installed files.
 SAMPLER = r'''
@@ -153,7 +175,7 @@ def main():
     expected = release['binaries']['lucent-desktop']['sha256']
     assert re.fullmatch(r'[0-9a-f]{40}', source) and re.fullmatch(r'[0-9a-f]{64}', expected)
     subprocess.run(['git', 'cat-file', '-e', source+'^{commit}'], cwd=ROOT, check=True)
-    h = runpy.run_path(str(ROOT/'vm/test-framework.py'), run_name='harness')
+    lab, h = load_helpers()
     inspect, remote, session = h['inspect'], h['remote'], h['session']
     assert session('omarchy-shell', 'lock', 'isLocked').strip() == 'false', 'Unlock the guest first'
     before = inspect()
