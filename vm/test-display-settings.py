@@ -319,8 +319,10 @@ print(json.dumps(matches[0]))
     def apply(expected):
         global INPUT_ALLOWED
         INPUT_ALLOWED=[signature(monitor()),signature(expected)]
+        preview_started=time.monotonic()
         click('display-apply');eventually(lambda:phase()=='confirmation','Native preview was not verified',timeout=10)
-        assert signature(monitor())==signature(expected)
+        actual=monitor()
+        assert signature(actual)==signature(expected), json.dumps({'preview_seconds':round(time.monotonic()-preview_started,3),'expected':signature(expected)[1:],'actual':signature(actual)[1:]})
         INPUT_ALLOWED=[signature(expected)]
     try:
         # Existing Omarchy discovery/action remains, only its presentation changes.
