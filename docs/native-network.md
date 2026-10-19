@@ -283,10 +283,26 @@ to alter original profiles. After initial WPA2/DHCP and saved reconnection it:
    over concurrent user changes. The root-owned fixture state remains private
    if teardown cannot be verified.
 
-`python3 -m py_compile vm/network_fixture.py vm/test-network-panel.py` validates
-helper syntax only. Cargo, private-bus, visual and real-guest results must be
-recorded from their actual executions; this source change does not by itself
-establish any of those acceptance results.
+The accepted source `c17d6e7d56d4` passes strict workspace formatting, all-target
+Clippy and the full Rust suite (789 passed, 76 intentionally ignored), 104 Python
+checks and 576 generated token checks. The strict execution source is
+`493675ba5921`; only the eight reviewed new credential PNG
+references differ. All eight normal/narrow, dark/light, 1×/2× Vulkan comparisons
+pass without updating references. No existing baseline or tolerance changed.
+
+The guarded desktop/CLI deployment and complete native panel recipe pass against
+that exact release. The guest exercises actual NetworkManager, an owned simulated
+WPA2 AP, native pointer/keyboard input, incorrect-password cancellation,
+missing-password repair, the same saved UUID, DHCP and system-owned persistence
+followed by prompt-free reconnection. Exact settings bytes/inode, media, exports,
+clipboard history, monitor configuration, supervisor and process identities survive
+fixture cleanup. The previous accepted binary cohort remains available for
+rollback; rollback was not needed or exercised by this successful deployment.
+
+This is simulated-radio, single-output guest acceptance. Physical Wi-Fi, SAE/OWE,
+enterprise/WEP provisioning, WPS, agent-owned vaults, captive portals, suspend and
+broader interoperability remain open. No new resource or animation-pacing result
+is inferred from the visual or native interaction checks.
 
 Protocol references for this slice:
 [SecretAgent](https://networkmanager.dev/docs/api/latest/gdbus-org.freedesktop.NetworkManager.SecretAgent.html),
@@ -294,4 +310,4 @@ Protocol references for this slice:
 and [secret flags](https://networkmanager.dev/docs/api/latest/nm-dbus-types.html).
 
 The [credential recovery evidence](../reports/measurements/lucent-wifi-credential-recovery.json)
-separates the actual focused source cohort from final visual/native checks.
+records the exact strict, visual, release/deployment and native source cohorts.
