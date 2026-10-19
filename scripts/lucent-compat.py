@@ -69,12 +69,13 @@ def shell(args):
             if 0<=index<len(names): return panel(names[index])
             raise ValueError('No Lucent panel at this position')
         if method=='hide':
-            cli('audio','close')
-            cli('media','close')
-            cli('network','close')
-            # Other compatibility panels still use the native picker.
+            # The desktop owns the full panel set and child cancellation policy.
+            # The selector is a separate Lucent process with its own close IPC.
             import menu_routes
-            menu_routes.picker_command('close')
+            try:
+                cli('shell','hide')
+            finally:
+                menu_routes.picker_command('close')
             return 'ok'
     if target=='background' and method=='set' and len(args)==1:
         return cli('wallpaper','set',args[0])

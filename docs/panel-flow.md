@@ -28,7 +28,8 @@ a desktop bar. There is no extra domain port for this presentation policy.
 
 The policy lives in
 `lucent/apps/lucent-desktop/src/desktop/panels.rs`. It covers launcher, audio,
-network, Bluetooth, power, tray, live-wallpaper settings and notification history.
+media, weather, network, Bluetooth, power, Displays, tray, live-wallpaper settings
+and notification history.
 Each child owns its open state; the root derives the current host from those
 states, without keeping another active-panel state variable.
 
@@ -76,12 +77,37 @@ Use `lucent-cli notifications hide` (or `close`) and
 `lucent-cli wallpaper live close` to dismiss those panels. Closing live-wallpaper
 settings does not stop playback; `wallpaper live off` is separate.
 
+`lucent-cli shell hide` dismisses all eleven ordinary foreground panels through
+that same child-owned Close/Hide dispatch. The Omarchy compatibility action
+`omarchy-shell shell hide` forwards one command to this policy and separately
+closes the native selector, including when the desktop command fails. The Python
+adapter does not keep another list of desktop panels.
+
+Dismissal releases foreground keyboard/pointer ownership immediately and keeps
+the existing exit animations. It also visits closed children with pending work:
+Display previews request Revert, late Apply admission is reverted by its exact
+identity, Network drops its zeroizing credential form and revokes the captured
+request, Bluetooth retains cancellation intent across a pending connection, and
+Tray retires a direct bar action so a late failure cannot reopen its menu. Power
+confirmation is cleared rather than executed. A new actual backend request has
+its own child-owned authority; dismissal is not a permanent prompt-disable flag.
+
+The command does not hide bars or desktop widgets, dismiss notifications, stop
+live playback, save preferences or alter lock/login/polkit authority. Those
+remain separate actions and clients.
+
 ## Validation
 
-Tests cover all 64 ordered panel pairs, repeated updates, pending tray work,
+Tests cover every ordered pair of the eleven panels, repeated updates, pending tray work,
 notification dismissal, host ownership, shared hit geometry/messages and bar/grid
 geometry. Dedicated Vulkan panel-host fixtures complement the isolated component
 references; screenshot tolerances remain unchanged.
+
+The global-dismissal regressions additionally cover all-panel input release,
+unchanged preferences, known/late display admission, credential retirement,
+pending Bluetooth connection cancellation, stale tray failure and power
+confirmation. They are source fixtures; Rust execution and native acceptance
+for this new command remain pending until their own source-specific checks run.
 
 `python3 vm/test-panel-flow.py` exercises real bar clicks, history padding,
 keyboard focus/Escape, outside dismissal and hiding the bar in the existing VM.

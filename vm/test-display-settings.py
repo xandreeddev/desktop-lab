@@ -25,6 +25,8 @@ import uuid
 import lab
 from native_surfaces import active_surfaces, find_surface
 from preservation_fingerprint import fingerprint
+from display_supervision import (identity as supervisor_identity, recovery_evidence,
+                                 recovered_beyond_deadline, expected_after_ui_crash)
 
 ROOT = Path(__file__).resolve().parents[1]
 STARTED = None
@@ -32,6 +34,7 @@ INPUT_ALLOWED = []
 HELPER = runpy.run_path(str(ROOT / 'vm/test-framework.py'))
 remote, session, inspect = [HELPER[key] for key in ('remote', 'session', 'inspect')]
 raw_key, eventually = [HELPER[key] for key in ('key', 'eventually')]
+rendered = runpy.run_path(str(ROOT / 'scripts/lucent_readiness.py'))['desktop_rendered']
 
 RECOVERY = r'''
 import ctypes,hashlib,json,os,stat,subprocess,sys,time
@@ -302,6 +305,7 @@ assert len(matches)==1
 print(json.dumps(matches[0]))
 """
     desktop_process=json.loads(remote('python3','-c',process_script,args.desktop_sha256))
+    supervisor_before=supervisor_identity(session) if args.test_crash else None
     directory='/home/omarchy/.local/state/lucent/lucent-display-transaction-'+uuid.uuid4().hex
     remote('mkdir','-m','700',directory)
     subprocess.run(lab.ssh_args('lucent')+['cat > '+shlex.quote(directory+'/recovery.py')],input=RECOVERY.encode(),check=True)
@@ -312,7 +316,7 @@ print(json.dumps(matches[0]))
     launch="import os,subprocess,sys; directory=sys.argv[1]; subprocess.Popen(['python3',directory+'/recovery.py','watch',directory],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True); print('started')"
     remote('python3','-c',launch,directory)
     eventually(lambda:remote('test','-f',directory+'/watch.ready')=='','Independent recovery watchdog did not arm')
-    checks=[];restoration=None;preservation_verified=False
+    checks=[];restoration=None;preservation_verified=False;post_recovery=None
     report_path=ROOT/'reports/local'/('display-settings-native-'+uuid.uuid4().hex+'.json')
     report_path.parent.mkdir(parents=True,exist_ok=True)
     def original(): return signature(monitor())==signature(observed)
@@ -390,6 +394,11 @@ finally:os.close(descriptor)
             eventually(lambda:inspect()['client']['settings_writable'],'Supervisor did not recover desktop',timeout=45)
             recovered=json.loads(remote('python3','-c',process_script,args.desktop_sha256))
             assert recovered['pid']!=desktop_process['pid']
+            def recovered_ready():
+                nonlocal post_recovery
+                post_recovery=recovery_evidence(session,inspect,rendered,desktop_process,recovered,args.desktop_sha256)
+                return recovered_beyond_deadline(post_recovery)
+            eventually(recovered_ready,'Recovered desktop did not remain verified and rendered beyond the rollback deadline',timeout=45)
             checks.append('desktop_crash_eof_rollback_and_supervisor_recovery')
     finally:
         try:
@@ -398,7 +407,17 @@ finally:os.close(descriptor)
         finally:
             try:
                 restoration=recovery('stop')
-                assert fingerprint(session)==before_preservation, 'Preserved settings/media/exports/history/supervisor/binary state changed; no automatic restore'
+                after_preservation=fingerprint(session)
+                supervisor_after=supervisor_identity(session) if args.test_crash else None
+                descriptor=os.open(report_path.with_suffix('.fingerprints.json'),os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+                with os.fdopen(descriptor,'w') as stream:
+                    json.dump({'before':before_preservation,'after':after_preservation,'process_before':desktop_process,'process_after':locals().get('recovered'),'unit_before':supervisor_before,'unit_after':supervisor_after,'post_recovery':post_recovery},stream,indent=2)
+                    stream.write('\n')
+                expected=before_preservation
+                if args.test_crash:
+                    assert checks and checks[-1]=='desktop_crash_eof_rollback_and_supervisor_recovery', 'Incomplete crash recovery proof'
+                    expected=expected_after_ui_crash(before_preservation,after_preservation,desktop_process,recovered,supervisor_before,supervisor_after,post_recovery,hashlib.sha256((ROOT/'scripts/lucent-session.py').read_bytes()).hexdigest())
+                assert after_preservation==expected, 'Preserved settings/media/exports/history/supervisor/binary state changed; no automatic restore'
                 preservation_verified=True
             finally:
                 report={'desktop_sha256':args.desktop_sha256,'checks':checks,'restoration':restoration,'crash_test_requested':args.test_crash,'preservation_verified':preservation_verified,'scope':'single-output QEMU native panel input and observed layout; no physical/multi-output claims'}
