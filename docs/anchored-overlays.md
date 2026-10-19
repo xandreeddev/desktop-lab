@@ -161,5 +161,6 @@ Native generic-popover focus, keyboard, dismissal and clipboard acceptance remai
 pending. Actual bar hint-band click-through is also pending because the inspector
 does not expose native input regions. Current RSS/CPU, sustained pacing, hardware,
 fractional/multi-output behavior and shaping/bidi/fallback/IME remain separate
-work; accessibility stays deferred. Final docs-site checks, published-head CI,
-merge and GitHub Pages publication remain pending.
+work; accessibility stays deferred. Astro checks at `d3f9b539` pass with zero
+diagnostics; both root and GitHub Pages builds pass 13 pages and 489 links/assets.
+Final published-head CI, merge and GitHub Pages publication remain separate.

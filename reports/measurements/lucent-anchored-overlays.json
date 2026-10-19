@@ -158,18 +158,20 @@
     }
   },
   "docs_site": {
-    "status": "pending_final_evidence_revision",
-    "source_commit": null,
+    "status": "passed",
+    "source_commit": "d3f9b53912e73d484ba4f4a63ce806cdae7ac56c",
+    "astro_diagnostics": 0,
     "root_prefix": {
-      "status": "pending",
-      "pages": null,
-      "links": null
+      "status": "passed",
+      "pages": 13,
+      "links": 489
     },
     "github_pages_prefix": {
-      "status": "pending",
-      "pages": null,
-      "links": null
-    }
+      "status": "passed",
+      "pages": 13,
+      "links": 489
+    },
+    "scope": "Five local validation steps at the recorded evidence revision; final published-head CI and Pages deployment remain separate."
   },
   "performance": {
     "status": "unmeasured_for_this_milestone",
