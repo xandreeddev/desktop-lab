@@ -27,7 +27,7 @@ import urllib.request
 sys.dont_write_bytecode = True
 from owned_application_units import (assert_unit_origin, capture_unit_origin,
                                      owned_argv, process_snapshot, retire_original_unit, retire_unit,
-                                     unit_snapshot)
+                                     unit_snapshot, _retirement_drained as retirement_drained)
 from application_intent_policy import owned_layers, socket_peer, unbound_pointer
 from application_intent_browser import fresh_documents, pages
 import owned_chromium_lease as chromium
@@ -79,6 +79,11 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def artifact_identity(value):
+    return [value.st_dev, value.st_ino, value.st_mode, value.st_uid, value.st_gid,
+            value.st_size, value.st_mtime_ns, value.st_ctime_ns]
+
+
 def regular(path, limit=131072):
     descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
     with os.fdopen(descriptor, 'rb') as stream:
@@ -100,11 +105,16 @@ def private(path, data):
         stream.write(data)
         stream.flush()
         os.fsync(stream.fileno())
+        value = os.fstat(stream.fileno())
+        require(value.st_nlink == 1 and value.st_size == len(data))
+        created = artifact_identity(value)
+        require(artifact_identity(path.lstat()) == created)
     parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         os.fsync(parent)
     finally:
         os.close(parent)
+    return created
 
 
 def atomic(path, data):
@@ -152,7 +162,8 @@ def encoded(value):
 
 
 def original_receipt(directory, name, value=None):
-    require(name in ('example-origin.json', 'example-admission.json', 'watchdog-origin.json', 'browser-admission.json', 'chromium-lease.json'))
+    require(name in ('example-origin.json', 'example-admission.json', 'watchdog-origin.json',
+                     'browser-admission.json', 'chromium-lease.json', 'entry-origin.json'))
     path = directory / name
     if value is not None and not os.path.lexists(path):
         private(path, json.dumps(value, sort_keys=True).encode())
@@ -205,7 +216,9 @@ def initialize(directory, run_id, example_sha256):
     private(directory / 'events.lock', b'')
     for item in files:
         private(directory / item['name'], item['data'])
-    private(entry_path, entry)
+    created = private(entry_path, entry)
+    original_receipt(directory, 'entry-origin.json',
+                     {'path': str(entry_path), 'identity': created, 'sha256': digest(entry)})
     print(json.dumps({key: manifest[key] for key in ('app_id', 'name', 'class', 'files')}))
 
 
@@ -401,20 +414,55 @@ def example_command(directory, run_id, command, expected):
     return response.decode()
 
 
+def retire_example_socket(original):
+    """Only the admitted, drained example's exact refused transport can retire."""
+    expected_socket = original['socket']
+    require(type(expected_socket) is list and len(expected_socket) == 4
+            and all(type(value) is int for value in expected_socket)
+            and expected_socket[0] > 0 and expected_socket[1] > 0
+            and stat.S_ISSOCK(expected_socket[2]) and stat.S_IMODE(expected_socket[2]) == 0o600
+            and expected_socket[3] == os.getuid())
+    require(retirement_drained(original))
+    runtime = Path(os.environ['XDG_RUNTIME_DIR'])
+    require(runtime.is_absolute() and runtime.resolve(strict=True) == runtime
+            and runtime.stat().st_uid == os.getuid())
+    path = runtime / 'application-intent.sock'
+    def observed():
+        value = path.lstat()
+        require(stat.S_ISSOCK(value.st_mode) and value.st_uid == os.getuid()
+                and stat.S_IMODE(value.st_mode) == 0o600)
+        stamp = [value.st_dev, value.st_ino, value.st_mode, value.st_uid]
+        require(stamp == expected_socket)
+        return stamp
+    if not os.path.lexists(path):
+        return
+    expected = observed()
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+        connection.settimeout(1)
+        try:
+            connection.connect(str(path))
+        except ConnectionRefusedError:
+            pass
+        except FileNotFoundError:
+            require(not os.path.lexists(path))
+            return
+        else:
+            require(False)  # A live listener never grants stale-socket removal.
+    require(observed() == expected and retirement_drained(original))
+    path.unlink()
+
+
 def retire_example(directory, run_id, captured=None):
     directory, _ = context(directory, run_id)
     binary = str(directory / 'application-intent')
     unit = 'lucent-application-intent-' + run_id + '.service'
     argv = owned_argv('lucent-application-intent-', binary, run_id)
     value = unit_snapshot(unit)
-    if value['load'] == 'not-found':
-        return
-    origin = original_receipt(directory, 'example-origin.json')
     admission = directory / 'example-admission.json'
     if os.path.lexists(admission):
+        origin = original_receipt(directory, 'example-origin.json')
         original = original_receipt(directory, 'example-admission.json')
         require(captured is None or original == captured)
-        assert_unit_origin(value, unit, argv, origin)
         require(original['unit']['invocation'] == origin['unit']['invocation']
                 and all(original['process'][key] == origin['process'][key]
                         for key in ('pid', 'start', 'group')))
@@ -422,12 +470,41 @@ def retire_example(directory, run_id, captured=None):
         if os.path.lexists(path):
             value = path.lstat()
             require([value.st_dev, value.st_ino, value.st_mode, value.st_uid] == original['socket'])
-        retire_unit(unit, argv, origin['unit']['group'], captured=original)
+        value = unit_snapshot(unit)
+        if value['load'] != 'not-found':
+            assert_unit_origin(value, unit, argv, origin)
+            retire_unit(unit, argv, origin['unit']['group'], captured=original)
+        retire_example_socket(original)
+        return {'retired': True, 'socket_admitted': True, 'socket_retired': True}
     else:
         require(captured is None)
+        require(not os.path.lexists(Path(os.environ['XDG_RUNTIME_DIR']) / 'application-intent.sock'))
         # Lost StartUnit reply or failed-before-socket startup: the original
         # wrapper's durable invocation/birth is enough to retire only its unit.
-        retire_original_unit(unit, argv, origin)
+        if value['load'] != 'not-found':
+            origin = original_receipt(directory, 'example-origin.json')
+            retire_original_unit(unit, argv, origin)
+            require(retirement_drained(origin))
+        elif os.path.lexists(directory / 'example-origin.json'):
+            require(retirement_drained(original_receipt(directory, 'example-origin.json')))
+        return {'retired': True, 'socket_admitted': False, 'socket_retired': False}
+
+
+def retire_entry(directory, run_id, manifest):
+    """Keep private evidence, but retire only the exact published desktop entry."""
+    expected = original_receipt(directory, 'entry-origin.json')
+    path = Path(manifest['entry'])
+    data_home = Path(os.environ.get('XDG_DATA_HOME', str(Path.home() / '.local/share')))
+    require(manifest['app_id'] == 'org.lucent.ApplicationIntent' + run_id + '.desktop'
+            and path == (data_home / 'applications').resolve(strict=True) / manifest['app_id']
+            and expected['path'] == str(path) and expected['sha256'] == manifest['entry_sha256'])
+    if not os.path.lexists(path):
+        return
+    require(artifact_identity(path.lstat()) == expected['identity']
+            and path.lstat().st_nlink == 1
+            and digest(regular(path)) == expected['sha256'])
+    require(artifact_identity(path.lstat()) == expected['identity'])
+    path.unlink()
 
 
 def retire_watchdog(directory, run_id):
@@ -440,7 +517,7 @@ def retire_watchdog(directory, run_id):
 
 
 def retire(directory, run_id):
-    directory, _ = context(directory, run_id)
+    directory, manifest = context(directory, run_id)
     # This lock also guards each wrapper's final admission before recording.
     # Already-recorded children will be swept; queued wrappers cannot start a
     # browser after this point, even when systemd accepted their job earlier.
@@ -470,10 +547,12 @@ def retire(directory, run_id):
             else:
                 retire_original_unit(unit, event_argv(directory, run_id, event), event['origin'],
                                      max_executable_bytes=512 * 1024 * 1024)
+                require(retirement_drained(event['origin']))
         except Exception:
             failed = True
     require(not failed)
-    print(json.dumps({'owned_browser_units_retired': True}))
+    retire_entry(directory, run_id, manifest)
+    print(json.dumps({'owned_browser_units_retired': True, 'owned_entry_retired': True}))
 
 
 def cleanup(directory, run_id):
@@ -481,20 +560,19 @@ def cleanup(directory, run_id):
     retire(directory, run_id)
     require(digest(regular(Path(manifest['settings']), 4 * 1024 * 1024)) == manifest['settings_sha256'])
     entry = Path(manifest['entry'])
-    require(digest(regular(entry)) == manifest['entry_sha256'])
+    require(not os.path.lexists(entry))
     for item in manifest['files']:
         require(digest(regular(directory / item['name'])) == item['sha256'])
     require(set(path.name for path in directory.iterdir()) <= {
         'fixture.py', 'manifest.json', 'events.json', 'events.lock', 'closing', 'profile', 'application_intent_policy.py',
         'application-intent', 'application-intent.sha256', 'owned_application_units.py',
         'example-origin.json', 'example-admission.json', 'watchdog-origin.json', 'browser-admission.json',
-        'application_intent_browser.py', 'owned_chromium_lease.py', 'chromium-lease.json',
+        'application_intent_browser.py', 'owned_chromium_lease.py', 'chromium-lease.json', 'entry-origin.json',
         *[item['name'] for item in manifest['files']]})
     profile = directory / 'profile'
     if profile.exists():
         value = profile.lstat()
         require(stat.S_ISDIR(value.st_mode) and value.st_uid == os.getuid() and not profile.is_symlink())
-    entry.unlink()
     shutil.rmtree(directory)
 
 
@@ -654,8 +732,8 @@ def main():
     elif args.operation == 'start-example' and not args.arguments:
         start_example(args.directory, args.run_id)
     elif args.operation == 'retire-example' and len(args.arguments) in (0, 1):
-        retire_example(args.directory, args.run_id, json.loads(args.arguments[0]) if args.arguments else None)
-        print(json.dumps({'retired': True}))
+        print(json.dumps(retire_example(args.directory, args.run_id,
+                         json.loads(args.arguments[0]) if args.arguments else None)))
     elif args.operation == 'retire-watchdog' and not args.arguments:
         retire_watchdog(args.directory, args.run_id)
         print(json.dumps({'retired': True}))

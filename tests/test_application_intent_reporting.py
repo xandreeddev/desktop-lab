@@ -336,5 +336,43 @@ class RequiredFocusCheckpoint(unittest.TestCase):
             self.assertEqual(result['failure'],'fresh_owned_browser_focus_observed')
 
 
+class MandatoryArtifactRetirement(unittest.TestCase):
+    def require(self, condition, label):
+        if not condition:raise CheckFailure(label)
+
+    def test_admitted_example_requires_socket_retirement_as_a_separate_cleanup_flag(self):
+        driver=load();cleanup={}
+        with patch.object(driver,'require',self.require,create=True):
+            driver.record_example_retirement(cleanup,{'retired':True,'socket_admitted':True,'socket_retired':True},True)
+        self.assertEqual(cleanup,{'example_retired':True,'example_socket_retired':True})
+        for reply in ({'retired':True}, {'retired':True,'socket_admitted':False,'socket_retired':False},
+                      {'retired':True,'socket_admitted':True,'socket_retired':False}):
+            with self.subTest(reply=reply),patch.object(driver,'require',self.require,create=True), \
+                 self.assertRaises(CheckFailure):driver.record_example_retirement({},reply,True)
+
+    def test_durable_guest_admission_also_requires_socket_cleanup_after_lost_host_reply(self):
+        driver=load();cleanup={}
+        with patch.object(driver,'require',self.require,create=True),self.assertRaisesRegex(
+                CheckFailure,'original_independent_example_socket_retired'):
+            driver.record_example_retirement(cleanup,{'retired':True,'socket_admitted':True},False)
+        self.assertNotIn('example_retired',cleanup)
+
+    def test_unadmitted_absent_example_does_not_claim_socket_cleanup(self):
+        driver=load();cleanup={}
+        with patch.object(driver,'require',self.require,create=True):
+            driver.record_example_retirement(cleanup,{'retired':True,'socket_admitted':False,'socket_retired':False},False)
+        self.assertEqual(cleanup,{'example_retired':True})
+
+    def test_browser_unit_retirement_cannot_substitute_for_entry_retirement(self):
+        driver=load();cleanup={}
+        with patch.object(driver,'require',self.require,create=True),self.assertRaisesRegex(
+                CheckFailure,'owned_desktop_entry_retired'):
+            driver.record_browser_retirement(cleanup,{'owned_browser_units_retired':True})
+        self.assertTrue(cleanup['browser_retired']);self.assertNotIn('desktop_entry_retired',cleanup)
+        with patch.object(driver,'require',self.require,create=True):
+            driver.record_browser_retirement(cleanup,{'owned_browser_units_retired':True,'owned_entry_retired':True})
+        self.assertEqual(cleanup,{'browser_retired':True,'desktop_entry_retired':True})
+
+
 if __name__ == '__main__':
     unittest.main()

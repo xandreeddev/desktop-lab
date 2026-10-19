@@ -277,6 +277,31 @@ overall success. A later Open/action acquiring focus does not retrospectively
 satisfy that first-launch checkpoint. No new native result follows from this
 source/pure-test change.
 
+Process retirement and published-artifact retirement are now separate required
+cleanup observations. An admitted example's original PID birth and recursive
+cgroup must drain even if systemd has already collected its unit. Only its exact
+captured socket device/inode/mode/owner can be retired: a bounded connection must
+be refused, the identity must still match afterward, and a live/replaced or
+uncaptured socket is left intact. An already absent admitted socket is valid;
+startup never adopts or clears an unknown stale socket. The host requires a
+separate `example_socket_retired` flag for every admitted example.
+
+The fixture captures its newly published desktop entry's identity from the
+creating file descriptor, alongside its exact path and content hash in a private
+receipt. After all owned example/browser lifetimes drain, retirement removes
+only that unchanged entry, including on an unsuccessful test. The host requires
+the separate `desktop_entry_retired` flag. A replaced entry, even with identical
+contents, is refused. Repeating retirement accepts absence, and successful final
+cleanup remains compatible with the already removed entry. Failed runs preserve
+their private profile, documents and origin/admission receipts.
+
+The original `d28fbe6b` report's successful process-retirement flags did not prove
+socket or entry retirement. The next `3d961e32` attempt refused admission at
+`independent_example_not_already_running` before mutations because the earlier
+captured refused socket remained. Both reports retain their original results;
+the new mandatory artifact flags are not retroactively added to them. The
+artifact correction has local boundary tests, not a new native pass.
+
 The independent example currently keeps its Overlay/OnDemand surface visible;
 the production launcher closes after requesting a launch. That client difference
 is under investigation, not an established cause of the observed failure. The

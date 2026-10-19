@@ -143,6 +143,23 @@ def require_first_launch_focus(checks):
             'fresh_owned_browser_focus_observed')
 
 
+def record_example_retirement(cleanup, result, admitted):
+    require(result.get('retired') is True and type(result.get('socket_admitted')) is bool,
+            'original_independent_example_retired')
+    require(not admitted or result['socket_admitted'], 'captured_example_socket_retirement_required')
+    if result['socket_admitted']:
+        require(result.get('socket_retired') is True, 'original_independent_example_socket_retired')
+        cleanup['example_socket_retired'] = True
+    cleanup['example_retired'] = True
+
+
+def record_browser_retirement(cleanup, result):
+    require(result.get('owned_browser_units_retired') is True, 'owned_browser_retired')
+    cleanup['browser_retired'] = True
+    require(result.get('owned_entry_retired') is True, 'owned_desktop_entry_retired')
+    cleanup['desktop_entry_retired'] = True
+
+
 def fixture_command(argv, operation, directory, sequence):
     """Retain failed fixture transport evidence without dropping its operation."""
     if re.fullmatch('[a-z][a-z-]{0,47}', operation) is None or type(sequence) is not int or not 1 <= sequence <= 512:
@@ -290,7 +307,7 @@ def suite(args, results):
     results['private_artifacts'] = {'guest_directory': scratch, 'host_diagnostics': str(diagnostics),
                                    'receipt_files': ['manifest.json', 'events.json', 'example-origin.json',
                                                      'example-admission.json', 'watchdog-origin.json',
-                                                     'browser-admission.json']}
+                                                     'browser-admission.json', 'entry-origin.json']}
     fixture, binary = scratch + '/fixture.py', scratch + '/application-intent'
     unit = 'lucent-application-intent-' + run_id + '.service'
     guard = 'lucent-application-intent-watchdog-' + run_id + '.service'
@@ -435,8 +452,8 @@ def suite(args, results):
 
     def retire_example():
         arguments = [json.dumps(example_identity)] if example_identity is not None else []
-        require(json.loads(call('retire-example', *arguments))['retired'],
-                'original_independent_example_retired')
+        record_example_retirement(cleanup, json.loads(call('retire-example', *arguments)),
+                                  example_identity is not None)
 
     try:
         sources = {name: path.read_bytes() for name, path in (
@@ -565,8 +582,7 @@ def suite(args, results):
                 failures['example_retirement'] = failure_details(error, 'example_retirement')
         if initialized:
             try:
-                require(json.loads(call('retire'))['owned_browser_units_retired'], 'owned_browser_retired')
-                cleanup['browser_retired'] = True
+                record_browser_retirement(cleanup, json.loads(call('retire')))
             except Exception as error:
                 failures['browser_retirement'] = failure_details(error, 'browser_retirement')
         if guard_attempted and cleanup.get('browser_retired', False) and cleanup.get('example_retired', False):

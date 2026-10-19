@@ -72,6 +72,7 @@ class DurableBrowserLease(unittest.TestCase):
                  patch.object(fixture,'events',return_value=[event]),patch.object(fixture,'retire_example'), \
                  patch.object(fixture,'browser_lease',return_value=lease) as leased, \
                  patch.object(fixture.chromium,'retire') as retired, \
+                 patch.object(fixture,'retire_entry'), \
                  patch.object(fixture,'retire_original_unit') as generic,patch('builtins.print'):
                 fixture.retire(directory,'abcdef')
             leased.assert_called_once_with(directory,'abcdef',event,retiring=True)

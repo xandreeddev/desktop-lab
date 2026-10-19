@@ -473,6 +473,8 @@ class FixtureRetirement(unittest.TestCase):
             with patch.object(fixture, 'context', return_value=(directory, {})), \
                  patch.object(fixture, 'owned_argv', return_value=argv), \
                  patch.object(fixture, 'unit_snapshot', return_value=origin['unit']), \
+                 patch.dict(os.environ, {'XDG_RUNTIME_DIR': str(directory)}), \
+                 patch.object(fixture, 'retirement_drained', return_value=True), \
                  patch.object(fixture, 'retire_original_unit') as stop:
                 fixture.retire_example(directory, 'abcdef')
                 self.assertEqual(stop.call_args.args[2], origin)
@@ -488,6 +490,7 @@ class FixtureRetirement(unittest.TestCase):
             with patch.object(fixture, 'context', return_value=(directory, {})), \
                  patch.object(fixture, 'owned_argv', return_value=argv), \
                  patch.object(fixture, 'unit_snapshot', return_value=origin['unit']), \
+                 patch.dict(os.environ, {'XDG_RUNTIME_DIR': str(directory)}), \
                  patch.object(fixture, 'retire_original_unit') as stop:
                 with self.assertRaises(FileNotFoundError):
                     fixture.retire_example(directory, 'abcdef')
@@ -503,6 +506,8 @@ class FixtureRetirement(unittest.TestCase):
             with patch.object(fixture, 'context', return_value=(directory, {})), \
                  patch.object(fixture, 'events', return_value=[event]), \
                  patch.object(fixture, 'retire_example'), \
+                 patch.object(fixture, 'retire_entry'), \
+                 patch.object(fixture, 'retirement_drained', return_value=True), \
                  patch.object(fixture, 'retire_original_unit') as stop:
                 fixture.retire(directory, 'abcdef')
                 self.assertEqual(stop.call_args.args[2], origin)
