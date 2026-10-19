@@ -68,6 +68,67 @@ def private(path, value):
         stream.write(data)
 
 
+SERVICE_QUIESCENCE = r'''
+import json,os,stat,subprocess
+from pathlib import Path
+def _service_properties():
+ argv=['systemctl','--user','show','lucent.service']
+ for name in ('ActiveState','SubState','MainPID','ControlPID','ControlGroup','Job'):argv += ['-p',name]
+ result=subprocess.run(argv,capture_output=True,text=True,timeout=6);assert result.returncode==0,'service_properties_unavailable'
+ return dict(line.split('=',1) for line in result.stdout.splitlines() if '=' in line)
+def _service_cgroup(group):
+ uid=os.getuid();prefix=f'/user.slice/user-{uid}.slice/user@{uid}.service/'
+ assert isinstance(group,str) and group.startswith(prefix) and group.endswith('/lucent.service'),'exact_user_unit_cgroup_required'
+ parts=group.split('/')[1:];assert all(part and part not in ('.','..') for part in parts),'canonical_cgroup_components_required'
+ root=Path('/sys/fs/cgroup');path=root.joinpath(*parts)
+ assert root.resolve(strict=True)==root and path.resolve(strict=False)==path,'canonical_cgroup_path_required'
+ return path
+def capture_service_scope():
+ value=_service_properties();assert value.get('ActiveState')=='active' and value.get('SubState')=='running','active_unit_required_before_stop'
+ pid=int(value['MainPID']);assert pid>0,'active_main_pid_required'
+ group=value['ControlGroup'];path=_service_cgroup(group)
+ assert stat.S_ISDIR(path.lstat().st_mode),'active_unit_cgroup_required'
+ assert str(pid) in (path/'cgroup.procs').read_text().split(),'main_pid_belongs_to_exact_cgroup'
+ return {'unit':'lucent.service','uid':os.getuid(),'control_group':group}
+def require_service_quiescent(scope):
+ assert scope.get('unit')=='lucent.service' and scope.get('uid')==os.getuid(),'owned_service_scope_required'
+ path=_service_cgroup(scope['control_group']);value=_service_properties()
+ assert value.get('ActiveState') in ('inactive','failed') and value.get('SubState') in ('dead','failed'),'service_not_stopped'
+ assert value.get('MainPID')=='0' and value.get('ControlPID')=='0','service_process_or_control_process_still_present'
+ assert value.get('ControlGroup','') in ('',scope['control_group']),'service_cgroup_changed'
+ assert value.get('Job','0') in ('','0'),'service_job_still_pending'
+ processes=subprocess.run(['pgrep','-x','lucent-desktop'],capture_output=True,timeout=5)
+ assert processes.returncode==1 and not processes.stdout,'desktop_process_still_present'
+ try:info=path.lstat()
+ except FileNotFoundError:return {'stopped_service':True,'no_desktop_process':True,'exact_cgroup_absent_or_empty':True}
+ assert stat.S_ISDIR(info.st_mode),'exact_cgroup_directory_required'
+ pending=[path];count=0
+ while pending:
+  current=pending.pop();count+=1;assert count<=128,'bounded_cgroup_tree_required'
+  assert current.resolve(strict=True)==current,'canonical_recursive_cgroup_required'
+  assert not (current/'cgroup.procs').read_text().strip(),'cgroup_processes_remain'
+  assert not (current/'cgroup.threads').read_text().strip(),'cgroup_threads_remain'
+  events=dict(line.split() for line in (current/'cgroup.events').read_text().splitlines())
+  assert events.get('populated')=='0','cgroup_descendants_populated'
+  with os.scandir(current) as entries:
+   for entry in entries:
+    assert not entry.is_symlink(),'cgroup_symlink_not_allowed'
+    if entry.is_dir(follow_symlinks=False):pending.append(Path(entry.path))
+ return {'stopped_service':True,'no_desktop_process':True,'exact_cgroup_absent_or_empty':True}
+'''
+
+
+def capture_desktop_scope(session):
+    """Read active unit identity before stop; keep the returned scope private."""
+    return json.loads(session('python3', '-c', SERVICE_QUIESCENCE + '\nprint(json.dumps(capture_service_scope()))'))
+
+
+def verify_desktop_quiescence(session, scope):
+    """Read-only proof of process/cgroup quiescence, accepting a stopped failure."""
+    code = SERVICE_QUIESCENCE + '\nprint(json.dumps(require_service_quiescent(json.load(__import__("sys").stdin))))'
+    return json.loads(session('python3', '-c', code, data=json.dumps(scope).encode()))
+
+
 CHECKPOINT = r'''
 import base64,hashlib,json,os,shutil,stat,sys
 from pathlib import Path
@@ -137,6 +198,7 @@ else:
   assert current.get('notes') in allowed['notes'];assert external(current)==value['external']
   original,original_id=read(directory/'original.link');assert digest(original)==value['settings_sha256'] and original_id==value['settings_identity']
   assert (directory/'original.bytes').read_bytes()==original
+  require_service_quiescent(allowed['service_scope'])
   temporary=base/('.native-notes-restore-'+tag);os.link(directory/'original.link',temporary,follow_symlinks=False)
   assert identity(settings.lstat())==current_id;os.replace(temporary,settings)
   print(json.dumps({'settings_restored':settings.read_bytes()==original,'identity_restored':identity(settings.lstat())==original_id}))
@@ -313,6 +375,32 @@ class Harness:
         self.layouts, self.notes, self.clipboard_hashes = [], set(), set()
         self.clipboard = {'supported': False, 'reason': 'not_attempted'}
         self.checkpointed = self.service_stopped = self.mutated = self.clipboard_restored = False
+        self.service_scope = None
+
+    def progress(self, phase, state='entered', check=None):
+        """Only fixed phase/check labels; never Notes, clipboard or raw errors."""
+        event = {'phase': phase, 'state': state, 'monotonic_seconds': time.monotonic()}
+        if check is not None:
+            event['check'] = check
+        private(self.directory / ('progress-' + str(time.monotonic_ns()) + '.json'), event)
+
+    def stop_quiescent(self):
+        """Capture exact active cgroup, stop normally, then prove no writer lives.
+
+        Root recovery may call this on an imported Harness, then checkpoint
+        restore with its independently validated exact owned layout/fixture.
+        """
+        self.progress('stop_quiescent_capture')
+        self.service_scope = capture_desktop_scope(self.session)
+        private(self.directory / ('service-scope-' + secrets.token_hex(6) + '.json'), self.service_scope)
+        self.service_stopped = True
+        self.progress('stop_quiescent_stop')
+        self.session('systemctl', '--user', 'stop', 'lucent.service')
+        self.progress('stop_quiescent_verify')
+        result = verify_desktop_quiescence(self.session, self.service_scope)
+        require(all(result.values()), 'desktop_service_not_quiescent')
+        self.progress('stop_quiescent_verify', 'passed')
+        return result
 
     def run(self, argv, *, data=None, timeout=20, okay=False):
         try:
@@ -360,7 +448,12 @@ class Harness:
         raise CheckFailure(label)
 
     def checkpoint(self, operation, data=None):
-        raw = self.session('python3', '-c', CHECKPOINT, operation, self.tag,
+        if operation == 'restore':
+            require(self.service_scope is not None, 'captured_service_scope_required_for_restore')
+            guard = json.loads(data)
+            guard['service_scope'] = self.service_scope
+            data = json.dumps(guard).encode()
+        raw = self.session('python3', '-c', SERVICE_QUIESCENCE + CHECKPOINT, operation, self.tag,
                            self.monitor['name'], data=data, timeout=45)
         return json.loads(raw) if raw.strip() else None
 
@@ -695,27 +788,35 @@ def suite(h, result):
 
 
 def restore(h, result):
+    failures = result.setdefault('restoration_failures', {})
+    def label(error):
+        return str(error) if isinstance(error, CheckFailure) else type(error).__name__
     def attempt(label, operation):
         try:
+            h.progress(label)
             operation()
             result['restoration'][label] = True
-        except Exception:
+            h.progress(label, 'passed')
+        except Exception as error:
             result['restoration'][label] = False
+            failures[label] = str(error) if isinstance(error, CheckFailure) else type(error).__name__
+            h.progress(label, 'failed', failures[label])
     if not h.checkpointed:
         return
     if h.clipboard.get('supported') and not h.clipboard_restored:
         attempt('clipboard_history_and_service', lambda: h.clip('restore', json.dumps(sorted(h.clipboard_hashes)).encode()))
     try:
-        h.service_stopped = True  # A lost stop reply must still reach normal start.
-        h.session('systemctl', '--user', 'stop', 'lucent.service')
-        require(h.session('systemctl', '--user', 'show', 'lucent.service', '-p', 'ActiveState', '--value').strip() == b'inactive',
-                'settings_restore_requires_stopped_service')
+        h.stop_quiescent()
         guard = json.dumps({'layouts': h.layouts, 'notes': sorted(h.notes)}).encode()
+        h.progress('exact_original_settings_stopped_service')
         restored = h.checkpoint('restore', guard)
         require(all(restored.values()), 'original_settings_restore_verified')
         result['restoration']['exact_original_settings_stopped_service'] = True
-    except Exception:
+        h.progress('exact_original_settings_stopped_service', 'passed')
+    except Exception as error:
         result['restoration']['exact_original_settings_stopped_service'] = False
+        failures['exact_original_settings_stopped_service'] = label(error)
+        h.progress('exact_original_settings_stopped_service', 'failed', label(error))
     finally:
         if h.service_stopped:
             attempt('normal_desktop_35s_stability', lambda: (h.session('systemctl', '--user', 'start', 'lucent.service'), h.stable()))

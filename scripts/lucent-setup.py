@@ -60,6 +60,8 @@ After=graphical-session.target
 [Service]
 Type=simple
 ExecStart=/usr/bin/python3 %h/.local/lib/lucent/session.py
+# The supervisor forwards TERM and reaps its child; timeout still kills the group.
+KillMode=mixed
 TimeoutStopSec=10
 Restart=on-failure
 RestartSec=3
