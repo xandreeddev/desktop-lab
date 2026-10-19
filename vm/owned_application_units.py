@@ -70,22 +70,50 @@ def unit_snapshot(unit):
  import dbus
  bus=dbus.SessionBus(private=True)
  try:
-  manager=dbus.Interface(bus.get_object('org.freedesktop.systemd1','/org/freedesktop/systemd1'),
+  manager=dbus.Interface(bus.get_object('org.freedesktop.systemd1','/org/freedesktop/systemd1',introspect=False),
                          'org.freedesktop.systemd1.Manager')
-  try:path=manager.GetUnit(unit,timeout=5)
-  except dbus.DBusException as error:
-   if error.get_dbus_name()=='org.freedesktop.systemd1.NoSuchUnit':return {'load':'not-found'}
-   raise
-  properties=dbus.Interface(bus.get_object('org.freedesktop.systemd1',path),'org.freedesktop.DBus.Properties')
-  def unit_value(key):return properties.Get('org.freedesktop.systemd1.Unit',key,timeout=5)
-  def service_value(key):return properties.Get('org.freedesktop.systemd1.Service',key,timeout=5)
-  # Do not retrieve unrelated service properties such as its environment.
-  commands=service_value('ExecStart');assert len(commands)==1
-  return {'load':str(unit_value('LoadState')),'active':str(unit_value('ActiveState')),
-          'transient':bool(unit_value('Transient')),'group':str(service_value('ControlGroup')),
-          'executable':str(commands[0][0]),'argv':[str(arg) for arg in commands[0][1]],
-          'main_pid':int(service_value('MainPID')),
-          'invocation':bytes(unit_value('InvocationID')).hex()}
+  deadline=time.monotonic()+5
+  def call(method,*args):
+   remaining=deadline-time.monotonic();assert remaining>0,'unit_observation_deadline'
+   return method(*args,timeout=min(1,remaining))
+  def lookup():
+   try:return call(manager.GetUnit,unit)
+   except dbus.DBusException as error:
+    if error.get_dbus_name()=='org.freedesktop.systemd1.NoSuchUnit':return None
+    raise
+  unit_keys=('LoadState','ActiveState','Transient','InvocationID')
+  service_keys=('ExecStart','ControlGroup','MainPID')
+  for attempt in range(3):
+   path=lookup()
+   if path is None:return {'load':'not-found'}
+   properties=dbus.Interface(bus.get_object('org.freedesktop.systemd1',path,introspect=False),'org.freedesktop.DBus.Properties')
+   def unit_values():
+    values=call(properties.GetAll,'org.freedesktop.systemd1.Unit')
+    return {key:values[key] for key in unit_keys}
+   def service_values():
+    # Never retrieve Environment or other unrelated service properties.
+    return {key:call(properties.Get,'org.freedesktop.systemd1.Service',key) for key in service_keys}
+   try:
+    before=unit_values();first=service_values()
+    middle=unit_values();second=service_values();after=unit_values()
+   except dbus.DBusException as error:
+    if error.get_dbus_name() not in ('org.freedesktop.DBus.Error.UnknownObject',
+                                   'org.freedesktop.DBus.Error.UnknownInterface',
+                                   'org.freedesktop.systemd1.NoSuchUnit'):raise
+    # A disappearing object is not absence until the manager confirms it.
+    if lookup() is None:return {'load':'not-found'}
+    continue
+   current=lookup()
+   if current is None:return {'load':'not-found'}
+   if current!=path or before!=middle or middle!=after or first!=second:continue
+   commands=first['ExecStart']
+   # An empty/malformed live command is never evidence that a unit vanished.
+   assert len(commands)==1 and len(commands[0])>=2 and len(commands[0][1])>0,'unit_exec_start_shape'
+   return {'load':str(after['LoadState']),'active':str(after['ActiveState']),
+           'transient':bool(after['Transient']),'group':str(first['ControlGroup']),
+           'executable':str(commands[0][0]),'argv':[str(arg) for arg in commands[0][1]],
+           'main_pid':int(first['MainPID']),'invocation':bytes(after['InvocationID']).hex()}
+  raise AssertionError('unit_observation_changed')
  finally:bus.close()
 
 def assert_unit_identity(value,unit,argv,group=None):

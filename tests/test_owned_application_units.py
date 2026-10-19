@@ -28,6 +28,150 @@ def authority(name='lucent-application-intent-abcdef.service'):
     return name, argv, {'unit': unit, 'process': process}
 
 
+class ConsistentUnitObservation(unittest.TestCase):
+    class BusError(Exception):
+        def __init__(self, name):
+            self.name = name
+
+        def get_dbus_name(self):
+            return self.name
+
+    def transport(self, *, commands=None, unit_frames=None, lookup=None, property_error=None):
+        name, argv, captured = authority()
+        original = captured['unit']
+        frame = {'LoadState': original['load'], 'ActiveState': original['active'],
+                 'Transient': original['transient'], 'InvocationID': bytes.fromhex(original['invocation'])}
+        service = {'ExecStart': commands if commands is not None else [(argv[0], argv)],
+                   'ControlGroup': original['group'], 'MainPID': original['main_pid']}
+        manager, properties, bus = Mock(), Mock(), Mock()
+        manager.GetUnit.return_value = '/original/unit'
+        if lookup is not None:
+            manager.GetUnit.side_effect = lookup
+        if unit_frames is not None:
+            properties.GetAll.side_effect = unit_frames
+        else:
+            properties.GetAll.return_value = frame
+        def get(interface, key, **kwargs):
+            self.assertEqual(interface, 'org.freedesktop.systemd1.Service')
+            self.assertIn(key, ('ExecStart', 'ControlGroup', 'MainPID'))
+            if property_error is not None:
+                raise property_error
+            return service[key]
+        properties.Get.side_effect = get
+        dbus = types.SimpleNamespace(SessionBus=Mock(return_value=bus), DBusException=self.BusError,
+            Interface=lambda _object, interface: manager if interface == 'org.freedesktop.systemd1.Manager' else properties)
+        return name, argv, captured, frame, manager, properties, bus, dbus
+
+    def test_stable_typed_snapshot_never_fetches_service_environment(self):
+        name, _, captured, _, manager, properties, bus, dbus = self.transport()
+        with patch.dict(sys.modules, {'dbus': dbus}):
+            self.assertEqual(units.unit_snapshot(name), captured['unit'])
+        self.assertEqual(properties.GetAll.call_count, 3)
+        for call in properties.GetAll.call_args_list:
+            self.assertEqual(call.args, ('org.freedesktop.systemd1.Unit',))
+            self.assertTrue(0 < call.kwargs['timeout'] <= 1)
+        self.assertEqual([call.args[1] for call in properties.Get.call_args_list],
+                         ['ExecStart', 'ControlGroup', 'MainPID']*2)
+        self.assertEqual(manager.GetUnit.call_count, 2)
+        bus.close.assert_called_once()
+
+    def test_gc_empty_exec_start_is_absent_only_after_typed_manager_confirmation(self):
+        gone = self.BusError('org.freedesktop.systemd1.NoSuchUnit')
+        name, _, _, _, manager, _, bus, dbus = self.transport(commands=[], lookup=['/original/unit', gone])
+        with patch.dict(sys.modules, {'dbus': dbus}):
+            self.assertEqual(units.unit_snapshot(name), {'load': 'not-found'})
+        self.assertEqual(manager.GetUnit.call_count, 2)
+        bus.close.assert_called_once()
+
+    def test_gc_object_disappearing_between_property_calls_requires_typed_absence(self):
+        gone = self.BusError('org.freedesktop.systemd1.NoSuchUnit')
+        error = self.BusError('org.freedesktop.DBus.Error.UnknownObject')
+        name, _, _, _, _, _, bus, dbus = self.transport(lookup=['/original/unit', gone], property_error=error)
+        with patch.dict(sys.modules, {'dbus': dbus}):
+            self.assertEqual(units.unit_snapshot(name), {'load': 'not-found'})
+        bus.close.assert_called_once()
+
+    def test_still_loaded_empty_or_multiple_exec_start_is_never_absence(self):
+        for commands in ([], [('/one', ['/one']), ('/two', ['/two'])], [('/one', [])]):
+            name, _, _, _, manager, _, bus, dbus = self.transport(commands=commands)
+            with self.subTest(commands=commands), patch.dict(sys.modules, {'dbus': dbus}), \
+                 self.assertRaisesRegex(AssertionError, 'unit_exec_start_shape'):
+                units.unit_snapshot(name)
+            self.assertEqual(manager.GetUnit.call_count, 2)
+            bus.close.assert_called_once()
+
+    def test_unknown_object_without_manager_absence_is_bounded_and_not_adopted(self):
+        error = self.BusError('org.freedesktop.DBus.Error.UnknownObject')
+        name, _, _, _, manager, _, bus, dbus = self.transport(property_error=error)
+        with patch.dict(sys.modules, {'dbus': dbus}), self.assertRaisesRegex(AssertionError, 'unit_observation_changed'):
+            units.unit_snapshot(name)
+        self.assertEqual(manager.GetUnit.call_count, 6)
+        bus.close.assert_called_once()
+
+    def test_wrong_live_command_never_authorizes_the_original_stop(self):
+        name, argv, captured, _, manager, _, bus, dbus = self.transport(commands=[('/foreign', ['/foreign'])])
+        with patch.dict(sys.modules, {'dbus': dbus}), self.assertRaises(AssertionError):
+            units.retire_unit(name, argv, captured=captured)
+        manager.StopUnit.assert_not_called()
+        bus.close.assert_called_once()
+
+    def test_service_fields_that_change_within_one_invocation_are_not_combined(self):
+        name, _, captured, _, _, properties, bus, dbus = self.transport()
+        original = captured['unit']
+        group = '/app.slice/replacement.service'
+        values = {'ExecStart': [(original['executable'], original['argv'])],
+                  'ControlGroup': original['group'], 'MainPID': original['main_pid']}
+        count = 0
+        def get(_interface, key, **_kwargs):
+            nonlocal count
+            count += 1
+            if count == 4:
+                values.update(ControlGroup=group, MainPID=203)
+            return values[key]
+        properties.Get.side_effect = get
+        with patch.dict(sys.modules, {'dbus': dbus}):
+            observed = units.unit_snapshot(name)
+        self.assertEqual((observed['group'], observed['main_pid']), (group, 203))
+        self.assertEqual(properties.GetAll.call_count, 6)
+        bus.close.assert_called_once()
+
+    def test_coherent_successor_after_mid_observation_reuse_is_refused_by_original_stop(self):
+        name, argv, captured, frame, manager, properties, bus, dbus = self.transport()
+        replacement = dict(frame, InvocationID=bytes.fromhex('2'*32))
+        properties.GetAll.side_effect = [frame, frame, replacement, replacement, replacement, replacement]
+        with patch.dict(sys.modules, {'dbus': dbus}), patch.object(units, 'process_snapshot') as process, \
+             self.assertRaises(AssertionError):
+            units.retire_unit(name, argv, captured=captured)
+        self.assertEqual(properties.GetAll.call_count, 6)
+        manager.StopUnit.assert_not_called()
+        process.assert_not_called()
+        bus.close.assert_called_once()
+
+    def test_permanently_changing_invocation_never_returns_a_mixed_snapshot(self):
+        name, _, _, frame, _, properties, bus, dbus = self.transport()
+        properties.GetAll.side_effect = [dict(frame, InvocationID=bytes.fromhex(str(index)*32))
+                                         for index in range(1, 10)]
+        with patch.dict(sys.modules, {'dbus': dbus}), self.assertRaisesRegex(AssertionError, 'unit_observation_changed'):
+            units.unit_snapshot(name)
+        self.assertEqual(properties.GetAll.call_count, 9)
+        bus.close.assert_called_once()
+
+    def test_transport_error_is_not_absence_and_whole_observation_has_one_deadline(self):
+        for error in (self.BusError('org.freedesktop.DBus.Error.AccessDenied'),
+                      self.BusError('org.freedesktop.DBus.Error.NoReply')):
+            name, _, _, _, manager, _, bus, dbus = self.transport(property_error=error)
+            with self.subTest(error=error.name), patch.dict(sys.modules, {'dbus': dbus}), self.assertRaises(self.BusError):
+                units.unit_snapshot(name)
+            self.assertEqual(manager.GetUnit.call_count, 1)
+            bus.close.assert_called_once()
+        name, _, _, _, manager, _, bus, dbus = self.transport()
+        with patch.dict(sys.modules, {'dbus': dbus}), patch.object(units.time, 'monotonic', side_effect=[0, 6]), \
+             self.assertRaisesRegex(AssertionError, 'unit_observation_deadline'):
+            units.unit_snapshot(name)
+        manager.GetUnit.assert_not_called()
+        bus.close.assert_called_once()
+
+
 class OriginalUnitAuthority(unittest.TestCase):
     def test_original_wrapper_may_exec_but_not_change_invocation_birth_or_group(self):
         name, argv, origin = authority()
@@ -349,9 +493,10 @@ class FixtureRetirement(unittest.TestCase):
                     fixture.retire_example(directory, 'abcdef')
                 stop.assert_not_called()
 
-    def test_browser_retirement_carries_original_pre_exec_invocation(self):
+    def test_forwarding_wrapper_retirement_carries_original_pre_exec_invocation(self):
         name, argv, origin = authority('run-owned.service')
-        event = {'cgroup': origin['unit']['group'], 'operation': 'open', 'uris': [], 'origin': origin}
+        event = {'cgroup': origin['unit']['group'], 'operation': 'action',
+                 'uris': ['file:///owned/one'], 'origin': origin}
         with tempfile.TemporaryDirectory() as name:
             directory = Path(name)
             fixture.private(directory / 'events.lock', b'')
