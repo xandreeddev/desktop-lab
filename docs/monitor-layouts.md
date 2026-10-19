@@ -93,6 +93,47 @@ The desktop `Monitors` host owns protocol-name mapping, current geometry and
 callback generations. The reusable runtime owns native surfaces/input/frame
 demand. It has no widget catalog, profile migration or desktop monitor policy.
 
+## System widget redraw routing
+
+The existing five-second system subscription stays shared. An unchanged
+`SystemSnapshot` requests no redraw; a changed snapshot updates the shared value
+and the desktop resolves the current surfaces whose members include `system`.
+An overlap group can have another role, such as `calendar`, so invalidation uses
+membership rather than assuming a surface named `system`. Each connected host
+uses its saved layout or borrows the default, without creating a profile. Saved
+disconnected profiles do not receive redraws; the legacy host keeps its exact
+uninstanced address.
+
+During drag or resize capture, the host retains its frozen source groups and
+also paints the cards in its temporary `widgets` preview. Both relevant exact
+addresses are invalidated. Hosts that do not paint `system` and unrelated groups
+remain untouched.
+The existing declarative path is:
+
+```text
+DesktopAdapters.system: Arc<dyn SystemPort>
+  → LinuxSystem.sample() on the five-second subscription worker
+  → SystemSnapshot → Message::System → Desktop.update
+  → changed value → current host/group membership
+  → Effects.redraw_surface(actual role + current instance)
+  → native frame demand using existing compositor readiness
+  → client view for that surface → SDK layout → Vulkan submission
+```
+
+The domain describes the observation; the adapter reads Linux; the client decides
+which presentation changed; the reusable runtime schedules and renders it.
+This adds no polling, persistence, renderer or domain behavior.
+
+All nine routing regressions and the full 778-test Rust workspace pass, alongside
+Clippy, formatting, Python checks and generated-token validation. On one native
+1× VM output, a short observation recorded three System submissions, zero
+Calendar/Clock submissions and an advancing background. Geometry, density,
+workspace, exact settings inode/bytes and process identity remained stable.
+This is scoped frame-counter evidence, not a CPU/RSS saving or video-FPS claim.
+See the [acceptance record](../reports/measurements/lucent-system-widget-invalidation.json).
+Source tests cover multiple outputs, overlap groups and captures; their native
+acceptance remains open.
+
 ## Geometry, density and startup
 
 Background configure events establish each monitor's logical viewport and
