@@ -8,6 +8,9 @@ pub(super) fn prepare(app: &mut Desktop, name: &str) {
     let mut effects = Effects::default();
     app.update(Message::Displays(D::Open), &mut effects);
     if name != "displays-loading" {
+        for task in std::mem::take(&mut effects.tasks) {
+            app.update(task.run(), &mut effects);
+        }
         let result = if name == "displays-unavailable" {
             Err(DomainError::Unavailable(
                 "Display observation disconnected. Your existing settings are preserved.".into(),

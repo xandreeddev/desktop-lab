@@ -289,6 +289,9 @@ impl WallpaperPlaybackPort for Fake {
 }
 
 impl DisplayPort for Fake {
+    fn read(&self) -> Result<DisplaySnapshot> {
+        Err(DomainError::Unavailable("No display fixture".into()))
+    }
     fn watch(&self, emit: &mut dyn FnMut(Result<DisplaySnapshot>), _: &dyn StopSignal) {
         emit(Ok(DisplaySnapshot::default()));
     }

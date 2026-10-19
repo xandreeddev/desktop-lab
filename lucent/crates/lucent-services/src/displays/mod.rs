@@ -37,6 +37,33 @@ struct State {
 #[derive(Default)]
 struct Core {
     state: Mutex<State>,
+    observation: Mutex<u64>,
+}
+impl Core {
+    fn capture(
+        &self,
+        query: impl FnOnce() -> Result<Vec<DisplayDevice>>,
+    ) -> Result<DisplaySnapshot> {
+        // Hold only observation ordering during IO, never callback/state locks.
+        let mut revision = self
+            .observation
+            .lock()
+            .map_err(|_| failed("Display observation order is unavailable"))?;
+        let outputs = query()?;
+        *revision = revision
+            .checked_add(1)
+            .ok_or_else(|| failed("Display observation order exhausted"))?;
+        Ok(DisplaySnapshot {
+            revision: *revision,
+            outputs,
+            transaction: self
+                .state
+                .lock()
+                .map_err(|_| failed("Display transaction state is unavailable"))?
+                .transaction
+                .clone(),
+        })
+    }
 }
 /// The executable is selected by the composition root, never from an IPC request.
 /// It must dispatch `--display-guard` before creating any Wayland/GPU objects.
@@ -83,21 +110,18 @@ impl HyprlandDisplays {
             .and_then(|_| guardian.input.flush())
             .map_err(|_| failed("Display restoration guard disconnected"))
     }
-    fn transaction(&self) -> Option<DisplayTransaction> {
-        self.core
-            .state
-            .lock()
-            .ok()
-            .and_then(|s| s.transaction.clone())
-    }
     fn snapshot(&self, native: &native::Native) -> Result<DisplaySnapshot> {
-        Ok(DisplaySnapshot {
-            outputs: native.outputs()?,
-            transaction: self.transaction(),
+        self.core.capture(|| {
+            let outputs = native.outputs()?;
+            native.check()?;
+            Ok(outputs)
         })
     }
 }
 impl DisplayPort for HyprlandDisplays {
+    fn read(&self) -> Result<DisplaySnapshot> {
+        self.snapshot(&native::Native::from_env()?)
+    }
     fn watch(&self, emit: &mut dyn FnMut(Result<DisplaySnapshot>), stop: &dyn StopSignal) {
         while !stop.cancelled() {
             let Ok(native) = native::Native::from_env() else {

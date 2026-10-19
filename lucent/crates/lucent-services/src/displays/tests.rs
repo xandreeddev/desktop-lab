@@ -1,4 +1,34 @@
 use super::*;
+#[test]
+fn explicit_and_watch_captures_share_one_order_and_failed_reads_do_not_advance_it() {
+    let core = Core::default();
+    let first = core.capture(|| Ok(vec![])).unwrap();
+    assert_eq!(first.revision, 1);
+    assert!(core.capture(|| Err(unavailable("Disconnected"))).is_err());
+    assert_eq!(core.capture(|| Ok(vec![])).unwrap().revision, 2);
+}
+#[test]
+fn concurrent_capture_cannot_publish_an_older_native_query_with_a_newer_revision() {
+    let core = Arc::new(Core::default());
+    let (started, ready) = std::sync::mpsc::channel();
+    let (release, wait) = std::sync::mpsc::channel();
+    let worker = core.clone();
+    let first = std::thread::spawn(move || {
+        worker
+            .capture(|| {
+                started.send(()).unwrap();
+                wait.recv().unwrap();
+                Ok(vec![])
+            })
+            .unwrap()
+    });
+    ready.recv().unwrap();
+    let worker = core.clone();
+    let second = std::thread::spawn(move || worker.capture(|| Ok(vec![])).unwrap());
+    release.send(()).unwrap();
+    assert_eq!(first.join().unwrap().revision, 1);
+    assert_eq!(second.join().unwrap().revision, 2);
+}
 use std::{
     cell::{Cell, RefCell},
     sync::mpsc,

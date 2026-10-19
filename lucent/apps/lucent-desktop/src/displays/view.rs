@@ -162,6 +162,9 @@ impl Displays {
             .height(Length::Fixed(token::HEADER_HEIGHT))
             .align(Align::Center),
         ];
+        if self.refreshing.is_some() && self.snapshot.is_some() {
+            children.push(label("Refreshing display state…", theme).font(font::CAPTION));
+        }
         if let Some(transaction) = self.snapshot.as_ref().and_then(|s| s.transaction.as_ref()) {
             let status = match &transaction.phase {
                 DisplayTransactionPhase::Preparing => "Preparing the display preview…".into(),

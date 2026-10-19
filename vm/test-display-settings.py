@@ -317,10 +317,10 @@ print(json.dumps(matches[0]))
     report_path.parent.mkdir(parents=True,exist_ok=True)
     def original(): return signature(monitor())==signature(observed)
     def open_panel(reset_draft=False):
-        cli('displays','open');eventually(lambda:state()['open'] and panel()['frames']>0,'Display panel did not submit');time.sleep(.3)
+        cli('displays','open');eventually(lambda:state()['open'] and not state()['busy'] and panel()['frames']>0,'Display panel did not submit a fresh observation');time.sleep(.3)
         if reset_draft:
             click('display-reset')
-            assert not state()['dirty'], 'Reset draft did not import the current observation'
+            eventually(lambda:not state()['busy'] and not state()['dirty'],'Reset draft did not import a fresh native observation')
     def apply(expected):
         global INPUT_ALLOWED
         INPUT_ALLOWED=[signature(monitor()),signature(expected)]

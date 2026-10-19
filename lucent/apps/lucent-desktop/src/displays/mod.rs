@@ -12,6 +12,7 @@ pub enum Message {
     Close,
     Closed(u64),
     Refresh,
+    Refreshed(u64, Result<DisplaySnapshot>),
     Select(MonitorId),
     Mode(MonitorId, DisplayMode),
     Enable(MonitorId),
@@ -55,6 +56,7 @@ pub struct Displays {
     close_generation: u64,
     revision: u64,
     active: Option<u64>,
+    refreshing: Option<(u64, bool)>,
     transaction: Option<DisplayTransactionId>,
     scroll: f32,
     error: String,
@@ -75,6 +77,7 @@ impl Displays {
             close_generation: 0,
             revision: 0,
             active: None,
+            refreshing: None,
             transaction: None,
             scroll: 0.,
             error: String::new(),
@@ -92,7 +95,8 @@ impl Displays {
         self.motion.active(now)
     }
     fn pending(&self) -> bool {
-        self.active.is_some()
+        self.refreshing.is_some()
+            || self.active.is_some()
             || self.transaction.is_some()
             || self
                 .snapshot
@@ -116,6 +120,31 @@ impl Displays {
             self.error.clear();
         }
     }
+    fn refresh(&mut self, reset: bool, effects: &mut Effects<Message>) {
+        if self.pending() {
+            return;
+        }
+        self.revision = self.revision.wrapping_add(1);
+        let revision = self.revision;
+        self.refreshing = Some((revision, reset));
+        let adapter = self.adapter.clone();
+        effects.task_on_with_failure(
+            crate::work::CONTROLS,
+            move || Message::Refreshed(revision, adapter.read()),
+            move |f| Message::Refreshed(revision, Err(DomainError::Failed(f.to_string()))),
+        );
+    }
+    fn accept(&mut self, snapshot: DisplaySnapshot) {
+        if self
+            .snapshot
+            .as_ref()
+            .is_some_and(|current| current.revision > snapshot.revision)
+        {
+            return;
+        }
+        self.snapshot = Some(snapshot);
+        self.observation_error.clear();
+    }
     fn set_open(&mut self, open: bool, now: f64) {
         if open == self.open {
             return;
@@ -123,6 +152,7 @@ impl Displays {
         self.open = open;
         self.mounted = true;
         if !open {
+            self.refreshing = None;
             self.close_generation = self.close_generation.wrapping_add(1);
             for row in &mut self.rows {
                 for field in &mut row.fields {
@@ -195,6 +225,13 @@ impl Displays {
         match message {
             Message::Observed(result) => match result {
                 Ok(snapshot) => {
+                    if self
+                        .snapshot
+                        .as_ref()
+                        .is_some_and(|current| current.revision > snapshot.revision)
+                    {
+                        return;
+                    }
                     if self.snapshot.as_ref() == Some(&snapshot) {
                         return;
                     }
@@ -219,7 +256,12 @@ impl Displays {
                     self.observation_error = error.to_string();
                 }
             },
-            Message::Open => self.set_open(true, effects.now),
+            Message::Open => {
+                if !self.open {
+                    self.set_open(true, effects.now);
+                    self.refresh(!self.dirty, effects);
+                }
+            }
             Message::Toggle => {
                 if self.open {
                     if self.pending() {
@@ -228,6 +270,7 @@ impl Displays {
                     self.set_open(false, effects.now);
                 } else {
                     self.set_open(true, effects.now);
+                    self.refresh(!self.dirty, effects);
                 }
             }
             Message::Close => {
@@ -242,8 +285,24 @@ impl Displays {
                 }
             }
             Message::Refresh => {
-                if !self.pending() {
-                    self.reset();
+                self.refresh(true, effects);
+            }
+            Message::Refreshed(revision, result) => {
+                let Some((current, reset)) = self.refreshing else {
+                    return;
+                };
+                if current != revision || !self.open {
+                    return;
+                }
+                self.refreshing = None;
+                match result {
+                    Ok(snapshot) => {
+                        self.accept(snapshot);
+                        if reset {
+                            self.reset();
+                        }
+                    }
+                    Err(error) => self.observation_error = error.to_string(),
                 }
             }
             Message::Select(id) => {
@@ -309,7 +368,7 @@ impl Displays {
                 }
             }
             Message::Apply => {
-                if self.open && !self.pending() {
+                if self.open && !self.pending() && self.observation_error.is_empty() {
                     let draft = self.draft().and_then(|draft| {
                         let s = self.snapshot.as_ref().ok_or_else(|| {
                             DomainError::Unavailable("Displays are not available".into())
@@ -422,7 +481,7 @@ impl Displays {
         }
     }
     pub fn inspect(&self) -> serde_json::Value {
-        serde_json::json!({"open":self.open,"visible":self.mounted,"busy":self.pending(),"dirty":self.dirty,"output_count":self.rows.len(),"selected":self.selected.as_ref().map(MonitorId::as_str),"error":self.error,"observation_error":self.observation_error,"transaction":self.snapshot.as_ref().and_then(|s|s.transaction.as_ref()).map(|t|serde_json::json!({"id":t.id.value(),"phase":match t.phase{DisplayTransactionPhase::Preparing=>"preparing",DisplayTransactionPhase::AwaitingConfirmation{..}=>"confirmation",DisplayTransactionPhase::Kept=>"kept",DisplayTransactionPhase::Reverted{..}=>"reverted",DisplayTransactionPhase::Failed{..}=>"failed"}}))})
+        serde_json::json!({"open":self.open,"visible":self.mounted,"busy":self.pending(),"refreshing":self.refreshing.is_some(),"observation_revision":self.snapshot.as_ref().map(|s|s.revision),"dirty":self.dirty,"output_count":self.rows.len(),"selected":self.selected.as_ref().map(MonitorId::as_str),"error":self.error,"observation_error":self.observation_error,"transaction":self.snapshot.as_ref().and_then(|s|s.transaction.as_ref()).map(|t|serde_json::json!({"id":t.id.value(),"phase":match t.phase{DisplayTransactionPhase::Preparing=>"preparing",DisplayTransactionPhase::AwaitingConfirmation{..}=>"confirmation",DisplayTransactionPhase::Kept=>"kept",DisplayTransactionPhase::Reverted{..}=>"reverted",DisplayTransactionPhase::Failed{..}=>"failed"}}))})
     }
 }
 

@@ -174,6 +174,8 @@ pub struct DisplayTransaction {
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct DisplaySnapshot {
+    /// Monotonic observation order within one supplied adapter's lifetime.
+    pub revision: u64,
     pub outputs: Vec<DisplayDevice>,
     pub transaction: Option<DisplayTransaction>,
 }
@@ -185,6 +187,8 @@ impl DisplaySnapshot {
 /// Implementations own native discovery, transient transactions and independent rollback.
 /// Admission is distinct from native completion: always observe the returned identity.
 pub trait DisplayPort: Send + Sync {
+    /// Query current native state, independently of compositor event coverage.
+    fn read(&self) -> Result<DisplaySnapshot>;
     fn watch(&self, emit: &mut dyn FnMut(Result<DisplaySnapshot>), stop: &dyn StopSignal);
     fn apply(
         &self,
