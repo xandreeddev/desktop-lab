@@ -46,6 +46,7 @@ use wayland_client::{
 use wgpu_handle::HasDisplayHandle;
 // Use the exact raw-window-handle version used by the renderer.
 use lucent_render::display_handle as wgpu_handle;
+mod activation;
 mod clipboard;
 mod delivery;
 mod effects;
@@ -137,6 +138,7 @@ struct State<A: Application> {
     input_serial: Option<u32>,
     clipboard: clipboard::Clipboard<A::Message>,
     input_method: input_method::InputMethod,
+    activation: activation::Activation<A::Message>,
     modifiers: Modifiers,
     epoch: Instant,
     profile_frames: bool,
@@ -242,6 +244,11 @@ fn run_inner<A: Application>(
         None
     };
     let input_method_allowed = authorize_unlock.is_none() && app.input_method_enabled();
+    let activation = activation::Activation::new(
+        &globals,
+        &qh,
+        app.activation_enabled() && authorize_unlock.is_none(),
+    );
     let mut state = State {
         surfaces: BTreeMap::new(),
         retiring: Default::default(),
@@ -267,6 +274,7 @@ fn run_inner<A: Application>(
         input_serial: None,
         clipboard: clipboard::Clipboard::new(clipboard_manager),
         input_method: input_method::InputMethod::bind(&globals, &qh, !input_method_allowed),
+        activation,
         modifiers: Modifiers::default(),
         epoch: Instant::now(),
         presentation: presentation::Capture::bind(&globals, &qh, ipc && authorize_unlock.is_none()),
@@ -550,6 +558,11 @@ impl<A: Application> State<A> {
             }
             self.exit = true;
             return;
+        }
+        // Capture the real input surface before reconciliation closes a launcher.
+        // The token callback is asynchronous and owns no native application policy.
+        for request in effects.activation {
+            self.activation_request(request, qh);
         }
         for task in effects.tasks {
             if let Err(rejected) = self.tasks.submit(task) {
@@ -1592,6 +1605,11 @@ impl<A: Application> PointerHandler for State<A> {
         events: &[PointerEvent],
     ) {
         for event in events {
+            // A wl_pointer.frame may contain several distinct native events.
+            // Reconciliation for the next event must not borrow a preceding
+            // button's unused authority (including when it is Motion/Leave).
+            self.input_serial = None;
+            self.activation.input = None;
             let Some(id) = self.id_for(&event.surface) else {
                 continue;
             };
@@ -1615,6 +1633,17 @@ impl<A: Application> PointerHandler for State<A> {
             let mut scroll = None;
             self.input_serial = match event.kind {
                 PointerEventKind::Press { serial, .. } => Some(serial),
+                _ => None,
+            };
+            self.activation.input = match event.kind {
+                PointerEventKind::Press { serial, .. }
+                | PointerEventKind::Release { serial, .. } => {
+                    self.pointer_seat.as_ref().map(|seat| activation::Input {
+                        surface: event.surface.clone(),
+                        seat: seat.clone(),
+                        serial,
+                    })
+                }
                 _ => None,
             };
             if let Some(s) = self.surfaces.get_mut(&id) {
@@ -1741,6 +1770,7 @@ impl<A: Application> PointerHandler for State<A> {
             }
         }
         self.input_serial = None;
+        self.activation.input = None;
         self.draw_all(qh);
     }
 }
@@ -1795,8 +1825,19 @@ impl<A: Application> KeyboardHandler for State<A> {
         event: KeyEvent,
     ) {
         self.input_serial = Some(serial);
+        self.activation.input = self
+            .keyboard_surface
+            .as_ref()
+            .and_then(|id| self.surfaces.get(id))
+            .zip(self.keyboard_seat.as_ref())
+            .map(|(native, seat)| activation::Input {
+                surface: native.role.wl_surface().clone(),
+                seat: seat.clone(),
+                serial,
+            });
         self.key(event, qh);
         self.input_serial = None;
+        self.activation.input = None;
     }
     fn repeat_key(
         &mut self,

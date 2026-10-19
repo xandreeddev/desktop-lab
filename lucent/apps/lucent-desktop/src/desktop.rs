@@ -37,11 +37,25 @@ pub enum Message {
     Network(crate::network::Message),
     Bluetooth(crate::bluetooth::Message),
     Power(crate::power::Message),
+    Displays(crate::displays::Message),
     Tray(crate::tray::Message),
     Media(crate::media::Message),
     Weather(crate::weather::Message),
     Launcher(launcher::Message),
     Launch(AppId, bool),
+    LaunchPrepared(domain::Application, bool, api::ActivationOutcome),
+    LaunchActionPrepared(
+        u64,
+        domain::Application,
+        ApplicationActionId,
+        api::ActivationOutcome,
+    ),
+    OpenApplication(domain::Application, ApplicationOpenRequest),
+    OpenApplicationPrepared(
+        domain::Application,
+        ApplicationOpenRequest,
+        api::ActivationOutcome,
+    ),
     Workspace(WorkspaceCommand),
     LiveWallpaper(crate::live_wallpaper::Message),
     Action(Action),
@@ -66,6 +80,15 @@ pub enum Message {
     Quit,
 }
 pub const SPATIAL: [f32; 4] = motion::SPATIAL;
+fn launch_context(outcome: api::ActivationOutcome) -> ApplicationLaunchContext {
+    match outcome {
+        api::ActivationOutcome::Token(token) => {
+            ApplicationLaunchContext::with_activation_token(token.into_value())
+                .expect("SDK validated activation token")
+        }
+        _ => ApplicationLaunchContext::default(),
+    }
+}
 fn widget_surface_specs(
     host: &widgets::Host,
     layout: &WidgetLayout,
@@ -131,6 +154,7 @@ pub struct Desktop {
     pub network: crate::network::Network,
     pub bluetooth: crate::bluetooth::Bluetooth,
     pub power: crate::power::Power,
+    pub displays: crate::displays::Displays,
     pub tray: crate::tray::Tray,
     pub media: crate::media::Media,
     pub weather: crate::weather::Weather,
@@ -191,6 +215,7 @@ impl Desktop {
             network: crate::network::Network::new(adapters.network.clone()),
             bluetooth: crate::bluetooth::Bluetooth::new(adapters.bluetooth.clone()),
             power: crate::power::Power::new(adapters.power.clone()),
+            displays: crate::displays::Displays::new(adapters.displays.clone()),
             tray: crate::tray::Tray::new(adapters.tray.clone(), adapters.assets.clone()),
             media: crate::media::Media::new(adapters.media.clone(), adapters.assets.clone()),
             weather: crate::weather::Weather::new(adapters.weather.clone()),
@@ -569,6 +594,7 @@ impl Desktop {
             "network",
             "bluetooth",
             "power",
+            "displays",
         ] {
             effects.redraw(id);
         }
@@ -808,6 +834,7 @@ impl Desktop {
             "network",
             "bluetooth",
             "power",
+            "displays",
             "tray",
             "notifications",
             "osd",
@@ -971,18 +998,42 @@ impl Desktop {
         let Some(app) = self.apps.iter().find(|a| &a.id == id).cloned() else {
             return;
         };
+        let app_id = app
+            .id
+            .as_str()
+            .strip_suffix(".desktop")
+            .unwrap_or(app.id.as_str())
+            .to_owned();
+        effects.activation_token(app_id, move |outcome| {
+            Message::LaunchPrepared(app, prefer_running, outcome)
+        });
+    }
+    fn launch_prepared(
+        &self,
+        app: domain::Application,
+        prefer_running: bool,
+        outcome: api::ActivationOutcome,
+        effects: &mut Effects<Message>,
+    ) {
+        if !matches!(self.catalog.status(), crate::catalog::Status::Ready)
+            || self.apps.iter().find(|entry| entry.id == app.id) != Some(&app)
+        {
+            return;
+        }
+        let context = launch_context(outcome);
         let apps = self.adapters.apps.clone();
         let hypr = self.adapters.compositor.clone();
         effects.task_on(crate::work::CONTROLS, move || {
             Message::Completed(if let Some(hypr) = hypr {
-                lucent_usecases::activate_application(
+                lucent_usecases::activate_application_with_context(
                     apps.as_ref(),
                     hypr.as_ref(),
                     &app,
                     prefer_running,
+                    context,
                 )
             } else {
-                apps.launch(&app)
+                apps.launch_with_context(&app, context)
             })
         });
     }
@@ -991,6 +1042,24 @@ impl Desktop {
         revision: u64,
         app: domain::Application,
         action: ApplicationActionId,
+        effects: &mut Effects<Message>,
+    ) {
+        let app_id = app
+            .id
+            .as_str()
+            .strip_suffix(".desktop")
+            .unwrap_or(app.id.as_str())
+            .to_owned();
+        effects.activation_token(app_id, move |outcome| {
+            Message::LaunchActionPrepared(revision, app, action, outcome)
+        });
+    }
+    fn launch_application_action_prepared(
+        &mut self,
+        revision: u64,
+        app: domain::Application,
+        action: ApplicationActionId,
+        outcome: api::ActivationOutcome,
         effects: &mut Effects<Message>,
     ) {
         let mut current = self.apps.iter().filter(|entry| entry.id == app.id);
@@ -1010,16 +1079,14 @@ impl Desktop {
             return;
         }
         let apps = self.adapters.apps.clone();
+        let context = launch_context(outcome);
         effects.task_on_with_failure(
             crate::work::CONTROLS,
             move || {
                 Message::Launcher(launcher::Message::ActionFinished {
                     revision,
-                    result: lucent_usecases::launch_application_action(
-                        apps.as_ref(),
-                        &app,
-                        &action,
-                    ),
+                    result: lucent_usecases::applications::application_action(&app, &action)
+                        .and_then(|_| apps.launch_action_with_context(&app, &action, context)),
                 })
             },
             move |failure| {
@@ -1128,6 +1195,7 @@ impl Component for Desktop {
                 .view(cx, self.theme())
                 .map(Message::Bluetooth),
             "power" => self.power.view(cx, self.theme()).map(Message::Power),
+            "displays" => self.displays.view(cx, self.theme()).map(Message::Displays),
             "tray" => self.tray.view(cx, self.theme()).map(Message::Tray),
             "osd" => self.osd.view(cx, self.theme()),
             "background" => self
@@ -1220,6 +1288,7 @@ impl Component for Desktop {
                     "network",
                     "bluetooth",
                     "power",
+                    "displays",
                     "tray",
                     "notifications",
                     "osd",
@@ -1550,6 +1619,14 @@ impl Component for Desktop {
                 effects.delegate(|child| self.tray.update(message, child), Message::Tray);
                 self.panel_opened(Panel::Tray, was_open, effects);
             }
+            Message::Displays(message) => {
+                let was_open = self.displays.open();
+                effects.delegate(
+                    |child| self.displays.update(message, child),
+                    Message::Displays,
+                );
+                self.panel_opened(Panel::Displays, was_open, effects);
+            }
             Message::Power(message) => {
                 if let crate::power::Message::Observed(result) = &message {
                     let before = (
@@ -1612,6 +1689,33 @@ impl Component for Desktop {
             Message::Launch(id, prefer) => {
                 self.launch(&id, prefer, effects);
                 self.update_launcher(launcher::Message::Close, effects);
+            }
+            Message::LaunchPrepared(app, prefer, outcome) => {
+                self.launch_prepared(app, prefer, outcome, effects)
+            }
+            Message::LaunchActionPrepared(revision, app, action, outcome) => {
+                self.launch_application_action_prepared(revision, app, action, outcome, effects)
+            }
+            Message::OpenApplication(app, request) => {
+                let app_id = app
+                    .id
+                    .as_str()
+                    .strip_suffix(".desktop")
+                    .unwrap_or(app.id.as_str())
+                    .to_owned();
+                effects.activation_token(app_id, move |outcome| {
+                    Message::OpenApplicationPrepared(app, request, outcome)
+                });
+            }
+            Message::OpenApplicationPrepared(app, request, outcome) => {
+                if matches!(self.catalog.status(), crate::catalog::Status::Ready)
+                    && self.apps.iter().find(|entry| entry.id == app.id) == Some(&app)
+                {
+                    let apps = self.adapters.apps.clone();
+                    effects.task_on(crate::work::CONTROLS, move || {
+                        Message::Completed(apps.open(&app, &request, launch_context(outcome)))
+                    });
+                }
             }
             Message::LiveWallpaper(message) => self.update_live_wallpaper(message, effects),
             Message::Workspace(command) => {
@@ -1881,6 +1985,9 @@ impl api::Application for Desktop {
         true
     }
 
+    fn activation_enabled(&self) -> bool {
+        true
+    }
     fn clipboard_enabled(&self) -> bool {
         true
     }
@@ -2076,6 +2183,29 @@ impl api::Application for Desktop {
                 },
                 visible: self.power.visible(),
                 pointer_input: if self.power.open() {
+                    PointerInput::All
+                } else {
+                    PointerInput::None
+                },
+            },
+            SurfaceSpec {
+                id: "displays",
+                instance: None,
+                output: None,
+                layer: Layer::Overlay,
+                anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
+                width: 0,
+                height: 0,
+                exclusive_zone: -1,
+                keyboard: if self.displays.open() {
+                    Keyboard::Exclusive
+                } else {
+                    Keyboard::None
+                },
+                visible: self.displays.visible(),
+                pointer_input: if self.displays.open() {
                     PointerInput::All
                 } else {
                     PointerInput::None
@@ -2342,14 +2472,13 @@ impl api::Application for Desktop {
         let network = self.adapters.network.clone();
         let bluetooth = self.adapters.bluetooth.clone();
         let power = self.adapters.power.clone();
+        let displays = self.adapters.displays.clone();
         let tray = self.adapters.tray.clone();
         let mut s = vec![
             Subscription::stream("applications", move |out, cancel| {
-                apps.watch(
+                apps.watch_updates(
                     &mut |snapshot| {
-                        out.send(Message::Catalog(crate::catalog::Message::Observed(
-                            snapshot,
-                        )))
+                        out.send(Message::Catalog(crate::catalog::Message::Updated(snapshot)))
                     },
                     &WatchStop(cancel),
                 )
@@ -2359,6 +2488,14 @@ impl api::Application for Desktop {
                     &mut |value| out.send(Message::Tray(crate::tray::Message::Observed(value))),
                     &WatchStop(cancel),
                 )
+            }),
+            Subscription::stream("displays", move |out, cancel| {
+                displays.watch(
+                    &mut |value| {
+                        out.send(Message::Displays(crate::displays::Message::Observed(value)))
+                    },
+                    &WatchStop(cancel),
+                );
             }),
             Subscription::stream("power", move |out, cancel| {
                 power.watch(
@@ -2457,6 +2594,14 @@ impl api::Application for Desktop {
                     Emitter::new(move |message| out.send(Message::Tray(message))),
                     cancel,
                 )
+            }));
+        }
+        for subscription in self.displays.subscriptions() {
+            s.push(Subscription::stream(subscription.id, move |out, cancel| {
+                (subscription.run)(
+                    Emitter::new(move |message| out.send(Message::Displays(message))),
+                    cancel,
+                );
             }));
         }
         for subscription in self.power.subscriptions() {
@@ -2665,6 +2810,14 @@ impl api::Application for Desktop {
                 surface: "tray", ..
             } => None,
             Event::Key {
+                surface: "displays",
+                key: Key::Escape,
+            } => Some(Message::Displays(self.displays.escape())),
+            Event::Key {
+                surface: "displays",
+                ..
+            } => None,
+            Event::Key {
                 surface: "power",
                 key: Key::Escape,
             } => Some(Message::Power(self.power.escape())),
@@ -2707,6 +2860,19 @@ impl api::Application for Desktop {
         }
     }
     fn command(&self, command: &str) -> std::result::Result<Option<Message>, String> {
+        if let Some(json) = command.strip_prefix("applications open ") {
+            let (id, request) =
+                crate::application_requests::parse_open(json).map_err(|error| error.to_string())?;
+            if !matches!(self.catalog.status(), crate::catalog::Status::Ready) {
+                return Err("Application catalog is unavailable".into());
+            }
+            let mut apps = self.apps.iter().filter(|app| app.id == id);
+            let app = apps.next().ok_or("Application is unavailable")?;
+            if apps.next().is_some() {
+                return Err("Application identity is ambiguous".into());
+            }
+            return Ok(Some(Message::OpenApplication(app.clone(), request)));
+        }
         if let Some(value) = command.strip_prefix("launcher actions ") {
             let id = AppId::new(value).map_err(|error| error.to_string())?;
             if !matches!(self.catalog.status(), crate::catalog::Status::Ready) {
@@ -2994,6 +3160,9 @@ impl api::Application for Desktop {
             "tray open"=>Message::Tray(crate::tray::Message::Open),
             "tray toggle"=>Message::Tray(crate::tray::Message::Toggle),
             "tray close"=>Message::Tray(crate::tray::Message::Close),
+            "displays open"=>Message::Displays(crate::displays::Message::Open),
+            "displays toggle"=>Message::Displays(crate::displays::Message::Toggle),
+            "displays close"=>Message::Displays(crate::displays::Message::Close),
             "power open"=>Message::Power(crate::power::Message::Open),
             "power toggle"=>Message::Power(crate::power::Message::Toggle),
             "power close"=>Message::Power(crate::power::Message::Close),
@@ -3047,6 +3216,7 @@ impl api::Application for Desktop {
         value["network"] = self.network.inspect();
         value["bluetooth"] = self.bluetooth.inspect();
         value["power"] = self.power.inspect();
+        value["displays"] = self.displays.inspect();
         value["tray"] = self.tray.inspect();
         value["catalog"] = self.catalog.inspect();
         value["application_actions"] = self.launcher.actions_inspect();
@@ -3085,6 +3255,7 @@ impl api::Application for Desktop {
             || (surface == "audio" && self.audio.animating(now))
             || (surface == "media-controls" && self.media.animating(now))
             || (surface == "power" && self.power.animating(now))
+            || (surface == "displays" && self.displays.animating(now))
             || (surface == "tray" && self.tray.animating(now))
             || (surface == "bluetooth" && self.bluetooth.animating(now))
             || (surface == "network" && self.network.animating(now))

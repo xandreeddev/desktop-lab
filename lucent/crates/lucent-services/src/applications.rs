@@ -2,7 +2,9 @@
 mod actions;
 mod activation;
 mod catalog;
+mod exec;
 mod launch;
+mod open;
 mod watch;
 use lucent_domain::*;
 use std::{
@@ -27,6 +29,7 @@ pub struct XdgApplications {
     desktop: String,
     locale: String,
     program_dirs: Vec<PathBuf>,
+    legacy_icons: Option<PathBuf>,
 }
 impl Default for XdgApplications {
     fn default() -> Self {
@@ -36,7 +39,7 @@ impl Default for XdgApplications {
         let data = std::env::var_os("XDG_DATA_HOME")
             .map(PathBuf::from)
             .filter(|p| p.is_absolute())
-            .or_else(|| home.map(|p| p.join(".local/share")));
+            .or_else(|| home.as_ref().map(|p| p.join(".local/share")));
         let mut roots = data.into_iter().collect::<Vec<_>>();
         roots.extend(
             std::env::var("XDG_DATA_DIRS")
@@ -48,6 +51,7 @@ impl Default for XdgApplications {
                 .map(PathBuf::from),
         );
         Self {
+            legacy_icons: home.map(|home| home.join(".icons")),
             data_roots: roots,
             desktop: std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_else(|_| "Hyprland".into()),
             locale: std::env::var("LC_ALL")
@@ -56,13 +60,7 @@ impl Default for XdgApplications {
                 .or_else(|| std::env::var("LC_MESSAGES").ok().filter(|s| !s.is_empty()))
                 .or_else(|| std::env::var("LANG").ok())
                 .unwrap_or_default(),
-            program_dirs: std::env::var_os("PATH")
-                .map(|p| {
-                    std::env::split_paths(&p)
-                        .filter(|p| p.is_absolute())
-                        .collect()
-                })
-                .unwrap_or_default(),
+            program_dirs: program_directories(),
         }
     }
 }
@@ -78,10 +76,11 @@ impl XdgApplications {
             ));
         }
         Ok(Self {
+            legacy_icons: None,
             data_roots,
             desktop,
             locale,
-            program_dirs: vec![],
+            program_dirs: program_directories(),
         })
     }
 }
@@ -90,12 +89,52 @@ impl ApplicationPort for XdgApplications {
         catalog::discover(self)
     }
     fn watch(&self, emit: &mut dyn FnMut(Result<Vec<Application>>), stop: &dyn StopSignal) {
+        watch::observe(
+            self,
+            &mut |update| emit(update.map(|update| update.applications)),
+            stop,
+        );
+    }
+    fn watch_updates(
+        &self,
+        emit: &mut dyn FnMut(Result<ApplicationCatalogUpdate>),
+        stop: &dyn StopSignal,
+    ) {
         watch::observe(self, emit, stop);
     }
     fn launch(&self, app: &Application) -> Result<()> {
-        launch::application(app)
+        self.launch_with_context(app, Default::default())
+    }
+    fn launch_with_context(
+        &self,
+        app: &Application,
+        context: ApplicationLaunchContext,
+    ) -> Result<()> {
+        let (current, _, _) = catalog::resolve(self, &app.id)?;
+        if current != *app {
+            return Err(DomainError::Invalid(
+                "Application changed; choose it again".into(),
+            ));
+        }
+        launch::application_with_context(&current, &context)
+    }
+    fn open(
+        &self,
+        app: &Application,
+        request: &ApplicationOpenRequest,
+        context: ApplicationLaunchContext,
+    ) -> Result<()> {
+        open::open(self, app, request, &context)
     }
     fn launch_action(&self, app: &Application, action: &ApplicationActionId) -> Result<()> {
+        self.launch_action_with_context(app, action, Default::default())
+    }
+    fn launch_action_with_context(
+        &self,
+        app: &Application,
+        action: &ApplicationActionId,
+        context: ApplicationLaunchContext,
+    ) -> Result<()> {
         lucent_usecases::applications::application_action(app, action)?;
         let current = self
             .discover()?
@@ -107,7 +146,7 @@ impl ApplicationPort for XdgApplications {
             ));
         }
         let selected = lucent_usecases::applications::application_action(app, action)?;
-        launch::action(app, selected)
+        launch::action_with_context(app, selected, &context)
     }
 }
 /// URI selection starts the desktop handler in an independent application unit.
@@ -126,14 +165,44 @@ impl UriPort for XdgUri {
     }
 }
 fn executable(program: &str) -> bool {
+    executable_in(program, &program_directories())
+}
+fn program_directories() -> Vec<PathBuf> {
+    std::env::var_os("PATH")
+        .map(|path| {
+            std::env::split_paths(&path)
+                .filter(|p| p.is_absolute())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+/// The catalog parser and its dependency observer must use the same captured
+/// lookup roots. Relative working-directory entries are not stable catalog
+/// dependencies; only absolute paths or executable names in absolute PATH roots
+/// have authority here.
+fn executable_candidates(program: &str, directories: &[PathBuf]) -> Vec<PathBuf> {
+    if program.is_empty() || program.contains('\0') {
+        return vec![];
+    }
+    if Path::new(program).is_absolute() {
+        return vec![PathBuf::from(program)];
+    }
+    if program.contains('/') {
+        return vec![];
+    }
+    directories
+        .iter()
+        .filter(|directory| directory.is_absolute())
+        .map(|directory| directory.join(program))
+        .collect()
+}
+fn executable_in(program: &str, directories: &[PathBuf]) -> bool {
     let check = |p: &Path| {
         fs::metadata(p).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
     };
-    if program.contains('/') {
-        return check(Path::new(program));
-    }
-    std::env::var_os("PATH")
-        .is_some_and(|p| std::env::split_paths(&p).any(|d| check(&d.join(program))))
+    executable_candidates(program, directories)
+        .iter()
+        .any(|path| check(path))
 }
 fn unescape(value: &str) -> String {
     let mut out = String::new();
@@ -187,6 +256,16 @@ pub fn parse_entry(
     desktops: &str,
     locale: &str,
 ) -> Result<Option<Application>> {
+    parse_entry_with_program_dirs(id, path, text, desktops, locale, &program_directories())
+}
+fn parse_entry_with_program_dirs(
+    id: &str,
+    path: &str,
+    text: &str,
+    desktops: &str,
+    locale: &str,
+    program_dirs: &[PathBuf],
+) -> Result<Option<Application>> {
     let mut main = false;
     let mut values = BTreeMap::new();
     for line in text.lines() {
@@ -221,7 +300,7 @@ pub fn parse_entry(
     {
         return Ok(None);
     }
-    if !value("TryExec").is_empty() && !executable(&unescape(value("TryExec"))) {
+    if !value("TryExec").is_empty() && !executable_in(&unescape(value("TryExec")), program_dirs) {
         return Ok(None);
     }
     let name = localized(&values, "Name", locale);
@@ -268,107 +347,10 @@ pub fn parse_entry(
 }
 /// Parse the desktop-entry quoting grammar, then expand each field code once.
 pub fn parse_exec(exec: &str, name: &str, path: &str, icon: &str) -> Result<Vec<String>> {
-    let invalid = || DomainError::Invalid("Invalid desktop entry Exec field".into());
-    // An input file's byte limit alone cannot bound repeated %c/%k expansion.
-    // This is an implementation resource policy, not a desktop-entry limit.
-    const MAX_EXEC_BYTES: usize = 1024 * 1024;
-    const MAX_EXEC_ARGUMENTS: usize = 4096;
-    if exec.len() > MAX_EXEC_BYTES {
-        return Err(invalid());
-    }
-    let mut tokens = vec![];
-    let mut token = String::new();
-    let mut quoted = false;
-    let mut started = false;
-    let mut chars = exec.chars();
-    while let Some(c) = chars.next() {
-        match c {
-            '"' => {
-                quoted = !quoted;
-                started = true;
-            }
-            '\\' => {
-                let c = chars.next().ok_or_else(invalid)?;
-                token.push(c);
-                started = true;
-            }
-            c if c.is_whitespace() && !quoted => {
-                if started {
-                    if tokens.len() == MAX_EXEC_ARGUMENTS {
-                        return Err(invalid());
-                    }
-                    tokens.push(std::mem::take(&mut token));
-                    started = false;
-                }
-            }
-            c => {
-                token.push(c);
-                started = true;
-            }
-        }
-    }
-    if quoted {
-        return Err(invalid());
-    }
-    if started {
-        if tokens.len() == MAX_EXEC_ARGUMENTS {
-            return Err(invalid());
-        }
-        tokens.push(token);
-    }
-    let mut out = vec![];
-    let mut bytes = 0;
-    for token in tokens {
-        match token.as_str() {
-            "%f" | "%F" | "%u" | "%U" | "%d" | "%D" | "%n" | "%N" | "%v" | "%m" => continue,
-            "%i" => {
-                if !icon.is_empty() {
-                    if out.len() > MAX_EXEC_ARGUMENTS - 2 {
-                        return Err(invalid());
-                    }
-                    let added = "--icon".len().checked_add(icon.len()).ok_or_else(invalid)?;
-                    if added > MAX_EXEC_BYTES - bytes {
-                        return Err(invalid());
-                    }
-                    bytes += added;
-                    out.extend(["--icon".into(), icon.into()]);
-                }
-                continue;
-            }
-            _ => {}
-        }
-        if out.len() == MAX_EXEC_ARGUMENTS {
-            return Err(invalid());
-        }
-        let mut expanded = String::new();
-        let append = |out: &mut String, value: &str| -> Result<()> {
-            if value.len() > MAX_EXEC_BYTES - bytes - out.len() {
-                return Err(invalid());
-            }
-            out.push_str(value);
-            Ok(())
-        };
-        let mut cs = token.chars();
-        while let Some(c) = cs.next() {
-            if c != '%' {
-                append(&mut expanded, c.encode_utf8(&mut [0; 4]))?;
-                continue;
-            }
-            match cs.next() {
-                Some('%') => append(&mut expanded, "%")?,
-                Some('c') => append(&mut expanded, name)?,
-                Some('k') => append(&mut expanded, path)?,
-                Some('f' | 'u' | 'd' | 'D' | 'n' | 'N' | 'v' | 'm') => {}
-                _ => return Err(invalid()),
-            }
-        }
-        bytes += expanded.len();
-        out.push(expanded);
-    }
-    if out.first().is_none_or(|s| s.is_empty() || s.contains('=')) {
-        return Err(invalid());
-    }
-    Ok(out)
+    exec::expand(exec, name, path, icon, None)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| DomainError::Invalid("Invalid desktop entry Exec field".into()))
 }
 
 #[cfg(test)]

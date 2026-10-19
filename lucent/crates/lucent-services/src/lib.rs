@@ -4,6 +4,7 @@ pub mod audio;
 pub mod bluetooth;
 pub mod compositor;
 pub mod desktop_adapters;
+pub mod displays;
 pub mod images;
 pub mod media;
 pub mod network;
@@ -48,10 +49,20 @@ pub fn command(program: &str, args: &[&str]) -> Result<String> {
     command_with_timeout(program, args, Duration::from_secs(5))
 }
 pub fn command_with_timeout(program: &str, args: &[&str], timeout: Duration) -> Result<String> {
+    command_with_environment(program, args, timeout, &[])
+}
+/// Per-child values never mutate global process state or appear in argv.
+pub(crate) fn command_with_environment(
+    program: &str,
+    args: &[&str],
+    timeout: Duration,
+    environment: &[(&str, &str)],
+) -> Result<String> {
     use std::os::unix::process::CommandExt;
     let mut child = Command::new(program)
         .process_group(0)
         .args(args)
+        .envs(environment.iter().copied())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

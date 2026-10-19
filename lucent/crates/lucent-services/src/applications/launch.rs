@@ -3,9 +3,24 @@ use lucent_domain::{
     Application, ApplicationAction, ApplicationLaunch, DomainError, LaunchCommand, Result,
 };
 
+#[cfg(test)]
 pub(super) fn application(app: &Application) -> Result<()> {
+    application_with_context(app, &Default::default())
+}
+pub(super) fn application_with_context(
+    app: &Application,
+    context: &lucent_domain::ApplicationLaunchContext,
+) -> Result<()> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     if let ApplicationLaunch::DesktopService { fallback } = &app.launch {
-        match super::activation::activate(&app.id, None) {
+        let result = super::activation::request_context(
+            &app.id,
+            super::activation::Operation::Activate,
+            context.activation_token(),
+            None,
+            deadline.saturating_duration_since(std::time::Instant::now()),
+        );
+        match result {
             Ok(()) => return Ok(()),
             Err(super::activation::ActivationError::Unsupported) => {}
             Err(super::activation::ActivationError::Failed) => {
@@ -24,20 +39,31 @@ pub(super) fn application(app: &Application) -> Result<()> {
         .launch
         .command()
         .ok_or_else(|| DomainError::Invalid("Application launch is unavailable".into()))?;
-    executable_command(launch)
+    executable_before(launch, context, deadline)
 }
 
-pub(super) fn action(app: &Application, action: &ApplicationAction) -> Result<()> {
+pub(super) fn action_with_context(
+    app: &Application,
+    action: &ApplicationAction,
+    context: &lucent_domain::ApplicationLaunchContext,
+) -> Result<()> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     let command = if matches!(action.launch, ApplicationLaunch::DesktopService { .. }) {
         action_fallback(
             action,
-            super::activation::activate_action(&app.id, &action.id, None),
+            super::activation::request_context(
+                &app.id,
+                super::activation::Operation::Action(&action.id),
+                context.activation_token(),
+                None,
+                deadline.saturating_duration_since(std::time::Instant::now()),
+            ),
         )?
     } else {
         action.launch.command()
     };
     if let Some(command) = command {
-        executable_command(command)?;
+        executable_before(command, context, deadline)?;
     }
     Ok(())
 }
@@ -61,7 +87,11 @@ fn action_fallback(
     }
 }
 
-fn executable_command(launch: &LaunchCommand) -> Result<()> {
+pub(super) fn executable_before(
+    launch: &LaunchCommand,
+    context: &lucent_domain::ApplicationLaunchContext,
+    deadline: std::time::Instant,
+) -> Result<()> {
     let terminal = if launch.terminal {
         Some(
             ["xdg-terminal-exec", "foot", "alacritty", "kitty"]
@@ -74,25 +104,62 @@ fn executable_command(launch: &LaunchCommand) -> Result<()> {
     } else {
         None
     };
-    command(launch, terminal)
+    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+    if remaining.is_zero() {
+        return Err(DomainError::Failed(
+            "Application request deadline exceeded; earlier files may already be open".into(),
+        ));
+    }
+    command_with_context(launch, terminal, context, remaining)
 }
 
 pub(super) fn command(command: &LaunchCommand, terminal: Option<&str>) -> Result<()> {
+    command_with_context(
+        command,
+        terminal,
+        &Default::default(),
+        std::time::Duration::from_secs(5),
+    )
+}
+fn command_with_context(
+    command: &LaunchCommand,
+    terminal: Option<&str>,
+    context: &lucent_domain::ApplicationLaunchContext,
+    timeout: std::time::Duration,
+) -> Result<()> {
     let environment = std::env::vars_os().filter_map(|(name, _)| name.into_string().ok());
-    let args = arguments(command, terminal, environment)?;
+    let args = arguments_with_activation(
+        command,
+        terminal,
+        environment,
+        context.activation_token().is_some(),
+    )?;
     let refs = args.iter().map(String::as_str).collect::<Vec<_>>();
     // Type=exec waits for execve acknowledgement, not for the application to exit.
     // Failure must not fall back to a child inside lucent.service: that would
     // make a shell restart terminate the user's application and its documents.
-    crate::command("systemd-run", &refs)
+    let environment = context
+        .activation_token()
+        .map(|token| vec![("XDG_ACTIVATION_TOKEN", token)])
+        .unwrap_or_default();
+    crate::command_with_environment("systemd-run", &refs, timeout, &environment)
         .map(|_| ())
         .map_err(|_| DomainError::Failed("Application could not be started".into()))
 }
 
+#[cfg(test)]
 fn arguments(
     command: &LaunchCommand,
     terminal: Option<&str>,
     environment: impl Iterator<Item = String>,
+) -> Result<Vec<String>> {
+    arguments_with_activation(command, terminal, environment, false)
+}
+fn arguments_with_activation(
+    command: &LaunchCommand,
+    terminal: Option<&str>,
+    environment: impl Iterator<Item = String>,
+    fresh_activation: bool,
 ) -> Result<Vec<String>> {
     if command.program.is_empty() || command.program.contains('\0') {
         return Err(DomainError::Invalid(
@@ -108,10 +175,20 @@ fn arguments(
         "--slice=app.slice",
         "--property=ExitType=cgroup",
         "--property=PartOf=graphical-session.target",
-        "--property=UnsetEnvironment=XDG_ACTIVATION_TOKEN DESKTOP_STARTUP_ID",
     ]
     .map(str::to_owned)
     .to_vec();
+    args.push(
+        if fresh_activation {
+            "--property=UnsetEnvironment=DESKTOP_STARTUP_ID"
+        } else {
+            "--property=UnsetEnvironment=XDG_ACTIVATION_TOKEN DESKTOP_STARTUP_ID"
+        }
+        .into(),
+    );
+    if fresh_activation {
+        args.push("--setenv=XDG_ACTIVATION_TOKEN".into());
+    }
     if let Some(directory) = &command.directory {
         args.push(format!("--working-directory={directory}"));
     } else {
@@ -187,6 +264,37 @@ mod tests {
             action_fallback(&action, Err(ActivationError::Unsupported)),
             Err(DomainError::Unavailable(_))
         ));
+    }
+    #[test]
+    fn fresh_token_is_imported_by_name_and_never_appears_in_arguments() {
+        let command = LaunchCommand {
+            program: "/fixture".into(),
+            args: vec![],
+            directory: None,
+            terminal: false,
+        };
+        let args = arguments_with_activation(
+            &command,
+            None,
+            [
+                "XDG_ACTIVATION_TOKEN",
+                "DESKTOP_STARTUP_ID",
+                "WAYLAND_DISPLAY",
+            ]
+            .map(String::from)
+            .into_iter(),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            args.iter()
+                .filter(|arg| arg.as_str() == "--setenv=XDG_ACTIVATION_TOKEN")
+                .count(),
+            1
+        );
+        assert!(args.contains(&"--property=UnsetEnvironment=DESKTOP_STARTUP_ID".into()));
+        assert!(!args.iter().any(|arg| arg == "--setenv=DESKTOP_STARTUP_ID"));
+        assert!(!args.iter().any(|arg| arg.contains("private-token")));
     }
 
     #[test]

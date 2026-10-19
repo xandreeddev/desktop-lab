@@ -1,5 +1,6 @@
 //! Native NetworkManager adapter. One subscription worker owns its connection.
 //! Commands use that worker; no subprocess, toolkit or network UI is involved.
+mod agent;
 mod control;
 mod native;
 mod snapshot;
@@ -23,6 +24,7 @@ struct Request {
     reply: mpsc::SyncSender<Result<()>>,
     cancelled: Arc<AtomicBool>,
     deadline: Instant,
+    interactive_deadline: Arc<Mutex<Option<Instant>>>,
 }
 pub struct NetworkManager {
     online: Mutex<Option<async_channel::Sender<Request>>>,
@@ -30,6 +32,8 @@ pub struct NetworkManager {
     next_id: AtomicU64,
     address: Option<String>,
     timeout: Duration,
+    credentials: Arc<agent::Hub>,
+    secret_agent: bool,
 }
 impl Default for NetworkManager {
     fn default() -> Self {
@@ -39,6 +43,8 @@ impl Default for NetworkManager {
             next_id: AtomicU64::new(1),
             address: None,
             timeout: OPERATION_TIMEOUT,
+            credentials: Arc::new(agent::Hub::default()),
+            secret_agent: false,
         }
     }
 }
@@ -50,6 +56,12 @@ impl NetworkManager {
             address: Some(address.into()),
             ..Self::default()
         }
+    }
+    /// Enable the native personal-Wi-Fi SecretAgent explicitly. Plain service
+    /// observation remains free of credential-agent registration side effects.
+    pub fn with_secret_agent(mut self) -> Self {
+        self.secret_agent = true;
+        self
     }
     fn allocate(&self) -> Result<NetworkObjectId> {
         self.next_id
@@ -66,10 +78,21 @@ impl NetworkManager {
         stop: &dyn StopSignal,
     ) -> Result<()> {
         let (transport, mut signals) =
-            native::connect(self.address.as_deref(), self.timeout).await?;
+            native::connect(self.address.as_deref(), self.timeout, self.secret_agent).await?;
+        let _agent = if self.secret_agent {
+            Some(
+                agent::Session::register(&transport, self.credentials.clone(), self.timeout)
+                    .await?,
+            )
+        } else {
+            None
+        };
         let (send, receive) = async_channel::bounded(REQUEST_LIMIT);
         let mut objects = Objects::default();
-        let mut notices = Notices::default();
+        let mut notices = Notices {
+            credentials: self.secret_agent.then(|| self.credentials.clone()),
+            ..Notices::default()
+        };
         let mut previous: Option<NetworkSnapshot> = None;
         let mut dirty = true;
         while !stop.cancelled() {
@@ -110,6 +133,9 @@ impl NetworkManager {
                         continue;
                     }
                     let value = objects.replace(raw?, &mut || self.allocate())?;
+                    if self.secret_agent {
+                        self.credentials.refresh(&objects, &value);
+                    }
                     dirty = notices.dirty;
                     *self
                         .online
@@ -150,14 +176,32 @@ impl NetworkManager {
             let result = match control::plan(request.command, &objects, previous.as_ref().unwrap())
             {
                 Ok(plan) => {
-                    signals
-                        .pump(
+                    let interaction = match &plan {
+                        control::Plan::Activate { profile, .. } if self.secret_agent => {
+                            Some(agent::Interaction::new(
+                                self.credentials.clone(),
+                                profile.to_string(),
+                                request.interactive_deadline.clone(),
+                                self.timeout,
+                            ))
+                        }
+                        _ => None,
+                    };
+                    let result = signals
+                        .pump_interactive(
                             control::apply(&transport, plan),
                             Some(request.deadline),
                             stop,
                             &mut notices,
+                            &|| interaction.as_ref().and_then(agent::Interaction::deadline),
                         )
-                        .await
+                        .await;
+                    if result.is_err()
+                        && let Some(interaction) = interaction
+                    {
+                        interaction.cancel();
+                    }
+                    result
                 }
                 Err(error) => Err(error),
             };
@@ -202,6 +246,20 @@ impl NetworkPort for NetworkManager {
             }
         }
     }
+    fn watch_credentials(
+        &self,
+        emit: &mut dyn FnMut(Result<Vec<NetworkCredentialRequest>>),
+        stop: &dyn StopSignal,
+    ) {
+        self.credentials.watch(emit, stop);
+    }
+    fn answer_credentials(
+        &self,
+        request: NetworkCredentialRequestId,
+        credentials: Option<WifiCredentials>,
+    ) -> Result<()> {
+        self.credentials.answer(request, credentials)
+    }
     fn control(&self, command: NetworkCommand) -> Result<()> {
         let send = self
             .online
@@ -211,21 +269,38 @@ impl NetworkPort for NetworkManager {
             .ok_or_else(|| unavailable("Network service is not ready"))?;
         let (reply, receive) = mpsc::sync_channel(1);
         let cancelled = Arc::new(AtomicBool::new(false));
+        let interactive_deadline = Arc::new(Mutex::new(None));
         send.try_send(Request {
             command,
             reply,
             cancelled: cancelled.clone(),
             deadline: Instant::now() + self.timeout,
+            interactive_deadline: interactive_deadline.clone(),
         })
         .map_err(|_| unavailable("Network command queue is unavailable or full"))?;
-        match receive.recv_timeout(self.timeout + Duration::from_millis(200)) {
-            Ok(result) => result,
-            Err(_) => {
-                cancelled.store(true, Ordering::Release);
-                Err(unavailable(
-                    "Network command was not acknowledged; observe state before retrying",
-                ))
+        let mut deadline = Instant::now() + self.timeout + Duration::from_millis(200);
+        let mut extended = false;
+        loop {
+            match receive.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+                Ok(result) => return result,
+                Err(mpsc::RecvTimeoutError::Timeout) if !extended => {
+                    let next = *interactive_deadline
+                        .lock()
+                        .map_err(|_| unavailable("Network credential deadline is unavailable"))?;
+                    if let Some(next) = next {
+                        // Fixed from the first actual matching callback, never
+                        // restarted by another prompt or unrelated request.
+                        deadline = next + Duration::from_millis(200);
+                        extended = true;
+                        continue;
+                    }
+                }
+                Err(_) => (),
             }
+            cancelled.store(true, Ordering::Release);
+            return Err(unavailable(
+                "Network command was not acknowledged; observe state before retrying",
+            ));
         }
     }
 }

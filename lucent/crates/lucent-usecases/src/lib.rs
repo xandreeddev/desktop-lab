@@ -58,6 +58,15 @@ pub fn activate_application(
     app: &Application,
     prefer_running: bool,
 ) -> Result<()> {
+    activate_application_with_context(apps, compositor, app, prefer_running, Default::default())
+}
+pub fn activate_application_with_context(
+    apps: &dyn ApplicationPort,
+    compositor: &dyn CompositorPort,
+    app: &Application,
+    prefer_running: bool,
+    context: ApplicationLaunchContext,
+) -> Result<()> {
     if prefer_running
         && let Ok(snapshot) = compositor.snapshot()
         && let Some(window) = snapshot
@@ -67,7 +76,7 @@ pub fn activate_application(
     {
         return compositor.focus_window(&window.address);
     }
-    apps.launch(app)
+    apps.launch_with_context(app, context)
 }
 
 /// Align a released widget to a client-supplied logical spacing grid.
@@ -435,3 +444,5 @@ mod tests {
         }
     }
 }
+
+pub mod displays;

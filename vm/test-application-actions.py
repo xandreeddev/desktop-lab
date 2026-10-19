@@ -18,6 +18,7 @@ import time
 
 import lab
 from native_surfaces import find_surface
+from owned_application_units import RETIRE
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -161,29 +162,6 @@ def reject_closed_action(action):
     require(result.returncode == 1 and result.stderr.startswith(b'lucent: error:'),
             'closed_action_authority_rejected')
 
-
-UNIT_RETIRE = r'''
-import json, subprocess, sys
-unit, script, run_id = sys.argv[1:]
-assert unit == 'lucent-application-actions-' + run_id + '.service'
-def show():
-    result = subprocess.run(['systemctl','--user','show',unit,
-        '--property=LoadState,ActiveState,Transient,ExecStart,ControlGroup'],
-        capture_output=True,text=True,timeout=5)
-    assert result.returncode in (0,1)
-    return dict(line.split('=',1) for line in result.stdout.splitlines() if '=' in line)
-value = show()
-if value.get('LoadState') != 'not-found':
-    assert value.get('Transient') == 'yes'
-    assert script in value.get('ExecStart','') and run_id in value.get('ExecStart','')
-    group = value.get('ControlGroup','')
-    assert not group or group.endswith('/' + unit)
-    result = subprocess.run(['systemctl','--user','stop',unit],capture_output=True,timeout=10)
-    value = show()
-    assert result.returncode == 0 or value.get('LoadState') == 'not-found'
-assert value.get('LoadState') == 'not-found' or value.get('ActiveState') in ('inactive','failed')
-print(json.dumps({'retired':True}))
-'''
 
 SCRATCH_REMOVE = r'''
 import hashlib,json,os,shutil,stat,sys
@@ -330,7 +308,8 @@ def suite(results):
                    'keyboard_invokes_literal_action_once')
         event = next(event for event in events() if event['kind'] == 'action-exec')
         require(event['action'] == 'Literal' and event['version'] == 'v1'
-                and event['argv'] == ['two words', '$HOME', '$(unused)', 'semi;colon', '%', ''],
+                and event['argv'] == ['two words', '$HOME', '$(unused)', 'semi;colon', '%', '']
+                and event['fresh_token_present'] and not event['legacy_startup_present'],
                 'literal_action_argv_preserved_without_shell_expansion')
         no_primary()
         results['checks']['keyboard_action_and_literal_argv'] = True
@@ -380,11 +359,13 @@ def suite(results):
                    'native_activate_action_acknowledged')
         native_event = next(event for event in events()
                             if event['kind'] == 'activate-action' and event['action'] == 'Native')
-        require(native_event['empty_parameters'] and native_event['empty_platform'],
-                'native_action_wire_uses_empty_parameters_and_platform')
+        require(native_event['empty_parameters']
+                and native_event['platform_keys'] == ['activation-token']
+                and native_event['fresh_token_present'],
+                'native_action_wire_uses_empty_parameters_and_fresh_activation')
         require(count('action-fallback') == 0, 'successful_native_action_has_no_exec_fallback')
         no_primary()
-        results['checks']['native_activate_action_exact_name_and_empty_wire_arguments'] = True
+        results['checks']['native_activate_action_exact_name_and_fresh_activation'] = True
 
         chooser('native', 'pointer')
         click(name, monitor, 'application-action-Denied')
@@ -419,7 +400,8 @@ def suite(results):
         retired = not unit_attempted
         if unit_attempted:
             try:
-                require(json.loads(session('python3', '-c', UNIT_RETIRE, unit, fixture, run_id))['retired'],
+                require(json.loads(session('python3', '-c', RETIRE,
+                    'lucent-application-actions-', unit, fixture, run_id))['retired'],
                         'owned_fixture_unit_retired')
                 require(json.loads(session('python3', '-c',
                     'import dbus,json,sys; b=dbus.SessionBus(private=True); '

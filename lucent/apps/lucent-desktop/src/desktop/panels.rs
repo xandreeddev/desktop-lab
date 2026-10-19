@@ -12,11 +12,12 @@ pub(super) enum Panel {
     Network,
     Bluetooth,
     Power,
+    Displays,
     Tray,
     LiveWallpaper,
     Notifications,
 }
-const PANELS: [Panel; 10] = [
+const PANELS: [Panel; 11] = [
     Panel::Launcher,
     Panel::Audio,
     Panel::Media,
@@ -24,6 +25,7 @@ const PANELS: [Panel; 10] = [
     Panel::Network,
     Panel::Bluetooth,
     Panel::Power,
+    Panel::Displays,
     Panel::Tray,
     Panel::LiveWallpaper,
     Panel::Notifications,
@@ -39,6 +41,7 @@ impl Panel {
             Self::Network => "network",
             Self::Bluetooth => "bluetooth",
             Self::Power => "power",
+            Self::Displays => "displays",
             Self::Tray => "tray",
             Self::LiveWallpaper => "live-wallpaper",
             Self::Notifications => "notifications",
@@ -56,6 +59,7 @@ impl Desktop {
             Panel::Network => self.network.open(),
             Panel::Bluetooth => self.bluetooth.open(),
             Panel::Power => self.power.open(),
+            Panel::Displays => self.displays.open(),
             Panel::Tray => self.tray.open(),
             Panel::LiveWallpaper => self.live_wallpaper.open,
             Panel::Notifications => self.notifications.history_open(),
@@ -100,6 +104,10 @@ impl Desktop {
                 Panel::Bluetooth => effects.delegate(
                     |e| self.bluetooth.update(crate::bluetooth::Message::Close, e),
                     Message::Bluetooth,
+                ),
+                Panel::Displays => effects.delegate(
+                    |e| self.displays.update(crate::displays::Message::Close, e),
+                    Message::Displays,
                 ),
                 Panel::Power => effects.delegate(
                     |e| self.power.update(crate::power::Message::Close, e),
@@ -190,6 +198,7 @@ mod tests {
             Panel::Network => Message::Network(crate::network::Message::Open),
             Panel::Bluetooth => Message::Bluetooth(crate::bluetooth::Message::Open),
             Panel::Power => Message::Power(crate::power::Message::Open),
+            Panel::Displays => Message::Displays(crate::displays::Message::Open),
             Panel::Tray => Message::Tray(crate::tray::Message::Open),
             Panel::LiveWallpaper => Message::LiveWallpaper(crate::live_wallpaper::Message::Open),
             Panel::Notifications => Message::Notifications(crate::notifications::Message::Show),

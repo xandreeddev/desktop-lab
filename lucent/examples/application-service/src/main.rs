@@ -29,6 +29,7 @@ fn run() -> Result<()> {
     let mut list = false;
     let mut launch = None;
     let mut action = None;
+    let mut open = None;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -54,6 +55,25 @@ fn run() -> Result<()> {
                     DomainError::Invalid("Application ID required".into())
                 })?)?);
             }
+            "--open" => {
+                i += 1;
+                let id = AppId::new(
+                    args.get(i)
+                        .ok_or_else(|| DomainError::Invalid("Application ID required".into()))?,
+                )?;
+                let mut targets = vec![];
+                i += 1;
+                while i < args.len() {
+                    let value = &args[i];
+                    targets.push(if value.starts_with('/') {
+                        ApplicationOpenTarget::file(value)?
+                    } else {
+                        ApplicationOpenTarget::uri_value(value)?
+                    });
+                    i += 1;
+                }
+                open = Some((id, ApplicationOpenRequest::new(targets)?));
+            }
             "--action" => {
                 i += 1;
                 let app = AppId::new(
@@ -69,7 +89,7 @@ fn run() -> Result<()> {
             }
             _ => {
                 return Err(DomainError::Invalid(
-                    "application-service [--observe|--list|--launch ID|--action APP_ID ACTION_ID] [--seconds 1..600] [--data-dir ABSOLUTE_ROOT]".into(),
+                    "application-service [--observe|--list|--launch ID|--action APP_ID ACTION_ID|--open APP_ID FILE_OR_URI ...] [--seconds 1..600] [--data-dir ABSOLUTE_ROOT]".into(),
                 ));
             }
         }
@@ -80,10 +100,25 @@ fn run() -> Result<()> {
     } else {
         XdgApplications::with_source(roots, "Hyprland".into(), String::new())?
     };
-    if action.is_some() && (launch.is_some() || list) {
+    if [action.is_some(), launch.is_some(), open.is_some(), list]
+        .into_iter()
+        .filter(|value| *value)
+        .count()
+        > 1
+    {
         return Err(DomainError::Invalid(
             "Choose one application operation".into(),
         ));
+    }
+    if let Some((id, request)) = open {
+        let apps = source.discover()?;
+        let app = apps
+            .iter()
+            .find(|app| app.id == id)
+            .ok_or_else(|| DomainError::Invalid("Application is not installed".into()))?;
+        source.open(app, &request, ApplicationLaunchContext::default())?;
+        println!("{}", serde_json::json!({"open_acknowledged":true}));
+        return Ok(());
     }
     if let Some((id, action)) = action {
         let apps = source.discover()?;
