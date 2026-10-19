@@ -6,6 +6,7 @@ pub(super) struct SubmissionHistory {
     pub frames: u64,
     pub frame_times: std::collections::VecDeque<f64>,
     pub profiles: crate::profiling::History,
+    pub presentation: crate::presentation::History,
 }
 impl SubmissionHistory {
     pub fn continuation(&mut self) -> Self {
