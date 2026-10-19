@@ -88,7 +88,11 @@ python3 vm/measure-daily-resources.py \
 
 The collector refuses a mismatched running/installed executable, a replacement
 process, changed settings bytes/inode, output changes or a changed playback
-generation/target. It samples Linux process RSS/CPU every 250 ms, captures
+generation/target. Every inspector poll also rejects open/busy panels (including
+Display and application actions), notification history, pending preference saves
+and wallpaper preparation. An older inspector without optional presentation or
+source-frame trace fields can still supply an uninstrumented resource baseline;
+missing traces remain missing. It samples Linux process RSS/CPU every 250 ms, captures
 smaps_rollup before/after and observes bounded presentation histories every
 500 ms, retaining at most 16,384 host samples across at most 64 surfaces and
 explicitly reporting truncation. It does not restart the VM/shell, change wallpapers/preferences, open

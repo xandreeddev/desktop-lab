@@ -94,6 +94,41 @@ class PresentationMeasurement(unittest.TestCase):
         with self.assertRaises(AssertionError):
             measurement['collect_sources'](storage, snapshot)
 
+    def idle(self):
+        return {'client': {'background_ready': True, 'wallpaper_busy': False,
+                           'launcher': False, 'widgets_editing': False,
+                           'live_wallpaper': {'running': True}}}
+
+    def test_old_uninstrumented_inspector_can_supply_a_read_only_baseline(self):
+        snapshot = self.idle()
+        measurement['assert_idle_snapshot'](snapshot, 'animated-background')
+        self.assertFalse(measurement['collect_presentations']({}, dict(snapshot, surfaces=[])))
+        self.assertFalse(measurement['collect_sources']({}, {'client': {'live_wallpaper': {'producers': []}}}))
+
+    def test_new_display_and_application_activity_rejects_an_idle_interval(self):
+        for name in ['displays', 'application_actions']:
+            for state in ['open', 'visible', 'busy', 'refreshing']:
+                with self.subTest(panel=name, state=state):
+                    snapshot = self.idle()
+                    snapshot['client'][name] = {state: True}
+                    with self.assertRaises(AssertionError):
+                        measurement['assert_idle_snapshot'](snapshot, 'animated-background')
+
+    def test_transient_preparation_or_history_cannot_be_reported_as_settled_idle(self):
+        for mutate in [
+            lambda client: client.update(notification_history_open=True),
+            lambda client: client.update(wallpaper_browser={'busy': True}),
+            lambda client: client.update(settings_save_status='saving'),
+            lambda client: client.update(settings_save_status='retrying'),
+            lambda client: client['live_wallpaper'].update(library_loading=True),
+            lambda client: client['live_wallpaper'].update(awaiting_first_frame=True),
+            lambda client: client['live_wallpaper'].update(running=False),
+        ]:
+            snapshot = self.idle()
+            mutate(snapshot['client'])
+            with self.assertRaises(AssertionError):
+                measurement['assert_idle_snapshot'](snapshot, 'animated-background')
+
     def test_embedded_guest_sampler_is_valid_python(self):
         compile(measurement['SAMPLER'], '<guest-resource-sampler>', 'exec')
 

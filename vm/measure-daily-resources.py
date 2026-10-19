@@ -239,6 +239,24 @@ def producer_identities(snapshot):
     return [{key: producer.get(key) for key in keys}
             for producer in snapshot['client']['live_wallpaper']['producers']]
 
+def assert_idle_snapshot(snapshot, phase):
+    """Reject activity throughout a matched interval, including newer panels."""
+    client = snapshot['client']
+    assert client['background_ready'] and not client['wallpaper_busy'], 'Wait for the wallpaper to settle'
+    assert not client['launcher'] and not client['widgets_editing'], 'Close the launcher and widget editor'
+    assert not snapshot.get('frame_profiling', False), 'Separate CPU-stage profiling from normal resources'
+    for name in ('audio', 'media', 'network', 'bluetooth', 'power', 'tray', 'settings',
+                 'weather', 'displays', 'application_actions'):
+        panel = client.get(name, {})
+        assert not any(panel.get(key, False) for key in ('open', 'visible', 'busy', 'refreshing')), 'Close and settle panels before sampling: '+name
+    assert not client.get('notification_history_open', False), 'Close notification history'
+    assert not client.get('wallpaper_browser', {}).get('busy', False), 'Wait for wallpaper searches/imports'
+    assert client.get('settings_save_status') not in ('saving', 'retrying'), 'Wait for preference persistence'
+    live = client['live_wallpaper']
+    assert not any(live.get(key, False) for key in ('open', 'importing', 'awaiting_first_frame', 'library_loading')), 'Wait for live wallpaper preparation'
+    assert bool(live['running']) == (phase == 'animated-background'), 'Prepared phase does not match actual playback'
+
+
 def private(path, value):
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, 'w') as stream:
@@ -264,15 +282,8 @@ def main():
     inspect, remote, session = h['inspect'], h['remote'], h['session']
     assert session('omarchy-shell', 'lock', 'isLocked').strip() == 'false', 'Unlock the guest first'
     before = inspect()
-    assert before['client']['background_ready'] and not before['client']['wallpaper_busy']
-    assert not before['client']['launcher'] and not before['client']['widgets_editing'], 'Prepare an idle closed desktop first'
-    assert not before.get('frame_profiling', False), 'Measure normal resources separately from CPU-stage profiling'
-    for name in ('audio', 'media', 'network', 'bluetooth', 'power', 'tray', 'settings', 'weather'):
-        panel = before['client'].get(name, {})
-        assert not panel.get('open', False) and not panel.get('busy', False), 'Close and settle panels before sampling'
+    assert_idle_snapshot(before, args.phase)
     live = before['client']['live_wallpaper']
-    assert not live['open'] and not live['importing'] and not live['awaiting_first_frame']
-    assert bool(live['running']) == (args.phase == 'animated-background'), 'Prepared phase does not match actual playback'
     pid_text = remote('pgrep', '-x', 'lucent-desktop').splitlines()
     assert len(pid_text) == 1
     monitors_before = json.loads(session('hyprctl', '-j', 'monitors'))
@@ -287,6 +298,8 @@ def main():
     try:
         while process.poll() is None:
             snapshot = inspect()
+            assert_idle_snapshot(snapshot, args.phase)
+            assert producer_identities(before) == producer_identities(snapshot), 'Playback generation/target changed'
             truncated |= collect_presentations(samples, snapshot, since)
             source_truncated |= collect_sources(sources, snapshot)
             time.sleep(.5)
@@ -299,6 +312,7 @@ def main():
         raise
     resources = json.loads(output)
     after = inspect()
+    assert_idle_snapshot(after, args.phase)
     truncated |= collect_presentations(samples, after, since)
     source_truncated |= collect_sources(sources, after)
     assert remote('pgrep', '-x', 'lucent-desktop').strip() == pid_text[0]
