@@ -118,5 +118,16 @@ class FixedFixtureDiagnostics(unittest.TestCase):
         self.assertNotIn('private payload',json.dumps(value))
         self.assertTrue(all(set(frame)=={'source','function','line'} for frame in value['trace_frames']))
 
+    def test_actual_staged_fixture_basename_normalizes_to_source_without_private_path(self):
+        namespace={}
+        exec(compile('def guarded():\n raise ValueError("private fixture payload")\n',
+                     '/private/test-run/fixture.py','exec'),namespace)
+        try:namespace['guarded']()
+        except ValueError as error:value=fixture.failure_details(error,'admission')
+        self.assertEqual(value['trace_frames'],[
+            {'source':'application-intent-fixture.py','function':'guarded','line':2}])
+        self.assertNotIn('/private',json.dumps(value))
+        self.assertNotIn('private fixture payload',json.dumps(value))
+
 
 if __name__=='__main__':unittest.main()

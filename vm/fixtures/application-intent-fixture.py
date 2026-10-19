@@ -58,6 +58,8 @@ def failure_details(error, operation):
     trace = error.__traceback__; observed = 0
     while trace is not None and observed < 64 and len(details['trace_frames']) < 12:
         code = trace.tb_frame.f_code; source = Path(code.co_filename).name
+        if source == 'fixture.py':
+            source = 'application-intent-fixture.py'
         if source in sources:
             function = code.co_name
             details['trace_frames'].append({'source': source,
