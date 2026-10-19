@@ -47,9 +47,20 @@ Extension A, Kana/Bopomofo and Hangul syllables/Jamo. CJK and Hangul are static
 renamed derivative family names. The asset manifest records source and derived
 SHA256 values, Unicode ranges, codepoint counts and individual OFL license files.
 The CJK subset contains 28,323 codepoints in 10,167,004 bytes; Hangul contains
-11,623 in 2,697,016 bytes. Each rasterizer initializes independently only when
-that fallback is actually selected. A missing emoji therefore does not parse all
-CJK outlines. Coverage tables are borrowed from immutable embedded bytes.
+11,623 in 2,697,016 bytes. Coverage and shaping tables borrow immutable embedded
+bytes. Fallback selection does not construct a fontdue rasterizer or copy those
+large source files into an Arc. The renderer reads only each requested glyph's
+bounds and outline through ttf-parser, then prepares an antialiased tiny-skia mask
+at the existing 2× physical coverage density. The ordinary primary-face fontdue
+path remains unchanged.
+
+Glyph dimensions, finite bearings and pixel count are validated before coverage
+allocation. One temporary outline has a bounded command count; masks are released
+after composing the string. No additional retained per-glyph map exists: the
+renderer's existing byte-budgeted text texture cache remains the reuse boundary.
+This closes the source-level whole-font outline allocation path. Actual cold/warm
+RSS, performance and 1×/2× raster acceptance still require recorded execution;
+source inspection alone is not a measured memory improvement.
 
 ## Input-method ownership
 

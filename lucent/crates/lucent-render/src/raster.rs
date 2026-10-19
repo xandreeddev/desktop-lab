@@ -29,7 +29,7 @@ pub(super) fn validate_request(text: &str, size: f32, scale: f32) -> Result<(), 
     Ok(())
 }
 
-fn validate_glyph(glyph: &fontdue::Metrics) -> Result<(), Error> {
+pub(super) fn validate_glyph(glyph: &fontdue::Metrics) -> Result<(), Error> {
     if glyph.width > MAX_GLYPH_DIMENSION
         || glyph.height > MAX_GLYPH_DIMENSION
         || glyph
@@ -79,7 +79,7 @@ pub fn text(
             if x * density >= MAX_WIDTH as f32 * density {
                 break;
             }
-            let glyph = selected.metrics_indexed(positioned.id, size * density);
+            let glyph = crate::fallback::metrics(selected, positioned.id, size * density)?;
             validate_glyph(&glyph)?;
             let left = (x * density).round() + glyph.xmin as f32;
             left_edge = left_edge.min(left);
@@ -121,7 +121,7 @@ pub fn text(
             if x * density >= w as f32 {
                 break;
             }
-            let glyph = selected.metrics_indexed(positioned.id, size * density);
+            let glyph = crate::fallback::metrics(selected, positioned.id, size * density)?;
             validate_glyph(&glyph)?;
             let left = f64::from((x * density).round() + left_padding) + f64::from(glyph.xmin);
             let top = f64::from(
@@ -156,7 +156,8 @@ pub fn text(
     pixels.try_reserve_exact((w * h) as usize)?;
     pixels.resize((w * h) as usize, 0);
     for (face, id, glyph, left, top) in glyphs {
-        let (_, bitmap) = font.raster_face(face).rasterize_indexed(id, size * density);
+        let bitmap =
+            crate::fallback::rasterize(font.raster_face(face), id, size * density, &glyph)?;
         let x0 = left.max(0);
         let y0 = top.max(0);
         let x1 = (left + glyph.width as i64).min(i64::from(w));

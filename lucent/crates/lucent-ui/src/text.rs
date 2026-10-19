@@ -29,19 +29,23 @@ impl Font {
             index: settings.collection_index,
         })
     }
-    /// Zero is this face. Positive IDs address the bounded deterministic fallback set.
-    pub fn raster_face(&self, id: usize) -> &fontdue::Font {
+    /// Zero is the application's prepared face. Fallbacks borrow their source
+    /// tables; selecting one never eagerly prepares its complete glyph catalog.
+    pub fn raster_face(&self, id: usize) -> RasterFace<'_> {
         if id == 0 {
-            &self.raster
+            RasterFace::Prepared(&self.raster)
         } else {
-            &fallbacks()[id - 1].font().raster
+            RasterFace::Outline {
+                bytes: fallbacks()[id - 1].bytes,
+                index: 0,
+            }
         }
     }
-    fn face(&self, id: usize) -> &Font {
+    fn shaping_face(&self, id: usize) -> rustybuzz::Face<'_> {
         if id == 0 {
-            self
+            rustybuzz::Face::from_slice(&self.bytes, self.index).expect("validated font tables")
         } else {
-            fallbacks()[id - 1].font()
+            fallbacks()[id - 1].tables().clone()
         }
     }
     fn choose(&self, grapheme: &str) -> usize {
@@ -73,27 +77,27 @@ impl Deref for Font {
         &self.raster
     }
 }
+/// Borrowed raster input. The renderer owns outline preparation and coverage;
+/// this enum contains no GPU resource or growing per-glyph cache.
+#[derive(Clone, Copy)]
+pub enum RasterFace<'a> {
+    Prepared(&'a fontdue::Font),
+    Outline { bytes: &'a [u8], index: u32 },
+}
 struct Fallback {
     bytes: &'static [u8],
     tables: OnceLock<rustybuzz::Face<'static>>,
-    raster: OnceLock<Font>,
 }
 impl Fallback {
     const fn new(bytes: &'static [u8]) -> Self {
         Self {
             bytes,
             tables: OnceLock::new(),
-            raster: OnceLock::new(),
         }
     }
     fn tables(&self) -> &rustybuzz::Face<'static> {
         self.tables.get_or_init(|| {
             rustybuzz::Face::from_slice(self.bytes, 0).expect("bundled fallback tables")
-        })
-    }
-    fn font(&self) -> &Font {
-        self.raster.get_or_init(|| {
-            Font::from_bytes(self.bytes, Default::default()).expect("bundled fallback rasterizer")
         })
     }
 }
@@ -222,9 +226,7 @@ pub fn shape(font: &Font, line: &str, size: f32) -> ShapedLine {
                 spans.reverse();
             }
             for (range, face_id) in spans {
-                let selected = font.face(face_id);
-                let face = rustybuzz::Face::from_slice(&selected.bytes, selected.index)
-                    .expect("validated font tables");
+                let face = font.shaping_face(face_id);
                 let scale = size / face.units_per_em() as f32;
                 let mut buffer = rustybuzz::UnicodeBuffer::new();
                 buffer.push_str(&line[range.clone()]);

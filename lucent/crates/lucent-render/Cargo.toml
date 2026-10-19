@@ -9,3 +9,5 @@ lucent-ui = { path = "../lucent-ui" }
 wgpu = "30.0"
 pollster = "0.4"
 fontdue = "0.9"
+tiny-skia = { version = "0.11.4", default-features = false, features = ["std", "simd"] }
+ttf-parser = "0.25.1"
