@@ -181,6 +181,105 @@ class CursorPositioningTests(unittest.TestCase):
         h.qmp.assert_not_called()
 
 
+class BrowserFocusPositioning(unittest.TestCase):
+    def harness(self):
+        base=InputAdmissionTests();h=base.harness()
+        base.native_client.update(at=[8,56],size=[1904,1016])
+        base.current_workspace={'id':3,'name':h.notes_workspace}
+        h.target='notes';position=[100,200];calls=[]
+        h.cursor_owner=driver.input_policy.CursorOwnership({'x':100,'y':200})
+        original=h.session
+        def session(*args,**kwargs):
+            calls.append(args)
+            if args==('hyprctl','-j','cursorpos'):
+                return json.dumps(dict(zip(('x','y'),position))).encode()
+            if args[:2]==('hyprctl','dispatch'):
+                if args[2]=='hl.dsp.cursor.move({x=960,y=564})':position[:]=[960,564]
+                elif 'workspace = ' in args[2]:
+                    base.current_workspace={'id':2,'name':h.browser_workspace}
+                    position[:]=[960,564]  # Real compositor activation centers here.
+                elif 'window = ' in args[2]:position[:]=[960,564]
+                else:raise AssertionError('unrecognized fixed dispatcher')
+                return b'ok'
+            return original(*args,**kwargs)
+        h.session=session
+        h.call_peer=Mock(side_effect=lambda operation,*_a,**_k:
+            {'owned_clients':1} if operation=='clients' else {'focused':True,'selection_complete':True})
+        h.eventually=lambda predicate,*_a,**_k:self.assertTrue(predicate())
+        h.qmp=Mock();h.run=Mock()
+        return h,base,position,calls
+
+    def test_explicit_observed_center_precedes_focus_and_normal_warp_does_not_change_authority(self):
+        h,base,position,calls=self.harness()
+        result=h.focus_browser('seed')
+        dispatched=[args[2] for args in calls if args[:2]==('hyprctl','dispatch')]
+        self.assertEqual(dispatched[0],'hl.dsp.cursor.move({x=960,y=564})')
+        self.assertIn('workspace = ',dispatched[1]);self.assertIn('window = ',dispatched[2])
+        self.assertEqual(len(dispatched),3)
+        self.assertEqual(h.cursor_owner.expected,(960,564));self.assertEqual(position,[960,564])
+        self.assertFalse(h.cursor_owner.lost);self.assertIsNone(h.browser_focus_snapshot)
+        self.assertEqual(h.target,'browser');self.assertTrue(result['selection_complete'])
+        h.qmp.assert_not_called();h.run.assert_not_called()
+
+    def test_foreign_identity_and_invalid_geometry_cannot_nominate_a_center(self):
+        h,base,_position,_calls=self.harness();window=base.native_client
+        for key,value in (('pid',999),('address','0x999'),('class','foreign'),
+                          ('workspace',{'id':8,'name':'foreign'}),('at',[float('nan'),56]),
+                          ('at',[-1,56]),('at',[100,56]),('size',[0,1016]),
+                          ('size',[1904,2000]),('size',[True,1016]),('at',[8])):
+            changed=copy.deepcopy(window);changed[key]=value
+            with self.subTest(key=key,value=value),self.assertRaises(driver.CheckFailure):
+                driver.browser_focus_target([changed],h.browser_window)
+
+    def test_changed_geometry_after_slow_guard_blocks_focus_before_dispatch(self):
+        for after_move in (False,True):
+            h,base,_position,calls=self.harness()
+            expected=driver.browser_focus_target([base.native_client],h.browser_window)
+            changed=copy.deepcopy(expected);changed['window']['at']=[9,56]
+            h.current_browser_target=Mock(side_effect=[expected]* (2 if after_move else 1)+[changed])
+            with self.subTest(after_move=after_move),self.assertRaisesRegex(driver.CheckFailure,'same_browser_window_and_geometry_during_focus'):
+                h.focus_browser('seed')
+            dispatched=[args[2] for args in calls if args[:2]==('hyprctl','dispatch')]
+            self.assertEqual(dispatched,['hl.dsp.cursor.move({x=960,y=564})'] if after_move else [])
+            self.assertIsNone(h.browser_focus_snapshot)
+            self.assertNotIn(unittest.mock.call('dom','seed'),h.call_peer.call_args_list)
+
+    def test_geometry_change_on_workspace_focus_refuses_window_focus_and_dom_input(self):
+        h,base,_position,calls=self.harness();original=h.session
+        def session(*args,**kwargs):
+            result=original(*args,**kwargs)
+            if args[:2]==('hyprctl','dispatch') and 'workspace = ' in args[2]:base.native_client['at']=[9,56]
+            return result
+        h.session=session
+        with self.assertRaisesRegex(driver.CheckFailure,'same_browser_window_and_geometry_during_focus'):
+            h.focus_browser('seed')
+        self.assertFalse(any('window = ' in args[2] for args in calls if args[:2]==('hyprctl','dispatch')))
+        self.assertFalse(any(call.args[0]=='dom' for call in h.call_peer.call_args_list))
+        self.assertIsNone(h.browser_focus_snapshot)
+
+    def test_stale_cursor_is_never_adopted_even_if_it_returns(self):
+        h,_base,position,calls=self.harness();position[0]=101
+        for restored in (False,True):
+            if restored:position[0]=100
+            with self.subTest(restored=restored),self.assertRaisesRegex(ValueError,'application_cursor_authority_lost'):
+                h.focus_browser('seed')
+        self.assertTrue(h.cursor_owner.lost)
+        self.assertFalse(any(args[:2]==('hyprctl','dispatch') for args in calls))
+
+    def test_full_peer_lease_rejection_prevents_preposition_and_focus(self):
+        h,_base,_position,calls=self.harness();original=h.call_peer.side_effect;count=0
+        def peer(operation,*args,**kwargs):
+            nonlocal count
+            if operation=='clients':
+                count+=1
+                if count==2:raise driver.CheckFailure('owned_browser_lease_changed')
+            return original(operation,*args,**kwargs)
+        h.call_peer.side_effect=peer
+        with self.assertRaisesRegex(driver.CheckFailure,'owned_browser_lease_changed'):
+            h.focus_browser('seed')
+        self.assertFalse(any(args[:2]==('hyprctl','dispatch') for args in calls))
+
+
 class PeerFailureEvidence(unittest.TestCase):
     def test_failed_peer_operation_has_bounded_metadata_without_raw_arguments_or_payload(self):
         h=driver.Harness.__new__(driver.Harness);h.peer_initialized=True

@@ -153,6 +153,28 @@ def notes_pointer_target(surface, hit, layer, desktop_pid):
             'point': point}
 
 
+def browser_focus_target(clients, captured):
+    """A visible center belongs only to the persistent admitted browser window."""
+    require(type(clients) is list and len(clients) == 1 and type(clients[0]) is dict,
+            'one_owned_browser_focus_target')
+    window = clients[0]
+    require(type(window.get('pid')) is int and window['pid'] > 1
+            and isinstance(window.get('address'), str) and re.fullmatch(r'0x[0-9a-fA-F]+', window['address'])
+            and {key: window.get(key) for key in ('address', 'pid', 'class', 'workspace')} == captured,
+            'persistent_owned_browser_focus_target')
+    position, size = window.get('at'), window.get('size')
+    require(type(position) is list and type(size) is list and len(position) == len(size) == 2
+            and all(type(value) in (int, float) and math.isfinite(value) for value in position + size),
+            'finite_browser_focus_geometry')
+    x, y = position; width, height = size
+    require(x >= 0 and y >= 0 and width > 0 and height > 0
+            and x + width <= 1920 and y + height <= 1080, 'fully_visible_browser_focus_geometry')
+    point = (round(x + width / 2), round(y + height / 2))
+    require(0 <= point[0] < 1920 and 0 <= point[1] < 1080, 'browser_focus_center_on_prepared_output')
+    return {'window': {key: copy.deepcopy(window[key]) for key in
+                      ('address', 'pid', 'class', 'workspace', 'at', 'size')}, 'point': point}
+
+
 class Harness(notes.Harness):
     def __init__(self, args, directory):
         super().__init__(args, directory)
@@ -170,6 +192,7 @@ class Harness(notes.Harness):
         self.desktop_pid = None
         self.restoring_desktop = False
         self.notes_press_target = None
+        self.browser_focus_snapshot = None
         self.last_peer_failure = None
         self.last_peer_error = None
         self.phase = 'harness_init'
@@ -254,6 +277,9 @@ class Harness(notes.Harness):
         if getattr(self, 'notes_press_target', None) is not None:
             require(self.current_notes_target() == self.notes_press_target,
                     'same_notes_hit_and_native_lifetime_before_press')
+        if getattr(self, 'browser_focus_snapshot', None) is not None:
+            require(self.current_browser_target() == self.browser_focus_snapshot,
+                    'same_browser_window_and_geometry_during_focus')
 
     def move(self, x, y):
         self.input_guard()
@@ -332,21 +358,36 @@ class Harness(notes.Harness):
 
     def focus_browser(self, operation):
         require(operation in ('seed', 'clear'), 'owned_dom_preparation')
-        self.workspace_focus(self.browser_workspace)
-        clients = json.loads(self.session('hyprctl', '-j', 'clients'))
-        require(len(clients) == 1 and re.fullmatch(r'0x[0-9a-fA-F]+', clients[0]['address']),
-                'one_owned_browser_window')
-        self.call_peer('clients', data=json.dumps({'clients': clients, 'identity': self.browser_identity}).encode())
-        self.session('hyprctl', 'dispatch', 'hl.dsp.focus({ window = '
-                     + json.dumps('address:' + clients[0]['address']) + ' })')
-        result = self.call_peer('dom', operation)
-        self.eventually(lambda: self.call_peer('dom', 'read')['focused'],
-                        'browser_document_keyboard_focus_settled')
-        self.target = 'browser'
+        self.target = None
         self.input_guard()
-        result = self.call_peer('dom', 'read')
-        require(result['focused'] and result['selection_complete'], 'owned_textarea_focused_and_selected')
-        return result
+        target = self.current_browser_target()
+        self.browser_focus_snapshot = target
+        try:
+            # Normal compositor focus can center the cursor in this window.
+            # Declare and observe that point before requesting focus, without
+            # adopting any independent movement or changing cursor policy.
+            self.move(*target['point'])
+            self.workspace_focus(self.browser_workspace)
+            self.input_guard()
+            self.session('hyprctl', 'dispatch', 'hl.dsp.focus({ window = '
+                         + json.dumps('address:' + target['window']['address']) + ' })')
+            self.input_guard()
+            self.call_peer('dom', operation)
+            self.eventually(lambda: self.call_peer('dom', 'read')['focused'],
+                            'browser_document_keyboard_focus_settled')
+            self.target = 'browser'
+            self.input_guard()
+            result = self.call_peer('dom', 'read')
+            require(result['focused'] and result['selection_complete'], 'owned_textarea_focused_and_selected')
+            return result
+        finally:
+            self.browser_focus_snapshot = None
+
+    def current_browser_target(self):
+        clients = json.loads(self.session('hyprctl', '-j', 'clients'))
+        target = browser_focus_target(clients, self.browser_window)
+        self.call_peer('clients', data=json.dumps({'clients': clients, 'identity': self.browser_identity}).encode())
+        return target
 
     def restore_workspace(self):
         self.input_guard()

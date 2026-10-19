@@ -50,6 +50,14 @@ physical-input result: QMP button presses and native keyboard delivery exercise
 the actual focus and clipboard interactions.
 The two workspaces let the actual browser window and desktop Notes receive focus
 without changing tiling rules or introducing an always-on-top test surface.
+Before requesting browser workspace/window focus, the driver retires its old
+keyboard target and uses its existing guarded cursor dispatcher to reach the
+center of the freshly admitted persistent browser window. This anticipates the
+compositor's normal focus-centering warp. The PID/address/class/workspace and
+finite, fully visible window geometry are pinned and rechecked through that
+focus sequence. A moved/replaced window or independently moved cursor refuses
+the operation. This declares and verifies a destination before focus; it never
+adopts a point after an unexpected warp, and generic cursor ownership is unchanged.
 Notes clicks bind the submitted field, full visible clip, surface instance/output
 and exact native layer address/PID/geometry. They revalidate that lifetime after
 pointer settling and as the final input guard before physical button-down;
@@ -206,6 +214,16 @@ clipboard transfers. Notes/cursor restoration did not pass. The original report
 retains those results; the added host phase/source diagnostics do not establish
 the underlying cause or a successful transfer. Independent recovery is separate
 from this failed test's automatic-restoration flags.
+
+The later frozen `cfec77f` diagnostics identify the actual failure in
+`browser_copy → focus_browser → input_guard → CursorOwnership.observe`:
+the compositor's focus dispatch centered the cursor in the admitted tiled
+browser below the bar, outside the previously declared point. The sticky cursor
+guard correctly refused it. No copy had occurred, and owned-browser retirement
+passed; automatic Notes/cursor restoration remained failed. Separate guarded
+recovery subsequently passed all eleven restoration checks, including normal
+desktop readiness for 35 seconds. The prepositioning correction has focused
+local tests; a fresh full native transfer result is still required.
 
 This test does not establish rich HTML/image clipboard behavior, other
 applications, delayed-provider/focus-retirement races, physical hardware, IME
