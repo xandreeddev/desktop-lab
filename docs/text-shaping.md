@@ -1,5 +1,12 @@
 # International text and input methods
 
+Source scope: accepted main `d00014509f13125fe4ccab3ce2e1fa3961a40dd3` includes the
+verified Display milestone. New script/bidi/fallback and ordinary IME paths belong to
+the implemented, unmerged cohort `5d3501ebd9e02dccca62f7c2f9cae59056e40a7a` (executable
+checks at `eec582ab`). Its controlled shaping/pixel/proxy checks do not establish native
+compositor IME interoperability. See [current readiness](current-readiness.md) for
+delivery and acceptance boundaries.
+
 The component still owns its ordinary `String` and `TextFieldState`. It declares
 `Element::text_input` or `Element::text_area`; the framework emits relative
 `TextEdit` values. Complex-script shaping and the Wayland input method do not
@@ -110,6 +117,16 @@ This closes the source-level whole-font outline allocation path. The
 records isolated cold/warm RSS and raster cost; it does not establish a historical
 reduction or desktop memory acceptance. The explicit Arabic style-mask Vulkan
 regression passes at 1×/2×. Broader native workload results remain separate.
+
+## Current multiline bidi limit
+
+The current unmerged textarea path re-shapes each soft row as a fresh automatic
+paragraph. Its candidate-advance pass over the complete value does not carry
+resolved hard-paragraph levels or embedding/isolate context into those row maps.
+A Latin-base paragraph whose next row starts with Hebrew plus Latin can therefore
+choose the wrong row direction and run order. Preserving paragraph bidi state
+across wrapping is a source-correctness gap; native IME testing alone cannot close
+it. The shared caret/paint map does not establish that its bidi ordering is correct.
 
 ## Input-method ownership
 

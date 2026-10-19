@@ -1,5 +1,12 @@
 # Declarative text editing
 
+Source scope: accepted main `d00014509f13125fe4ccab3ce2e1fa3961a40dd3` includes the
+verified Display milestone. New script/bidi/fallback and ordinary IME paths belong to
+the implemented, unmerged cohort `5d3501ebd9e02dccca62f7c2f9cae59056e40a7a` (executable
+checks at `eec582ab`). Its controlled shaping/pixel/proxy checks do not establish native
+compositor IME interoperability. See [current readiness](current-readiness.md) for
+delivery and acceptance boundaries.
+
 Ordinary text fields use a shared framework API rather than editing the last
 painted string in the input dispatcher. The component owns its value and a
 `TextFieldState` (which contains selection, bounded undo/redo history and one
@@ -53,7 +60,9 @@ Unconsumed Super+letters remain shortcuts instead of inserting their UTF-8 text.
 Ordinary and masked controls consume the same translated SDK keys; masked
 controls retain count-only edits without clipboard or undo authority. Composed
 UTF-8 text from the existing keyboard adapter keeps its original contents.
-This does not implement compositor IME/preedit or complex-script shaping.
+Keyboard translation alone does not implement compositor IME/preedit or complex-script
+shaping. The unmerged text cohort adds those separate framework/runtime paths; see
+[international text](text-shaping.md).
 
 Extended graphemes use the maintained
 [Unicode segmentation implementation](https://docs.rs/unicode-segmentation/latest/unicode_segmentation/trait.UnicodeSegmentation.html).
@@ -245,9 +254,12 @@ The malformed/oversized stored-notes native restart check remains pending.
 Failed settings load can apply the default theme, so that check needs exact
 theme/login export restoration as well as the original JSON file.
 
-Native clipboard interoperability and hardware acceptance remain open. Current
-shaping remains the existing kerning-based implementation. Clipboard native
-interoperability, IME, bidi/complex-script shaping, font fallback and platform accessibility remain separate requirements.
+Accepted main retains the earlier kerning-based shaping path. The unmerged text
+cohort implements script shaping, visual bidi navigation, bounded fallback and
+opt-in text-input-v3 composition; [its guide](text-shaping.md) describes the shared
+source/caret/paint map and secure-client opt-out. Native compositor IME, delayed
+clipboard/focus races, third-party GUI clipboard and hardware acceptance remain
+open. Platform accessibility remains deferred by the user.
 The controlled multiline editor and Notes client are described in
 [multiline editing](multiline-text.md); their integrated and native acceptance
 remain separately recorded. Editing tests and

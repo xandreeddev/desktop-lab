@@ -1,5 +1,12 @@
 # Inline text: content, interaction and painting
 
+Source scope: accepted main `d00014509f13125fe4ccab3ce2e1fa3961a40dd3` includes the
+verified Display milestone. New script/bidi/fallback and ordinary IME paths belong to
+the implemented, unmerged cohort `5d3501ebd9e02dccca62f7c2f9cae59056e40a7a` (executable
+checks at `eec582ab`). Its controlled shaping/pixel/proxy checks do not establish native
+compositor IME interoperability. See [current readiness](current-readiness.md) for
+delivery and acceptance boundaries.
+
 `Element::rich_text(Vec<TextSpan>)` is a framework control. It knows registered
 font indices, colors, underline and opaque action identities. It does not parse
 HTML, interpret a URL, load an image or open an application.
@@ -93,5 +100,8 @@ per-line paint, mapped callbacks, one keyboard target, disjoint pointer coverage
 and capture retirement. Pure/client tests cover parser limits, URI policy,
 literal arguments, current-version actions and saved-content links. Render
 references exercise bold/italic baselines, clipped links and visible keyboard
-focus at 1x/2x with both palettes. Real compositor input remains deferred;
-complex-script shaping, bidi, fallback, IME and accessibility remain open.
+focus at 1x/2x with both palettes. Real compositor input remains unverified;
+the unmerged text cohort implements whole-paragraph bidi and script/font shaping
+with shared style masks and bounded fallback. See [international text](text-shaping.md)
+for the implementation and controlled checks. Native compositor IME and wider
+application interoperability remain unverified; accessibility is user-deferred.
