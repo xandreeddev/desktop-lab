@@ -163,4 +163,8 @@ does not expose native input regions. Current RSS/CPU, sustained pacing, hardwar
 fractional/multi-output behavior and shaping/bidi/fallback/IME remain separate
 work; accessibility stays deferred. Astro checks at `d3f9b539` pass with zero
 diagnostics; both root and GitHub Pages builds pass 13 pages and 489 links/assets.
-Final published-head CI, merge and GitHub Pages publication remain separate.
+PR #77 merged normally as `f57d709c` after all six final-head checks passed at
+`d239eb77` with a clean merge state. GitHub Pages run `39222213152` succeeds at
+that merge; the public library page returns HTTP 200. The current main docs also
+serve through the existing LAN preview service on port 4321. These delivery
+receipts do not extend the native, timing or resource acceptance above.

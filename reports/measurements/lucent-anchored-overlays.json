@@ -194,11 +194,34 @@
     "original_ids_and_statuses_preserved": true
   },
   "delivery": {
-    "status": "pending_final_head_checks_and_merge",
+    "status": "merged_and_pages_published",
     "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/77",
-    "final_head": null,
-    "merge_commit": null,
-    "github_pages_publication": "pending"
+    "final_head": "d239eb77e002835d64e7391a6bcf243f743e3f3a",
+    "final_head_ci": {
+      "status": "passed",
+      "completed_successful_checks": 6,
+      "merge_state_before_merge": "CLEAN"
+    },
+    "merge_commit": "f57d709c23f48da0747d2c80b97c43aef0d54ccc",
+    "merge_method": "normal_merge",
+    "merged_at": "2026-10-19T08:21:39Z",
+    "github_pages_publication": "passed",
+    "github_pages_run": {
+      "status": "success",
+      "run_id": 39222213152,
+      "run_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/39222213152",
+      "source_commit": "f57d709c23f48da0747d2c80b97c43aef0d54ccc",
+      "library_http_status": 200
+    },
+    "public_library_http_status": 200,
+    "lan_docs": {
+      "status": "root_verified_live_current_main",
+      "private_host_or_lan_address_published": false,
+      "service": "lucent-docs-main-preview.service",
+      "port": 4321,
+      "source": "root_accepted_main"
+    },
+    "scope": "PR77 delivery only. Original validation, native tooltip/static scope and pending timing/resource/popover limits retain their own source revisions; this does not publish Weather."
   },
   "privacy": {
     "original_document_or_clipboard_contents_published": false,
