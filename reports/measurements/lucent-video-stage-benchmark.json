@@ -1,0 +1,416 @@
+{
+  "schema": 1,
+  "feature": "Controlled video decode and conversion stage benchmark",
+  "status": "compiled_and_executed_diagnostic_production_unchanged",
+  "scope": "Four fresh host processes, one warm fixed-order pass per case plus separate quality validation. Unpaced stage throughput is not native presentation or normal desktop resource acceptance.",
+  "provenance": {
+    "compiled_source_commit": "6f19f8e296b6d8b68e4a647aedbc26933a502f6a",
+    "documentation_commit_is_not_a_new_code_build": true,
+    "test_binary_sha256": "b07e5d99c594380dcd3326ab9c3f4fff7f7276008711fc84e867252e8edb4386",
+    "test_binary_bytes": 15049224,
+    "source_hashes": {
+      "lucent/crates/lucent-services/src/video/benchmark.rs": "b7de6e2a6d03963568c4937f0f0b986bae71f06066a7613e2f688cbb0f250702",
+      "lucent/crates/lucent-services/src/video.rs": "26298bdfc5d136dc8b65161488bf9ecf7afb89284dd1fbccc7055dac2feba886",
+      "vm/compare_video_stage_reports.py": "e53e044d1846e546b67f8444e497d1203280b29f859689a99faa851a3be5bb91"
+    },
+    "private_build_receipt_sha256": "3c95b2204a6adb766f60b258499d66922bd20c8ff4e762c05568d9ca931731c4",
+    "private_execution_wrapper_sha256": "412a2b753842b1a0f1ba302a954f475d3d156fb95c0089ec39e3ae3d14f23bf9",
+    "private_comparison_sha256": "31164136aa8be725f5eba9fefc8c55e457c1556ecbf9c906df81dcdfcd4d2f7a"
+  },
+  "actual_build_checks": {
+    "formatting_passed": true,
+    "strict_release_clippy_all_targets_passed": true,
+    "locked_offline_dependencies": true,
+    "build_jobs": 1,
+    "rust_boundary_tests_passed": 6,
+    "media_test_ignored_in_ordinary_run": 1,
+    "explicit_media_case_runs_passed": 4
+  },
+  "workload": {
+    "source_sha256": "9bfaece1a34f02067005190a26c9dc5ba0e83e74875653c8336c022d133ebc35",
+    "source_bytes": 39805718,
+    "codec": "h264",
+    "pixel_format": "yuv420p",
+    "source_dimensions": [
+      3840,
+      2160
+    ],
+    "source_average_frame_rate": "60/1",
+    "source_time_base": "1/60000",
+    "physical_cover_target": [
+      1920,
+      1080
+    ],
+    "conversion": "Existing private FrameConverter, unchanged BILINEAR resampling and owned RGBA row copy.",
+    "frames_per_timed_and_validation_prefix": 360,
+    "internal_deadline_seconds_per_pass": 60,
+    "input_eof_reached": false,
+    "warm_input": "Initial full-source digest verification precedes each timed pass.",
+    "library_versions": {
+      "libavcodec_version": 4129126,
+      "libavformat_version": 4129126,
+      "libavutil_version": 3998054,
+      "libswscale_version": 655718
+    }
+  },
+  "execution": {
+    "location": "Host process; no Wayland connection or guest access.",
+    "processes": "One fresh process per case, sequential in listed order.",
+    "repeated_or_randomized_trials": false,
+    "limits": {
+      "cpu_quota_percent": 200,
+      "memory_high_MiB": 900,
+      "memory_max_MiB": 1400,
+      "tasks_max": 256,
+      "runtime_max_seconds": 180
+    },
+    "cgroup_throttling_counters_captured": false,
+    "normal_wallpaper_configuration_changed": false,
+    "production_policy_changed": false,
+    "cases": [
+      {
+        "name": "serial-decode",
+        "completed": true,
+        "private_report_sha256": "f6e44405a9a47eb91539c172886423d899ceb51d177d7b10bf43c01cf0f1ecd8",
+        "timed": {
+          "active_threading": {
+            "count": 1,
+            "kind": "None"
+          },
+          "after": {
+            "process_lifetime_high_water_kib": 78640,
+            "rss_kib": 45212,
+            "system_cpu_ns": 81869000,
+            "threads": 2,
+            "user_cpu_ns": 4823372000
+          },
+          "before": {
+            "process_lifetime_high_water_kib": 32512,
+            "rss_kib": 32072,
+            "system_cpu_ns": 36136000,
+            "threads": 2,
+            "user_cpu_ns": 147959000
+          },
+          "conversion_and_owned_rgba_wall_ns": 0,
+          "converted_dimensions": null,
+          "converter_setup_wall_ns": 0,
+          "decoder_api_wall_ns": 4632323303,
+          "demux_wall_ns": 15151473,
+          "frames": 360,
+          "input_eof_observed": false,
+          "requested_frames": 360,
+          "retirement_wall_ns": 2514341,
+          "sampled_rss_max_kib": 79300,
+          "sampled_threads_max": 2,
+          "scope": "Unpaced adapter stage throughput, not native presentation. API wall stages may overlap asynchronous decoder work. HWM is process-lifetime through this pass, including startup/source validation; RSS samples every 16 frames and pass boundaries.",
+          "setup_ns": 143314465,
+          "source_average_frame_rate": "Rational(60/1)",
+          "source_dimensions": [
+            3840,
+            2160
+          ],
+          "source_time_base": "Rational(1/60000)",
+          "system_cpu_ns": 45733000,
+          "unpaced_output_prefix_frames_per_second": 75.0403528090224,
+          "user_cpu_ns": 4675413000,
+          "wall_ns": 4797418809
+        },
+        "derived": {
+          "all_thread_process_cpu_seconds": 4.721146,
+          "cpu_percent_of_one_core": 98.41012819525133,
+          "sampled_rss_max_mib": 77.44140625,
+          "final_process_lifetime_vmhwm_mib": 76.796875
+        },
+        "separate_validation": {
+          "frames": 360,
+          "wall_ns": 19187028323,
+          "timed_pts_and_count_match": true,
+          "quality_hashes": {
+            "converted_rgba_sha256": null,
+            "pts_sha256": "5bbe6cd6d9658730453a7545f05f39c24f29e288442bc3214da2615b8ca0099f",
+            "visible_yuv420p_sha256": "641e73f47d1baa20fd1b1bd83cc54451784ddc1883ee91b67294d10d6d6cfdc6"
+          },
+          "source_identity_preserved": true
+        },
+        "host_whole_case_bracket": {
+          "scope": "Whole case including process setup, timed prefix and separate quality validation; not the timed prefix alone.",
+          "monotonic_span_ns": 24375668123,
+          "io_full_stall_total_delta_microseconds": 13347741,
+          "io_full_stall_fraction": 0.5475846213792824,
+          "swap_in_pages": 125,
+          "swap_out_pages": 0
+        }
+      },
+      {
+        "name": "frame2-decode",
+        "completed": true,
+        "private_report_sha256": "a86519ad0cf48cc23d942c2f9fc2e35d77a991ace77e0b66a3873c82fe45669c",
+        "timed": {
+          "active_threading": {
+            "count": 2,
+            "kind": "Frame"
+          },
+          "after": {
+            "process_lifetime_high_water_kib": 105148,
+            "rss_kib": 105148,
+            "system_cpu_ns": 110738000,
+            "threads": 2,
+            "user_cpu_ns": 5117013000
+          },
+          "before": {
+            "process_lifetime_high_water_kib": 32912,
+            "rss_kib": 32180,
+            "system_cpu_ns": 30801000,
+            "threads": 2,
+            "user_cpu_ns": 163759000
+          },
+          "conversion_and_owned_rgba_wall_ns": 0,
+          "converted_dimensions": null,
+          "converter_setup_wall_ns": 0,
+          "decoder_api_wall_ns": 2641127105,
+          "demux_wall_ns": 14540961,
+          "frames": 360,
+          "input_eof_observed": false,
+          "requested_frames": 360,
+          "retirement_wall_ns": 26243121,
+          "sampled_rss_max_kib": 105004,
+          "sampled_threads_max": 4,
+          "scope": "Unpaced adapter stage throughput, not native presentation. API wall stages may overlap asynchronous decoder work. HWM is process-lifetime through this pass, including startup/source validation; RSS samples every 16 frames and pass boundaries.",
+          "setup_ns": 105298920,
+          "source_average_frame_rate": "Rational(60/1)",
+          "source_dimensions": [
+            3840,
+            2160
+          ],
+          "source_time_base": "Rational(1/60000)",
+          "system_cpu_ns": 79937000,
+          "unpaced_output_prefix_frames_per_second": 128.947089251547,
+          "user_cpu_ns": 4953254000,
+          "wall_ns": 2791842779
+        },
+        "derived": {
+          "all_thread_process_cpu_seconds": 5.033191,
+          "cpu_percent_of_one_core": 180.28203586030085,
+          "sampled_rss_max_mib": 102.54296875,
+          "final_process_lifetime_vmhwm_mib": 102.68359375
+        },
+        "separate_validation": {
+          "frames": 360,
+          "wall_ns": 14765869677,
+          "timed_pts_and_count_match": true,
+          "quality_hashes": {
+            "converted_rgba_sha256": null,
+            "pts_sha256": "5bbe6cd6d9658730453a7545f05f39c24f29e288442bc3214da2615b8ca0099f",
+            "visible_yuv420p_sha256": "641e73f47d1baa20fd1b1bd83cc54451784ddc1883ee91b67294d10d6d6cfdc6"
+          },
+          "source_identity_preserved": true
+        },
+        "host_whole_case_bracket": {
+          "scope": "Whole case including process setup, timed prefix and separate quality validation; not the timed prefix alone.",
+          "monotonic_span_ns": 17958982156,
+          "io_full_stall_total_delta_microseconds": 9456056,
+          "io_full_stall_fraction": 0.5265362990987094,
+          "swap_in_pages": 137,
+          "swap_out_pages": 0
+        }
+      },
+      {
+        "name": "serial-convert",
+        "completed": true,
+        "private_report_sha256": "89ad7ed8ffcddef47d4590646f7d184ecc1f4fa6fcbe0b84865fd9f45a416060",
+        "timed": {
+          "active_threading": {
+            "count": 1,
+            "kind": "None"
+          },
+          "after": {
+            "process_lifetime_high_water_kib": 95836,
+            "rss_kib": 46192,
+            "system_cpu_ns": 85285000,
+            "threads": 2,
+            "user_cpu_ns": 7327245000
+          },
+          "before": {
+            "process_lifetime_high_water_kib": 32876,
+            "rss_kib": 32176,
+            "system_cpu_ns": 40594000,
+            "threads": 2,
+            "user_cpu_ns": 147985000
+          },
+          "conversion_and_owned_rgba_wall_ns": 2495682396,
+          "converted_dimensions": [
+            1920,
+            1080
+          ],
+          "converter_setup_wall_ns": 1838212,
+          "decoder_api_wall_ns": 4669912402,
+          "demux_wall_ns": 15260411,
+          "frames": 360,
+          "input_eof_observed": false,
+          "requested_frames": 360,
+          "retirement_wall_ns": 3643522,
+          "sampled_rss_max_kib": 96532,
+          "sampled_threads_max": 2,
+          "scope": "Unpaced adapter stage throughput, not native presentation. API wall stages may overlap asynchronous decoder work. HWM is process-lifetime through this pass, including startup/source validation; RSS samples every 16 frames and pass boundaries.",
+          "setup_ns": 102139809,
+          "source_average_frame_rate": "Rational(60/1)",
+          "source_dimensions": [
+            3840,
+            2160
+          ],
+          "source_time_base": "Rational(1/60000)",
+          "system_cpu_ns": 44691000,
+          "unpaced_output_prefix_frames_per_second": 49.34800181504198,
+          "user_cpu_ns": 7179260000,
+          "wall_ns": 7295128207
+        },
+        "derived": {
+          "all_thread_process_cpu_seconds": 7.223951,
+          "cpu_percent_of_one_core": 99.0243186277151,
+          "sampled_rss_max_mib": 94.26953125,
+          "final_process_lifetime_vmhwm_mib": 93.58984375
+        },
+        "separate_validation": {
+          "frames": 360,
+          "wall_ns": 30920400642,
+          "timed_pts_and_count_match": true,
+          "quality_hashes": {
+            "converted_rgba_sha256": "67a6e557a9b1283e1ffd9a8797b219cc501d9d333cc8062bb55ecc48fed9a02e",
+            "pts_sha256": "5bbe6cd6d9658730453a7545f05f39c24f29e288442bc3214da2615b8ca0099f",
+            "visible_yuv420p_sha256": "641e73f47d1baa20fd1b1bd83cc54451784ddc1883ee91b67294d10d6d6cfdc6"
+          },
+          "source_identity_preserved": true
+        },
+        "host_whole_case_bracket": {
+          "scope": "Whole case including process setup, timed prefix and separate quality validation; not the timed prefix alone.",
+          "monotonic_span_ns": 38608924787,
+          "io_full_stall_total_delta_microseconds": 21920944,
+          "io_full_stall_fraction": 0.5677688286046493,
+          "swap_in_pages": 395,
+          "swap_out_pages": 0
+        }
+      },
+      {
+        "name": "frame2-convert",
+        "completed": true,
+        "private_report_sha256": "8102cfe6ae3808d710b77a1bc73359f0810e03096c9308c898867a4160ab2dfb",
+        "timed": {
+          "active_threading": {
+            "count": 2,
+            "kind": "Frame"
+          },
+          "after": {
+            "process_lifetime_high_water_kib": 121556,
+            "rss_kib": 105632,
+            "system_cpu_ns": 113788000,
+            "threads": 2,
+            "user_cpu_ns": 7998153000
+          },
+          "before": {
+            "process_lifetime_high_water_kib": 32608,
+            "rss_kib": 32128,
+            "system_cpu_ns": 38632000,
+            "threads": 2,
+            "user_cpu_ns": 141453000
+          },
+          "conversion_and_owned_rgba_wall_ns": 2757198470,
+          "converted_dimensions": [
+            1920,
+            1080
+          ],
+          "converter_setup_wall_ns": 757503,
+          "decoder_api_wall_ns": 1284208915,
+          "demux_wall_ns": 15979095,
+          "frames": 360,
+          "input_eof_observed": false,
+          "requested_frames": 360,
+          "retirement_wall_ns": 17704232,
+          "sampled_rss_max_kib": 121788,
+          "sampled_threads_max": 4,
+          "scope": "Unpaced adapter stage throughput, not native presentation. API wall stages may overlap asynchronous decoder work. HWM is process-lifetime through this pass, including startup/source validation; RSS samples every 16 frames and pass boundaries.",
+          "setup_ns": 95801158,
+          "source_average_frame_rate": "Rational(60/1)",
+          "source_dimensions": [
+            3840,
+            2160
+          ],
+          "source_time_base": "Rational(1/60000)",
+          "system_cpu_ns": 75156000,
+          "unpaced_output_prefix_frames_per_second": 86.15694054590405,
+          "user_cpu_ns": 7856700000,
+          "wall_ns": 4178421352
+        },
+        "derived": {
+          "all_thread_process_cpu_seconds": 7.931856,
+          "cpu_percent_of_one_core": 189.82901272518674,
+          "sampled_rss_max_mib": 118.93359375,
+          "final_process_lifetime_vmhwm_mib": 118.70703125
+        },
+        "separate_validation": {
+          "frames": 360,
+          "wall_ns": 26687679878,
+          "timed_pts_and_count_match": true,
+          "quality_hashes": {
+            "converted_rgba_sha256": "67a6e557a9b1283e1ffd9a8797b219cc501d9d333cc8062bb55ecc48fed9a02e",
+            "pts_sha256": "5bbe6cd6d9658730453a7545f05f39c24f29e288442bc3214da2615b8ca0099f",
+            "visible_yuv420p_sha256": "641e73f47d1baa20fd1b1bd83cc54451784ddc1883ee91b67294d10d6d6cfdc6"
+          },
+          "source_identity_preserved": true
+        },
+        "host_whole_case_bracket": {
+          "scope": "Whole case including process setup, timed prefix and separate quality validation; not the timed prefix alone.",
+          "monotonic_span_ns": 31239449039,
+          "io_full_stall_total_delta_microseconds": 17110314,
+          "io_full_stall_fraction": 0.547714973418357,
+          "swap_in_pages": 112,
+          "swap_out_pages": 0
+        }
+      }
+    ]
+  },
+  "comparison": {
+    "all_four_cases_match_source_libraries_prefix_and_decoded_quality": true,
+    "conversion_cases_match_converted_rgba": true,
+    "serial_over_frame2_wall_time_ratio": {
+      "decode": 1.7183699759477036,
+      "convert": 1.7459053533479072
+    },
+    "interpretation": "Descriptive ratios for this fixed-order observation; not causal or statistical speedup estimates."
+  },
+  "measurement_definitions": {
+    "throughput": "Output prefix frame count divided by its own wall time, including setup and decoder retirement; not compositor frames or source-rate delivery.",
+    "cpu": "Process user-plus-system delta includes all decoder workers and setup. CPU percent of one core is that delta / timed wall time * 100; more than 100% uses more than one core.",
+    "api_wall_stages": "Decoder worker work can overlap conversion; API wall times do not partition exclusive worker CPU.",
+    "sampled_rss": "VmRSS sampled every 16 frames and pass boundaries; not an exact interval peak.",
+    "lifetime_high_water": "Final VmHWM observation through the timed pass, including process startup and initial source validation; not a resettable interval peak. Some separately read RSS samples slightly exceed this final observation; values are preserved as captured.",
+    "validation": "Full ordered PTS/YUV/RGBA hashing runs in a second pass after timed measurements. Validation throughput and residency are not used as the stage result.",
+    "pressure": "Counters bracket each whole process case including setup and separate quality validation. Nonzero host swap-in and substantial I/O full-stall observations prevent a pressure-matched or causal performance claim."
+  },
+  "acceptance": {
+    "quality_equivalence_for_measured_prefix": true,
+    "native_source_cadence": false,
+    "native_60_frames_per_second": false,
+    "physical_scanout_or_pixel_visibility": false,
+    "hardware_decode": false,
+    "normal_desktop_300_mib_target_met": null,
+    "production_policy_accepted": false,
+    "other_codecs_or_machines": false
+  },
+  "limits": [
+    "One source, 360 output frames, one warm fixed-order observation per case; no randomized or repeated trial estimate.",
+    "No Wayland, renderer, compositor frame pacing, sleep, latest-frame delivery or full-desktop process is exercised.",
+    "Host pressure brackets include the separate quality pass, not just each timed prefix; cgroup quota throttling was not captured.",
+    "Frame2 uses more observed CPU and residency despite shorter timed wall duration; the result does not establish lower total resource use.",
+    "Matching hashes establish the tested decoded/converted prefix, not every source frame, codec or native presentation outcome.",
+    "The explicit Frame/count 2 experiment does not change production playback, poster or preview policy."
+  ],
+  "next_step": "Evaluate a separately built adapter-only live-playback trial, preserving serial poster/preview decoding and unchanged output quality, then collect source-specific native cadence and eligible normal desktop RSS/CPU evidence.",
+  "offline_verification": {
+    "command": "python3 -B -m unittest discover -s tests -p test_video_stage_reports.py -v",
+    "python_comparator_boundary_tests_passed": 17,
+    "consistency_checks": "Verified compiled source and three source-file hashes; private build/wrapper/comparison/case hashes; exact four timed records and validation hashes; derived CPU/throughput/pressure values; documentation table and relative links; public data review; only documentation/report changes.",
+    "new_cargo_build": false,
+    "guest_actions": false,
+    "network_actions": false
+  }
+}
