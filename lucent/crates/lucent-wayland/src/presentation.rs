@@ -243,8 +243,10 @@ mod tests {
     }
     #[test]
     fn presented_history_is_bounded_and_preserves_association_clock_flags_and_discard_scope() {
-        let mut history = History::default();
-        history.discarded = 3;
+        let mut history = History {
+            discarded: 3,
+            ..Default::default()
+        };
         for frame in 0..HISTORY_LIMIT as u64 + 7 {
             history.push(Sample {
                 frame,

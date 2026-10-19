@@ -5,8 +5,8 @@ use serde_json::{Value, json};
 use std::io::{self, BufRead, Write};
 use wayland_client::{
     Connection, Dispatch, QueueHandle,
-    globals::registry_queue_init,
-    protocol::{wl_compositor::WlCompositor, wl_seat::WlSeat, wl_surface::WlSurface},
+    globals::{GlobalListContents, registry_queue_init},
+    protocol::{wl_compositor::WlCompositor, wl_registry, wl_seat::WlSeat, wl_surface::WlSurface},
 };
 use wayland_protocols_misc::zwp_input_method_v2::client::{
     zwp_input_method_manager_v2::ZwpInputMethodManagerV2,
@@ -179,6 +179,25 @@ impl Dispatch<ZwpInputPopupSurfaceV2, ()> for State {
         }
     }
 }
+impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
+    fn event(
+        state: &mut Self,
+        _: &wl_registry::WlRegistry,
+        event: wl_registry::Event,
+        _: &GlobalListContents,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        // The fixture deliberately binds one static seat. A registry retirement
+        // revokes admission rather than silently rebinding to another owner.
+        if matches!(event, wl_registry::Event::GlobalRemove { .. }) {
+            state.active = false;
+            state.unavailable = true;
+            state.exit = true;
+            emit(json!({"event":"retired","error":"native_registry_changed"}));
+        }
+    }
+}
 wayland_client::delegate_noop!(State:WlCompositor);
 wayland_client::delegate_noop!(State:WlSurface);
 wayland_client::delegate_noop!(State:WlSeat);
@@ -236,10 +255,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if count == 0 || line.len() > 16_384 {
                 break;
             }
-            if let Ok(value) = serde_json::from_slice(&line) {
-                if sender.send(value).is_err() {
-                    break;
-                }
+            if let Ok(value) = serde_json::from_slice(&line)
+                && sender.send(value).is_err()
+            {
+                break;
             }
         }
     });
