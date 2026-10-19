@@ -302,7 +302,44 @@ captured refused socket remained. Both reports retain their original results;
 the new mandatory artifact flags are not retroactively added to them. The
 artifact correction has local boundary tests, not a new native pass.
 
-The independent example currently keeps its Overlay/OnDemand surface visible;
-the production launcher closes after requesting a launch. That client difference
-is under investigation, not an established cause of the observed failure. The
-compositor remains responsible for deciding whether to grant application focus.
+The frozen `8e6d074b` independent example keeps its Overlay/OnDemand surface
+visible; the production launcher closes after requesting a launch. The later
+`d1fff2d8` example source yields keyboard interaction in that same Request update
+and retains the yielded state through token preparation and adapter completion.
+Only a subsequent deliberate idle pointer press re-arms its keyboard policy;
+hover, socket commands and completion cannot take it back. This uses the existing
+SurfaceSpec contract, with no compositor focus command or framework policy.
+Its separate bounded build and native verification remain pending. The lifecycle
+difference is not yet an established cause of the observed failure. The compositor
+remains responsible for deciding whether to grant application focus.
+
+
+## Fresh real-application result: file opening passes, focus remains failed
+
+The frozen `f6d004d9` harness ran against the unchanged deployed `8e6d074b`
+desktop and independent intent example. Seven independent behavior checks pass:
+fresh physical-input tokens reach the owned child; physical Open and declared
+Action, later socket Open and desktop CLI Open each create both new local
+documents. The documents include spaces, percent signs, Unicode and literal
+shell-like filename characters. Exact new page IDs, file URLs and loaded titles
+are checked for every request. Only those fresh targets retire; the original
+blank control page survives. Socket/CLI requests do not reuse earlier physical
+activation authority.
+
+All eight restoration flags pass, including original example socket and published
+entry removal, exact owned unit retirement, unchanged settings/wallpaper and
+original output/workspace/cursor. Private failure evidence is retained.
+
+The first-launch focus check remains **failed**: eleven coherent observations
+find one owned mapped browser and no active managed window. The independent
+example continues to advertise its on-demand keyboard layer. Production closes
+its launcher on dispatch; that lifecycle difference is under investigation and
+is not an established cause. No test forces compositor focus or changes the
+acceptance predicate. Overall native acceptance remains failed.
+
+The [sanitized result](../reports/measurements/lucent-native-application-intents.json)
+identifies source/artifact hashes and exact check/restoration flags. The owner
+observed 111.318 seconds for the bounded run; this is not a performance benchmark.
+Token delivery does not prove Chromium consumed the Wayland activation token.
+Other applications, remote URI handlers and physical hardware remain outside
+this local-document workload. Earlier failed reports remain unchanged.

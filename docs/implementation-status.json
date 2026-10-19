@@ -9,7 +9,7 @@
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted main b474d1fe includes PR87, merged normally after all six required checks passed on exact 8e6d074b and CLEAN mergeability. Text and Application integration are merged and their coherent 8e release is deployed: six user clients and root greeter match the archive with original user/security state preserved. Exact 8e passes six CI checks and 832 visual cases. A 120-second RADV resource interval records 217.28/221.92 MiB mean/peak RSS but is host-pressure-ineligible; joined-source presentation records 26.9992 callback intervals/s under host pressure; eligible 60FPS/RSS acceptance remains unproven. A source-specific 16-check native run passes two-output density/input/retirement/recreation with one owned headless output and exact restoration, not physical or secure cross-output acceptance. The fresh owned IME run passes all five feature and five restoration checks, including preedit ink/caret evidence and exact unit/transport retirement. Earlier failed reports and their independent recoveries retain their original scope; third-party IME, physical and cross-output text remain pending.",
+    "scope": "Accepted main b474d1fe includes PR87, merged normally after all six required checks passed on exact 8e6d074b and CLEAN mergeability. Text and Application integration are merged and their coherent 8e release is deployed: six user clients and root greeter match the archive with original user/security state preserved. Exact 8e passes six CI checks and 832 visual cases. A 120-second RADV resource interval records 217.28/221.92 MiB mean/peak RSS but is host-pressure-ineligible; joined-source presentation records 26.9992 callback intervals/s under host pressure; eligible 60FPS/RSS acceptance remains unproven. A source-specific 16-check native run passes two-output density/input/retirement/recreation with one owned headless output and exact restoration, not physical or secure cross-output acceptance. The fresh owned IME run passes all five feature and five restoration checks, including preedit ink/caret evidence and exact unit/transport retirement. Earlier failed reports and their independent recoveries retain their original scope; third-party IME, physical and cross-output text remain pending. A later scoped real-Chromium run verifies seven independent launch-context/file-Open/action/socket/CLI behaviors and all eight cleanup flags; first-launch focus remains failed, so no full App acceptance is claimed.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -277,14 +277,26 @@
       },
       {
         "id": "application-integration",
-        "status": "merged_native_pending",
-        "implemented": "Accepted main b474d1fe includes catalog/pins, ordinary activation, declared actions and Application bb304907 through merged/deployed 8e: fresh input-bound context, explicit file/URI Open and expanded XDG parsing/observation.",
-        "remaining": "Native third-party launch/open/action acceptance remains pending. Dispatch acknowledgement and token presence do not establish application focus/document loading; the current real-browser ownership/fresh-document harness still needs its own complete native preservation gate.",
+        "status": "merged_partial_native_focus_failed",
+        "implemented": "Accepted main b474d1fe includes catalog/pins, ordinary activation, declared actions and Application bb304907 through merged/deployed 8e: fresh input-bound context, explicit file/URI Open and expanded XDG parsing/observation. A real Chromium run verifies seven independent token-delivery, fresh file Open/action/socket/CLI and no-stale-authority checks, with all eight restoration flags true.",
+        "remaining": "First-launch focus remains failed in the independent graphical consumer: no active managed window was observed while the owned Chromium client was mapped. Full acceptance remains failed; token consumption and other applications/URI handlers are not inferred. See the sanitized partial report.",
         "guides": [
           "docs/application-activation.md",
           "docs/application-catalog.md",
           "docs/application-actions.md"
-        ]
+        ],
+        "latest_native_attempt": {
+          "report": "reports/measurements/lucent-native-application-intents.json",
+          "status": "partial_native_focus_failed",
+          "overall_passed": false,
+          "production_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "harness_source_commit": "f6d004d91e03a0e52d4a7347f850900d51fd3c33",
+          "private_report_sha256": "ca9f57dd4ac402913c08c9a673df2edef30fe6b4fb378066d96adcf684d4f0d7",
+          "feature_checks_passed": 7,
+          "feature_checks_failed": 2,
+          "restoration_flags_passed": 8,
+          "first_launch_focus_observed": false
+        }
       },
       {
         "id": "real-world-validation",

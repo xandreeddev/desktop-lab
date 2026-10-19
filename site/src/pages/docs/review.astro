@@ -1,11 +1,12 @@
 ---
 import { performanceTargets } from '../../data/performance';
 import DocGuide from '../../layouts/DocGuide.astro';
+import RuntimeStatus from '../../components/RuntimeStatus.astro';
 import { withBase } from '../../data/urls';
 import { sourceUrl } from '../../data/source';
 const sections: [string, string][] = [['verdict','01 · Assessment'],['concepts','02 · Domain concepts'],['ports','03 · Ports and adapters'],['findings','04 · Findings and changes'],['performance','05 · Performance evidence'],['gaps','06 · Feature gaps'],['next','07 · Next architectural steps']];
 const ports = [
-  ['ApplicationPort', 'Discover, launch and explicitly open targets', 'XdgApplications', 'Accepted-main catalog/actions plus unmerged fresh launch context and Open. XDG/D-Bus/argv IO stays in this adapter; domain values carry no Wayland handles. Native real-application intent acceptance remains pending'],
+  ['ApplicationPort', 'Discover, launch and explicitly open targets', 'XdgApplications', 'Merged catalog/actions, fresh launch context and Open. XDG/D-Bus/argv IO stays in this adapter; domain values carry no Wayland handles. Native real-application intent acceptance remains pending'],
   ['CompositorPort', 'Read windows/workspaces, focus, switch and watch', 'Hyprland', 'Hyprland request/event sockets; reconnect policy in adapter'],
   ['SettingsPort', 'Load and save DesktopSettings', 'JsonSettings', 'Validated JSON and atomic replacement'],
   ['ClockPort', 'Supply local date and time', 'LocalClock', 'System time through chrono'],
@@ -32,7 +33,7 @@ const ports = [
 ];
 ---
 <DocGuide chapter="review" title="Architecture review" heading="Good boundaries." accent="Explicit remaining work." description="A review of the implemented dependency graph, ports, adapters, entities, value types and runtime responsibilities, with targeted fixes and a practical refactoring order." sections={sections}>
-  <p><strong>Source and delivery:</strong> accepted main <code>d0001450</code> includes the verified Display panel. Text <code>8e6d074b</code> and Application <code>bb304907</code> are implemented, unmerged cohorts; their newer APIs are described separately from installed-release and native acceptance. Read <a href={sourceUrl('docs/current-readiness.md')}>current readiness</a> for the exact scopes.</p>
+  <RuntimeStatus />
   <section id="verdict"><span class="eyebrow">01 / REVIEW CONCLUSION</span><h2>The separation is useful.<br />It is not finished everywhere.</h2>
     <p>The framework has real independent clients and avoids desktop/OS-service dependencies. The desktop receives adapters through port contracts, while production wiring lives in composition roots. Use cases depend only on the domain. These are meaningful boundaries, not just directory names.</p>
     <p>The domain is mostly typed data and small behavior models. Some types enforce invariants, while others are public records whose callers can construct invalid values. Launcher and widget interaction now belong to child controllers with explicit borrowed inputs. The root still coordinates shared snapshots, settings and bar/dock presentation. Message payload sizes remain application-owned, and service error handling is uneven. Those limits should guide the next changes rather than adding more empty crates or abstractions.</p>
