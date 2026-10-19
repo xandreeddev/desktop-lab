@@ -10,10 +10,16 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
+import socket
 import stat
+import struct
 import subprocess
+import sys
 import time
 
+sys.dont_write_bytecode = True
+from owned_application_units import process_snapshot, unit_snapshot
 from third_party_tray_policy import (Blocked, Unsupported, cgroup_path, digest,
                                      information_entry, owned_process, require, unique, unit_name,
                                      unbound_input)
@@ -141,13 +147,83 @@ def unit_properties(unit):
     return dict(line.split('=', 1) for line in value.splitlines())
 
 
+def desktop_parent(pid):
+    with Path(f'/proc/{pid}/stat').open('rb') as stream:
+        value = stream.read(4097)
+    require(len(value) <= 4096, 'bounded_desktop_process_stat_required')
+    return int(value.decode().rsplit(')', 1)[1].split()[1])
+
+
+def desktop_service(pid):
+    """Admit the deployed Python supervisor and its separate Rust child."""
+    service = unit_snapshot('lucent.service')
+    script = str(Path.home() / '.local/lib/lucent/session.py')
+    require(service.get('load') == 'loaded' and service.get('active') == 'active'
+            and service.get('executable') == '/usr/bin/python3'
+            and service.get('argv') == ['/usr/bin/python3', script]
+            and type(service.get('main_pid')) is int and service['main_pid'] > 1
+            and service['main_pid'] != pid
+            and isinstance(service.get('invocation'), str)
+            and re.fullmatch(r'[a-f0-9]{32}', service['invocation'])
+            and set(service['invocation']) != {'0'}, 'typed_python_supervisor_required')
+    child = process_snapshot(pid, hashed=True)
+    supervisor = process_snapshot(service['main_pid'], hashed=True)
+    require(child['group'] == supervisor['group'] == service['group']
+            and desktop_parent(pid) == supervisor['pid'], 'desktop_must_be_original_supervisor_child')
+    python = file_record('/usr/bin/python3')
+    source = file_record(script)
+    require(python is not None and source is not None and supervisor['sha256'] == python['sha256'],
+            'installed_python_supervisor_identity_required')
+    # Read/hash operations can take time. Pin the same invocation and process
+    # births/executables after them; atime is deliberately absent from snapshots.
+    for original in (child, supervisor):
+        current = process_snapshot(original['pid'])
+        require({key: value for key, value in current.items() if key != 'sha256'} ==
+                {key: value for key, value in original.items() if key != 'sha256'},
+                'desktop_or_supervisor_process_lifetime_changed')
+    require(unit_snapshot('lucent.service') == service and desktop_parent(pid) == supervisor['pid'],
+            'desktop_supervisor_invocation_changed')
+    return {'unit': service, 'process': supervisor, 'script': source, 'child': child}
+
+
+def desktop_ipc(pid):
+    path = Path(os.environ['XDG_RUNTIME_DIR']) / 'lucent.sock'
+    def stamp():
+        value = path.lstat()
+        require(stat.S_ISSOCK(value.st_mode) and value.st_uid == os.getuid(),
+                'owned_desktop_ipc_socket_required')
+        return [value.st_dev, value.st_ino, value.st_mode, value.st_uid, value.st_gid]
+    original = stamp()
+    with socket.socket(socket.AF_UNIX) as connection:
+        connection.settimeout(3)
+        connection.connect(str(path))
+        peer_pid, peer_uid, _ = struct.unpack('3i', connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
+        require(peer_pid == pid and peer_uid == os.getuid() and stamp() == original,
+                'exact_desktop_ipc_peer_required')
+        connection.sendall(b'inspect\n')
+        raw, deadline = bytearray(), time.monotonic() + 4
+        while True:
+            remaining = deadline - time.monotonic()
+            require(remaining > 0, 'bounded_desktop_ipc_response_required')
+            connection.settimeout(remaining)
+            chunk = connection.recv(65536)
+            if not chunk:
+                break
+            raw.extend(chunk)
+            require(len(raw) <= 8 * 1024 * 1024, 'bounded_desktop_ipc_response_required')
+    require(stamp() == original, 'desktop_ipc_socket_lifetime_changed')
+    return json.loads(raw), original
+
+
 def desktop(allowed_pid=None):
     require(json.loads(run('hyprctl', '-j', 'locked')) == {'locked': False}
             and run('omarchy-shell', 'lock', 'isLocked') == 'false', 'unlocked_session_required')
     pids = run('pgrep', '-x', 'lucent-desktop').splitlines()
     require(len(pids) == 1 and pids[0].isdigit(), 'one_desktop_process_required')
     pid = int(pids[0])
-    client = json.loads(run(CLI, 'inspect'))['client']
+    authority = desktop_service(pid)
+    inspected, ipc = desktop_ipc(pid)
+    client = inspected['client']
     require(not client.get('network', {}).get('form')
             and not any(client.get('bluetooth', {}).get(key) for key in ('form', 'requests', 'answering')),
             'no_credential_requests_required')
@@ -178,12 +254,9 @@ def desktop(allowed_pid=None):
     signature = {key: native[key] for key in ('id', 'name', 'width', 'height', 'x', 'y',
                                              'scale', 'transform', 'refreshRate', 'dpmsStatus')}
     require(signature['dpmsStatus'] is True, 'awake_output_required')
-    supervisor = run('systemctl', '--user', 'show', 'lucent.service', '--property=ActiveState',
-                     '--property=MainPID', '--property=ControlGroup', '--property=ExecMainStartTimestampMonotonic')
-    fields = dict(line.split('=', 1) for line in supervisor.splitlines())
-    current = process(pid)
-    require(fields.get('ActiveState') == 'active' and fields.get('MainPID') == str(pid)
-            and fields.get('ControlGroup') == current['cgroup'], 'desktop_owned_by_current_supervisor_required')
+    child = authority['child']
+    current = {'pid': child['pid'], 'start': child['start'], 'cgroup': child['group'],
+               'executable_sha256': child['sha256'], 'executable': child['executable']}
     instance = os.environ.get('HYPRLAND_INSTANCE_SIGNATURE')
     require(instance and '/' not in instance, 'captured_native_compositor_required')
     compositor = unique(json.loads(run('hyprctl', '-j', 'instances')),
@@ -193,7 +266,9 @@ def desktop(allowed_pid=None):
     require(stat.S_ISSOCK(info.st_mode) and info.st_uid == os.getuid(), 'owned_native_compositor_socket_required')
     installed = file_record(Path.home() / '.local/bin/lucent-desktop')
     require(installed and installed['sha256'] == current['executable_sha256'], 'installed_running_release_mismatch')
-    return {'process': current, 'supervisor': supervisor, 'monitor': signature, 'installed': installed,
+    require(desktop_service(pid) == authority and desktop_ipc(pid)[1] == ipc,
+            'desktop_supervisor_or_ipc_lifetime_changed')
+    return {'process': current, 'supervisor': authority, 'ipc_socket': ipc, 'monitor': signature, 'installed': installed,
             'compositor': {'process': process(compositor['pid']), 'instance': instance,
                            'socket': identity(info)[:2]}}, client, windows
 
