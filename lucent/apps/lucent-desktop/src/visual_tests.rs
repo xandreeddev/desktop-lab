@@ -376,6 +376,148 @@ fn fully_visible(rect: Rect, clip: Rect) -> bool {
         && rect.y + rect.h <= clip.y + clip.h + 0.01
 }
 #[test]
+fn weather_widget_content_keeps_its_inset_after_host_card_geometry_is_applied() {
+    use lucent_design::{component::widget_size::weather, font, icon, space};
+    for state in ["ready", "widget-long"] {
+        for (width, height) in [(weather::WIDTH, weather::HEIGHT), (384., 240.)] {
+            let mut app = fixture(0, false);
+            app.weather = crate::weather::tests::visual_fixture(state);
+            app.settings.layout.visible_widgets = vec!["weather".into()];
+            app.settings.layout.positions.insert(
+                "weather".into(),
+                lucent_domain::Placement::new(64., 96.).unwrap(),
+            );
+            app.settings.layout.widget_sizes.insert(
+                "weather".into(),
+                lucent_domain::WidgetSize::new(width, height).unwrap(),
+            );
+            let cx = ViewContext {
+                surface: "widgets",
+                instance: None,
+                width: 640.,
+                height: 580.,
+                now: 1.,
+                density: Density::ONE,
+            };
+            let scene = Layout::new(fonts(&app)).build(
+                &app.view(&cx),
+                cx.width,
+                cx.height,
+                &Interaction::default(),
+                cx.now,
+            );
+            let card = scene
+                .hits
+                .iter()
+                .find(|hit| hit.id == "widget-weather")
+                .unwrap();
+            assert_eq!((card.rect.w, card.rect.h), (width, height));
+            let inner = Rect::new(
+                card.rect.x + space::LG,
+                card.rect.y + space::LG,
+                width - 2. * space::LG,
+                height - 2. * space::LG,
+            );
+            let details = scene
+                .hits
+                .iter()
+                .find(|hit| hit.id == "weather-details")
+                .unwrap();
+            assert!(
+                fully_visible(details.rect, inner),
+                "details hit must clear every rounded border"
+            );
+            let mut images = 0;
+            let mut temperatures = 0;
+            let mut texts = 0;
+            let mut detail_labels = 0;
+            for paint in &scene.paint {
+                let (rect, clip) = match paint {
+                    Paint::Image { rect, clip, .. } => {
+                        images += 1;
+                        assert_eq!((rect.w, rect.h), (icon::WEATHER, icon::WEATHER));
+                        (rect, clip)
+                    }
+                    Paint::Text {
+                        rect,
+                        clip,
+                        size,
+                        text,
+                        ..
+                    } => {
+                        texts += 1;
+                        if *size == font::TEMPERATURE {
+                            temperatures += 1;
+                        }
+                        if fully_visible(*rect, details.rect) {
+                            detail_labels += 1;
+                            assert_eq!(
+                                text.lines().count(),
+                                1,
+                                "long condition details stay on one bounded line"
+                            );
+                        }
+                        (rect, clip)
+                    }
+                    _ => continue,
+                };
+                assert!(
+                    fully_visible(*rect, inner),
+                    "widget content must retain its token inset after card composition"
+                );
+                assert!(
+                    fully_visible(*rect, clip.bounds),
+                    "widget content must not be clipped by its card"
+                );
+            }
+            assert_eq!((images, temperatures, texts, detail_labels), (1, 1, 3, 1));
+        }
+    }
+}
+
+#[test]
+fn weather_current_conditions_text_is_centered_beside_its_large_icon() {
+    let mut app = fixture(0, false);
+    app.bar_visible = false;
+    app.weather = crate::weather::tests::visual_fixture("ready");
+    let cx = ViewContext {
+        surface: "weather-controls",
+        instance: None,
+        width: 640.,
+        height: 580.,
+        now: 1.,
+        density: Density::ONE,
+    };
+    let scene = Layout::new(fonts(&app)).build(
+        &app.view(&cx),
+        cx.width,
+        cx.height,
+        &Interaction::default(),
+        cx.now,
+    );
+    let icon = scene
+        .paint
+        .iter()
+        .find_map(|paint| match paint {
+            Paint::Image { rect, .. } if rect.w == lucent_design::icon::WEATHER => Some(rect),
+            _ => None,
+        })
+        .unwrap();
+    let current = scene
+        .paint
+        .iter()
+        .find_map(|paint| match paint {
+            Paint::Text { rect, text, .. } if text == "8°C · Clear sky" => Some(rect),
+            _ => None,
+        })
+        .unwrap();
+    assert!(
+        (icon.y + icon.h / 2. - current.y - current.h / 2.).abs() < 0.01,
+        "current conditions share the icon's vertical center"
+    );
+}
+
+#[test]
 fn every_visible_launcher_row_fits_even_after_scrolling() {
     for count in [1, 7, 9] {
         let mut app = fixture(count, false);
@@ -779,43 +921,147 @@ fn framework_buttons_support_keyboard_focus_and_activation_without_hover() {
 }
 #[test]
 fn command_rows_center_icons_and_labels_inside_rounded_endcaps() {
-    let mut app = fixture(9, false);
-    app.update(
-        Message::Launcher(launcher::Message::Mode(Mode::Commands)),
-        &mut Effects::default(),
-    );
-    let layout = Layout::new(fonts(&app));
-    let command_scene = scene(&app, &layout, &mut Interaction::default(), 1.);
-    let rows: Vec<_> = command_scene
-        .hits
-        .iter()
-        .filter(|h| h.id.starts_with("command-"))
-        .collect();
-    assert_eq!(rows.len(), crate::actions::COMMANDS.len());
-    for row in rows {
-        let center = row.rect.y + row.rect.h / 2.;
-        let paints: Vec<_> = command_scene
-            .paint
+    fn assert_aligned(scene: &Scene<Message>, capacity: usize, selected: &str) {
+        let rows: Vec<_> = scene
+            .hits
             .iter()
-            .filter_map(|p| match p {
-                Paint::Image { rect, .. } | Paint::Text { rect, .. }
-                    if rect.y >= row.rect.y && rect.y + rect.h <= row.rect.y + row.rect.h =>
-                {
-                    Some(rect)
-                }
-                _ => None,
-            })
+            .filter(|hit| hit.id.starts_with("command-"))
             .collect();
-        assert_eq!(paints.len(), 2);
-        for rect in paints {
+        assert_eq!(
+            rows.len(),
+            capacity,
+            "only the bounded row window is admitted"
+        );
+        assert!(
+            rows.iter().any(|row| row.id == selected),
+            "selected command must be reachable: {selected}"
+        );
+        for row in rows {
             assert!(
-                (rect.y + rect.h / 2. - center).abs() < 0.01,
-                "command contents share a vertical center"
+                fully_visible(row.rect, row.clip.bounds),
+                "command row is cropped: {}",
+                row.id
             );
-            assert!(rect.x - row.rect.x >= 16., "content clears curved endcap");
-            assert!(fully_visible(*rect, row.clip.bounds));
+            let center = row.rect.y + row.rect.h / 2.;
+            let paints: Vec<_> = scene
+                .paint
+                .iter()
+                .filter_map(|paint| match paint {
+                    Paint::Image { rect, clip, .. } | Paint::Text { rect, clip, .. }
+                        if rect.y >= row.rect.y && rect.y + rect.h <= row.rect.y + row.rect.h =>
+                    {
+                        Some((rect, clip))
+                    }
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(paints.len(), 2);
+            for (rect, clip) in paints {
+                assert!(
+                    (rect.y + rect.h / 2. - center).abs() < 0.01,
+                    "command contents share a vertical center"
+                );
+                assert!(
+                    rect.x - row.rect.x >= lucent_design::component::launcher::ROW_PADDING_INLINE,
+                    "content clears curved endcap"
+                );
+                assert!(fully_visible(*rect, row.clip.bounds));
+                assert!(fully_visible(*rect, clip.bounds));
+            }
         }
     }
+    let commands: Vec<_> = crate::actions::COMMANDS
+        .into_iter()
+        .map(|(label, _, icon)| format!("command-{icon}-{label}"))
+        .collect();
+    let weather = crate::actions::COMMANDS
+        .iter()
+        .position(|(_, action, _)| matches!(action, crate::actions::Action::Weather))
+        .unwrap();
+    let mut app = fixture(9, false);
+    let layout = Layout::new(fonts(&app));
+    for width in [640., 390.] {
+        resize_fixture(&mut app, width, 580.);
+        app.update(
+            Message::Launcher(launcher::Message::Mode(Mode::Commands)),
+            &mut Effects::default(),
+        );
+        let capacity = crate::shell_layout::visible_rows(
+            Mode::Commands,
+            app.launcher.result_count(),
+            app.viewport,
+            app.settings.launcher,
+        )
+        .min(commands.len());
+        assert!(
+            capacity < commands.len(),
+            "fixture must exercise a real scroll boundary"
+        );
+        let mut seen = std::collections::BTreeSet::new();
+        for (index, id) in commands.iter().enumerate() {
+            if index > 0 {
+                key(&mut app, Key::Down);
+            }
+            assert_eq!(app.launcher.selected(), index);
+            let current = scene(&app, &layout, &mut Interaction::default(), 1.);
+            assert_aligned(&current, capacity, id);
+            seen.insert(id.clone());
+        }
+        assert_eq!(
+            seen.len(),
+            commands.len(),
+            "keyboard must reach the complete catalog"
+        );
+        for (index, id) in commands.iter().enumerate().rev().skip(1) {
+            key(&mut app, Key::Up);
+            assert_eq!(app.launcher.selected(), index);
+            assert_aligned(
+                &scene(&app, &layout, &mut Interaction::default(), 1.),
+                capacity,
+                id,
+            );
+        }
+        // The pointer-wheel route uses the same controlled selection/scroll
+        // window, rather than admitting clipped offscreen command hits.
+        for (index, id) in commands.iter().enumerate() {
+            if index > 0 {
+                let message = app
+                    .event(Event::Scroll {
+                        surface: "dock",
+                        lines: 1.,
+                    })
+                    .expect("command wheel navigation");
+                app.update(message, &mut Effects::default());
+            }
+            assert_eq!(app.launcher.selected(), index);
+            assert_aligned(
+                &scene(&app, &layout, &mut Interaction::default(), 1.),
+                capacity,
+                id,
+            );
+        }
+        app.update(
+            Message::Launcher(launcher::Message::Select(weather)),
+            &mut Effects::default(),
+        );
+        assert_aligned(
+            &scene(&app, &layout, &mut Interaction::default(), 1.),
+            capacity,
+            &commands[weather],
+        );
+        key(&mut app, Key::Enter);
+        assert!(
+            app.weather.open(),
+            "the reachable Weather command opens its native client"
+        );
+        assert!(
+            !app.launcher.open(),
+            "the command transfers foreground ownership"
+        );
+    }
+    // Retain the existing independent closed-dock padding assertions at their
+    // original geometry, after testing both bounded command viewports above.
+    let mut app = fixture(9, false);
     app.update(
         Message::Launcher(launcher::Message::Close),
         &mut Effects::default(),
@@ -1712,6 +1958,20 @@ fn visual_regressions() {
             ),
             ("media-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("media-paused", Mode::Apps, 0, 0, "", 1., 390.),
+            ("weather-unconfigured", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-loading", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-ready", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-night", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-rain", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-stale", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-offline", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-error", Mode::Apps, 0, 0, "", 1., 390.),
+            ("weather-invalid", Mode::Apps, 0, 0, "", 1., 390.),
+            ("weather-narrow", Mode::Apps, 0, 0, "", 1., 390.),
+            ("weather-form-bottom", Mode::Apps, 0, 0, "", 1., 390.),
+            ("weather-widget", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-widget-long", Mode::Apps, 0, 0, "", 1., 640.),
+            ("weather-widget-resized", Mode::Apps, 0, 0, "", 1., 640.),
             ("audio-loading", Mode::Apps, 0, 0, "", 1., 640.),
             ("tray-loading", Mode::Apps, 0, 0, "", 1., 640.),
             ("tray-bar-wide", Mode::Apps, 0, 0, "", 1., 1920.),
@@ -1994,6 +2254,64 @@ fn visual_regressions() {
                 interaction.focus = Some("text-sample".into());
                 interaction.focus_visible = true;
                 layout.build(&tree, width, height, &interaction, now)
+            } else if let Some(state) = name.strip_prefix("weather-") {
+                app.weather = crate::weather::tests::visual_fixture(
+                    if matches!(
+                        state,
+                        "narrow" | "form-bottom" | "widget" | "widget-resized"
+                    ) {
+                        "ready"
+                    } else {
+                        state
+                    },
+                );
+                app.settings_writable = true;
+                if matches!(state, "form-bottom" | "invalid") {
+                    app.weather.update(
+                        crate::weather::Message::Scroll(ScrollEvent { offset: 10000. }),
+                        &mut Effects::default(),
+                    );
+                }
+                if state.starts_with("widget") {
+                    app.weather
+                        .update(crate::weather::Message::Close, &mut Effects::default());
+                    app.settings.layout.visible_widgets = vec!["weather".into()];
+                    app.settings.layout.positions.insert(
+                        "weather".into(),
+                        lucent_domain::Placement::new(64., 96.).unwrap(),
+                    );
+                    if state == "widget-resized" {
+                        app.settings.layout.widget_sizes.insert(
+                            "weather".into(),
+                            lucent_domain::WidgetSize::new(384., 240.).unwrap(),
+                        );
+                    }
+                }
+                let cx = ViewContext {
+                    surface: if state.starts_with("widget") {
+                        "widgets"
+                    } else {
+                        "weather-controls"
+                    },
+                    instance: None,
+                    width,
+                    height,
+                    now,
+                    density: Density::ONE,
+                };
+                let mut input = Interaction::default();
+                if matches!(state, "invalid" | "form-bottom") {
+                    input.focus = Some(
+                        if state == "invalid" {
+                            "weather-latitude-1"
+                        } else {
+                            "weather-disable"
+                        }
+                        .into(),
+                    );
+                    input.focus_visible = true;
+                }
+                layout.build(&app.view(&cx), width, height, &input, now)
             } else if let Some(state) = name.strip_prefix("notes-") {
                 let app = notes_fixture(state, light);
                 let mut interaction = Interaction::default();

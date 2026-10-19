@@ -407,6 +407,7 @@ pub struct DesktopSettings {
     pub saved_palettes: Vec<crate::ThemePalette>,
     pub launcher: LauncherSize,
     pub live_wallpapers: crate::LiveWallpapers,
+    pub weather: Option<crate::WeatherPreferences>,
 }
 impl Default for DesktopSettings {
     fn default() -> Self {
@@ -422,6 +423,7 @@ impl Default for DesktopSettings {
             saved_palettes: Vec::new(),
             launcher: LauncherSize::default(),
             live_wallpapers: Default::default(),
+            weather: None,
         }
     }
 }
@@ -437,12 +439,6 @@ pub struct SystemSnapshot {
     pub cpu_percent: f32,
     pub memory_used_mib: u64,
     pub memory_total_mib: u64,
-}
-#[derive(Clone, Debug, PartialEq)]
-pub struct WeatherSnapshot {
-    pub temperature: f32,
-    pub description: String,
-    pub code: u32,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Wallpaper {

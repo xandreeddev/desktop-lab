@@ -526,4 +526,36 @@ mod tests {
         assert_eq!(fs::read(&store.path).unwrap(), invalid_position);
         fs::remove_dir_all(directory).unwrap();
     }
+
+    #[test]
+    fn weather_preferences_validate_roundtrip_and_preserve_invalid_files() {
+        let directory = Directory::new();
+        let store = JsonSettings {
+            path: directory.0.join("desktop.json"),
+        };
+        fs::write(&store.path, br#"{"version":1}"#).unwrap();
+        let mut settings = store.load().unwrap();
+        assert!(
+            settings.weather.is_none(),
+            "only absent preferences allow legacy import"
+        );
+        settings.weather = Some(WeatherPreferences {
+            enabled: false,
+            location: Some(
+                WeatherLocation::new("Fixture place", WeatherCoordinates::new(0., 0.).unwrap())
+                    .unwrap(),
+            ),
+            unit: TemperatureUnit::Fahrenheit,
+        });
+        store.save(&settings).unwrap();
+        assert_eq!(store.load().unwrap(), settings);
+        let original = fs::read(&store.path).unwrap();
+        settings.weather.as_mut().unwrap().enabled = true;
+        settings.weather.as_mut().unwrap().location = None;
+        assert!(store.save(&settings).is_err());
+        assert_eq!(fs::read(&store.path).unwrap(), original);
+        for bad in [br#"{"weather":{"enabled":true,"location":{"name":"Fixture","coordinates":{"latitude":91,"longitude":0}}}}"#.as_slice(),br#"{"weather":{"unit":"kelvin"}}"#.as_slice()] {
+            fs::write(&store.path,bad).unwrap();assert!(store.load().is_err());assert_eq!(fs::read(&store.path).unwrap(),bad);
+        }
+    }
 }

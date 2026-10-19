@@ -1,0 +1,551 @@
+{
+  "schema": 1,
+  "milestone": "native-weather-current-forecast-and-configuration",
+  "status": "local_strict_visual_cohorts_vm_and_scoped_native_verified_current_resources_recorded_rss_target_unmet",
+  "source_commit": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+  "integration_comparison_source_commit": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+  "architecture": {
+    "domain": "Checked WeatherCoordinates, WeatherLocation and WeatherTemperature; persisted TemperatureUnit/WeatherPreferences; provider-neutral WeatherCondition and three consecutive checked WeatherDay values in WeatherSnapshot.",
+    "port": "WeatherPort declares read-only legacy_preferences and forecast(checked coordinates, StopSignal). It owns contracts, not HTTP, files, renderer or desktop policy.",
+    "adapter": "OpenMeteo implements WeatherPort. It owns bounded legacy-file reading, curl transport, provider-code/JSON/unit/date decoding and cooperative child-process cancellation.",
+    "root": "The composition root injects OpenMeteo behind WeatherPort. DesktopSettings.weather and persistence::Persistence remain the sole settings authority and save path.",
+    "client": "Weather child owns form/clipboard lifetime, panel motion/scroll, generations/coalescing, explicit commands, in-memory last-good/error/stale presentation. It returns save intent to the root and composes existing SDK elements/generated tokens.",
+    "framework": "Existing TextFieldState/TextEdit, controlled ScrollSpec, Motion, surface instances, subscriptions and effects remain generic; no weather policy in Wayland, Vulkan, input or layout."
+  },
+  "local_checks": {
+    "status": "passed",
+    "source_commit": "2723503b1fdd83b6f9baa8c7c100a4a494df6f9d",
+    "workspace_regular_passed": 736,
+    "workspace_failed": 0,
+    "workspace_ignored": 76,
+    "python_passed": 104,
+    "generated_design_tokens": 576,
+    "format_passed": true,
+    "strict_clippy_workspace_all_targets_passed": true,
+    "independent_example_help_passed": true,
+    "scope": "Owned local behavior/domain/adapter/clipboard and routing fixtures; not native provider interoperability or real physical hardware acceptance."
+  },
+  "visual_reference_acceptance": {
+    "status": "reviewed_new_references_accepted",
+    "source_commit": "2723503b1fdd83b6f9baa8c7c100a4a494df6f9d",
+    "scenarios": 14,
+    "new_references_reviewed": 56,
+    "palettes": [
+      "dark",
+      "light"
+    ],
+    "densities": [
+      1,
+      2
+    ],
+    "tolerances_changed": false,
+    "initial_render_run": {
+      "exit": 101,
+      "status": "expected_missing_new_references",
+      "compared_scenarios": 56,
+      "updated_references": false
+    },
+    "initial_review_disposition": {
+      "status": "not_accepted_until_corrected",
+      "source_commit": "713fe019df8459f0507fe3f1c370f6a1f220860b",
+      "issues": [
+        "Weather widget content touched the outer card origin and rounded clipping cut its icon; all twelve base/long/resized widget references required correction.",
+        "Current-condition headline needed vertical centering beside its taller icon; narrow panel alignment was rechecked."
+      ],
+      "correction": "Client composition retains internal token padding inside the card wrapper, restores established dominant icon/temperature hierarchy, bounds the details line with ellipsis and centers the condition row. No generic card/framework or tolerance workaround.",
+      "corrected_review": "All56 corrected references are accepted at2723503b; exact unchanged PNG hashes retain prior review, and changed originals were viewed again."
+    },
+    "full_workspace_comparisons": {
+      "status": "completed_with_16_reviewed_intentional_reference_failures",
+      "source_commit": "ad4b0a07666e648a93f22c99723013599678ae32",
+      "exit": 101,
+      "wall_seconds": 837.94,
+      "comparisons": 768,
+      "passed_comparisons": 752,
+      "threshold_failures": 16,
+      "failed_scenarios": [
+        "commands",
+        "widget-drag-grid",
+        "monitor-widgets-right",
+        "monitor-grid-right"
+      ],
+      "updated_references": false,
+      "original_failure_retained": true
+    },
+    "scope": "Static offscreen software-Vulkan references only. Native input/scroll, provider data, animation, pacing, quantitative contrast and RSS are separate.",
+    "existing_references_accepted_for_update": 16,
+    "existing_reference_update_commit": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+    "existing_reference_review": {
+      "status": "accepted_all_16_specific_actual_hashes",
+      "source_commit": "ad4b0a07666e648a93f22c99723013599678ae32",
+      "scenarios": [
+        "commands",
+        "widget-drag-grid",
+        "monitor-widgets-right",
+        "monitor-grid-right"
+      ],
+      "scenarios_count": 4,
+      "palettes": [
+        "dark",
+        "light"
+      ],
+      "densities": [
+        1,
+        2
+      ],
+      "reviewed_actual_baseline_and_diff_images": 48,
+      "commands_reason": "A ninth Weather command increases desired panel height; the existing bar-aware cap admits eight whole rows in a496-logical-pixel panel. The selected row remains aligned and the final admitted row is fully visible. Source navigation admits the ninth command by scrolling; this review is not native keyboard acceptance.",
+      "monitor_right_reason": "All eight right-monitor comparisons change only Weather contents within logical[616,136,854,226], inside the unchanged card[600,112,870,242]. RawRGB outside that region and the complete alpha channels are identical; Notes, grid, card bounds and shadows stay unchanged.",
+      "widget_drag_grid_reason": "The old unavailable-weather placeholder becomes the padded native-child Loading preferences state. Grid/calendar layout, selected date and drag placement remain visually unchanged, but outside-card raster pixels are not all identical.",
+      "widget_drag_grid_outside_card_raster_disclosure": [
+        {
+          "case": "widget-drag-grid-dark-1x",
+          "exact_different_pixel_count": 909,
+          "maximum_channel_delta": 14,
+          "existing_threshold_marked_pixel_count": 33,
+          "interpretation": "Isolated calendar glyph antialias coverage and low-amplitude shadow raster variation were reviewed and accepted; no substantive layout/selection/grid/card-geometry regression was seen. These pixels are disclosed rather than described as identical."
+        },
+        {
+          "case": "widget-drag-grid-dark-2x",
+          "exact_different_pixel_count": 12815,
+          "maximum_channel_delta": 9,
+          "existing_threshold_marked_pixel_count": 2,
+          "interpretation": "Isolated calendar glyph antialias coverage and low-amplitude shadow raster variation were reviewed and accepted; no substantive layout/selection/grid/card-geometry regression was seen. These pixels are disclosed rather than described as identical."
+        },
+        {
+          "case": "widget-drag-grid-light-1x",
+          "exact_different_pixel_count": 3886,
+          "maximum_channel_delta": 17,
+          "existing_threshold_marked_pixel_count": 35,
+          "interpretation": "Isolated calendar glyph antialias coverage and low-amplitude shadow raster variation were reviewed and accepted; no substantive layout/selection/grid/card-geometry regression was seen. These pixels are disclosed rather than described as identical."
+        },
+        {
+          "case": "widget-drag-grid-light-2x",
+          "exact_different_pixel_count": 28281,
+          "maximum_channel_delta": 10,
+          "existing_threshold_marked_pixel_count": 6,
+          "interpretation": "Isolated calendar glyph antialias coverage and low-amplitude shadow raster variation were reviewed and accepted; no substantive layout/selection/grid/card-geometry regression was seen. These pixels are disclosed rather than described as identical."
+        }
+      ],
+      "tolerances_changed": false,
+      "unreviewed_reference_updates_allowed": false
+    },
+    "focused_reference_rechecks": {
+      "status": "passed",
+      "source_commit": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+      "comparisons_passed": 16,
+      "filters": [
+        {
+          "filter": "commands",
+          "exit": 0,
+          "seconds": 6.87,
+          "comparisons": 4,
+          "ids": [
+            "commands-dark-1x",
+            "commands-dark-2x",
+            "commands-light-1x",
+            "commands-light-2x"
+          ],
+          "updated_references": false
+        },
+        {
+          "filter": "widget-drag-grid",
+          "exit": 0,
+          "seconds": 6.99,
+          "comparisons": 4,
+          "ids": [
+            "widget-drag-grid-dark-1x",
+            "widget-drag-grid-dark-2x",
+            "widget-drag-grid-light-1x",
+            "widget-drag-grid-light-2x"
+          ],
+          "updated_references": false
+        },
+        {
+          "filter": "monitor-widgets-right",
+          "exit": 0,
+          "seconds": 6.46,
+          "comparisons": 4,
+          "ids": [
+            "monitor-widgets-right-dark-1x",
+            "monitor-widgets-right-dark-2x",
+            "monitor-widgets-right-light-1x",
+            "monitor-widgets-right-light-2x"
+          ],
+          "updated_references": false
+        },
+        {
+          "filter": "monitor-grid-right",
+          "exit": 0,
+          "seconds": 6.83,
+          "comparisons": 4,
+          "ids": [
+            "monitor-grid-right-dark-1x",
+            "monitor-grid-right-dark-2x",
+            "monitor-grid-right-light-1x",
+            "monitor-grid-right-light-2x"
+          ],
+          "updated_references": false
+        }
+      ],
+      "updated_references_during_comparison": false
+    },
+    "final_local_coverage": {
+      "status": "passed_full_then_affected_cohorts",
+      "expected_total_distinct_comparisons": 768,
+      "verified_total": 768,
+      "inherited_from_full_pass_count": 752,
+      "inherited_full_source_commit": "ad4b0a07666e648a93f22c99723013599678ae32",
+      "focused_pass_count": 16,
+      "focused_source_commit": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+      "source_code_unchanged_from_initial_full": true,
+      "rust_source_identical_between_strict_and_original_full": true,
+      "single_final_full_local_pass_claimed": false,
+      "scope": "752 passes from the original full768 run plus16 focused passes after only reviewed reference updates. Original full exit101 is retained. Final-head GitHubCI independently runs all768 before merge."
+    }
+  },
+  "local_migration_storage_acceptance": {
+    "status": "passed_owned_temporary_storage_only",
+    "deployer_sha256": "302643eb7d35013051809a90e0e74d0a856e568423bc6f921ef332f135d2f19d",
+    "runner_sha256": "5b95c5b61631d3fa7ff4b4c71d67cd050944959d74196abe1f29b27ff5f123b6",
+    "cases_passed": 7,
+    "operations_checked": 35,
+    "actual_ast_extracted_transaction_code": true,
+    "deployer_import_or_main_executed": false,
+    "child_only_fake_home": true,
+    "home_environment_overridden": false,
+    "write_audit_confined_to_owned_tmp_homes": true,
+    "temporary_homes_removed": true,
+    "passed_cases": [
+      "capture_arm_admit_stable_observe_exact_inode_rollback",
+      "already_original_restore_no_temporary_link_or_mutation",
+      "independent-nonweather_rejects_and_preserves_independent_files",
+      "independent-same-semantics-inode_rejects_and_preserves_independent_files",
+      "independent-legacy_rejects_and_preserves_independent_files",
+      "unquiescent_rejects_and_preserves_independent_files",
+      "unarmed_expected_migration_rejected_and_preserved"
+    ],
+    "limitations": "Actual migration storage/ownership code exercised with deterministic fake external artifacts and a fake quiescence guard. No VM, service, cgroup, native UI, provider/network or real deployment acceptance is established."
+  },
+  "release_deployment": {
+    "status": "passed_guarded_expected_legacy_migration",
+    "source_commit": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+    "desktop_sha256": "da753b92761f9e002f1c3a26d4f74c2c12e9f8a8bd1b353256fa52746a915c4d",
+    "cli_sha256": "94d45e25be64d264203179b619f84c0f847e629227c9ed3a2b357c9a415ab881",
+    "binaries_deployed": 2,
+    "running_binary_hash_verified": true,
+    "activation_lifecycle": "graceful_full_stop_start",
+    "supervisor_stable_seconds": 37.43,
+    "supervisor_sha256": "4238b8fbc096a353e88619cf4da2bb4f4b47e150be4a12b67c61181d59e2461c",
+    "effective_kill_mode": "mixed",
+    "supervisor_or_unit_modified": false,
+    "settings_migration_saved": true,
+    "only_expected_weather_semantics_changed": true,
+    "nonweather_preferences_semantically_preserved": true,
+    "settings_bytes_preserved": false,
+    "settings_bytes_intentionally_changed_for_migration": true,
+    "legacy_weather_bytes_and_inode_preserved": true,
+    "wallpaper_source_exports_preserved": true,
+    "initially_empty_clipboard_and_history_preserved": true,
+    "rollback_attempted": false,
+    "rollback_required": false,
+    "rollback_exercised_on_vm": false,
+    "scope": "Two-client replacement and graceful existing-service stop/start with guarded expected migration and stable readiness. Legacy bytes/inode and media/export/clipboard state remain preserved; desktop settings bytes intentionally change. The separate fake-home7case/35operation storage test does not establish a VM rollback."
+  },
+  "native_acceptance": {
+    "status": "passed_with_explicit_open_close_focus_scope",
+    "source_commit": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+    "desktop_sha256": "da753b92761f9e002f1c3a26d4f74c2c12e9f8a8bd1b353256fa52746a915c4d",
+    "acceptance_helper_sha256": "ee7a511761d2ca73c60ad5561f93dcb7ceeba8ac418a674f0f79bdb7520a8d80",
+    "reused_notes_harness_sha256": "a2c5b493965eb909ef222432077b71e7bafd4145172fcefefef3d69c83304d88",
+    "output_scope": {
+      "outputs": 1,
+      "density": 1,
+      "palettes": "one_current_palette"
+    },
+    "cases": {
+      "center_bar_passive": {
+        "status": "passed"
+      },
+      "cli_role_and_inert_panel_padding": {
+        "status": "passed"
+      },
+      "close_input_release": {
+        "status": "passed_observed_on_still_present_closing_surface",
+        "keyboard": "none",
+        "pointer": "none",
+        "duration_or_animation_quality_measured": false
+      },
+      "direct_audio_to_weather_exclusive_switch": {
+        "status": "passed"
+      },
+      "escape_close": {
+        "status": "passed",
+        "fade_window": "not_observed_already_absent"
+      },
+      "actual_widget_action_opens_weather": {
+        "status": "passed",
+        "shared_native_widget_group_role": "calendar"
+      },
+      "tab_only_field_focus": {
+        "status": "passed",
+        "editing_or_submission_tested": false
+      },
+      "outside_close": {
+        "status": "passed",
+        "fade_window": "not_observed_already_absent"
+      },
+      "invalid_apply": {
+        "status": "skipped_no_form_writes_or_submit_permitted"
+      }
+    },
+    "private_screenshot_review": {
+      "status": "passed_static_only",
+      "captures_reviewed_original_resolution": 4,
+      "observations": [
+        "Open panels show readable current model conditions and three forecast rows with consistent internal padding.",
+        "The weather form focus state is visibly distinguished, and closed UI is absent in the reviewed closed capture."
+      ],
+      "limits": "Private location-bearing images and their paths/hashes are not published. Static review does not establish caret editing, native scrolling, fade duration, smoothness or frame pacing."
+    },
+    "restoration": {
+      "owned_foreground_ui_closed": true,
+      "owned_cursor_and_dock_state_restored": true,
+      "exact_settings_bytes_inode_legacy_artifacts_clipboard_monitor_workspace_and_process_preserved": true,
+      "scope": "Exact state preservation during this initially closed, saved, single-output acceptance workload. The clipboard is initially empty and no payload offer/transfer, preference write, lifecycle or monitor operation is performed by the native helper."
+    },
+    "real_focus_input_scroll_clipboard_and_preference_mutation": {
+      "status": "partial_scope_only",
+      "passed": "Opening/exclusive role, passive padding, Tab field focus and observed pointer/keyboard release on close.",
+      "pending": [
+        "Actual text edits/selection/caret operations, native scroll/thumb and clipboard transfer.",
+        "Apply/off/unit/reload preference mutations and invalid native form submission.",
+        "Native failure/retry or stale/location-generation transition acceptance."
+      ]
+    },
+    "animation": {
+      "status": "timing_smoothness_and_pacing_unmeasured",
+      "observed": "One close sample retains its surface with pointer/keyboard none. Escape/outside samples arrive after the surface is absent; no fade timing is inferred."
+    },
+    "scope": "Production panel/widget open-close, foreground routing and optional Tab focus only. No full native configuration CRUD, multi-output/hardware or performance claim."
+  },
+  "performance": {
+    "status": "completed_current_animated_workload_rss_target_unmet",
+    "source_commit": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+    "desktop_sha256": "da753b92761f9e002f1c3a26d4f74c2c12e9f8a8bd1b353256fa52746a915c4d",
+    "duration_seconds": 120.001,
+    "samples": 121,
+    "normal_desktop_rss_target_mib": 300,
+    "rss_300_mib_target_met": false,
+    "process_rss_mib_mean": 424.12,
+    "process_rss_mib_max": 424.15,
+    "process_cpu_percent_one_core": 148.649,
+    "service_cgroup_cpu_percent_one_core": 148.718,
+    "environment": {
+      "vcpus": 4,
+      "guest_reported_memory_mib": 2893.54,
+      "vulkan_adapter": "llvmpipe software Vulkan",
+      "driver": "Mesa 26.2.2-arch1.1 / LLVM 22.1.8",
+      "outputs": [
+        {
+          "width": 1920,
+          "height": 1080,
+          "refreshRate": 60.0,
+          "scale": 1,
+          "transform": 0
+        }
+      ]
+    },
+    "workload": {
+      "animated_wallpaper": true,
+      "live_players": 1,
+      "running_producers": 1,
+      "source_video_size": [
+        3840,
+        2160
+      ],
+      "fitted_frame_size": [
+        1920,
+        1080
+      ],
+      "retained_frame_bytes": 8294400,
+      "prepared_payload_is_not_process_rss_or_total_gpu_memory": true
+    },
+    "submitted_frame_diagnostics": {
+      "dock_delta": 0,
+      "deltas_by_role": {
+        "background": 909,
+        "bar": 2,
+        "calendar": 27,
+        "clock": 27,
+        "dock": 0,
+        "system": 27
+      },
+      "scope": "Counter snapshots span preflight, sampling and post-inspection; their exact total span was not timed. They establish no output FPS, source-video pacing or scanout measurement.",
+      "counter_span_duration_measured": false
+    },
+    "state_preserved": {
+      "settings_bytes": true,
+      "wallpaper": true,
+      "monitor_and_workspace": true,
+      "same_process_and_binary": true
+    },
+    "guest_ui_settings_clipboard_idle_marker_service_or_workload_writes": false,
+    "host_heavy_job_during_interval": false,
+    "matched_before_after_comparison": false,
+    "weather_specific_cost_isolated": false,
+    "native_60_fps_or_output_refresh_pacing_established": false,
+    "gpu_allocations_or_frame_time_scanout_measurement": null,
+    "idle_cpu_target_percent_one_core": 1,
+    "static_idle_cpu_target_assessed": false,
+    "scope": "One current same-process software-Vulkan live-video observation. CPU is percent of one logical core;148.649% is about1.49cores. Process RSS may include software GPU/driver mappings and excludes decoder/helper processes; service CPU covers its cgroup. The300MiB target is not met. This is not a matched comparison against prior375MiB or other-source/workload results, and does not attribute cost to Weather."
+  },
+  "docs_site": {
+    "status": "passed",
+    "source_commit": "f4dd34b2c062411dee2d1f28208aca2cf0000b09",
+    "astro_diagnostics": {
+      "errors": 0,
+      "warnings": 0,
+      "hints": 0
+    },
+    "root_prefix": {
+      "status": "passed",
+      "pages": 13,
+      "links": 489
+    },
+    "github_pages_prefix": {
+      "status": "passed",
+      "base": "/desktop-lab",
+      "pages": 13,
+      "links": 489
+    },
+    "steps": [
+      {
+        "step": "site-check",
+        "exit": 0,
+        "seconds": 13.49
+      },
+      {
+        "step": "root-build",
+        "exit": 0,
+        "seconds": 5.22
+      },
+      {
+        "step": "root-links",
+        "exit": 0,
+        "seconds": 0.3
+      },
+      {
+        "step": "pages-build",
+        "exit": 0,
+        "seconds": 5.95
+      },
+      {
+        "step": "pages-links",
+        "exit": 0,
+        "seconds": 0.27
+      }
+    ],
+    "scope": "Local docs check/build/link results at the recorded revision. The following receipt-only commit does not change Rust or Astro sources; final-head CI remains an independent gate."
+  },
+  "delivery": {
+    "status": "authored_before_final_docs_head_validation_and_merge",
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/78",
+    "final_head": null,
+    "merge_commit": null,
+    "github_pages_publication": "pending",
+    "final_head_full_visual_ci": {
+      "status": "pending_final_docs_head",
+      "expected_comparisons": 768
+    },
+    "code_checkpoint_ci": {
+      "source_commit": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+      "status": "passed",
+      "successful_checks": 6,
+      "merge_state": "CLEAN",
+      "draft_at_observation": true,
+      "workflow_run_ids": [
+        39225573485,
+        39225565477
+      ],
+      "scope": "Code checkpoint only; this does not validate the forthcoming documentation head."
+    }
+  },
+  "prior_anchored_overlays_delivery_reconciliation": {
+    "milestone": "surface-local-anchored-tooltips-and-popover-scope",
+    "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/77",
+    "status": "merged_and_pages_published",
+    "final_head": "d239eb77e002835d64e7391a6bcf243f743e3f3a",
+    "final_head_ci": {
+      "status": "passed",
+      "completed_successful_checks": 6,
+      "merge_state_before_merge": "CLEAN"
+    },
+    "merge_commit": "f57d709c23f48da0747d2c80b97c43aef0d54ccc",
+    "merged_at": "2026-10-19T08:21:39Z",
+    "github_pages": {
+      "status": "success",
+      "run_id": 39222213152,
+      "run_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/39222213152",
+      "source_commit": "f57d709c23f48da0747d2c80b97c43aef0d54ccc",
+      "library_http_status": 200
+    },
+    "lan_docs": {
+      "status": "root_verified_live_current_main",
+      "private_host_or_lan_address_published": false,
+      "service": "lucent-docs-main-preview.service",
+      "port": 4321,
+      "source": "root_accepted_main"
+    },
+    "scope": "Delivery metadata only. Overlay source28b/tooltips/strict/visual/timing/RSS scopes retain their original provenance and limitations; this does not publish or validate Weather."
+  },
+  "requirement_ledger": {
+    "requirements_count": 24,
+    "original_ids_and_statuses_must_remain_unchanged": true,
+    "previous_notes_and_performance_evidence_must_remain_unchanged": true
+  },
+  "limits": [
+    "Manual coordinates only; no automatic location detection or city search.",
+    "Open-Meteo model conditions and fixed response UTC offset; no station reading or DST-aware hourly timeline.",
+    "One in-memory last-good report; no persistent offline disk cache, alerts or hourly graphs.",
+    "Weather can remain explicitly disabled; saved preference authority outranks read-only legacy import.",
+    "Complex-script shaping, bidi, fallback and IME remain open; accessibility stays deferred by user request.",
+    "Native opening/foreground/Tab focus and one successful production forecast are observed. Native form mutation, invalid Apply, failure/retry, scrolling/clipboard transfer, RSS optimization, frame pacing, multi-output and hardware acceptance remain open; the current120-second active-video sample is recorded separately and exceeds the300MiB target."
+  ],
+  "privacy": {
+    "original_location_coordinates_settings_clipboard_or_documents_published": false,
+    "private_vm_screenshots_report_paths_checkpoint_identifiers_credentials_or_host_addresses_published": false
+  },
+  "implementation_source_commit": "2723503b1fdd83b6f9baa8c7c100a4a494df6f9d",
+  "release_build": {
+    "status": "passed",
+    "source_commit": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+    "wall_seconds": 356.43,
+    "binaries": {
+      "lucent-desktop": {
+        "sha256": "da753b92761f9e002f1c3a26d4f74c2c12e9f8a8bd1b353256fa52746a915c4d",
+        "bytes": 21457576
+      },
+      "lucent-cli": {
+        "sha256": "94d45e25be64d264203179b619f84c0f847e629227c9ed3a2b357c9a415ab881",
+        "bytes": 345400
+      }
+    }
+  },
+  "provider_observation": {
+    "status": "single_production_forecast_observed",
+    "source_commit": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+    "desktop_sha256": "da753b92761f9e002f1c3a26d4f74c2c12e9f8a8bd1b353256fa52746a915c4d",
+    "observation": {
+      "configured": true,
+      "busy": false,
+      "has_last_good": true,
+      "stale": false,
+      "open": false,
+      "unit": "celsius",
+      "failed": false
+    },
+    "current_conditions_and_three_day_forecast_visible_in_private_capture_set": true,
+    "scope": "One read-only observation after the normal migrated-location subscription. No injected provider, explicit refresh, native Apply/off/units, failure/retry, cache/reconnect or broad interoperability acceptance is established. Actual location and provider body are not published."
+  }
+}

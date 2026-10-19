@@ -3,9 +3,7 @@ use super::{Host, Message, surfaces, widget_size};
 use crate::{artwork::Artwork, persistence::Status};
 use lucent_api::*;
 use lucent_design::*;
-use lucent_domain::{
-    ClockSnapshot, Date, SystemSnapshot, TimerPhase, WeatherSnapshot, WidgetLayout,
-};
+use lucent_domain::{ClockSnapshot, Date, SystemSnapshot, TimerPhase, WidgetLayout};
 
 #[derive(Clone, Copy)]
 pub struct Input<'a> {
@@ -16,7 +14,7 @@ pub struct Input<'a> {
     pub system: &'a SystemSnapshot,
     pub network_status: &'a str,
     pub media: &'a crate::media::Media,
-    pub weather: Option<&'a WeatherSnapshot>,
+    pub weather: &'a crate::weather::Weather,
 }
 pub struct View<'a> {
     pub host: &'a Host,
@@ -103,7 +101,11 @@ impl View<'_> {
         // Notes uses the actual resized card, rather than a fixed editor
         // centered inside a larger decorative shell. Other catalog views keep
         // their established base layouts.
-        let content_size = if id == "notes" { size } else { base };
+        let content_size = if matches!(id, "notes" | "weather") {
+            size
+        } else {
+            base
+        };
         let content_context = ViewContext {
             width: content_size.0,
             height: content_size.1,
@@ -362,54 +364,13 @@ pub(super) fn calendar(d: &View<'_>, _: &ViewContext) -> Element<Message> {
     }
     Element::stack(children).fill()
 }
-pub(super) fn weather(d: &View<'_>, _: &ViewContext) -> Element<Message> {
-    let (temperature, description, symbol) = d
-        .input
+pub(super) fn weather(d: &View<'_>, cx: &ViewContext) -> Element<Message> {
+    d.input
         .weather
-        .as_ref()
-        .map(|w| {
-            (
-                format!("{:.0}°", w.temperature),
-                w.description.as_str(),
-                if w.code <= 1 { "sun" } else { "cloud" },
-            )
+        .widget(cx, d.theme(), |name, size| {
+            d.icon(name, size).map(|_| crate::weather::Message::Ignore)
         })
-        .unwrap_or_else(|| ("—".into(), "Weather unavailable", "cloud"));
-    Element::stack(vec![
-        Element::empty()
-            .size(
-                component::weather::ICON_BACKGROUND_SIZE,
-                component::weather::ICON_BACKGROUND_SIZE,
-            )
-            .at(
-                component::weather::ICON_BACKGROUND_LEFT,
-                component::weather::ICON_BACKGROUND_TOP,
-            )
-            .radius(radius::WIDGET)
-            .background(d.ink().alpha(opacity::SUBTLE)),
-        d.icon(symbol, icon::WEATHER)
-            .at(component::weather::ICON_LEFT, component::weather::ICON_TOP),
-        d.label(temperature, font::TEMPERATURE)
-            .font_face(1)
-            .at(
-                component::weather::TEXT_LEFT,
-                component::weather::TEMPERATURE_TOP,
-            )
-            .size(
-                component::weather::TEMPERATURE_WIDTH,
-                component::weather::TEMPERATURE_HEIGHT,
-            ),
-        d.label(description, font::BODY)
-            .at(
-                component::weather::TEXT_LEFT,
-                component::weather::DESCRIPTION_TOP,
-            )
-            .size(
-                component::weather::DESCRIPTION_WIDTH,
-                component::weather::DESCRIPTION_HEIGHT,
-            ),
-    ])
-    .fill()
+        .map(Message::Weather)
 }
 
 pub(super) fn media(d: &View<'_>, _: &ViewContext) -> Element<Message> {

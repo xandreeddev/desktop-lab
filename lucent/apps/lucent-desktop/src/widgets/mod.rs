@@ -33,11 +33,13 @@ pub enum Message {
     /// Cancel capture before its output or loaded configuration changes.
     CancelDrags,
     Media(crate::media::Message),
+    Weather(crate::weather::Message),
 }
 pub enum Intent {
     Save,
     RetrySave,
     Media(crate::media::Message),
+    Weather(crate::weather::Message),
     Error(lucent_domain::DomainError),
 }
 /// Preferences remain in the root aggregate. The child borrows them for this
@@ -340,6 +342,7 @@ impl Host {
                 None
             }
             Message::Media(message) => Some(Intent::Media(message)),
+            Message::Weather(message) => Some(Intent::Weather(message)),
             Message::ScrollNotes(event) => {
                 if event.offset.is_finite() && event.offset >= 0. {
                     self.notes_scroll = event.offset;

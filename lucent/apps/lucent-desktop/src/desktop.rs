@@ -37,7 +37,7 @@ pub enum Message {
     Power(crate::power::Message),
     Tray(crate::tray::Message),
     Media(crate::media::Message),
-    Weather(domain::Result<WeatherSnapshot>),
+    Weather(crate::weather::Message),
     Launcher(launcher::Message),
     Launch(AppId, bool),
     Workspace(WorkspaceCommand),
@@ -131,7 +131,7 @@ pub struct Desktop {
     pub power: crate::power::Power,
     pub tray: crate::tray::Tray,
     pub media: crate::media::Media,
-    pub weather: Option<WeatherSnapshot>,
+    pub weather: crate::weather::Weather,
     pub browser: crate::wallpaper_browser::Browser,
     browser_selection: Option<(u64, u64, Option<crate::palette_intent::Revision>)>,
     palette_intent: crate::palette_intent::Intent,
@@ -191,7 +191,7 @@ impl Desktop {
             power: crate::power::Power::new(adapters.power.clone()),
             tray: crate::tray::Tray::new(adapters.tray.clone(), adapters.assets.clone()),
             media: crate::media::Media::new(adapters.media.clone(), adapters.assets.clone()),
-            weather: None,
+            weather: crate::weather::Weather::new(adapters.weather.clone()),
             browser: Default::default(),
             browser_selection: None,
             palette_intent: Default::default(),
@@ -543,6 +543,7 @@ impl Desktop {
             "osd",
             "audio",
             "media-controls",
+            "weather-controls",
             "network",
             "bluetooth",
             "power",
@@ -741,6 +742,7 @@ impl Desktop {
             "dock",
             "audio",
             "media-controls",
+            "weather-controls",
             "network",
             "bluetooth",
             "power",
@@ -783,7 +785,7 @@ impl Desktop {
                 system: &self.system,
                 network_status: self.network.status(),
                 media: &self.media,
-                weather: self.weather.as_ref(),
+                weather: &self.weather,
                 save_status: self.persistence.status(self.settings_writable),
             },
             artwork: self.artwork(),
@@ -893,6 +895,9 @@ impl Desktop {
                 effects,
             ),
             Some(widgets::Intent::Media(message)) => self.update(Message::Media(message), effects),
+            Some(widgets::Intent::Weather(message)) => {
+                self.update(Message::Weather(message), effects)
+            }
             Some(widgets::Intent::Error(error)) => {
                 self.error = error.to_string();
                 effects.redraw("dock");
@@ -977,6 +982,10 @@ impl Desktop {
             effects.quit();
             return;
         }
+        if matches!(action, Action::Weather) {
+            self.update(Message::Weather(crate::weather::Message::Open), effects);
+            return;
+        }
         if matches!(action, Action::LiveWallpapers) {
             self.update(
                 Message::LiveWallpaper(crate::live_wallpaper::Message::Open),
@@ -1037,6 +1046,18 @@ impl Component for Desktop {
             .and_then(|route| self.monitors.connected.get(&route.id));
         let viewport = monitor.map_or(self.viewport, |monitor| monitor.viewport);
         let tree = match cx.surface {
+            "weather-controls" => self
+                .weather
+                .view(
+                    cx,
+                    self.artwork(),
+                    crate::weather::SaveState {
+                        status: self.persistence.status(self.settings_writable),
+                        error: self.persistence.error(),
+                        writable: self.settings_writable,
+                    },
+                )
+                .map(Message::Weather),
             "audio" => self.audio.view(cx, self.theme()).map(Message::Audio),
             "media-controls" => self.media.view(cx, self.theme()).map(Message::Media),
             "network" => self.network.view(cx, self.theme()).map(Message::Network),
@@ -1227,6 +1248,8 @@ impl Component for Desktop {
                         self.settings_error = e.to_string();
                     }
                 }
+                self.weather
+                    .configure(self.settings.weather.as_ref(), self.settings_writable);
                 self.update_dock(crate::dock::Message::Cancel, effects);
                 self.wallpapers = wallpapers;
                 self.wallpaper_index = self
@@ -1407,6 +1430,10 @@ impl Component for Desktop {
                 }
             },
             Message::Clock(clock) => {
+                if self.weather.tick(clock.unix_seconds) {
+                    effects.redraw("weather-controls");
+                    effects.redraw("widgets");
+                }
                 if self.clock.minute != clock.minute || self.clock.date != clock.date {
                     effects.redraw("bar");
                     effects.redraw("widgets");
@@ -1508,10 +1535,25 @@ impl Component for Desktop {
                 effects.delegate(|child| self.media.update(message, child), Message::Media);
                 self.panel_opened(Panel::Media, was_open, effects);
             }
-            Message::Weather(result) => {
-                self.weather = result.ok();
-                effects.redraw("bar");
-                effects.redraw("widgets");
+            Message::Weather(message) => {
+                let was_open = self.weather.open();
+                let mut intent = None;
+                effects.delegate(
+                    |child| intent = self.weather.update(message, child),
+                    Message::Weather,
+                );
+                match intent {
+                    Some(crate::weather::Intent::Save(preferences)) if self.settings_writable => {
+                        self.settings.weather = Some(preferences);
+                        self.save(effects);
+                    }
+                    Some(crate::weather::Intent::RetrySave) => self.update(
+                        Message::Persistence(crate::persistence::Message::Retry),
+                        effects,
+                    ),
+                    _ => (),
+                }
+                self.panel_opened(Panel::Weather, was_open, effects);
             }
             Message::Launcher(message) => {
                 self.update_launcher(message, effects);
@@ -1570,6 +1612,7 @@ impl Component for Desktop {
                         |child| self.persistence.update(message, child),
                         Message::Persistence,
                     );
+                    effects.redraw("weather-controls");
                     effects.redraw("live-wallpaper");
                 }
             }
@@ -1781,6 +1824,15 @@ impl api::Application for Desktop {
                 DomainError::Unavailable(failure.to_string()),
             ))));
         }
+        if let Some(generation) = failure
+            .source
+            .strip_prefix("subscription weather:")
+            .and_then(|value| value.parse().ok())
+        {
+            return Some(Message::Weather(crate::weather::Message::WorkerFailed(
+                generation,
+            )));
+        }
         if let Some(revision) = failure
             .source
             .strip_prefix("subscription live-wallpaper:")
@@ -1837,6 +1889,29 @@ impl api::Application for Desktop {
     }
     fn surfaces(&self) -> Vec<SurfaceSpec> {
         let mut surfaces = vec![
+            SurfaceSpec {
+                id: "weather-controls",
+                instance: None,
+                output: None,
+                layer: Layer::Overlay,
+                anchor: Anchor::Fill,
+                margins: Default::default(),
+                redraw_group: None,
+                width: 0,
+                height: 0,
+                exclusive_zone: -1,
+                keyboard: if self.weather.open() {
+                    Keyboard::Exclusive
+                } else {
+                    Keyboard::None
+                },
+                visible: self.weather.visible(),
+                pointer_input: if self.weather.open() {
+                    PointerInput::All
+                } else {
+                    PointerInput::None
+                },
+            },
             SurfaceSpec {
                 id: "live-wallpaper",
                 instance: None,
@@ -2185,7 +2260,6 @@ impl api::Application for Desktop {
         let apps = self.adapters.apps.clone();
         let clock = self.adapters.clock.clone();
         let system = self.adapters.system.clone();
-        let weather = self.adapters.weather.clone();
         let notifications = self.adapters.notifications.clone();
         let audio = self.adapters.audio.clone();
         let network = self.adapters.network.clone();
@@ -2255,10 +2329,13 @@ impl api::Application for Desktop {
             Subscription::every("system", Duration::from_secs(5), move || {
                 Message::System(system.sample())
             }),
-            Subscription::every("weather", Duration::from_secs(15 * 60), move || {
-                Message::Weather(weather.snapshot())
-            }),
         ];
+        s.extend(
+            self.weather
+                .subscriptions()
+                .into_iter()
+                .map(|subscription| subscription.map(Message::Weather)),
+        );
         s.extend(
             self.media
                 .subscriptions()
@@ -2355,6 +2432,20 @@ impl api::Application for Desktop {
     }
     fn event(&self, event: Event) -> Option<Message> {
         match event {
+            Event::FrameSubmitted {
+                surface: "weather-controls",
+                now,
+                ..
+            } if !self.weather.open() => {
+                Some(Message::Weather(crate::weather::Message::Frame(now)))
+            }
+            Event::Key {
+                surface: "weather-controls",
+                key: Key::Escape,
+            }
+            | Event::Outside {
+                surface: "weather-controls",
+            } => Some(Message::Weather(crate::weather::Message::Close)),
             Event::Key {
                 surface: "media-controls",
                 key: Key::Escape,
@@ -2563,6 +2654,16 @@ impl api::Application for Desktop {
                 .launcher
                 .action_message(value)
                 .map(|message| Some(Message::Launcher(message)));
+        }
+        if let Some(command) = command.strip_prefix("weather ") {
+            let message = match command {
+                "open" => crate::weather::Message::Open,
+                "close" => crate::weather::Message::Close,
+                "refresh" => crate::weather::Message::Refresh,
+                "off" => crate::weather::Message::Disable,
+                _ => return Err("Use weather open|close|refresh|off".into()),
+            };
+            return Ok(Some(Message::Weather(message)));
         }
         if let Some(command) = command.strip_prefix("media ") {
             return self
@@ -2870,6 +2971,7 @@ impl api::Application for Desktop {
         value["catalog"] = self.catalog.inspect();
         value["application_actions"] = self.launcher.actions_inspect();
         value["dock"] = self.dock.inspect();
+        value["weather"] = self.weather.inspect();
         value["widget_sizes"] = serde_json::json!(self.active_widget_layout().widget_sizes);
         value["widgets_editing"] = serde_json::json!(self.active_widgets().editing());
         value["named_monitor_hosts"] = serde_json::json!(!self.monitors.legacy());
@@ -2897,7 +2999,8 @@ impl api::Application for Desktop {
         }
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
-        (surface == "live-wallpaper" && self.live_wallpaper.motion.active(now))
+        (surface == "weather-controls" && self.weather.animating(now))
+            || (surface == "live-wallpaper" && self.live_wallpaper.motion.active(now))
             || (surface == "notifications" && self.notifications.animating(now))
             || (surface == "audio" && self.audio.animating(now))
             || (surface == "media-controls" && self.media.animating(now))

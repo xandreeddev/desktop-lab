@@ -26,6 +26,7 @@ mod tray;
 mod views;
 mod wallpaper_browser;
 mod wallpaper_selection;
+mod weather;
 mod widgets;
 mod work;
 mod workspaces;

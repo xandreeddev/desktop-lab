@@ -628,6 +628,11 @@ pub mod component {
         pub const GAP: f32 = 8.0;
         pub const INSET: f32 = 12.0;
     }
+    pub mod weather_panel {
+        pub const WIDTH: f32 = 480.0;
+        pub const HEIGHT: f32 = 640.0;
+        pub const TEXT_LINES: f32 = 3.0;
+    }
 }
 pub mod icon {
     pub const TINY: f32 = 16.0;

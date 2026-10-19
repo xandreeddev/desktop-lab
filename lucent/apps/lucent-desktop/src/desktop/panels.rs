@@ -8,6 +8,7 @@ pub(super) enum Panel {
     Launcher,
     Audio,
     Media,
+    Weather,
     Network,
     Bluetooth,
     Power,
@@ -15,10 +16,11 @@ pub(super) enum Panel {
     LiveWallpaper,
     Notifications,
 }
-const PANELS: [Panel; 9] = [
+const PANELS: [Panel; 10] = [
     Panel::Launcher,
     Panel::Audio,
     Panel::Media,
+    Panel::Weather,
     Panel::Network,
     Panel::Bluetooth,
     Panel::Power,
@@ -33,6 +35,7 @@ impl Panel {
             Self::Launcher => "dock",
             Self::Audio => "audio",
             Self::Media => "media-controls",
+            Self::Weather => "weather-controls",
             Self::Network => "network",
             Self::Bluetooth => "bluetooth",
             Self::Power => "power",
@@ -49,6 +52,7 @@ impl Desktop {
             Panel::Launcher => self.launcher.open(),
             Panel::Audio => self.audio.open(),
             Panel::Media => self.media.open(),
+            Panel::Weather => self.weather.open(),
             Panel::Network => self.network.open(),
             Panel::Bluetooth => self.bluetooth.open(),
             Panel::Power => self.power.open(),
@@ -75,6 +79,12 @@ impl Desktop {
                 Panel::LiveWallpaper => {
                     self.update_live_wallpaper(crate::live_wallpaper::Message::Close, effects)
                 }
+                Panel::Weather => effects.delegate(
+                    |child| {
+                        self.weather.update(crate::weather::Message::Close, child);
+                    },
+                    Message::Weather,
+                ),
                 Panel::Media => effects.delegate(
                     |e| self.media.update(crate::media::Message::Close, e),
                     Message::Media,
@@ -176,6 +186,7 @@ mod tests {
             }
             Panel::Audio => Message::Audio(crate::audio::Message::Open),
             Panel::Media => Message::Media(crate::media::Message::Open),
+            Panel::Weather => Message::Weather(crate::weather::Message::Open),
             Panel::Network => Message::Network(crate::network::Message::Open),
             Panel::Bluetooth => Message::Bluetooth(crate::bluetooth::Message::Open),
             Panel::Power => Message::Power(crate::power::Message::Open),
@@ -201,6 +212,84 @@ mod tests {
             density: lucent_api::Density::ONE,
         }
     }
+    #[test]
+    fn weather_controls_and_widget_have_distinct_routes_with_or_without_named_outputs() {
+        use lucent_api::{DisplayOutput, OutputName};
+        use std::collections::BTreeSet;
+        for named in [false, true] {
+            let mut app = Desktop::new(crate::test_adapters::adapters());
+            app.settings.layout.visible_widgets = vec!["weather".into()];
+            if named {
+                app.update(
+                    Message::Outputs(
+                        ["LEFT", "RIGHT"]
+                            .into_iter()
+                            .enumerate()
+                            .map(|(index, name)| DisplayOutput {
+                                global: index as u32 + 1,
+                                name: Some(OutputName::new(name).unwrap()),
+                                logical_size: Some((1920, 1080)),
+                                integer_scale: 1,
+                            })
+                            .collect(),
+                    ),
+                    &mut Effects::default(),
+                );
+            }
+            app.update(open(Panel::Weather), &mut Effects::default());
+            let specs = app.surfaces();
+            let addresses: BTreeSet<_> = specs.iter().map(|spec| spec.address()).collect();
+            assert_eq!(
+                addresses.len(),
+                specs.len(),
+                "duplicate native role, named={named}"
+            );
+            let controls = specs
+                .iter()
+                .find(|spec| spec.id == "weather-controls")
+                .unwrap();
+            assert!(controls.visible);
+            assert_eq!(controls.keyboard, Keyboard::Exclusive);
+            assert!(controls.instance.is_none());
+            if named {
+                assert_eq!(controls.output.as_ref().unwrap().as_str(), "LEFT");
+            }
+            let control_tree = app.view(&context("weather-controls"));
+            assert!(contains(&control_tree, "weather-scroll"));
+            assert!(!contains(&control_tree, "weather-details"));
+            let widgets: Vec<_> = specs.iter().filter(|spec| spec.id == "weather").collect();
+            assert_eq!(widgets.len(), if named { 2 } else { 1 });
+            for widget in widgets {
+                let mut cx = context("weather");
+                cx.instance = widget.instance.clone();
+                cx.width = widget.width as f32;
+                cx.height = widget.height as f32;
+                let tree = app.view(&cx);
+                assert!(
+                    contains(&tree, "weather-details"),
+                    "widget routed to panel: {:?}",
+                    widget.address()
+                );
+                assert!(!contains(&tree, "weather-scroll"));
+                // Escape from a widget is not a controls-panel dismissal.
+                assert!(
+                    app.event(Event::Key {
+                        surface: "weather",
+                        key: lucent_api::Key::Escape
+                    })
+                    .is_none()
+                );
+            }
+            assert!(matches!(
+                app.event(Event::Key {
+                    surface: "weather-controls",
+                    key: lucent_api::Key::Escape
+                }),
+                Some(Message::Weather(crate::weather::Message::Close))
+            ));
+        }
+    }
+
     #[test]
     fn bar_controls_keep_their_geometry_and_messages_in_every_panel_host() {
         use lucent_ui::{Interaction, Layout};

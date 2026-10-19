@@ -154,9 +154,7 @@ A running timer uses a deadline and catches up after delayed callbacks; it is
 not persisted across a restart.
 
 Place wallpapers in `~/Pictures/Wallpapers` or `~/.config/lucent/wallpapers`.
-Weather is optional: `~/.config/lucent/weather.json` accepts numeric `latitude`
-and `longitude`; conditions come from Open-Meteo every 15 minutes. No IP lookup
-is performed and personal location is excluded from this repository.
+Weather source now adds **Weather and location** in Commands and the weather widget: apply a manual label/coordinates and °C/°F, then inspect current conditions and three daily forecasts. Requests run every fifteen minutes or on explicit refresh; failures retain same-location last-good data. Turn off persists disabled authority. Legacy `weather.json` is imported only while saved weather preferences are absent. No IP/GPS lookup or persistent offline cache is performed. New Weather compilation, rendered and native acceptance remains pending; see [weather.md](../docs/weather.md).
 
 ```sh
 lucent-cli launcher toggle  # also open / close

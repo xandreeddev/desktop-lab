@@ -500,6 +500,9 @@
   --component-popover-radius: var(--radius-panel);
   --component-popover-gap: var(--space-sm);
   --component-popover-inset: var(--space-md);
+  --component-weather-panel-width: var(--component-network-width);
+  --component-weather-panel-height: var(--component-network-height);
+  --component-weather-panel-text-lines: var(--component-network-status-lines);
   --icon-tiny: 16px;
   --icon-small: 17px;
   --icon-compact: 18px;

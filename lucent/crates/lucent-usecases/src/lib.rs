@@ -140,6 +140,9 @@ pub fn ensure_monitor_layout(settings: &mut DesktopSettings, id: &MonitorId) -> 
 }
 pub fn validate_settings(settings: &DesktopSettings) -> Result<()> {
     validate_notes(&settings.notes)?;
+    if let Some(weather) = &settings.weather {
+        weather.validate()?;
+    }
     let live = &settings.live_wallpapers;
     if live.monitors.values().filter(|s| s.enabled).count()
         + usize::from(live.default.as_ref().is_some_and(|s| s.enabled))

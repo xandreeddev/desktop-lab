@@ -14,6 +14,7 @@ pub use settings::JsonSettings;
 pub mod tray;
 pub mod video;
 pub mod wallpapers;
+pub mod weather;
 use chrono::{Datelike, Timelike};
 use lucent_domain::*;
 use std::{
@@ -203,54 +204,6 @@ impl SystemProbe {
             memory_total_mib: total,
         })
     }
-}
-pub fn weather() -> Result<WeatherSnapshot> {
-    let path = config_directory().join("weather.json");
-    let bytes = fs::read(path).map_err(|_| {
-        DomainError::Unavailable("Choose a weather location in configuration".into())
-    })?;
-    let config: serde_json::Value =
-        serde_json::from_slice(&bytes).map_err(|e| DomainError::Invalid(e.to_string()))?;
-    let lat = config["latitude"]
-        .as_f64()
-        .filter(|v| v.abs() <= 90.)
-        .ok_or_else(|| DomainError::Invalid("Invalid latitude".into()))?;
-    let lon = config["longitude"]
-        .as_f64()
-        .filter(|v| v.abs() <= 180.)
-        .ok_or_else(|| DomainError::Invalid("Invalid longitude".into()))?;
-    let url = format!(
-        "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,weather_code"
-    );
-    let body = command("curl", &["-fsSL", "--max-time", "4", &url])?;
-    let value: serde_json::Value =
-        serde_json::from_str(&body).map_err(|e| DomainError::Failed(e.to_string()))?;
-    let current = &value["current"];
-    let code = current["weather_code"]
-        .as_u64()
-        .ok_or_else(|| DomainError::Failed("Weather response missing current conditions".into()))?
-        as u32;
-    let temperature = current["temperature_2m"]
-        .as_f64()
-        .ok_or_else(|| DomainError::Failed("Weather response missing temperature".into()))?
-        as f32;
-    let description = match code {
-        0 => "Clear sky",
-        1 | 2 => "Partly cloudy",
-        3 => "Overcast",
-        45 | 48 => "Fog",
-        51..=67 => "Rain",
-        71..=77 => "Snow",
-        80..=82 => "Showers",
-        85 | 86 => "Snow showers",
-        95..=99 => "Thunderstorm",
-        _ => "Cloudy",
-    };
-    Ok(WeatherSnapshot {
-        temperature,
-        description: description.into(),
-        code,
-    })
 }
 pub fn wallpapers() -> Vec<Wallpaper> {
     let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());

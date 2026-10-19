@@ -1813,22 +1813,120 @@
         "The source-pinned desktop/CLI deployment verifies the running binary, readiness and 36.531 seconds of stable supervision while preserving the existing supervisor/mixed kill policy, settings bytes and wallpaper. No rollback is needed.",
         "Production bar/dock pointer checks and four reviewed static captures pass on one 1920x1080 1x output/current palette. A bar reservation of 48 logical pixels and buffer height of 144 are observed; label hits/focus stay unchanged, labels retire on leave, the empty dock hint band produces native pointer leave and each two-second settled sample adds zero submissions.",
         "The pointer workload preserves exact cursor/dock state, settings bytes/inode, wallpaper/source/theme artifacts, initially empty clipboard/history/helper, UI state, monitor/workspace and the pinned running process. No preference, clipboard offer, lifecycle or monitor mutations are part of that acceptance helper.",
-        "Final evidence documentation at d3f9b53912e73d484ba4f4a63ce806cdae7ac56c passes Astro check with zero diagnostics and both root/Pages builds: 13 pages and 489 links/assets each."
+        "Final evidence documentation at d3f9b53912e73d484ba4f4a63ce806cdae7ac56c passes Astro check with zero diagnostics and both root/Pages builds: 13 pages and 489 links/assets each.",
+        "PR77 final d239eb77e002835d64e7391a6bcf243f743e3f3a has all six SUCCESS checks and CLEAN merge state; normal merge f57d709c23f48da0747d2c80b97c43aef0d54ccc and Pages39222213152 pass. Public library HTTP200 and current-main LAN preview on port4321 are verified. These are delivery receipts, not new native or resource evidence."
       ],
       "pending": [
         "RPC sampling misses the early dwell window and visible-scene frame progression. Precise dwell/fade timing, animation smoothness and scanout are not established.",
         "Native generic-popover focus/keyboard/outside-dismiss/clipboard acceptance and actual bar native hint-band click-through.",
         "Current CPU/RSS and sustained frame pacing, hardware GPU, fractional/multi-output/hotplug and broader launcher/tray behavior.",
-        "Shaping/bidi/font fallback/IME remain open; accessibility remains deferred.",
-        "Final published-head CI, authorized merge and actual GitHub Pages publication."
+        "Shaping/bidi/font fallback/IME remain open; accessibility remains deferred."
       ],
       "validation_sources": {
         "strict_checks": "8b2956ed8e9eb737da14e153ec31767b1d556e95",
         "runtime_binary_visual_and_native_tooltips": "28bdf070bdd3a377757dea6405f193aca28edfe5"
       },
       "delivery": {
-        "status": "pending_final_head_checks_and_merge",
-        "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/77"
+        "status": "merged_and_pages_published",
+        "pull_request": "https://github.com/xandreeddev/desktop-lab/pull/77",
+        "final_head": "d239eb77e002835d64e7391a6bcf243f743e3f3a",
+        "final_head_ci": {
+          "status": "passed",
+          "completed_successful_checks": 6,
+          "merge_state_before_merge": "CLEAN"
+        },
+        "merge_commit": "f57d709c23f48da0747d2c80b97c43aef0d54ccc",
+        "merge_method": "normal_merge",
+        "merged_at": "2026-10-19T08:21:39Z",
+        "github_pages_publication": "passed",
+        "github_pages_run": {
+          "status": "success",
+          "run_id": 39222213152,
+          "run_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/39222213152",
+          "source_commit": "f57d709c23f48da0747d2c80b97c43aef0d54ccc",
+          "library_http_status": 200
+        },
+        "public_library_http_status": 200,
+        "lan_docs": {
+          "status": "root_verified_live_current_main",
+          "private_host_or_lan_address_published": false,
+          "service": "lucent-docs-main-preview.service",
+          "port": 4321,
+          "source": "root_accepted_main"
+        },
+        "scope": "PR77 delivery only. Original validation, native tooltip/static scope and pending timing/resource/popover limits retain their own source revisions; this does not publish Weather."
+      }
+    },
+    {
+      "milestone": "native-weather-current-forecast-and-configuration",
+      "status": "local_and_scoped_native_verified_current_animated_workload_rss_target_unmet",
+      "base_source": "6ec372e6ebf",
+      "scope": [
+        "Checked manual coordinates, location labels, Celsius/Fahrenheit preferences and provider-neutral current/three-day values",
+        "Bounded read-only legacy import, response validation, deadline/cancellation and coordinate-free process arguments/errors",
+        "Native Weather child, root-only preference saves, same-location last-good state, opaque generations and coalesced refresh",
+        "Explicit weather widget/Commands actions; center clock/weather bar remains passive; generated token recipes and original monochrome weather artwork"
+      ],
+      "written_checks": [
+        "Domain checked values/date/temperature cases",
+        "Adapter malformed units/arrays/overflow and bounded regular legacy-file cases",
+        "Client last-good/recovery/coalescing/stale result/disabled precedence/form/clipboard cases",
+        "Preference roundtrip/invalid-file preservation",
+        "Fourteen new visual scenarios across both reference themes at 1x/2x",
+        "Legacy/named-output native role routing and transient input redraw isolation",
+        "Owned local-file curl process isolates ambient output/trace configuration; freezing drizzle/rain mapping"
+      ],
+      "pending": [
+        "Native form edits/selection/scroll/clipboard transfer and Apply/off/units/reload/invalid-form preference mutations.",
+        "Provider failure/retry, location-generation/stale/cache/reconnect and broader interoperability acceptance; one successful configured production fetch is observed.",
+        "RSS optimization to the300MiB target, frame pacing/animation quality, native multi-output/hardware, exact final-head CI/merge/publication. A current120-second animated-workload resource sample is recorded; it is not a matched comparison."
+      ],
+      "limitations": [
+        "One in-memory last-good report; no disk offline cache",
+        "Manual coordinates only; no automatic location or city search",
+        "Provider model conditions and fixed response timezone offset",
+        "Existing shaping/IME/accessibility scope remains separately pending/deferred"
+      ],
+      "executed_source_checks": [
+        "Cached rustfmt parsed/formatted 25 scoped Rust files without compilation",
+        "Python suite: 104 tests passed; two modified Python files also parsed with ast",
+        "Generated design token check: 557 tokens verified; git diff --check passed",
+        "Original 24 requirement IDs/statuses remain unchanged",
+        "Review follow-up: cached rustfmt parsed/formatted eight scoped Rust files; Python 104/token557/diff checks repeated successfully",
+        "Owned local-file curl isolation and negative control passed using extracted command arguments; no HTTP request or HOME mutation",
+        "Overlay integration: cached rustfmt checked 18 integrated Rust files without compilation; Python104, generated576 tokens and staged diff checks passed",
+        "Exact overlay token union, async-executor1.13.3 and anchored-overlays lock entry verified; eight API/UI/runtime files match published overlay byte-for-byte",
+        "Strict checks at 2723503b1fdd83b6f9baa8c7c100a4a494df6f9d pass 736 regular Rust tests / 76 ignored, 104 Python checks, 576 generated tokens, formatting, strict all-target Clippy and independent example help.",
+        "All 56 new Weather references in both palettes at 1x/2x are reviewed after rejecting and fixing client widget padding/icon clipping and condition-row alignment. No generic card/framework or tolerance workaround.",
+        "The original full run at ad4b0a07666e648a93f22c99723013599678ae32 performs 768 comparisons and exits 101: 752 passes and 16 specifically reviewed intentional reference failures. After committing only those 16 references, four focused filters pass 16 comparisons at 579c62cb9a78369f2f47a0e51bc6a826d06373c6 with source code unchanged. This is 752+16 cohort coverage, not one final full local pass; no comparison updates references.",
+        "Existing Commands references reflect a ninth command and bounded whole-row viewport. Right-monitor changes are exactly confined to Weather RGB contents with identical alpha; widget-drag-grid additionally discloses small calendar antialias coverage and subtle shadow raster variation, with geometry/grid/selection visually unchanged. Tolerances remain unchanged.",
+        "Actual migration transaction literals pass 7 cases / 35 operations in temporary owned fake homes: capture/admission/stable observation/exact inode rollback and rejection of independent edits or unsafe restoration. Fake external artifacts and quiescence mean no service, VM or native acceptance.",
+        "The source 579c62cb release and guarded desktop/CLI deployment pass with 37.43 seconds of stable supervision and the accepted supervisor / effective KillMode=mixed unchanged. Only expected Weather preference semantics migrate; desktop settings bytes intentionally change. Legacy bytes/inode, all non-Weather preference semantics, wallpaper/source/exports and initially empty clipboard/history remain preserved. No VM rollback was needed or exercised; fake-home 7/35 rollback evidence stays separate.",
+        "Production native helper passes center-bar passivity, CLI role/inert padding, direct exclusive Audio-to-Weather switch, Escape, actual widget action, Tab field focus and outside close at source 579c62cb / desktop da753b. One still-present close sample has pointer and keyboard none; this is input-release evidence, not fade timing. Invalid Apply is explicitly skipped because no form writes are allowed.",
+        "The native workload preserves exact settings bytes/inode, legacy/media/theme artifacts, initially empty clipboard/history, cursor/dock state, UI, monitor/workspace and the pinned process. Four private original-resolution captures are reviewed for readable content, forecast rows, padding, field focus and closed UI. No location-bearing capture or path is published.",
+        "One read-only production observation after the normal migrated-location subscription reports configured=true, busy=false, has_last_good=true, stale=false, failed=false, open=false and Celsius. Current conditions and three forecast rows appear in the private capture set. No native Apply/refresh/off/units, failure/retry or broad provider-interoperability claim.",
+        "A 120.001-second / 121-sample same-process animated-wallpaper observation at579c62cb / da753b records process RSS424.12MiB mean /424.15MiB maximum and process CPU148.649% of one logical core (service cgroup148.718%). Software Vulkan llvmpipe,4vCPU and one1920x1080 output play one3840x2160 source fitted1920x1080 with8,294,400 retained frame bytes. The300MiB RSS target is NOT met.",
+        "The resource sampler preserves settings/wallpaper/output/workspace/process without UI/service/idle-marker writes or a heavy host job. Dock frame delta is0; other counters include inspector-boundary overhead and prove no FPS/scanout/pacing. This is no matched old/new or Weather-specific cost comparison; prior Notes/performance evidence remains unchanged.",
+        "Code checkpoint579c62cb has all six CI checks SUCCESS and CLEAN merge state while still draft; this is not the final documentation head. Current delivery is tracked in PR78.",
+        "Documentation source f4dd34b2c062411dee2d1f28208aca2cf0000b09 passes Astro with zero diagnostics, root/Pages builds and link checks at13pages/489links each. Final-head CI and delivery stay separate; no Rust or Astro source changes in this receipt update."
+      ],
+      "integration": {
+        "weather_reviewed_source": "e6d8545aca66e4ff7522ea59ce6bbbef1ebe6195",
+        "published_overlay_source": "28bdf070bdd3a377757dea6405f193aca28edfe5",
+        "status": "local_strict_visual_cohorts_guarded_vm_migration_and_scoped_native_acceptance_passed",
+        "scope": "Published generic overlay API/runtime/recipes and reviewed references merged; exact published token set plus three Weather aliases",
+        "source_reviews": "Independent domain/adapter and client/lifecycle source review, strict checks, reviewed visual cohort coverage, guarded VM migration and scoped native opening/focus acceptance pass at recorded sources. Broader native form/provider/failure/resource acceptance remains open."
+      },
+      "source_commit": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+      "report": "reports/measurements/lucent-weather.json",
+      "validation_sources": {
+        "strict_checks_and_new_reference_review": "2723503b1fdd83b6f9baa8c7c100a4a494df6f9d",
+        "original_full_visual_run": "ad4b0a07666e648a93f22c99723013599678ae32",
+        "reviewed_reference_commit_and_focused_passes": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+        "release_binary_and_guarded_vm_migration": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+        "scoped_native_and_single_provider_observation": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+        "current_animated_workload_resources": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+        "documentation_builds": "f4dd34b2c062411dee2d1f28208aca2cf0000b09"
       }
     }
   ],

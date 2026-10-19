@@ -182,8 +182,9 @@ fn raster_svg(source: &str, size: u32) -> Option<Vec<u8>> {
     Some(pixmap.take())
 }
 
-/// Official Material Symbols Rounded; pinned SVG sources and Apache-2.0 license
-/// are vendored in assets/material. Monochrome tint is supplied by the UI theme.
+/// Bundled monochrome symbols. Pinned Material sources/Apache-2.0 license live
+/// in assets/material; original Lucent weather shapes live in assets/weather.
+/// Monochrome tint is supplied by the UI theme.
 pub fn symbol(name: &str, color: &str) -> Arc<ImageData> {
     let source = match name {
         "pin" => include_str!("../assets/material/pin.svg"),
@@ -207,6 +208,12 @@ pub fn symbol(name: &str, color: &str) -> Arc<ImageData> {
         "bluetooth" => include_str!("../assets/material/bluetooth.svg"),
         "sun" => include_str!("../assets/material/sun.svg"),
         "cloud" => include_str!("../assets/material/cloud.svg"),
+        "weather-night" => include_str!("../assets/weather/night.svg"),
+        "weather-rain" => include_str!("../assets/weather/rain.svg"),
+        "weather-snow" => include_str!("../assets/weather/snow.svg"),
+        "weather-storm" => include_str!("../assets/weather/storm.svg"),
+        "weather-fog" => include_str!("../assets/weather/fog.svg"),
+
         "notifications" => include_str!("../assets/material/notifications.svg"),
         "lock" => include_str!("../assets/material/lock.svg"),
         "command" => include_str!("../assets/material/command.svg"),
