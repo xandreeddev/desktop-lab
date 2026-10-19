@@ -3,8 +3,9 @@
 
 Requires an unlocked single-output Lucent VM, closed panels, writable settings,
 and the bundled Moonlit/Amber samples already in ~/Videos/Wallpapers. Installs
-nothing. QMP clicks Wallpapers -> Live and each discovered library row; native
-background submissions establish playback after the poster transition settles.
+nothing. QMP opens Wallpapers -> Live, selects each discovered sample card
+without saving, then explicitly clicks Apply. Native background submissions
+establish playback after the poster transition settles.
 Both imports must default to their source frame rate. Native Tab-revealed FPS
 controls and the rate CLI change only the default profile's frame policy; an
 explicit source policy and advancing frames must survive one service restart.
@@ -178,6 +179,25 @@ def reveal(name, identifier):
     raise h['CheckFailure']('native_library_keyboard_reveal')
 
 
+def select_library_card(name, monitor, index):
+    # The carousel mounts only nearby cards and Open retains its old selection.
+    # Reach the discovered sample with actual controls before clicking its card.
+    for _ in range(33):
+        current = client()['live_wallpaper']['selection']
+        if current == index:
+            identifier = 'live-library-' + str(index)
+            reveal(name, identifier)
+            click(name, monitor, 'live-wallpaper', identifier)
+            return
+        identifier = 'live-next' if current < index else 'live-previous'
+        reveal(name, identifier)
+        click(name, monitor, 'live-wallpaper', identifier)
+        expected = current + (1 if current < index else -1)
+        eventually(lambda: client()['live_wallpaper']['selection'] == expected,
+                   'native_library_browse_step')
+    raise h['CheckFailure']('native_library_sample_not_reachable')
+
+
 def open_library(name, monitor, count):
     cli('launcher', 'open')
     eventually(lambda: client()['launcher'] and find_surface(inspect(), 'dock')['frames'] > 0,
@@ -328,9 +348,20 @@ def main():
         for index, sample in enumerate(library['samples']):
             phase = 'native_' + sample['filename'].removesuffix('.mp4')
             open_library(name, monitor, library['count'])
-            identifier = 'live-library-' + str(sample['index'])
-            reveal(name, identifier)
-            click(name, monitor, 'live-wallpaper', identifier)
+            before_selection = h['settings_digest']()
+            before_wallpaper = client()['wallpaper']
+            select_library_card(name, monitor, sample['index'])
+            eventually(lambda: client()['live_wallpaper']['selection'] == sample['index']
+                       and client()['live_wallpaper']['preview']['frame_size'] is not None
+                       and not client()['live_wallpaper']['preview']['loading']
+                       and not client()['live_wallpaper']['preview']['failed']
+                       and not client()['live_wallpaper']['importing'],
+                       'native_sample_read_only_preview', timeout=45)
+            require(h['saved']() and h['settings_digest']() == before_selection
+                    and client()['wallpaper'] == before_wallpaper,
+                    'native_card_selection_preserves_preferences_and_wallpaper')
+            reveal(name, 'live-apply')
+            click(name, monitor, 'live-wallpaper', 'live-apply')
             eventually(lambda: not client()['live_wallpaper']['importing'] and h['saved']()
                        and (h['read_settings']()['live_wallpapers']['default'] or {})
                        .get('asset', {}).get('source', {}).get('path') == sample['path'],
@@ -360,6 +391,8 @@ def main():
             require(h['saved']() and h['read_settings']()['live_wallpapers']['default']['asset'] == asset,
                     'sample_saved_profile_stays_selected')
             report['samples'].append({'filename': sample['filename'], 'library_index': sample['index'],
+                                      'selection_preserved_preferences_and_wallpaper': True,
+                                      'explicit_apply_saved': True,
                                       'saved_source_matches': True, 'producer_running': True,
                                       'saved_frame_rate': 'source',
                                       'background_frames_advanced': last - first})
@@ -368,7 +401,8 @@ def main():
                 source_rate_acceptance(name, monitor, library['count'], report)
         report['checks']['native_wallpapers_live_route_and_library'] = True
         report['checks']['native_first_submission_then_diagonal_cut_settle'] = True
-        report['checks']['both_discovered_sample_rows_import_and_save'] = True
+        report['checks']['both_sample_card_selections_preserve_preferences_and_wallpaper'] = True
+        report['checks']['both_discovered_samples_explicitly_apply_and_save'] = True
         report['checks']['both_new_sample_profiles_default_to_source_frame_rate'] = True
         report['checks']['both_sample_producers_submit_advancing_background_frames'] = True
         report['passed'] = len(report['samples']) == 2 and all(report['checks'].values())
