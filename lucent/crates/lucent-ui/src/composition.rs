@@ -61,6 +61,85 @@ pub(super) fn paint<M: Clone>(
         }
         return;
     };
+    let projected =
+        project(element, hit, font, interaction, id).expect("live composition projection");
+    let (projected, projected_hit) = projected;
+    let range = hit.selection.range(&hit.value);
+    let show_cursor = focused && !(composition.begin < 0 && composition.end < 0);
+    if projected_hit.is_multiline() {
+        text_area::paint(
+            scene,
+            &projected,
+            &projected_hit,
+            clip.clone(),
+            alpha,
+            show_cursor,
+            font,
+        )
+    } else {
+        text_input::paint(
+            scene,
+            &projected,
+            &projected_hit,
+            clip.clone(),
+            alpha,
+            show_cursor,
+            font,
+        )
+    }
+    let preedit = range.start..range.start + composition.value.len();
+    let mut underline = |a: f32, b: f32, y: f32, height: f32| {
+        scene.paint.push(Paint::Shape {
+            rect: Rect::new(
+                a,
+                y + height - element.style.caret_width,
+                b - a,
+                element.style.caret_width,
+            ),
+            clip: clip.clone(),
+            color: element
+                .style
+                .foreground
+                .alpha(element.style.foreground.3 * alpha),
+            radius: 0.,
+        })
+    };
+    if let Some(area) = &projected_hit.area {
+        for (index, row) in area.rows.iter().enumerate() {
+            for (r, a, b) in row.segments.iter() {
+                if r.start < preedit.end && r.end > preedit.start {
+                    underline(
+                        hit.inner.x + a.min(*b),
+                        hit.inner.x + a.max(*b),
+                        hit.inner.y + index as f32 * area.line_height - hit.scroll,
+                        area.line_height,
+                    );
+                }
+            }
+        }
+    } else {
+        let shape = text::shape(font, &display_of(&projected), element.style.font_size);
+        for (a, b) in shape.selection(preedit) {
+            underline(
+                hit.inner.x + a - projected_hit.scroll,
+                hit.inner.x + b - projected_hit.scroll,
+                hit.inner.y,
+                hit.inner.h,
+            );
+        }
+    }
+}
+pub(super) fn project<M: Clone>(
+    element: &Element<M>,
+    hit: &TextHit,
+    font: &text::Font,
+    interaction: &Interaction<M>,
+    id: &str,
+) -> Option<(Element<M>, TextHit)> {
+    let composition = interaction
+        .composition
+        .as_ref()
+        .filter(|composition| composition.id == id && interaction.focus.as_deref() == Some(id))?;
     let mut display = hit.value.to_string();
     let range = hit.selection.range(&display);
     display.replace_range(range.clone(), &composition.value);
@@ -121,74 +200,144 @@ pub(super) fn paint<M: Clone>(
                 None,
             )
         }
-        _ => return,
+        _ => return None,
     };
-    if projected_hit.is_multiline() {
-        text_area::paint(
-            scene,
-            &projected,
-            &projected_hit,
-            clip.clone(),
-            alpha,
-            focused,
-            font,
-        )
-    } else {
-        text_input::paint(
-            scene,
-            &projected,
-            &projected_hit,
-            clip.clone(),
-            alpha,
-            focused,
-            font,
-        )
-    }
-    let preedit = range.start..range.start + composition.value.len();
-    let mut underline = |a: f32, b: f32, y: f32, height: f32| {
-        scene.paint.push(Paint::Shape {
-            rect: Rect::new(
-                a,
-                y + height - element.style.caret_width,
-                b - a,
-                element.style.caret_width,
-            ),
-            clip: clip.clone(),
-            color: element
-                .style
-                .foreground
-                .alpha(element.style.foreground.3 * alpha),
-            radius: 0.,
-        })
-    };
-    if let Some(area) = &projected_hit.area {
-        for (index, row) in area.rows.iter().enumerate() {
-            for (r, a, b) in row.segments.iter() {
-                if r.start < preedit.end && r.end > preedit.start {
-                    underline(
-                        hit.inner.x + a.min(*b),
-                        hit.inner.x + a.max(*b),
-                        hit.inner.y + index as f32 * area.line_height - hit.scroll,
-                        area.line_height,
-                    );
-                }
-            }
-        }
-    } else {
-        let shape = text::shape(font, &display_of(&projected), element.style.font_size);
-        for (a, b) in shape.selection(preedit) {
-            underline(
-                hit.inner.x + a - projected_hit.scroll,
-                hit.inner.x + b - projected_hit.scroll,
-                hit.inner.y,
-                hit.inner.h,
-            );
-        }
-    }
+    Some((projected, projected_hit))
 }
+
 fn display_of<M>(element: &Element<M>) -> String {
     match &element.kind {
         Kind::TextInput { value, .. } | Kind::TextArea { value, .. } => value.clone(),
         _ => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn layout() -> Layout {
+        Layout::new(Arc::new(vec![
+            text::Font::from_bytes(
+                include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf").as_slice(),
+                Default::default(),
+            )
+            .unwrap(),
+        ]))
+    }
+    #[test]
+    fn preedit_is_projected_and_canonical_hit_and_client_value_stay_unchanged() {
+        let value = "a日b".to_string();
+        let mut selection = TextSelection::default();
+        let mut owned = value.clone();
+        selection
+            .apply(
+                &mut owned,
+                TextEdit::Select {
+                    anchor: 1,
+                    caret: 4,
+                },
+                32,
+            )
+            .unwrap();
+        let tree = Element::text_input(&value, selection, "", |edit| edit)
+            .id("field")
+            .autofocus()
+            .size(240., 40.)
+            .font(20.);
+        let mut input = Interaction::default();
+        let layout = layout();
+        let scene = layout.build(&tree, 240., 40., &input, 0.);
+        input.synchronize(&scene);
+        assert!(input.set_preedit(&scene, Some(("語".into(), 3, 3))));
+        let projected = layout.build(&tree, 240., 40., &input, 0.);
+        assert_eq!(value, "a日b");
+        assert_eq!(projected.hits[0].value, value);
+        assert_eq!(
+            projected.hits[0].text.as_ref().unwrap().value.as_ref(),
+            value
+        );
+        assert!(
+            projected
+                .paint
+                .iter()
+                .any(|paint| matches!(paint,Paint::Text {text,..} if text=="a語b"))
+        );
+        assert!(
+            projected.hits[0]
+                .text
+                .as_ref()
+                .unwrap()
+                .composition_cursor
+                .is_some()
+        );
+        assert!(input.set_preedit(&projected, None));
+    }
+    #[test]
+    fn masked_and_unfocused_controls_never_accept_composition() {
+        let layout = layout();
+        let mut input = Interaction::default();
+        let tree = Element::masked_input(7, "", |_edit| TextEdit::Clear)
+            .id("secret")
+            .autofocus()
+            .size(240., 40.);
+        let scene = layout.build(&tree, 240., 40., &input, 0.);
+        input.synchronize(&scene);
+        assert!(!input.set_preedit(&scene, Some(("secret".into(), 6, 6))));
+        assert!(input.composition.is_none());
+        assert!(
+            scene
+                .hits
+                .iter()
+                .all(|hit| hit.text.is_none() && hit.value.is_empty())
+        );
+    }
+    #[test]
+    fn composition_retires_when_focus_moves_or_control_disappears() {
+        let layout = layout();
+        let tree = Element::text_input("abc", TextSelection::default(), "", |edit| edit)
+            .id("field")
+            .autofocus()
+            .size(240., 40.);
+        let mut input = Interaction::default();
+        let scene = layout.build(&tree, 240., 40., &input, 0.);
+        input.synchronize(&scene);
+        input.set_preedit(&scene, Some(("日".into(), 3, 3)));
+        input.focus = Some("other".into());
+        input.synchronize(&scene);
+        assert!(input.composition.is_none());
+        input.focus = Some("field".into());
+        input.set_preedit(&scene, Some(("日".into(), 3, 3)));
+        input.synchronize(&Scene::default());
+        assert!(input.composition.is_none());
+    }
+    #[test]
+    fn multiline_preedit_uses_wrapped_geometry_and_hides_requested_cursor() {
+        let layout = layout();
+        let tree = Element::text_area(
+            "ab",
+            TextSelection::at_end("ab"),
+            "",
+            ScrollSpec::new(0., 20.).unwrap(),
+            |edit| edit,
+            |_| TextEdit::Clear,
+        )
+        .id("area")
+        .autofocus()
+        .size(80., 100.)
+        .font(20.);
+        let mut input = Interaction::default();
+        let scene = layout.build(&tree, 80., 100., &input, 0.);
+        input.synchronize(&scene);
+        input.set_preedit(&scene, Some(("日本語\n語".into(), -1, -1)));
+        let projected = layout.build(&tree, 80., 100., &input, 0.);
+        let text = projected.hits[0].text.as_ref().unwrap();
+        assert_eq!(text.value.as_ref(), "ab");
+        assert!(text.caret_rect().y > text.inner.y);
+        assert!(
+            projected
+                .paint
+                .iter()
+                .any(|paint| matches!(paint,Paint::Text{text,..} if text.contains('日')))
+        );
     }
 }

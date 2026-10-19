@@ -450,7 +450,7 @@ impl Layout {
             });
             child_focus_clips = clips.into();
         }
-        let prepared_text = if let Kind::TextInput {
+        let mut prepared_text = if let Kind::TextInput {
             value, selection, ..
         } = &e.kind
         {
@@ -467,6 +467,17 @@ impl Layout {
         } else {
             prepared_area
         };
+        if let Some(text) = prepared_text.as_mut() {
+            if let Some((_, projected)) = composition::project(
+                e,
+                text,
+                self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
+                interaction,
+                &id,
+            ) {
+                text.composition_cursor = Some(projected.caret_rect());
+            }
+        }
         let interactive = e.click.is_some()
             || e.secondary_click.is_some()
             || e.middle_click.is_some()

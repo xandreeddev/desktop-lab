@@ -34,11 +34,15 @@ impl Font {
         if id == 0 {
             &self.raster
         } else {
-            &fallbacks()[id - 1].raster
+            &fallbacks()[id - 1].font().raster
         }
     }
     fn face(&self, id: usize) -> &Font {
-        if id == 0 { self } else { &fallbacks()[id - 1] }
+        if id == 0 {
+            self
+        } else {
+            fallbacks()[id - 1].font()
+        }
     }
     fn choose(&self, grapheme: &str) -> usize {
         let supports = |font: &Font| {
@@ -51,7 +55,16 @@ impl Font {
         if supports(self) {
             return 0;
         }
-        fallbacks().iter().position(supports).map_or(0, |at| at + 1)
+        fallbacks()
+            .iter()
+            .position(|fallback| {
+                grapheme.chars().all(|c| {
+                    c.is_control()
+                        || matches!(c, '\u{200c}' | '\u{200d}' | '\u{fe0e}' | '\u{fe0f}')
+                        || fallback.tables().glyph_index(c).is_some()
+                })
+            })
+            .map_or(0, |at| at + 1)
     }
 }
 impl Deref for Font {
@@ -60,18 +73,38 @@ impl Deref for Font {
         &self.raster
     }
 }
-fn fallbacks() -> &'static [Font] {
-    static FONTS: OnceLock<Vec<Font>> = OnceLock::new();
-    FONTS.get_or_init(|| {
-        [
-            include_bytes!("../assets/NotoSansArabic-Regular.ttf").as_slice(),
-            include_bytes!("../assets/NotoSansDevanagari-Regular.ttf").as_slice(),
-            include_bytes!("../assets/NotoSansHebrew-Regular.ttf").as_slice(),
-        ]
-        .into_iter()
-        .map(|bytes| Font::from_bytes(bytes, Default::default()).expect("bundled fallback font"))
-        .collect()
-    })
+struct Fallback {
+    bytes: &'static [u8],
+    tables: OnceLock<rustybuzz::Face<'static>>,
+    raster: OnceLock<Font>,
+}
+impl Fallback {
+    const fn new(bytes: &'static [u8]) -> Self {
+        Self {
+            bytes,
+            tables: OnceLock::new(),
+            raster: OnceLock::new(),
+        }
+    }
+    fn tables(&self) -> &rustybuzz::Face<'static> {
+        self.tables.get_or_init(|| {
+            rustybuzz::Face::from_slice(self.bytes, 0).expect("bundled fallback tables")
+        })
+    }
+    fn font(&self) -> &Font {
+        self.raster.get_or_init(|| {
+            Font::from_bytes(self.bytes, Default::default()).expect("bundled fallback rasterizer")
+        })
+    }
+}
+fn fallbacks() -> &'static [Fallback] {
+    static FONTS: [Fallback; 4] = [
+        Fallback::new(include_bytes!("../assets/NotoSansArabic-Regular.ttf")),
+        Fallback::new(include_bytes!("../assets/NotoSansDevanagari-Regular.ttf")),
+        Fallback::new(include_bytes!("../assets/NotoSansHebrew-Regular.ttf")),
+        Fallback::new(include_bytes!("../assets/NotoSansCJK.ttf")),
+    ];
+    &FONTS
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -289,7 +322,15 @@ pub fn shape(font: &Font, line: &str, size: f32) -> ShapedLine {
 }
 pub fn width(font: &Font, text: &str, size: f32) -> f32 {
     text.lines()
-        .map(|line| shape(font, line, size).width)
+        .map(|line| {
+            if line.is_ascii() {
+                glyph_positions(font, line, size)
+                    .last()
+                    .map_or(0., |(c, x)| x + font.metrics(c, size).advance_width)
+            } else {
+                shape(font, line, size).width
+            }
+        })
         .fold(0., f32::max)
 }
 #[derive(Clone, Copy, Debug)]
@@ -365,6 +406,15 @@ mod international_tests {
         assert!(shaped.x(hebrew) > shaped.x(hebrew + "אב".len()));
         assert_eq!(shaped.selection(0..hebrew + "א".len()).len(), 2);
         assert!(shaped.glyphs.iter().all(|g| g.id != 0));
+    }
+    #[test]
+    fn cjk_fallback_covers_full_common_ideographs_and_kana() {
+        let font = font();
+        let value = "日本語 中文 あいうえお アイウエオ 龍 龥";
+        let shaped = shape(&font, value, 20.);
+        assert!(shaped.glyphs.iter().all(|glyph| glyph.id != 0));
+        assert!(shaped.glyphs.iter().any(|glyph| glyph.face == 4));
+        assert!(shaped.width > 0.);
     }
     #[test]
     fn ascii_keeps_exact_legacy_pair_positions_and_advance() {

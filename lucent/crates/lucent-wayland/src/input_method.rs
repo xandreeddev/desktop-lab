@@ -147,13 +147,25 @@ impl<A: Application> State<A> {
         if self.input_method.input.is_none() {
             return;
         }
-        if self.input_method.deferred {
-            return;
-        }
         let target = self.input_method_target();
+        if self.input_method.deferred {
+            if self
+                .input_method
+                .target
+                .as_ref()
+                .zip(target.as_ref())
+                .is_some_and(|(a, b)| {
+                    a.address == b.address && a.element == b.element && a.surface == b.surface
+                })
+            {
+                return;
+            }
+            self.input_method.deferred = false;
+        }
         if target == self.input_method.target && !self.input_method.force {
             return;
         }
+        let from_input_method = self.input_method.force;
         self.input_method.force = false;
         let lifetime_same = self
             .input_method
@@ -198,7 +210,16 @@ impl<A: Application> State<A> {
         }
         let (text, cursor, anchor) = surrounding(&target.value, target.selection);
         input.set_surrounding_text(text, cursor, anchor);
-        input.set_text_change_cause(protocol::ChangeCause::Other);
+        let externally_changed =
+            !from_input_method
+                && self.input_method.target.as_ref().is_none_or(|old| {
+                    old.value != target.value || old.selection != target.selection
+                });
+        input.set_text_change_cause(if externally_changed {
+            protocol::ChangeCause::Other
+        } else {
+            protocol::ChangeCause::InputMethod
+        });
         input.set_content_type(
             if target.multiline {
                 protocol::ContentHint::Multiline

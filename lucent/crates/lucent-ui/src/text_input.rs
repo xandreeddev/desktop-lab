@@ -8,10 +8,14 @@ pub struct TextHit {
     pub scroll: f32,
     pub(super) boundaries: Arc<[(usize, f32)]>,
     pub(super) area: Option<Arc<super::text_area::AreaGeometry>>,
+    pub(super) composition_cursor: Option<Rect>,
 }
 impl TextHit {
     /// Logical cursor bounds for native input-method candidate placement.
     pub fn caret_rect(&self) -> Rect {
+        if let Some(rect) = self.composition_cursor {
+            return rect;
+        }
         if let Some(area) = &self.area {
             let row = &area.rows[area.caret_row];
             let x = row
@@ -120,6 +124,7 @@ pub(super) fn geometry(
         scroll,
         boundaries: boundaries.into(),
         area: None,
+        composition_cursor: None,
     }
 }
 pub(super) fn paint<M>(

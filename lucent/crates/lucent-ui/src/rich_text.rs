@@ -40,16 +40,10 @@ fn add(
 ) {
     let font = font(fonts, spans, span, face);
     if let Some(run) = line.runs.last_mut().filter(|run| run.span == span) {
-        let previous = run.text.chars().next_back();
-        let next = value.chars().next();
-        let kern = previous
-            .zip(next)
-            .and_then(|(a, b)| font.horizontal_kern(a, b, size))
-            .unwrap_or(0.);
-        let advance = text::width(font, value, size) + kern;
+        let previous = run.width;
         run.text.push_str(value);
-        run.width += advance;
-        line.width += advance;
+        run.width = text::width(font, &run.text, size);
+        line.width += run.width - previous;
     } else {
         let width = text::width(font, value, size);
         line.runs.push(Run {
@@ -158,7 +152,14 @@ pub(super) fn flow(
                 .zip(value.chars().next())
                 .and_then(|(a, b)| font.horizontal_kern(a, b, size))
                 .unwrap_or(0.);
-            let advance = text::width(font, value, size) + kern;
+            let advance =
+                if value.is_ascii() && current.runs.last().is_none_or(|run| run.text.is_ascii()) {
+                    text::width(font, value, size) + kern
+                } else if let Some(run) = current.runs.last().filter(|run| run.span == span) {
+                    text::width(font, &format!("{}{value}", run.text), size) - run.width
+                } else {
+                    text::width(font, value, size)
+                };
             if current.width > 0. && current.width + advance > width {
                 if lines.len() == limit {
                     truncated = true;

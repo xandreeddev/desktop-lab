@@ -266,3 +266,27 @@ mod tests {
         assert!(text(&font, "still usable", 14., 1., 8192).is_ok());
     }
 }
+
+#[cfg(test)]
+mod international_raster {
+    use super::*;
+    #[test]
+    fn shaped_fallback_glyphs_keep_logical_advances_at_both_densities() {
+        let font = lucent_ui::text::Font::from_bytes(
+            include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf").as_slice(),
+            Default::default(),
+        )
+        .unwrap();
+        for value in ["سلام", "क्षि", "abc אבג def", "日本語 中文"] {
+            let logical = width(&font, value, 20.);
+            let (one, w, h, x) = text(&font, value, 20., 1., 8192).unwrap();
+            let (two, w2, h2, x2) = text(&font, value, 20., 2., 8192).unwrap();
+            assert!(logical > 0.);
+            assert_eq!((w2, h2), (w * 2, h * 2));
+            assert_eq!(x, x2);
+            assert!(one.iter().any(|a| *a > 0));
+            assert!(two.iter().any(|a| *a > 0));
+            assert!(w as f32 + x >= logical);
+        }
+    }
+}

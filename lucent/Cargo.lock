@@ -1442,6 +1442,8 @@ version = "0.1.0"
 dependencies = [
  "fontdue",
  "lucent-api",
+ "rustybuzz",
+ "unicode-bidi",
 ]
 
 [[package]]

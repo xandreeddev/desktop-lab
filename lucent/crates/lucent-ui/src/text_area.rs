@@ -236,6 +236,7 @@ pub(super) fn geometry(
         inner,
         scroll: spec.offset().min((content_height - inner.h).max(0.)),
         boundaries: Arc::from([]),
+        composition_cursor: None,
         area: Some(Arc::new(AreaGeometry {
             rows: rows.into(),
             line_height,
