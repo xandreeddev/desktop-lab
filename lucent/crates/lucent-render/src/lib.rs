@@ -15,7 +15,9 @@ mod cache;
 mod extent;
 mod presentation;
 mod profiling;
+mod stream_trace;
 pub use profiling::{PaintProfile, RenderProfile, ResourceProfile};
+pub use stream_trace::StreamTrace;
 mod fallback;
 #[cfg(all(test, target_os = "linux"))]
 mod font_resources;
@@ -32,6 +34,7 @@ struct TextureResource {
     height: f32,
     _texture: Texture,
     revision: Cell<u64>,
+    stream_id: Cell<Option<u64>>,
     image_lifetime: RefCell<Option<lucent_api::ImageLifetime>>,
     bytes: u64,
     /// Logical left bearing for text masks; ordinary image resources use zero.
@@ -285,6 +288,7 @@ impl Gpu {
             height: height as f32,
             _texture: texture,
             revision: Cell::new(0),
+            stream_id: Cell::new(None),
             image_lifetime: RefCell::new(None),
             bytes: levels.iter().map(|level| level.pixels.len() as u64).sum(),
             text_origin_x: 0.,
@@ -367,7 +371,8 @@ impl Gpu {
         }
         let texture = self.texture(data.levels(), data.format(), profile, enabled);
         *texture.image_lifetime.borrow_mut() = Some(data.lifetime());
-        if let Some((_, revision)) = streamed {
+        if let Some((id, revision)) = streamed {
+            texture.stream_id.set(Some(id));
             texture.revision.set(revision);
         }
         self.cache
@@ -445,6 +450,8 @@ pub struct Canvas {
     clips: Buffer,
     clip_capacity: usize,
     profiling: bool,
+    stream_tracing: bool,
+    last_stream_trace: Option<StreamTrace>,
     last_profile: Option<PaintProfile>,
 }
 struct PreparedScene {
@@ -510,6 +517,8 @@ impl Canvas {
             clips,
             clip_capacity: 1,
             profiling: false,
+            stream_tracing: false,
+            last_stream_trace: None,
             last_profile: None,
         }
     }
@@ -527,6 +536,7 @@ impl Canvas {
         paint: &'a [Paint],
     ) -> Result<ValidatedScene<'a>, Error> {
         self.last_profile = None;
+        self.last_stream_trace = None;
         let started = profiling::start(self.profiling);
         let limits = self.gpu.device.limits();
         PhysicalExtent::density(width, height, density, limits.max_texture_dimension_2d)?;
@@ -880,6 +890,20 @@ impl Canvas {
         let started = profiling::start(self.profiling);
         // Keep each surface's current scene resident, including while other
         // surfaces redraw. Replacing the scene releases its obsolete references.
+        // Read revisions only after all uploads have finished preparing. Two
+        // draws can share a mutable stream texture; requested revisions are not
+        // necessarily the revisions that its final bindings reference.
+        self.last_stream_trace = self.stream_tracing.then(|| {
+            textures
+                .iter()
+                .filter_map(|texture| {
+                    texture
+                        .stream_id
+                        .get()
+                        .map(|id| (id, texture.revision.get()))
+                })
+                .collect()
+        });
         self.resources = textures;
         self.gpu.cache.borrow_mut().trim(TextureResource::reusable);
         profile.retire = profiling::elapsed(started);
@@ -905,6 +929,7 @@ impl Canvas {
         density: Density,
         paint: &[Paint],
     ) -> Result<Vec<u8>, Error> {
+        self.last_stream_trace = None;
         let limits = self.gpu.device.limits();
         let physical =
             PhysicalExtent::density(width, height, density, limits.max_texture_dimension_2d)?;
@@ -2037,13 +2062,21 @@ impl Renderer {
             self.last_profile = None;
         }
     }
+    /// Disabled by default. Captures only bounded IDs/revisions for bound
+    /// streamed resources, independently of CPU-stage profiling.
+    pub fn enable_stream_tracing(&mut self, enabled: bool) {
+        self.canvas.stream_tracing = enabled;
+        if !enabled {
+            self.canvas.last_stream_trace = None;
+        }
+    }
     pub fn render(
         &mut self,
         width: u32,
         height: u32,
         scale: u32,
         paint: &[Paint],
-        before_present: impl FnOnce(),
+        before_present: impl FnOnce(Option<&StreamTrace>),
     ) -> Result<RenderOutcome, Error> {
         if scale == 0 {
             return Ok(RenderOutcome::RetryAfter(self.recovery.retry()));
@@ -2062,12 +2095,13 @@ impl Renderer {
         height: u32,
         density: Density,
         paint: &[Paint],
-        before_present: impl FnOnce(),
+        before_present: impl FnOnce(Option<&StreamTrace>),
     ) -> Result<RenderOutcome, Error> {
         let enabled = self.canvas.profiling;
         let total = profiling::start(enabled);
         let mut profile = RenderProfile::default();
         self.last_profile = None;
+        self.canvas.last_stream_trace = None;
         if let Some(error) = self
             .gpu
             .device_failure
@@ -2134,7 +2168,7 @@ impl Renderer {
         profile.paint = self.canvas.last_profile.unwrap_or_default();
         let started = profiling::start(enabled);
         // Request a Wayland callback only when a buffer will actually be committed.
-        before_present();
+        before_present(self.canvas.last_stream_trace.as_ref());
         self.gpu.queue.present(frame);
         profile.present = profiling::elapsed(started);
         profile.total = profiling::elapsed(total);
@@ -2308,5 +2342,54 @@ mod streaming_tests {
                 .all(|pixel| *pixel == [255, 255, 0, 255])
         );
         assert_eq!(gpu.cache_stats().entries, 1);
+    }
+}
+
+#[cfg(test)]
+mod stream_trace_rendering {
+    use super::*;
+    #[test]
+    #[ignore = "requires a Vulkan driver"]
+    fn trace_reports_final_bound_alias_and_clears_when_disabled_or_validation_fails() {
+        let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
+        let mut canvas = Canvas::new(gpu);
+        let stream = lucent_api::ImageStream::new();
+        let old = Arc::new(stream.frame_rgba(1, 1, vec![255, 0, 0, 255]).unwrap());
+        let next = Arc::new(stream.frame_rgba(1, 1, vec![0, 0, 255, 255]).unwrap());
+        let full = Rect::new(0., 0., 8., 4.);
+        let image = |data: Arc<lucent_api::ImageData>, rect| Paint::Image {
+            data,
+            rect,
+            clip: full.into(),
+            uv: Rect::new(0., 0., 1., 1.),
+            radius: 0.,
+            opacity: 1.,
+            tint: lucent_api::Color::hex(0xffffff),
+        };
+        let scene = [
+            image(old, Rect::new(0., 0., 4., 4.)),
+            image(next.clone(), Rect::new(4., 0., 4., 4.)),
+        ];
+        canvas.stream_tracing = true;
+        let pixels = canvas.snapshot(8, 4, 1, &scene).unwrap();
+        assert!(
+            pixels
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|pixel| *pixel == [0, 0, 255, 255])
+        );
+        assert_eq!(
+            canvas.last_stream_trace.unwrap().revisions(),
+            [next.stream_revision().unwrap()]
+        );
+        canvas.stream_tracing = false;
+        canvas.snapshot(8, 4, 1, &scene).unwrap();
+        assert!(canvas.last_stream_trace.is_none());
+        canvas.stream_tracing = true;
+        canvas.snapshot(8, 4, 1, &scene).unwrap();
+        assert!(canvas.last_stream_trace.is_some());
+        assert!(canvas.snapshot(0, 4, 1, &scene).is_err());
+        assert!(canvas.last_stream_trace.is_none());
     }
 }

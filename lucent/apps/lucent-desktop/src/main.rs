@@ -33,7 +33,11 @@ mod work;
 mod workspaces;
 use desktop::Desktop;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    lucent_wayland::run(Desktop::new(platform::desktop_adapters()))
+    let mut desktop = Desktop::new(platform::desktop_adapters());
+    desktop.live_wallpaper.enable_frame_tracing(
+        std::env::var_os("LUCENT_PROFILE_PRESENTATION").is_some_and(|value| value == "1"),
+    );
+    lucent_wayland::run(desktop)
 }
 
 #[cfg(test)]

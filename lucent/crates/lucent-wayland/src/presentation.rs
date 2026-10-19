@@ -17,6 +17,7 @@ struct Pending {
     surface: wl_surface::WlSurface,
     frame: u64,
     requested_ms: f64,
+    streams: Option<lucent_render::StreamTrace>,
 }
 pub(super) struct Capture {
     global: Option<PresentationTimeState>,
@@ -49,6 +50,9 @@ impl Capture {
             accepted: 0,
         }
     }
+    pub(super) fn tracing(&self) -> bool {
+        self.global.is_some()
+    }
     /// Called only in the renderer's before-present hook, after successful
     /// acquire/paint and before WSI commits the matching buffer.
     pub(super) fn request<A: Application>(
@@ -57,6 +61,7 @@ impl Capture {
         qh: &QueueHandle<State<A>>,
         frame: u64,
         requested_ms: f64,
+        streams: Option<lucent_render::StreamTrace>,
     ) {
         let Some(global) = &self.global else {
             return;
@@ -74,6 +79,7 @@ impl Capture {
                         surface: surface.clone(),
                         frame,
                         requested_ms,
+                        streams,
                     },
                 );
             }
@@ -107,6 +113,7 @@ struct Sample {
     sequence: u64,
     flags: u32,
     outputs: usize,
+    streams: Option<lucent_render::StreamTrace>,
 }
 #[derive(Default)]
 pub(super) struct History {
@@ -146,6 +153,7 @@ impl History {
             sequence,
             flags,
             outputs,
+            streams: pending.streams,
         });
     }
     fn push(&mut self, sample: Sample) {
@@ -157,8 +165,11 @@ impl History {
     }
     pub(super) fn json(&self) -> serde_json::Value {
         serde_json::json!({"presented":self.presented,"discarded":self.discarded,"invalid":self.invalid,"history_limit":HISTORY_LIMIT,
-            "samples":self.samples.iter().map(|s|serde_json::json!({"frame":s.frame,"requested_at_ms":s.requested_ms,"clock_id":s.clock_id,
-                "presented_ns":s.presented_ns,"refresh_ns":s.refresh_ns,"sequence":s.sequence,"flags":s.flags,"sync_output_count":s.outputs})).collect::<Vec<_>>()})
+            "samples":self.samples.iter().map(|s| {
+                let streams=s.streams.map(|trace|serde_json::json!({"revisions":trace.revisions().iter().map(|(id,revision)|serde_json::json!({"stream_id":id,"revision":revision})).collect::<Vec<_>>(),"truncated":trace.truncated(),"scope":"Bound resource references; opacity, occlusion and final pixel visibility are not established"}));
+                serde_json::json!({"frame":s.frame,"requested_at_ms":s.requested_ms,"clock_id":s.clock_id,
+                "presented_ns":s.presented_ns,"refresh_ns":s.refresh_ns,"sequence":s.sequence,"flags":s.flags,"sync_output_count":s.outputs,"streams":streams})
+            }).collect::<Vec<_>>()})
     }
 }
 impl<A: Application> PresentationTimeHandler for State<A> {
@@ -257,6 +268,7 @@ mod tests {
                 sequence: frame + 1000,
                 flags: 5,
                 outputs: 1,
+                streams: Some([(7, frame)].into_iter().collect()),
             });
         }
         let state = history.json();
@@ -268,6 +280,8 @@ mod tests {
         assert_eq!(samples[0]["clock_id"], 4);
         assert_eq!(samples[0]["sequence"], 1007);
         assert_eq!(samples[0]["flags"], 5);
+        assert_eq!(samples[0]["streams"]["revisions"][0]["revision"], 7);
+        assert_eq!(samples[0]["streams"]["revisions"][0]["stream_id"], 7);
         assert_eq!(samples[0]["presented_ns"], 7 * 16_666_667u64);
     }
 }

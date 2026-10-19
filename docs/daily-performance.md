@@ -50,6 +50,29 @@ flags. A compositor-reported presentation is still distinct from proof that
 sixty *different decoded video frames* reached a physical monitor. Successful
 submission counters and CPU-stage profiling keep their previous meanings.
 
+With the same explicit presentation opt-in, the renderer records at most sixteen
+unique `(ImageStream id, revision)` pairs actually referenced by the completed
+prepared draw. It reads the final bound textures after every upload, so shared
+same-size texture aliases report the revision actually bound instead of an older
+requested revision. The before-present hook carries this bounded metadata into
+the exact feedback request and presented sample. Failed acquisitions/retries do
+not invoke that hook; discarded and retired-surface feedback produce no presented
+sample. Truncation is explicit. The trace contains no pixels, asset keys, paths,
+media values or domain types; normal and secure runtimes do not record it.
+
+The desktop's composition root separately enables a metadata-only media trace.
+Each player retains at most 256 prepared-revision/media-PTS associations tagged
+with its playback generation. A non-increasing PTS starts a new observed cycle;
+this is not an asserted decoder loop count. Worker-side associations survive
+latest-frame mailbox coalescing until bounded eviction. No frame pixels are kept
+by this history. The collector joins these records to presented bound revisions
+and separates display feedback cadence, distinct revision advancements, repeated
+references, missing associations and revision gaps. Prepared PTS cadence describes
+observed prepared media samples, not an inferred nominal file rate. Revision gaps
+do not establish decoder drops; bound references do not establish opacity,
+occlusion, visible pixels or hardware scanout. Missing/truncated records remain
+explicit and do not become a synthetic frame rate.
+
 ## Matched native collection
 
 `vm/measure-daily-resources.py` is read-only. Prepare identical static-idle and
@@ -86,3 +109,13 @@ font content and GPU backend. Keep static idle, source-rate video, cold/warm
 launcher interactions and peaks separate. Record actual constraints and unmet
 targets. Do not cut density, effects, source cadence or the design system to make
 a smaller number.
+
+
+The distinct-stream/source-PTS instrumentation and the accompanying Arabic/style
+and oversized-row corrections are source changes awaiting their own Rust/native
+cohort. Nine pure Python collector-policy cases passed locally, including one
+revision repeated at 60 Hz with zero distinct advancement, and 24 source revisions
+referenced at 60 Hz remaining 24 unique revisions. These controlled policy cases
+are not measured compositor/video performance. Actual matched resource runs,
+Vulkan alias/pixel checks and native presentation/source-cadence acceptance remain
+pending.

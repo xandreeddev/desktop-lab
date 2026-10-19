@@ -270,6 +270,8 @@ pub struct LayoutOptions {
     pub direction: Option<Direction>,
     pub metrics: Option<LineMetrics>,
     pub context: Option<ShapingContext>,
+    /// Bound raster coverage without changing shaping or logical source geometry.
+    pub raster_width: Option<f32>,
 }
 pub fn shape(font: &Font, line: &str, size: f32) -> ShapedLine {
     shape_directed(font, line, size, None)

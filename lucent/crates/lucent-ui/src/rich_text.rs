@@ -10,6 +10,7 @@ struct Run {
     source: std::ops::Range<usize>,
     direction: Option<text::Direction>,
     context: Option<text::ShapingContext>,
+    shared: Option<(f32, f32)>,
 }
 struct Line {
     origin: usize,
@@ -58,6 +59,7 @@ fn add(
             source: source..source + value.len(),
             direction: None,
             context: None,
+            shared: None,
             text: value.into(),
             x: line.width,
             width,
@@ -253,8 +255,8 @@ fn reorder(
     size: f32,
     bidi: &unicode_bidi::BidiInfo<'_>,
 ) {
-    if !bidi.has_rtl() {
-        return;
+    if bidi.text.is_ascii() {
+        return; // Keep established ASCII style-boundary kerning geometry.
     }
     let Some(start) = line.runs.iter().map(|run| run.source.start).min() else {
         return;
@@ -274,8 +276,7 @@ fn reorder(
     line.height = base.height;
     line.baseline = base.baseline;
     for visual in visual {
-        let rtl = levels[visual.start].is_rtl();
-        let direction = Some(if rtl {
+        let direction = Some(if levels[visual.start].is_rtl() {
             text::Direction::RightToLeft
         } else {
             text::Direction::LeftToRight
@@ -285,39 +286,66 @@ fn reorder(
             .filter_map(|run| {
                 let start = run.source.start.max(visual.start);
                 let end = run.source.end.min(visual.end);
-                (end > start).then_some((run, start..end))
+                (end > start).then_some((run.span, start..end))
             })
             .collect::<Vec<_>>();
-        if rtl {
+        if levels[visual.start].is_rtl() {
             parts.reverse();
         }
-        for (run, range) in parts {
-            let value = &run.text[range.start - run.source.start..range.end - run.source.start];
-            let font = font(fonts, spans, run.span, default_face);
-            let context = Some(text::ShapingContext::new(
-                &bidi.text[start..range.start],
-                &bidi.text[range.end..end],
-            ));
-            let options = text::LayoutOptions {
-                direction,
-                context,
-                ..Default::default()
-            };
-            let width = text::width_with_layout(font, value, size, options);
-            let metrics = text::run_metrics_with_layout(font, value, size, options);
+        // Styles do not divide a shaping buffer. Contiguous spans selecting the
+        // same font share one complete buffer, including cross-span GSUB/GPOS.
+        let face = |span: usize| {
+            let index = spans[span].face.unwrap_or(default_face);
+            if index < fonts.len() { index } else { 0 }
+        };
+        let mut first = 0;
+        while first < parts.len() {
+            let mut last = first + 1;
+            while last < parts.len() && face(parts[last].0) == face(parts[first].0) {
+                last += 1;
+            }
+            let group = &parts[first..last];
+            let from = group.iter().map(|(_, range)| range.start).min().unwrap();
+            let to = group.iter().map(|(_, range)| range.end).max().unwrap();
+            let value = &bidi.text[from..to];
+            let font = font(fonts, spans, group[0].0, default_face);
+            let shaped = text::shape_directed(font, value, size, direction);
+            let metrics = text::run_metrics(font, value, size, direction);
             let descent = (line.height - line.baseline).max(metrics.height - metrics.baseline);
             line.baseline = line.baseline.max(metrics.baseline);
             line.height = line.baseline + descent;
-            line.runs.push(Run {
-                span: run.span,
-                text: value.to_owned(),
-                x: line.width,
-                width,
-                source: range,
-                direction,
-                context,
-            });
-            line.width += width;
+            let origin = line.width;
+            let mut fragments = vec![];
+            for (span, range) in group {
+                // A style starting inside a grapheme does not split that
+                // grapheme. Its first scalar's style owns its visual coverage.
+                let owned = shaped
+                    .segments
+                    .iter()
+                    .filter(|(segment, _, _)| {
+                        range.start <= from + segment.start && from + segment.start < range.end
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                for (a, b) in text::selection_fragments(&owned, 0..value.len()) {
+                    fragments.push((a, b, *span, range.clone()));
+                }
+            }
+            fragments.sort_by(|a, b| a.0.total_cmp(&b.0));
+            for (a, b, span, source) in fragments {
+                line.runs.push(Run {
+                    span,
+                    text: value.to_owned(),
+                    x: origin + a,
+                    width: b - a,
+                    source,
+                    direction,
+                    context: None,
+                    shared: Some((origin, shaped.width)),
+                });
+            }
+            line.width += shaped.width;
+            first = last;
         }
     }
 }
@@ -408,14 +436,41 @@ pub(super) fn paint<M: Clone>(
                     });
                 }
             }
+            let (text_rect, text_clip) = if let Some((origin, width)) = run.shared {
+                let full = Rect::new(x + origin, rect.y, width, rect.h);
+                let left = if run.x == origin {
+                    clip.bounds.x
+                } else {
+                    rect.x
+                };
+                let right = if run.x + run.width
+                    >= origin + width - f32::EPSILON * width.abs().max(1.) * 4.
+                {
+                    clip.bounds.x + clip.bounds.w
+                } else {
+                    rect.x + rect.w
+                };
+                (
+                    full,
+                    clip.intersect(Rect::new(
+                        left,
+                        clip.bounds.y,
+                        (right - left).max(0.),
+                        clip.bounds.h,
+                    )),
+                )
+            } else {
+                (rect, clip.clone())
+            };
             scene.paint.push(Paint::Text {
                 layout: text::LayoutOptions {
                     direction: run.direction,
                     metrics: Some(metrics),
                     context: run.context,
+                    ..Default::default()
                 },
-                rect,
-                clip: clip.clone(),
+                rect: text_rect,
+                clip: text_clip,
                 text: run.text,
                 size: e.style.font_size,
                 face,
@@ -692,29 +747,33 @@ mod international_paragraphs {
             TextSpan::new("ام").color(Color::hex(0x0000ff)),
         ];
         let result = flow(&spans, &fonts, 0, 24., 600., 10);
-        let mut actual = Vec::new();
-        for run in &result.lines[0].runs {
-            let shaped = text::shape_with_layout(
-                &fonts[0],
-                &run.text,
-                24.,
-                text::LayoutOptions {
-                    direction: run.direction,
-                    context: run.context,
-                    ..Default::default()
-                },
-            );
-            actual.extend(shaped.glyphs.iter().map(|glyph| glyph.id));
-        }
         let expected = text::shape(&fonts[0], "سلام", 24.)
             .glyphs
             .iter()
             .map(|glyph| glyph.id)
             .collect::<Vec<_>>();
-        assert_eq!(
-            actual, expected,
-            "color changes cannot isolate Arabic joining forms"
-        );
+        let line = &result.lines[0];
+        assert_eq!(line.runs.len(), 2);
+        let mut edge = 0.;
+        for run in &line.runs {
+            let shaped = text::shape_directed(&fonts[0], &run.text, 24., run.direction);
+            assert_eq!(
+                shaped
+                    .glyphs
+                    .iter()
+                    .map(|glyph| glyph.id)
+                    .collect::<Vec<_>>(),
+                expected,
+                "all colors must use the same complete GSUB buffer"
+            );
+            assert!(
+                (run.x - edge).abs() < 0.01,
+                "style clips partition the full visual run"
+            );
+            edge = run.x + run.width;
+            assert_eq!(run.shared, Some((0., line.width)));
+        }
+        assert!((edge - line.width).abs() < 0.01);
     }
     #[test]
     fn truncating_an_empty_later_line_preserves_earlier_rtl_paragraphs() {

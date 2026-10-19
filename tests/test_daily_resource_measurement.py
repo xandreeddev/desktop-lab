@@ -46,6 +46,54 @@ class PresentationMeasurement(unittest.TestCase):
         self.assertEqual(len(storage['background']), 3)
         self.assertEqual(measurement['presentation_intervals'](list(storage['background'].values()))['intervals'], 2)
 
+    def traced(self, frame, revision):
+        value = self.sample(frame, round(frame * 1_000_000_000 / 60))
+        value['streams'] = {'revisions': [{'stream_id': 7, 'revision': revision}], 'truncated': False}
+        return value
+
+    def test_repeating_one_revision_at_display_sixty_has_no_distinct_advancement(self):
+        values = [self.traced(frame, 1) for frame in range(60)]
+        result = measurement['stream_cadence'](values, {})['streams'][0]
+        self.assertEqual(result['unique_prepared_revisions'], 1)
+        self.assertEqual(result['distinct_advancements'], 0)
+        self.assertEqual(result['repeated_revision_samples'], 59)
+        self.assertEqual(result['presented_distinct_advancements_hz'], 0)
+        self.assertAlmostEqual(measurement['presentation_intervals'](values)['fps'], 60, places=4)
+
+    def test_twenty_four_source_frames_remain_twenty_four_unique_at_display_sixty(self):
+        values = [self.traced(frame, frame * 24 // 60 + 1) for frame in range(60)]
+        sources = {(7, revision): {'stream_id': 7, 'revision': revision, 'generation': 2, 'cycle': 0,
+                                  'source_ns': round((revision - 1) * 1_000_000_000 / 24)}
+                   for revision in range(1, 25)}
+        result = measurement['stream_cadence'](values, sources)['streams'][0]
+        self.assertEqual(result['unique_prepared_revisions'], 24)
+        self.assertEqual(result['repeated_revision_samples'], 36)
+        self.assertEqual(result['prepared_revision_gaps_between_presentations'], 0)
+        self.assertEqual(result['joined_source_revisions'], 24)
+        self.assertAlmostEqual(result['observed_prepared_source_pts_hz'], 24, places=4)
+
+    def test_alias_ambiguity_and_incomplete_trace_cannot_invent_single_revision_cadence(self):
+        value = self.traced(1, 1)
+        value['streams']['revisions'].append({'stream_id': 7, 'revision': 2})
+        value['streams']['truncated'] = True
+        result = measurement['stream_cadence']([value, self.sample(2, 100)], {})
+        self.assertEqual(result['truncated_trace_samples'], 1)
+        self.assertEqual(result['missing_trace_samples'], 1)
+        self.assertEqual(result['streams'][0]['ambiguous_multi_revision_samples'], 1)
+        self.assertIsNone(result['streams'][0]['presented_distinct_advancements_hz'])
+
+    def test_source_associations_are_bounded_and_immutable(self):
+        samples = [{'stream_id': 7, 'revision': revision, 'generation': 1, 'source_ns': revision, 'cycle': 0}
+                   for revision in range(3)]
+        snapshot = {'client': {'live_wallpaper': {'producers': [{'source_frames': {'samples': samples}}]}}}
+        storage = {}
+        self.assertTrue(measurement['collect_sources'](storage, snapshot, limit=2))
+        self.assertEqual(len(storage), 2)
+        altered = dict(samples[0], source_ns=99)
+        snapshot['client']['live_wallpaper']['producers'][0]['source_frames']['samples'] = [altered]
+        with self.assertRaises(AssertionError):
+            measurement['collect_sources'](storage, snapshot)
+
     def test_embedded_guest_sampler_is_valid_python(self):
         compile(measurement['SAMPLER'], '<guest-resource-sampler>', 'exec')
 

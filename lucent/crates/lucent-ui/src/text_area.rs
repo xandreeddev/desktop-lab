@@ -24,27 +24,6 @@ impl Row {
             .min_by(|(_, a), (_, b)| (a - x).abs().total_cmp(&(b - x).abs()))
             .map_or(self.range.start, |(at, _)| *at)
     }
-    fn visible_display(&self, font: &crate::text::Font, size: f32, width: f32) -> String {
-        if !self.display.is_ascii() || self.stops.last().is_none_or(|(_, end)| *end <= width) {
-            return self.display.clone();
-        }
-        // A whole grapheme may be wider than its viewport. Clipping geometry
-        // alone must not rasterize a huge hidden texture for that row. Keep the
-        // exact prefix through the last glyph whose actual ink intersects the
-        // visible horizontal span; source/selection geometry stays untouched.
-        let end = self
-            .display
-            .char_indices()
-            .zip(text::glyph_positions(font, &self.display, size))
-            .filter_map(|((byte, c), (_, x))| {
-                let metrics = font.metrics(c, size);
-                let left = x + metrics.xmin as f32;
-                (left < width && left + metrics.width as f32 > 0.).then_some(byte + c.len_utf8())
-            })
-            .last()
-            .unwrap_or(0);
-        self.display[..end].to_owned()
-    }
     fn x(&self, byte: usize) -> f32 {
         self.stops
             .iter()
@@ -536,7 +515,7 @@ pub(super) fn paint<M>(
         let content = if value.is_empty() {
             placeholder.lines().next().unwrap_or("").to_owned()
         } else {
-            row.visible_display(font, style.font_size, hit.inner.w)
+            row.display.clone()
         };
         if !content.is_empty() {
             scene.paint.push(Paint::Text {
@@ -544,6 +523,11 @@ pub(super) fn paint<M>(
                     direction: None,
                     metrics: Some(metrics),
                     context: None,
+                    raster_width: row
+                        .stops
+                        .last()
+                        .filter(|(_, width)| *width > hit.inner.w)
+                        .map(|_| hit.inner.w),
                 },
                 rect: Rect::new(hit.inner.x, y, hit.inner.w, area.line_height),
                 clip: clip.clone(),
@@ -1524,15 +1508,23 @@ mod oversized_grapheme_tests {
             2,
             "the edit model still owns one whole grapheme"
         );
-        let visible = rows[0].visible_display(&font, 20., 100.);
-        assert!(visible.len() < value.len());
-        assert!(text::width(&font, &visible, 20.) < 200.);
-        let expected = text::glyph_positions(&font, &value, 20.)
-            .take(visible.chars().count())
-            .collect::<Vec<_>>();
-        assert_eq!(
-            text::glyph_positions(&font, &visible, 20.).collect::<Vec<_>>(),
-            expected
-        );
+        // Painting retains the complete shaping buffer. Cutting a source
+        // prefix could change ligatures/context or split a canonical grapheme.
+        let layout = Layout::new(Arc::new(vec![font]));
+        let tree = Element::text_area(
+            value.clone(),
+            TextSelection::at_end(&value),
+            "",
+            ScrollSpec::new(0., 24.).unwrap(),
+            |edit| edit,
+            |_| TextEdit::Clear,
+        )
+        .id("field")
+        .size(100., 80.)
+        .font(20.);
+        let scene = layout.build(&tree, 100., 80., &Interaction::default(), 0.);
+        let text = scene.hits[0].text.as_ref().unwrap();
+        assert_eq!(text.area.as_ref().unwrap().rows[0].stops.len(), 2);
+        assert!(scene.paint.iter().any(|paint|matches!(paint,Paint::Text{text,layout,..} if text==&value&&layout.raster_width==Some(100.))));
     }
 }

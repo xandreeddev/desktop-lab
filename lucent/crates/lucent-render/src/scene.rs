@@ -157,6 +157,9 @@ pub(super) fn validate(
                     layout,
                     ..
                 } => {
+                    if let Some(width) = layout.raster_width {
+                        positive(width)?;
+                    }
                     if let Some(metrics) = layout.metrics {
                         for value in [
                             metrics.height,

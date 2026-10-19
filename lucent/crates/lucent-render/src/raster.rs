@@ -72,6 +72,15 @@ pub(super) fn text_with_layout(
         return Err("font has no horizontal line metrics".into());
     }
     let measured_width = lucent_ui::text::width_with_layout(font, text, size, layout);
+    if layout
+        .raster_width
+        .is_some_and(|width| !width.is_finite() || width < 0.)
+    {
+        return Err("invalid raster coverage width".into());
+    }
+    let coverage_width = layout
+        .raster_width
+        .map_or(measured_width, |width| width.min(measured_width));
     let metrics = layout
         .metrics
         .unwrap_or_else(|| lucent_ui::text::run_metrics_with_layout(font, text, size, layout));
@@ -85,12 +94,12 @@ pub(super) fn text_with_layout(
     // A glyph's ink can overhang its advance, especially in italic faces.
     // Keep layout advances unchanged and return the mask origin separately.
     let mut left_edge = 0f32;
-    let mut right_edge = measured_width * density;
+    let mut right_edge = coverage_width * density;
     for line in text.lines() {
         for positioned in lucent_ui::text::shape_with_layout(font, line, size, layout).glyphs {
             let x = positioned.x;
             let selected = font.raster_face(positioned.face);
-            if x * density >= MAX_WIDTH as f32 * density {
+            if x >= coverage_width || x * density >= MAX_WIDTH as f32 * density {
                 break;
             }
             let glyph = crate::fallback::metrics(selected, positioned.id, size * density)?;
@@ -101,10 +110,14 @@ pub(super) fn text_with_layout(
         }
     }
     let left_padding = (-left_edge / SUPERSAMPLE as f32).ceil() * SUPERSAMPLE as f32;
-    let logical_w = ((right_edge + left_padding) / density)
-        .ceil()
-        .max(measured_width.ceil())
-        + 2.;
+    let logical_w = if layout.raster_width.is_some() {
+        (coverage_width + left_padding / density).ceil() + 2.
+    } else {
+        ((right_edge + left_padding) / density)
+            .ceil()
+            .max(measured_width.ceil())
+            + 2.
+    };
     let logical_w = logical_w.clamp(1., MAX_WIDTH as f32);
     let logical_h = (metrics.height * text.lines().count().max(1) as f32)
         .ceil()
@@ -356,6 +369,44 @@ mod fallback_line_envelope {
                     reference[(shift + h) * w..rh as usize * w]
                         .iter()
                         .all(|a| *a == 0)
+                );
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod bounded_shaping_coverage {
+    use super::*;
+    #[test]
+    fn clipping_one_large_grapheme_keeps_full_shaping_and_exact_visible_pixels() {
+        let font = lucent_ui::text::Font::from_bytes(
+            include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf").as_slice(),
+            Default::default(),
+        )
+        .unwrap();
+        let value = format!("{}💻", "👩‍".repeat(500));
+        for scale in [1., 2.] {
+            let (full, fw, fh, _) = text(&font, &value, 20., scale, 8192).unwrap();
+            let (clipped, cw, ch, _) = text_with_layout(
+                &font,
+                &value,
+                20.,
+                scale,
+                8192,
+                lucent_ui::text::LayoutOptions {
+                    raster_width: Some(100.),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            assert!(cw <= 102 * (scale as u32));
+            assert_eq!(ch, fh);
+            assert!(cw < fw);
+            for row in 0..ch as usize {
+                assert_eq!(
+                    &clipped[row * cw as usize..(row + 1) * cw as usize],
+                    &full[row * fw as usize..row * fw as usize + cw as usize]
                 );
             }
         }

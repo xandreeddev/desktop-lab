@@ -35,12 +35,17 @@ component's logical word-boundary editing rules. Native candidate-window bounds
 come from the same caret rectangle as the painted cursor.
 
 Rich text resolves bidi for the complete paragraph before splitting its visual
-runs into styles and links. Small bounded shaping contexts retain Arabic joining
-across a color boundary. Each resulting fragment carries its resolved direction
-and shared row metrics to the renderer; links keep their own visual hit regions.
+runs into fonts, styles and links. Adjacent spans selecting the same font use one
+complete shaping buffer. Each style paints the shared whole-run mask through its
+source-grapheme coverage clips, so GSUB ligatures and GPOS positioning survive
+color/link boundaries. A style starting inside a grapheme does not split that
+grapheme; its first scalar owns its coverage. Links keep their own disjoint hit
+regions and underlines. ASCII style-boundary geometry remains unchanged.
 Actual positioned glyph extents can expand a row's ascent and descent, so stacked
 marks share a baseline without clipping. Ordinary ASCII retains its prior metric
-envelope.
+envelope. An oversized textarea grapheme keeps its complete canonical shaping
+buffer while `LayoutOptions::raster_width` bounds only the generated mask's
+coverage. Culling does not slice strings or change the editing source map.
 
 ASCII preserves the prior character advances and pair kerning exactly. Density
 changes do not reflow text or change logical positions. The native renderer keeps
@@ -132,7 +137,11 @@ glyph counts and bidi caret affinity, and a fixture assertion that read the
 intentionally empty legacy hit value. Subsequent source changes correct those
 tests, preserve visual affinity and add paragraph, metrics, atomic-edit and native
 protocol regression cases. This final cohort still requires its own compile,
-test and 1×/2× visual runs. No native compositor IME interoperability or memory
+test and 1×/2× visual runs. Remote CI for `0bfdd8a0f69` passed strict workspace
+Clippy, then ran 94 UI tests successfully and exposed two failures: independently
+shaped Arabic styles and oversized-grapheme culling. The shared-mask and bounded
+coverage corrections above follow those failures; their new cohort has not yet
+been verified. No native compositor IME interoperability or memory
 acceptance is claimed by the presence of the harness or these source cases.
 Accessibility bridging remains explicitly deferred by the user.
 
@@ -143,7 +152,11 @@ Fallback glyph preparation remains on demand, with borrowed immutable tables and
 one bounded outline at a time. The combined source cohort adds the isolated
 `font_resources::cold_and_warm_fallback_preparation_resources` probe and opt-in
 compositor presentation feedback. These observe preparation and actual compositor
-reports separately from CPU submission counters; neither changes text density,
+reports separately from CPU submission counters. Bounded stream identity/revision
+traces are associated with those exact presented submissions; the client retains
+separate bounded media-PTS associations. These distinguish repeated references
+from distinct prepared-frame advancement, with no pixel-visibility claim. None
+of this changes text density,
 frame demand or the domain/component contracts. See [daily-performance.md](daily-performance.md)
 for the matched static/video workloads and protocol-flag limits. Compilation and
 measured resource/presentation acceptance for this combined cohort remain pending.

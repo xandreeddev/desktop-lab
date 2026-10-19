@@ -970,24 +970,27 @@ impl<A: Application> State<A> {
             }
             let input_ms = profiling::elapsed(started);
             s.renderer.enable_profiling(self.profile_frames);
-            let outcome = s
-                .renderer
-                .render_scaled(width, height, density, &scene.paint, || {
-                    if s.committed_spec != s.spec
-                        && let SurfaceRole::Layer(layer) = &s.role
-                    {
-                        configure_layer(layer, &s.spec);
-                    }
-                    // WSI presentation commits the role state, viewport,
-                    // input region and newly rendered buffer together.
-                    self.presentation.request(
-                        surface,
-                        qh,
-                        s.history.frames.saturating_add(1),
-                        self.epoch.elapsed().as_secs_f64() * 1000.,
-                    );
-                    surface.frame(qh, FrameCallbackData(surface.clone()));
-                });
+            s.renderer
+                .enable_stream_tracing(self.presentation.tracing());
+            let outcome =
+                s.renderer
+                    .render_scaled(width, height, density, &scene.paint, |streams| {
+                        if s.committed_spec != s.spec
+                            && let SurfaceRole::Layer(layer) = &s.role
+                        {
+                            configure_layer(layer, &s.spec);
+                        }
+                        // WSI presentation commits the role state, viewport,
+                        // input region and newly rendered buffer together.
+                        self.presentation.request(
+                            surface,
+                            qh,
+                            s.history.frames.saturating_add(1),
+                            self.epoch.elapsed().as_secs_f64() * 1000.,
+                            streams.copied(),
+                        );
+                        surface.frame(qh, FrameCallbackData(surface.clone()));
+                    });
             self.retiring.finish_submission(&s.spec.address(), &outcome);
             match outcome {
                 Ok(RenderOutcome::Presented) => {}

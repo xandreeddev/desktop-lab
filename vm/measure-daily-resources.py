@@ -154,6 +154,91 @@ def collect_presentations(storage, snapshot, since=0, limit=16_384):
     return truncated
 
 
+
+def collect_sources(storage, snapshot, limit=16_384):
+    truncated = False
+    for producer in snapshot['client']['live_wallpaper']['producers']:
+        for sample in (producer.get('source_frames') or {}).get('samples', []):
+            key = (sample['stream_id'], sample['revision'])
+            if key not in storage and len(storage) >= limit:
+                truncated = True
+                continue
+            previous = storage.get(key)
+            if previous is not None:
+                assert previous == sample, 'Immutable stream source association changed'
+            storage[key] = sample
+    return truncated
+
+
+def stream_cadence(samples, sources):
+    """Bound references are distinct from source PTS and from visible pixels."""
+    ordered = sorted(samples, key=lambda sample: sample['frame'])
+    streams = {}
+    missing = truncated = 0
+    for sample in ordered:
+        trace = sample.get('streams')
+        if trace is None:
+            missing += 1
+            continue
+        if trace.get('truncated', False):
+            truncated += 1
+        by_id = {}
+        for item in trace['revisions']:
+            by_id.setdefault(item['stream_id'], set()).add(item['revision'])
+        for identity, revisions in by_id.items():
+            stream = streams.setdefault(identity, {'observations': [], 'ambiguous': 0})
+            if len(revisions) != 1:
+                stream['ambiguous'] += 1
+                continue  # One submission cannot establish one revision's cadence.
+            stream['observations'].append((sample, next(iter(revisions))))
+    results = []
+    for identity, stream in streams.items():
+        observations = stream['observations']
+        revisions = {revision for _, revision in observations}
+        repeats = advances = gaps = backwards = 0
+        for (_, before), (_, after) in zip(observations, observations[1:]):
+            if after == before:
+                repeats += 1
+            elif after > before:
+                advances += 1
+                gaps += after - before - 1
+            else:
+                backwards += 1
+        rate = None
+        if len(observations) > 1 and len({sample['clock_id'] for sample, _ in observations}) == 1:
+            duration = observations[-1][0]['presented_ns'] - observations[0][0]['presented_ns']
+            if duration > 0:
+                rate = advances * 1_000_000_000 / duration
+        prepared = sorted((value for (sid, _), value in sources.items() if sid == identity),
+                          key=lambda value: value['revision'])
+        intervals = []
+        mapping_gaps = 0
+        for before, after in zip(prepared, prepared[1:]):
+            mapping_gaps += max(0, after['revision'] - before['revision'] - 1)
+            if before['generation'] == after['generation'] and before['cycle'] == after['cycle']:
+                delta = after['source_ns'] - before['source_ns']
+                if delta > 0:
+                    intervals.append(delta)
+        results.append({'stream_id': identity, 'reference_samples': len(observations),
+                        'unique_prepared_revisions': len(revisions), 'distinct_advancements': advances,
+                        'repeated_revision_samples': repeats, 'prepared_revision_gaps_between_presentations': gaps,
+                        'backward_revision_steps': backwards, 'ambiguous_multi_revision_samples': stream['ambiguous'],
+                        'presented_distinct_advancements_hz': rate,
+                        'joined_source_revisions': sum((identity, revision) in sources for revision in revisions),
+                        'missing_source_revisions': sum((identity, revision) not in sources for revision in revisions),
+                        'observed_prepared_source_samples': len(prepared), 'source_mapping_revision_gaps': mapping_gaps,
+                        'observed_prepared_source_pts_hz': (1_000_000_000 / statistics.mean(intervals)) if intervals else None,
+                        'source_generations': sorted({value['generation'] for value in prepared}),
+                        'observed_pts_cycles': len({(value['generation'], value['cycle']) for value in prepared})})
+    return {'streams': results, 'missing_trace_samples': missing, 'truncated_trace_samples': truncated,
+            'scope': 'Compositor-presented bound resource references. Distinct revisions, repeated references, revision gaps and prepared media PTS cadence are separate. Gaps do not prove decoder drops; references do not prove visible pixels or hardware scanout.'}
+
+
+def producer_identities(snapshot):
+    keys = ('revision', 'running', 'target', 'frame_size', 'source_aspect')
+    return [{key: producer.get(key) for key in keys}
+            for producer in snapshot['client']['live_wallpaper']['producers']]
+
 def private(path, value):
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, 'w') as stream:
@@ -195,11 +280,15 @@ def main():
     command = ['python3', '-c', SAMPLER, pid_text[0], str(args.seconds), expected]
     process = subprocess.Popen(lab.ssh_args('lucent')+[shlex.join(command)], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     samples = {}
+    sources = {}
+    source_truncated = collect_sources(sources, before)
     truncated = False
     since = before['uptime_ms']
     try:
         while process.poll() is None:
-            truncated |= collect_presentations(samples, inspect(), since)
+            snapshot = inspect()
+            truncated |= collect_presentations(samples, snapshot, since)
+            source_truncated |= collect_sources(sources, snapshot)
             time.sleep(.5)
         output, error = process.communicate(timeout=5)
         assert process.returncode == 0, 'Read-only guest sampler failed: '+error[-1000:]
@@ -211,10 +300,11 @@ def main():
     resources = json.loads(output)
     after = inspect()
     truncated |= collect_presentations(samples, after, since)
+    source_truncated |= collect_sources(sources, after)
     assert remote('pgrep', '-x', 'lucent-desktop').strip() == pid_text[0]
     assert after['uptime_ms'] > since
     assert json.loads(session('hyprctl', '-j', 'monitors')) == monitors_before, 'Display state changed'
-    assert before['client']['live_wallpaper']['producers'] == after['client']['live_wallpaper']['producers'], 'Playback generation/target changed'
+    assert producer_identities(before) == producer_identities(after), 'Playback generation/target changed'
     frames_before = {s['id']: s['frames'] for s in before['surfaces']}
     frames_after = {s['id']: s['frames'] for s in after['surfaces']}
     assert frames_before.keys() == frames_after.keys(), 'Surface membership changed'
@@ -229,6 +319,9 @@ def main():
               'presentation_sampling_truncated': truncated,
               'presentation_sample_limit': 16_384,
               'presentation': {name: presentation_intervals(list(values.values())) for name, values in samples.items()},
+              'stream_cadence': {name: stream_cadence(list(values.values()), sources) for name, values in samples.items()},
+              'source_trace_sampling_truncated': source_truncated,
+              'source_trace_samples': len(sources), 'source_trace_sample_limit': 16_384,
               'successful_submission_deltas': extra,
               'observation_uptime_ms': [since, after['uptime_ms']],
               'gpu_cache_before': before.get('gpu_cache'), 'gpu_cache_after': after.get('gpu_cache'),
