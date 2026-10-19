@@ -83,6 +83,17 @@ impl Default for Hub {
         }
     }
 }
+fn take_pending(state: &mut State, matches: impl Fn(&Pending) -> bool) -> Vec<Pending> {
+    let ids = state
+        .pending
+        .iter()
+        .filter(|(_, pending)| matches(pending))
+        .map(|(id, _)| *id)
+        .collect::<Vec<_>>();
+    ids.into_iter()
+        .filter_map(|id| state.pending.remove(&id))
+        .collect()
+}
 impl Hub {
     #[cfg(test)]
     pub(super) fn state_for_test(&self) -> Option<NetworkCredentialRequest> {
@@ -104,13 +115,17 @@ impl Hub {
         self.change(&mut state);
     }
     fn retire(&self) {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        state.online = false;
-        state.pending.clear(); // drops senders and wakes every awaiting callback
-        state.profiles.clear();
-        state.wifi_paths.clear();
-        state.waiting = None;
-        self.change(&mut state);
+        let retired = {
+            let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            state.online = false;
+            let retired = std::mem::take(&mut state.pending);
+            state.profiles.clear();
+            state.wifi_paths.clear();
+            state.waiting = None;
+            self.change(&mut state);
+            retired
+        };
+        drop(retired);
     }
     pub(super) fn refresh(&self, objects: &Objects, snapshot: &NetworkSnapshot) {
         let profiles: BTreeMap<_, _> = if snapshot.wifi_enabled
@@ -142,9 +157,8 @@ impl Hub {
             BTreeMap::new()
         };
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        let before = state.pending.len();
-        state.pending.retain(|_, pending| {
-            profiles.get(&pending.path).is_some_and(|profile| {
+        let retired = take_pending(&mut state, |pending| {
+            !profiles.get(&pending.path).is_some_and(|profile| {
                 profile.id == pending.profile_id
                     && profile.key == pending.request.profile
                     && profile.ssid == pending.request.ssid
@@ -162,9 +176,11 @@ impl Hub {
                     .map(|p| p.to_string())
             })
             .collect();
-        if state.pending.len() != before {
+        if !retired.is_empty() {
             self.change(&mut state);
         }
+        drop(state);
+        drop(retired);
     }
     pub(super) fn watch(
         &self,
@@ -184,10 +200,17 @@ impl Hub {
         struct Watching<'a>(&'a Hub);
         impl Drop for Watching<'_> {
             fn drop(&mut self) {
-                self.0.watching.store(false, Ordering::Release);
-                let mut state = self.0.state.lock().unwrap_or_else(|e| e.into_inner());
-                state.pending.clear();
-                self.0.change(&mut state);
+                let retired = {
+                    let mut state = self.0.state.lock().unwrap_or_else(|e| e.into_inner());
+                    let retired = std::mem::take(&mut state.pending);
+                    // Publish admission only after old authority is detached.
+                    // A replacement can win CAS now but cannot insert a prompt
+                    // until this same state lock has been released.
+                    self.0.watching.store(false, Ordering::Release);
+                    self.0.change(&mut state);
+                    retired
+                };
+                drop(retired); // callback wakeups run outside the state lock
             }
         }
         let _watching = Watching(self);
@@ -237,38 +260,50 @@ impl Hub {
         }
         let pending = state.pending.remove(&id).unwrap();
         self.change(&mut state);
+        drop(state);
         pending.reply.try_send(credentials).map_err(|_| {
             DomainError::Invalid("Network credential request ended before answer delivery".into())
         })
     }
     pub(super) fn invalidate(&self, path: &str) {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        let before = state.pending.len();
-        if state.wifi_paths.remove(path) {
-            // A profile may select any managed radio. Until a fresh native
-            // snapshot resolves the surviving target, retire interactive intent.
-            state.pending.clear();
-        } else {
-            state.pending.retain(|_, p| p.path != path);
-        }
-        state.profiles.remove(path);
-        if state.pending.len() != before {
-            self.change(&mut state);
-        }
+        let retired = {
+            let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let retire_all = state.wifi_paths.remove(path);
+            let ids = state
+                .pending
+                .iter()
+                .filter(|(_, p)| retire_all || p.path == path)
+                .map(|(id, _)| *id)
+                .collect::<Vec<_>>();
+            let retired = ids
+                .into_iter()
+                .filter_map(|id| state.pending.remove(&id))
+                .collect::<Vec<_>>();
+            state.profiles.remove(path);
+            if !retired.is_empty() {
+                self.change(&mut state);
+            }
+            retired
+        };
+        drop(retired);
     }
     fn remove(&self, id: NetworkCredentialRequestId) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if state.pending.remove(&id).is_some() {
+        let retired = state.pending.remove(&id);
+        if retired.is_some() {
             self.change(&mut state);
         }
+        drop(state);
+        drop(retired);
     }
     fn cancel_path(&self, path: &str) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        let before = state.pending.len();
-        state.pending.retain(|_, pending| pending.path != path);
-        if state.pending.len() != before {
+        let retired = take_pending(&mut state, |p| p.path == path);
+        if !retired.is_empty() {
             self.change(&mut state);
         }
+        drop(state);
+        drop(retired);
     }
 }
 #[derive(Clone)]
@@ -410,7 +445,7 @@ impl Agent {
         let (send, receive) = async_channel::bounded(1);
         let id = request.id;
         let deadline = Instant::now() + PROMPT_TIMEOUT;
-        {
+        let retired = {
             let mut state = self.hub.state.lock().map_err(|_| no_secrets())?;
             if !state.online
                 || !self.hub.watching.load(Ordering::Acquire)
@@ -424,9 +459,7 @@ impl Agent {
             }
             // NetworkManager promises one setting exchange, but retire an older
             // same-profile callback rather than keeping two competing prompts.
-            state
-                .pending
-                .retain(|_, p| p.path != connection_path.as_str());
+            let retired = take_pending(&mut state, |p| p.path == connection_path.as_str());
             let profile_id = state.profiles[connection_path.as_str()].id;
             if let Some(waiting) = &state.waiting
                 && waiting.path == connection_path.as_str()
@@ -447,7 +480,9 @@ impl Agent {
                 },
             );
             self.hub.change(&mut state);
-        }
+            retired
+        };
+        drop(retired);
         let answer =
             futures_lite::future::or(async { receive.recv().await.ok().flatten() }, async {
                 async_io::Timer::at(deadline).await;
@@ -525,13 +560,14 @@ impl Interaction {
     }
     pub(super) fn cancel(&self) {
         let mut state = self.hub.state.lock().unwrap_or_else(|e| e.into_inner());
-        let before = state.pending.len();
-        state
-            .pending
-            .retain(|_, p| p.path != self.path || p.request.id.value() < self.minimum);
-        if state.pending.len() != before {
+        let retired = take_pending(&mut state, |p| {
+            p.path == self.path && p.request.id.value() >= self.minimum
+        });
+        if !retired.is_empty() {
             self.hub.change(&mut state);
         }
+        drop(state);
+        drop(retired);
     }
 }
 impl Drop for Interaction {

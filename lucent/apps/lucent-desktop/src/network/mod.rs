@@ -7,7 +7,7 @@ mod view;
 pub use control::Control;
 use form::{Form, Submission, Target};
 use lucent_api::{
-    ClipboardTarget, Effects, InputEdit, Motion, ScrollEvent, Subscription, TextEdit,
+    Cancellation, ClipboardTarget, Effects, InputEdit, Motion, ScrollEvent, Subscription, TextEdit,
 };
 use lucent_design::motion;
 use lucent_domain::*;
@@ -78,6 +78,15 @@ struct Scan {
     revision: u64,
     device: NetworkObjectId,
     before: Option<u64>,
+}
+struct Stop(Cancellation);
+impl StopSignal for Stop {
+    fn cancelled(&self) -> bool {
+        self.0.cancelled()
+    }
+    fn wait(&self, duration: Duration) {
+        self.0.sleep(duration);
+    }
 }
 pub struct Network {
     adapter: Arc<dyn NetworkPort>,
@@ -700,7 +709,7 @@ impl Network {
             move |out, cancel| {
                 adapter.watch_credentials(
                     &mut |value| out.send(Message::Credentials(value)),
-                    &crate::adapters::WatchStop(cancel),
+                    &Stop(cancel),
                 );
             },
         )];

@@ -1219,3 +1219,81 @@ fn network_secret_agent_cancel_profile_retirement_and_daemon_loss_retire_exact_r
     assert!(pending.join().unwrap().is_err());
     assert!(watch.adapter.answer_credentials(request.id, None).is_err());
 }
+
+#[test]
+fn profile_updates_retire_credentials_while_activation_is_still_awaiting_user_input() {
+    for property_signal in [false, true] {
+        let bus = Bus::new();
+        let service = Service::new(&bus);
+        agent_service(&service);
+        let watch = Watch::configured(&bus, Duration::from_secs(3), true);
+        let ready = watch.ready();
+        let adapter = watch.adapter.clone();
+        let profile = ready.profiles[0].id;
+        let device = ready.devices[0].id;
+        let activation = thread::spawn(move || {
+            adapter.control(NetworkCommand::Activate {
+                profile,
+                device: Some(device),
+            })
+        });
+        let request = current_request(&watch.adapter);
+        assert!(!activation.is_finished());
+        // A different profile's update must not cancel this conversation.
+        service
+            .connection
+            .emit_signal(
+                None::<&str>,
+                "/org/freedesktop/NetworkManager/Settings/Unrelated",
+                PROFILE,
+                "Updated",
+                &(),
+            )
+            .unwrap();
+        thread::sleep(Duration::from_millis(100));
+        assert_eq!(
+            watch.adapter.credentials.state_for_test().unwrap().id,
+            request.id
+        );
+        if property_signal {
+            service.changed(SAVED, PROFILE);
+        } else {
+            service
+                .connection
+                .emit_signal(None::<&str>, SAVED, PROFILE, "Updated", &())
+                .unwrap();
+        }
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while watch.adapter.credentials.state_for_test().is_some() {
+            assert!(
+                Instant::now() < deadline,
+                "A profile update left reply authority alive behind the pending activation"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert!(
+            watch
+                .adapter
+                .answer_credentials(
+                    request.id,
+                    Some(
+                        WifiCredentials::new(
+                            WifiSecurity::WpaPersonal,
+                            Some(Secret::new("test-password".into()))
+                        )
+                        .unwrap()
+                    )
+                )
+                .is_err()
+        );
+        while !activation.is_finished() {
+            assert!(
+                Instant::now() < deadline,
+                "Retired credential callback did not release the native activation"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert!(activation.join().unwrap().is_err());
+        assert_eq!(service.state.lock().unwrap().secret_replies, 0);
+    }
+}

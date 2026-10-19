@@ -247,7 +247,13 @@ its actual `GetSecrets` response, proving the separate answer lane can complete
 without another join or saved-profile identity. Additional protocol cases cover
 unauthorized senders, noninteractive/unknown flags, unsupported hints/security,
 agent-owned vault requests, UUID mismatch, daemon cancellation, profile removal,
-service-owner loss and stale one-shot response rejection. Client tests cover
+service-owner loss and stale one-shot response rejection. Profile Updated and
+profile PropertiesChanged signals immediately invalidate only that profile’s
+credential context, even while its activation is holding the ordinary snapshot
+loop. Credential-observer replacement detaches old requests under its admission
+lock; callback wakeups and consuming replies happen outside that lock. A new
+held-activation regression covers both update signal forms and unrelated-profile
+isolation. Client tests cover
 masked consuming submission while ordinary activation is pending, close-before-
 acknowledgement, late prompts, daemon withdrawal, replacement generations and
 credential observation arriving before the first network snapshot.
@@ -264,8 +270,13 @@ to alter original profiles. After initial WPA2/DHCP and saved reconnection it:
 4. Requires the original UUID, one matching profile, real association and DHCP.
 5. Checks the daemon's stored secret inside the root fixture process, emitting
    only a boolean comparison, then disconnects/reconnects without another prompt.
-6. Restores original profiles, routes, radio state, wallpaper and desktop process
-   through the existing fixture cleanup guards.
+6. Restores original profiles, routes and radio state through the fixture cleanup
+   guards, even when native panel close fails. The helper compares exact settings
+   bytes/inode, wallpaper links, complete bounded media inventory, exported files,
+   clipboard history, monitor configuration, supervisor and binary identities.
+   Changes fail verification and are preserved for inspection, never restored
+   over concurrent user changes. The root-owned fixture state remains private
+   if teardown cannot be verified.
 
 `python3 -m py_compile vm/network_fixture.py vm/test-network-panel.py` validates
 helper syntax only. Cargo, private-bus, visual and real-guest results must be
