@@ -15,6 +15,7 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 #[derive(Clone)]
 pub enum Message {
     Ignore,
+    DismissPanels,
     BackgroundPresented(Option<SurfaceInstance>, f64),
     Outputs(Vec<DisplayOutput>),
     OnMonitor(crate::monitors::Route, Box<Message>),
@@ -1357,6 +1358,7 @@ impl Component for Desktop {
                     }
                 }
             }
+            Message::DismissPanels => self.dismiss_panels(effects),
             Message::Notifications(message) => {
                 let was_open = self.notifications.history_open();
                 effects.delegate(
@@ -3157,6 +3159,7 @@ impl api::Application for Desktop {
             return Ok(Some(Message::LauncherSize(size)));
         }
         Ok(Some(match command {
+            "shell hide" => Message::DismissPanels,
             "tray open"=>Message::Tray(crate::tray::Message::Open),
             "tray toggle"=>Message::Tray(crate::tray::Message::Toggle),
             "tray close"=>Message::Tray(crate::tray::Message::Close),
