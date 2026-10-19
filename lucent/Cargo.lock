@@ -42,6 +42,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "application-intent"
+version = "0.1.0"
+dependencies = [
+ "lucent-api",
+ "lucent-design",
+ "lucent-domain",
+ "lucent-services",
+ "lucent-wayland",
+ "serde_json",
+]
+
+[[package]]
 name = "application-service"
 version = "0.1.0"
 dependencies = [

@@ -165,6 +165,8 @@ def record(directory, run_id, arguments):
     require(values == (LITERAL if action == 'Literal' else []))
     append_event(directory, run_id, {'kind': event, 'action': action,
                  'version': version, 'argv': values,
+                 'fresh_token_present': bool(os.environ.get('XDG_ACTIVATION_TOKEN')),
+                 'legacy_startup_present': bool(os.environ.get('DESKTOP_STARTUP_ID')),
                  'pid': os.getpid(),
                  'started': Path('/proc/self/stat').read_text().rsplit(')', 1)[1].split()[19],
                  'cgroup': Path('/proc/self/cgroup').read_text()})
@@ -255,6 +257,14 @@ def native(directory, run_id, operation):
 
     loop = GLib.MainLoop()
 
+    def platform_state(platform):
+        # Never retain native token values, including in the private event log.
+        keys = sorted(str(key) for key in platform)
+        token = platform.get('activation-token')
+        return {'platform_keys': keys,
+                'fresh_token_present': isinstance(token, str) and bool(token),
+                'empty_platform': not platform}
+
     class Application(dbus.service.Object):
         def __init__(self):
             self.name = dbus.service.BusName(bus_name, bus=bus, do_not_queue=True,
@@ -263,13 +273,13 @@ def native(directory, run_id, operation):
 
         @dbus.service.method(APPLICATION, in_signature='a{sv}', out_signature='')
         def Activate(self, platform):
-            append_event(directory, run_id, {'kind': 'activate', 'empty_platform': not platform})
+            append_event(directory, run_id, {'kind': 'activate', **platform_state(platform)})
 
         @dbus.service.method(APPLICATION, in_signature='sava{sv}', out_signature='')
         def ActivateAction(self, action, parameters, platform):
             require(str(action) in ('Native', 'Denied'))
             append_event(directory, run_id, {'kind': 'activate-action', 'action': str(action),
-                         'empty_parameters': not parameters, 'empty_platform': not platform})
+                         'empty_parameters': not parameters, **platform_state(platform)})
             if str(action) == 'Denied':
                 raise dbus.exceptions.DBusException('Owned fixture denial',
                     name='org.freedesktop.DBus.Error.AccessDenied')

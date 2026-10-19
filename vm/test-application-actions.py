@@ -330,7 +330,8 @@ def suite(results):
                    'keyboard_invokes_literal_action_once')
         event = next(event for event in events() if event['kind'] == 'action-exec')
         require(event['action'] == 'Literal' and event['version'] == 'v1'
-                and event['argv'] == ['two words', '$HOME', '$(unused)', 'semi;colon', '%', ''],
+                and event['argv'] == ['two words', '$HOME', '$(unused)', 'semi;colon', '%', '']
+                and event['fresh_token_present'] and not event['legacy_startup_present'],
                 'literal_action_argv_preserved_without_shell_expansion')
         no_primary()
         results['checks']['keyboard_action_and_literal_argv'] = True
@@ -380,11 +381,13 @@ def suite(results):
                    'native_activate_action_acknowledged')
         native_event = next(event for event in events()
                             if event['kind'] == 'activate-action' and event['action'] == 'Native')
-        require(native_event['empty_parameters'] and native_event['empty_platform'],
-                'native_action_wire_uses_empty_parameters_and_platform')
+        require(native_event['empty_parameters']
+                and native_event['platform_keys'] == ['activation-token']
+                and native_event['fresh_token_present'],
+                'native_action_wire_uses_empty_parameters_and_fresh_activation')
         require(count('action-fallback') == 0, 'successful_native_action_has_no_exec_fallback')
         no_primary()
-        results['checks']['native_activate_action_exact_name_and_empty_wire_arguments'] = True
+        results['checks']['native_activate_action_exact_name_and_fresh_activation'] = True
 
         chooser('native', 'pointer')
         click(name, monitor, 'application-action-Denied')

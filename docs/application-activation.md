@@ -95,6 +95,26 @@ work; an actual native failure arrives through desktop error state. The independ
 `application-service --open APP_ID FILE_OR_URI ...` consumer demonstrates the same
 port without a renderer or Wayland dependency.
 
+The independent graphical `application-intent` example demonstrates the other
+boundary: a physical button dispatch requests the SDK token, maps its completion
+into a domain launch context, then invokes an injected `ApplicationPort` on a
+worker. Its composition root supplies `XdgApplications`; its view performs no OS
+calls. It can launch, open the supplied targets or invoke one declared action:
+
+```sh
+cargo run --locked -p application-intent -- \
+  --app org.example.Editor.desktop --target '/absolute/a b.txt' \
+  --action NewWindow
+```
+
+Omit `--action` when the application does not declare one. `--data-dir` selects
+an isolated XDG catalog for acceptance. The example's inspector exposes only
+busy/completion counters and a boolean indicating fresh authority. Its socket
+`open` command exercises the same port without physical input and must not reuse
+the preceding button's serial or token. An acknowledged operation still needs
+verification in the target application; the example does not equate dispatch
+with observed focus or file loading.
+
 ## Verification scope
 
 Declared desktop actions predate this milestone and already have owned native
