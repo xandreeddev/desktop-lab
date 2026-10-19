@@ -41,9 +41,6 @@ impl View<'_> {
     fn icon(&self, name: &str, size: f32) -> Element<Message> {
         self.artwork.icon(name, size)
     }
-    fn icon_button(&self, id: &str, name: &str, message: Message) -> Element<Message> {
-        self.artwork.icon_button(id, name, message)
-    }
     fn app_icon(&self, app: &lucent_domain::Application, size: f32) -> Element<Message> {
         self.artwork.app_icon(app, size)
     }

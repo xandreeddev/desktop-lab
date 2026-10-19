@@ -584,7 +584,7 @@ mod tests {
     }
     fn frame(marker: u8, width: u32, height: u32) -> Result<MediaFrame> {
         let mut pixels = vec![0; width as usize * height as usize * 4];
-        for pixel in pixels.chunks_exact_mut(4) {
+        for pixel in pixels.as_chunks_mut::<4>().0 {
             pixel.copy_from_slice(&[marker, 0, 0, 255]);
         }
         MediaFrame::rgba_with_aspect(width, height, pixels, (16, 9), Duration::ZERO)
