@@ -2,11 +2,22 @@
 use calloop::{EventLoop, channel};
 use calloop_wayland_source::WaylandSource;
 use serde_json::{Value, json};
+use std::fs::File;
 use std::io::{self, BufRead, Write};
+use std::os::fd::AsFd;
 use wayland_client::{
     Connection, Dispatch, QueueHandle,
     globals::{GlobalListContents, registry_queue_init},
-    protocol::{wl_compositor::WlCompositor, wl_registry, wl_seat::WlSeat, wl_surface::WlSurface},
+    protocol::{
+        wl_buffer::WlBuffer,
+        wl_compositor::WlCompositor,
+        wl_region::WlRegion,
+        wl_registry,
+        wl_seat::WlSeat,
+        wl_shm::{Format, WlShm},
+        wl_shm_pool::WlShmPool,
+        wl_surface::WlSurface,
+    },
 };
 use wayland_protocols_misc::zwp_input_method_v2::client::{
     zwp_input_method_manager_v2::ZwpInputMethodManagerV2,
@@ -17,6 +28,8 @@ struct State {
     method: ZwpInputMethodV2,
     popup: ZwpInputPopupSurfaceV2,
     surface: WlSurface,
+    marker_buffer: WlBuffer,
+    popup_buffer_committed: bool,
     manager: ZwpInputMethodManagerV2,
     active: bool,
     pending_active: bool,
@@ -26,7 +39,24 @@ struct State {
     cursor: u32,
     anchor: u32,
     rect: Option<(i32, i32, i32, i32)>,
+    rectangle_updates: u64,
     exit: bool,
+}
+// Acceptance barcode only: opaque 8×8 pixels, not a shell component or IME UI.
+const MARKER_ROWS: [u8; 8] = [0xa7, 0xd2, 0x19, 0xec, 0x56, 0x83, 0x6d, 0xb8];
+fn marker_pixels() -> [u8; 256] {
+    let mut pixels = [0; 256];
+    for (y, row) in MARKER_ROWS.into_iter().enumerate() {
+        for x in 0..8 {
+            let argb: u32 = if row & (1 << (7 - x)) != 0 {
+                0xffff_ffff
+            } else {
+                0xff00_0000
+            };
+            pixels[(y * 8 + x) * 4..(y * 8 + x + 1) * 4].copy_from_slice(&argb.to_ne_bytes());
+        }
+    }
+    pixels
 }
 fn emit(value: Value) {
     println!("{value}");
@@ -42,7 +72,7 @@ impl State {
         }
         if command["action"] == "status" {
             emit(
-                json!({"id":id,"ok":true,"active":self.active,"unavailable":self.unavailable,"serial":self.serial,"bytes":self.text.len(),"cursor":self.cursor,"anchor":self.anchor,"rectangle":self.rect,"matches":command.get("expected").and_then(Value::as_str).is_some_and(|expected|expected==self.text)}),
+                json!({"id":id,"ok":true,"active":self.active,"unavailable":self.unavailable,"serial":self.serial,"bytes":self.text.len(),"cursor":self.cursor,"anchor":self.anchor,"rectangle":self.rect,"rectangle_updates":self.rectangle_updates,"popup_buffer_committed":self.popup_buffer_committed,"matches":command.get("expected").and_then(Value::as_str).is_some_and(|expected|expected==self.text)}),
             );
             return;
         }
@@ -146,6 +176,18 @@ impl Dispatch<ZwpInputMethodV2, ()> for State {
             zwp_input_method_v2::Event::Done => {
                 state.serial = state.serial.wrapping_add(1);
                 state.active = state.pending_active;
+                let map_popup = state.active && !state.unavailable;
+                if map_popup != state.popup_buffer_committed {
+                    state
+                        .surface
+                        .attach(map_popup.then_some(&state.marker_buffer), 0, 0);
+                    state.surface.damage(0, 0, 8, 8);
+                    state.surface.commit();
+                    state.popup_buffer_committed = map_popup;
+                    if !map_popup {
+                        state.rect = None;
+                    }
+                }
                 emit(
                     json!({"event":"state","active":state.active,"serial":state.serial,"bytes":state.text.len(),"cursor":state.cursor,"anchor":state.anchor}),
                 );
@@ -176,6 +218,7 @@ impl Dispatch<ZwpInputPopupSurfaceV2, ()> for State {
         } = event
         {
             state.rect = Some((x, y, width, height));
+            state.rectangle_updates = state.rectangle_updates.saturating_add(1);
         }
     }
 }
@@ -203,6 +246,10 @@ wayland_client::delegate_noop!(State:WlCompositor);
 // the eventless form of delegate_noop! would panic instead of ignoring them.
 wayland_client::delegate_noop!(State:ignore WlSurface);
 wayland_client::delegate_noop!(State:ignore WlSeat);
+wayland_client::delegate_noop!(State:ignore WlShm);
+wayland_client::delegate_noop!(State:ignore WlBuffer);
+wayland_client::delegate_noop!(State:WlShmPool);
+wayland_client::delegate_noop!(State:WlRegion);
 wayland_client::delegate_noop!(State:ZwpInputMethodManagerV2);
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let connection = Connection::connect_to_env()?;
@@ -219,13 +266,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let seat: WlSeat = globals.bind(&qh, 1..=1, ())?;
     let manager: ZwpInputMethodManagerV2 = globals.bind(&qh, 1..=1, ())?;
     let compositor: WlCompositor = globals.bind(&qh, 1..=1, ())?;
+    let shm: WlShm = globals.bind(&qh, 1..=1, ())?;
     let method = manager.get_input_method(&seat, &qh, ());
     let surface = compositor.create_surface(&qh, ());
     let popup = method.get_input_popup_surface(&surface, &qh, ());
+    let mut marker_memory = File::from(rustix::fs::memfd_create(
+        "lucent-owned-ime-marker",
+        rustix::fs::MemfdFlags::CLOEXEC,
+    )?);
+    marker_memory.write_all(&marker_pixels())?;
+    let pool = shm.create_pool(marker_memory.as_fd(), 256, &qh, ());
+    let marker_buffer = pool.create_buffer(0, 8, 8, 32, Format::Argb8888, &qh, ());
+    let empty_input = compositor.create_region(&qh, ());
+    surface.set_input_region(Some(&empty_input));
+    empty_input.destroy();
     let mut state = State {
         method,
         popup,
         surface,
+        marker_buffer,
+        popup_buffer_committed: false,
         manager,
         active: false,
         pending_active: false,
@@ -235,6 +295,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cursor: 0,
         anchor: 0,
         rect: None,
+        rectangle_updates: 0,
         exit: false,
     };
     let mut event_loop = EventLoop::<State>::try_new()?;
@@ -270,6 +331,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     state.popup.destroy();
     state.surface.destroy();
+    state.marker_buffer.destroy();
+    pool.destroy();
     state.method.destroy();
     state.manager.destroy();
     Ok(())
