@@ -35,6 +35,64 @@ precedes unmounting. Reopening rejects stale close timers and retargets current
 motion. The root coordinates launcher/audio/network keyboard ownership. Closed
 network observation continues without an idle redraw loop or nmcli polling.
 
+## Saved-password recovery
+
+A saved profile is activated with its current `NetworkObjectId`. If NetworkManager
+actually requests a new WPA-personal or SAE password, the adapter's SecretAgent
+publishes a `NetworkCredentialRequest`. The desktop opens the existing token-styled
+masked form for that exchange. **Continue** consumes the password into
+`NetworkPort::answer_credentials`; it does not call `Join` or
+`AddAndActivateConnection2`. The response belongs to the same saved connection's
+native `GetSecrets` invocation, preserving its UUID and settings.
+
+The domain request contains only its transient `NetworkCredentialRequestId`,
+opaque saved-profile key, name, original SSID octets, security and whether a new
+secret was requested. D-Bus paths, sender names, callback senders and settings
+serialization remain private to the adapter. `watch_credentials` is a separate
+observation lane so an activation awaiting its native reply cannot block the
+human prompt. It observes an in-memory coordinator; it opens no second bus
+connection. The desktop answers on its existing controls work queue while the
+ordinary network queue may still be awaiting activation.
+
+`NetworkManager::with_secret_agent()` explicitly enables registration. The
+production desktop composition root opts in; a plain independent service observer
+does not. Registration uses NetworkManager's AgentManager and the required native
+SecretAgent path on the **same** captured system-bus connection. Only its captured
+unique NetworkManager owner may invoke callbacks. A request must match a currently
+observed saved profile's native path, UUID and raw SSID. Unsupported requested
+settings/hints, noninteractive requests, WPS, enterprise/VPN methods and
+agent-owned secret flags are refused. The adapter provides no secret vault and
+does not pretend to persist agent-owned passwords. System-owned secret storage
+remains NetworkManager's authority; no "Remember" override is presented during
+saved-profile repair. Not-saved profiles retain their existing storage policy.
+
+At most eight requests are admitted and each callback expires after 90 seconds.
+An admitted saved activation retains the normal five-second transport deadline
+unless its exact profile actually opens a new SecretAgent exchange. That first
+callback grants one absolute user-input deadline plus a bounded native-completion
+grace to both the caller and the connection owner; subsequent callbacks cannot
+renew it. Unrelated profiles and already-existing prompts cannot extend the call.
+The separate response lane remains usable throughout.
+The consuming response validates its exact live ID and security. Cancel/Escape,
+closing or changing the form sends an explicit cancellation; a late prompt after
+closing the pending saved activation is declined without reopening the panel.
+NetworkManager's `CancelGetSecrets`, saved-profile retirement, Wi-Fi removal/radio
+disable, service loss and observer shutdown retire pending callback senders and
+drop any editing secret. A replacement callback gets a new ID; stale edits and
+answers cannot target it. Response delivery acknowledges only the answer, not
+successful association, DHCP or durable storage. There is no automatic credential
+retry, silent profile replacement, terminal wizard, or invented connected state.
+
+Secret replies use deterministic map traversal during both D-Bus sizing and
+serialization. Reconstructing a randomized map per serialization pass can change
+aligned body length and corrupt the native stream; a wire-level regression checks
+the header/body length and decoded fields across supported passphrase lengths.
+
+The form and domain `WifiCredentials` retain zeroizing owned storage through
+response serialization. Native incoming and outgoing D-Bus buffers and
+NetworkManager's own copies/storage have independent lifetimes and are not
+claimed to be zeroized by Lucent.
+
 ## Values and ownership
 
 - `NetworkObjectId` is a temporary handle allocated by one adapter. Device,
@@ -94,7 +152,7 @@ network observation continues without an idle redraw loop or nmcli polling.
    call `control` synchronously from the watch callback: it is running on the
    command owner's thread.
 
-The service uses at most 32 waiting commands, 128 queued network signals, eight
+The ordinary service uses at most 32 waiting commands, 128 queued network signals, eight
 queued owner-change signals, 64 devices, 512 access points, 512 profiles and 64
 active connections. A state refresh and a command have a five-second absolute
 deadline, including command queue time. Exceeding a catalog bound is explicit
@@ -159,9 +217,9 @@ python3 vm/test-network-service.py --login-file /path/to/private/LOGIN.txt
 ```
 
 Actual test results belong in the milestone's measurement report. Physical Wi-Fi,
-enterprise provisioning, secret-agent prompting for saved profiles with missing
-credentials, SAE/OWE interoperability, captive portal UX, suspend and the native
-panel remain separate acceptance work.
+enterprise provisioning, SAE/OWE interoperability, captive portal UX and suspend remain separate hardware
+acceptance work. Secret-agent implementation checks and the extended native panel
+recipe below have separate evidence; implementation alone is not native proof.
 
 The [service evidence](../reports/measurements/lucent-network-service.json) records
 the tested binary and simulated-radio workflow: scan, WPA2/hidden association,
@@ -182,6 +240,74 @@ were preserved. See [the panel report](../reports/measurements/lucent-network-pa
 
 The two-minute warm idle sample measured 225.33 MiB mean process RSS and 0.567%
 of one logical core. This checkpoint is within the current 300 MiB normal-desktop target; software-driver mappings
-can contribute to RSS and separate GPU allocation was not measured. Physical
-Wi-Fi, SAE/OWE/enterprise, secret-agent prompts, captive portals and suspend
-remain unverified. This report does not establish a complete control center.
+can contribute to RSS and separate GPU allocation was not measured. That historical panel checkpoint did not test saved-password SecretAgent
+recovery. Physical Wi-Fi, SAE/OWE/enterprise, captive portals and suspend remain
+unverified by that checkpoint. This report does not establish a complete control center.
+
+
+## Credential recovery validation
+
+The focused private-bus tests exercise an activation deliberately held open until
+its actual `GetSecrets` response, proving the separate answer lane can complete
+without another join or saved-profile identity. Additional protocol cases cover
+unauthorized senders, noninteractive/unknown flags, unsupported hints/security,
+agent-owned vault requests, UUID mismatch, daemon cancellation, profile removal,
+service-owner loss and stale one-shot response rejection. Profile Updated and
+profile PropertiesChanged signals immediately invalidate only that profile’s
+credential context, even while its activation is holding the ordinary snapshot
+loop. Credential-observer replacement detaches old requests under its admission
+lock; callback wakeups and consuming replies happen outside that lock. A new
+held-activation regression covers both update signal forms and unrelated-profile
+isolation. Client tests cover
+masked consuming submission while ordinary activation is pending, close-before-
+acknowledgement, late prompts, daemon withdrawal, replacement generations and
+credential observation arriving before the first network snapshot.
+
+The extended `vm/test-network-panel.py` recipe owns its hwsim profile and refuses
+to alter original profiles. After initial WPA2/DHCP and saved reconnection it:
+
+1. Disconnects only its owned station and installs a deliberately incorrect test
+   password into its registered fixture profile.
+2. Waits for the real native SecretAgent form, enters a disposable fixture value,
+   checks inspector redaction and cancels with Escape.
+3. Clears only that fixture's system-owned password, reconnects, enters the real
+   fixture credential through verified native masked input and submits with Enter.
+4. Requires the original UUID, one matching profile, real association and DHCP.
+5. Checks the daemon's stored secret inside the root fixture process, emitting
+   only a boolean comparison, then disconnects/reconnects without another prompt.
+6. Restores original profiles, routes and radio state through the fixture cleanup
+   guards, even when native panel close fails. The helper compares exact settings
+   bytes/inode, wallpaper links, complete bounded media inventory, exported files,
+   clipboard history, monitor configuration, supervisor and binary identities.
+   Changes fail verification and are preserved for inspection, never restored
+   over concurrent user changes. The root-owned fixture state remains private
+   if teardown cannot be verified.
+
+The accepted source `c17d6e7d56d4` passes strict workspace formatting, all-target
+Clippy and the full Rust suite (789 passed, 76 intentionally ignored), 104 Python
+checks and 576 generated token checks. The strict execution source is
+`493675ba5921`; only the eight reviewed new credential PNG
+references differ. All eight normal/narrow, dark/light, 1×/2× Vulkan comparisons
+pass without updating references. No existing baseline or tolerance changed.
+
+The guarded desktop/CLI deployment and complete native panel recipe pass against
+that exact release. The guest exercises actual NetworkManager, an owned simulated
+WPA2 AP, native pointer/keyboard input, incorrect-password cancellation,
+missing-password repair, the same saved UUID, DHCP and system-owned persistence
+followed by prompt-free reconnection. Exact settings bytes/inode, media, exports,
+clipboard history, monitor configuration, supervisor and process identities survive
+fixture cleanup. The previous accepted binary cohort remains available for
+rollback; rollback was not needed or exercised by this successful deployment.
+
+This is simulated-radio, single-output guest acceptance. Physical Wi-Fi, SAE/OWE,
+enterprise/WEP provisioning, WPS, agent-owned vaults, captive portals, suspend and
+broader interoperability remain open. No new resource or animation-pacing result
+is inferred from the visual or native interaction checks.
+
+Protocol references for this slice:
+[SecretAgent](https://networkmanager.dev/docs/api/latest/gdbus-org.freedesktop.NetworkManager.SecretAgent.html),
+[AgentManager](https://networkmanager.dev/docs/api/latest/gdbus-org.freedesktop.NetworkManager.AgentManager.html)
+and [secret flags](https://networkmanager.dev/docs/api/latest/nm-dbus-types.html).
+
+The [credential recovery evidence](../reports/measurements/lucent-wifi-credential-recovery.json)
+records the exact strict, visual, release/deployment and native source cohorts.

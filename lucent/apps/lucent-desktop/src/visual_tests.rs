@@ -2083,6 +2083,8 @@ fn visual_regressions() {
             ("network-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("network-available", Mode::Apps, 0, 0, "", 1., 640.),
             ("network-password", Mode::Apps, 0, 0, "", 1., 390.),
+            ("network-credentials", Mode::Apps, 0, 0, "", 1., 640.),
+            ("network-credentials-narrow", Mode::Apps, 0, 0, "", 1., 390.),
             ("network-hidden", Mode::Apps, 0, 0, "", 1., 390.),
             ("network-forget", Mode::Apps, 0, 0, "", 1., 390.),
             ("network-error", Mode::Apps, 0, 0, "", 1., 390.),
@@ -3012,6 +3014,21 @@ fn visual_regressions() {
                 }
                 if name == "network-password" {
                     app.update(Message::Network(N::Join(id(2))), &mut effects);
+                    app.update(
+                        Message::Network(N::Password(
+                            1,
+                            InputEdit::Insert("fixture-secret".into()),
+                        )),
+                        &mut effects,
+                    );
+                }
+                if name.starts_with("network-credentials") {
+                    app.update(
+                        Message::Network(N::Credentials(Ok(vec![
+                            crate::network::tests::credential_request(1),
+                        ]))),
+                        &mut effects,
+                    );
                     app.update(
                         Message::Network(N::Password(
                             1,
@@ -6075,4 +6092,72 @@ fn notes_editor_uses_actual_resized_card_insets_and_vertical_space() {
     assert!(field.rect.h > lucent_design::component::input::HEIGHT * 3.);
     assert!(field.text.as_ref().unwrap().is_multiline());
     assert!(field.scroll.is_some());
+}
+
+#[test]
+fn saved_password_prompt_keeps_native_focus_masking_and_current_profile_policy() {
+    use crate::network::{
+        Message as N,
+        tests::{credential_request, fixture as network_fixture},
+    };
+    let mut app = fixture(0, false);
+    let mut effects = Effects::default();
+    app.update(
+        Message::Network(N::Observed(Ok(network_fixture()))),
+        &mut effects,
+    );
+    app.update(
+        Message::Network(N::Credentials(Ok(vec![credential_request(1)]))),
+        &mut effects,
+    );
+    app.update(
+        Message::Network(N::Password(
+            1,
+            InputEdit::Insert("private-test-value".into()),
+        )),
+        &mut effects,
+    );
+    assert!(app.network.open());
+    assert!(!app.launcher.open());
+    let layout = Layout::new(fonts(&app));
+    for width in [390., 640.] {
+        let cx = ViewContext {
+            surface: "network",
+            instance: None,
+            width,
+            height: 580.,
+            now: 1.,
+            density: lucent_api::Density::ONE,
+        };
+        let tree = app.view(&cx);
+        let mut input = Interaction::default();
+        input.synchronize(&layout.build(&tree, width, cx.height, &input, cx.now));
+        let scene = layout.build(&tree, width, cx.height, &input, cx.now);
+        assert_eq!(input.focus.as_deref(), Some("network-password-1"));
+        assert!(
+            scene
+                .hits
+                .iter()
+                .all(|h| !h.value.contains("private-test-value"))
+        );
+        assert!(scene.hits.iter().any(|h| h.id == "network-connect"));
+        assert!(!scene.hits.iter().any(|h| h.id == "network-remember"));
+        assert!(scene.paint.iter().all(
+            |p| !matches!(p, Paint::Text { text, .. } if text.contains("private-test-value"))
+        ));
+        assert!(
+            scene
+                .paint
+                .iter()
+                .any(|p| matches!(p, Paint::Text { text, .. } if text == "Continue"))
+        );
+    }
+    assert!(!app.inspect().contains("private-test-value"));
+    assert_eq!(
+        app.surfaces()
+            .iter()
+            .filter(|s| s.visible && s.keyboard == Keyboard::Exclusive)
+            .count(),
+        1
+    );
 }
