@@ -9,7 +9,7 @@ use std::{sync::Arc, time::Duration};
 #[cfg(test)]
 pub(crate) mod tests;
 mod view;
-pub use view::{condition_label, condition_symbol};
+pub use view::condition_symbol;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Field {
@@ -468,13 +468,10 @@ impl Weather {
                 }
             }
             Message::Observed(generation, result) => {
-                let Some(worker) = self
+                let worker = self
                     .worker
                     .as_ref()
-                    .filter(|worker| worker.generation == generation)
-                else {
-                    return None;
-                };
+                    .filter(|worker| worker.generation == generation)?;
                 let Work::Forecast(coordinates) = worker.work else {
                     return None;
                 };
