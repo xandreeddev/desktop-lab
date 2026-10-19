@@ -22,6 +22,7 @@ import uuid
 
 import lab
 from native_surfaces import active_surfaces, find_surface
+from preservation_fingerprint import fingerprint
 
 ROOT = Path(__file__).resolve().parents[1]
 STARTED = None
@@ -207,6 +208,26 @@ def main():
     observed=monitor();assert changed(observed)==(1920,1080,0,0,1,0)
     assert any(mode.startswith('1280x720@') for mode in observed['availableModes'])
     assert remote('sha256sum','/home/omarchy/.local/bin/lucent-desktop').split()[0]==args.desktop_sha256
+    before_preservation=fingerprint(session)
+    process_script=r"""
+import hashlib,json,os,stat,sys
+from pathlib import Path
+expected=Path.home()/'.local/bin/lucent-desktop'; wanted=sys.argv[1]; matches=[]
+for entry in Path('/proc').iterdir():
+    if not entry.name.isdecimal():continue
+    try:
+        args=(entry/'cmdline').read_bytes().split(bytes([0]))
+        if len([a for a in args if a])!=1 or (entry/'exe').resolve()!=expected:continue
+        with (entry/'exe').open('rb') as stream:
+            meta=os.fstat(stream.fileno());assert stat.S_ISREG(meta.st_mode) and meta.st_size<=128*1024*1024
+            value=hashlib.file_digest(stream,'sha256').hexdigest()
+        assert value==wanted
+        matches.append({'pid':int(entry.name),'start':(entry/'stat').read_text().rsplit(')',1)[1].split()[19],'exe_identity':[meta.st_dev,meta.st_ino]})
+    except (FileNotFoundError,ProcessLookupError,PermissionError):pass
+assert len(matches)==1
+print(json.dumps(matches[0]))
+"""
+    desktop_process=json.loads(remote('python3','-c',process_script,args.desktop_sha256))
     directory='/home/omarchy/.local/state/lucent/lucent-display-transaction-'+uuid.uuid4().hex
     remote('mkdir','-m','700',directory)
     subprocess.run(lab.ssh_args('lucent')+['cat > '+shlex.quote(directory+'/recovery.py')],input=RECOVERY.encode(),check=True)
@@ -217,7 +238,7 @@ def main():
     launch="import os,subprocess,sys; directory=sys.argv[1]; subprocess.Popen(['python3',directory+'/recovery.py','watch',directory],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True); print('started')"
     remote('python3','-c',launch,directory)
     eventually(lambda:remote('test','-f',directory+'/watch.ready')=='','Independent recovery watchdog did not arm')
-    checks=[];restoration=None
+    checks=[];restoration=None;preservation_verified=False
     report_path=ROOT/'reports/local'/('display-settings-native-'+uuid.uuid4().hex+'.json')
     report_path.parent.mkdir(parents=True,exist_ok=True)
     def original(): return changed(monitor())==changed(observed)
@@ -257,21 +278,40 @@ def main():
             open_panel();click(field(0));enter('16');apply()
             # Match only the preflight-verified desktop binary with no arguments;
             # the --display-guard child must remain alive and restore on pipe EOF.
-            script="import os,pathlib,signal,sys; expected=pathlib.Path(sys.argv[1]); matches=[]\nfor path in pathlib.Path('/proc').iterdir():\n if path.name.isdecimal():\n  try:\n   args=(path/'cmdline').read_bytes().split(bytes([0])); exe=(path/'exe').resolve();\n   if exe==expected and len([a for a in args if a])==1: matches.append(int(path.name))\n  except (OSError,PermissionError): pass\nassert len(matches)==1\nos.kill(matches[0],signal.SIGKILL)"
-            remote('python3','-c',script,'/home/omarchy/.local/bin/lucent-desktop')
+            script=r"""
+import hashlib,json,os,signal,sys
+from pathlib import Path
+captured=json.loads(sys.argv[1]); expected_sha=sys.argv[2]
+entry=Path('/proc')/str(captured['pid']); descriptor=os.pidfd_open(captured['pid'])
+try:
+    assert (entry/'stat').read_text().rsplit(')',1)[1].split()[19]==captured['start']
+    assert len([a for a in (entry/'cmdline').read_bytes().split(bytes([0])) if a])==1
+    with (entry/'exe').open('rb') as stream:
+        meta=os.fstat(stream.fileno());assert [meta.st_dev,meta.st_ino]==captured['exe_identity']
+        assert hashlib.file_digest(stream,'sha256').hexdigest()==expected_sha
+    assert (entry/'stat').read_text().rsplit(')',1)[1].split()[19]==captured['start']
+    signal.pidfd_send_signal(descriptor,signal.SIGKILL)
+finally:os.close(descriptor)
+"""
+            remote('python3','-c',script,json.dumps(desktop_process),args.desktop_sha256)
             eventually(original,'Guardian did not restore after desktop crash',timeout=12)
             eventually(lambda:inspect()['client']['settings_writable'],'Supervisor did not recover desktop',timeout=45)
+            recovered=json.loads(remote('python3','-c',process_script,args.desktop_sha256))
+            assert recovered['pid']!=desktop_process['pid']
             checks.append('desktop_crash_eof_rollback_and_supervisor_recovery')
     finally:
         try:
             cli('displays','close');time.sleep(.8)
         except (OSError,subprocess.SubprocessError): pass
-        try: restoration=recovery('stop')
+        try:
+            restoration=recovery('stop')
+            assert fingerprint(session)==before_preservation, 'Preserved settings/media/exports/history/supervisor/binary state changed; no automatic restore'
+            preservation_verified=True
         finally:
-            report={'desktop_sha256':args.desktop_sha256,'checks':checks,'restoration':restoration,'crash_test_requested':args.test_crash,'scope':'single-output QEMU native panel input and observed layout; no physical/multi-output claims'}
+            report={'desktop_sha256':args.desktop_sha256,'checks':checks,'restoration':restoration,'crash_test_requested':args.test_crash,'preservation_verified':preservation_verified,'scope':'single-output QEMU native panel input and observed layout; no physical/multi-output claims'}
             descriptor=os.open(report_path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
             with os.fdopen(descriptor,'w') as stream:json.dump(report,stream,indent=2);stream.write('\n')
-    assert restoration and all(restoration.values())
-    print(json.dumps({'passed':True,'checks':checks,'restoration':restoration,'private_report':str(report_path)}))
+    assert restoration and all(restoration.values()) and preservation_verified
+    print(json.dumps({'passed':True,'checks':checks,'restoration':restoration,'preservation_verified':preservation_verified,'private_report':str(report_path)}))
 
 if __name__=='__main__': main()
