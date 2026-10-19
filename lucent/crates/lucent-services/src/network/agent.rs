@@ -1,7 +1,10 @@
 //! NetworkManager SecretAgent transport. Only the captured unique daemon may
 //! ask; user input uses a separate bounded lane from five-second native methods.
 use super::{native::*, snapshot::Kind, *};
-use std::{collections::BTreeMap, sync::Condvar};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Condvar,
+};
 use zbus::{
     message::Header,
     zvariant::{OwnedObjectPath, Signature, Type, Value},
@@ -10,7 +13,7 @@ use zbus::{
 pub(super) const PATH: &str = "/org/freedesktop/NetworkManager/SecretAgent";
 const MANAGER: &str = "/org/freedesktop/NetworkManager/AgentManager";
 const SECURITY: &str = "802-11-wireless-security";
-const PROMPT_TIMEOUT: Duration = Duration::from_secs(90);
+pub(super) const PROMPT_TIMEOUT: Duration = Duration::from_secs(90);
 const LIMIT: usize = 8;
 
 #[derive(zbus::DBusError, Debug)]
@@ -41,11 +44,19 @@ struct Pending {
     request: NetworkCredentialRequest,
     reply: async_channel::Sender<Option<WifiCredentials>>,
 }
+struct Waiter {
+    path: String,
+    minimum: u64,
+    extension: Arc<Mutex<Option<Instant>>>,
+    grace: Duration,
+}
 struct State {
     online: bool,
     revision: u64,
     profiles: BTreeMap<String, ProfileContext>,
     pending: BTreeMap<NetworkCredentialRequestId, Pending>,
+    waiting: Option<Waiter>,
+    wifi_paths: BTreeSet<String>,
 }
 /// No transport or secret value is stored in an observation. A pending reply
 /// owns only its one-shot sender; credentials move straight to the callback.
@@ -63,6 +74,8 @@ impl Default for Hub {
                 revision: 0,
                 profiles: BTreeMap::new(),
                 pending: BTreeMap::new(),
+                waiting: None,
+                wifi_paths: BTreeSet::new(),
             }),
             changed: Condvar::new(),
             next: AtomicU64::new(1),
@@ -95,6 +108,8 @@ impl Hub {
         state.online = false;
         state.pending.clear(); // drops senders and wakes every awaiting callback
         state.profiles.clear();
+        state.wifi_paths.clear();
+        state.waiting = None;
         self.change(&mut state);
     }
     pub(super) fn refresh(&self, objects: &Objects, snapshot: &NetworkSnapshot) {
@@ -136,6 +151,17 @@ impl Hub {
             })
         });
         state.profiles = profiles;
+        state.wifi_paths = snapshot
+            .devices
+            .iter()
+            .filter(|d| d.kind == NetworkKind::Wifi && d.managed)
+            .filter_map(|d| {
+                objects
+                    .resolve(d.id, Kind::Device)
+                    .ok()
+                    .map(|p| p.to_string())
+            })
+            .collect();
         if state.pending.len() != before {
             self.change(&mut state);
         }
@@ -214,6 +240,21 @@ impl Hub {
         pending.reply.try_send(credentials).map_err(|_| {
             DomainError::Invalid("Network credential request ended before answer delivery".into())
         })
+    }
+    pub(super) fn invalidate(&self, path: &str) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let before = state.pending.len();
+        if state.wifi_paths.remove(path) {
+            // A profile may select any managed radio. Until a fresh native
+            // snapshot resolves the surviving target, retire interactive intent.
+            state.pending.clear();
+        } else {
+            state.pending.retain(|_, p| p.path != path);
+        }
+        state.profiles.remove(path);
+        if state.pending.len() != before {
+            self.change(&mut state);
+        }
     }
     fn remove(&self, id: NetworkCredentialRequestId) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -368,6 +409,7 @@ impl Agent {
         drop(settings); // Native incoming transport copies are not our secret vault.
         let (send, receive) = async_channel::bounded(1);
         let id = request.id;
+        let deadline = Instant::now() + PROMPT_TIMEOUT;
         {
             let mut state = self.hub.state.lock().map_err(|_| no_secrets())?;
             if !state.online
@@ -386,6 +428,15 @@ impl Agent {
                 .pending
                 .retain(|_, p| p.path != connection_path.as_str());
             let profile_id = state.profiles[connection_path.as_str()].id;
+            if let Some(waiting) = &state.waiting
+                && waiting.path == connection_path.as_str()
+                && id.value() >= waiting.minimum
+            {
+                let mut extension = waiting.extension.lock().unwrap_or_else(|e| e.into_inner());
+                if extension.is_none() {
+                    *extension = Some(deadline + waiting.grace);
+                }
+            }
             state.pending.insert(
                 id,
                 Pending {
@@ -399,7 +450,7 @@ impl Agent {
         }
         let answer =
             futures_lite::future::or(async { receive.recv().await.ok().flatten() }, async {
-                async_io::Timer::after(PROMPT_TIMEOUT).await;
+                async_io::Timer::at(deadline).await;
                 None
             })
             .await;
@@ -438,6 +489,61 @@ impl Agent {
         self.authorize(&header)?;
         self.hub.cancel_path(connection_path.as_str());
         Ok(())
+    }
+}
+/// One admitted saved activation can wait for its first actual, matching native
+/// request. The deadline is absolute and cannot be renewed by repeated prompts.
+pub(super) struct Interaction {
+    hub: Arc<Hub>,
+    path: String,
+    minimum: u64,
+    extension: Arc<Mutex<Option<Instant>>>,
+}
+impl Interaction {
+    pub(super) fn new(
+        hub: Arc<Hub>,
+        path: String,
+        extension: Arc<Mutex<Option<Instant>>>,
+        grace: Duration,
+    ) -> Self {
+        let minimum = hub.next.load(Ordering::Acquire);
+        hub.state.lock().unwrap_or_else(|e| e.into_inner()).waiting = Some(Waiter {
+            path: path.clone(),
+            minimum,
+            extension: extension.clone(),
+            grace,
+        });
+        Self {
+            hub,
+            path,
+            minimum,
+            extension,
+        }
+    }
+    pub(super) fn deadline(&self) -> Option<Instant> {
+        *self.extension.lock().unwrap_or_else(|e| e.into_inner())
+    }
+    pub(super) fn cancel(&self) {
+        let mut state = self.hub.state.lock().unwrap_or_else(|e| e.into_inner());
+        let before = state.pending.len();
+        state
+            .pending
+            .retain(|_, p| p.path != self.path || p.request.id.value() < self.minimum);
+        if state.pending.len() != before {
+            self.hub.change(&mut state);
+        }
+    }
+}
+impl Drop for Interaction {
+    fn drop(&mut self) {
+        let mut state = self.hub.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state
+            .waiting
+            .as_ref()
+            .is_some_and(|w| Arc::ptr_eq(&w.extension, &self.extension))
+        {
+            state.waiting = None;
+        }
     }
 }
 pub(super) struct Session {

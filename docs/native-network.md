@@ -67,6 +67,12 @@ remains NetworkManager's authority; no "Remember" override is presented during
 saved-profile repair. Not-saved profiles retain their existing storage policy.
 
 At most eight requests are admitted and each callback expires after 90 seconds.
+An admitted saved activation retains the normal five-second transport deadline
+unless its exact profile actually opens a new SecretAgent exchange. That first
+callback grants one absolute user-input deadline plus a bounded native-completion
+grace to both the caller and the connection owner; subsequent callbacks cannot
+renew it. Unrelated profiles and already-existing prompts cannot extend the call.
+The separate response lane remains usable throughout.
 The consuming response validates its exact live ID and security. Cancel/Escape,
 closing or changing the form sends an explicit cancellation; a late prompt after
 closing the pending saved activation is declined without reopening the panel.

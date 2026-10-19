@@ -1063,6 +1063,11 @@ fn network_secret_agent_answer_is_independent_of_pending_activation_and_keeps_sa
         !operation.is_finished(),
         "The fixture must actually hold native activation for human input"
     );
+    // Cross the ordinary five-second command deadline with no answer. Neither
+    // the caller nor native owner may retire this real interactive exchange.
+    thread::sleep(Duration::from_millis(5400));
+    assert!(!operation.is_finished());
+    assert_eq!(current_request(&watch.adapter).id, request.id);
     watch
         .adapter
         .answer_credentials(
