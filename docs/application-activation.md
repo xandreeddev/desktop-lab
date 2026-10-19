@@ -148,8 +148,8 @@ without silently reducing the requested application behavior. Child-environment
 delivery and observed focus do not prove
 that Chromium consumed a specific activation protocol message. The run requires
 an identified release containing the independent example, an unlocked idle
-single-output VM and bounded owned-process cleanup. Its existence is not an
-executed result; no native pass is claimed here.
+single-output VM and bounded owned-process cleanup. The native attempt described
+below failed; no complete native pass is claimed here.
 
 The admission snapshot binds the desktop, supervisor and compositor to their
 captured lifetimes. The independent example must match the release digest and
@@ -208,3 +208,34 @@ reuse of old matching tabs, only one fresh document, duplicate/unexpected pages,
 control replacement, and target-specific cleanup refusals. These checks use
 pure policy, temporary endpoint files and mocked browser transport; they do not
 establish native Chromium interoperability.
+
+The `1c3d500` native attempt did start a real owned Chromium window during the
+first physical Launch. Its private child event records fresh token presence and
+no legacy startup value. The original report nevertheless contains no passed
+checks and fails cleanup; it remains unchanged. Independent process diagnostics
+show the same original wrapper PID/birth and service invocation while Chromium
+moved itself into its normal registered application scope. Its executable is
+319,274,072 bytes, below the explicit 512 MiB limit. The fixture's strict original
+cgroup check rejected that lifecycle; neither a size-limit failure nor an SDK
+defect is established. No focus, document-loading or complete application pass
+is inferred from that partial observation. Supporting normal application-scope
+migration requires separately reviewed exact execution ownership; disabling the
+browser's integration or accepting arbitrary new cgroups is not a substitute.
+
+Failure reporting now retains the primary interaction phase and fixed error
+independently from each cleanup failure. Failed fixture subprocesses retain their
+operation, exit/deadline metadata and stderr byte count/hash. At most 64 KiB of
+stderr per failure is stored in a mode-0600 file under a new mode-0700 ignored
+host diagnostics directory. The private report records those files and the guest
+scratch/origin/admission receipt locations, including the latest failed fixture
+observation when a readiness loop subsequently times out. It never includes raw
+exception/traceback text in diagnostic metadata or stdout. These bounded evidence
+files are not authority to bypass a failed guard or adopt another process.
+
+An earlier interaction failure survives cleanup failure instead of being replaced
+by the generic preservation label. Cleanup failures remain separately named;
+they still fail acceptance when the interaction itself passed. Reports are born
+mode 0600 and refuse to overwrite an existing receipt. Stdout gives only the
+fixed outcome/check summary and report location, leaving private artifact paths
+inside the report. The reporting correction has local tests; it does not rerun
+or relabel the original failed native attempt.
