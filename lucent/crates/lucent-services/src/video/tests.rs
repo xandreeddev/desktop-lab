@@ -306,7 +306,7 @@ fn local_library_lists_bounded_regular_media_without_decoding_or_importing() {
         fs::write(library.join(format!("loop-{number:02}.mp4")), b"candidate").unwrap();
     }
     let sources = adapter.library().unwrap();
-    assert_eq!(sources.len(), MAX_ASSETS);
+    assert_eq!(sources.len(), LIBRARY_RESULTS);
     assert!(sources.windows(2).all(|pair| pair[0].name <= pair[1].name));
 }
 
@@ -374,6 +374,259 @@ fn fixture(root: &Path, extension: &str) -> PathBuf {
     assert!(result.status.success(), "synthetic fixture encoding failed");
     file
 }
+
+#[derive(Debug, PartialEq, Eq)]
+struct StoredFile {
+    path: PathBuf,
+    identity: (u64, u64, u32, u64),
+    modified: (i64, i64),
+    changed: (i64, i64),
+    bytes: Vec<u8>,
+    link: Option<PathBuf>,
+}
+fn storage_snapshot(root: &Path) -> Vec<StoredFile> {
+    use std::os::unix::fs::MetadataExt;
+    fn visit(path: &Path, root: &Path, files: &mut Vec<StoredFile>) {
+        let metadata = fs::symlink_metadata(path).unwrap();
+        files.push(StoredFile {
+            path: path.strip_prefix(root).unwrap().to_owned(),
+            identity: (
+                metadata.dev(),
+                metadata.ino(),
+                metadata.mode(),
+                metadata.len(),
+            ),
+            modified: (metadata.mtime(), metadata.mtime_nsec()),
+            changed: (metadata.ctime(), metadata.ctime_nsec()),
+            bytes: if metadata.is_file() {
+                fs::read(path).unwrap()
+            } else {
+                vec![]
+            },
+            link: metadata.is_symlink().then(|| fs::read_link(path).unwrap()),
+        });
+        if metadata.is_dir() {
+            for entry in fs::read_dir(path).unwrap() {
+                visit(&entry.unwrap().path(), root, files);
+            }
+        }
+    }
+    let mut files = vec![];
+    visit(root, root, &mut files);
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    files
+}
+
+#[test]
+fn video_native_repeated_import_reuses_exact_owned_bytes_beyond_old_import_quota() {
+    let root = Directory::new();
+    let file = fixture(&root.0, "mp4");
+    let source = Wallpaper {
+        path: file.to_string_lossy().into(),
+        name: "Current fixture".into(),
+    };
+    let adapter = NativeVideoWallpapers {
+        state: root.0.join("store"),
+        library: root.0.clone(),
+    };
+    let asset = adapter.prepare(&source).unwrap();
+    // Historical assets remain valid and immutable, with distinct descriptors.
+    // Lookup must not confuse the library's bounded result count with a quota.
+    for number in 0..40 {
+        let dir = adapter.state.join(format!("media-history-{number}"));
+        fs::create_dir(&dir).unwrap();
+        let mut historical = asset.clone();
+        historical.source.name = format!("Historical {number}");
+        historical.path = dir.join("source.mp4").to_string_lossy().into();
+        historical.poster.path = dir.join("poster.png").to_string_lossy().into();
+        fs::copy(&asset.path, &historical.path).unwrap();
+        fs::copy(&asset.poster.path, &historical.poster.path).unwrap();
+        fs::write(
+            dir.join("asset.json"),
+            serde_json::to_vec(&historical).unwrap(),
+        )
+        .unwrap();
+        adapter.owned(&historical).unwrap();
+    }
+    let before = storage_snapshot(&adapter.state);
+    let original_source = storage_snapshot(&file);
+    for _ in 0..3 {
+        assert_eq!(adapter.prepare(&source).unwrap(), asset);
+        assert_eq!(storage_snapshot(&adapter.state), before);
+        assert_eq!(storage_snapshot(&file), original_source);
+    }
+    assert_eq!(fs::read_dir(&adapter.state).unwrap().count(), 41);
+}
+
+#[test]
+fn video_native_changed_source_bytes_create_new_immutable_asset_without_old_writes() {
+    let root = Directory::new();
+    let file = fixture(&root.0, "mp4");
+    // A legal ignored ISO-BMFF free box makes comparison span multiple chunks.
+    // Its last byte changes without changing path, name, size or video pixels.
+    let mut original = fs::read(&file).unwrap();
+    let padding = 2 * 64 * 1024 + 8;
+    original.extend_from_slice(&(padding as u32).to_be_bytes());
+    original.extend_from_slice(b"free");
+    original.resize(original.len() + padding - 8, 0);
+    *original.last_mut().unwrap() = b'A';
+    fs::write(&file, &original).unwrap();
+    let source = Wallpaper {
+        path: file.to_string_lossy().into(),
+        name: "Same descriptor".into(),
+    };
+    let adapter = NativeVideoWallpapers {
+        state: root.0.join("store"),
+        library: root.0.clone(),
+    };
+    let first = adapter.prepare(&source).unwrap();
+    let first_dir = Path::new(&first.path).parent().unwrap();
+    let first_snapshot = storage_snapshot(first_dir);
+    let mut changed = original.clone();
+    *changed.last_mut().unwrap() = b'B';
+    fs::write(&file, &changed).unwrap();
+    let second = adapter.prepare(&source).unwrap();
+    assert_ne!(second.path, first.path);
+    assert_eq!(fs::read(&second.path).unwrap(), changed);
+    assert_eq!(fs::read(&first.path).unwrap(), original);
+    assert_eq!(storage_snapshot(first_dir), first_snapshot);
+    let stable = storage_snapshot(&adapter.state);
+    assert_eq!(adapter.prepare(&source).unwrap(), second);
+    assert_eq!(storage_snapshot(&adapter.state), stable);
+    // Equal bytes alone are insufficient when the source descriptor changes.
+    let renamed = Wallpaper {
+        name: "Different descriptor".into(),
+        ..source
+    };
+    let third = adapter.prepare(&renamed).unwrap();
+    assert_ne!(third.path, second.path);
+    assert_eq!(third.source, renamed);
+    assert_eq!(storage_snapshot(first_dir), first_snapshot);
+}
+
+#[test]
+fn video_native_invalid_foreign_and_symlink_records_are_not_reused_or_rewritten() {
+    let root = Directory::new();
+    let file = fixture(&root.0, "mp4");
+    let source = Wallpaper {
+        path: file.to_string_lossy().into(),
+        name: "Fixture".into(),
+    };
+    for case in ["invalid", "foreign", "symlink", "poster", "writable"] {
+        let adapter = NativeVideoWallpapers {
+            state: root.0.join(case),
+            library: root.0.clone(),
+        };
+        let first = adapter.prepare(&source).unwrap();
+        let dir = Path::new(&first.path).parent().unwrap();
+        let metadata = dir.join("asset.json");
+        let outside = root.0.join(format!("{case}-outside.json"));
+        match case {
+            "invalid" => fs::write(&metadata, b"invalid metadata").unwrap(),
+            "foreign" => {
+                let mut foreign = first.clone();
+                foreign.path = source.path.clone();
+                fs::write(&metadata, serde_json::to_vec(&foreign).unwrap()).unwrap();
+            }
+            "symlink" => {
+                fs::rename(&metadata, &outside).unwrap();
+                std::os::unix::fs::symlink(&outside, &metadata).unwrap();
+                assert!(adapter.owned(&first).is_err());
+            }
+            "poster" => {
+                fs::rename(&first.poster.path, &outside).unwrap();
+                std::os::unix::fs::symlink(&outside, &first.poster.path).unwrap();
+            }
+            "writable" => {
+                fs::set_permissions(&first.path, fs::Permissions::from_mode(0o600)).unwrap()
+            }
+            _ => unreachable!(),
+        }
+        let before = storage_snapshot(dir);
+        let outside_before = outside.exists().then(|| storage_snapshot(&outside));
+        let second = adapter.prepare(&source).unwrap();
+        assert_ne!(second.path, first.path, "reused {case} record");
+        adapter.owned(&second).unwrap();
+        assert_eq!(storage_snapshot(dir), before, "rewrote {case} record");
+        assert_eq!(
+            outside.exists().then(|| storage_snapshot(&outside)),
+            outside_before
+        );
+    }
+}
+
+#[test]
+fn video_native_import_still_succeeds_after_bounded_historical_lookup_misses() {
+    let root = Directory::new();
+    let file = fixture(&root.0, "mp4");
+    let adapter = NativeVideoWallpapers {
+        state: root.0.join("store"),
+        library: root.0.clone(),
+    };
+    fs::create_dir(&adapter.state).unwrap();
+    for number in 0..1025 {
+        let dir = adapter.state.join(format!("media-history-{number}"));
+        fs::create_dir(&dir).unwrap();
+        fs::write(dir.join("keep"), b"unrelated historical data").unwrap();
+    }
+    let historical = fs::read_dir(&adapter.state)
+        .unwrap()
+        .map(|entry| {
+            let path = entry.unwrap().path();
+            let snapshot = storage_snapshot(&path);
+            (path, snapshot)
+        })
+        .collect::<Vec<_>>();
+    let asset = adapter
+        .prepare(&Wallpaper {
+            path: file.to_string_lossy().into(),
+            name: "Fresh import".into(),
+        })
+        .unwrap();
+    adapter.owned(&asset).unwrap();
+    assert_eq!(fs::read_dir(&adapter.state).unwrap().count(), 1026);
+    for (path, before) in historical {
+        assert_eq!(storage_snapshot(&path), before);
+    }
+}
+
+#[test]
+fn video_import_rejects_symlink_fifo_and_replaced_sources_before_storage_mutation() {
+    use std::os::unix::ffi::OsStrExt;
+    let root = Directory::new();
+    let original = root.0.join("original.mp4");
+    fs::write(&original, b"regular source").unwrap();
+    let link = root.0.join("linked.mp4");
+    std::os::unix::fs::symlink(&original, &link).unwrap();
+    let fifo = root.0.join("fifo.mp4");
+    let fifo_name = std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();
+    // SAFETY: the CString is valid for this call; the FIFO is in our owned
+    // temporary directory and has no readers or writers.
+    assert_eq!(unsafe { libc::mkfifo(fifo_name.as_ptr(), 0o600) }, 0);
+    let adapter = NativeVideoWallpapers {
+        state: root.0.join("store"),
+        library: root.0.clone(),
+    };
+    for path in [&link, &fifo] {
+        assert!(
+            adapter
+                .prepare(&Wallpaper {
+                    path: path.to_string_lossy().into(),
+                    name: "Rejected source".into(),
+                })
+                .is_err()
+        );
+        assert!(!adapter.state.exists());
+    }
+    let mut source = store::Source::open(&original).unwrap();
+    fs::rename(&original, root.0.join("old.mp4")).unwrap();
+    fs::write(&original, b"replacement bytes").unwrap();
+    let mut out = fs::File::create(root.0.join("copy")).unwrap();
+    assert!(source.copy_to(&mut out).is_err());
+    assert_eq!(out.metadata().unwrap().len(), 0);
+    assert_eq!(fs::read(&original).unwrap(), b"replacement bytes");
+}
+
 #[test]
 fn video_native_mp4_webm_and_gif_import_and_decode_through_the_real_port() {
     for extension in ["mp4", "webm", "gif"] {

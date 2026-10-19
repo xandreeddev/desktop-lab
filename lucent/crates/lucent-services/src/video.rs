@@ -4,8 +4,8 @@ use ffmpeg_next as ffmpeg;
 use lucent_domain::*;
 use std::{
     fs,
-    io::{Read, Write},
-    os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt},
+    io::Write,
+    os::unix::fs::{DirBuilderExt, PermissionsExt},
     path::{Path, PathBuf},
     sync::{
         Arc, OnceLock,
@@ -14,8 +14,9 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 const SOURCE_BYTES: u64 = 512 * 1024 * 1024;
-const MAX_ASSETS: usize = 32;
+const LIBRARY_RESULTS: usize = 32;
 const LIBRARY_ENTRIES: usize = 1024;
+mod store;
 static NEXT: AtomicU64 = AtomicU64::new(1);
 static INIT: OnceLock<bool> = OnceLock::new();
 #[derive(Clone)]
@@ -71,16 +72,7 @@ impl NativeVideoWallpapers {
                 "Live wallpaper is not an owned asset".into(),
             ));
         }
-        let mut bytes = vec![];
-        fs::File::open(dir.join("asset.json"))
-            .map_err(|_| storage())?
-            .take(16 * 1024 + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|_| storage())?;
-        if bytes.len() > 16 * 1024
-            || serde_json::from_slice::<LiveWallpaperAsset>(&bytes).map_err(|_| storage())?
-                != *asset
-        {
+        if store::metadata(&dir.join("asset.json"))? != *asset {
             return Err(DomainError::Invalid(
                 "Live wallpaper asset metadata is invalid".into(),
             ));
@@ -149,12 +141,12 @@ impl WallpaperPlaybackPort for NativeVideoWallpapers {
             });
         }
         sources.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.path.cmp(&b.path)));
-        sources.truncate(MAX_ASSETS);
+        sources.truncate(LIBRARY_RESULTS);
         Ok(sources)
     }
     fn prepare(&self, source: &Wallpaper) -> Result<LiveWallpaperAsset> {
         let file = Path::new(&source.path);
-        valid_file(file)?;
+        let mut input = store::Source::open(file)?;
         let extension = file
             .extension()
             .and_then(|s| s.to_str())
@@ -165,18 +157,10 @@ impl WallpaperPlaybackPort for NativeVideoWallpapers {
                 "Use a local MP4, WebM or animated GIF".into(),
             ));
         }
-        fs::create_dir_all(&self.state).map_err(|_| storage())?;
-        if fs::read_dir(&self.state)
-            .map_err(|_| storage())?
-            .filter_map(|e| e.ok())
-            .filter(|e| e.file_name().to_string_lossy().starts_with("media-"))
-            .count()
-            >= MAX_ASSETS
-        {
-            return Err(DomainError::Unavailable(
-                "Live wallpaper asset store is full; remove unused media before importing".into(),
-            ));
+        if let Some(asset) = self.reusable(source, &mut input)? {
+            return Ok(asset);
         }
+        fs::create_dir_all(&self.state).map_err(|_| storage())?;
         let stamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| storage())?
@@ -193,22 +177,8 @@ impl WallpaperPlaybackPort for NativeVideoWallpapers {
             .map_err(|_| storage())?;
         let result = (|| {
             let target = dir.join(format!("source.{extension}"));
-            let input = fs::OpenOptions::new()
-                .read(true)
-                .custom_flags(libc::O_NONBLOCK)
-                .open(file)
-                .map_err(|_| storage())?;
-            if !input.metadata().map_err(|_| storage())?.is_file() {
-                return Err(storage());
-            }
             let mut out = fs::File::create(&target).map_err(|_| storage())?;
-            if std::io::copy(&mut input.take(SOURCE_BYTES + 1), &mut out).map_err(|_| storage())?
-                > SOURCE_BYTES
-            {
-                return Err(DomainError::Invalid(
-                    "Live wallpaper source exceeds 512 MiB".into(),
-                ));
-            }
+            input.copy_to(&mut out)?;
             out.flush().map_err(|_| storage())?;
             out.sync_all().map_err(|_| storage())?;
             fs::set_permissions(&target, fs::Permissions::from_mode(0o400))
