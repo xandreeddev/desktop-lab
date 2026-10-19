@@ -4,7 +4,7 @@
   "status": "in_progress",
   "completion_rule": "An item is verified only when its behavior, boundary checks, documentation and applicable native integration checks have evidence. Implemented without verification remains incomplete.",
   "current_rollup": {
-    "snapshot_source_commit": "e279f7b587caff0158cdb0d1fc4132575ac55c0c",
+    "snapshot_source_commit": "24ee05cb10229cb8aeef707e0d8d87f2eb643fc3",
     "snapshot_date": "2026-10-19",
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
@@ -21,10 +21,11 @@
     "requested_gaps": [
       {
         "id": "saved-wifi-credential-recovery",
-        "status": "pending_in_accepted_main",
-        "implemented": "Native scanning, visible/hidden joins, saved activation, targeted disconnect and confirmed Forget.",
-        "remaining": "Secure saved-profile credential prompt/repair preserving the same profile without duplicates, NetworkManager SecretAgent lifetimes and recovery acceptance. Enterprise/WEP and physical-radio validation are separate.",
-        "guide": "docs/native-network.md"
+        "status": "accepted_owned_native",
+        "implemented": "Native SecretAgent masked saved-password repair preserves the same profile UUID and original system-owned/not-saved storage policy. Fourteen actual NetworkManager/native UI checks pass on owned simulated WPA2/hidden radios.",
+        "remaining": "Enterprise/WEP, agent-owned credential vaults, physical Wi-Fi, SAE/OWE/WPS/captive portals and suspend are not established by this fixture.",
+        "guide": "docs/native-network.md",
+        "report": "reports/measurements/lucent-wifi-credential-recovery.json"
       },
       {
         "id": "safe-display-configuration",
@@ -88,6 +89,13 @@
       }
     ],
     "scoped_native_evidence": [
+      {
+        "feature": "saved-wifi-recovery",
+        "source_commit": "c17d6e7d56d43834245938f6b0b63832a140ffe3",
+        "report": "reports/measurements/lucent-wifi-credential-recovery.json",
+        "accepted": "Fourteen actual NetworkManager/native panel checks on owned simulated WPA2/hidden radios: wrong-password cancellation, missing-secret repair, same UUID/no duplicates, DHCP/reconnect and exact restoration. PR82 merged24ee05cb after six final checks.",
+        "not_established": "Physical Wi-Fi, enterprise/SAE/OWE/WPS, agent-owned vaults, captive portals and suspend."
+      },
       {
         "feature": "notes",
         "source_commit": "3806bcfc00e54842022d4f274a092f132c284de8",

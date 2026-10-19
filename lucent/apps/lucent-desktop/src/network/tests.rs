@@ -49,10 +49,19 @@ pub fn fixture() -> NetworkSnapshot {
 #[derive(Default)]
 struct Adapter {
     commands: Mutex<Vec<NetworkCommand>>,
+    answers: Mutex<Vec<(NetworkCredentialRequestId, Option<WifiCredentials>)>>,
 }
 impl NetworkPort for Adapter {
     fn watch(&self, emit: &mut dyn FnMut(Result<NetworkSnapshot>), _: &dyn StopSignal) {
         emit(Ok(fixture()));
+    }
+    fn answer_credentials(
+        &self,
+        request: NetworkCredentialRequestId,
+        credentials: Option<WifiCredentials>,
+    ) -> Result<()> {
+        self.answers.lock().unwrap().push((request, credentials));
+        Ok(())
     }
     fn control(&self, command: NetworkCommand) -> Result<()> {
         self.commands.lock().unwrap().push(command);
@@ -308,4 +317,181 @@ fn hidden_network_text_is_current_bounded_and_clipboard_tickets_do_not_cross_for
     );
     assert_eq!(client.form.as_ref().unwrap().name, "");
     assert_eq!(client.form.as_ref().unwrap().password_length(), 0);
+}
+
+pub(crate) fn credential_request(value: u64) -> NetworkCredentialRequest {
+    NetworkCredentialRequest {
+        id: NetworkCredentialRequestId::new(value).unwrap(),
+        profile: NetworkProfileKey::new("fixture-profile").unwrap(),
+        name: "Lucent fixture".into(),
+        ssid: NetworkSsid::new(b"Lucent fixture".to_vec()).unwrap(),
+        security: WifiSecurity::WpaPersonal,
+        new_secret_required: true,
+    }
+}
+fn complete_answer(client: &mut Network, effects: &mut Effects<Message>) {
+    let index = effects
+        .tasks
+        .iter()
+        .position(|t| t.queue == crate::work::CONTROLS)
+        .unwrap();
+    let task = effects.tasks.remove(index);
+    client.update(task.run(), effects);
+}
+#[test]
+fn native_credential_form_consumes_secret_on_controls_while_activation_is_pending() {
+    let (mut client, adapter, mut effects) = client();
+    client.update(
+        Message::Request(Control::Activate(id(3), Some(id(1)))),
+        &mut effects,
+    );
+    let request = credential_request(1);
+    client.update(
+        Message::Credentials(Ok(vec![request.clone()])),
+        &mut effects,
+    );
+    assert!(client.active.is_some());
+    let form = client.form.as_ref().unwrap();
+    let generation = form.generation;
+    assert_eq!(form.credential_request(), Some(request.id));
+    client.update(
+        Message::Password(generation, InputEdit::Insert("replacement-password".into())),
+        &mut effects,
+    );
+    assert!(
+        !client
+            .inspect()
+            .to_string()
+            .contains("replacement-password")
+    );
+    client.update(Message::Submit(generation), &mut effects);
+    assert!(client.form.is_none());
+    assert!(client.credential_reply.is_some());
+    complete_answer(&mut client, &mut effects);
+    assert!(client.active.is_some()); // Answer acknowledgement is not Activate completion.
+    assert_eq!(effects.tasks.len(), 1);
+    assert_eq!(effects.tasks[0].queue, crate::work::NETWORK);
+    let answers = adapter.answers.lock().unwrap();
+    assert_eq!(answers.len(), 1);
+    assert_eq!(answers[0].0, request.id);
+    assert_eq!(
+        answers[0].1.as_ref().unwrap().password().unwrap().expose(),
+        "replacement-password"
+    );
+    drop(answers);
+    client.update(Message::Submit(generation), &mut effects);
+    assert!(
+        !effects
+            .tasks
+            .iter()
+            .any(|t| t.queue == crate::work::CONTROLS)
+    );
+}
+#[test]
+fn closing_before_activation_ack_cancels_late_prompt_without_reopening() {
+    let (mut client, adapter, mut effects) = client();
+    client.update(
+        Message::Request(Control::Activate(id(3), Some(id(1)))),
+        &mut effects,
+    );
+    client.update(Message::Close, &mut effects);
+    let request = credential_request(2);
+    client.update(
+        Message::Credentials(Ok(vec![request.clone()])),
+        &mut effects,
+    );
+    assert!(!client.open);
+    assert!(client.form.is_none());
+    complete_answer(&mut client, &mut effects);
+    assert_eq!(adapter.answers.lock().unwrap().len(), 1);
+    assert!(adapter.answers.lock().unwrap()[0].1.is_none());
+    client.update(Message::Credentials(Ok(vec![request])), &mut effects);
+    assert!(!client.open);
+    assert!(
+        !effects
+            .tasks
+            .iter()
+            .any(|t| t.queue == crate::work::CONTROLS)
+    );
+}
+#[test]
+fn daemon_cancellation_replacement_and_stale_edits_cannot_reuse_credential_form() {
+    let (mut client, adapter, mut effects) = client();
+    client.update(
+        Message::Credentials(Ok(vec![credential_request(3)])),
+        &mut effects,
+    );
+    let old = client.form.as_ref().unwrap().generation;
+    client.update(
+        Message::Password(old, InputEdit::Insert("old-password".into())),
+        &mut effects,
+    );
+    client.update(Message::Credentials(Ok(vec![])), &mut effects);
+    assert!(client.form.is_none());
+    client.update(
+        Message::Credentials(Ok(vec![credential_request(4)])),
+        &mut effects,
+    );
+    let current = client.form.as_ref().unwrap().generation;
+    assert_ne!(current, old);
+    client.update(
+        Message::Password(old, InputEdit::Insert("stale-secret".into())),
+        &mut effects,
+    );
+    assert_eq!(client.form.as_ref().unwrap().password_length(), 0);
+    client.update(Message::Cancel, &mut effects);
+    complete_answer(&mut client, &mut effects);
+    assert!(adapter.answers.lock().unwrap()[0].1.is_none());
+    client.update(
+        Message::Credentials(Err(DomainError::Unavailable("daemon changed".into()))),
+        &mut effects,
+    );
+    assert!(client.form.is_none());
+    client.update(Message::Submit(current), &mut effects);
+    assert!(effects.tasks.is_empty());
+}
+#[test]
+fn request_before_first_network_snapshot_waits_for_profile_authority() {
+    let adapter = Arc::new(Adapter::default());
+    let mut client = Network::new(adapter);
+    let mut effects = Effects::default();
+    client.update(
+        Message::Credentials(Ok(vec![credential_request(5)])),
+        &mut effects,
+    );
+    assert!(!client.open);
+    assert!(effects.tasks.is_empty());
+    client.update(Message::Observed(Ok(fixture())), &mut effects);
+    assert!(client.open);
+    assert_eq!(
+        client.form.as_ref().unwrap().credential_request(),
+        Some(NetworkCredentialRequestId::new(5).unwrap())
+    );
+}
+
+#[test]
+fn observed_saved_connection_retires_close_suppression_for_future_requests() {
+    let (mut client, _, mut effects) = client();
+    let mut connecting = fixture();
+    connecting.devices[0].state = NetworkDeviceState::Connecting;
+    connecting.connections[0].state = NetworkConnectionState::Connecting;
+    client.update(Message::Observed(Ok(connecting)), &mut effects);
+    client.update(
+        Message::Request(Control::Activate(id(3), Some(id(1)))),
+        &mut effects,
+    );
+    complete(&mut client, &mut effects);
+    assert!(client.activation_profile.is_some());
+    client.update(Message::Observed(Ok(fixture())), &mut effects);
+    assert!(client.activation_profile.is_none());
+    client.update(Message::Close, &mut effects);
+    client.update(
+        Message::Credentials(Ok(vec![credential_request(8)])),
+        &mut effects,
+    );
+    assert!(client.open); // This is a new actual backend request, not the old activation.
+    assert_eq!(
+        client.form.as_ref().unwrap().credential_request(),
+        Some(NetworkCredentialRequestId::new(8).unwrap())
+    );
 }

@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import secrets
 import signal
+import stat
 import subprocess
 import time
 
@@ -146,7 +147,7 @@ def stop(directory):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('start', 'info', 'register', 'hide', 'stop'))
+    parser.add_argument('operation', choices=('start', 'info', 'register', 'wrong-secret', 'clear-secret', 'verify-secret', 'hide', 'stop'))
     parser.add_argument('directory', type=Path)
     parser.add_argument('profile', nargs='?')
     args = parser.parse_args()
@@ -163,6 +164,41 @@ def main():
         state = json.loads((directory / 'state.json').read_text())
         state['profile_keys'].append(args.profile)
         save(directory, state)
+    elif args.operation in ('wrong-secret', 'clear-secret', 'verify-secret'):
+        # Mutate/read only a profile created and explicitly registered by this
+        # fixture. Never touch a host/guest user's pre-existing connection.
+        if (os.geteuid() != 0 or not Path('/etc/arch-release').exists()
+                or run('systemd-detect-virt', '--vm') not in ('kvm', 'qemu')
+                or directory.stat().st_uid != 0 or stat.S_IMODE(directory.stat().st_mode) != 0o700):
+            raise SystemExit('Credential fixtures require their root-owned private directory inside the prepared VM')
+        state_file = directory / 'state.json'
+        identity = state_file.lstat()
+        if not stat.S_ISREG(identity.st_mode) or identity.st_uid != 0 or stat.S_IMODE(identity.st_mode) != 0o600:
+            raise SystemExit('Credential fixture state must be an owned private regular file')
+        state = json.loads(state_file.read_text())
+        if not state.get('module') or not Path('/sys/module/mac80211_hwsim').exists() or state.get('station') not in interfaces():
+            raise SystemExit('Credential test requires its still-live owned simulated Wi-Fi station')
+        key = args.profile
+        if not key or key not in state['profile_keys'] or key in state['original_profiles']:
+            raise SystemExit("Credential testing requires this fixture's registered new profile")
+        if run('nmcli', '-g', '802-11-wireless.ssid', 'connection', 'show', 'uuid', key) != state['ssid']:
+            raise SystemExit('Owned profile changed its network identity')
+        if args.operation == 'verify-secret':
+            # The actual credential stays inside this root fixture process;
+            # stdout contains only a comparison result, never secret material.
+            stored = run('nmcli', '--show-secrets', '-g', '802-11-wireless-security.psk', 'connection', 'show', 'uuid', key)
+            print(json.dumps({'stored_secret_matches': stored == state['password']}))
+        else:
+            active = run('nmcli', '-g', 'GENERAL.CON-UUID', 'device', 'show', state['station'])
+            if active == key:
+                raise SystemExit('Disconnect this owned profile before invalidating its credentials')
+            # A public, synthetic invalid fixture value is not the real secret.
+            # Clearing exercises an immediately missing system-owned password.
+            replacement = 'invalid-lucent-fixture-only' if args.operation == 'wrong-secret' else ''
+            run('nmcli', 'connection', 'modify', 'uuid', key,
+                '802-11-wireless-security.psk', replacement,
+                '802-11-wireless-security.psk-flags', '0')
+            print(json.dumps({'owned_profile_credentials_invalidated': True}))
     elif args.operation == 'hide':
         state = json.loads((directory / 'state.json').read_text())
         terminate(state['children'][0])

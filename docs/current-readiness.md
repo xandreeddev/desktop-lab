@@ -1,7 +1,7 @@
 # Current daily-use readiness
 
 This is a reconciliation of accepted main at
-`e279f7b587caff0158cdb0d1fc4132575ac55c0c`, dated 2026-10-19. It describes
+`24ee05cb10229cb8aeef707e0d8d87f2eb643fc3`, dated 2026-10-19. It describes
 merged behavior and existing evidence, without counting work on feature branches
 as delivered. The seven requested gaps all remain in scope. Accessibility is
 separately deferred by the user.
@@ -32,7 +32,7 @@ ledger's requirement history remains useful for the broader backlog.
 
 | Area | Accepted-main state | Still needed |
 | --- | --- | --- |
-| Saved Wi-Fi recovery | The native panel can scan, join visible/hidden personal networks, activate a saved profile, disconnect and confirm Forget. | A saved profile's wrong/missing password needs a secure native credential request and repair of that same profile without duplicates. NetworkManager SecretAgent lifecycle and recovery acceptance remain pending. Enterprise/WEP provisioning and physical-radio acceptance are separate gaps. |
+| Saved Wi-Fi recovery | Merged native masked SecretAgent repair retains the saved profile UUID and storage policy. Fourteen native NetworkManager/GUI checks pass against owned simulated WPA2/hidden radios, including cancellation, repair, DHCP, saved reconnection and exact restoration. | Enterprise/WEP provisioning, agent-owned vaults and physical-radio acceptance remain separate gaps; they are not implied by the owned fixture. |
 | Safe display settings | Named output hosts, saved widget profiles, fractional rendering density and the existing display picker exist. | Resolution/layout drafts, Apply → Keep/Revert and deadline rollback are not implemented in accepted main. Simultaneous-output input/placement, hotplug, suspend/resume and secure-output acceptance also remain open. |
 | Resources and animation | Event-driven redraw, bounded image/preview ownership and live-video physical-cover conversion are implemented. | The latest recorded 120-second video workload at the Weather source measured 424.12 MiB mean / 424.15 MiB peak RSS, above the 300 MiB target. Newer accepted preview/invalidation changes have no new matched resource sample. Actual 60 FPS presentation and consistent cold/warm animation timing are not established. |
 | International text | Controlled ordinary/multiline editing, grapheme navigation, undo/redo and bounded clipboard transfers exist. | Complex-script shaping, bidirectional layout, font fallback and IME are unfinished in accepted main. Native pixel/scroll details and clipboard races need further acceptance. |
@@ -53,6 +53,7 @@ scoped observations, not fresh executions by this documentation change.
 
 | Behavior and source | Observed acceptance | Remaining boundary |
 | --- | --- | --- |
+| [Saved Wi-Fi recovery, `c17d6e7d`](../reports/measurements/lucent-wifi-credential-recovery.json) | Fourteen native NetworkManager and panel checks against owned WPA2/hidden simulated radios: incorrect-password cancellation, missing-secret masked repair on the same UUID without duplicates, DHCP, subsequent prompt-free reconnect, targeted disconnect/Forget and original routes/profiles/radio/preferences restored. | Physical Wi-Fi, SAE/OWE/enterprise/WPS, agent-owned vaults, captive portals and suspend remain unverified. Executable source is `c17d6e7d`; final documentation head `0c7c8e98` merged in PR82. |
 | [Notes, `3806bcfc`](../reports/measurements/lucent-multiline-notes.json) | 17 functional and nine restoration checks: native editing/navigation/selection, grapheme deletion, undo, copy/cut/paste with `wl-copy`/`wl-paste`, resized editing geometry, restart persistence and stable restored supervision. | One output. No third-party GUI clipboard interoperability, native pixel-level caret/selection/clipping proof, scrollbar-thumb drag, exact soft-wrap/scroll affinity, Page Up/Down/edge-autoscroll or delayed clipboard/focus-retirement race acceptance. The report retains an initial restoration failure and the later successful fresh run. |
 | [Tray, `b8a69c8f`](../reports/measurements/lucent-tray-bar.json) | Owned SNI/DBusMenu fixture with actual VM pointer/keyboard input: primary/middle/vertical-wheel actions, right-click menu, menu-only fallback, overflow, item status/owner retirement and stale-reply handling. | No third-party application compatibility. Application-owned popups use neutral position hints; horizontal/high-resolution wheel coverage is automated rather than this native test. No XEmbed or hardware/performance claim. |
 | [Live display fit, `83a02372`](../reports/measurements/lucent-live-display-fit.json) | One-output live video follows actual resize, integer/fractional density and rapid target changes; old producer generations retire and fitted frames continue. Original output/preferences/source restore. | No simultaneous-output placement/input, alpha-safe fitting, seamless playhead retargeting, hardware decode or actual 60 FPS presentation proof. Software resource targets remain unmet. |
