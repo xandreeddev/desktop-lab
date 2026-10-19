@@ -90,12 +90,40 @@
         "id": "international-text",
         "status": "implemented_unmerged_native_pending",
         "implemented": "Accepted main retains controlled editing/clipboard and the earlier shaping path. Implemented unmerged Text 8e6d074b adds script/fallback shaping and ordinary IME plus hard-paragraph levels across soft wraps, exact row-bound resolved context, line-local L1/L2, tab separator projection and stale-context cache canonicalization.",
-        "remaining": "Merging and final-cohort native compositor IME acceptance; native pixel/scroll details, delayed clipboard/focus races and third-party GUI clipboard. Exact 8e passes all six CI checks, full workspace, six controlled service-protocol filters and 832 visual cases, plus focused wrap/cache checks. All six managed clients and root greeter are deployed coherently; acceptance examples are staged separately. Earlier evidence retains historical scope; accessibility remains user-deferred.",
+        "remaining": "Merging and final-cohort native compositor IME acceptance; native pixel/scroll details, delayed clipboard/focus races and third-party GUI clipboard. Exact 8e passes all six CI checks, full workspace, six controlled service-protocol filters and 832 visual cases, plus focused wrap/cache checks. All six managed clients and root greeter are deployed coherently; acceptance examples are staged separately. Earlier evidence retains historical scope; accessibility remains user-deferred. The latest mapped-peer attempt failed at exact_owned_pointer_arrival before composition (zero checks); no SDK defect is proven. Independent owned-unit/socket and original desktop/cursor recovery is verified separately. The observed acknowledged-stop metadata transition has a reviewed, 26-test cleanup correction; its native rerun is pending. See docs/native-text-acceptance.md.",
         "guides": [
           "docs/text-editing.md",
           "docs/multiline-text.md",
-          "docs/text-shaping.md"
-        ]
+          "docs/text-shaping.md",
+          "docs/native-text-acceptance.md"
+        ],
+        "latest_native_attempt": {
+          "status": "failed_before_composition",
+          "private_report": "reports/local/international-text-native-5231c104b8c1b3a738b1f268/report.json",
+          "private_report_sha256": "de13a6a576b147aa0b236115d324977c0fcd44ea9c64d3993a0a42cc113d5308",
+          "desktop_and_example_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "peer_source_commit": "3beda6172b8ce7eeb7be77b7ebd055511388f6de",
+          "peer_sha256": "5e823533c49713b1c5f488bd51564cf84838cd3df6e39384ac276749c53d93cc",
+          "fixed_failure": "exact_owned_pointer_arrival",
+          "composition_checks_passed": 0,
+          "sdk_fault_proven": false,
+          "native_ime_acceptance_established": false,
+          "original_failure_and_restoration_flags_retained": true,
+          "independent_recovery": {
+            "owned_units_and_processes_absent": true,
+            "same_original_8e_desktop_and_cursor": true,
+            "only_captured_refused_stale_socket_retired": true,
+            "readonly_receipt_sha256": "98715622f4116feac7edd615652a4a811a8828697ca47f6e2892564378b098bc",
+            "guarded_socket_receipt_sha256": "6919749f78ccd8984b8a26096675e10c00e8f31464d68f3a6546b0d0f3150ead"
+          },
+          "cleanup_correction": {
+            "source_commit": "47fa3ac96d76e3880fdf4fe70dba24ab98a9cef3",
+            "scope": "Acknowledged StopUnit may clear transient metadata while deactivating; original PID birth and recursive cgroup must drain. Original stop admission and successor refusal remain strict.",
+            "focused_ownership_checks_passed": 26,
+            "native_rerun_passed": false
+          },
+          "guide": "docs/native-text-acceptance.md"
+        }
       },
       {
         "id": "application-integration",

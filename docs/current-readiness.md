@@ -81,6 +81,15 @@ beyond its startup deadline. The three acceptance executables are staged private
 not installed as user applications. The successful private receipt is
 `reports/local/daily-text-8e-deployment-33ba0219a8a4a8a4c924f896.json`.
 
+The latest mapped-peer IME attempt uses the `8e` desktop/example and independent
+peer `3beda617`. It fails at `exact_owned_pointer_arrival` before any composition
+check; no SDK defect or native IME acceptance is established. Separate read-only
+and guarded recovery verify absent owned clients, the same original desktop and
+cursor, and retirement of only the captured refused stale socket. The original
+failed flags remain unchanged. Shared cleanup correction `47fa3ac96d7` addresses
+the recorded acknowledged-stop metadata transition and passes 26 focused checks;
+its native rerun is pending. See [the native text evidence](native-text-acceptance.md).
+
 The later AMD native-context trial passes RADV RENOIR enumeration, secure login,
 Lucent hardware-adapter selection and advancing native frame counters over three
 seconds at the older deployed `a7f41ecc` binary. Mount-anchored preservation of

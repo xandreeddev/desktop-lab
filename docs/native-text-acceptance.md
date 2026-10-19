@@ -89,8 +89,9 @@ guards. Its independently compiled fixture source is
 `ff22d164e475893f12d45c34cdcdd82ceeb8b92c22a4ec7c720bf184762c016f`
 (894,008 bytes). Formatting and the peer-only build passed. The desktop/example
 remain at `8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, and the original archive
-remains unchanged. A native rerun with explicit independent-peer provenance is
-pending; no successful IME interaction is claimed from compilation alone.
+remains unchanged. At that point the native rerun was pending; the subsequent
+failed attempt is recorded below. Compilation alone establishes no successful
+IME interaction.
 
 The subsequent b4d-peer native attempt no longer panicked: both fixtures were
 admitted and the owned ordinary field was focused/cleared, but it failed at the
@@ -123,12 +124,61 @@ outside either barcode, with an unchanged dominant field background. A blinking
 caret, reused image, missing/duplicate marker, background change, wrong-region
 ink or absent motion fails the pure negative fixtures. This is controlled native
 preedit evidence when executed; it does not establish third-party IME behavior.
-The mapped-peer build and native execution of this latest source remain pending.
+The mapped peer subsequently compiled and passed source review at independent
+fixture source `3beda6172b8ce7eeb7be77b7ebd055511388f6de`, corresponding to native
+fixture code `45e4f8a9ad68593a27edbf6ad065b37f3aec709f`. Its SHA256 is
+`5e823533c49713b1c5f488bd51564cf84838cd3df6e39384ac276749c53d93cc`
+(934,024 bytes). The deployed desktop and SDK example remain at coherent `8e`;
+that peer-only build changes neither the production runtime nor the original
+nine-binary archive. Mapping code that compiled is not proof that a mapped
+popup or preedit ink was observed in the compositor.
 
 Cleanup now records a bounded trace of original unit/process observation phases,
 fixed exception classes and allowlisted D-Bus error names. It retains protected
 metadata and comparisons against pinned identities, without actual argv,
 credential/text payloads or raw exception messages. Subprocess failure metadata
 also remains attached to its fixed restoration phase. Failed identity checks
-still block socket cleanup and pointer restoration; no invocation, process-birth
-or same-name successor guard has been relaxed based on an unrecorded failure.
+still block socket cleanup and pointer restoration. The first attempts provided
+no trace proving why strict retirement failed. The later mapped-peer attempt
+records a concrete acknowledged-stop transition, described below; a separate
+correction addresses only that observed lifecycle state.
+
+
+## Latest mapped-peer attempt
+
+The fresh attempt `international-text-native-5231c104b8c1b3a738b1f268` used the
+`8e6d074b` desktop/example and independently built `3beda617` mapped peer. It
+failed at `exact_owned_pointer_arrival`, before composition checks. Its `checks`
+object is empty: **zero native composition checks passed**. It establishes no
+successful preedit, commit, delete, multiline or RTL interaction, and proves no
+SDK defect. The original failed report and its false retirement/restoration
+flags remain unchanged.
+
+Its bounded cleanup trace records the original owned unit before an acknowledged
+`StopUnit`, followed by `deactivating` with zero MainPID, cleared invocation and
+cgroup, and `Transient=false`; a later observation finds that unit absent. The
+strict completion check rejected that intermediate cleared-metadata state.
+This actual trace supports the narrow shared helper correction `47fa3ac96d7`.
+The correction still requires the exact captured invocation/process at stop
+admission and a successful stop acknowledgement. It accepts only the matching
+cleared stopping/terminal shape, then independently proves that the captured
+PID birth and recursive cgroup have drained. A cleared unit is never initial
+stop authority; changed argv or a same-name successor remains refused, and a
+lost stop reply does not authorize this completion path. All 26 focused ownership
+checks pass. Native verification of the corrected cleanup path is pending.
+
+Separate independent receipts in the same private attempt directory establish
+recovery without changing the failed result:
+
+- `independent-readonly-after-mapped-failure.json` finds both owned units and
+  processes absent, the same original `8e` desktop and original cursor position.
+- `independent-guarded-socket-retirement.json` verifies that only the captured
+  stale socket was retired after connection refusal, with the same desktop,
+  original cursor and unlocked session retained.
+
+These observations verify their stated recovery scope. They do not rerun the
+composition sequence or turn it into native IME acceptance. A fresh guarded run
+is still needed for actual popup/caret/preedit ink, commit/delete/undo,
+multiline, masked-field deactivation and RTL navigation. Third-party IMEs and
+secure authentication remain separate acceptance; no presentation/FPS or
+resource result follows from this attempt.
