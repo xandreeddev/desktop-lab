@@ -193,6 +193,9 @@ pub struct Style {
     /// Controlled selection, independent of pointer hover and text-input focus.
     pub selected: bool,
     pub tab_stop: bool,
+    /// Opacity multiplier for empty-field placeholder text. The neutral SDK
+    /// default is one; product design recipes choose any dimming policy.
+    pub placeholder_opacity: f32,
     pub caret_width: f32,
     pub text_selection_color: Color,
     pub text_underline_width: f32,
@@ -230,6 +233,7 @@ impl Default for Style {
             focus_within: false,
             selected: false,
             tab_stop: true,
+            placeholder_opacity: 1.,
             caret_width: 1.,
             text_selection_color: Color::hex(0xffffff).alpha(0.25),
             text_underline_width: 1.,
@@ -255,6 +259,12 @@ pub enum Kind {
         value: String,
         placeholder: String,
         selection: TextSelection,
+    },
+    TextArea {
+        value: String,
+        placeholder: String,
+        selection: TextSelection,
+        scroll: ScrollSpec,
     },
     MaskedInput {
         length: usize,
@@ -423,7 +433,32 @@ impl<M> Element<M> {
         e.text_edit = Some(Arc::new(on_edit));
         e
     }
-    /// Submit a focused text/masked field with Enter; pointer focus never submits.
+    /// Controlled multiline ordinary text. The client owns value, selection
+    /// (normally TextFieldState::multiline) and logical vertical scroll offset.
+    /// Hard lines, wrapping, pointer geometry and navigation share one row map.
+    /// Enter inserts LF; Tab still traverses. This is not a secret control.
+    pub fn text_area(
+        value: impl Into<String>,
+        selection: TextSelection,
+        placeholder: impl Into<String>,
+        scroll: ScrollSpec,
+        on_edit: impl Fn(TextEdit) -> M + Send + Sync + 'static,
+        on_scroll: impl Fn(ScrollEvent) -> M + Send + Sync + 'static,
+    ) -> Self {
+        let value = value.into();
+        let selection = selection.reconciled(&value);
+        let mut e = Self::new(Kind::TextArea {
+            value,
+            selection,
+            placeholder: placeholder.into(),
+            scroll,
+        });
+        e.text_edit = Some(Arc::new(on_edit));
+        e.scroll = Some(Arc::new(on_scroll));
+        e.style.clip = true;
+        e
+    }
+    /// Submit a focused single-line text/masked field with Enter; pointer focus never submits.
     pub fn on_submit(mut self, message: M) -> Self {
         self.submit = Some(message);
         self
@@ -560,6 +595,11 @@ impl<M> Element<M> {
     }
     pub fn opacity(mut self, v: f32) -> Self {
         self.style.opacity = v;
+        self
+    }
+    /// Set empty-field placeholder opacity independently from entered text.
+    pub fn placeholder_opacity(mut self, value: f32) -> Self {
+        self.style.placeholder_opacity = value;
         self
     }
     /// Retain layout, focus and pointer capture while another surface presents

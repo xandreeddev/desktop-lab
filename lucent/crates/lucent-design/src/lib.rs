@@ -111,6 +111,7 @@ impl Theme {
             e.style.focus_color = theme.focus;
             e.style.focus_width = component::focus::WIDTH;
             e.style.caret_width = component::input::CARET_WIDTH;
+            e.style.placeholder_opacity = component::input::PLACEHOLDER_OPACITY;
             e.style.text_selection_color = theme.primary.alpha(component::input::SELECTION_OPACITY);
             e.style.text_underline_width = component::input::UNDERLINE_WIDTH;
             e.style.hover_color = if e.style.hover_feedback {
@@ -364,6 +365,36 @@ impl Theme {
             .radius(radius::CONTROL)
             .clip()
     }
+    /// Bounded multiline field. The client chooses actual geometry and owns
+    /// text/selection/scroll; all visual roles reuse the design system recipes.
+    pub fn text_area<M>(
+        self,
+        value: impl Into<String>,
+        selection: lucent_api::TextSelection,
+        placeholder: impl Into<String>,
+        scroll: lucent_api::ScrollSpec,
+        on_edit: impl Fn(lucent_api::TextEdit) -> M + Send + Sync + 'static,
+        on_scroll: impl Fn(lucent_api::ScrollEvent) -> M + Send + Sync + 'static,
+    ) -> Element<M> {
+        Element::text_area(value, selection, placeholder, scroll, on_edit, on_scroll)
+            .placeholder_opacity(component::input::PLACEHOLDER_OPACITY)
+            .font(font::BODY)
+            .color(self.on_surface)
+            .fill()
+            .padding_xy(
+                component::input::PADDING_INLINE,
+                component::input::PADDING_BLOCK,
+            )
+            .background(self.surface_container)
+            .radius(radius::CONTROL)
+            .focus_outline(true)
+            .scroll_style(lucent_api::ScrollStyle {
+                thumb: self.primary,
+                width: component::scroll::THUMB_WIDTH,
+                gutter: component::scroll::GUTTER,
+                minimum_thumb: component::scroll::MINIMUM_THUMB,
+            })
+    }
     /// Editable content inside `input_group`; the group supplies the field
     /// height, insets, background and focus decoration exactly once.
     pub fn text_input_content<M>(
@@ -374,6 +405,7 @@ impl Theme {
         on_edit: impl Fn(lucent_api::TextEdit) -> M + Send + Sync + 'static,
     ) -> Element<M> {
         Element::text_input(value, selection, placeholder, on_edit)
+            .placeholder_opacity(component::input::PLACEHOLDER_OPACITY)
             .font(font::BODY)
             .color(self.on_surface)
             .width(lucent_api::Length::Fill)
@@ -410,6 +442,47 @@ impl Theme {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn field_recipes_and_composed_controls_take_placeholder_opacity_from_tokens() {
+        use lucent_api::{ScrollSpec, TextSelection};
+        assert_eq!(component::input::PLACEHOLDER_OPACITY, opacity::PLACEHOLDER);
+        assert_ne!(
+            lucent_api::Style::default().placeholder_opacity,
+            opacity::PLACEHOLDER
+        );
+        for theme in [Theme::new(false), Theme::new(true)] {
+            let recipes = [
+                theme.text_input("", TextSelection::default(), "Hint", |_| ()),
+                theme.text_input_content("", TextSelection::default(), "Hint", |_| ()),
+                theme.text_area(
+                    "",
+                    TextSelection::default(),
+                    "Hint",
+                    ScrollSpec::new(0., component::scroll::LINE_STEP).unwrap(),
+                    |_| (),
+                    |_| (),
+                ),
+            ];
+            for recipe in recipes {
+                assert_eq!(
+                    recipe.style.placeholder_opacity,
+                    component::input::PLACEHOLDER_OPACITY
+                );
+            }
+            let bare = Element::stack(vec![
+                Element::input("", "Hint", |_| ()),
+                Element::masked_input(0, "Hint", |_| ()),
+            ]);
+            let styled = theme.apply(bare);
+            assert!(
+                styled
+                    .children
+                    .iter()
+                    .all(|child| child.style.placeholder_opacity
+                        == component::input::PLACEHOLDER_OPACITY)
+            );
+        }
+    }
     #[test]
     fn plain_and_grouped_fields_share_height_caret_insets_and_vertical_center() {
         use lucent_api::{Length, TextSelection};

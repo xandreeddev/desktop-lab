@@ -62,6 +62,9 @@ impl<M> OverlayScene<M> {
     pub fn has_popover(&self) -> bool {
         self.popover.is_some() || !self.retired.is_empty()
     }
+    pub(super) fn has_active_popover(&self) -> bool {
+        self.popover.is_some()
+    }
     pub(super) fn anchor(&mut self, id: &str, rect: Rect, clip: &Clip) {
         if !self.requested.contains(id) {
             return;
@@ -228,6 +231,30 @@ fn valid_tooltip<M>(tooltip: &Tooltip<M>) -> bool {
             .all(|value| value.is_finite() && (0.0..=1.0).contains(value))
 }
 impl Layout {
+    fn bounded_overlay<M: Clone>(
+        &self,
+        element: &Element<M>,
+        available: (f32, f32),
+    ) -> Option<(Element<M>, (f32, f32))> {
+        if !available.0.is_finite()
+            || !available.1.is_finite()
+            || available.0 <= 0.
+            || available.1 <= 0.
+        {
+            return None;
+        }
+        let width = self.measure(element, available).0;
+        if !width.is_finite() || width <= 0. {
+            return None;
+        }
+        let mut content = element.clone();
+        content.style.width = Length::Fixed(width.min(available.0));
+        // A fixed requested width may exceed the viewport. Measure wrapping
+        // again at the width we will actually place before choosing height.
+        let size = self.measure(&content, available);
+        (size.0.is_finite() && size.1.is_finite() && size.0 > 0. && size.1 > 0.)
+            .then_some((content, size))
+    }
     pub(super) fn compose_overlays<M: Clone>(
         &self,
         definitions: Definitions<'_, M>,
@@ -251,14 +278,13 @@ impl Layout {
                 viewport.w - 2. * popover.placement.inset,
                 viewport.h - 2. * popover.placement.inset,
             );
-            let bounds = anchor.as_ref().and_then(|anchor| {
+            let prepared = anchor.as_ref().and_then(|anchor| {
                 let anchor = anchor.rect.intersect(anchor.clip.bounds);
                 popover.placement.place(anchor, (1., 1.), viewport)?;
-                popover
-                    .placement
-                    .place(anchor, self.measure(&popover.content, available), viewport)
+                let (content, size) = self.bounded_overlay(&popover.content, available)?;
+                Some((content, popover.placement.place(anchor, size, viewport)?))
             });
-            if let Some(rect) = bounds.filter(|_| !popover.id.is_empty()) {
+            if let Some((mut content, rect)) = prepared.filter(|_| !popover.id.is_empty()) {
                 let paint_start = scene.paint.len();
                 let hit_start = scene.hits.len();
                 let region_start = scene.regions.len();
@@ -308,7 +334,6 @@ impl Layout {
                     .overlays
                     .requested
                     .extend(popup_tips.iter().map(|(id, _, _)| id.clone()));
-                let mut content = (*popover.content).clone();
                 content.style.clip = true;
                 content.style.paint &= declared.paint;
                 self.place(
@@ -408,14 +433,15 @@ impl Layout {
         let Some((_, tooltip, _)) = tips.iter().find(|(id, _, _)| id == &target.id) else {
             return;
         };
-        let mut size = self.measure(
+        let Some((mut content, size)) = self.bounded_overlay(
             &tooltip.content,
             (
                 (viewport.w - 2. * tooltip.placement.inset).min(tooltip.max_width),
                 viewport.h - 2. * tooltip.placement.inset,
             ),
-        );
-        size.0 = size.0.min(tooltip.max_width);
+        ) else {
+            return;
+        };
         let Some(rect) = tooltip.placement.place(
             target.anchor.rect.intersect(target.anchor.clip.bounds),
             size,
@@ -425,7 +451,6 @@ impl Layout {
         };
         scene.overlays.motion = motion;
         let mut passive = Scene::default();
-        let mut content = (*tooltip.content).clone();
         content.style.clip = true;
         self.place(
             &content,
@@ -527,6 +552,24 @@ impl<M: Clone> Interaction<M> {
         }
     }
     pub(super) fn synchronize_overlays(&mut self, scene: &Scene<M>) {
+        if self.overlays.hover.as_ref().is_some_and(|hover| {
+            !scene
+                .overlays
+                .tooltips
+                .iter()
+                .any(|target| target.id == hover.id && target.anchor == hover.anchor)
+        }) {
+            self.overlays.hover = None;
+        }
+        if self.overlays.suppressed.as_ref().is_some_and(|id| {
+            !scene
+                .overlays
+                .tooltips
+                .iter()
+                .any(|target| &target.id == id)
+        }) {
+            self.overlays.suppressed = None;
+        }
         self.overlays.motion = scene.overlays.motion;
         if let Some(popover) = &scene.overlays.popover {
             if self
@@ -550,6 +593,7 @@ impl<M: Clone> Interaction<M> {
                 self.select_all = false;
                 self.input_buffer = None;
                 self.slider_buffer = None;
+                self.text_navigation = None;
             }
             // Ordinary primary buttons otherwise retain a cloned old hit. A
             // stable scope ID cannot authorize a removed/moved content action.
@@ -588,6 +632,7 @@ impl<M: Clone> Interaction<M> {
                 self.select_all = false;
                 self.input_buffer = None;
                 self.slider_buffer = None;
+                self.text_navigation = None;
             }
         } else if let Some(previous) = self.overlays.focus.take() {
             self.focus = previous.opener.filter(|id| {
@@ -604,6 +649,7 @@ impl<M: Clone> Interaction<M> {
             self.select_all = false;
             self.input_buffer = None;
             self.slider_buffer = None;
+            self.text_navigation = None;
         }
         let rejected: BTreeSet<_> = scene
             .overlays
@@ -867,6 +913,35 @@ mod tests {
         assert_eq!(input.next_wakeup(&scene(&removed, &input, 0.2), 0.2), None);
     }
     #[test]
+    fn changed_or_removed_tooltip_cannot_resurrect_an_old_dwell() {
+        for change in 0..3 {
+            let original = tree(false);
+            let mut input = Interaction::default();
+            let initial = scene(&original, &input, 0.);
+            input.motion(&initial, 120., 45., 0.);
+            let mut changed = original.clone();
+            match change {
+                0 => changed.children[1].style.position = Some((100., 90.)),
+                1 => changed.children[1].tooltip = None,
+                _ => {
+                    changed.children.remove(1);
+                }
+            }
+            let retired = scene(&changed, &input, 0.2);
+            input.synchronize(&retired);
+            assert_eq!(input.next_wakeup(&retired, 0.2), None);
+            let returned = scene(&original, &input, 1.);
+            input.synchronize(&returned);
+            assert!(
+                !has_tip(&returned),
+                "returning geometry needs a new physical hover"
+            );
+            assert_eq!(input.next_wakeup(&returned, 1.), None);
+            input.motion(&returned, 120., 45., 1.);
+            assert_eq!(input.next_wakeup(&returned, 1.), Some(1.5));
+        }
+    }
+    #[test]
     fn popover_scopes_tab_escape_and_restores_only_a_live_opener() {
         let mut input = Interaction::default();
         input.focus = Some("trigger".into());
@@ -976,6 +1051,90 @@ mod tests {
         assert_eq!(
             input.key(&open, &Key::Text("q".into())),
             [Message::Input("valueq".into())]
+        );
+    }
+    #[test]
+    fn scope_focus_transfer_retires_multiline_vertical_navigation() {
+        let mut root = tree(false);
+        root.children.push(
+            Element::text_area(
+                "one\ntwo\nthree",
+                TextSelection::default(),
+                "",
+                ScrollSpec::new(0., 20.).unwrap(),
+                |_| Message::Under,
+                |_| Message::Under,
+            )
+            .size(90., 80.)
+            .at(5., 100.)
+            .id("editor")
+            .autofocus(),
+        );
+        let mut input = Interaction::default();
+        let initial = scene(&root, &input, 0.);
+        input.synchronize(&initial);
+        assert_eq!(input.focus.as_deref(), Some("editor"));
+        input.key(&initial, &Key::Down);
+        assert!(input.text_navigation.is_some());
+        root.popovers = tree(true).popovers;
+        let open = scene(&root, &input, 1.);
+        input.synchronize(&open);
+        assert_eq!(input.focus.as_deref(), Some("first"));
+        assert!(input.text_navigation.is_none());
+        root.popovers.clear();
+        let closed = scene(&root, &input, 2.);
+        input.synchronize(&closed);
+        assert_eq!(input.focus.as_deref(), Some("editor"));
+        assert!(input.text_navigation.is_none());
+    }
+    #[test]
+    fn popup_consumes_unhandled_wheel_without_blocking_its_controls() {
+        let mut input = Interaction::default();
+        let open = scene(&tree(true), &input, 0.);
+        input.synchronize(&open);
+        let panel = open.overlays.popover.as_ref().unwrap().rect;
+        let first = open.hits.iter().find(|hit| hit.id == "first").unwrap().rect;
+        for (x, y) in [
+            (10., 10.),
+            (panel.x + panel.w / 2., panel.y + panel.h - 8.),
+            (first.x + 4., first.y + 4.),
+            (-1., -1.),
+        ] {
+            assert_eq!(input.scroll(&open, x, y, 1.), Some(vec![]));
+        }
+        let mut root = tree(true);
+        root.popovers[0].content.children[0].wheel = Some(Arc::new(|_| Message::Second));
+        let open = scene(&root, &input, 1.);
+        input.synchronize(&open);
+        let first = open.hits.iter().find(|hit| hit.id == "first").unwrap().rect;
+        assert_eq!(
+            input.scroll(&open, first.x + 4., first.y + 4., 1.),
+            Some(vec![Message::Second])
+        );
+        root.popovers[0].content = Box::new(
+            Element::scroll(
+                ScrollSpec::new(0., 20.).unwrap(),
+                Element::column(
+                    (0..5)
+                        .map(|n| {
+                            Element::empty()
+                                .size(100., 40.)
+                                .on_click(Message::First)
+                                .id(format!("row-{n}"))
+                        })
+                        .collect(),
+                ),
+                |_| Message::Under,
+            )
+            .size(140., 80.)
+            .id("list"),
+        );
+        let open = scene(&root, &input, 2.);
+        input.synchronize(&open);
+        let panel = open.overlays.popover.as_ref().unwrap().rect;
+        assert_eq!(
+            input.scroll(&open, panel.x + 10., panel.y + 10., 1.),
+            Some(vec![Message::Under])
         );
     }
     #[test]
@@ -1150,7 +1309,9 @@ mod tests {
         for width in [90., 300., 900.] {
             let mut hint = tooltip();
             hint.max_width = 100.;
-            hint.content.style.width = Length::Fixed(600.);
+            hint.content=Box::new(Element::text("A long description wraps across the available hint width before it reaches its final words.")
+                .font(12.).padding(8.).background(Color::hex(0x123456))
+                .width(Length::Fixed(600.)).wrap(8));
             let root = Element::stack(vec![
                 Element::empty()
                     .size(20., 20.)
@@ -1174,8 +1335,41 @@ mod tests {
                 })
                 .expect("tooltip painted");
             assert!(bound.w <= 100.);
+            assert!(
+                bound.h > 60.,
+                "height follows wrapping at the actual capped width"
+            );
             assert!(bound.x >= 8. && bound.x + bound.w <= width - 8.);
         }
+    }
+    #[test]
+    fn narrow_popup_remeasures_wrapped_height_and_keeps_its_last_control_visible() {
+        let mut root = tree(true);
+        root.popovers[0].content=Box::new(Element::column(vec![
+            Element::text("A long description wraps across the available popup width before its final action.")
+                .font(12.).width(Length::Fill).wrap(8),
+            Element::text("Final action").font(12.).on_click(Message::First).id("last-action"),
+        ]).padding(8.).gap(8.).width(Length::Fixed(600.)));
+        let mut input = Interaction::default();
+        let layout = layout();
+        let current = layout.build(&root, 160., 300., &input, 0.);
+        input.synchronize(&current);
+        let panel = current.overlays.popover.as_ref().unwrap().rect;
+        let last = current
+            .hits
+            .iter()
+            .find(|hit| hit.id == "last-action")
+            .unwrap();
+        assert!(panel.w <= 144. && panel.h > 80.);
+        assert!(last.rect.y >= panel.y && last.rect.y + last.rect.h <= panel.y + panel.h);
+        assert!(last.contains(
+            last.rect.x + last.rect.w / 2.,
+            last.rect.y + last.rect.h / 2.
+        ));
+        assert_eq!(
+            input.popover_key(&current, &Key::Enter),
+            Some(vec![Message::First])
+        );
     }
     #[test]
     fn passive_popup_content_cannot_duplicate_the_source_anchor() {

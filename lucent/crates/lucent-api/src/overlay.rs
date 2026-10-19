@@ -117,8 +117,8 @@ impl AnchoredSpec {
             return None;
         }
         let result = Rect::new(
-            x.clamp(bounds.x, bounds.x + bounds.w - w),
-            y.clamp(bounds.y, bounds.y + bounds.h - h),
+            x.clamp(bounds.x, bounds.x + (bounds.w - w)),
+            y.clamp(bounds.y, bounds.y + (bounds.h - h)),
             w,
             h,
         );
@@ -226,6 +226,16 @@ mod tests {
             }
             .place(Rect::new(20., 20., 20., 20.), (20., 20.), viewport)
             .is_none()
+        );
+    }
+    #[test]
+    fn filled_bounds_keep_fractional_clamp_origins_ordered() {
+        let viewport = Rect::new(0.1, 0.1, 56., 56.);
+        let result =
+            spec(OverlaySide::Below).place(Rect::new(20., 20., 8., 8.), (100., 100.), viewport);
+        assert_eq!(
+            result,
+            Some(Rect::new(viewport.x + 8., viewport.y + 8., 40., 40.))
         );
     }
     #[test]

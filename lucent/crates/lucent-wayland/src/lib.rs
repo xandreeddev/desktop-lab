@@ -444,10 +444,21 @@ impl<A: Application> State<A> {
         self.messages([message], qh);
     }
     fn messages(&mut self, messages: impl IntoIterator<Item = A::Message>, qh: &QueueHandle<Self>) {
-        let mut effects = Effects {
-            now: self.epoch.elapsed().as_secs_f64(),
-            ..Default::default()
-        };
+        self.messages_with_effects(
+            messages,
+            Effects {
+                now: self.epoch.elapsed().as_secs_f64(),
+                ..Default::default()
+            },
+            qh,
+        );
+    }
+    fn messages_with_effects(
+        &mut self,
+        messages: impl IntoIterator<Item = A::Message>,
+        mut effects: Effects<A::Message>,
+        qh: &QueueHandle<Self>,
+    ) {
         for message in messages {
             self.app.update(message, &mut effects);
         }
@@ -565,9 +576,15 @@ impl<A: Application> State<A> {
                 native.demand.invalidate();
             }
         }
-        // Admission/retirement changes input authority immediately, even while
-        // a compositor callback blocks GPU submission. Refresh only affected
-        // surfaces; the helper skips layout when neither tree has a scope.
+        // Reconciliation installs the current requested geometry before one
+        // CPU-only input layout. Scope authority changes immediately, even if a
+        // compositor callback still blocks GPU submission. Caret reveal remains
+        // a controlled client batch; unrelated wallpaper frames skip editor IO.
+        let clipboard_targets: std::collections::BTreeSet<_> = effects
+            .clipboard
+            .iter()
+            .map(|request| request.target.address())
+            .collect();
         let affected: Vec<_> = self
             .surfaces
             .iter()
@@ -578,28 +595,41 @@ impl<A: Application> State<A> {
                         .iter()
                         .any(|id| native.spec.matches_redraw(id))
                     || effects.redraw_instances.contains(&native.spec.address())
+                    || clipboard_targets.contains(&native.spec.address())
             })
             .map(|(address, native)| (address.clone(), native.role.wl_surface().clone()))
             .collect();
-        let mut retired = vec![];
+        let mut input_messages = vec![];
         for (address, origin) in affected {
             if self.id_for(&origin).as_ref() != Some(&address) {
                 continue;
             }
-            retired.extend(
-                self.refresh_overlay_input_scene(&address)
+            let force_clipboard = clipboard_targets.contains(&address);
+            input_messages.extend(
+                self.refresh_input_scene(&address, true, force_clipboard)
                     .into_iter()
                     .map(|message| (origin.clone(), message)),
             );
         }
         self.clipboard_observe_focus(qh);
-        for (origin, message) in retired {
-            if self.id_for(&origin).is_some() {
-                self.message(message, qh);
+        if !input_messages.is_empty() {
+            // Carry this update's clipboard requests through the bounded reveal /
+            // retirement batch instead of dropping or validating them early.
+            let mut carried = Effects {
+                now: self.epoch.elapsed().as_secs_f64(),
+                clipboard: effects.clipboard,
+                ..Default::default()
+            };
+            for (origin, message) in input_messages {
+                if self.id_for(&origin).is_some() {
+                    self.app.update(message, &mut carried);
+                }
             }
+            self.effects(carried, qh);
+            return;
         }
-        // A popup-targeted request from the opening update sees the new scope;
-        // an outstanding transfer for the previous editor has already retired.
+        // New popup targets now see their admitted scope; old editor transfers
+        // have retired before a request can validate clipboard authority.
         for request in effects.clipboard {
             self.clipboard_request(request, qh);
         }
@@ -836,6 +866,43 @@ impl<A: Application> State<A> {
         }
         self.draw_all(qh);
     }
+    /// One fresh CPU scene handles text geometry and declarative scope
+    /// admission together. It never begins GPU demand or changes native regions.
+    fn refresh_input_scene(
+        &mut self,
+        address: &api::SurfaceAddress,
+        reveal: bool,
+        force_clipboard: bool,
+    ) -> Vec<A::Message> {
+        let Some(native) = self
+            .surfaces
+            .get_mut(address)
+            .filter(|native| native.configured)
+        else {
+            return vec![];
+        };
+        let now = self.epoch.elapsed().as_secs_f64();
+        let Some((_, _, scene)) =
+            current_scene(&self.app, &self.layout, native, now, force_clipboard)
+        else {
+            return vec![];
+        };
+        let focus = native.interaction.focus.clone();
+        native.interaction.synchronize(&scene);
+        let mut messages = if reveal {
+            native.interaction.text_caret_reveal(&native.scene, &scene)
+        } else {
+            vec![]
+        };
+        while let Some(message) = native.interaction.take_overlay_dismissal() {
+            messages.push(message);
+        }
+        if focus != native.interaction.focus {
+            native.demand.invalidate();
+        }
+        native.scene = scene;
+        messages
+    }
     fn draw_all(&mut self, qh: &QueueHandle<Self>) {
         let now = self.epoch.elapsed().as_secs_f64();
         let mut submitted = Vec::new();
@@ -846,16 +913,7 @@ impl<A: Application> State<A> {
             }
             let total = self.profile_frames.then(Instant::now);
             let started = self.profile_frames.then(Instant::now);
-            let (width, height) =
-                layer_commit::buffer_extent(&s.committed_spec, &s.spec, (s.width, s.height));
-            let tree = self.app.view(&ViewContext {
-                surface: s.spec.id,
-                instance: s.spec.instance.clone(),
-                width: width as f32,
-                height: height as f32,
-                now,
-                density: s.density(),
-            });
+            let (width, height, tree) = current_tree(&self.app, s, now);
             let view_ms = profiling::elapsed(started);
             let started = self.profile_frames.then(Instant::now);
             let scene = self
@@ -1057,44 +1115,6 @@ impl<A: Application> State<A> {
         let native = self.surfaces.get(id)?;
         self.app.event(native.spec.scope_event(event))
     }
-    /// Scope admission/retirement is synchronous client state, independent of
-    /// whether a compositor callback permits the next GPU submission.
-    fn refresh_overlay_input_scene(&mut self, id: &api::SurfaceAddress) -> Vec<A::Message> {
-        fn declares_scope<M>(tree: &api::Element<M>) -> bool {
-            !tree.popovers.is_empty() || tree.children.iter().any(declares_scope)
-        }
-        let Some(native) = self.surfaces.get_mut(id).filter(|native| native.configured) else {
-            return vec![];
-        };
-        let now = self.epoch.elapsed().as_secs_f64();
-        let (width, height) = layer_commit::buffer_extent(
-            &native.committed_spec,
-            &native.spec,
-            (native.width, native.height),
-        );
-        let tree = self.app.view(&ViewContext {
-            surface: native.spec.id,
-            instance: native.spec.instance.clone(),
-            width: width as f32,
-            height: height as f32,
-            now,
-            density: native.density(),
-        });
-        if !declares_scope(&tree) && !native.scene.overlays.has_popover() {
-            return vec![];
-        }
-        let scene = self
-            .layout
-            .build(&tree, width as f32, height as f32, &native.interaction, now);
-        native.interaction.synchronize(&scene);
-        native.demand.invalidate();
-        native.scene = scene;
-        let mut messages = vec![];
-        while let Some(message) = native.interaction.take_overlay_dismissal() {
-            messages.push(message);
-        }
-        messages
-    }
     fn id_for(&self, surface: &wl_surface::WlSurface) -> Option<api::SurfaceAddress> {
         self.surfaces
             .iter()
@@ -1115,7 +1135,7 @@ impl<A: Application> State<A> {
         else {
             return;
         };
-        for message in self.refresh_overlay_input_scene(&id) {
+        for message in self.refresh_input_scene(&id, false, false) {
             if self.id_for(&origin).as_ref() != Some(&id) {
                 return;
             }
@@ -1185,6 +1205,52 @@ impl<A: Application> State<A> {
         }
     }
 }
+// The CPU scene path is shared by presentation and input refresh. It never
+// begins frame demand, touches a renderer/native region, or emits FrameSubmitted.
+fn current_tree<A: Application>(
+    app: &A,
+    native: &Native<A::Message>,
+    now: f64,
+) -> (u32, u32, api::Element<A::Message>) {
+    let (width, height) = layer_commit::buffer_extent(
+        &native.committed_spec,
+        &native.spec,
+        (native.width, native.height),
+    );
+    let tree = app.view(&ViewContext {
+        surface: native.spec.id,
+        instance: native.spec.instance.clone(),
+        width: width as f32,
+        height: height as f32,
+        now,
+        density: native.density(),
+    });
+    (width, height, tree)
+}
+fn current_scene<A: Application>(
+    app: &A,
+    layout: &Layout,
+    native: &Native<A::Message>,
+    now: f64,
+    force_clipboard: bool,
+) -> Option<(u32, u32, Scene<A::Message>)> {
+    fn requests_input<M>(tree: &api::Element<M>) -> bool {
+        !tree.popovers.is_empty()
+            || matches!(tree.kind, api::Kind::TextArea { .. })
+            || tree.children.iter().any(requests_input)
+    }
+    let (width, height, tree) = current_tree(app, native, now);
+    if !force_clipboard
+        && !Interaction::has_text_area(&native.scene)
+        && !native.scene.overlays.has_popover()
+        && !requests_input(&tree)
+    {
+        return None;
+    }
+    let scene = layout.build(&tree, width as f32, height as f32, &native.interaction, now);
+    Some((width, height, scene))
+}
+
 fn layer_kind(layer: api::Layer) -> Layer {
     match layer {
         api::Layer::Background => Layer::Background,
@@ -1380,9 +1446,15 @@ impl<A: Application> LayerShellHandler for State<A> {
                 scale: s.scale,
                 density: s.density(),
             });
-            if let Some(message) = self.app.event(event) {
-                self.message(message, qh);
-            }
+            let mut effects = Effects {
+                now: self.epoch.elapsed().as_secs_f64(),
+                ..Default::default()
+            };
+            // The runtime owns this configure invalidation even when the client
+            // consumes Resize without requesting redraw. Route it through the
+            // same post-reconcile CPU reveal path before any new presentation.
+            effects.redraw_surface(id);
+            self.messages_with_effects(self.app.event(event), effects, qh);
         }
         self.draw_all(qh);
     }
@@ -1503,7 +1575,7 @@ impl<A: Application> PointerHandler for State<A> {
             let Some(id) = self.id_for(&event.surface) else {
                 continue;
             };
-            for message in self.refresh_overlay_input_scene(&id) {
+            for message in self.refresh_input_scene(&id, false, false) {
                 if self.id_for(&event.surface).as_ref() != Some(&id) {
                     break;
                 }
