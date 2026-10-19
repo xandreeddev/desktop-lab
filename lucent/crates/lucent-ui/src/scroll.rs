@@ -105,7 +105,7 @@ pub struct FocusClip {
     pub scroll_depth: usize,
 }
 
-fn visible(clip: &Clip, rect: Rect) -> bool {
+pub(super) fn visible(clip: &Clip, rect: Rect) -> bool {
     let clip = clip.intersect(rect);
     if clip.bounds.w <= 0. || clip.bounds.h <= 0. {
         return false;

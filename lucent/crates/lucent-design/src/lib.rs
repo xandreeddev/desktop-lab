@@ -131,9 +131,63 @@ impl Theme {
             for child in &mut e.children {
                 visit(theme, child);
             }
+            if let Some(tooltip) = &mut e.tooltip {
+                visit(theme, &mut tooltip.content);
+            }
+            for popover in &mut e.popovers {
+                visit(theme, &mut popover.content);
+            }
         }
         visit(self, &mut element);
         element
+    }
+    /// Passive labels share typography, rounded insets, elevation and dwell.
+    pub fn tooltip<M>(
+        self,
+        label: impl Into<String>,
+        side: lucent_api::OverlaySide,
+    ) -> lucent_api::Tooltip<M> {
+        use component::tooltip as token;
+        lucent_api::Tooltip {
+            content: Box::new(
+                Element::text(label)
+                    .font(token::FONT_SIZE)
+                    .color(self.on_surface)
+                    .padding_xy(token::PADDING_INLINE, token::PADDING_BLOCK)
+                    .background(self.surface_container)
+                    .radius(token::RADIUS)
+                    .shadow()
+                    .clip()
+                    .wrap(token::MAX_LINES as usize)
+                    .tab_stop(false)
+                    .hover_feedback(false),
+            ),
+            placement: lucent_api::AnchoredSpec {
+                side,
+                align: lucent_api::OverlayAlign::Center,
+                gap: token::GAP,
+                inset: token::INSET,
+            },
+            max_width: token::MAX_WIDTH,
+            delay: token::DELAY,
+            transition: Transition {
+                duration: token::ENTER,
+                curve: motion::DECELERATE,
+            },
+        }
+    }
+    /// An ordinary interactive overlay's visual recipe; scope and actions remain
+    /// explicit in Popover and its owning component.
+    pub fn popover<M>(self, content: Element<M>) -> Element<M> {
+        use component::popover as token;
+        Element::stack(vec![content])
+            .padding(token::PADDING)
+            .width(lucent_api::Length::Fixed(token::WIDTH))
+            .background(self.surface)
+            .color(self.on_surface)
+            .radius(token::RADIUS)
+            .shadow()
+            .clip()
     }
     /// Visual state for a toggle row; attach the action to its enclosing control.
     pub fn switch_indicator<M>(self, checked: bool) -> Element<M> {

@@ -1,6 +1,6 @@
 //! Generic event-driven Wayland runtime. Desktop policy lives entirely in clients.
 use calloop::{
-    EventLoop, LoopHandle, channel,
+    EventLoop, LoopHandle, RegistrationToken, channel,
     timer::{TimeoutAction, Timer},
 };
 use calloop_wayland_source::WaylandSource;
@@ -36,7 +36,7 @@ use std::{
     path::PathBuf,
     rc::Rc,
     sync::{Arc, mpsc},
-    time::Instant,
+    time::{Duration, Instant},
 };
 use wayland_client::{
     Connection, Proxy, QueueHandle,
@@ -143,10 +143,14 @@ struct State<A: Application> {
     sender: delivery::Delivery<RuntimeEvent<A::Message>>,
     tasks: effects::Executor<A::Message>,
     subscriptions: subscriptions::Workers,
+    interaction_timer: Option<(f64, RegistrationToken)>,
     connection: Connection,
 }
 impl<A: Application> Drop for State<A> {
     fn drop(&mut self) {
+        if let Some((_, token)) = self.interaction_timer.take() {
+            self.handle.remove(token);
+        }
         self.clipboard_drop();
         // Drop GPU surfaces before their protocol roles, then send the queued
         // destroy requests while the connection is still alive. A caller such
@@ -265,6 +269,7 @@ fn run_inner<A: Application>(
         sender: sender.clone(),
         tasks,
         subscriptions: subscriptions::Workers::default(),
+        interaction_timer: None,
         connection: conn.clone(),
     };
     let runtime =
@@ -548,9 +553,6 @@ impl<A: Application> State<A> {
                 }
             }
         }
-        for request in effects.clipboard {
-            self.clipboard_request(request, qh);
-        }
         let recreate = effects.recreate_surfaces.into_iter().collect();
         if let Err(e) = self.reconcile_with_recreation(qh, &recreate) {
             self.error = Some(e.to_string());
@@ -574,39 +576,62 @@ impl<A: Application> State<A> {
                 native.demand.invalidate();
             }
         }
-        // Reconciliation above installs the current requested geometry before
-        // CPU-only input layout. An editor that fills ViewContext must reveal
-        // against a newly resized native extent, not the last submitted size.
-        // Unrelated wallpaper frames do not rebuild an idle notes document.
-        let addresses: Vec<_> = self
+        // Reconciliation installs the current requested geometry before one
+        // CPU-only input layout. Scope authority changes immediately, even if a
+        // compositor callback still blocks GPU submission. Caret reveal remains
+        // a controlled client batch; unrelated wallpaper frames skip editor IO.
+        let clipboard_targets: std::collections::BTreeSet<_> = effects
+            .clipboard
+            .iter()
+            .map(|request| request.target.address())
+            .collect();
+        let affected: Vec<_> = self
             .surfaces
             .iter()
             .filter(|(_, native)| {
-                native.scene.hits.iter().any(|hit| {
-                    native.interaction.focus.as_ref() == Some(&hit.id)
-                        && hit
-                            .text
-                            .as_ref()
-                            .is_some_and(lucent_ui::TextHit::is_multiline)
-                }) && (native.spec != native.committed_spec
+                native.spec != native.committed_spec
                     || effects
                         .redraw
                         .iter()
                         .any(|id| native.spec.matches_redraw(id))
-                    || effects.redraw_instances.contains(&native.spec.address()))
+                    || effects.redraw_instances.contains(&native.spec.address())
+                    || clipboard_targets.contains(&native.spec.address())
             })
-            .map(|(address, _)| address.clone())
+            .map(|(address, native)| (address.clone(), native.role.wl_surface().clone()))
             .collect();
-        let mut reveal = Vec::new();
-        for address in addresses {
-            reveal.extend(self.refresh_text_input_scene(&address, true));
+        let mut input_messages = vec![];
+        for (address, origin) in affected {
+            if self.id_for(&origin).as_ref() != Some(&address) {
+                continue;
+            }
+            let force_clipboard = clipboard_targets.contains(&address);
+            input_messages.extend(
+                self.refresh_input_scene(&address, true, force_clipboard)
+                    .into_iter()
+                    .map(|message| (origin.clone(), message)),
+            );
         }
-        if !reveal.is_empty() {
-            // A single bounded event batch asks the client to store clamped
-            // offsets. The following normal update does not reveal an unchanged
-            // caret again; it still passes through ordinary effect admission.
-            self.messages(reveal, qh);
+        self.clipboard_observe_focus(qh);
+        if !input_messages.is_empty() {
+            // Carry this update's clipboard requests through the bounded reveal /
+            // retirement batch instead of dropping or validating them early.
+            let mut carried = Effects {
+                now: self.epoch.elapsed().as_secs_f64(),
+                clipboard: effects.clipboard,
+                ..Default::default()
+            };
+            for (origin, message) in input_messages {
+                if self.id_for(&origin).is_some() {
+                    self.app.update(message, &mut carried);
+                }
+            }
+            self.effects(carried, qh);
             return;
+        }
+        // New popup targets now see their admitted scope; old editor transfers
+        // have retired before a request can validate clipboard authority.
+        for request in effects.clipboard {
+            self.clipboard_request(request, qh);
         }
         self.draw_all(qh);
     }
@@ -841,30 +866,47 @@ impl<A: Application> State<A> {
         }
         self.draw_all(qh);
     }
-    fn refresh_text_input_scene(
+    /// One fresh CPU scene handles text geometry and declarative scope
+    /// admission together. It never begins GPU demand or changes native regions.
+    fn refresh_input_scene(
         &mut self,
         address: &api::SurfaceAddress,
         reveal: bool,
+        force_clipboard: bool,
     ) -> Vec<A::Message> {
-        let Some(native) = self.surfaces.get_mut(address).filter(|native| {
-            native.configured && lucent_ui::Interaction::has_text_area(&native.scene)
-        }) else {
-            return Vec::new();
+        let Some(native) = self
+            .surfaces
+            .get_mut(address)
+            .filter(|native| native.configured)
+        else {
+            return vec![];
         };
         let now = self.epoch.elapsed().as_secs_f64();
-        let (_, _, scene) = current_scene(&self.app, &self.layout, native, now);
+        let Some((_, _, scene)) =
+            current_scene(&self.app, &self.layout, native, now, force_clipboard)
+        else {
+            return vec![];
+        };
+        let focus = native.interaction.focus.clone();
         native.interaction.synchronize(&scene);
-        let messages = if reveal {
+        let mut messages = if reveal {
             native.interaction.text_caret_reveal(&native.scene, &scene)
         } else {
-            Vec::new()
+            vec![]
         };
+        while let Some(message) = native.interaction.take_overlay_dismissal() {
+            messages.push(message);
+        }
+        if focus != native.interaction.focus {
+            native.demand.invalidate();
+        }
         native.scene = scene;
         messages
     }
     fn draw_all(&mut self, qh: &QueueHandle<Self>) {
         let now = self.epoch.elapsed().as_secs_f64();
         let mut submitted = Vec::new();
+        let mut overlay_messages = Vec::new();
         for s in self.surfaces.values_mut() {
             if !s.configured || !s.demand.begin() {
                 continue;
@@ -881,6 +923,9 @@ impl<A: Application> State<A> {
             let started = self.profile_frames.then(Instant::now);
             let focus = s.interaction.focus.clone();
             s.interaction.synchronize(&scene);
+            while let Some(message) = s.interaction.take_overlay_dismissal() {
+                overlay_messages.push((s.role.wl_surface().clone(), message));
+            }
             if focus != s.interaction.focus {
                 s.demand.invalidate();
             }
@@ -999,6 +1044,11 @@ impl<A: Application> State<A> {
             }
         }
         self.clipboard_observe_focus(qh);
+        for (surface, message) in overlay_messages {
+            if self.id_for(&surface).is_some() {
+                self.message(message, qh);
+            }
+        }
         for (surface, event) in submitted {
             // Clipboard completions and preceding frame messages may renew or
             // hide an address. An old frame cannot authorize its replacement.
@@ -1006,6 +1056,58 @@ impl<A: Application> State<A> {
                 && let Some(message) = self.app.event(event)
             {
                 self.message(message, qh);
+            }
+        }
+        self.schedule_interaction_wakeup();
+    }
+    /// Dwell is a single cancellable event-loop deadline across live surfaces.
+    /// It creates neither a polling subscription nor frames while waiting.
+    fn schedule_interaction_wakeup(&mut self) {
+        let now = self.epoch.elapsed().as_secs_f64();
+        let due = self
+            .surfaces
+            .values()
+            .filter_map(|native| native.interaction.next_wakeup(&native.scene, now))
+            .min_by(f64::total_cmp);
+        if self.interaction_timer.as_ref().map(|(due, _)| *due) == due {
+            return;
+        }
+        if let Some((_, token)) = self.interaction_timer.take() {
+            self.handle.remove(token);
+        }
+        let Some(due) = due else {
+            return;
+        };
+        let Ok(delay) = Duration::try_from_secs_f64((due - now).max(0.)) else {
+            return;
+        };
+        match self
+            .handle
+            .insert_source(Timer::from_duration(delay), move |_, _, state| {
+                if state
+                    .interaction_timer
+                    .as_ref()
+                    .is_some_and(|(expected, _)| *expected == due)
+                {
+                    state.interaction_timer = None;
+                    // A retired/recreated native has fresh interaction state. The
+                    // exact pending deadline must still belong to each live target.
+                    for native in state.surfaces.values_mut() {
+                        if native
+                            .interaction
+                            .next_wakeup(&native.scene, due.next_down())
+                            == Some(due)
+                        {
+                            native.demand.invalidate();
+                        }
+                    }
+                }
+                TimeoutAction::Drop
+            }) {
+            Ok(token) => self.interaction_timer = Some((due, token)),
+            Err(error) => {
+                self.error = Some(error.to_string());
+                self.exit = true;
             }
         }
     }
@@ -1026,6 +1128,23 @@ impl<A: Application> State<A> {
         let Some(key) = keyboard::translate(event, self.modifiers) else {
             return;
         };
+        let Some(origin) = self
+            .surfaces
+            .get(&id)
+            .map(|native| native.role.wl_surface().clone())
+        else {
+            return;
+        };
+        for message in self.refresh_input_scene(&id, false, false) {
+            if self.id_for(&origin).as_ref() != Some(&id) {
+                return;
+            }
+            self.message(message, qh);
+        }
+        self.clipboard_observe_focus(qh);
+        if self.id_for(&origin).as_ref() != Some(&id) {
+            return;
+        }
         if let Some(s) = self.surfaces.get_mut(&id) {
             if !s.interaction.focus_visible {
                 s.demand.invalidate();
@@ -1040,6 +1159,24 @@ impl<A: Application> State<A> {
             self.keyboard_surface = None;
             return;
         };
+        let overlay = self
+            .surfaces
+            .get_mut(&id)
+            .and_then(|native| native.interaction.popover_key(&native.scene, &key));
+        if let Some(messages) = overlay {
+            if let Some(native) = self.surfaces.get_mut(&id) {
+                native.demand.invalidate();
+            }
+            self.clipboard_observe_focus(qh);
+            for message in messages {
+                if self.id_for(&native_surface).as_ref() != Some(&id) {
+                    break;
+                }
+                self.message(message, qh);
+            }
+            self.draw_all(qh);
+            return;
+        }
         if let Some(message) = self.surface_event(
             &id,
             api::Event::Key {
@@ -1050,10 +1187,10 @@ impl<A: Application> State<A> {
             self.message(message, qh);
             return;
         }
-        self.refresh_text_input_scene(&id, false);
         if let Some(s) = self.surfaces.get_mut(&id) {
             let before = s.interaction.focus.clone();
             let messages = s.interaction.key(&s.scene, &key);
+            s.demand.invalidate();
             if before != s.interaction.focus {
                 s.demand.invalidate();
             }
@@ -1095,10 +1232,23 @@ fn current_scene<A: Application>(
     layout: &Layout,
     native: &Native<A::Message>,
     now: f64,
-) -> (u32, u32, Scene<A::Message>) {
+    force_clipboard: bool,
+) -> Option<(u32, u32, Scene<A::Message>)> {
+    fn requests_input<M>(tree: &api::Element<M>) -> bool {
+        !tree.popovers.is_empty()
+            || matches!(tree.kind, api::Kind::TextArea { .. })
+            || tree.children.iter().any(requests_input)
+    }
     let (width, height, tree) = current_tree(app, native, now);
+    if !force_clipboard
+        && !Interaction::has_text_area(&native.scene)
+        && !native.scene.overlays.has_popover()
+        && !requests_input(&tree)
+    {
+        return None;
+    }
     let scene = layout.build(&tree, width as f32, height as f32, &native.interaction, now);
-    (width, height, scene)
+    Some((width, height, scene))
 }
 
 fn layer_kind(layer: api::Layer) -> Layer {
@@ -1425,7 +1575,16 @@ impl<A: Application> PointerHandler for State<A> {
             let Some(id) = self.id_for(&event.surface) else {
                 continue;
             };
-            self.refresh_text_input_scene(&id, false);
+            for message in self.refresh_input_scene(&id, false, false) {
+                if self.id_for(&event.surface).as_ref() != Some(&id) {
+                    break;
+                }
+                self.message(message, qh);
+            }
+            self.clipboard_observe_focus(qh);
+            if self.id_for(&event.surface).as_ref() != Some(&id) {
+                continue;
+            }
             let now = self.epoch.elapsed().as_secs_f64();
             let (x, y) = (event.position.0 as f32, event.position.1 as f32);
             let mut messages = vec![];

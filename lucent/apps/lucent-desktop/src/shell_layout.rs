@@ -25,15 +25,22 @@ pub fn panel_origin(viewport: (f32, f32), size: (f32, f32)) -> (f32, f32) {
         bottom(viewport.1) - size.1,
     )
 }
-/// The settled dock needs only its shape, shadow and existing bottom inset.
+/// The settled dock needs its shape, shadow, bottom inset and passive hint room.
 /// Floor the upper crop edge on the same display grid; retain the actual
 /// output height's remainder rather than moving the dock onto another grid.
 pub fn dock_surface_height(viewport_height: f32) -> u32 {
+    (dock_slide_distance(viewport_height) + lucent_design::component::tooltip::SURFACE_ROOM)
+        .min(viewport_height.max(1.))
+        .ceil() as u32
+}
+/// Keep the original auto-hide travel: passive hint room is transparent and
+/// does not move the dock's visible shape, hotspot or display-grid placement.
+pub fn dock_slide_distance(viewport_height: f32) -> f32 {
     let top = bottom(viewport_height) - panel::DOCK_HEIGHT;
     let shadow_top = top + elevation::OFFSET - Shadow::blur_outset(elevation::BLUR);
     (viewport_height - floor(top.min(shadow_top), layout::SHELL_STEP))
         .ceil()
-        .max(1.) as u32
+        .max(1.)
 }
 /// Surface-local position within a bottom-anchored crop. Display placement
 /// remains authoritative; native buffer size must not change the output grid.

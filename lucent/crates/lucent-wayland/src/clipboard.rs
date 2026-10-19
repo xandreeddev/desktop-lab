@@ -7,7 +7,7 @@ use calloop::{
 };
 use lucent_api::{
     self as api, Application, CLIPBOARD_TEXT_LIMIT, ClipboardAction, ClipboardError,
-    ClipboardOutcome, ClipboardRequest, ClipboardTarget, ViewContext,
+    ClipboardOutcome, ClipboardRequest, ClipboardTarget,
 };
 use smithay_client_toolkit::data_device_manager::{
     DataDeviceManagerState, WritePipe,
@@ -102,15 +102,10 @@ impl<A: Application> State<A> {
         {
             return None;
         }
-        let tree = self.app.view(&ViewContext {
-            surface: native.spec.id,
-            instance: native.spec.instance.clone(),
-            width: native.width as f32,
-            height: native.height as f32,
-            now: self.epoch.elapsed().as_secs_f64(),
-            density: native.density(),
-        });
-        if !ordinary_field(&tree, &target.element) {
+        // Request admission and transfer callbacks refresh this CPU scene
+        // before checking authority. Its hits include admitted popover controls
+        // and exclude passive tooltip contents and rejected declarations.
+        if !ordinary_field(&native.scene, &target.element) {
             return None;
         }
         Some(Guard {
@@ -245,6 +240,18 @@ impl<A: Application> State<A> {
                 let Some(mut pending) = state.clipboard.pending.remove(&id) else {
                     return Ok(PostAction::Remove);
                 };
+                if let Some(guard) = &pending.guard {
+                    let address = guard.target.address();
+                    if state.id_for(&guard.surface).as_ref() == Some(&address) {
+                        for message in state.refresh_input_scene(&address, false, true) {
+                            if state.id_for(&guard.surface).as_ref() != Some(&address) {
+                                break;
+                            }
+                            state.message(message, &event_qh);
+                        }
+                        state.clipboard_observe_focus(&event_qh);
+                    }
+                }
                 let live = pending.guard.as_ref().is_none_or(|guard| {
                     state
                         .clipboard_guard(&guard.target)
@@ -375,18 +382,12 @@ impl<A: Application> State<A> {
         self.clipboard.device = None;
     }
 }
-fn ordinary_field<M>(tree: &api::Element<M>, id: &str) -> bool {
-    if tree.style.opacity <= 0. {
-        return false;
-    }
-    if tree.id == id {
-        return matches!(
-            tree.kind,
-            api::Kind::TextInput { .. } | api::Kind::TextArea { .. }
-        ) && tree.text_edit.is_some()
-            && tree.style.opacity > 0.;
-    }
-    tree.children.iter().any(|child| ordinary_field(child, id))
+fn ordinary_field<M>(scene: &lucent_ui::Scene<M>, id: &str) -> bool {
+    let mut matching = scene.hits.iter().filter(|hit| hit.id == id);
+    matching
+        .next()
+        .is_some_and(|hit| hit.text.is_some() && hit.text_edit.is_some())
+        && matching.next().is_none()
 }
 impl<A: Application> DataDeviceHandler for State<A> {
     fn enter(
@@ -495,19 +496,89 @@ impl<A: Application> DataSourceHandler for State<A> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn layout() -> lucent_ui::Layout {
+        lucent_ui::Layout::new(Arc::new(vec![
+            fontdue::Font::from_bytes(
+                include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
+                Default::default(),
+            )
+            .unwrap(),
+        ]))
+    }
+    fn scene(
+        layout: &lucent_ui::Layout,
+        tree: &api::Element<api::TextEdit>,
+    ) -> lucent_ui::Scene<api::TextEdit> {
+        layout.build(tree, 240., 160., &lucent_ui::Interaction::default(), 0.)
+    }
     #[test]
     fn clipboard_target_requires_a_live_ordinary_control_and_callback() {
+        let layout = layout();
         let field =
             api::Element::text_input("value", api::TextSelection::default(), "", |edit| edit)
                 .id("field");
-        assert!(ordinary_field(&field, "field"));
-        assert!(!ordinary_field(&field, "other"));
+        assert!(ordinary_field(&scene(&layout, &field), "field"));
+        assert!(!ordinary_field(&scene(&layout, &field), "other"));
         let hidden = api::Element::column(vec![field.clone()]).opacity(0.);
-        assert!(!ordinary_field(&hidden, "field"));
+        assert!(!ordinary_field(&scene(&layout, &hidden), "field"));
         let masked = api::Element::masked_input(5, "", |_| api::TextEdit::Clear).id("field");
-        assert!(!ordinary_field(&masked, "field"));
+        assert!(!ordinary_field(&scene(&layout, &masked), "field"));
+        assert!(ordinary_field(
+            &scene(&layout, &field.clone().input_only()),
+            "field"
+        ));
+        let duplicate = api::Element::stack(vec![field.clone(), field.clone()]);
+        assert!(!ordinary_field(&scene(&layout, &duplicate), "field"));
         let mut unbound = field;
         unbound.text_edit = None;
-        assert!(!ordinary_field(&unbound, "field"));
+        assert!(!ordinary_field(&scene(&layout, &unbound), "field"));
+    }
+    #[test]
+    fn clipboard_fields_follow_admitted_scopes_and_exclude_tooltip_content() {
+        let layout = layout();
+        let placement = api::AnchoredSpec {
+            side: api::OverlaySide::Below,
+            align: api::OverlayAlign::Start,
+            gap: 8.,
+            inset: 8.,
+        };
+        let field =
+            api::Element::text_input("Popup value", api::TextSelection::default(), "", |edit| {
+                edit
+            })
+            .size(140., 40.)
+            .id("field");
+        let anchor = api::Element::empty()
+            .size(20., 20.)
+            .at(20., 10.)
+            .on_click(api::TextEdit::Clear)
+            .id("anchor");
+        let popup = api::Element::stack(vec![anchor.clone()]).popover(api::Popover {
+            id: "popup".into(),
+            anchor: "anchor".into(),
+            placement,
+            content: Box::new(field.clone()),
+            dismiss: api::TextEdit::Clear,
+        });
+        let mut input = lucent_ui::Interaction::default();
+        let prepared = layout.build(&popup, 240., 160., &input, 0.);
+        input.synchronize(&prepared);
+        assert_eq!(input.focus.as_deref(), Some("field"));
+        assert!(ordinary_field(&prepared, "field"));
+        let mut rejected = popup.clone();
+        rejected.popovers[0].anchor = "missing".into();
+        assert!(!ordinary_field(&scene(&layout, &rejected), "field"));
+        let passive = api::Element::stack(vec![anchor.tooltip(api::Tooltip {
+            content: Box::new(field),
+            placement,
+            max_width: 160.,
+            delay: 0.,
+            transition: api::Transition::default(),
+        })]);
+        let mut input = lucent_ui::Interaction::default();
+        let initial = layout.build(&passive, 240., 160., &input, 0.);
+        input.motion(&initial, 30., 20., 0.);
+        let prepared = layout.build(&passive, 240., 160., &input, 1.);
+        assert!(!ordinary_field(&prepared, "field"));
     }
 }

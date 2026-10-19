@@ -484,6 +484,22 @@
   --component-media-panel-height: var(--component-audio-height);
   --component-media-panel-artwork: 168px;
   --component-media-panel-slide-distance: var(--component-audio-slide-distance);
+  --component-tooltip-font-size: var(--font-small);
+  --component-tooltip-padding-inline: var(--space-md);
+  --component-tooltip-padding-block: var(--space-sm);
+  --component-tooltip-radius: var(--radius-control);
+  --component-tooltip-gap: var(--space-lg);
+  --component-tooltip-inset: var(--space-md);
+  --component-tooltip-max-width: var(--size-tooltip-max-width);
+  --component-tooltip-max-lines: 2;
+  --component-tooltip-delay: var(--motion-panel);
+  --component-tooltip-enter: var(--motion-hover);
+  --component-tooltip-surface-room: var(--size-overlay-surface-room);
+  --component-popover-padding: var(--space-md);
+  --component-popover-width: var(--size-popover-width);
+  --component-popover-radius: var(--radius-panel);
+  --component-popover-gap: var(--space-sm);
+  --component-popover-inset: var(--space-md);
   --icon-tiny: 16px;
   --icon-small: 17px;
   --icon-compact: 18px;
@@ -554,4 +570,7 @@
   --palette-recipe-contrast-step: 0.05;
   --elevation-blur: var(--space-sm);
   --elevation-offset: var(--space-xs);
+  --size-tooltip-max-width: 320px;
+  --size-popover-width: 240px;
+  --size-overlay-surface-room: 96px;
 }
