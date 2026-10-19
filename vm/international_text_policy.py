@@ -137,6 +137,43 @@ def captured_cleanup(configuration, attempted):
     return result, missing
 
 
+# Hash/read the same pinned regular file before and after. Reading may update
+# atime under relatime; it grants no content or identity mutation authority.
+PINNED_READ_FUNCTIONS = r'''
+import hashlib,os,stat
+from pathlib import Path
+
+def stable_file_identity(info):
+ return [info.st_dev,info.st_ino,info.st_mode,info.st_uid,info.st_gid,
+         info.st_size,info.st_mtime_ns,info.st_ctime_ns]
+
+def read_pinned_file(raw,limit,canonical=False):
+ path=Path(raw)
+ assert path.is_absolute(),'absolute_owned_file_required'
+ if canonical:assert path.resolve(strict=True)==path,'canonical_owned_file_required'
+ fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+ with os.fdopen(fd,'rb') as stream:
+  info=os.fstat(stream.fileno())
+  assert stat.S_ISREG(info.st_mode) and info.st_uid==os.getuid(),'owned_regular_file_required'
+  assert 0<=info.st_size<=limit,'file_size_envelope'
+  identity=stable_file_identity(info)
+  assert stable_file_identity(path.lstat())==identity,'path_fd_identity_mismatch'
+  digest=hashlib.sha256();consumed=0
+  while True:
+   chunk=stream.read(min(1024*1024,limit-consumed+1))
+   if not chunk:break
+   consumed+=len(chunk);assert consumed<=limit,'file_size_envelope'
+   digest.update(chunk)
+  assert stable_file_identity(os.fstat(stream.fileno()))==identity,'file_identity_changed_during_read'
+  assert stable_file_identity(path.lstat())==identity,'path_identity_changed_during_read'
+  assert consumed==info.st_size,'content_size_changed_during_read'
+ return {'identity':identity,'sha256':digest.hexdigest()}
+'''
+
+# Functions/imports only: no filesystem or subprocess operations on import.
+exec(PINNED_READ_FUNCTIONS)
+
+
 # Invoked only by the prepared harness through the guest session. Reuses typed
 # systemd ExecStart/InvocationID/cgroup and /proc identity checks from App tooling.
 OBSERVATION_FUNCTIONS = UNIT_IDENTITY + r'''

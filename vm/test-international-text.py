@@ -31,7 +31,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class Failure(Exception):
-    pass
+    def __init__(self, label, diagnostics=None):
+        super().__init__(label)
+        self.diagnostics = diagnostics
 
 
 def require(condition, label):
@@ -39,12 +41,27 @@ def require(condition, label):
         raise Failure(label)
 
 
-def run(argv, *, data=None, timeout=20):
+def run(argv, *, data=None, timeout=20, label='bounded_subprocess_failed'):
+    require(re.fullmatch('[a-z_]+', label) is not None, 'fixed_subprocess_step_label')
     try:
         result = subprocess.run(argv, input=data, capture_output=True, timeout=timeout)
-    except (OSError, subprocess.TimeoutExpired):
-        raise Failure('bounded_subprocess_failed') from None
-    require(result.returncode == 0, 'bounded_subprocess_failed')
+    except OSError as error:
+        raise Failure(label, {'step': label, 'kind': 'os_error', 'errno': error.errno}) from None
+    except subprocess.TimeoutExpired:
+        raise Failure(label, {'step': label, 'kind': 'deadline'}) from None
+    if result.returncode:
+        stderr = result.stderr or b''
+        # Retain useful transport metadata, never argv, stdout or stderr payload.
+        diagnostics = {'step': label, 'kind': 'nonzero_exit', 'returncode': result.returncode,
+                       'stderr_bytes': len(stderr), 'stderr_sha256': hashlib.sha256(stderr).hexdigest()}
+        allowed = {'absolute_owned_file_required', 'canonical_owned_file_required',
+                   'owned_regular_file_required', 'file_size_envelope', 'path_fd_identity_mismatch',
+                   'file_identity_changed_during_read', 'path_identity_changed_during_read',
+                   'content_size_changed_during_read', 'release_binary_digest_mismatch'}
+        match = re.search(rb'(?:^|\n)AssertionError: ([a-z_]+)\s*$', stderr)
+        if match is not None and match[1].decode() in allowed:
+            diagnostics['fixed_reason'] = match[1].decode()
+        raise Failure(label, diagnostics)
     return result.stdout
 
 
@@ -54,32 +71,25 @@ def private(path, data):
         stream.write(data if isinstance(data, bytes) else (json.dumps(data, indent=2) + '\n').encode())
 
 
-PROBE = r'''
-import hashlib,json,os,stat,sys
-from pathlib import Path
+PROBE = policy.PINNED_READ_FUNCTIONS + r'''
+import json,sys
+assert len(sys.argv)==7
 result={}
 for name,raw,expected in zip(('example','peer','desktop'),sys.argv[1::2],sys.argv[2::2]):
- path=Path(raw);assert path.is_absolute() and path.resolve(strict=True)==path
- fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
- with os.fdopen(fd,'rb') as stream:
-  info=os.fstat(stream.fileno());assert stat.S_ISREG(info.st_mode) and info.st_uid==os.getuid() and info.st_size<=128*1024*1024
-  digest=hashlib.sha256()
-  for chunk in iter(lambda:stream.read(1024*1024),b''):digest.update(chunk)
-  assert digest.hexdigest()==expected and os.fstat(stream.fileno())==info
+ value=read_pinned_file(raw,128*1024*1024,canonical=True)
+ assert value['sha256']==expected,'release_binary_digest_mismatch'
  result[name]=expected
 print(json.dumps(result))
 '''
-CHECKPOINT = r'''
-import hashlib,json,os,stat
-from pathlib import Path
+CHECKPOINT = policy.PINNED_READ_FUNCTIONS + r'''
+import json
 base=Path.home()/'.local/state/lucent';settings=base/'desktop.json'
-fd=os.open(settings,os.O_RDONLY|os.O_NOFOLLOW)
-with os.fdopen(fd,'rb') as stream:
- info=os.fstat(stream.fileno());assert stat.S_ISREG(info.st_mode) and info.st_size<=4*1024*1024
- data=stream.read(4*1024*1024+1);assert len(data)<=4*1024*1024 and os.fstat(stream.fileno())==info
+value=read_pinned_file(settings,4*1024*1024)
 wallpaper=base/'wallpaper';link=wallpaper.lstat();assert stat.S_ISLNK(link.st_mode)
-print(json.dumps({'settings_sha256':hashlib.sha256(data).hexdigest(),'settings_inode':[info.st_dev,info.st_ino,info.st_size,info.st_mtime_ns],'wallpaper':[link.st_dev,link.st_ino,link.st_mtime_ns,os.readlink(wallpaper),str(wallpaper.resolve(strict=True))]}))
+print(json.dumps({'settings_sha256':value['sha256'],'settings_inode':value['identity'],
+ 'wallpaper':stable_file_identity(link)+[os.readlink(wallpaper),str(wallpaper.resolve(strict=True))]}))
 '''
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source-commit', required=True)
@@ -122,11 +132,11 @@ def main():
               'scope': 'One prepared native output; independent non-replacing input-method peer, no third-party IME/hardware claim',
               'host_crash_policy': 'Both exact owned transient units expire after210seconds. Private evidence remains; cursor restoration requires a guarded live host.'}
 
-    def remote(*argv, data=None):
-        return run(lab.ssh_args('lucent') + [shlex.join(argv)], data=data)
+    def remote(*argv, data=None, label='bounded_subprocess_failed'):
+        return run(lab.ssh_args('lucent') + [shlex.join(argv)], data=data, label=label)
 
-    def session(*argv, data=None):
-        return remote('python3', 'desktop-lab/scripts/in-session.py', *argv, data=data)
+    def session(*argv, data=None, label='bounded_subprocess_failed'):
+        return remote('python3', 'desktop-lab/scripts/in-session.py', *argv, data=data, label=label)
 
     def configuration(owned=True):
         expected = authority if owned else {k: v for k, v in authority.items() if k.startswith('desktop')}
@@ -283,13 +293,13 @@ def main():
         original_outputs = policy.output_state(outputs)
         original_workspace = policy.workspace_state(json.loads(session('hyprctl', '-j', 'activeworkspace')))
         cursor = policy.CursorOwnership(json.loads(session('hyprctl', '-j', 'cursorpos')))
-        original = json.loads(session('python3', '-c', CHECKPOINT))
+        original = json.loads(session('python3', '-c', CHECKPOINT, label='settings_checkpoint_failed'))
         private(directory / 'original-private.json', {'state': original, 'outputs': original_outputs,
                 'workspace': original_workspace, 'cursor': cursor.initial, 'owned_units': [unit, peer_unit]})
         # These explicitly supplied paths are immutable release files/staged copies,
         # never an existing user's input-method executable or running process.
         session('python3', '-c', PROBE, args.example_bin, args.example_sha256, args.peer_bin, args.peer_sha256,
-                '/home/omarchy/.local/bin/lucent-desktop', args.desktop_sha256)
+                '/home/omarchy/.local/bin/lucent-desktop', args.desktop_sha256, label='release_binary_probe_failed')
         peer_log = (directory / 'peer-private.log').open('xb')
         os.chmod(directory / 'peer-private.log', 0o600)
         input_deadline = time.monotonic() + 170
@@ -364,6 +374,8 @@ def main():
         report['passed'] = False
         label = str(error)
         report['failure'] = label if re.fullmatch('[a-z_]+', label) else 'fixture_protocol_geometry_or_ownership_failed'
+        if isinstance(error, Failure) and error.diagnostics is not None:
+            report['subprocess_failure'] = error.diagnostics
     finally:
         if pressed:
             try:
@@ -396,7 +408,7 @@ def main():
             try:
                 require(report['restoration'].get('owned_example_and_peer_units_retired'), 'owned_units_retired_before_restoration')
                 guard(owned=False, restoring=True)
-                report['restoration']['settings_and_wallpaper_preserved'] = json.loads(session('python3', '-c', CHECKPOINT)) == original
+                report['restoration']['settings_and_wallpaper_preserved'] = json.loads(session('python3', '-c', CHECKPOINT, label='settings_checkpoint_failed')) == original
                 report['restoration']['output_and_workspace_preserved'] = True  # exact guard above
                 current = cursor.observe(json.loads(session('hyprctl', '-j', 'cursorpos')))
                 if current != cursor.initial:

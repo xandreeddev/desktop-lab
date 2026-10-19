@@ -39,6 +39,14 @@ restores the cursor only while the original idle session and pointer authority
 remain valid. A host crash does not automatically restore the cursor. Private
 checkpoints, captures and reports remain under ignored `reports/local` on failure.
 
+Binary probing and settings checkpoints pin a bounded regular-file descriptor
+and compare device, inode, mode, owner, group, size, modification time and change
+time against both the descriptor and pathname before/after reading. Access time
+is excluded because a cold read can update it under relatime. Content hashes,
+size bounds and refusal of replacement/symlinks remain required. Subprocess
+failures identify the fixed probe/checkpoint step and retain only exit metadata,
+stderr length/hash and allowlisted fixed reasons, without process payload.
+
 The sequence exercises preedit candidate movement without canonical commit,
 commit/delete with atomic undo/redo, masked-field deactivation, actual multiline
 commit and RTL Home/Right navigation. The fixture contains two real newline
@@ -50,4 +58,10 @@ render tests establish preedit geometry/pixels independently.
 An existing compositor input-method owner causes refusal; this harness never
 replaces it. These controlled results do not establish third-party IME behavior,
 hardware hotplug, physical output acceptance or secure authentication behavior.
-Native execution of the corrected harness remains pending.
+The initial native attempt refused admission before starting either fixture;
+its generic subprocess failure did not record which file attribute differed.
+Restoration checks passed. It is retained as a failed attempt, not proof that
+access time caused the refusal. That attempt paired the 8e SDK examples with the
+older a7f desktop, so it is not coherent 8e runtime acceptance. The corrected file
+checks pass real temporary file cold-read and mutation-refusal regressions; a
+native rerun remains pending.

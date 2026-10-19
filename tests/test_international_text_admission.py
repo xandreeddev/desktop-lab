@@ -1,11 +1,17 @@
 """Pure native IME fixture authority checks; no VM, D-Bus or native input."""
 import copy
+from contextlib import redirect_stdout
+import hashlib
 import importlib.util
+import io
 import json
+import os
 from pathlib import Path
 import stat
 import struct
+import subprocess
 import sys
+import tempfile
 import types
 import unittest
 from unittest.mock import MagicMock, patch
@@ -13,6 +19,13 @@ from unittest.mock import MagicMock, patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'vm'))
 import international_text_policy as policy
+
+
+def driver_module():
+    spec = importlib.util.spec_from_file_location('native_text_driver', ROOT/'vm/test-international-text.py')
+    driver = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(driver)
+    return driver
 
 
 def scene():
@@ -222,6 +235,148 @@ class OwnedGuestBoundary(unittest.TestCase):
              patch('subprocess.Popen', side_effect=AssertionError('import must not start processes')):
             spec.loader.exec_module(driver)
         self.assertTrue(callable(driver.main))
+
+
+class PinnedFileReads(unittest.TestCase):
+    def cold_file(self, path, data):
+        path.write_bytes(data)
+        # Force the next actual read to qualify for Linux relatime. No hash/read
+        # precedes the operation under test.
+        os.utime(path, ns=(1, path.stat().st_mtime_ns))
+        return path.stat()
+
+    def test_only_access_time_is_excluded_from_all_eight_identity_fields(self):
+        fields = ('st_dev', 'st_ino', 'st_mode', 'st_uid', 'st_gid', 'st_size',
+                  'st_mtime_ns', 'st_ctime_ns')
+        original = types.SimpleNamespace(**dict(zip(fields, range(10, 18))), st_atime_ns=1)
+        self.assertEqual(policy.stable_file_identity(original), list(range(10, 18)))
+        access = copy.copy(original);access.st_atime_ns = 999
+        self.assertEqual(policy.stable_file_identity(original), policy.stable_file_identity(access))
+        for name in fields:
+            changed = copy.copy(original);setattr(changed, name, getattr(changed, name)+1)
+            with self.subTest(field=name):
+                self.assertNotEqual(policy.stable_file_identity(original), policy.stable_file_identity(changed))
+
+    def test_actual_binary_probe_accepts_cold_read_access_time_update(self):
+        driver = driver_module()
+        with tempfile.TemporaryDirectory() as directory:
+            argv = ['probe'];expected = {};before = {}
+            for name in ('example', 'peer', 'desktop'):
+                path = Path(directory)/name
+                data = (name+'\x00payload').encode()*4096
+                before[path] = self.cold_file(path, data)
+                expected[name] = hashlib.sha256(data).hexdigest()
+                argv.extend((str(path), expected[name]))
+            output = io.StringIO()
+            with patch.object(sys, 'argv', argv), redirect_stdout(output):
+                exec(driver.PROBE, {})
+            self.assertEqual(json.loads(output.getvalue()), expected)
+            advanced = False
+            for path, original in before.items():
+                after = path.stat()
+                self.assertEqual(policy.stable_file_identity(original), policy.stable_file_identity(after))
+                advanced |= after.st_atime_ns != original.st_atime_ns
+            if not advanced:
+                self.skipTest('filesystem does not update atime on actual cold reads')
+
+    def test_actual_settings_checkpoint_survives_cold_read_and_keeps_identity(self):
+        driver = driver_module()
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory);base = home/'.local/state/lucent';base.mkdir(parents=True)
+            settings = base/'desktop.json';data = b'{"ordinary":"unchanged"}'
+            original = self.cold_file(settings, data)
+            target = base/'image';target.write_bytes(b'owned fixture')
+            (base/'wallpaper').symlink_to(target)
+            output = io.StringIO()
+            with patch.object(Path, 'home', return_value=home), redirect_stdout(output):
+                exec(driver.CHECKPOINT, {})
+            result = json.loads(output.getvalue())
+            self.assertEqual(result['settings_sha256'], hashlib.sha256(data).hexdigest())
+            self.assertEqual(result['settings_inode'], policy.stable_file_identity(original))
+            self.assertEqual(result['settings_inode'], policy.stable_file_identity(settings.stat()))
+            self.assertEqual(result['wallpaper'][:8], policy.stable_file_identity((base/'wallpaper').lstat()))
+
+    def read_with_hook(self, path, hook):
+        real_fdopen = os.fdopen
+
+        class HookedRead:
+            def __init__(self, stream):
+                self.stream = stream
+                self.called = False
+
+            def __enter__(self):
+                self.stream.__enter__()
+                return self
+
+            def __exit__(self, *args):
+                return self.stream.__exit__(*args)
+
+            def fileno(self):
+                return self.stream.fileno()
+
+            def read(self, amount):
+                value = self.stream.read(amount)
+                if value and not self.called:
+                    self.called = True
+                    hook()
+                return value
+
+        with patch.object(os, 'fdopen', side_effect=lambda *args, **kwargs: HookedRead(real_fdopen(*args, **kwargs))):
+            return policy.read_pinned_file(str(path), 1024)
+
+    def test_same_size_content_mutation_during_pinned_read_is_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'settings';original = self.cold_file(path, b'original')
+
+            def mutate():
+                path.write_bytes(b'modified')
+                os.utime(path, ns=(1, original.st_mtime_ns+1))
+
+            with self.assertRaisesRegex(AssertionError, '^file_identity_changed_during_read$'):
+                self.read_with_hook(path, mutate)
+
+    def test_path_replacement_with_identical_bytes_during_read_is_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'settings';replacement = Path(directory)/'new'
+            self.cold_file(path, b'unchanged');self.cold_file(replacement, b'unchanged')
+            # Unlinking the pinned inode can update its ctime first; either
+            # descriptor or pathname identity must refuse the replacement.
+            with self.assertRaisesRegex(AssertionError, '^(file|path)_identity_changed_during_read$'):
+                self.read_with_hook(path, lambda: os.replace(replacement, path))
+
+    def test_size_limit_and_final_component_symlink_are_still_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'file';path.write_bytes(b'12345')
+            with self.assertRaisesRegex(AssertionError, '^file_size_envelope$'):
+                policy.read_pinned_file(str(path), 4)
+            link = Path(directory)/'link';link.symlink_to(path)
+            with self.assertRaises(OSError):
+                policy.read_pinned_file(str(link), 1024)
+
+
+class FixedFailureDiagnostics(unittest.TestCase):
+    def test_probe_failure_has_fixed_step_and_hash_without_process_payload(self):
+        driver = driver_module()
+        stderr = b'private-path-and-payload\nAssertionError: file_identity_changed_during_read\n'
+        result = subprocess.CompletedProcess(['private-argv'], 1, stdout=b'private-output', stderr=stderr)
+        with patch.object(driver.subprocess, 'run', return_value=result):
+            with self.assertRaises(driver.Failure) as raised:
+                driver.run(['private-argv'], label='release_binary_probe_failed')
+        self.assertEqual(str(raised.exception), 'release_binary_probe_failed')
+        self.assertEqual(raised.exception.diagnostics, {
+            'step': 'release_binary_probe_failed', 'kind': 'nonzero_exit', 'returncode': 1,
+            'stderr_bytes': len(stderr), 'stderr_sha256': hashlib.sha256(stderr).hexdigest(),
+            'fixed_reason': 'file_identity_changed_during_read'})
+        self.assertNotIn('private', json.dumps(raised.exception.diagnostics))
+
+    def test_non_allowlisted_assertion_payload_is_never_retained(self):
+        driver = driver_module()
+        result = subprocess.CompletedProcess([], 1, stdout=b'', stderr=b'AssertionError: secret_field_value\n')
+        with patch.object(driver.subprocess, 'run', return_value=result):
+            with self.assertRaises(driver.Failure) as raised:
+                driver.run([], label='settings_checkpoint_failed')
+        self.assertNotIn('fixed_reason', raised.exception.diagnostics)
+        self.assertNotIn('secret', json.dumps(raised.exception.diagnostics))
 
 
 if __name__ == '__main__':
