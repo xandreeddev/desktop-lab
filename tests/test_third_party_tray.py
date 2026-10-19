@@ -144,7 +144,7 @@ class NativeAdmission(unittest.TestCase):
 
 
 class NonsecretNetworkSnapshot(unittest.TestCase):
-    def fake_bus(self, wifi=False, owner_change=False):
+    def fake_bus(self, wifi=False, owner_change=False, loopback=False):
         bus = object.__new__(guest.Bus)
         calls = []
         bus.plain = lambda value: value
@@ -152,12 +152,16 @@ class NonsecretNetworkSnapshot(unittest.TestCase):
         bus.owner = lambda *_args: next(owners)
         root = {'Devices': ['/device'], 'ActiveConnections': ['/active'], 'NetworkingEnabled': True,
                 'WirelessEnabled': True, 'WwanEnabled': False}
+        if loopback:
+            root['ActiveConnections'].append('/loopback-active')
         def properties(_bus, _owner, _path, interface):
             if interface == guest.NM:
                 return root
             if interface.endswith('.Device'):
                 return {'DeviceType': 2 if wifi else 1, 'Interface': 'fixture0', 'State': 100}
             if interface.endswith('.Connection.Active'):
+                if _path == '/loopback-active':
+                    return {'Type': 'loopback', 'State': 2, 'Uuid': 'loopback-test-uuid'}
                 return {'Type': '802-3-ethernet', 'State': 2, 'Uuid': 'owned-test-uuid'}
             return {'Unsaved': False, 'Flags': 0}
         def call(_bus, _owner, _path, _interface, method, *_args):
@@ -181,6 +185,11 @@ class NonsecretNetworkSnapshot(unittest.TestCase):
         with self.assertRaisesRegex(policy.Blocked, 'wired_only'):
             bus.profiles()
         self.assertEqual(calls, [])
+
+    def test_existing_active_loopback_is_preserved_alongside_one_ethernet(self):
+        bus, _ = self.fake_bus(loopback=True)
+        observed = bus.profiles()
+        self.assertEqual([item[2] for item in observed['active']], ['802-3-ethernet', 'loopback'])
 
     def test_daemon_owner_replacement_invalidates_observation(self):
         bus, _ = self.fake_bus(owner_change=True)

@@ -261,10 +261,11 @@ class Bus:
         active = []
         for path in root['ActiveConnections']:
             props = self.properties(self.system, owner, str(path), NM + '.Connection.Active')
-            require(str(props['Type']) == '802-3-ethernet' and int(props['State']) == 2,
-                    'stable_active_wired_connection_required')
-            active.append([str(path), str(props['Uuid']), int(props['State'])])
-        require(len(active) == 1, 'one_active_wired_connection_required')
+            require(str(props['Type']) in ('802-3-ethernet', 'loopback') and int(props['State']) == 2,
+                    'stable_active_wired_or_loopback_connection_required')
+            active.append([str(path), str(props['Uuid']), str(props['Type']), int(props['State'])])
+        require(sum(value[2] == '802-3-ethernet' for value in active) == 1,
+                'one_active_wired_connection_required')
         settings = '/org/freedesktop/NetworkManager/Settings'
         paths = self.call(self.system, owner, settings, NM + '.Settings', 'ListConnections')
         require(len(paths) <= 64, 'bounded_nonsecret_profile_set_required')
