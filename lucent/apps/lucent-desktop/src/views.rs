@@ -83,7 +83,7 @@ impl Desktop {
         } else {
             self.dock.progress(cx.now)
         };
-        y += (1. - visibility) * crate::shell_layout::dock_surface_height(self.viewport.1) as f32;
+        y += (1. - visibility) * crate::shell_layout::dock_slide_distance(self.viewport.1);
         let mut children = vec![];
         if reveal < 0.999 {
             children.push(self.dock_row().opacity((1. - reveal * 2.).max(0.)).at(
@@ -194,11 +194,14 @@ impl Desktop {
                 .radius(radius::CONTROL)
                 .background(self.surface_color());
             let id = app.id.clone();
-            let source = element
+            let mut source = element
                 .clone()
                 .on_click(Message::Launch(app.id.clone(), true))
                 .on_drag(move |event| Message::Dock(crate::dock::Message::Drag(id.clone(), event)))
                 .id(format!("dock-{}", app.id.as_str()));
+            if !self.launcher.expanded() && !self.dock.dragging() {
+                source = source.tooltip(self.theme().tooltip(&app.name, OverlaySide::Above));
+            }
             if self.dock.dragging() {
                 items.push(source.input_only());
                 previews.push(element.at(

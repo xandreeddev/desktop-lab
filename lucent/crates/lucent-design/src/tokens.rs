@@ -606,6 +606,26 @@ pub mod component {
         pub const ARTWORK: f32 = 168.0;
         pub const SLIDE_DISTANCE: f32 = 20.0;
     }
+    pub mod tooltip {
+        pub const FONT_SIZE: f32 = 12.0;
+        pub const PADDING_INLINE: f32 = 12.0;
+        pub const PADDING_BLOCK: f32 = 8.0;
+        pub const RADIUS: f32 = 18.0;
+        pub const GAP: f32 = 8.0;
+        pub const INSET: f32 = 12.0;
+        pub const MAX_WIDTH: f32 = 320.0;
+        pub const MAX_LINES: f32 = 2.0;
+        pub const DELAY: f64 = 0.5;
+        pub const ENTER: f64 = 0.16;
+        pub const SURFACE_ROOM: f32 = 96.0;
+    }
+    pub mod popover {
+        pub const PADDING: f32 = 12.0;
+        pub const WIDTH: f32 = 240.0;
+        pub const RADIUS: f32 = 20.0;
+        pub const GAP: f32 = 8.0;
+        pub const INSET: f32 = 12.0;
+    }
 }
 pub mod icon {
     pub const TINY: f32 = 16.0;
@@ -692,4 +712,9 @@ pub mod palette_recipe {
 pub mod elevation {
     pub const BLUR: f32 = 8.0;
     pub const OFFSET: f32 = 4.0;
+}
+pub mod size {
+    pub const TOOLTIP_MAX_WIDTH: f32 = 320.0;
+    pub const POPOVER_WIDTH: f32 = 240.0;
+    pub const OVERLAY_SURFACE_ROOM: f32 = 96.0;
 }

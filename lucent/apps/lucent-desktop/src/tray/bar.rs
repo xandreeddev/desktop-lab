@@ -101,6 +101,18 @@ impl Tray {
                     .on_secondary_click(Message::Bar(id, Action::Menu))
                     .on_middle_click(Message::Bar(id, Action::Secondary))
                     .on_wheel(move |event| Message::Bar(id, Action::Wheel(event)))
+                    .tooltip(theme.tooltip(
+                        if item.tooltip.is_empty() {
+                            if item.title.is_empty() {
+                                &item.application
+                            } else {
+                                &item.title
+                            }
+                        } else {
+                            &item.tooltip
+                        },
+                        OverlaySide::Below,
+                    ))
                     .id(format!("bar-tray-item-{}", id.value()))
             })
             .collect()

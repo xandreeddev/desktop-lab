@@ -26,6 +26,9 @@ impl<M: Clone> Interaction<M> {
         button: MouseButton,
         modifiers: KeyModifiers,
     ) -> Option<M> {
+        if let Some(message) = self.popover_outside_press(scene, x, y) {
+            return Some(message);
+        }
         if button == MouseButton::Primary {
             return self.press_with_modifiers(scene, x, y, modifiers);
         }

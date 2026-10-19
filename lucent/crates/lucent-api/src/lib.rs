@@ -9,6 +9,8 @@ pub use surface::{SurfaceAddress, SurfaceInstance};
 mod rich_text;
 pub use rich_text::TextSpan;
 mod input;
+mod overlay;
+pub use overlay::{AnchoredSpec, OverlayAlign, OverlaySide, Popover, Tooltip};
 mod text_edit;
 pub use clipboard::{
     CLIPBOARD_TEXT_LIMIT, ClipboardAction, ClipboardError, ClipboardOutcome, ClipboardRequest,
@@ -289,6 +291,8 @@ pub struct Element<M> {
     pub kind: Kind,
     pub style: Style,
     pub children: Vec<Element<M>>,
+    pub tooltip: Option<Tooltip<M>>,
+    pub popovers: Vec<Popover<M>>,
     pub click: Option<M>,
     pub secondary_click: Option<M>,
     pub middle_click: Option<M>,
@@ -311,6 +315,8 @@ impl<M> Element<M> {
             kind,
             style: Style::default(),
             children: vec![],
+            tooltip: None,
+            popovers: vec![],
             click: None,
             secondary_click: None,
             middle_click: None,
@@ -605,6 +611,16 @@ impl<M> Element<M> {
     }
     pub fn on_hover(mut self, msg: M) -> Self {
         self.hover = Some(msg);
+        self
+    }
+    pub fn tooltip(mut self, tooltip: Tooltip<M>) -> Self {
+        self.tooltip = Some(tooltip);
+        self
+    }
+    /// Append an out-of-flow anchored scope. This initial contract supports one
+    /// active popover per surface; nested application menus keep their own client.
+    pub fn popover(mut self, popover: Popover<M>) -> Self {
+        self.popovers.push(popover);
         self
     }
     pub fn on_drag(mut self, f: impl Fn(DragEvent) -> M + Send + Sync + 'static) -> Self {
@@ -1367,6 +1383,24 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
                 .children
                 .into_iter()
                 .map(|c| c.map_arc(mapper.clone()))
+                .collect(),
+            tooltip: self.tooltip.map(|tooltip| Tooltip {
+                content: Box::new(tooltip.content.map_arc(mapper.clone())),
+                placement: tooltip.placement,
+                max_width: tooltip.max_width,
+                delay: tooltip.delay,
+                transition: tooltip.transition,
+            }),
+            popovers: self
+                .popovers
+                .into_iter()
+                .map(|popover| Popover {
+                    id: popover.id,
+                    anchor: popover.anchor,
+                    content: Box::new(popover.content.map_arc(mapper.clone())),
+                    placement: popover.placement,
+                    dismiss: mapper(popover.dismiss),
+                })
                 .collect(),
             click: self.click.map(|m| mapper(m)),
             secondary_click: self.secondary_click.map(|m| mapper(m)),

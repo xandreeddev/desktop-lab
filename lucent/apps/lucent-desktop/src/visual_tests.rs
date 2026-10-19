@@ -1,6 +1,7 @@
 //! Deterministic fixtures use the production layout, fonts, shaders and Vulkan renderer.
 //! Run ignored snapshots explicitly; no session, D-Bus service or compositor is needed.
 mod application_actions;
+mod overlays;
 use crate::desktop::{Desktop, Message};
 use crate::launcher::{self, Mode};
 use lucent_api::*;
@@ -1177,7 +1178,10 @@ fn compact_dock_resize_cannot_replace_the_display_viewport() {
     assert_eq!(app.viewport, (1920., 1080.));
     let dock = app.surfaces().into_iter().find(|s| s.id == "dock").unwrap();
     assert_eq!(dock.anchor, Anchor::Bottom);
-    assert_eq!(dock.height, 120);
+    assert_eq!(
+        dock.height,
+        120 + lucent_design::component::tooltip::SURFACE_ROOM as u32
+    );
     assert_eq!(dock.pointer_input, PointerInput::Content);
 }
 
@@ -1708,6 +1712,12 @@ fn visual_regressions() {
             ("tray-bar-narrow", Mode::Apps, 0, 0, "", 1., 640.),
             ("tray-bar-hover", Mode::Apps, 0, 0, "", 1., 1280.),
             ("tray-bar-fallback", Mode::Apps, 0, 0, "", 1., 1280.),
+            ("tooltip-tray", Mode::Apps, 0, 0, "", 1., 640.),
+            ("tooltip-tray-narrow", Mode::Apps, 0, 0, "", 1., 390.),
+            ("tooltip-dock", Mode::Apps, 9, 0, "", 1., 640.),
+            ("tooltip-dock-narrow", Mode::Apps, 9, 0, "", 1., 390.),
+            ("popover-controls", Mode::Apps, 0, 0, "", 1., 640.),
+            ("popover-controls-narrow", Mode::Apps, 0, 0, "", 1., 390.),
             ("tray-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("tray-empty", Mode::Apps, 0, 0, "", 1., 390.),
             ("tray-items", Mode::Apps, 0, 0, "", 1., 390.),
@@ -1804,7 +1814,14 @@ fn visual_regressions() {
             {
                 continue;
             }
-            let height = if name.starts_with("monitor-bar-") || name.starts_with("tray-bar-") {
+            let height = if name.starts_with("tooltip-tray") {
+                lucent_design::component::panel::BAR_HEIGHT
+                    + lucent_design::component::tooltip::SURFACE_ROOM
+            } else if name.starts_with("tooltip-dock") {
+                crate::shell_layout::dock_surface_height(580.) as f32
+            } else if name.starts_with("popover-controls") {
+                320.
+            } else if name.starts_with("monitor-bar-") || name.starts_with("tray-bar-") {
                 lucent_design::component::panel::BAR_HEIGHT
             } else if name == "notification-image-small" {
                 320.
@@ -1878,7 +1895,9 @@ fn visual_regressions() {
             if name == "palette-ocean" {
                 app.settings.palette = Some(lucent_design::palettes()[2].clone());
             }
-            let scene = if name.starts_with("panel-host-") {
+            let scene = if name.starts_with("tooltip-") || name.starts_with("popover-controls") {
+                overlays::fixture(name, &mut app, &layout, now, width, height)
+            } else if name.starts_with("panel-host-") {
                 let role = match name {
                     "panel-host-audio" => {
                         app.update(
@@ -2370,7 +2389,7 @@ fn visual_regressions() {
                         &initial,
                         hit.rect.x + hit.rect.w / 2.,
                         hit.rect.y + hit.rect.h / 2.,
-                        0.,
+                        now - 0.2,
                     );
                 }
                 layout.build(&tree, width, height, &input, now)
@@ -3762,7 +3781,11 @@ fn bar_capsules_share_grid_do_not_overlap_and_keep_active_workspace_visible() {
     // gap again here pushes tiled windows away from the shell spacing grid.
     let visible_bottom = component::bar::TOP + component::pill::HEIGHT;
     assert_eq!(surface.exclusive_zone as f32, visible_bottom);
-    assert_eq!(surface.height as f32, visible_bottom);
+    assert_eq!(
+        surface.height as f32,
+        visible_bottom + component::tooltip::SURFACE_ROOM
+    );
+    assert_eq!(surface.pointer_input, PointerInput::Content);
     assert_eq!(component::window::GAP_OUT, grid::SHELL_INSET);
     assert_eq!(component::window::GAP_IN * 2., grid::SECTION_GAP);
     for width in [320., 390., 640., 1024., 1280., 1366., 1920.] {
