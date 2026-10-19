@@ -276,3 +276,6 @@ Protocol references for this slice:
 [SecretAgent](https://networkmanager.dev/docs/api/latest/gdbus-org.freedesktop.NetworkManager.SecretAgent.html),
 [AgentManager](https://networkmanager.dev/docs/api/latest/gdbus-org.freedesktop.NetworkManager.AgentManager.html)
 and [secret flags](https://networkmanager.dev/docs/api/latest/nm-dbus-types.html).
+
+The [credential recovery evidence](../reports/measurements/lucent-wifi-credential-recovery.json)
+separates the actual focused source cohort from final visual/native checks.
