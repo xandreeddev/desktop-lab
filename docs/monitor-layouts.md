@@ -108,9 +108,31 @@ During drag or resize capture, the host retains its frozen source groups and
 also paints the cards in its temporary `widgets` preview. Both relevant exact
 addresses are invalidated. Hosts that do not paint `system` and unrelated groups
 remain untouched.
-This is client routing over the existing surface API; it adds no polling,
-persistence, renderer or domain behavior. Focused source regressions accompany
-the change; compilation and native/performance acceptance remain pending.
+The existing declarative path is:
+
+```text
+DesktopAdapters.system: Arc<dyn SystemPort>
+  → LinuxSystem.sample() on the five-second subscription worker
+  → SystemSnapshot → Message::System → Desktop.update
+  → changed value → current host/group membership
+  → Effects.redraw_surface(actual role + current instance)
+  → native frame demand using existing compositor readiness
+  → client view for that surface → SDK layout → Vulkan submission
+```
+
+The domain describes the observation; the adapter reads Linux; the client decides
+which presentation changed; the reusable runtime schedules and renders it.
+This adds no polling, persistence, renderer or domain behavior.
+
+All nine routing regressions and the full 778-test Rust workspace pass, alongside
+Clippy, formatting, Python checks and generated-token validation. On one native
+1× VM output, a short observation recorded three System submissions, zero
+Calendar/Clock submissions and an advancing background. Geometry, density,
+workspace, exact settings inode/bytes and process identity remained stable.
+This is scoped frame-counter evidence, not a CPU/RSS saving or video-FPS claim.
+See the [acceptance record](../reports/measurements/lucent-system-widget-invalidation.json).
+Source tests cover multiple outputs, overlap groups and captures; their native
+acceptance remains open.
 
 ## Geometry, density and startup
 

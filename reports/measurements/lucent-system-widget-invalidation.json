@@ -1,0 +1,86 @@
+{
+  "schema": 1,
+  "milestone": "targeted-system-widget-invalidation",
+  "status": "strict-local-and-scoped-native-accepted",
+  "release_source_commit": "82a27a46cfd474370ab66b3d5f8fc5be70517e6d",
+  "release_binaries": {
+    "lucent-desktop": {
+      "sha256": "d22bdd4d42ba4ce0e9372d11c1d08404559aed3f370f9d3708885e4ee35fc449",
+      "bytes": 21735592
+    },
+    "lucent-cli": {
+      "sha256": "94d45e25be64d264203179b619f84c0f847e629227c9ed3a2b357c9a415ab881",
+      "bytes": 345400
+    }
+  },
+  "architecture": {
+    "domain": "Existing SystemPort.sample returns SystemSnapshot. No domain or port change.",
+    "adapter": "Existing LinuxSystem reads /proc/stat and /proc/meminfo on the service worker; the five-second subscription is unchanged.",
+    "client": "Desktop stores only changed snapshots, resolves current Host::surfaces membership and requests exact role/instance redraws. Connected hosts borrow effective layouts; disconnected saved profiles are not enumerated. Frozen drag/resize sources and their painted preview retain their existing lifecycle.",
+    "framework": "Existing Effects.redraw_surface and native frame demand are used; no widget policy, new bounds API, renderer or compositor change."
+  },
+  "local_checks": {
+    "source_commit": "82a27a46cfd474370ab66b3d5f8fc5be70517e6d",
+    "rust_passed": 778,
+    "rust_ignored": 76,
+    "new_routing_tests": 9,
+    "python_passed": 104,
+    "generated_design_tokens": 576,
+    "format_passed": true,
+    "strict_workspace_all_targets_clippy_passed": true,
+    "fixture_correction": "The initial resize fixture omitted the physical Press required after Edit cancels old gestures; only the fixture was corrected. Production behavior was unchanged."
+  },
+  "native_observation": {
+    "source_commit": "82a27a46cfd474370ab66b3d5f8fc5be70517e6d",
+    "desktop_sha256": "d22bdd4d42ba4ce0e9372d11c1d08404559aed3f370f9d3708885e4ee35fc449",
+    "passed": true,
+    "scope": "One native output with a standalone System widget; submitted-frame observations only",
+    "initial_live_panel_open": false,
+    "panel_reopened": false,
+    "observed_seconds": 13.765,
+    "frame_deltas": [
+      {
+        "role": "background",
+        "frames": 261
+      },
+      {
+        "role": "calendar",
+        "frames": 0
+      },
+      {
+        "role": "clock",
+        "frames": 0
+      },
+      {
+        "role": "system",
+        "frames": 3
+      }
+    ],
+    "settings_inode_and_bytes_preserved": true,
+    "exact_running_binary_and_supervisor_epoch_preserved": true,
+    "wallpaper_selection_preserved": true,
+    "minute_boundary_crossed": false,
+    "output_geometry_workspace_density_and_standalone_membership_preserved": true
+  },
+  "deployment": {
+    "running_binary_hash_verified": true,
+    "settings_bytes_and_inode_preserved": true,
+    "legacy_media_exports_preserved": true,
+    "initially_empty_clipboard_and_history_preserved": true,
+    "supervisor_preserved": true,
+    "post_ui_preservation_verified": true,
+    "supervisor_observed_seconds": 39.913
+  },
+  "merge_requirements": {
+    "all_six_exact_head_checks_success": true,
+    "github_merge_state": "CLEAN",
+    "normal_merge_only": true,
+    "full_vulkan_comparisons": 796
+  },
+  "limits": [
+    "This records submitted-frame counters, not GPU execution, scanout, video FPS, CPU savings or RSS savings.",
+    "Native coverage is one stable 1x virtual output with a standalone System group. Transitive groups, named fallback/disconnected profiles, hidden/error/unchanged values and frozen drag/resize routing are covered by nine source tests.",
+    "The 300 MiB RSS target remains unmet by the prior measured video workload; this slice has no new matched CPU/RSS measurement.",
+    "Saved Wi-Fi credential recovery and native display Keep/Revert acceptance remain separate shell gaps. Accessibility remains deferred."
+  ]
+}
