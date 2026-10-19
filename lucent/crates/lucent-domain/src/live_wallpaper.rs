@@ -319,6 +319,51 @@ impl Default for PlaybackOptions {
         }
     }
 }
+/// Physical preview bounds, separate from saved playback and cover demand.
+/// Previewing never enlarges a source or admits media outside its envelope.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WallpaperPreviewOptions {
+    width: u32,
+    height: u32,
+}
+impl WallpaperPreviewOptions {
+    pub const MAX_EDGE: u32 = 1024;
+
+    pub fn new(width: u32, height: u32) -> Result<Self> {
+        if width == 0 || height == 0 || width > Self::MAX_EDGE || height > Self::MAX_EDGE {
+            return Err(DomainError::Invalid(
+                "Wallpaper preview bounds must be between 1 and 1024 physical pixels".into(),
+            ));
+        }
+        Ok(Self { width, height })
+    }
+    pub fn size(self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+    /// Fit both physical edges without upscaling. Integer rounding can alter
+    /// pixel aspect slightly; MediaFrame retains the natural source aspect.
+    pub fn fit_size(self, source_width: u32, source_height: u32) -> Result<(u32, u32)> {
+        media_frame_byte_size(source_width, source_height)?;
+        if source_width <= self.width && source_height <= self.height {
+            return Ok((source_width, source_height));
+        }
+        if u64::from(source_width) * u64::from(self.height)
+            >= u64::from(source_height) * u64::from(self.width)
+        {
+            Ok((
+                self.width,
+                (u64::from(source_height) * u64::from(self.width) / u64::from(source_width)).max(1)
+                    as u32,
+            ))
+        } else {
+            Ok((
+                (u64::from(source_width) * u64::from(self.height) / u64::from(source_height)).max(1)
+                    as u32,
+                self.height,
+            ))
+        }
+    }
+}
 pub trait WallpaperPlaybackPort: Send + Sync {
     /// Discover up to 32 local media sources without decoding or selecting them.
     /// A source still needs `prepare` before it can become a saved preference.
@@ -337,6 +382,24 @@ pub trait WallpaperPlaybackPort: Send + Sync {
         emit: &mut dyn FnMut(Result<MediaFrame>) -> bool,
         stop: Arc<dyn StopSignal>,
     );
+    /// Read a local source without importing it or changing saved preferences.
+    /// One caller-owned worker receives owned, straight-alpha RGBA frames at
+    /// source cadence, looping until cancellation or a false callback result.
+    /// Output fits the checked preview bounds and preserves aspect/timestamps.
+    /// Cancellation is cooperative; return means the decoder body has ended.
+    fn preview(
+        &self,
+        _source: &Wallpaper,
+        _options: WallpaperPreviewOptions,
+        emit: &mut dyn FnMut(Result<MediaFrame>) -> bool,
+        stop: Arc<dyn StopSignal>,
+    ) {
+        if !stop.cancelled() {
+            emit(Err(DomainError::Unavailable(
+                "Live wallpaper previews are unavailable".into(),
+            )));
+        }
+    }
 }
 #[cfg(test)]
 mod tests {
@@ -377,6 +440,30 @@ mod tests {
         for target in [(1, 1), (u32::MAX, 1), (1, u32::MAX)] {
             let value = WallpaperPixelTarget::new(target.0, target.1).unwrap();
             assert_eq!(value.size(), target);
+        }
+    }
+    #[test]
+    fn preview_bounds_contain_both_edges_without_enlarging_or_relaxing_admission() {
+        for (target, source, expected) in [
+            ((1024, 1024), (3840, 2160), (1024, 576)),
+            ((1024, 1024), (2160, 3840), (576, 1024)),
+            ((320, 180), (4096, 4096), (180, 180)),
+            ((180, 320), (4096, 1), (180, 1)),
+            ((320, 180), (1, 4096), (1, 180)),
+            ((1, 1), (4096, 4095), (1, 1)),
+            ((640, 480), (17, 9), (17, 9)),
+            ((17, 9), (65, 37), (15, 9)),
+        ] {
+            let options = WallpaperPreviewOptions::new(target.0, target.1).unwrap();
+            assert_eq!(options.size(), target);
+            assert_eq!(options.fit_size(source.0, source.1).unwrap(), expected);
+        }
+        for (width, height) in [(0, 1), (1, 0), (1025, 1), (1, 1025), (u32::MAX, 1)] {
+            assert!(WallpaperPreviewOptions::new(width, height).is_err());
+        }
+        let options = WallpaperPreviewOptions::new(1, 1).unwrap();
+        for (width, height) in [(0, 1), (1, 0), (4097, 1), (1, 4097), (u32::MAX, u32::MAX)] {
+            assert!(options.fit_size(width, height).is_err());
         }
     }
     #[test]

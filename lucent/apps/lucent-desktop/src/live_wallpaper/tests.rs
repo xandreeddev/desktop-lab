@@ -155,7 +155,10 @@ fn library_scene(
         &context,
         settings,
         &[],
-        theme,
+        crate::artwork::Artwork {
+            images: &std::collections::BTreeMap::new(),
+            theme,
+        },
         SaveState {
             status: crate::persistence::Status::Saved,
             error: "",
@@ -166,7 +169,7 @@ fn library_scene(
 }
 
 #[test]
-fn visible_library_choice_uses_the_existing_validated_import_for_its_target() {
+fn library_card_previews_and_explicit_apply_uses_existing_validated_import_for_its_target() {
     use lucent_ui::Interaction;
     let mut controller = controller();
     controller.assets = Arc::new(Posters(Arc::new(
@@ -199,9 +202,28 @@ fn visible_library_choice_uses_the_existing_validated_import_for_its_target() {
     );
     assert!(input.press(&scene, x, y).is_none());
     let message = input.release(x, y).unwrap();
-    assert!(
-        matches!(&message, Message::ImportPath(captured, path) if captured == &target && path == &source.path)
+    assert!(matches!(&message, Message::SelectSource(0)));
+    let pending_before = effects.tasks.len();
+    assert!(controller.update(message, &mut effects).is_none());
+    assert!(controller.importing.is_none());
+    assert_eq!(
+        effects.tasks.len(),
+        pending_before,
+        "card selection cannot import or save"
     );
+    let scene = library_scene(&controller, &LiveWallpapers::default());
+    let apply = scene
+        .hits
+        .iter()
+        .find(|hit| hit.id == "live-apply")
+        .unwrap();
+    let (x, y) = (
+        apply.rect.x + apply.rect.w / 2.,
+        apply.rect.y + apply.rect.h / 2.,
+    );
+    assert!(input.press(&scene, x, y).is_none());
+    let message = input.release(x, y).unwrap();
+    assert!(matches!(message, Message::ApplySelection));
     assert!(
         matches!(controller.update(message, &mut effects), Some(Intent::ImportStarted(captured, _)) if captured == target)
     );
@@ -215,8 +237,8 @@ fn visible_library_choice_uses_the_existing_validated_import_for_its_target() {
 }
 
 #[test]
-fn library_choices_keep_the_active_profile_and_show_busy_and_failure_status_above_the_rows() {
-    use lucent_ui::{Interaction, Paint, Scene};
+fn preview_navigation_keeps_applied_profile_and_import_busy_failure_stays_separate() {
+    use lucent_ui::Paint;
     let mut controller = controller();
     let mut effects = Effects::default();
     controller.update(Message::Open, &mut effects);
@@ -244,57 +266,53 @@ fn library_choices_keep_the_active_profile_and_show_busy_and_failure_status_abov
         default: Some(profile.clone()),
         ..Default::default()
     };
-    let click = |scene: &Scene<Message>, id: &str| {
-        let hit = scene.hits.iter().find(|hit| hit.id == id).unwrap();
-        let (x, y) = (hit.rect.x + hit.rect.w / 2., hit.rect.y + hit.rect.h / 2.);
-        assert!(hit.contains(x, y));
-        let mut input = Interaction::default();
-        assert!(input.press(scene, x, y).is_none());
-        input.release(x, y).unwrap()
-    };
-    let scene = library_scene(&controller, &settings);
-    let message = click(&scene, "live-library-0");
-    assert!(matches!(message, Message::Ignore));
-    assert!(controller.update(message, &mut effects).is_none());
-    assert!(effects.tasks.is_empty());
+    assert!(
+        controller
+            .update(Message::SelectSource(0), &mut effects)
+            .is_none()
+    );
+    assert!(
+        controller
+            .update(Message::Browse(1), &mut effects)
+            .is_none()
+    );
+    assert_eq!(controller.selected_source(), Some(&other));
+    assert!(
+        effects.tasks.is_empty(),
+        "preview selection declares a subscription, not an import task"
+    );
     assert!(controller.importing.is_none());
     assert_eq!(settings.default.as_ref(), Some(&profile));
-    let message = click(&scene, "live-library-1");
-    let Some(Intent::ImportStarted(_, revision)) = controller.update(message, &mut effects) else {
-        panic!("the different library source must be selectable");
+    let Some(Intent::ImportStarted(_, revision)) =
+        controller.update(Message::ApplySelection, &mut effects)
+    else {
+        panic!("Apply must start the validated import path");
     };
     let busy = library_scene(&controller, &settings);
-    let first_row = busy
-        .hits
-        .iter()
-        .find(|hit| hit.id == "live-library-0")
-        .unwrap();
-    assert!(busy.paint.iter().any(|paint| matches!(paint,
-        Paint::Text { text, rect, clip, .. } if text == "Importing and decoding…"
-            && rect.y < first_row.rect.y && rect.y >= clip.bounds.y
-            && rect.y + rect.h <= clip.bounds.y + clip.bounds.h
-    )));
+    assert!(busy.paint.iter().any(|paint| matches!(paint, Paint::Text { text, rect, clip, .. }
+        if text == "Importing and decoding…" && rect.y >= clip.bounds.y && rect.y + rect.h <= clip.bounds.y + clip.bounds.h)));
     assert!(
         busy.hits
             .iter()
-            .filter(|hit| hit.id.starts_with("live-library-") && hit.id != "live-library-refresh")
-            .all(|hit| !hit.tab_stop)
+            .all(|hit| hit.id != "live-apply" || !hit.tab_stop)
     );
     let task_count = effects.tasks.len();
-    let message = click(&busy, "live-library-1");
-    assert!(matches!(message, Message::Ignore));
-    assert!(controller.update(message, &mut effects).is_none());
     assert!(
         controller
-            .update(
-                Message::ImportPath(LiveWallpaperTarget::Default, source.path),
-                &mut effects
-            )
+            .update(Message::ApplySelection, &mut effects)
+            .is_none()
+    );
+    assert!(
+        controller
+            .update(Message::SelectSource(0), &mut effects)
             .is_none()
     );
     assert_eq!(controller.importing.as_ref().unwrap().revision, revision);
-    assert_eq!(effects.tasks.len(), task_count);
-    assert!(controller.error.is_empty());
+    assert_eq!(
+        effects.tasks.len(),
+        task_count,
+        "navigation cannot replace an admitted import"
+    );
     controller.update(
         Message::Prepared(
             revision,
@@ -303,17 +321,377 @@ fn library_choices_keep_the_active_profile_and_show_busy_and_failure_status_abov
         &mut effects,
     );
     let failed = library_scene(&controller, &settings);
-    let first_row = failed
-        .hits
-        .iter()
-        .find(|hit| hit.id == "live-library-0")
-        .unwrap();
-    assert!(failed.paint.iter().any(|paint| matches!(paint,
-        Paint::Text { text, rect, clip, .. } if text.contains("fixture decode failed")
-            && rect.y < first_row.rect.y && rect.y >= clip.bounds.y
-            && rect.y + rect.h <= clip.bounds.y + clip.bounds.h
-    )));
+    assert!(failed.paint.iter().any(
+        |paint| matches!(paint, Paint::Text { text, .. } if text.contains("fixture decode failed"))
+    ));
+    assert!(
+        failed
+            .hits
+            .iter()
+            .any(|hit| hit.id == "live-apply" && hit.tab_stop)
+    );
     assert_eq!(settings.default.as_ref(), Some(&profile));
+}
+
+#[test]
+fn refreshed_library_preserves_selected_path_and_browse_clamps_without_applying() {
+    let mut controller = controller();
+    let mut effects = Effects::default();
+    controller.path = "/manual-input.mp4".into();
+    controller.update(Message::Open, &mut effects);
+    let sources: Vec<_> = (0..3)
+        .map(|index| Wallpaper {
+            path: format!("/fixture/clip{index}.mp4"),
+            name: format!("Clip {index}"),
+        })
+        .collect();
+    controller.update(
+        Message::LibraryLoaded(controller.library_revision, Ok(sources.clone())),
+        &mut effects,
+    );
+    effects.tasks.clear();
+    assert!(
+        controller
+            .update(Message::Browse(i32::MAX), &mut effects)
+            .is_none()
+    );
+    assert_eq!(controller.selection, 2);
+    assert_eq!(controller.carousel.target_value(), 2.);
+    assert!(controller.preview.inspect()["selected"].as_bool().unwrap());
+    assert!(controller.importing.is_none());
+    assert!(effects.tasks.is_empty());
+    assert_eq!(
+        controller.path, "/manual-input.mp4",
+        "carousel does not rewrite the controlled path field"
+    );
+    controller.update(Message::RefreshLibrary, &mut effects);
+    let selected = sources[2].clone();
+    controller.update(
+        Message::LibraryLoaded(
+            controller.library_revision,
+            Ok(vec![selected.clone(), sources[0].clone()]),
+        ),
+        &mut effects,
+    );
+    assert_eq!(controller.selection, 0);
+    assert_eq!(controller.selected_source(), Some(&selected));
+    assert_eq!(controller.carousel.target_value(), 0.);
+    controller.update(Message::Browse(i32::MIN), &mut effects);
+    assert_eq!(controller.selection, 0);
+    controller.update(Message::SelectSource(usize::MAX), &mut effects);
+    assert_eq!(
+        controller.selection, 0,
+        "stale card identities cannot retarget a missing index"
+    );
+    controller.update(Message::Close, &mut effects);
+    assert_eq!(controller.preview.retained_bytes(), 0);
+    controller.update(Message::Browse(1), &mut effects);
+    controller.update(Message::ApplySelection, &mut effects);
+    assert!(
+        controller.importing.is_none(),
+        "closed preview actions cannot start imports"
+    );
+}
+
+#[test]
+fn refresh_invalidates_same_path_pixels_failures_and_waits_for_fresh_discovery_and_decoder_ack() {
+    use std::sync::{
+        atomic::{AtomicU8, AtomicUsize, Ordering},
+        mpsc,
+    };
+    use std::time::Duration;
+    struct Call {
+        stop: Arc<dyn StopSignal>,
+        release: mpsc::Sender<()>,
+    }
+    struct Adapter {
+        marker: AtomicU8,
+        mode: AtomicU8,
+        calls: AtomicUsize,
+        started: mpsc::Sender<Call>,
+    }
+    impl WallpaperPlaybackPort for Adapter {
+        fn prepare(&self, _: &Wallpaper) -> Result<LiveWallpaperAsset> {
+            panic!("Refresh cannot import");
+        }
+        fn play(
+            &self,
+            _: &LiveWallpaperAsset,
+            _: PlaybackOptions,
+            _: &mut dyn FnMut(Result<MediaFrame>) -> bool,
+            _: Arc<dyn StopSignal>,
+        ) {
+            panic!("Refresh cannot apply");
+        }
+        fn preview(
+            &self,
+            _: &Wallpaper,
+            _: WallpaperPreviewOptions,
+            emit: &mut dyn FnMut(Result<MediaFrame>) -> bool,
+            stop: Arc<dyn StopSignal>,
+        ) {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            if !emit(MediaFrame::rgba(
+                1,
+                1,
+                vec![self.marker.load(Ordering::SeqCst), 0, 0, 255],
+                Duration::ZERO,
+            )) {
+                return;
+            }
+            match self.mode.load(Ordering::SeqCst) {
+                0 => {
+                    emit(Err(DomainError::Unavailable(
+                        "owned old-file failure".into(),
+                    )));
+                }
+                2 => {
+                    let (release, wait) = mpsc::channel();
+                    self.started.send(Call { stop, release }).unwrap();
+                    // Delay native teardown after cancellation to prove that a
+                    // fresh LibraryLoaded is not itself a decoder retirement ACK.
+                    let _ = wait.recv_timeout(Duration::from_secs(2));
+                }
+                _ => (),
+            }
+        }
+    }
+    let (started, calls) = mpsc::channel();
+    let adapter = Arc::new(Adapter {
+        marker: AtomicU8::new(11),
+        mode: AtomicU8::new(0),
+        calls: AtomicUsize::new(0),
+        started,
+    });
+    let mut controller =
+        LiveWallpaper::new(adapter.clone(), crate::test_adapters::adapters().assets);
+    let mut effects = Effects::default();
+    let source = Wallpaper {
+        path: "/owned-fixture/same-path.mp4".into(),
+        name: "Same path".into(),
+    };
+    let finite = |controller: &mut LiveWallpaper| {
+        let (send, receive) = mpsc::channel();
+        (controller.subscriptions().pop().unwrap().run)(
+            lucent_api::Emitter::new(move |message| {
+                send.send(message).unwrap();
+            }),
+            Cancellation::default(),
+        );
+        for message in receive.try_iter() {
+            controller.update(message, &mut Effects::default());
+        }
+    };
+    controller.update(Message::Open, &mut effects);
+    assert!(
+        controller.subscriptions().is_empty(),
+        "Open waits for discovery before declaring preview work"
+    );
+    controller.update(
+        Message::LibraryLoaded(controller.library_revision, Ok(vec![source.clone()])),
+        &mut effects,
+    );
+    finite(&mut controller);
+    assert_eq!(controller.preview.status(), preview::Status::Failed);
+    assert_eq!(controller.preview.frame().unwrap().pixels()[0], 11);
+    assert_eq!(controller.preview.inspect()["cached"], 1);
+
+    adapter.marker.store(44, Ordering::SeqCst);
+    adapter.mode.store(2, Ordering::SeqCst);
+    controller.update(Message::RefreshLibrary, &mut effects);
+    let stale_library = controller.library_revision;
+    assert_eq!(controller.preview.status(), preview::Status::Idle);
+    assert!(controller.preview.error().is_empty());
+    assert_eq!(controller.preview.inspect()["cached"], 0);
+    assert_eq!(controller.preview.retained_bytes(), 0);
+    for message in [
+        Message::Browse(0),
+        Message::SelectSource(0),
+        Message::RetryPreview,
+    ] {
+        controller.update(message, &mut effects);
+        assert!(
+            controller.subscriptions().is_empty(),
+            "pending discovery cannot restart a known old path"
+        );
+    }
+    controller.update(Message::RefreshLibrary, &mut effects);
+    controller.update(
+        Message::LibraryLoaded(stale_library, Ok(vec![source.clone()])),
+        &mut effects,
+    );
+    assert!(controller.library_loading);
+    assert!(controller.subscriptions().is_empty());
+    controller.update(
+        Message::LibraryLoaded(controller.library_revision, Ok(vec![source.clone()])),
+        &mut effects,
+    );
+    let subscription = controller.subscriptions().pop().unwrap();
+    let retiring_id = subscription.id.clone();
+    let generation: u64 = retiring_id
+        .strip_prefix("live-wallpaper-preview:")
+        .unwrap()
+        .parse()
+        .unwrap();
+    let (send, receive) = mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        (subscription.run)(
+            lucent_api::Emitter::new(move |message| {
+                send.send(message).unwrap();
+            }),
+            Cancellation::default(),
+        );
+    });
+    let running = calls.recv_timeout(Duration::from_secs(2)).unwrap();
+    controller.update(
+        receive.recv_timeout(Duration::from_secs(2)).unwrap(),
+        &mut effects,
+    );
+    assert_eq!(controller.preview.frame().unwrap().pixels()[0], 44);
+
+    adapter.marker.store(77, Ordering::SeqCst);
+    adapter.mode.store(1, Ordering::SeqCst);
+    controller.update(Message::RefreshLibrary, &mut effects);
+    assert!(running.stop.cancelled());
+    assert_eq!(controller.preview.retained_bytes(), 0);
+    assert_eq!(controller.preview.inspect()["cached"], 0);
+    controller.update(Message::Browse(0), &mut effects);
+    assert_eq!(controller.preview.inspect()["selected"], false);
+    assert_eq!(controller.subscriptions()[0].id, retiring_id);
+    controller.update(
+        Message::LibraryLoaded(controller.library_revision, Ok(vec![source])),
+        &mut effects,
+    );
+    assert_eq!(
+        controller.subscriptions()[0].id,
+        retiring_id,
+        "same-path replacement waits for the old decoder to return"
+    );
+    assert_eq!(adapter.calls.load(Ordering::SeqCst), 2);
+    running.release.send(()).unwrap();
+    let ended = receive.recv_timeout(Duration::from_secs(2)).unwrap();
+    assert!(matches!(
+        ended,
+        Message::Preview(preview::Message::Ended(_, _))
+    ));
+    worker.join().unwrap();
+    controller.update(ended, &mut effects);
+    assert_ne!(controller.subscriptions()[0].id, retiring_id);
+    controller.update(
+        Message::Preview(preview::Message::Wake(generation)),
+        &mut effects,
+    );
+    assert!(
+        controller.preview.frame().is_none(),
+        "late old-file wakes cannot flash old pixels"
+    );
+    finite(&mut controller);
+    assert_eq!(controller.preview.frame().unwrap().pixels()[0], 77);
+    assert_eq!(controller.preview.status(), preview::Status::Ready);
+    assert!(controller.preview.error().is_empty());
+    assert_eq!(adapter.calls.load(Ordering::SeqCst), 3);
+    assert!(controller.importing.is_none());
+    controller.update(Message::Close, &mut effects);
+    assert!(controller.subscriptions().is_empty());
+    assert_eq!(controller.preview.retained_bytes(), 0);
+}
+
+#[test]
+fn preview_viewport_uses_shared_hero_geometry_and_real_density_with_a_checked_cap() {
+    let mut controller = controller();
+    let mut effects = Effects::default();
+    let viewport = (960., 800.);
+    controller.update(
+        Message::PreviewViewport(viewport.0, viewport.1, lucent_api::Density::ONE),
+        &mut effects,
+    );
+    let logical = super::view::preview_size(viewport);
+    let one = controller.preview_options.size();
+    assert_eq!(one, (logical.0.ceil() as u32, logical.1.ceil() as u32));
+    assert!(
+        controller.subscriptions().is_empty(),
+        "closed resize cannot start a decoder"
+    );
+    controller.update(
+        Message::PreviewViewport(
+            viewport.0,
+            viewport.1,
+            lucent_api::Density::new(5, 4).unwrap(),
+        ),
+        &mut effects,
+    );
+    assert_eq!(
+        controller.preview_options.size(),
+        (
+            (logical.0 * 1.25).ceil() as u32,
+            (logical.1 * 1.25).ceil() as u32
+        )
+    );
+    controller.update(
+        Message::PreviewViewport(
+            viewport.0,
+            viewport.1,
+            lucent_api::Density::integer(8).unwrap(),
+        ),
+        &mut effects,
+    );
+    let bounded = controller.preview_options.size();
+    assert_eq!(bounded.0.max(bounded.1), WallpaperPreviewOptions::MAX_EDGE);
+    assert!(bounded.0 > 0 && bounded.1 > 0);
+    controller.update(
+        Message::PreviewViewport(f32::NAN, viewport.1, lucent_api::Density::ONE),
+        &mut effects,
+    );
+    assert_eq!(controller.preview_options.size(), bounded);
+    assert_eq!(controller.preview.retained_bytes(), 0);
+    assert!(effects.tasks.is_empty());
+}
+
+#[test]
+fn root_blocks_unwritable_preview_apply_and_routes_only_exact_preview_failures() {
+    use crate::desktop::{Desktop, Message as DesktopMessage};
+    use lucent_api::{Application, Component, RuntimeFailure};
+    let mut app = Desktop::new(crate::test_adapters::adapters());
+    let mut effects = Effects::default();
+    app.live_wallpaper.open = true;
+    app.live_wallpaper.library = vec![Wallpaper {
+        path: "/fixture/clip.mp4".into(),
+        name: "Fixture".into(),
+    }];
+    app.settings_writable = false;
+    let before = serde_json::to_value(&app.settings).unwrap();
+    app.update(
+        DesktopMessage::LiveWallpaper(Message::ApplySelection),
+        &mut effects,
+    );
+    assert!(app.live_wallpaper.importing.is_none());
+    assert!(app.live_wallpaper.error.contains("not writable"));
+    assert_eq!(serde_json::to_value(&app.settings).unwrap(), before);
+    assert!(effects.tasks.is_empty());
+    let failure = app.runtime_failure(RuntimeFailure {
+        source: "subscription live-wallpaper-preview:17".into(),
+        reason: "fixture".into(),
+    });
+    assert!(matches!(
+        failure,
+        Some(DesktopMessage::LiveWallpaper(Message::Preview(
+            preview::Message::WorkerFailed(17)
+        )))
+    ));
+    assert!(matches!(
+        app.runtime_failure(RuntimeFailure {
+            source: "subscription live-wallpaper-preview:17-extra".into(),
+            reason: "fixture".into(),
+        }),
+        Some(DesktopMessage::Completed(Err(_)))
+    ));
+    assert!(matches!(
+        app.runtime_failure(RuntimeFailure {
+            source: "subscription live-wallpaper:17".into(),
+            reason: "fixture".into(),
+        }),
+        Some(DesktopMessage::LiveWallpaper(Message::WorkerFailed(17, _)))
+    ));
 }
 
 #[test]

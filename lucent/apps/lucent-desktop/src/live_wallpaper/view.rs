@@ -1,15 +1,34 @@
 use super::*;
 use lucent_api::{Color, Element, Length, ScrollSpec, ViewContext};
 use lucent_design::{component, font, radius, space};
+
+fn carousel_width(panel_width: f32) -> f32 {
+    // Match the controlled scroll viewport and the content's token padding.
+    // A fixed panel-wide child would overflow the scrollbar gutter.
+    (panel_width - component::scroll::PADDING * 2. - component::scroll::GUTTER - space::LG * 2.)
+        .max(0.)
+}
+/// Logical image demand shared by the controller and its actual presentation.
+/// Density conversion and checked physical preview bounds belong to the caller.
+pub(super) fn preview_size(viewport: (f32, f32)) -> (f32, f32) {
+    let bounds = crate::shell_layout::live_wallpaper_panel(viewport);
+    crate::wallpaper_carousel::hero_size(carousel_width(bounds.w))
+}
+
 impl LiveWallpaper {
     pub fn view(
         &self,
         cx: &ViewContext,
         settings: &LiveWallpapers,
         monitors: &[MonitorId],
-        theme: lucent_design::Theme,
+        artwork: crate::artwork::Artwork<'_>,
         save: SaveState<'_>,
     ) -> Element<Message> {
+        use crate::wallpaper_carousel::{Action, Card, Carousel, Controls, visible_wallpapers};
+        let theme = artwork.theme;
+        let bounds = crate::shell_layout::live_wallpaper_panel((cx.width, cx.height));
+        let (width, height) = (bounds.w, bounds.h);
+        let carousel_width = carousel_width(width);
         let selected = settings.selected(&self.target);
         let label = |text: &str| Element::text(text).font(font::BODY).color(theme.on_surface);
         let button = |text: &str, message: Message| theme.button(text, message);
@@ -34,15 +53,54 @@ impl LiveWallpaper {
                     .id(format!("live-target-{}", monitor.as_str())),
             );
         }
+        let center = self.carousel.value(cx.now);
+        let cards = visible_wallpapers(self.library.len(), center)
+            .map(|index| {
+                let source = &self.library[index];
+                Card {
+                    index,
+                    caption: &source.name,
+                    image: self.preview.frame_for(&source.path).cloned(),
+                    unavailable: index == self.selection && !self.preview.error().is_empty(),
+                    select: Message::SelectSource(index),
+                    id: format!("live-library-{index}"),
+                }
+            })
+            .collect();
+        let applied = self.library.get(self.selection).is_some_and(|source| {
+            selected
+                .is_some_and(|profile| profile.enabled && profile.asset.source.path == source.path)
+        });
+        let carousel = Carousel {
+            cards,
+            center,
+            artwork,
+            controls: Controls {
+                previous: ("live-previous", Message::Browse(-1)),
+                next: ("live-next", Message::Browse(1)),
+                apply: Action {
+                    label: if applied {
+                        "Applied"
+                    } else {
+                        "Apply wallpaper"
+                    },
+                    message: Message::ApplySelection,
+                    enabled: save.writable && self.importing.is_none(),
+                    id: "live-apply",
+                },
+            },
+            empty: "No local live wallpapers",
+        }
+        .render(
+            carousel_width,
+            crate::wallpaper_carousel::preferred_height(),
+        );
         let mut children = vec![
             Element::row(vec![
                 label("Live wallpapers").width(Length::Fill),
                 button("Close", Message::Close).id("live-close"),
             ])
             .gap(space::SM),
-            label("Local MP4, WebM or animated GIF · muted, looped playback")
-                .width(Length::Fill)
-                .wrap(component::live_wallpaper::STATUS_LINES as usize),
             Element::row(vec![
                 label("Local library").width(Length::Fill),
                 button("Refresh", Message::RefreshLibrary)
@@ -50,7 +108,29 @@ impl LiveWallpaper {
                     .id("live-library-refresh"),
             ])
             .gap(space::SM),
+            carousel,
+            label("Local MP4, WebM or animated GIF · muted, looped playback")
+                .width(Length::Fill)
+                .wrap(component::live_wallpaper::STATUS_LINES as usize),
         ];
+        match self.preview.status() {
+            super::preview::Status::Idle => {}
+            super::preview::Status::Loading => {
+                children.push(theme.status_text("Preparing preview…", false));
+            }
+            super::preview::Status::Ready => {
+                children.push(theme.status_text("Previewing selection", false));
+            }
+            super::preview::Status::Failed => {
+                children.push(
+                    theme
+                        .status_text(self.preview.error(), true)
+                        .wrap(component::live_wallpaper::STATUS_LINES as usize),
+                );
+                children
+                    .push(button("Retry preview", Message::RetryPreview).id("live-preview-retry"));
+            }
+        }
         if self.importing.is_some() {
             children.push(theme.status_text("Importing and decoding…", false));
         } else if !self.error.is_empty() {
@@ -74,29 +154,6 @@ impl LiveWallpaper {
                     .status_text("Add clips to ~/Videos/Wallpapers, then Refresh", false)
                     .wrap(component::live_wallpaper::STATUS_LINES as usize),
             );
-        }
-        for (index, source) in self.library.iter().enumerate() {
-            let active = selected
-                .is_some_and(|profile| profile.enabled && profile.asset.source.path == source.path);
-            let row = if save.writable {
-                let choice = theme.choice_button(
-                    &source.name,
-                    if active || self.importing.is_some() {
-                        Message::Ignore
-                    } else {
-                        Message::ImportPath(self.target.clone(), source.path.clone())
-                    },
-                    active,
-                );
-                if self.importing.is_some() {
-                    choice.hover_feedback(false).tab_stop(false)
-                } else {
-                    choice
-                }
-            } else {
-                label(&source.name)
-            };
-            children.push(row.width(Length::Fill).id(format!("live-library-{index}")));
         }
         children.extend([
             label("Or import another local file"),
@@ -266,12 +323,10 @@ impl LiveWallpaper {
             children
                 .push(button("Retry saving preferences", Message::RetrySave).id("live-save-retry"));
         }
-        let bounds = crate::shell_layout::live_wallpaper_panel((cx.width, cx.height));
-        let (width, height) = (bounds.w, bounds.h);
         let panel = Element::column(children)
             .gap(space::MD)
             .padding(space::LG)
-            .width(Length::Fixed(width))
+            .width(Length::Fill)
             .radius(radius::PANEL)
             .background(theme.surface);
         let panel = theme

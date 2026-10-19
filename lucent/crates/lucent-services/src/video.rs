@@ -16,6 +16,7 @@ use std::{
 const SOURCE_BYTES: u64 = 512 * 1024 * 1024;
 const LIBRARY_RESULTS: usize = 32;
 const LIBRARY_ENTRIES: usize = 1024;
+mod preview;
 mod store;
 static NEXT: AtomicU64 = AtomicU64::new(1);
 static INIT: OnceLock<bool> = OnceLock::new();
@@ -90,6 +91,15 @@ impl StopSignal for Never {
     }
 }
 impl WallpaperPlaybackPort for NativeVideoWallpapers {
+    fn preview(
+        &self,
+        source: &Wallpaper,
+        options: WallpaperPreviewOptions,
+        emit: &mut dyn FnMut(Result<MediaFrame>) -> bool,
+        stop: Arc<dyn StopSignal>,
+    ) {
+        preview::run(source, options, emit, stop);
+    }
     fn library(&self) -> Result<Vec<Wallpaper>> {
         if !self.library.is_absolute() {
             return Err(DomainError::Unavailable(
@@ -307,6 +317,13 @@ impl FrameConverter {
         frame: &ffmpeg::util::frame::video::Video,
         target: Option<WallpaperPixelTarget>,
     ) -> Result<Self> {
+        Self::new_sized(frame, target, None)
+    }
+    fn new_sized(
+        frame: &ffmpeg::util::frame::video::Video,
+        target: Option<WallpaperPixelTarget>,
+        preview: Option<WallpaperPreviewOptions>,
+    ) -> Result<Self> {
         dimensions(frame.width(), frame.height())?;
         let format = frame.format();
         if format.descriptor().is_none()
@@ -315,7 +332,12 @@ impl FrameConverter {
         {
             return Err(failed());
         }
-        let (width, height) = conversion_dimensions(format, frame.width(), frame.height(), target)?;
+        let (width, height) = match preview {
+            Some(options) => {
+                preview::conversion_dimensions(format, frame.width(), frame.height(), options)?
+            }
+            None => conversion_dimensions(format, frame.width(), frame.height(), target)?,
+        };
         let scaler = ffmpeg::software::scaling::context::Context::get(
             format,
             frame.width(),
@@ -380,6 +402,33 @@ impl FrameConverter {
 fn decode(
     path: &Path,
     options: PlaybackOptions,
+    emit: &mut dyn FnMut(MediaFrame) -> bool,
+    stop: Arc<dyn StopSignal>,
+) -> Result<()> {
+    decode_inner(path, options, None, emit, stop)
+}
+fn decode_preview(
+    path: &Path,
+    preview: WallpaperPreviewOptions,
+    emit: &mut dyn FnMut(MediaFrame) -> bool,
+    stop: Arc<dyn StopSignal>,
+) -> Result<()> {
+    decode_inner(
+        path,
+        PlaybackOptions {
+            fps: WallpaperFrameRate::Source,
+            looping: true,
+            target: None,
+        },
+        Some(preview),
+        emit,
+        stop,
+    )
+}
+fn decode_inner(
+    path: &Path,
+    options: PlaybackOptions,
+    preview: Option<WallpaperPreviewOptions>,
     emit: &mut dyn FnMut(MediaFrame) -> bool,
     stop: Arc<dyn StopSignal>,
 ) -> Result<()> {
@@ -455,7 +504,10 @@ fn decode(
                     return Ok(false);
                 }
                 if converter.is_none() {
-                    converter = Some(FrameConverter::new(&frame, options.target)?);
+                    converter = Some(match preview {
+                        Some(preview) => FrameConverter::new_sized(&frame, None, Some(preview))?,
+                        None => FrameConverter::new(&frame, options.target)?,
+                    });
                 }
                 let converter = converter.as_mut().ok_or_else(failed)?;
                 converter.validate(&frame)?;

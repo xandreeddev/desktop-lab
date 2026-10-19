@@ -1,0 +1,112 @@
+{
+  "schema": 1,
+  "milestone": "live-wallpaper-carousel-and-read-only-animated-previews",
+  "status": "strict_local_ci_visual_and_scoped_native_acceptance_passed",
+  "release_source_commit": "ba693fb940522db8348b77a4d111126c12abdde7",
+  "native_harness_source_commit": "0e1f4fed5a6828982135f4bde979c2514809f210",
+  "release_binaries": {
+    "lucent-desktop": {
+      "sha256": "16171141d24d6f4d7b20564aa86c43407023128111aa54e4a381efc2df3f23ae",
+      "bytes": 21734824
+    },
+    "lucent-cli": {
+      "sha256": "94d45e25be64d264203179b619f84c0f847e629227c9ed3a2b357c9a415ab881",
+      "bytes": 345400
+    }
+  },
+  "architecture": {
+    "domain": "WallpaperPlaybackPort.library/prepare/play/preview exchange pure domain values. WallpaperPreviewOptions checks physical contain bounds; WallpaperFrameRate distinguishes source timing and a checked cap.",
+    "adapter": "NativeVideoWallpapers pins a read-only regular source descriptor, validates media and decodes/fits frames. Preview creates no import, poster or preferences. Existing background fit and alpha policy are unchanged.",
+    "client": "Shared wallpaper_carousel composition owns cards, captions and controls. Preview owns transient demand, generations, retirement acknowledgement, five-entry cache and bounded latest-frame delivery; only explicit Apply delegates prepare and root persistence.",
+    "framework": "Existing ImageStream, prepared images, controlled scrolling, motion, generic subscriptions and Vulkan rendering remain reusable. Subscription spawn failures retain their exact source identity."
+  },
+  "local_checks": {
+    "source_commit": "ba693fb940522db8348b77a4d111126c12abdde7",
+    "rust_passed": 769,
+    "rust_ignored": 76,
+    "python_passed": 104,
+    "generated_design_tokens": 576,
+    "format_passed": true,
+    "strict_workspace_all_targets_clippy_passed": true
+  },
+  "visual_checks": {
+    "ci_source_commit": "ba693fb940522db8348b77a4d111126c12abdde7",
+    "ci_all_six_success": true,
+    "unfiltered_visual_regressions_passed": true,
+    "fixture_scenarios": 199,
+    "palettes": 2,
+    "densities": [
+      1,
+      2
+    ],
+    "comparisons": 796,
+    "reviewed_live_renders": 80,
+    "reviewed_narrow_regular_renders": 4,
+    "reviewed_composed_bar_panel_renders": 4,
+    "regular_wallpaper_comparisons_passed": 28,
+    "tolerances_changed": false,
+    "scope": "Offscreen software Vulkan images and structural assertions, separate from native input and animation sampling.",
+    "initial_broad_local_run": "Intentionally stopped after 267 actual images for focused review; never claimed complete."
+  },
+  "deployment": {
+    "running_binary_hash_verified": true,
+    "settings_bytes_and_inode_preserved": true,
+    "legacy_media_exports_preserved": true,
+    "initially_empty_clipboard_and_history_preserved": true,
+    "supervisor_preserved": true,
+    "post_ui_preservation_verified": true,
+    "supervisor_observed_seconds": 39.497
+  },
+  "native": {
+    "helper_sha256": "5a455d223dcd84b4e18b9d164336a48376df80e0a77156b5724b38bdb52c4f03",
+    "scope": "One existing 1x native output; synthetic animated GIF carousel and monitor-specific Apply",
+    "passed": true,
+    "checks": {
+      "original_settings_hardlink_checkpointed": true,
+      "selected_a_actual_animated_crop": true,
+      "native_cards_previous_next_select_only": true,
+      "native_tab_reveal_focus_and_wheel_scroll": true,
+      "native_same_path_retry_recovers_without_import": true,
+      "native_refresh_replaces_same_path_cached_preview": true,
+      "native_close_reopen_latest_demand_and_zero_admitted_after_close": true,
+      "all_browsing_exact_settings_inode_sources_stores_exports_preserved": true,
+      "only_expected_monitor_profile_saved": true,
+      "source_rate_saved": true,
+      "one_owned_asset_imported": true,
+      "native_monitor_apply_advances_background": true,
+      "monitor_apply_keeps_static_wallpaper_theme_login_exports_exact": true
+    },
+    "import_counts": {
+      "original_owned_assets_count": 32,
+      "after_apply_owned_assets_count": 33
+    },
+    "restoration": {
+      "exact_original_settings_inode_wallpaper_and_stable_runtime": true,
+      "only_owned_fixtures_import_and_checkpoint_removed": true,
+      "owned_cursor_position": true,
+      "original_bar_and_wallpaper_observed": true
+    },
+    "recovery_material_retained": false,
+    "cropped_samples": 3,
+    "scope_of_pixel_evidence": "Private 24×24 interior samples changed synthetic fixture colors. No full native UI, FPS, smoothness, decoder-count, scanout or physical-GPU claim.",
+    "earlier_attempts": [
+      {
+        "foreground_budget_seconds": 240,
+        "result": "deadline_during_navigation",
+        "all_restoration_checks_passed": true
+      },
+      {
+        "foreground_budget_seconds": 600,
+        "result": "deadline_during_Apply_navigation",
+        "all_browsing_and_restoration_checks_passed": true
+      }
+    ],
+    "accepted_harness": "600-second foreground bound, 64-step navigation bound, guarded direct visible-card clicks and bounded forward/backward Tab; unchanged per-input/cohort/persistence/restoration guards."
+  },
+  "remaining": [
+    "Native decoder-body count and source-cadence/60FPS/smoothness measurements. Serialization is established by source and mock lifetime tests.",
+    "Native translucent-alpha, fractional/multiple-output, codec/hardware and preview-specific CPU/RSS/scratch/GPU coverage.",
+    "The prior video workload exceeded 300 MiB RSS; this change has no new matched RSS measurement and claims no memory target achievement.",
+    "Separate shell slices: logical-widget invalidation, saved Wi-Fi credential recovery, native display Keep/Revert acceptance. Accessibility remains deferred."
+  ]
+}

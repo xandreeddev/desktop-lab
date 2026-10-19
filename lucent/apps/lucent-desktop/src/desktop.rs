@@ -242,7 +242,8 @@ impl Desktop {
         if !self.settings_writable
             && matches!(
                 message,
-                Live::Import(_)
+                Live::ApplySelection
+                    | Live::Import(_)
                     | Live::ImportPath(..)
                     | Live::Pause(..)
                     | Live::PauseAll(_)
@@ -259,6 +260,10 @@ impl Desktop {
         let admission = match &message {
             Live::Import(target) => Some((target, self.live_wallpaper.path.as_str())),
             Live::ImportPath(target, path) => Some((target, path.as_str())),
+            Live::ApplySelection => self
+                .live_wallpaper
+                .selected_source()
+                .map(|source| (&self.live_wallpaper.target, source.path.as_str())),
             _ => None,
         };
         if let Some((target, path)) = admission
@@ -287,9 +292,24 @@ impl Desktop {
             &message,
             Live::Prepared(..) | Live::Close | Live::Off(LiveWallpaperTarget::Default)
         );
-        let is_frame = matches!(&message, Live::Wake(..) | Live::Frame(_));
+        let is_frame = matches!(&message, Live::Wake(..) | Live::Frame(_) | Live::Preview(_));
         let was_open = self.live_wallpaper.open;
         let mut intent = None;
+        if matches!(message, Live::Open) {
+            let density = self
+                .monitors
+                .current()
+                .map_or(Density::ONE, |(_, monitor)| monitor.density);
+            effects.delegate(
+                |child| {
+                    self.live_wallpaper.update(
+                        Live::PreviewViewport(self.viewport.0, self.viewport.1, density),
+                        child,
+                    );
+                },
+                Message::LiveWallpaper,
+            );
+        }
         effects.delegate(
             |child| intent = self.live_wallpaper.update(message, child),
             Message::LiveWallpaper,
@@ -1079,7 +1099,7 @@ impl Component for Desktop {
                     cx,
                     &self.settings.live_wallpapers,
                     &self.monitors.connected.keys().cloned().collect::<Vec<_>>(),
-                    self.theme(),
+                    self.artwork(),
                     crate::live_wallpaper::SaveState {
                         status: self.persistence.status(self.settings_writable),
                         error: self.persistence.error(),
@@ -1757,6 +1777,17 @@ impl Component for Desktop {
                 effects.redraw("dock");
             }
             Message::Resize(id, w, h, density) => {
+                if id == "live-wallpaper" {
+                    effects.delegate(
+                        |child| {
+                            self.live_wallpaper.update(
+                                crate::live_wallpaper::Message::PreviewViewport(w, h, density),
+                                child,
+                            );
+                        },
+                        Message::LiveWallpaper,
+                    );
+                }
                 if id == "media-controls" {
                     effects.delegate(
                         |child| self.media.update(crate::media::Message::CancelSeek, child),
@@ -1832,6 +1863,17 @@ impl api::Application for Desktop {
             return Some(Message::Weather(crate::weather::Message::WorkerFailed(
                 generation,
             )));
+        }
+        if let Some(revision) = failure
+            .source
+            .strip_prefix("subscription live-wallpaper-preview:")
+            .and_then(|value| value.parse().ok())
+        {
+            return Some(Message::LiveWallpaper(
+                crate::live_wallpaper::Message::Preview(
+                    crate::live_wallpaper::preview::Message::WorkerFailed(revision),
+                ),
+            ));
         }
         if let Some(revision) = failure
             .source
@@ -2468,6 +2510,9 @@ impl api::Application for Desktop {
             Event::Key {
                 surface: "live-wallpaper",
                 key: Key::Escape,
+            }
+            | Event::Outside {
+                surface: "live-wallpaper",
             } => Some(Message::LiveWallpaper(
                 crate::live_wallpaper::Message::Close,
             )),
@@ -3000,7 +3045,7 @@ impl api::Application for Desktop {
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
         (surface == "weather-controls" && self.weather.animating(now))
-            || (surface == "live-wallpaper" && self.live_wallpaper.motion.active(now))
+            || (surface == "live-wallpaper" && self.live_wallpaper.animating(now))
             || (surface == "notifications" && self.notifications.animating(now))
             || (surface == "audio" && self.audio.animating(now))
             || (surface == "media-controls" && self.media.animating(now))
