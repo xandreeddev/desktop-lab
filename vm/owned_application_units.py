@@ -48,13 +48,14 @@ def unit_snapshot(unit):
    if error.get_dbus_name()=='org.freedesktop.systemd1.NoSuchUnit':return {'load':'not-found'}
    raise
   properties=dbus.Interface(bus.get_object('org.freedesktop.systemd1',path),'org.freedesktop.DBus.Properties')
-  value=properties.GetAll('org.freedesktop.systemd1.Unit',timeout=5)
-  service=properties.GetAll('org.freedesktop.systemd1.Service',timeout=5)
-  commands=service['ExecStart'];assert len(commands)==1
-  return {'load':str(value['LoadState']),'active':str(value['ActiveState']),
-          'transient':bool(value['Transient']),'group':str(service['ControlGroup']),
+  def unit_value(key):return properties.Get('org.freedesktop.systemd1.Unit',key,timeout=5)
+  def service_value(key):return properties.Get('org.freedesktop.systemd1.Service',key,timeout=5)
+  # Do not retrieve unrelated service properties such as its environment.
+  commands=service_value('ExecStart');assert len(commands)==1
+  return {'load':str(unit_value('LoadState')),'active':str(unit_value('ActiveState')),
+          'transient':bool(unit_value('Transient')),'group':str(service_value('ControlGroup')),
           'executable':str(commands[0][0]),'argv':[str(arg) for arg in commands[0][1]],
-          'main_pid':int(service['MainPID'])}
+          'main_pid':int(service_value('MainPID'))}
  finally:bus.close()
 
 def assert_unit_identity(value,unit,argv,group=None):
