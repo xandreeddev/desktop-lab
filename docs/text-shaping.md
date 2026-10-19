@@ -102,8 +102,8 @@ Explicit Vulkan regressions compare wrapped coverage with independently drawn
 visual runs and exercise stale-context cache reuse at both densities. Separate
 run masks start at independent raster origins, so a fractional run advance can
 shift their sampling phase relative to one combined mask. This fixture permits
-at most one physical pixel of coverage displacement in both directions, bounds
-total ink quantization error, and must reject a deliberately reversed run order.
+at most one horizontal physical pixel of coverage displacement in both
+directions, exact vertical bounds and per-run ink quantization error, and must reject a deliberately reversed run order.
 The stale-context cache comparison remains byte exact; desktop golden thresholds
 are unchanged.
 

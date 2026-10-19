@@ -52,9 +52,15 @@ fn row(fonts: Arc<Vec<lucent_ui::text::Font>>, opening: &str, body: &str) -> (Pa
 
 // Independent masks rasterize at their own origin before fractional GPU placement,
 // whereas one combined mask rounds the full glyph position at coverage density.
-// Permit only that one-physical-pixel phase in both directions, preserve total ink,
+// Permit only that horizontal one-physical-pixel phase in both directions, preserve each run's ink,
 // and reject an independently rendered wrong run order below.
-fn same_ink_with_one_pixel_phase(a: &[u8], b: &[u8], width: u32, height: u32) -> bool {
+fn same_ink_with_one_pixel_phase(
+    a: &[u8],
+    b: &[u8],
+    width: u32,
+    height: u32,
+    run_split: u32,
+) -> bool {
     let width = width as usize;
     let height = height as usize;
     if a.len() != width * height * 4 || b.len() != a.len() {
@@ -71,56 +77,50 @@ fn same_ink_with_one_pixel_phase(a: &[u8], b: &[u8], width: u32, height: u32) ->
         return false;
     }
     let coverage = |image: &[u8], x: usize, y: usize| image[(y * width + x) * 4 + 3];
-    let bounds = |image: &[u8]| {
-        let mut result: Option<(usize, usize, usize, usize)> = None;
+    let run_summary = |image: &[u8], from: usize, to: usize| {
+        let mut bounds: Option<(usize, usize, usize, usize)> = None;
+        let mut mass = 0_u64;
+        let mut nonzero = 0_u64;
         for y in 0..height {
-            for x in 0..width {
-                if coverage(image, x, y) > 8 {
-                    result = Some(match result {
+            for x in from..to {
+                let alpha = coverage(image, x, y);
+                mass += u64::from(alpha);
+                nonzero += u64::from(alpha > 0);
+                if alpha > 8 {
+                    bounds = Some(match bounds {
                         None => (x, y, x, y),
                         Some((x0, y0, x1, y1)) => (x0.min(x), y0.min(y), x1.max(x), y1.max(y)),
                     });
                 }
             }
         }
-        result
+        (bounds, mass, nonzero)
     };
-    let (Some(a_bounds), Some(b_bounds)) = (bounds(a), bounds(b)) else {
-        return false;
-    };
-    if [
-        a_bounds.0.abs_diff(b_bounds.0),
-        a_bounds.1.abs_diff(b_bounds.1),
-        a_bounds.2.abs_diff(b_bounds.2),
-        a_bounds.3.abs_diff(b_bounds.3),
-    ]
-    .into_iter()
-    .any(|difference| difference > 1)
-    {
-        return false;
-    }
-    let alpha_mass = |image: &[u8]| {
-        image
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .map(|p| u64::from(p[3]))
-            .sum::<u64>()
-    };
-    let nonzero =
-        |image: &[u8]| image.as_chunks::<4>().0.iter().filter(|p| p[3] > 0).count() as u64;
-    // At most one alpha quantization unit per covered physical pixel.
-    if alpha_mass(a).abs_diff(alpha_mass(b)) > nonzero(a).max(nonzero(b)) {
-        return false;
+    // The explicit run advance locates their separating space. Check each run
+    // independently so one glyph group cannot compensate for another's ink.
+    for (from, to) in [(0, run_split as usize), (run_split as usize, width)] {
+        let (Some(a_bounds), a_mass, a_nonzero) = run_summary(a, from, to) else {
+            return false;
+        };
+        let (Some(b_bounds), b_mass, b_nonzero) = run_summary(b, from, to) else {
+            return false;
+        };
+        // Fractional placement is horizontal only: any vertical movement fails.
+        if a_bounds.1 != b_bounds.1
+            || a_bounds.3 != b_bounds.3
+            || a_bounds.0.abs_diff(b_bounds.0) > 1
+            || a_bounds.2.abs_diff(b_bounds.2) > 1
+            || a_mass.abs_diff(b_mass) > a_nonzero.max(b_nonzero)
+        {
+            return false;
+        }
     }
     for (actual, expected) in [(a, b), (b, a)] {
         for y in 0..height {
             for x in 0..width {
                 let mut neighboring = 0;
-                for v in y.saturating_sub(1)..=(y + 1).min(height - 1) {
-                    for u in x.saturating_sub(1)..=(x + 1).min(width - 1) {
-                        neighboring = neighboring.max(coverage(expected, u, v));
-                    }
+                for u in x.saturating_sub(1)..=(x + 1).min(width - 1) {
+                    neighboring = neighboring.max(coverage(expected, u, y));
                 }
                 if coverage(actual, x, y).saturating_sub(neighboring) > 8 {
                     return false;
@@ -187,7 +187,13 @@ fn wrapped_bidi_pixels_match_explicit_visual_runs_at_both_densities() {
             .snapshot(width, 64, density, &[hebrew.clone(), latin.clone()])
             .unwrap();
         assert!(
-            same_ink_with_one_pixel_phase(&a, &b, width * density, 64 * density),
+            same_ink_with_one_pixel_phase(
+                &a,
+                &b,
+                width * density,
+                64 * density,
+                (hebrew_advance * density as f32).ceil() as u32
+            ),
             "wrapped paragraph run coverage differs at {density}×"
         );
         let wrong = canvas
@@ -199,7 +205,13 @@ fn wrapped_bidi_pixels_match_explicit_visual_runs_at_both_densities() {
             )
             .unwrap();
         assert!(
-            !same_ink_with_one_pixel_phase(&a, &wrong, width * density, 64 * density),
+            !same_ink_with_one_pixel_phase(
+                &a,
+                &wrong,
+                width * density,
+                64 * density,
+                (hebrew_advance * density as f32).ceil() as u32
+            ),
             "the coverage comparison must reject reversed run order at {density}×"
         );
     }
