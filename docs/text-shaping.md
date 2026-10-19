@@ -1,5 +1,13 @@
 # International text and input methods
 
+Source scope: accepted main `d00014509f13125fe4ccab3ce2e1fa3961a40dd3` includes the
+verified Display milestone. The implemented, unmerged Text cohort is
+`9a3a51fce0d61a331c2c887ec02a60c31293049e`, including the soft-wrap bidi correction.
+Its Rust/visual and native acceptance remain pending. The earlier `5d3501eb`
+cohort's passing checks retain their original source scope; they do not validate
+this correction or establish native compositor IME interoperability. See
+[current readiness](current-readiness.md) for delivery and acceptance boundaries.
+
 The component still owns its ordinary `String` and `TextFieldState`. It declares
 `Element::text_input` or `Element::text_area`; the framework emits relative
 `TextEdit` values. Complex-script shaping and the Wayland input method do not
@@ -148,6 +156,42 @@ records isolated cold/warm RSS and raster cost; it does not establish a historic
 reduction or desktop memory acceptance. The explicit Arabic style-mask Vulkan
 regression passes at 1×/2×. Broader native workload results remain separate.
 
+## Hard paragraphs and soft lines
+
+Text `9a3a51fc` resolves bidi on the canonical document before wrapping. Each
+soft row inherits its hard paragraph's resolved embedding/isolate levels and
+base level. A wrap applies line reordering; it does not infer a new paragraph
+from whichever script starts that row.
+
+An opaque `ResolvedBidiLine` shares the exact displayed row's `Arc<str>` and
+stores visual runs relative to those bytes. `LayoutOptions` carries it through
+`Paint::Text`, so it is `Clone` rather than `Copy`. Components keep declaring the
+same controlled text field; they do not construct bidi fragments or register
+another document. Measurement, selection, caret/hit geometry and raster
+preparation use the same resolved order. Arabic joining still ends at actual
+line edges, and fallback selection and 2× coverage retain their existing paths.
+
+The framework binary-searches the hard paragraph and supplies only the row's
+already-resolved classes/levels and original base level to the maintained bidi
+library's L1/L2 line reordering. Those temporary copies are bounded by row bytes,
+rather than the full document for every row. Tab expansion projects the original
+separator class S and levels into four displayed spaces; it does not resolve four
+ordinary whitespace characters as replacement input. The source/display map
+retains canonical UTF-8 offsets, including paragraph boundaries inside CRLF.
+
+`ResolvedBidiLine::is_for` checks exact row bytes before reuse. Shaping discards
+stale context, and the renderer canonicalizes it to no context before looking up
+the text-mask cache. Valid run order remains in the cache key; the same row text
+with a different paragraph order cannot reuse the wrong mask.
+
+The source includes independently stated Hebrew/Latin, override and isolate
+orders, tab/CRLF projection, stale same-length context, upstream line-reordering
+equivalence and controlled-field geometry regressions. Explicit Vulkan tests
+cover wrapped order and stale-context cache reuse at 1×/2×. Their presence is not
+a pass: strict Rust, visual and native execution at `9a3a51fc` remain pending.
+The earlier [full 832-case visual CI at `5d3501eb`](https://github.com/xandreeddev/desktop-lab/actions/runs/39306754599)
+passes only for that historical cohort.
+
 ## Input-method ownership
 
 The optional native `zwp_text_input_v3` adapter binds one text-input object for
@@ -233,5 +277,6 @@ from distinct prepared-frame advancement, with no pixel-visibility claim. None
 of this changes text density,
 frame demand or the domain/component contracts. See [daily-performance.md](daily-performance.md)
 for the matched static/video workloads and protocol-flag limits. Compilation and
-controlled alias/pixel tests pass for the source above. Measured desktop
+controlled alias/pixel tests pass for the named earlier cohorts above; they do not
+validate the later `9a3a51fc` correction. Measured desktop
 resource/presentation acceptance remains pending.

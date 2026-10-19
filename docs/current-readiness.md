@@ -1,11 +1,12 @@
 # Current daily-use readiness
 
-This is a reconciliation of accepted-main documentation base
-`bc3561439504c8818b17b9b739480e54d1e351fe` plus the Display milestone contained
-in this source, dated 2026-10-19. Its compiled source is `a7f41ecc`; merge and
-publication remain separate delivery gates. Other unmerged feature work is not
-counted as delivered. The seven requested gaps all remain in scope. Accessibility is
-separately deferred by the user.
+Accepted main for this reconciliation is `d00014509f13125fe4ccab3ce2e1fa3961a40dd3`
+(PR86, including the verified Display milestone), dated 2026-10-19. Its Display
+executable source is `a7f41ecc`; the documentation/native-tool snapshot is
+`d0611935`. Implemented, unmerged Text and Application cohorts are identified
+separately below and are not counted as delivered. Publication and deployment
+remain separate from merging. The seven requested gaps all remain in scope.
+Accessibility is separately deferred by the user.
 
 The shell's launcher, dock, widgets, notifications, lock/login and service panels
 are implemented. Several daily-use cases and their real-world acceptance remain
@@ -36,8 +37,8 @@ ledger's requirement history remains useful for the broader backlog.
 | Saved Wi-Fi recovery | Merged native masked SecretAgent repair retains the saved profile UUID and storage policy. Fourteen native NetworkManager/GUI checks pass against owned simulated WPA2/hidden radios, including cancellation, repair, DHCP, saved reconnection and exact restoration. | Enterprise/WEP provisioning, agent-owned vaults and physical-radio acceptance remain separate gaps; they are not implied by the owned fixture. |
 | Safe display settings | Native whole-layout drafts, fresh ordered observations, Apply → Keep/Revert and independent 15-second/UI-crash EOF rollback. Seven actual one-output QEMU flows pass for mode, scale, position, persistence and recovery. File preservation is exact; the expected one-restart service transition is validated explicitly. | Physical/multiple outputs, native enable/disable/rotation, fractional display-settings input, hotplug, suspend/resume, compositor restart and secure-output acceptance remain open. The Keep-to-file-identity-capture host-loss interval retains manual recovery. |
 | Resources and animation | Event-driven redraw, bounded image/preview ownership and live-video physical-cover conversion are implemented. | The separate 120-second normal-video sample of the Display binary measures 384.82 MiB mean / 403.88 MiB peak RSS and 101.466% of one core on llvmpipe, above the 300 MiB target. This differs from the Weather cohort and establishes no isolated improvement. Actual 60 FPS presentation and consistent cold/warm animation timing are not established. |
-| International text | Controlled ordinary/multiline editing, grapheme navigation, undo/redo and bounded clipboard transfers exist. | Complex-script shaping, bidirectional layout, font fallback and IME are unfinished in accepted main. Native pixel/scroll details and clipboard races need further acceptance. |
-| Application integration | Live XDG catalog observation, identity-preserving selection, persisted pin/reorder, ordinary activation and desktop-entry action paths exist. | Fresh activation authority, file/URI opening and remaining desktop-entry handling need completion. Private protocol/client action checks do not establish third-party native activation interoperability. |
+| International text | Accepted main retains controlled editing/clipboard and the earlier shaping path. Unmerged Text `9a3a51fc` implements script shaping, hard-paragraph context across soft wraps, exact row-bound visual source/caret maps, tab separator projection, deterministic fallback and opt-in text-input-v3 composition. | Strict Rust/visual execution for `9a3a51fc`, merge/deployment and native compositor IME acceptance remain pending. Earlier `5d3501eb` checks do not validate this correction. Native pixel/scroll details, delayed clipboard/focus races and third-party GUI clipboard still need acceptance; controlled protocol checks do not establish those results. |
+| Application integration | Accepted main includes catalog, pins, ordinary activation and declared actions. Unmerged Application `bb304907` implements fresh input-bound activation context, explicit file/URI Open and expanded XDG parsing/observation, with a prepared real-application harness. | Merge/deployment and native third-party launch/open/action acceptance remain pending. An intent token, dispatch acknowledgement or prepared harness does not prove focus, document loading or application interoperability. |
 | Real-world validation | Several owned native workflows already pass, as listed below. | Simultaneous monitors, hotplug, suspend/resume, physical Bluetooth/audio and other power/radio hardware, third-party tray applications and GUI clipboard interoperability need broader testing. Implementation and an owned fixture are separate from this acceptance. |
 | Documentation accuracy | This reconciliation updates current summaries and repository skills against source-specific evidence. | Keep summaries and the ledger current when later PRs merge; site validation is required for this documentation change. Historical evidence must retain its original scope. |
 
@@ -47,12 +48,31 @@ The relevant contract guides are [network](native-network.md),
 [application catalog](application-catalog.md). Those guides describe the code at
 their stated source; delivery and acceptance must be identified separately.
 
+## Implemented branches and pending acceptance
+
+| Cohort | Implemented scope | Delivery and acceptance boundary |
+| --- | --- | --- |
+| Text `9a3a51fc` | Shared glyph/source geometry, script/fallback shaping and ordinary IME, plus hard-paragraph levels across wraps, exact row-bound resolved context, line-local L1/L2, tab separator projection and a stale-context cache guard. | Implemented, source-reviewed and unmerged; strict Rust/visual and native checks at this source remain pending. Full 832-case visual CI passes for the earlier `5d3501eb` cohort only. The [text guide](text-shaping.md) and [typography review](text-baseline-review.md) preserve those sources. |
+| Application `bb304907` | Domain open/context values, XDG adapter dispatch/revalidation and generic opt-in Wayland activation effects; standalone intent consumer and owned native harness. | Implemented, unmerged. Native launch/open/action proof has not run; [activation](application-activation.md) separates physical input from socket commands. |
+| Native-tool snapshot `d0611935` | Source includes guarded acceptance tools for real applications, GUI clipboard, third-party tray, simultaneous outputs and suspend/recovery. | Tool existence is not acceptance. Those native cases, physical devices and hardware pacing remain pending. |
+
+The controlled AMD native-context candidate executed: RADV RENOIR enumeration,
+native login, hardware adapter selection and initial rendered shell frames passed.
+The preservation gate then detected the home Btrfs device identity changing from
+56 to 57, before the planned three-second liveness gate. Recovery verified the
+original software domain semantics, all 963 original package versions, removal of
+the owned RADV addition and exact non-device state; 189 captured identities retain
+only that acknowledged device remap. The original failed preservation result is
+retained. See [the dated Vulkan trial](lucent-vulkan.md). This is no stable hardware
+presentation, FPS or RSS acceptance and does not supersede the software-Vulkan
+resource failure below.
+
 ## Source-specific native evidence
 
-Each report identifies its tested source. Earlier reports belong to accepted
-main; the Display source is contained in this milestone and still has separate
-PR delivery gates. These are scoped observations, not fresh executions caused
-by editing this guide.
+Each report identifies its tested source. Display is now merged through PR86;
+its native inputs still belong to the recorded `a7f41ecc` binary and harness
+cohort, not every newer combined source. These are scoped observations, not fresh
+executions caused by editing this guide.
 
 | Behavior and source | Observed acceptance | Remaining boundary |
 | --- | --- | --- |
@@ -104,4 +124,5 @@ prove the underlying OS operation completed.
 This guide distinguishes the recorded Display input run, its explicit offline
 acceptance-contract correction and the separate same-binary read-only resource
 sample. Historical ledger entries remain intact. Final Astro/site checks and
-exact-head CI are separate delivery gates; the seven requested gaps are not all closed.
+exact-head CI are separate documentation delivery gates; the seven requested gaps
+are not all closed. This reconciliation does not run native or hardware acceptance.

@@ -1,5 +1,13 @@
 # Multiline editing and Notes
 
+Source scope: accepted main `d00014509f13125fe4ccab3ce2e1fa3961a40dd3` includes the
+verified Display milestone. The implemented, unmerged Text cohort is
+`9a3a51fce0d61a331c2c887ec02a60c31293049e`, including the soft-wrap bidi correction.
+Its Rust/visual and native acceptance remain pending. The earlier `5d3501eb`
+cohort's passing checks retain their original source scope; they do not validate
+this correction or establish native compositor IME interoperability. See
+[current readiness](current-readiness.md) for delivery and acceptance boundaries.
+
 `Element::text_area` is an ordinary controlled editor. It reuses `TextEdit`,
 `TextSelection`, `TextFieldState`, `ScrollSpec` and the existing clipboard effects.
 It adds no desktop domain port, persistence mechanism or engine-owned document.
@@ -209,6 +217,9 @@ when comparing runs. The [sanitized report](../reports/measurements/lucent-multi
 retains all sample summaries and their source revision. This is no before/after
 CPU comparison, desktop RSS measurement, GPU benchmark or proof of native 60 FPS.
 
-Complex-script shaping, bidirectional layout, font fallback, preedit/IME and
-platform accessibility remain separate requirements. The current glyph metrics
-support pair kerning and grapheme editing; that does not establish those features.
+The historical Notes results above exercise the earlier kerning/grapheme path.
+The implemented, unmerged text cohort adds complex-script shaping, bidi visual
+stops, deterministic fallback and opt-in preedit/IME through the same controlled
+API; see [international text](text-shaping.md). Those source and controlled checks
+do not repeat native Notes acceptance or establish compositor IME interoperability.
+Platform accessibility remains deferred by the user.

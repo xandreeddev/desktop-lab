@@ -1,5 +1,12 @@
 # Application catalog and dock preferences
 
+Source scope: catalog and declared-action foundations are in accepted main `d0001450`.
+Fresh intent tokens, explicit file/URI Open and the expanded XDG parser/observer belong
+to the implemented, unmerged application cohort
+`bb3049078768ac195af49b41cf3f6f8044dd5726`. The native application harness exists but
+has not run; these APIs and commands do not imply that the installed accepted-main
+release exposes them. See [current readiness](current-readiness.md).
+
 `ApplicationPort` exposes `discover`, `watch`, `watch_updates` and application
 launch/open commands. The production `XdgApplications` adapter captures its source
 directories, absolute PATH lookup roots, session desktop and locale at
