@@ -78,4 +78,45 @@ class DurableBrowserLease(unittest.TestCase):
             retired.assert_called_once_with(lease);generic.assert_not_called()
 
 
+class FixedFixtureDiagnostics(unittest.TestCase):
+    def test_known_lease_failure_keeps_operation_class_and_source_location_without_payload(self):
+        try:
+            fixture.chromium.require(False)
+        except ValueError as error:
+            value=fixture.failure_details(error,'guard')
+        self.assertEqual(value['operation'],'guard')
+        self.assertEqual(value['error_class'],'ValueError')
+        self.assertEqual(value['fixed_reason'],'owned_chromium_lease_refused')
+        self.assertEqual(value['trace_frames'][0]['source'],'owned_chromium_lease.py')
+        self.assertEqual(value['trace_frames'][0]['function'],'require')
+        self.assertGreater(value['trace_frames'][0]['line'],0)
+        self.assertFalse(value['trace_truncated'])
+        self.assertNotIn(str(ROOT),json.dumps(value))
+
+    def test_unknown_reason_operation_chain_and_locals_never_enter_diagnostics(self):
+        secret='credential profile title /private/path about:private'
+        try:
+            try:raise ValueError(secret)
+            except ValueError as cause:raise RuntimeError(secret) from cause
+        except RuntimeError as error:
+            value=fixture.failure_details(error,secret)
+        self.assertEqual(value['operation'],'unknown')
+        self.assertEqual(value['error_class'],'OtherError')
+        self.assertEqual(value['fixed_reason'],'unclassified_fixture_failure')
+        self.assertEqual(value['trace_frames'],[])
+        self.assertNotIn(secret,json.dumps(value))
+
+    def test_trace_has_fixed_sources_and_bounded_frames_without_code_or_locals(self):
+        namespace={}
+        exec(compile('def recurse(depth):\n if depth: recurse(depth-1)\n else: raise ValueError("private payload")\n',
+                     str(ROOT/'vm/fixtures/application-intent-fixture.py'),'exec'),namespace)
+        try:namespace['recurse'](100)
+        except ValueError as error:value=fixture.failure_details(error,'retire')
+        self.assertEqual(len(value['trace_frames']),12)
+        self.assertTrue(value['trace_truncated'])
+        self.assertLess(len(json.dumps(value)),4096)
+        self.assertNotIn('private payload',json.dumps(value))
+        self.assertTrue(all(set(frame)=={'source','function','line'} for frame in value['trace_frames']))
+
+
 if __name__=='__main__':unittest.main()

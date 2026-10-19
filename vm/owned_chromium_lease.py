@@ -79,18 +79,32 @@ def command_identity(pid, declared):
     # are unambiguous. Never interpret shell syntax or split arbitrary text.
     values = raw[:-1].split(b'\0')
     required = [arg.encode() for arg in declared['argv'][1:]]
-    prefixes = (b'--user-data-dir=', b'--class=', b'--ozone-platform=',
+    platform = b'--ozone-platform=wayland'
+    require(required.count(platform) == 1)
+    required = [arg for arg in required if arg != platform]
+    prefixes = (b'--user-data-dir=', b'--class=',
                 b'--remote-debugging-address=', b'--remote-debugging-port=')
+    # Arch's launcher can add the same platform flag before our declared one.
+    # The distinct --ozone-platform-hint option is not a platform occurrence.
+    # Count even embedded/malformed occurrences, then require every occurrence
+    # to be a complete literal Wayland flag. No arbitrary title parsing occurs.
+    platform_key = rb'--ozone-platform(?==|[\x00-\x20]|$)'
     if len(values) == 1:
         title = b' ' + values[0] + b' '
         require(values[0].startswith(CHROMIUM.encode() + b' '))
         for prefix in prefixes:
             require(title.count(b' ' + prefix) == 1)
-        require(all(not any(c in arg for c in b'\t\n\r ') and title.count(b' ' + arg + b' ') == 1
+        occurrences = len(re.findall(platform_key, values[0]))
+        require(occurrences > 0 and occurrences == len(re.findall(
+            rb'(?<= )' + re.escape(platform) + rb'(?= )', title)))
+        require(all(not any(c in arg for c in b'\t\n\r ') and len(re.findall(
+                    rb'(?<= )' + re.escape(arg) + rb'(?= )', title)) == 1
                     for arg in required))
     else:
         require(values[0] == CHROMIUM.encode())
         require(all(sum(arg.startswith(prefix) for arg in values[1:]) == 1 for prefix in prefixes))
+        occurrences = [arg for arg in values[1:] if re.search(platform_key, arg)]
+        require(occurrences and all(arg == platform for arg in occurrences))
         require(all(values[1:].count(arg) == 1 for arg in required))
     return {'sha256': hashlib.sha256(raw).hexdigest(), 'bytes': len(raw), 'flattened': len(values) == 1}
 

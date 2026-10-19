@@ -32,15 +32,15 @@ def scenario():
 
 
 class LeaseAuthority(unittest.TestCase):
-    def capture(self, origin, declared, process, scope, expected=None):
+    def capture(self, origin, declared, process, scope, expected=None, command=None, observe=chromium.observe):
         def snapshot(*_args,hashed=False,**_kwargs):
             return dict(process,sha256=process['sha256'] if hashed else None)
         with patch.object(chromium,'unit_snapshot',return_value=origin['unit']), \
              patch.object(chromium,'pinned_root_file',side_effect=lambda _path,value:value), \
              patch.object(chromium,'process_snapshot',side_effect=snapshot), \
-             patch.object(chromium,'command_identity',return_value={'sha256':'opaque-title','bytes':123,'flattened':True}), \
+             patch.object(chromium,'command_identity',return_value=command or {'sha256':'opaque-title','bytes':123,'flattened':True}), \
              patch.object(chromium,'scope_snapshot',return_value=scope):
-            return chromium.observe(origin,declared,expected)
+            return observe(origin,declared,expected)
 
     def test_same_original_birth_may_migrate_to_one_existing_typed_scope(self):
         origin,declared,process,scope=scenario()
@@ -76,6 +76,25 @@ class LeaseAuthority(unittest.TestCase):
             with self.assertRaises(ValueError):chromium.observe(origin,declared)
         process.assert_not_called()
 
+    def test_valid_repeated_platform_title_is_still_frozen_across_input_and_retirement(self):
+        origin,declared,process,scope=scenario()
+        title=OpaqueProcessTitle().check
+        raw=(chromium.CHROMIUM+' '+' '.join(declared['argv'][1:])).encode()
+        original=title(raw+b'\0')
+        repeated=title(raw+b' --ozone-platform=wayland\0')
+        self.assertNotEqual(original['sha256'],repeated['sha256'])
+        lease=self.capture(origin,declared,process,scope,command=repeated)
+        self.assertEqual(self.capture(origin,declared,process,scope,lease,repeated),lease)
+        with self.assertRaises(ValueError):self.capture(origin,declared,process,scope,lease,original)
+        with patch.object(chromium,'original_gone',return_value=False), \
+             patch.object(chromium.os,'pidfd_open',return_value=9), \
+             patch.object(chromium,'observe',side_effect=lambda *_args:self.capture(
+                 origin,declared,process,scope,lease,original)), \
+             patch.object(chromium.signal,'pidfd_send_signal') as signal_sent, \
+             patch.object(chromium.os,'close') as closed:
+            with self.assertRaises(ValueError):chromium.retire(lease)
+        signal_sent.assert_not_called();closed.assert_called_once_with(9)
+
 
 class OpaqueProcessTitle(unittest.TestCase):
     def check(self, raw):
@@ -101,6 +120,56 @@ class OpaqueProcessTitle(unittest.TestCase):
                     flat+b' --user-data-dir=/foreign\0',flat.replace(b'about:blank',b'https://example.invalid')+b'\0',
                     flat+b' --class=Other\0',flat+b'\0extra\0',b'x'*65537):
             with self.subTest(bytes=len(raw)),self.assertRaises(ValueError):self.check(raw)
+
+    def test_actual_arch_wrapper_shape_accepts_identical_wayland_repeats_and_distinct_hint(self):
+        # Sanitized actual Arch wrapper prefix; only the profile/class are replaced.
+        prefix=[chromium.CHROMIUM,'--ozone-platform=wayland','--ozone-platform-hint=wayland',
+                '--password-store=gnome-libsecret','--enable-features=TouchpadOverscrollHistoryNavigation',
+                '--load-extension=/usr/share/omarchy/default/chromium/extensions/copy-url,'
+                '/usr/share/omarchy/default/chromium/extensions/yt-dlp,'
+                '/usr/share/omarchy/default/chromium/extensions/whatsapp-slim']
+        _,declared,_,_=scenario()
+        tail=[*declared['argv'][1:3],*declared['argv'][3:4],'--no-first-run','--no-default-browser-check',
+              '--disable-sync','--disable-extensions','--disable-background-networking',*declared['argv'][4:]]
+        for structured in (False,True):
+            for extra in ([],['--ozone-platform=wayland']*2):
+                args=prefix+extra+tail
+                raw=(b'\0'.join(arg.encode() for arg in args) if structured else ' '.join(args).encode())+b'\0'
+                with self.subTest(structured=structured,adjacent_repeats=len(extra)):
+                    self.assertEqual(self.check(raw)['flattened'],not structured)
+
+    def test_conflicting_embedded_ambiguous_platform_flags_are_refused_in_both_shapes(self):
+        _,declared,_,_=scenario()
+        for extra in ('--ozone-platform=x11','--other=--ozone-platform=wayland',
+                      'embedded--ozone-platform=wayland','--ozone-platform=wayland-other',
+                      '--ozone-platform wayland','--ozone-platform',
+                      '--ozone-platform=wayland\t','\t--ozone-platform=wayland'):
+            for structured in (False,True):
+                args=[chromium.CHROMIUM,*declared['argv'][1:],extra]
+                raw=(b'\0'.join(arg.encode() for arg in args) if structured else ' '.join(args).encode())+b'\0'
+                with self.subTest(extra=extra,structured=structured),self.assertRaises(ValueError):self.check(raw)
+
+    def test_profile_class_and_debug_flags_remain_unique_in_both_shapes(self):
+        _,declared,_,_=scenario()
+        for extra in declared['argv'][1:3]+declared['argv'][4:6]:
+            for structured in (False,True):
+                args=[chromium.CHROMIUM,*declared['argv'][1:],extra]
+                raw=(b'\0'.join(arg.encode() for arg in args) if structured else ' '.join(args).encode())+b'\0'
+                with self.subTest(extra=extra,structured=structured),self.assertRaises(ValueError):self.check(raw)
+
+    def test_wayland_hint_cannot_replace_the_actual_platform_flag(self):
+        _,declared,_,_=scenario()
+        args=[chromium.CHROMIUM,'--ozone-platform-hint=wayland',
+              *(arg for arg in declared['argv'][1:] if arg!='--ozone-platform=wayland')]
+        for structured in (False,True):
+            raw=(b'\0'.join(arg.encode() for arg in args) if structured else ' '.join(args).encode())+b'\0'
+            with self.subTest(structured=structured),self.assertRaises(ValueError):self.check(raw)
+
+    def test_declared_startup_still_requires_exactly_one_wayland_flag(self):
+        _,declared,_,_=scenario()
+        with patch.object(chromium,'pinned_root_file') as pinned,self.assertRaises(ValueError):
+            chromium.startup([*declared['argv'],'--ozone-platform=wayland'])
+        pinned.assert_not_called()
 
 
 class RegisteredScopeObservation(unittest.TestCase):

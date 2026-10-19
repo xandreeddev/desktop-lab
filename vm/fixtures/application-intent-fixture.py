@@ -33,6 +33,41 @@ from application_intent_browser import fresh_documents, pages
 import owned_chromium_lease as chromium
 
 
+OPERATIONS = ('initialize', 'execute', 'state', 'retire', 'cleanup', 'watchdog', 'guard',
+              'admission', 'example-command', 'initial-absence', 'start-example',
+              'retire-example', 'retire-watchdog', 'browser-snapshot', 'browser-close')
+
+
+def failure_details(error, operation):
+    """Bounded fixed diagnostics: no exception text, argv, locals or source lines."""
+    classes = ('AssertionError', 'ValueError', 'OSError', 'FileNotFoundError', 'PermissionError',
+               'TimeoutError', 'TimeoutExpired', 'ConnectionError', 'ConnectionRefusedError',
+               'ConnectionResetError', 'BrokenPipeError', 'HTTPError', 'URLError',
+               'JSONDecodeError', 'UnicodeDecodeError', 'DBusException')
+    reasons = {'owned_chromium_lease_refused': 'owned_chromium_lease_refused',
+               'Owned application intent fixture identity failed': 'owned_fixture_identity_refused',
+               'Owned browser page identity failed': 'owned_browser_page_identity_refused',
+               'unit_observation_changed': 'unit_observation_changed'}
+    details = {'operation': operation if operation in OPERATIONS else 'unknown',
+               'error_class': type(error).__name__ if type(error).__name__ in classes else 'OtherError',
+               'fixed_reason': 'unclassified_fixture_failure', 'trace_frames': []}
+    if len(error.args) == 1 and type(error.args[0]) is str and len(error.args[0]) <= 128:
+        details['fixed_reason'] = reasons.get(error.args[0], details['fixed_reason'])
+    sources = {'application-intent-fixture.py', 'owned_chromium_lease.py',
+               'owned_application_units.py', 'application_intent_policy.py', 'application_intent_browser.py'}
+    trace = error.__traceback__; observed = 0
+    while trace is not None and observed < 64 and len(details['trace_frames']) < 12:
+        code = trace.tb_frame.f_code; source = Path(code.co_filename).name
+        if source in sources:
+            function = code.co_name
+            details['trace_frames'].append({'source': source,
+                'function': function if re.fullmatch('[A-Za-z_][A-Za-z0-9_]{0,95}', function) else 'module',
+                'line': trace.tb_lineno if 0 < trace.tb_lineno <= 1000000 else 0})
+        trace = trace.tb_next; observed += 1
+    details['trace_truncated'] = trace is not None
+    return details
+
+
 def require(condition):
     if not condition:
         raise ValueError('Owned application intent fixture identity failed')
@@ -604,9 +639,7 @@ def watchdog(directory, run_id):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('initialize', 'execute', 'state', 'retire', 'cleanup', 'watchdog', 'guard',
-                                             'admission', 'example-command', 'initial-absence', 'start-example',
-                                             'retire-example', 'retire-watchdog', 'browser-snapshot', 'browser-close'))
+    parser.add_argument('operation', choices=OPERATIONS)
     parser.add_argument('directory')
     parser.add_argument('run_id')
     parser.add_argument('arguments', nargs=argparse.REMAINDER)
@@ -650,5 +683,7 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except Exception:
-        raise SystemExit('Owned application intent fixture failed') from None
+    except Exception as error:
+        print(json.dumps(failure_details(error, sys.argv[1] if len(sys.argv) > 1 else None),
+                         sort_keys=True), file=sys.stderr)
+        raise SystemExit(1) from None
