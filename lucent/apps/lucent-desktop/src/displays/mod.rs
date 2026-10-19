@@ -121,7 +121,7 @@ impl Displays {
         }
     }
     fn refresh(&mut self, reset: bool, effects: &mut Effects<Message>) {
-        if self.pending() {
+        if !self.open || self.pending() {
             return;
         }
         self.revision = self.revision.wrapping_add(1);

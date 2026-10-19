@@ -133,6 +133,22 @@ fn failed_refresh_preserves_unsaved_draft_and_blocks_apply_until_recovery() {
     assert!(!child.dirty && child.observation_error.is_empty());
 }
 #[test]
+fn a_late_reset_after_close_cannot_keep_the_next_open_permanently_busy() {
+    let mut child = Displays::new(Arc::new(Adapter::default()));
+    let mut effects = Effects::default();
+    open(&mut child, &mut effects);
+    child.update(Message::Close, &mut effects);
+    child.update(Message::Refresh, &mut effects);
+    assert!(effects.tasks.is_empty());
+    assert!(child.refreshing.is_none());
+    child.update(Message::Open, &mut effects);
+    assert!(child.pending());
+    let result = effects.tasks.remove(0).run();
+    child.update(result, &mut effects);
+    assert!(child.open() && !child.pending());
+    assert_eq!(child.baseline, fixture().configuration());
+}
+#[test]
 fn draft_changes_do_not_apply_until_explicit_action() {
     let adapter = Arc::new(Adapter::default());
     let mut child = Displays::new(adapter.clone());
