@@ -138,21 +138,11 @@ impl Captured {
             .path
             .parent()
             .ok_or_else(|| failed("Monitor configuration directory is unavailable"))?;
-        let temp = parent.join(format!(
-            ".lucent-displays-{}-{}.tmp",
-            std::process::id(),
-            super::boot_millis()?
-        ));
+        let (temp, mut file) = create_stage(parent, self.mode)?;
         let backup = temp.with_extension("baseline");
         let recovery_required = std::cell::Cell::new(false);
+        let backup_owned = std::cell::Cell::new(false);
         let result = (|| {
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .mode(self.mode & 0o777)
-                .custom_flags(libc::O_NOFOLLOW)
-                .open(&temp)
-                .map_err(|_| failed("Display configuration cannot be staged"))?;
             file.write_all(&content)
                 .and_then(|_| file.sync_all())
                 .map_err(|_| failed("Display configuration could not be saved"))?;
@@ -162,6 +152,7 @@ impl Captured {
             // Retain the exact original inode until the replacement is durable.
             std::fs::hard_link(&self.path, &backup)
                 .map_err(|_| failed("Display configuration rollback could not be established"))?;
+            backup_owned.set(true);
             let captured = Self::at(backup.clone())?;
             if captured.identity != self.identity || captured.bytes != self.bytes {
                 return Err(failed("Monitor configuration changed before commit"));
@@ -194,10 +185,41 @@ impl Captured {
         })();
         if !recovery_required.get() {
             let _ = std::fs::remove_file(&temp);
-            let _ = std::fs::remove_file(&backup);
+            if backup_owned.get() {
+                let _ = std::fs::remove_file(&backup);
+            }
         }
         result
     }
+}
+static NEXT_STAGE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+fn create_stage(parent: &std::path::Path, mode: u32) -> Result<(PathBuf, File)> {
+    create_stage_at(parent, mode, &NEXT_STAGE)
+}
+fn create_stage_at(
+    parent: &std::path::Path,
+    mode: u32,
+    next: &std::sync::atomic::AtomicU64,
+) -> Result<(PathBuf, File)> {
+    for _ in 0..128 {
+        let serial = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let path = parent.join(format!(
+            ".lucent-displays-{}-{serial}.tmp",
+            std::process::id()
+        ));
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(mode & 0o777)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(&path)
+        {
+            Ok(file) => return Ok((path, file)),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(_) => return Err(failed("Display configuration cannot be staged")),
+        }
+    }
+    Err(failed("Display configuration staging names are occupied"))
 }
 fn exchange(first: &std::path::Path, second: &std::path::Path) -> Result<()> {
     use std::os::unix::ffi::OsStrExt;
@@ -239,8 +261,8 @@ mod tests {
     use super::*;
     #[test]
     fn tail_block_preserves_user_bytes_and_rejects_non_tail_markers() {
-        let path =
-            std::env::temp_dir().join(format!("lucent-display-persistence-{}", std::process::id()));
+        let directory = TestDirectory::new();
+        let path = directory.0.join("monitors.lua");
         std::fs::write(
             &path,
             b"-- user monitor rules\nhl.monitor({ output = \"\", mode = \"preferred\" })\n",
@@ -267,8 +289,8 @@ mod authority_tests {
     use super::*;
     #[test]
     fn authority_loss_after_exchange_restores_exact_original_inode() {
-        let path =
-            std::env::temp_dir().join(format!("lucent-display-authority-{}", std::process::id()));
+        let directory = TestDirectory::new();
+        let path = directory.0.join("monitors.lua");
         std::fs::write(&path, b"-- original user rule\n").unwrap();
         let captured = Captured::at(path.clone()).unwrap();
         let original = std::fs::metadata(&path).unwrap().ino();
@@ -288,18 +310,69 @@ mod authority_tests {
         std::fs::remove_file(path).unwrap();
     }
     #[test]
+    fn staging_collision_retries_without_modifying_an_existing_file_or_symlink() {
+        let directory = TestDirectory::new();
+        let first = directory
+            .0
+            .join(format!(".lucent-displays-{}-1.tmp", std::process::id()));
+        let second = directory
+            .0
+            .join(format!(".lucent-displays-{}-2.tmp", std::process::id()));
+        std::fs::write(&first, b"foreign sentinel").unwrap();
+        std::os::unix::fs::symlink(&first, &second).unwrap();
+        let next = std::sync::atomic::AtomicU64::new(1);
+        let (path, _file) = create_stage_at(&directory.0, 0o600, &next).unwrap();
+        assert_eq!(
+            path.file_name().unwrap(),
+            format!(".lucent-displays-{}-3.tmp", std::process::id()).as_str()
+        );
+        assert_eq!(std::fs::read(&first).unwrap(), b"foreign sentinel");
+        assert!(
+            std::fs::symlink_metadata(&second)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+    }
+    #[test]
     fn oversized_or_symlink_configuration_is_rejected_before_staging() {
-        let directory =
-            std::env::temp_dir().join(format!("lucent-display-file-check-{}", std::process::id()));
-        std::fs::create_dir(&directory).unwrap();
-        let path = directory.join("monitors.lua");
+        let directory = TestDirectory::new();
+        let path = directory.0.join("monitors.lua");
         std::fs::write(&path, vec![b'x'; MAX_BYTES as usize + 1]).unwrap();
         assert!(Captured::at(path.clone()).is_err());
-        let link = directory.join("link.lua");
+        let link = directory.0.join("link.lua");
         std::os::unix::fs::symlink(&path, &link).unwrap();
         assert!(Captured::at(link.clone()).is_err());
         std::fs::remove_file(link).unwrap();
         std::fs::remove_file(path).unwrap();
-        std::fs::remove_dir(directory).unwrap();
+    }
+}
+
+#[cfg(test)]
+struct TestDirectory(PathBuf);
+#[cfg(test)]
+impl TestDirectory {
+    fn new() -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        for _ in 0..128 {
+            let path = std::env::temp_dir().join(format!(
+                "lucent-display-test-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            match std::fs::create_dir(&path) {
+                Ok(()) => return Self(path),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(e) => panic!("Unable to create owned test directory: {e}"),
+            }
+        }
+        panic!("Test directory names occupied")
+    }
+}
+#[cfg(test)]
+impl Drop for TestDirectory {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
     }
 }

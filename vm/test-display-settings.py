@@ -24,6 +24,7 @@ import lab
 from native_surfaces import active_surfaces, find_surface
 
 ROOT = Path(__file__).resolve().parents[1]
+STARTED = None
 HELPER = runpy.run_path(str(ROOT / 'vm/test-framework.py'))
 remote, session, inspect = [HELPER[key] for key in ('remote', 'session', 'inspect')]
 key, eventually = [HELPER[key] for key in ('key', 'eventually')]
@@ -140,8 +141,12 @@ def panel():
 
 def click(identifier):
     """Physical input uses current dimensions after each modeset, not a 1080p constant."""
-    for _ in range(128):
+    for _ in range(48):
+        assert STARTED is not None and time.monotonic()-STARTED<180, 'Stop UI input before the independent recovery deadline'
+        assert session('omarchy-shell','lock','isLocked').strip()=='false', 'Never type into a secure prompt'
         current = panel()
+        assert state()['open'] and current['pointer_input']=='all'
+
         hit = next((hit for hit in current['hits'] if hit['id'] == identifier), None)
         if hit:
             clip = hit['clip']
@@ -160,6 +165,9 @@ def click(identifier):
 
 
 def enter(value):
+    assert STARTED is not None and time.monotonic()-STARTED<180
+    assert state()['open'] and panel()['focus'] in {field(0),field(1),field(2)}
+    assert session('omarchy-shell','lock','isLocked').strip()=='false'
     mapping = {}
     for node in ast.walk(ast.parse((ROOT/'vm/run.py').read_text())):
         if isinstance(node,ast.Assign) and len(node.targets)==1 and isinstance(node.targets[0],ast.Name) and node.targets[0].id in ('normal','shifted','codes'):
@@ -189,6 +197,7 @@ def main():
     assert session('omarchy-shell','lock','isLocked').strip()=='false'
     before=inspect();client=before['client']
     assert not client['launcher'] and not client['notification_history_open'] and not client['widget_grid']
+    assert not json.loads(session('hyprctl','-j','activewindow')), 'No foreground app may be used as an accidental input target'
     for name in ('audio','media','network','bluetooth','power','tray','live_wallpaper','displays','weather'):
         assert not client.get(name,{}).get('open',False), 'Close panels before this deliberate acceptance run'
     observed=monitor();assert changed(observed)==(1920,1080,0,0,1,0)
@@ -199,6 +208,8 @@ def main():
     subprocess.run(lab.ssh_args('lucent')+['cat > '+shlex.quote(directory+'/recovery.py')],input=RECOVERY.encode(),check=True)
     def recovery(operation): return json.loads(remote('python3',directory+'/recovery.py',operation,directory))
     recovery('create')
+    global STARTED
+    STARTED=time.monotonic()
     launch="import os,subprocess,sys; directory=sys.argv[1]; subprocess.Popen(['python3',directory+'/recovery.py','watch',directory],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True); print('started')"
     remote('python3','-c',launch,directory)
     eventually(lambda:remote('test','-f',directory+'/watch.ready')=='','Independent recovery watchdog did not arm')
