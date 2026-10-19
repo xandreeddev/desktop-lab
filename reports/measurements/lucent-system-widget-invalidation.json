@@ -81,6 +81,10 @@
     "This records submitted-frame counters, not GPU execution, scanout, video FPS, CPU savings or RSS savings.",
     "Native coverage is one stable 1x virtual output with a standalone System group. Transitive groups, named fallback/disconnected profiles, hidden/error/unchanged values and frozen drag/resize routing are covered by nine source tests.",
     "The 300 MiB RSS target remains unmet by the prior measured video workload; this slice has no new matched CPU/RSS measurement.",
-    "Saved Wi-Fi credential recovery and native display Keep/Revert acceptance remain separate shell gaps. Accessibility remains deferred."
-  ]
+    "Saved Wi-Fi credential repair and a native display transaction with Apply/Keep/Revert remain unimplemented follow-ups. Accessibility remains deferred."
+  ],
+  "followup_scope_correction": {
+    "saved_wifi": "Saved activation has no credential channel; retry repeats activation. Choosing a network with a new password creates another profile rather than repairing the saved profile.",
+    "displays": "The current native generic picker dispatches immediate scaling/brightness helpers. Captured output drafts, Apply/Keep/Revert and timeout rollback are not implemented; existing display-fit tests bypass that picker."
+  }
 }
