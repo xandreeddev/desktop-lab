@@ -223,6 +223,9 @@ remain open, along with animation quality, frame pacing, native multi-output and
 hardware acceptance. Current delivery and final-head validation are tracked in
 [PR #78](https://github.com/xandreeddev/desktop-lab/pull/78) and the sanitized report.
 
+Documentation at `f4dd34b2` passes Astro with zero diagnostics and both root/Pages
+builds and link checks: 13 pages and 489 links/assets under each prefix.
+
 ### Current resource sample
 
 A 120.001-second sample with 121 observations uses the same deployed process on

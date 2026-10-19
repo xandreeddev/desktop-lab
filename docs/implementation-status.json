@@ -1879,7 +1879,7 @@
       "pending": [
         "Native form edits/selection/scroll/clipboard transfer and Apply/off/units/reload/invalid-form preference mutations.",
         "Provider failure/retry, location-generation/stale/cache/reconnect and broader interoperability acceptance; one successful configured production fetch is observed.",
-        "RSS optimization to the300MiB target, frame pacing/animation quality, native multi-output/hardware, final documentation validation and exact final-head CI/merge/publication. A current120-second animated-workload resource sample is recorded; it is not a matched comparison."
+        "RSS optimization to the300MiB target, frame pacing/animation quality, native multi-output/hardware, exact final-head CI/merge/publication. A current120-second animated-workload resource sample is recorded; it is not a matched comparison."
       ],
       "limitations": [
         "One in-memory last-good report; no disk offline cache",
@@ -1907,7 +1907,8 @@
         "One read-only production observation after the normal migrated-location subscription reports configured=true, busy=false, has_last_good=true, stale=false, failed=false, open=false and Celsius. Current conditions and three forecast rows appear in the private capture set. No native Apply/refresh/off/units, failure/retry or broad provider-interoperability claim.",
         "A 120.001-second / 121-sample same-process animated-wallpaper observation at579c62cb / da753b records process RSS424.12MiB mean /424.15MiB maximum and process CPU148.649% of one logical core (service cgroup148.718%). Software Vulkan llvmpipe,4vCPU and one1920x1080 output play one3840x2160 source fitted1920x1080 with8,294,400 retained frame bytes. The300MiB RSS target is NOT met.",
         "The resource sampler preserves settings/wallpaper/output/workspace/process without UI/service/idle-marker writes or a heavy host job. Dock frame delta is0; other counters include inspector-boundary overhead and prove no FPS/scanout/pacing. This is no matched old/new or Weather-specific cost comparison; prior Notes/performance evidence remains unchanged.",
-        "Code checkpoint579c62cb has all six CI checks SUCCESS and CLEAN merge state while still draft; this is not the final documentation head. Current delivery is tracked in PR78."
+        "Code checkpoint579c62cb has all six CI checks SUCCESS and CLEAN merge state while still draft; this is not the final documentation head. Current delivery is tracked in PR78.",
+        "Documentation source f4dd34b2c062411dee2d1f28208aca2cf0000b09 passes Astro with zero diagnostics, root/Pages builds and link checks at13pages/489links each. Final-head CI and delivery stay separate; no Rust or Astro source changes in this receipt update."
       ],
       "integration": {
         "weather_reviewed_source": "e6d8545aca66e4ff7522ea59ce6bbbef1ebe6195",
@@ -1924,7 +1925,8 @@
         "reviewed_reference_commit_and_focused_passes": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
         "release_binary_and_guarded_vm_migration": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
         "scoped_native_and_single_provider_observation": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
-        "current_animated_workload_resources": "579c62cb9a78369f2f47a0e51bc6a826d06373c6"
+        "current_animated_workload_resources": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+        "documentation_builds": "f4dd34b2c062411dee2d1f28208aca2cf0000b09"
       }
     }
   ],

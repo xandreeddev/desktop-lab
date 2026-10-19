@@ -401,18 +401,52 @@
     "scope": "One current same-process software-Vulkan live-video observation. CPU is percent of one logical core;148.649% is about1.49cores. Process RSS may include software GPU/driver mappings and excludes decoder/helper processes; service CPU covers its cgroup. The300MiB target is not met. This is not a matched comparison against prior375MiB or other-source/workload results, and does not attribute cost to Weather."
   },
   "docs_site": {
-    "status": "pending_final_evidence_revision",
-    "source_commit": null,
+    "status": "passed",
+    "source_commit": "f4dd34b2c062411dee2d1f28208aca2cf0000b09",
+    "astro_diagnostics": {
+      "errors": 0,
+      "warnings": 0,
+      "hints": 0
+    },
     "root_prefix": {
-      "status": "pending",
-      "pages": null,
-      "links": null
+      "status": "passed",
+      "pages": 13,
+      "links": 489
     },
     "github_pages_prefix": {
-      "status": "pending",
-      "pages": null,
-      "links": null
-    }
+      "status": "passed",
+      "base": "/desktop-lab",
+      "pages": 13,
+      "links": 489
+    },
+    "steps": [
+      {
+        "step": "site-check",
+        "exit": 0,
+        "seconds": 13.49
+      },
+      {
+        "step": "root-build",
+        "exit": 0,
+        "seconds": 5.22
+      },
+      {
+        "step": "root-links",
+        "exit": 0,
+        "seconds": 0.3
+      },
+      {
+        "step": "pages-build",
+        "exit": 0,
+        "seconds": 5.95
+      },
+      {
+        "step": "pages-links",
+        "exit": 0,
+        "seconds": 0.27
+      }
+    ],
+    "scope": "Local docs check/build/link results at the recorded revision. The following receipt-only commit does not change Rust or Astro sources; final-head CI remains an independent gate."
   },
   "delivery": {
     "status": "authored_before_final_docs_head_validation_and_merge",
