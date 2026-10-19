@@ -533,8 +533,8 @@ mod tests {
     fn secure_session_clients_never_grant_input_method_or_clipboard_authority() {
         for mode in [Mode::Login, Mode::Lock, Mode::Authorization] {
             let app = SessionScreen::new(mode, "identity-fixture".into(), Arc::new(Deny));
-            assert!(!app.input_method_enabled());
-            assert!(!app.clipboard_enabled());
+            assert!(!lucent_api::Application::input_method_enabled(&app));
+            assert!(!lucent_api::Application::clipboard_enabled(&app));
         }
     }
     struct Deny;
