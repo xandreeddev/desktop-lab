@@ -74,6 +74,37 @@ its existing size, glyph and mask allocation checks and coverage supersampling.
 See [the baseline review](text-baseline-review.md) for the row-local typography
 changes, unchanged visual tolerances and source-specific acceptance boundaries.
 
+### Soft lines keep their hard paragraph
+
+A visual wrap does not create a new bidi paragraph. The text-area engine resolves
+the original canonical document first, then retains its resolved embedding and
+isolate levels when it chooses each soft line. Tab expansion projects the
+original tab's separator class and levels into its four displayed spaces; it
+does not substitute whitespace before resolving text direction. Canonical UTF-8
+offsets remain separate from those displayed bytes, including CRLF boundaries.
+
+The engine creates an opaque `ResolvedBidiLine` for each displayed row and shares
+its exact row allocation with the row geometry. `LayoutOptions` carries that
+order through `Paint::Text`; it is clonable rather than `Copy`. Components do not
+construct bidi fragments or register context. Measurement, hit/selection/caret
+positions and raster preparation consume the same resolved order. Arabic joining
+still ends at actual line edges. The renderer rejects stale context for different
+row bytes before both cache lookup and shaping.
+
+The maintained bidi library applies its line-reordering rules to a line-local
+view of already-resolved levels, original classes and the hard paragraph's base
+level. This avoids cloning the full document once per row. Independent expected
+orders cover Latin-first paragraphs with Hebrew-first wraps, an override and an
+isolate crossing a wrap, and tabs between Hebrew runs. Further tests compare
+bounded line-local reordering with the upstream whole-document reference, and
+exercise actual controlled-field paint, selection, hits and candidate geometry.
+Explicit Vulkan regressions compare wrapped pixels with separate visual runs and
+exercise stale-context cache reuse at both densities.
+
+This wrapped-paragraph correction follows the fully passing `5d3501ebd9e` cohort;
+its new source and tests require their own strict/visual execution. Earlier
+results below retain their original source scopes.
+
 ## Bounded fallback
 
 Font fallback is deterministic and does not scan the machine during layout.

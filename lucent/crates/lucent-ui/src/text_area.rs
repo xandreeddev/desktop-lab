@@ -2,12 +2,16 @@
 //! wrapping, pointer placement, caret painting and visual navigation.
 use super::*;
 use std::ops::Range;
+#[cfg(test)]
+#[path = "text_wrap_tests.rs"]
+mod wrapped_paragraphs;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Row {
     pub range: Range<usize>,
     pub stops: Arc<[(usize, f32)]>,
-    display: String,
+    display: Arc<str>,
+    bidi: Option<text::ResolvedBidiLine>,
     pub(super) segments: Arc<[(Range<usize>, f32, f32)]>,
 }
 impl Row {
@@ -96,18 +100,105 @@ fn display_grapheme(grapheme: &str) -> std::borrow::Cow<'_, str> {
         std::borrow::Cow::Borrowed(grapheme)
     }
 }
-fn measured_row(font: &crate::text::Font, value: &str, range: Range<usize>, size: f32) -> Row {
-    let mut display = String::new();
-    let mut map = Vec::new();
-    let boundaries: Vec<_> = TextSelection::boundaries(&value[range.clone()]).collect();
-    for pair in boundaries.windows(2) {
-        map.push((display.len(), range.start + pair[0]));
-        display.push_str(&display_grapheme(
-            &value[range.start + pair[0]..range.start + pair[1]],
-        ));
+/// Display projection preserves a stable document-wide byte map, including tabs.
+/// Bidi resolves this complete document once; row slices keep that context.
+struct Projection {
+    display: String,
+    map: Vec<(usize, usize)>,
+}
+impl Projection {
+    fn new(value: &str, boundaries: &[usize]) -> Self {
+        let mut display = String::new();
+        let mut map = Vec::with_capacity(boundaries.len());
+        for pair in boundaries.windows(2) {
+            map.push((display.len(), pair[0]));
+            display.push_str(&display_grapheme(&value[pair[0]..pair[1]]));
+        }
+        map.push((display.len(), value.len()));
+        Self { display, map }
     }
-    map.push((display.len(), range.end));
-    let shaped = text::shape(font, &display, size);
+    fn source_to_display(&self, source: usize) -> usize {
+        let index = self
+            .map
+            .partition_point(|(_, byte)| *byte <= source)
+            .saturating_sub(1);
+        self.map[index].0 + source - self.map[index].1
+    }
+    fn bidi<'a>(&'a self, value: &'a str) -> unicode_bidi::BidiInfo<'a> {
+        let original = unicode_bidi::BidiInfo::new(value, None);
+        if !value.contains('\t') {
+            return unicode_bidi::BidiInfo {
+                text: &self.display,
+                ..original
+            };
+        }
+        // A tab is bidi class S, not four WS characters. Expand its already
+        // resolved byte metadata alongside its displayed spaces; never resolve
+        // a different substituted paragraph and lose separator semantics.
+        let mut levels = Vec::with_capacity(self.display.len());
+        let mut classes = Vec::with_capacity(self.display.len());
+        for pair in self.map.windows(2) {
+            let source = pair[0].1..pair[1].1;
+            if &value[source.clone()] == "\t" {
+                levels.extend(std::iter::repeat_n(original.levels[source.start], 4));
+                classes.extend(std::iter::repeat_n(
+                    original.original_classes[source.start],
+                    4,
+                ));
+            } else {
+                levels.extend_from_slice(&original.levels[source.clone()]);
+                classes.extend_from_slice(&original.original_classes[source]);
+            }
+        }
+        let paragraphs = original
+            .paragraphs
+            .iter()
+            .map(|paragraph| unicode_bidi::ParagraphInfo {
+                range: self.source_to_display(paragraph.range.start)
+                    ..self.source_to_display(paragraph.range.end),
+                level: paragraph.level,
+            })
+            .collect();
+        unicode_bidi::BidiInfo {
+            text: &self.display,
+            original_classes: classes,
+            levels,
+            paragraphs,
+        }
+    }
+}
+fn measured_row(
+    font: &crate::text::Font,
+    projection: &Projection,
+    bidi: Option<&unicode_bidi::BidiInfo<'_>>,
+    range: Range<usize>,
+    size: f32,
+) -> Row {
+    let first = projection
+        .map
+        .binary_search_by_key(&range.start, |(_, source)| *source)
+        .unwrap();
+    let last = projection
+        .map
+        .binary_search_by_key(&range.end, |(_, source)| *source)
+        .unwrap();
+    let display_range = projection.map[first].0..projection.map[last].0;
+    let display: Arc<str> = Arc::from(&projection.display[display_range.clone()]);
+    let map = projection.map[first..=last]
+        .iter()
+        .map(|(byte, source)| (byte - display_range.start, *source))
+        .collect::<Vec<_>>();
+    let bidi = bidi
+        .and_then(|bidi| text::ResolvedBidiLine::from_range(bidi, display_range, display.clone()));
+    let shaped = text::shape_with_layout(
+        font,
+        &display,
+        size,
+        text::LayoutOptions {
+            bidi: bidi.clone(),
+            ..Default::default()
+        },
+    );
     let stops = shaped
         .stops
         .iter()
@@ -141,28 +232,37 @@ fn measured_row(font: &crate::text::Font, value: &str, range: Range<usize>, size
         range,
         stops: stops.into(),
         display,
+        bidi,
         segments: segments.into(),
     }
 }
 
 fn rows(font: &crate::text::Font, value: &str, size: f32, width: f32) -> Vec<Row> {
     let boundaries: Vec<_> = TextSelection::boundaries(value).collect();
-    // Shape Unicode once for candidate advances. Re-shaping every growing
-    // prefix made international documents quadratic even before row painting.
-    let advances = (!value.is_ascii()).then(|| {
-        let mut display = String::new();
-        let mut projections = Vec::new();
-        for pair in boundaries.windows(2) {
-            projections.push(display.len());
-            display.push_str(&display_grapheme(&value[pair[0]..pair[1]]));
-        }
+    let projection = Projection::new(value, &boundaries);
+    let bidi = (!value.is_ascii()).then(|| projection.bidi(value));
+    // Candidate advances and final soft-line reordering share the hard-paragraph
+    // source. A wrap changes line reordering (UBA L1/L2), not paragraph identity.
+    let advances = bidi.as_ref().map(|bidi| {
+        let projections = &projection.map[..projection.map.len().saturating_sub(1)];
         let mut advances = vec![0.; projections.len()];
-        for (range, a, b) in text::shape(font, &display, size).segments {
-            let index = projections
-                .partition_point(|at| *at <= range.start)
-                .saturating_sub(1);
-            if let Some(advance) = advances.get_mut(index) {
-                *advance += (b - a).abs();
+        for paragraph in &bidi.paragraphs {
+            let source: Arc<str> = Arc::from(&projection.display[paragraph.range.clone()]);
+            let layout = text::LayoutOptions {
+                bidi: text::ResolvedBidiLine::from_range(
+                    bidi,
+                    paragraph.range.clone(),
+                    source.clone(),
+                ),
+                ..Default::default()
+            };
+            for (range, a, b) in text::shape_with_layout(font, &source, size, layout).segments {
+                let index = projections
+                    .partition_point(|(at, _)| *at <= paragraph.range.start + range.start)
+                    .saturating_sub(1);
+                if let Some(advance) = advances.get_mut(index) {
+                    *advance += (b - a).abs();
+                }
             }
         }
         advances
@@ -210,7 +310,13 @@ fn rows(font: &crate::text::Font, value: &str, size: f32, width: f32) -> Vec<Row
         } else {
             whitespace.filter(|last| *last > start).unwrap_or(index)
         };
-        let mut row = measured_row(font, value, boundaries[start]..boundaries[end], size);
+        let mut row = measured_row(
+            font,
+            &projection,
+            bidi.as_ref(),
+            boundaries[start]..boundaries[end],
+            size,
+        );
         // Joining at an actual wrap edge can change an advance. Confirm the
         // selected row, retreating by whole graphemes if its final shape grows.
         while advances.is_some()
@@ -218,14 +324,26 @@ fn rows(font: &crate::text::Font, value: &str, size: f32, width: f32) -> Vec<Row
             && row.stops.iter().map(|(_, x)| *x).fold(0., f32::max) > width
         {
             end -= 1;
-            row = measured_row(font, value, boundaries[start]..boundaries[end], size);
+            row = measured_row(
+                font,
+                &projection,
+                bidi.as_ref(),
+                boundaries[start]..boundaries[end],
+                size,
+            );
         }
         result.push(row);
         start = if hard_end == Some(end) { end + 1 } else { end };
     }
     // Empty values and trailing hard lines are real editable rows.
     if result.is_empty() || value.ends_with(['\r', '\n']) {
-        result.push(measured_row(font, value, value.len()..value.len(), size));
+        result.push(measured_row(
+            font,
+            &projection,
+            bidi.as_ref(),
+            value.len()..value.len(),
+            size,
+        ));
     }
     result
 }
@@ -515,12 +633,13 @@ pub(super) fn paint<M>(
         let content = if value.is_empty() {
             placeholder.lines().next().unwrap_or("").to_owned()
         } else {
-            row.display.clone()
+            row.display.to_string()
         };
         if !content.is_empty() {
             scene.paint.push(Paint::Text {
                 layout: text::LayoutOptions {
                     direction: None,
+                    bidi: row.bidi.clone(),
                     metrics: Some(metrics),
                     raster_width: row
                         .stops
@@ -687,7 +806,7 @@ mod tests {
                 .collect::<Vec<_>>(),
             [" a  ", "", "\tb", ""]
         );
-        assert_eq!(result[2].display, "    b");
+        assert_eq!(result[2].display.as_ref(), "    b");
         assert_eq!(result.last().unwrap().range, source.len()..source.len());
         assert_eq!(rows(font, "", 20., 0.).len(), 1);
         for row in rows(font, "a👩‍💻e\u{301}b", 20., 1.) {
@@ -698,11 +817,11 @@ mod tests {
             );
         }
         let spaces = rows(font, "aa  bb cc", 20., text::width(font, "aa  ", 20.) + 0.1);
-        assert_eq!(spaces[0].display, "aa  ");
+        assert_eq!(spaces[0].display.as_ref(), "aa  ");
         assert_eq!(
             spaces
                 .iter()
-                .map(|row| row.display.as_str())
+                .map(|row| row.display.as_ref())
                 .collect::<String>(),
             "aa  bb cc"
         );

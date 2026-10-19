@@ -195,9 +195,16 @@ pub enum Direction {
     LeftToRight,
     RightToLeft,
 }
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[path = "text_bidi.rs"]
+mod bidi;
+pub use bidi::ResolvedBidiLine;
+
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct LayoutOptions {
     pub direction: Option<Direction>,
+    /// Opaque paragraph-resolved soft-line order retained by the UI engine.
+    /// Renderers forward this unchanged instead of inferring a new paragraph.
+    pub bidi: Option<ResolvedBidiLine>,
     pub metrics: Option<LineMetrics>,
     /// Bound raster coverage without changing shaping or logical source geometry.
     pub raster_width: Option<f32>,
@@ -263,7 +270,14 @@ pub fn shape_directed(
 }
 pub fn shape_with_layout(font: &Font, line: &str, size: f32, layout: LayoutOptions) -> ShapedLine {
     let direction = layout.direction;
-    if line.is_ascii() && direction != Some(Direction::RightToLeft) {
+    let resolved = layout
+        .bidi
+        .as_ref()
+        .filter(|bidi| bidi.runs(line).is_some());
+    if line.is_ascii()
+        && direction != Some(Direction::RightToLeft)
+        && resolved.is_none_or(|bidi| bidi.is_ltr(line))
+    {
         let mut result = ShapedLine::default();
         let boundaries: Vec<_> = TextSelection::boundaries(line).collect();
         for ((byte, c), (_, x)) in line.char_indices().zip(glyph_positions(font, line, size)) {
@@ -289,135 +303,129 @@ pub fn shape_with_layout(font: &Font, line: &str, size: f32, layout: LayoutOptio
         }
         return result;
     }
-    let bidi = unicode_bidi::BidiInfo::new(
-        line,
-        direction.map(|direction| match direction {
-            Direction::LeftToRight => unicode_bidi::Level::ltr(),
-            Direction::RightToLeft => unicode_bidi::Level::rtl(),
-        }),
-    );
+    let runs = resolved
+        .and_then(|bidi| bidi.runs(line))
+        .map(<[_]>::to_vec)
+        .unwrap_or_else(|| bidi::standalone_runs(line, direction));
     let mut result = ShapedLine::default();
-    for paragraph in &bidi.paragraphs {
-        let (levels, runs) = bidi.visual_runs(paragraph, paragraph.range.clone());
-        for run in runs {
-            let rtl = levels[run.start].is_rtl();
-            let mut spans: Vec<(Range<usize>, usize, rustybuzz::Script)> = Vec::new();
-            for (script_range, script) in script_runs(line, run) {
-                let boundaries = TextSelection::boundaries(&line[script_range.clone()])
-                    .map(|byte| byte + script_range.start)
-                    .collect::<Vec<_>>();
-                for pair in boundaries.windows(2) {
-                    let face = font.choose(&line[pair[0]..pair[1]]);
-                    if let Some((range, _, _)) =
-                        spans
-                            .last_mut()
-                            .filter(|(_, previous_face, previous_script)| {
-                                *previous_face == face && *previous_script == script
-                            })
-                    {
-                        range.end = pair[1];
-                    } else {
-                        spans.push((pair[0]..pair[1], face, script));
-                    }
-                }
-            }
-            if rtl {
-                spans.reverse();
-            }
-            for (range, face_id, script) in spans {
-                let face = font.shaping_face(face_id);
-                let scale = size / face.units_per_em() as f32;
-                let mut buffer = rustybuzz::UnicodeBuffer::new();
-                buffer.push_str(&line[range.clone()]);
-                // Keep each source cluster contiguous in this one script/font
-                // run, including RTL output and reordered marks.
-                buffer.set_cluster_level(rustybuzz::BufferClusterLevel::MonotoneGraphemes);
-                // Joining context belongs to this source line, not a public
-                // fragment API. rustybuzz retains only its bounded scalar window.
-                buffer.set_pre_context(&line[..range.start]);
-                buffer.set_post_context(&line[range.end..]);
-                buffer.set_direction(if rtl {
-                    rustybuzz::Direction::RightToLeft
-                } else {
-                    rustybuzz::Direction::LeftToRight
-                });
-                buffer.set_script(script);
-                buffer.guess_segment_properties();
-                let output = rustybuzz::shape(&face, &[], buffer);
-                let mut clusters: Vec<_> = output
-                    .glyph_infos()
-                    .iter()
-                    .map(|i| range.start + i.cluster as usize)
-                    .collect();
-                clusters.push(range.end);
-                clusters.sort_unstable();
-                clusters.dedup();
-                let base = result.width;
-                let mut x = 0.;
-                let mut extents: Vec<(Range<usize>, f32, f32)> = Vec::new();
-                for (info, position) in output.glyph_infos().iter().zip(output.glyph_positions()) {
-                    let start = range.start + info.cluster as usize;
-                    let end = clusters
-                        .get(clusters.partition_point(|at| *at <= start))
-                        .copied()
-                        .unwrap_or(range.end);
-                    let advance = position.x_advance as f32 * scale;
-                    result.glyphs.push(Glyph {
-                        face: face_id,
-                        id: info.glyph_id as u16,
-                        cluster: start..end,
-                        x: base + x + position.x_offset as f32 * scale,
-                        y: -position.y_offset as f32 * scale,
-                        advance,
-                    });
-                    if let Some((_, a, b)) = extents
+    for (run, direction) in runs {
+        let rtl = direction == Direction::RightToLeft;
+        let mut spans: Vec<(Range<usize>, usize, rustybuzz::Script)> = Vec::new();
+        for (script_range, script) in script_runs(line, run) {
+            let boundaries = TextSelection::boundaries(&line[script_range.clone()])
+                .map(|byte| byte + script_range.start)
+                .collect::<Vec<_>>();
+            for pair in boundaries.windows(2) {
+                let face = font.choose(&line[pair[0]..pair[1]]);
+                if let Some((range, _, _)) =
+                    spans
                         .last_mut()
-                        .filter(|(range, _, _)| range.start == start)
-                    {
-                        *a = a.min(x);
-                        *b = b.max(x + advance);
-                    } else {
-                        extents.push((start..end, x, x + advance));
-                    }
-                    x += advance;
+                        .filter(|(_, previous_face, previous_script)| {
+                            *previous_face == face && *previous_script == script
+                        })
+                {
+                    range.end = pair[1];
+                } else {
+                    spans.push((pair[0]..pair[1], face, script));
                 }
-                for (cluster, a, b) in extents {
-                    let stops: Vec<_> = TextSelection::boundaries(&line[cluster.clone()])
-                        .map(|at| at + cluster.start)
-                        .collect();
-                    let count = stops.len().saturating_sub(1).max(1) as f32;
-                    for pair in stops.windows(2).enumerate() {
-                        let (index, pair) = pair;
-                        let a_fraction = index as f32 / count;
-                        let b_fraction = (index + 1) as f32 / count;
-                        result.segments.push((
-                            pair[0]..pair[1],
-                            base + if rtl {
-                                b - (b - a) * a_fraction
-                            } else {
-                                a + (b - a) * a_fraction
-                            },
-                            base + if rtl {
-                                b - (b - a) * b_fraction
-                            } else {
-                                a + (b - a) * b_fraction
-                            },
-                        ));
-                    }
-                    for (index, byte) in stops.into_iter().enumerate() {
-                        let fraction = index as f32 / count;
-                        result.stops.push((
-                            byte,
-                            base + if rtl {
-                                b - (b - a) * fraction
-                            } else {
-                                a + (b - a) * fraction
-                            },
-                        ));
-                    }
-                }
-                result.width += x;
             }
+        }
+        if rtl {
+            spans.reverse();
+        }
+        for (range, face_id, script) in spans {
+            let face = font.shaping_face(face_id);
+            let scale = size / face.units_per_em() as f32;
+            let mut buffer = rustybuzz::UnicodeBuffer::new();
+            buffer.push_str(&line[range.clone()]);
+            // Keep each source cluster contiguous in this one script/font
+            // run, including RTL output and reordered marks.
+            buffer.set_cluster_level(rustybuzz::BufferClusterLevel::MonotoneGraphemes);
+            // Joining context belongs to this source line, not a public
+            // fragment API. rustybuzz retains only its bounded scalar window.
+            buffer.set_pre_context(&line[..range.start]);
+            buffer.set_post_context(&line[range.end..]);
+            buffer.set_direction(if rtl {
+                rustybuzz::Direction::RightToLeft
+            } else {
+                rustybuzz::Direction::LeftToRight
+            });
+            buffer.set_script(script);
+            buffer.guess_segment_properties();
+            let output = rustybuzz::shape(&face, &[], buffer);
+            let mut clusters: Vec<_> = output
+                .glyph_infos()
+                .iter()
+                .map(|i| range.start + i.cluster as usize)
+                .collect();
+            clusters.push(range.end);
+            clusters.sort_unstable();
+            clusters.dedup();
+            let base = result.width;
+            let mut x = 0.;
+            let mut extents: Vec<(Range<usize>, f32, f32)> = Vec::new();
+            for (info, position) in output.glyph_infos().iter().zip(output.glyph_positions()) {
+                let start = range.start + info.cluster as usize;
+                let end = clusters
+                    .get(clusters.partition_point(|at| *at <= start))
+                    .copied()
+                    .unwrap_or(range.end);
+                let advance = position.x_advance as f32 * scale;
+                result.glyphs.push(Glyph {
+                    face: face_id,
+                    id: info.glyph_id as u16,
+                    cluster: start..end,
+                    x: base + x + position.x_offset as f32 * scale,
+                    y: -position.y_offset as f32 * scale,
+                    advance,
+                });
+                if let Some((_, a, b)) = extents
+                    .last_mut()
+                    .filter(|(range, _, _)| range.start == start)
+                {
+                    *a = a.min(x);
+                    *b = b.max(x + advance);
+                } else {
+                    extents.push((start..end, x, x + advance));
+                }
+                x += advance;
+            }
+            for (cluster, a, b) in extents {
+                let stops: Vec<_> = TextSelection::boundaries(&line[cluster.clone()])
+                    .map(|at| at + cluster.start)
+                    .collect();
+                let count = stops.len().saturating_sub(1).max(1) as f32;
+                for pair in stops.windows(2).enumerate() {
+                    let (index, pair) = pair;
+                    let a_fraction = index as f32 / count;
+                    let b_fraction = (index + 1) as f32 / count;
+                    result.segments.push((
+                        pair[0]..pair[1],
+                        base + if rtl {
+                            b - (b - a) * a_fraction
+                        } else {
+                            a + (b - a) * a_fraction
+                        },
+                        base + if rtl {
+                            b - (b - a) * b_fraction
+                        } else {
+                            a + (b - a) * b_fraction
+                        },
+                    ));
+                }
+                for (index, byte) in stops.into_iter().enumerate() {
+                    let fraction = index as f32 / count;
+                    result.stops.push((
+                        byte,
+                        base + if rtl {
+                            b - (b - a) * fraction
+                        } else {
+                            a + (b - a) * fraction
+                        },
+                    ));
+                }
+            }
+            result.width += x;
         }
     }
     result
@@ -495,7 +503,7 @@ pub fn run_metrics_with_layout(
     let mut ascent = base.ascent;
     let mut descent = base.descent;
     for line in value.lines() {
-        for glyph in shape_with_layout(font, line, size, layout).glyphs {
+        for glyph in shape_with_layout(font, line, size, layout.clone()).glyphs {
             let face = font.shaping_face(glyph.face);
             if let Some(bounds) = face.glyph_bounding_box(rustybuzz::ttf_parser::GlyphId(glyph.id))
             {
@@ -525,12 +533,12 @@ pub fn width_directed(font: &Font, value: &str, size: f32, direction: Option<Dir
     )
 }
 pub fn width_with_layout(font: &Font, value: &str, size: f32, layout: LayoutOptions) -> f32 {
-    if layout.direction.is_none() {
+    if layout.direction.is_none() && layout.bidi.is_none() {
         return width(font, value, size);
     }
     value
         .lines()
-        .map(|line| shape_with_layout(font, line, size, layout).width)
+        .map(|line| shape_with_layout(font, line, size, layout.clone()).width)
         .fold(0., f32::max)
 }
 

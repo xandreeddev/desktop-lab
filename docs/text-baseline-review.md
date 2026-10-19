@@ -29,9 +29,12 @@ records each accepted case's old/new PNG hashes, original comparison and reason,
 plus hashes for every preserved passing reference. Only the 423 failed, reviewed
 references are replaced. Expected/actual/difference crops from this exact capture
 were inspected across the 18 historical component families at both densities and
-palettes, together with the new Display and credential controls. A final full CI
-run against the updated references remains required; this review does not turn
-the original failed run into a passing result.
+palettes, together with the new Display and credential controls.
+[Updated-reference CI 39306754599](https://github.com/xandreeddev/desktop-lab/actions/runs/39306754599)
+passes all checks, including the full 832-case Vulkan comparison, at
+`5d3501ebd9e02dccca62f7c2f9cae59056e40a7a`. This does not turn the original
+failed comparison into a passing result. The later hard-paragraph/soft-wrap bidi
+correction requires a fresh source-specific run.
 
 Twenty focused Vulkan filters also pass locally on AMD RADV. The duplicate local
 full sweep was deliberately stopped after 58 actual cases; its logs and images

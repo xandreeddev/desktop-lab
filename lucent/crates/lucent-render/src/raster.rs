@@ -71,7 +71,7 @@ pub(super) fn text_with_layout(
     if font.horizontal_line_metrics(size).is_none() {
         return Err("font has no horizontal line metrics".into());
     }
-    let measured_width = lucent_ui::text::width_with_layout(font, text, size, layout);
+    let measured_width = lucent_ui::text::width_with_layout(font, text, size, layout.clone());
     if layout
         .raster_width
         .is_some_and(|width| !width.is_finite() || width < 0.)
@@ -81,9 +81,9 @@ pub(super) fn text_with_layout(
     let coverage_width = layout
         .raster_width
         .map_or(measured_width, |width| width.min(measured_width));
-    let metrics = layout
-        .metrics
-        .unwrap_or_else(|| lucent_ui::text::run_metrics_with_layout(font, text, size, layout));
+    let metrics = layout.metrics.unwrap_or_else(|| {
+        lucent_ui::text::run_metrics_with_layout(font, text, size, layout.clone())
+    });
     if !measured_width.is_finite()
         || !metrics.height.is_finite()
         || metrics.height <= 0.
@@ -96,7 +96,9 @@ pub(super) fn text_with_layout(
     let mut left_edge = 0f32;
     let mut right_edge = coverage_width * density;
     for line in text.lines() {
-        for positioned in lucent_ui::text::shape_with_layout(font, line, size, layout).glyphs {
+        for positioned in
+            lucent_ui::text::shape_with_layout(font, line, size, layout.clone()).glyphs
+        {
             let x = positioned.x;
             let selected = font.raster_face(positioned.face);
             if x >= coverage_width || x * density >= MAX_WIDTH as f32 * density {
@@ -139,7 +141,9 @@ pub(super) fn text_with_layout(
     // fontdue's bitmap allocation is infallible, so bound its dimensions first.
     let mut glyphs = Vec::new();
     for (line_index, line) in text.lines().enumerate() {
-        for positioned in lucent_ui::text::shape_with_layout(font, line, size, layout).glyphs {
+        for positioned in
+            lucent_ui::text::shape_with_layout(font, line, size, layout.clone()).glyphs
+        {
             let x = positioned.x;
             let selected = font.raster_face(positioned.face);
             if !x.is_finite() {
