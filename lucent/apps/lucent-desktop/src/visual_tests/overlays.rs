@@ -71,7 +71,9 @@ pub(super) fn fixture(
         let opener_width = component::input::HEIGHT * 2.;
         let content = theme.popover(
             Element::column(vec![
-                Element::text("Choose a value").font(font::BODY),
+                Element::text("Choose a value")
+                    .font(font::BODY)
+                    .color(theme.on_surface),
                 theme
                     .button("First value", Message::Completed(Ok(())))
                     .id("choice-first"),

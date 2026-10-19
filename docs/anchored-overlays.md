@@ -66,6 +66,10 @@ root.popover(Popover {
 })
 ```
 
+Text colors are node-local. Set a semantic foreground such as
+`.color(theme.on_surface)` on plain text inside popover content; the wrapper
+does not override a child's explicit color.
+
 The component owns whether this value is present and handles its messages. The
 engine supports one interactive popover per surface in this initial contract.
 It moves focus into the scope, traps Tab/Shift+Tab there, offers Escape before

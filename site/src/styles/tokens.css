@@ -488,7 +488,7 @@
   --component-tooltip-padding-inline: var(--space-md);
   --component-tooltip-padding-block: var(--space-sm);
   --component-tooltip-radius: var(--radius-control);
-  --component-tooltip-gap: var(--space-sm);
+  --component-tooltip-gap: var(--space-lg);
   --component-tooltip-inset: var(--space-md);
   --component-tooltip-max-width: var(--size-tooltip-max-width);
   --component-tooltip-max-lines: 2;

@@ -613,7 +613,7 @@ pub mod component {
         pub const PADDING_INLINE: f32 = 12.0;
         pub const PADDING_BLOCK: f32 = 8.0;
         pub const RADIUS: f32 = 18.0;
-        pub const GAP: f32 = 8.0;
+        pub const GAP: f32 = 16.0;
         pub const INSET: f32 = 12.0;
         pub const MAX_WIDTH: f32 = 320.0;
         pub const MAX_LINES: f32 = 2.0;

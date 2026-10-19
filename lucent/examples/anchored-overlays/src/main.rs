@@ -19,11 +19,14 @@ impl Component for Example {
     fn view(&self, cx: &ViewContext) -> Element<Message> {
         let theme = Theme::new(false);
         let mut root = Element::column(vec![
-            Element::text("Anchored overlays").font(font::TITLE),
+            Element::text("Anchored overlays")
+                .font(font::TITLE)
+                .color(theme.on_surface),
             Element::text(
                 "Hover or Tab for a label. Open the menu, then use Tab, Shift+Tab or Escape.",
             )
             .font(font::BODY)
+            .color(theme.on_surface)
             .width(Length::Fill)
             .wrap(3),
             theme
@@ -31,7 +34,9 @@ impl Component for Example {
                 .id("trigger")
                 .autofocus()
                 .tooltip(theme.tooltip("This label takes no input or focus", OverlaySide::Below)),
-            Element::text(self.selected.unwrap_or("No selection yet")).font(font::BODY),
+            Element::text(self.selected.unwrap_or("No selection yet"))
+                .font(font::BODY)
+                .color(theme.on_surface),
             theme.button("Close example", Message::Quit).id("quit"),
         ])
         .padding(space::XXL)
