@@ -18,6 +18,7 @@ import time
 
 import lab
 from native_surfaces import find_surface
+from owned_application_units import RETIRE
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -161,29 +162,6 @@ def reject_closed_action(action):
     require(result.returncode == 1 and result.stderr.startswith(b'lucent: error:'),
             'closed_action_authority_rejected')
 
-
-UNIT_RETIRE = r'''
-import json, subprocess, sys
-unit, script, run_id = sys.argv[1:]
-assert unit == 'lucent-application-actions-' + run_id + '.service'
-def show():
-    result = subprocess.run(['systemctl','--user','show',unit,
-        '--property=LoadState,ActiveState,Transient,ExecStart,ControlGroup'],
-        capture_output=True,text=True,timeout=5)
-    assert result.returncode in (0,1)
-    return dict(line.split('=',1) for line in result.stdout.splitlines() if '=' in line)
-value = show()
-if value.get('LoadState') != 'not-found':
-    assert value.get('Transient') == 'yes'
-    assert script in value.get('ExecStart','') and run_id in value.get('ExecStart','')
-    group = value.get('ControlGroup','')
-    assert not group or group.endswith('/' + unit)
-    result = subprocess.run(['systemctl','--user','stop',unit],capture_output=True,timeout=10)
-    value = show()
-    assert result.returncode == 0 or value.get('LoadState') == 'not-found'
-assert value.get('LoadState') == 'not-found' or value.get('ActiveState') in ('inactive','failed')
-print(json.dumps({'retired':True}))
-'''
 
 SCRATCH_REMOVE = r'''
 import hashlib,json,os,shutil,stat,sys
@@ -422,7 +400,8 @@ def suite(results):
         retired = not unit_attempted
         if unit_attempted:
             try:
-                require(json.loads(session('python3', '-c', UNIT_RETIRE, unit, fixture, run_id))['retired'],
+                require(json.loads(session('python3', '-c', RETIRE,
+                    'lucent-application-actions-', unit, fixture, run_id))['retired'],
                         'owned_fixture_unit_retired')
                 require(json.loads(session('python3', '-c',
                     'import dbus,json,sys; b=dbus.SessionBus(private=True); '

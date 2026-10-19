@@ -60,13 +60,7 @@ impl Default for XdgApplications {
                 .or_else(|| std::env::var("LC_MESSAGES").ok().filter(|s| !s.is_empty()))
                 .or_else(|| std::env::var("LANG").ok())
                 .unwrap_or_default(),
-            program_dirs: std::env::var_os("PATH")
-                .map(|p| {
-                    std::env::split_paths(&p)
-                        .filter(|p| p.is_absolute())
-                        .collect()
-                })
-                .unwrap_or_default(),
+            program_dirs: program_directories(),
         }
     }
 }
@@ -86,7 +80,7 @@ impl XdgApplications {
             data_roots,
             desktop,
             locale,
-            program_dirs: vec![],
+            program_dirs: program_directories(),
         })
     }
 }
@@ -171,14 +165,44 @@ impl UriPort for XdgUri {
     }
 }
 fn executable(program: &str) -> bool {
+    executable_in(program, &program_directories())
+}
+fn program_directories() -> Vec<PathBuf> {
+    std::env::var_os("PATH")
+        .map(|path| {
+            std::env::split_paths(&path)
+                .filter(|p| p.is_absolute())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+/// The catalog parser and its dependency observer must use the same captured
+/// lookup roots. Relative working-directory entries are not stable catalog
+/// dependencies; only absolute paths or executable names in absolute PATH roots
+/// have authority here.
+fn executable_candidates(program: &str, directories: &[PathBuf]) -> Vec<PathBuf> {
+    if program.is_empty() || program.contains('\0') {
+        return vec![];
+    }
+    if Path::new(program).is_absolute() {
+        return vec![PathBuf::from(program)];
+    }
+    if program.contains('/') {
+        return vec![];
+    }
+    directories
+        .iter()
+        .filter(|directory| directory.is_absolute())
+        .map(|directory| directory.join(program))
+        .collect()
+}
+fn executable_in(program: &str, directories: &[PathBuf]) -> bool {
     let check = |p: &Path| {
         fs::metadata(p).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
     };
-    if program.contains('/') {
-        return check(Path::new(program));
-    }
-    std::env::var_os("PATH")
-        .is_some_and(|p| std::env::split_paths(&p).any(|d| check(&d.join(program))))
+    executable_candidates(program, directories)
+        .iter()
+        .any(|path| check(path))
 }
 fn unescape(value: &str) -> String {
     let mut out = String::new();
@@ -232,6 +256,16 @@ pub fn parse_entry(
     desktops: &str,
     locale: &str,
 ) -> Result<Option<Application>> {
+    parse_entry_with_program_dirs(id, path, text, desktops, locale, &program_directories())
+}
+fn parse_entry_with_program_dirs(
+    id: &str,
+    path: &str,
+    text: &str,
+    desktops: &str,
+    locale: &str,
+    program_dirs: &[PathBuf],
+) -> Result<Option<Application>> {
     let mut main = false;
     let mut values = BTreeMap::new();
     for line in text.lines() {
@@ -266,7 +300,7 @@ pub fn parse_entry(
     {
         return Ok(None);
     }
-    if !value("TryExec").is_empty() && !executable(&unescape(value("TryExec"))) {
+    if !value("TryExec").is_empty() && !executable_in(&unescape(value("TryExec")), program_dirs) {
         return Ok(None);
     }
     let name = localized(&values, "Name", locale);

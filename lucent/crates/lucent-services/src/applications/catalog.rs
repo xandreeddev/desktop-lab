@@ -1,8 +1,10 @@
 use super::*;
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::{ffi::OsStrExt, fs::OpenOptionsExt};
 const MAX_FILES: usize = 20_000;
 const MAX_FILE_BYTES: u64 = 1024 * 1024;
 const MAX_CATALOG_BYTES: usize = 16 * 1024 * 1024;
+const MAX_DEPENDENCIES: usize = 4096;
+const MAX_DEPENDENCY_PATH_BYTES: usize = 4096;
 fn collect(path: &Path, depth: u8, files: &mut Vec<PathBuf>) -> Result<()> {
     if depth > 8 {
         return Ok(());
@@ -77,12 +79,13 @@ pub(super) fn resolve(
             if text.len() as u64 > MAX_FILE_BYTES {
                 return Err(unavailable());
             }
-            let app = parse_entry(
+            let app = parse_entry_with_program_dirs(
                 id.as_str(),
                 &path.to_string_lossy(),
                 &text,
                 &source.desktop,
                 &source.locale,
+                &source.program_dirs,
             )?
             .ok_or_else(unavailable)?;
             return Ok((app, path, text));
@@ -92,8 +95,8 @@ pub(super) fn resolve(
 }
 /// Metadata dependencies are observed even while TryExec hides an entry. Keep
 /// this bounded discovery on the catalog worker, never in client paint/update.
-pub(super) fn dependency_files(source: &XdgApplications) -> Result<Vec<PathBuf>> {
-    let mut dependencies = std::collections::BTreeSet::new();
+pub(super) fn dependency_files(source: &XdgApplications) -> Result<Vec<(PathBuf, bool)>> {
+    let mut dependencies = BTreeMap::new();
     let mut seen = std::collections::BTreeSet::new();
     let mut count = 0usize;
     for root in &source.data_roots {
@@ -140,26 +143,45 @@ pub(super) fn dependency_files(source: &XdgApplications) -> Result<Vec<PathBuf>>
                     main = line == "[Desktop Entry]";
                     continue;
                 }
-                if main && let Some(("TryExec" | "Icon", value)) = line.split_once('=') {
+                if main && let Some((key @ ("TryExec" | "Icon"), value)) = line.split_once('=') {
                     let value = unescape(value.trim());
-                    if value.starts_with('/') && !value.contains('\0') {
-                        let path = PathBuf::from(value);
-                        let canonical = path.canonicalize().ok();
-                        dependencies.insert(path);
-                        if let Some(target) = canonical {
-                            dependencies.insert(target);
-                        }
-                        if dependencies.len() > 4096 {
-                            return Err(DomainError::Unavailable(
-                                "Application dependency watch limit exceeded".into(),
-                            ));
-                        }
+                    let paths = if key == "TryExec" {
+                        executable_candidates(&value, &source.program_dirs)
+                    } else if Path::new(&value).is_absolute() {
+                        vec![PathBuf::from(value)]
+                    } else {
+                        vec![]
+                    };
+                    for path in paths {
+                        insert_dependency(&mut dependencies, path, key == "Icon")?;
                     }
                 }
             }
         }
     }
     Ok(dependencies.into_iter().collect())
+}
+fn insert_dependency(
+    dependencies: &mut BTreeMap<PathBuf, bool>,
+    path: PathBuf,
+    artwork: bool,
+) -> Result<()> {
+    let bytes = path.as_os_str().as_bytes();
+    // Such paths cannot name a usable Linux executable/icon. Their descriptor
+    // remains watched, so correcting the field still triggers discovery.
+    if !path.is_absolute() || bytes.len() > MAX_DEPENDENCY_PATH_BYTES || bytes.contains(&0) {
+        return Ok(());
+    }
+    dependencies
+        .entry(path)
+        .and_modify(|existing| *existing |= artwork)
+        .or_insert(artwork);
+    if dependencies.len() > MAX_DEPENDENCIES {
+        return Err(DomainError::Unavailable(
+            "Application dependency watch limit exceeded".into(),
+        ));
+    }
+    Ok(())
 }
 pub(super) fn discover(source: &XdgApplications) -> Result<Vec<Application>> {
     let mut entries = BTreeMap::new();
@@ -201,12 +223,13 @@ pub(super) fn discover(source: &XdgApplications) -> Result<Vec<Application>> {
                 if text.len() as u64 > MAX_FILE_BYTES {
                     return None;
                 }
-                parse_entry(
+                parse_entry_with_program_dirs(
                     &id,
                     &path.to_string_lossy(),
                     &text,
                     &source.desktop,
                     &source.locale,
+                    &source.program_dirs,
                 )
                 .ok()
                 .flatten()

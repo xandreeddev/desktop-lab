@@ -1,7 +1,7 @@
 //! Linux directory notifications with parent watches for roots not yet created.
 use super::*;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     ffi::CString,
     os::{
         fd::{AsRawFd, FromRawFd, OwnedFd},
@@ -17,6 +17,10 @@ const MASK: u32 = libc::IN_CREATE
     | libc::IN_ATTRIB
     | libc::IN_DELETE_SELF
     | libc::IN_MOVE_SELF;
+const MAX_DEPENDENCIES: usize = 4096;
+const MAX_PATH_BYTES: usize = 4096;
+const MAX_SYMLINK_HOPS: usize = 40;
+const MAX_RESOLUTION_COMPONENTS: usize = 8192;
 #[derive(Clone)]
 enum Interest {
     Desktop,
@@ -107,6 +111,103 @@ impl Watcher {
         }
         Ok(())
     }
+    fn dependency_prefix(
+        &self,
+        path: &Path,
+        artwork: bool,
+        next: &mut BTreeMap<i32, Vec<Interest>>,
+        observed: &mut BTreeMap<PathBuf, bool>,
+    ) -> Result<()> {
+        let existing = observed.get(path).copied();
+        if path.file_name().is_none() || existing.is_some_and(|was_artwork| was_artwork || !artwork)
+        {
+            return Ok(());
+        }
+        if existing.is_none() && observed.len() >= MAX_DEPENDENCIES {
+            return Err(DomainError::Unavailable(
+                "Application dependency watch limit exceeded".into(),
+            ));
+        }
+        // A specific child interest observes replacement/permissions without
+        // treating unrelated changes in /usr/bin or a shared ancestor as icon
+        // updates. Subscribe before examining a prefix or following its link.
+        self.parent_interest(path, next, artwork)?;
+        observed.insert(path.to_owned(), artwork);
+        Ok(())
+    }
+    fn dependency(
+        &self,
+        mut path: PathBuf,
+        artwork: bool,
+        next: &mut BTreeMap<i32, Vec<Interest>>,
+        observed: &mut BTreeMap<PathBuf, bool>,
+    ) -> Result<()> {
+        use std::path::Component;
+        let mut visited = BTreeSet::new();
+        let mut steps = 0usize;
+        for _ in 0..=MAX_SYMLINK_HOPS {
+            let bytes = path.as_os_str().as_bytes();
+            if !path.is_absolute()
+                || bytes.len() > MAX_PATH_BYTES
+                || bytes.contains(&0)
+                || !visited.insert(path.clone())
+            {
+                return Ok(());
+            }
+            // Keep the unresolved target even when it is currently absent. Its
+            // nearest existing ancestor observes later directory/file creation.
+            self.dependency_prefix(&path, artwork, next, observed)?;
+            let mut prefix = PathBuf::new();
+            let mut components = path.components();
+            let mut redirected = None;
+            while let Some(component) = components.next() {
+                steps += 1;
+                if steps > MAX_RESOLUTION_COMPONENTS {
+                    return Err(DomainError::Unavailable(
+                        "Application dependency resolution limit exceeded".into(),
+                    ));
+                }
+                match component {
+                    Component::RootDir => {
+                        prefix.push(component.as_os_str());
+                        continue;
+                    }
+                    Component::CurDir => continue,
+                    Component::ParentDir => {
+                        prefix.pop();
+                        continue;
+                    }
+                    Component::Normal(name) => prefix.push(name),
+                    Component::Prefix(_) => unreachable!("Linux paths have no native prefix"),
+                }
+                self.dependency_prefix(&prefix, artwork, next, observed)?;
+                let Ok(metadata) = fs::symlink_metadata(&prefix) else {
+                    break;
+                };
+                if metadata.file_type().is_symlink() {
+                    if let Ok(target) = fs::read_link(&prefix) {
+                        let mut target = if target.is_absolute() {
+                            target
+                        } else {
+                            prefix.parent().unwrap_or(Path::new("/")).join(target)
+                        };
+                        for remaining in components {
+                            target.push(remaining.as_os_str());
+                        }
+                        redirected = Some(target);
+                    }
+                    break;
+                }
+            }
+            let Some(target) = redirected else {
+                return Ok(());
+            };
+            path = target;
+        }
+        // A cyclic/overlong link chain cannot currently satisfy TryExec. The
+        // prefixes already subscribed above still permit recovery after repair.
+        Ok(())
+    }
     fn refresh(&mut self, source: &XdgApplications) -> Result<()> {
         let mut next = BTreeMap::new();
         for root in &source.data_roots {
@@ -130,13 +231,9 @@ impl Watcher {
             self.parent_interest(directory, &mut next, true)?;
             self.tree_interest(directory, 0, Interest::Artwork, &mut next)?;
         }
-        for path in catalog::dependency_files(source)? {
-            self.parent_interest(&path, &mut next, true)?;
-            if let Some(directory) = path.parent()
-                && directory.is_dir()
-            {
-                self.add(directory, Interest::Artwork, &mut next)?;
-            }
+        let mut observed = BTreeMap::new();
+        for (path, artwork) in catalog::dependency_files(source)? {
+            self.dependency(path, artwork, &mut next, &mut observed)?;
         }
         for id in self.interests.keys().filter(|id| !next.contains_key(id)) {
             unsafe { libc::inotify_rm_watch(self.fd.as_raw_fd(), *id) };
@@ -197,19 +294,21 @@ impl Watcher {
                 }
                 let name = &buffer[begin..end];
                 let name = &name[..name.iter().position(|b| *b == 0).unwrap_or(name.len())];
+                let retired = event.mask
+                    & (libc::IN_DELETE_SELF | libc::IN_MOVE_SELF | libc::IN_IGNORED)
+                    != 0;
                 dirty.artwork |= event.mask & libc::IN_Q_OVERFLOW != 0
                     || self.interests.get(&event.wd).is_some_and(|interests| {
-                        interests.iter().any(|interest| {
-                            matches!(interest, Interest::Artwork | Interest::Child(_, true))
+                        interests.iter().any(|interest| match interest {
+                            Interest::Artwork => true,
+                            Interest::Child(child, true) => retired || name == child,
+                            _ => false,
                         })
                     });
                 dirty.any |= event.mask & libc::IN_Q_OVERFLOW != 0
                     || self.interests.get(&event.wd).is_some_and(|interests| {
                         interests.iter().any(|interest| {
-                            if event.mask
-                                & (libc::IN_DELETE_SELF | libc::IN_MOVE_SELF | libc::IN_IGNORED)
-                                != 0
-                            {
+                            if retired {
                                 return true;
                             }
                             match interest {

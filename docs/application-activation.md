@@ -19,8 +19,10 @@ object path by replacing dots with slashes and dashes with underscores. It invok
 an application-generated command string. See the
 [freedesktop activation specification](https://specifications.freedesktop.org/desktop-entry/latest/dbus.html).
 
-Connection and request work share a five-second deadline. The connection's local
-executor is driven while the request waits; it creates no permanent polling worker.
+Native connection, method, close and permitted command fallback share one
+five-second dispatch budget. Close gets at most 250 ms within that budget.
+The connection's local executor is driven while the request waits; it creates no
+permanent polling worker.
 Native errors are classified without displaying their raw bodies.
 
 A definitive missing service/object/method permits the parsed `Exec` fallback.
@@ -123,3 +125,13 @@ Open, parser and observation changes require their own final strict, protocol,
 visual and native application acceptance. Do not treat source implementation as
 proof of broad third-party compatibility. Current evidence and remaining checks
 are tracked in `docs/daily-use-completion.json`.
+
+`vm/test-application-intent.py` prepares an owned desktop entry and private real
+Chromium profile, then exercises physical launch/open/action and socket/CLI
+opening. The fixture records token **presence**, observes owned window/focus
+state, and checks actual file URI/title loading through that profile's loopback
+DevTools endpoint. Child-environment delivery and observed focus do not prove
+that Chromium consumed a specific activation protocol message. The run requires
+an identified release containing the independent example, an unlocked idle
+single-output VM and bounded owned-process cleanup. Its existence is not an
+executed result; no native pass is claimed here.
