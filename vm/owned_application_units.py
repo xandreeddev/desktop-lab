@@ -5,8 +5,30 @@ structured ExecStart argv property; no serialized command substring is authority
 """
 
 UNIT_IDENTITY = r'''
-import json,os,re,stat,time
+import hashlib,json,os,re,stat,time
 from pathlib import Path
+
+def process_snapshot(pid,hashed=False):
+ assert type(pid) is int and pid>1
+ root=Path('/proc')/str(pid)
+ assert root.stat().st_uid==os.getuid()
+ def start():return (root/'stat').read_text().rsplit(')',1)[1].split()[19]
+ birth=start()
+ def identity(value):return [value.st_dev,value.st_ino,value.st_mode,value.st_uid,
+                            value.st_size,value.st_mtime_ns,value.st_ctime_ns]
+ with (root/'exe').open('rb') as stream:
+  before=os.fstat(stream.fileno())
+  assert stat.S_ISREG(before.st_mode) and before.st_size<=128*1024*1024
+  executable=identity(before)
+  digest=hashlib.file_digest(stream,'sha256').hexdigest() if hashed else None
+  assert identity(os.fstat(stream.fileno()))==executable
+ group=(root/'cgroup').read_text()
+ assert len(group)<16384 and group.startswith('0::') and group.count('\n')==1
+ after=(root/'exe').stat()
+ assert executable==identity(after)
+ assert birth==start()
+ return {'pid':pid,'start':birth,'executable':executable,'sha256':digest,
+         'group':group.removeprefix('0::').strip()}
 
 def owned_manifest(script,run_id):
  directory=Path(script).parent
@@ -55,7 +77,8 @@ def unit_snapshot(unit):
   return {'load':str(unit_value('LoadState')),'active':str(unit_value('ActiveState')),
           'transient':bool(unit_value('Transient')),'group':str(service_value('ControlGroup')),
           'executable':str(commands[0][0]),'argv':[str(arg) for arg in commands[0][1]],
-          'main_pid':int(service_value('MainPID'))}
+          'main_pid':int(service_value('MainPID')),
+          'invocation':bytes(unit_value('InvocationID')).hex()}
  finally:bus.close()
 
 def assert_unit_identity(value,unit,argv,group=None):
@@ -68,12 +91,16 @@ def assert_unit_identity(value,unit,argv,group=None):
  elif group is not None:
   assert current in ('',group)
 
-def retire_unit(unit,argv,group=None):
+def retire_unit(unit,argv,group=None,captured=None):
  import dbus
  value=unit_snapshot(unit)
  if value['load']=='not-found':return
  assert_unit_identity(value,unit,argv,group)
  if value['active'] not in ('inactive','failed'):
+  if captured is not None:
+   assert {k:v for k,v in value.items() if k!='active'}==\
+          {k:v for k,v in captured['unit'].items() if k!='active'}
+   assert process_snapshot(value['main_pid'],hashed=True)==captured['process']
   bus=dbus.SessionBus(private=True)
   try:
    manager=dbus.Interface(bus.get_object('org.freedesktop.systemd1','/org/freedesktop/systemd1'),
@@ -95,10 +122,12 @@ exec(UNIT_IDENTITY)
 
 RETIRE = UNIT_IDENTITY + r'''
 import sys
-prefix,unit,script,run_id=sys.argv[1:]
+prefix,unit,script,run_id=sys.argv[1:5]
 assert prefix in ('lucent-application-actions-','lucent-application-intent-',
                   'lucent-application-intent-watchdog-')
 assert unit==prefix+run_id+'.service'
-retire_unit(unit,owned_argv(prefix,script,run_id))
+assert len(sys.argv) in (5,6)
+captured=json.loads(sys.argv[5]) if len(sys.argv)==6 else None
+retire_unit(unit,owned_argv(prefix,script,run_id),captured=captured)
 print(json.dumps({'retired':True}))
 '''

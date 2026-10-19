@@ -14,6 +14,7 @@ from pathlib import Path
 import runpy
 import re
 import shlex
+import signal
 import stat
 import subprocess
 import sys
@@ -21,6 +22,7 @@ import time
 
 from native_surfaces import find_surface
 from owned_application_units import RETIRE
+from application_intent_policy import CursorOwnership, absolute_move, same_target, target as native_target
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,23 +52,6 @@ def load_helpers():
     remote, session, cli, inspect = [h[key] for key in ('remote', 'session', 'cli', 'inspect')]
     require, eventually, CheckFailure = [h[key] for key in ('require', 'eventually', 'CheckFailure')]
 
-SOCKET = r'''
-import json,os,socket,stat,sys
-from pathlib import Path
-path=Path(os.environ['XDG_RUNTIME_DIR'])/'application-intent.sock'
-value=path.lstat()
-assert stat.S_ISSOCK(value.st_mode) and value.st_uid==os.getuid()
-command=sys.argv[1]; assert command in ('inspect','open','quit')
-with socket.socket(socket.AF_UNIX) as connection:
- connection.settimeout(4); connection.connect(str(path)); connection.sendall((command+'\n').encode())
- response=bytearray()
- while True:
-  data=connection.recv(65536)
-  if not data: break
-  response.extend(data); assert len(response)<=4*1024*1024
-assert not response.startswith(b'error:')
-print(response.decode())
-'''
 BROWSER_TABS = r'''
 import json,stat,sys,urllib.request
 from pathlib import Path
@@ -112,6 +97,8 @@ def suite(args, results):
     require(session('omarchy-shell', 'lock', 'isLocked').strip() == 'false', 'guest_unlocked')
     before = inspect()['client']
     require(not before['launcher'] and not before['query']
+            and not any(before.get(key) for key in ('notification_count', 'notification_history_open',
+                        'widgets_editing', 'widget_grid', 'dock_surface_expanded', 'launcher_opening'))
             and before['settings_save_status'] == 'saved' and not before['wallpaper_busy'],
             'idle_desktop_before_application_acceptance')
     require(json.loads(session('hyprctl', '-j', 'clients')) == [], 'no_foreign_managed_clients')
@@ -119,14 +106,17 @@ def suite(args, results):
         'import json,os; from pathlib import Path; '
         'print(json.dumps(not os.path.lexists(Path(os.environ["XDG_RUNTIME_DIR"])/"application-intent.sock")))')),
             'independent_example_not_already_running')
-    for panel in ('audio', 'media', 'network', 'bluetooth', 'power', 'tray', 'live_wallpaper', 'display'):
+    for panel in ('audio', 'media', 'network', 'bluetooth', 'power', 'tray', 'live_wallpaper', 'displays', 'weather',
+                  'settings', 'application_actions'):
         require(not before.get(panel, {}).get('open', False)
-                and not before.get(panel, {}).get('visible', False), 'other_panels_initially_closed')
+                and not before.get(panel, {}).get('visible', False)
+                and not before.get(panel, {}).get('busy', False), 'other_panels_initially_closed')
     require('lucent-authorization-' not in session('hyprctl', '-j', 'layers'), 'no_authentication_prompt')
     a['keyboard_preflight']()
     monitors = json.loads(session('hyprctl', '-j', 'monitors'))
     require(len(monitors) == 1 and monitors[0]['width'] == 1920 and monitors[0]['height'] == 1080
-            and monitors[0]['x'] == monitors[0]['y'] == 0 and monitors[0]['scale'] == 1,
+            and monitors[0]['x'] == monitors[0]['y'] == 0 and monitors[0]['scale'] == 1
+            and monitors[0].get('transform') == 0 and monitors[0].get('dpmsStatus') is True,
             'single_scale_one_output')
     monitor = monitors[0]
     def output_state(values):
@@ -141,7 +131,7 @@ def suite(args, results):
     original_outputs = output_state(monitors)
     original_workspace = workspace_state()
     original_cursor = json.loads(session('hyprctl', '-j', 'cursorpos'))
-    last_cursor = dict(original_cursor)
+    cursor_owner = CursorOwnership(original_cursor)
     name = lab.inventory()['vms']['lucent']['name']
     preferences = json.loads(remote('python3', '-c', a['PREFERENCES']))
     scratch = remote('mktemp', '-d', '/tmp/lucent-application-intent.XXXXXXXXXXXX').strip()
@@ -151,13 +141,15 @@ def suite(args, results):
     guard = 'lucent-application-intent-watchdog-' + run_id + '.service'
     initialized, example_attempted, guard_attempted = False, False, False
     completed_success, pressed = False, False
+    baseline, example_identity, example_layer = None, None, None
     cleanup = results['cleanup'] = {}
 
     def call(operation, *arguments):
         return session('/usr/bin/python3', fixture, operation, scratch, run_id, *arguments)
 
     def example_command(command):
-        return session('/usr/bin/python3', '-c', SOCKET, command)
+        require(example_identity is not None, 'captured_example_socket_authority')
+        return call('example-command', command, json.dumps(example_identity))
 
     def example_state():
         return json.loads(example_command('inspect'))
@@ -172,18 +164,36 @@ def suite(args, results):
     def loaded():
         return all(json.loads(session('python3', '-c', BROWSER_TABS, scratch, run_id))['loaded'])
 
-    def interaction_guard():
+    def observe_native(with_example=True):
+        value = json.loads(call('admission', json.dumps({'desktop_sha256': expected,
+            'example_sha256': manifest['binaries']['application-intent']['sha256'] if with_example else None})))
+        if baseline is not None:
+            require(value['baseline'] == baseline, 'frozen_desktop_supervisor_compositor_authority')
+        if with_example and example_identity is not None:
+            require(value['example'] == example_identity, 'frozen_example_unit_process_and_socket_authority')
+            require(all(value['intent_layer'][key] == example_layer[key]
+                        for key in ('address', 'namespace', 'pid')), 'frozen_example_native_layer_lifetime')
+        return value
+
+    def interaction_guard(with_example=True):
         require(session('omarchy-shell', 'lock', 'isLocked').strip() == 'false', 'current_unlocked_guest')
         require('lucent-authorization-' not in session('hyprctl', '-j', 'layers'), 'current_no_authentication_prompt')
         current = inspect()['client']
         require(not current['launcher'] and not current['query']
                 and not current.get('notification_history_open', False)
+                and not current.get('notification_count', 0)
+                and not current.get('dock_surface_expanded', False) and not current.get('launcher_opening', False)
                 and not current.get('widget_grid', False) and not current.get('widgets_editing', False)
                 and current['settings_save_status'] == 'saved' and not current['wallpaper_busy'],
                 'current_idle_shell_without_competing_controls')
-        for panel in ('audio', 'media', 'network', 'bluetooth', 'power', 'tray', 'live_wallpaper', 'display', 'weather'):
+        for panel in ('audio', 'media', 'network', 'bluetooth', 'power', 'tray', 'live_wallpaper', 'displays', 'weather',
+                      'settings', 'application_actions'):
             require(not current.get(panel, {}).get('open', False)
-                    and not current.get(panel, {}).get('visible', False), 'current_panels_closed')
+                    and not current.get(panel, {}).get('visible', False)
+                    and not current.get(panel, {}).get('busy', False), 'current_panels_closed')
+        require(not current.get('network', {}).get('form')
+                and not any(current.get('bluetooth', {}).get(key) for key in ('form', 'requests', 'answering')),
+                'no_current_native_credential_requests')
         require(output_state(json.loads(session('hyprctl', '-j', 'monitors'))) == original_outputs,
                 'current_original_output_layout')
         require(workspace_state() == original_workspace, 'current_original_active_workspace')
@@ -193,48 +203,60 @@ def suite(args, results):
                     'current_exact_owned_browser_clients')
         else:
             require(clients == [], 'current_no_foreign_managed_clients')
-        return clients
+        current_native = observe_native(with_example)
+        cursor_owner.observe(json.loads(session('hyprctl', '-j', 'cursorpos')))
+        return clients, current_native
 
     def physical_click(identifier):
-        nonlocal last_cursor, pressed
-        interaction_guard()
-        surface = find_surface(example_state(), 'intent')
-        hits = [hit for hit in surface['hits'] if hit['id'] == identifier]
-        require(len(hits) == 1, 'independent_example_current_control')
-        hit, clip = hits[0], hits[0]['clip']
-        left, top = max(hit['x'], clip['x']), max(hit['y'], clip['y'])
-        right = min(hit['x'] + hit['width'], clip['x'] + clip['width'])
-        bottom = min(hit['y'] + hit['height'], clip['y'] + clip['height'])
-        require(right - left > 4 and bottom - top > 4
-                and right - left >= hit['width'] - .5 and bottom - top >= hit['height'] - .5,
-                'independent_example_control_fully_visible')
-        origin = h['layer_origin'](surface)
-        require(abs(origin['w'] - surface['width']) <= .5 and abs(origin['h'] - surface['height']) <= .5,
-                'independent_example_current_native_geometry')
-        target = (origin['x'] + (left + right) / 2, origin['y'] + (top + bottom) / 2)
-        last_cursor = {'x': target[0], 'y': target[1]}
-        h['move'](name, monitor, *target)
+        nonlocal pressed
+        def observed_target(observation):
+            return native_target(find_surface(observation['example_state'], 'intent'),
+                                 observation['intent_layer'], identifier)
+        _, admitted = interaction_guard()
+        initial = observed_target(admitted)
+        point = initial['point']
+        cursor_owner.begin(json.loads(session('hyprctl', '-j', 'cursorpos')), point)
+        h['qmp'](name, absolute_move(point))
         def arrived():
             position = json.loads(session('hyprctl', '-j', 'cursorpos'))
-            return abs(position['x'] - target[0]) <= 2 and abs(position['y'] - target[1]) <= 2
+            return cursor_owner.observe(position) == point
         eventually(arrived, 'independent_control_pointer_arrived', timeout=3)
-        time.sleep(.15)
-        interaction_guard()
+        cursor_owner.finish(json.loads(session('hyprctl', '-j', 'cursorpos')))
+        _, admitted = interaction_guard()
+        same_target(initial, observed_target(admitted))
+        cursor_owner.observe(json.loads(session('hyprctl', '-j', 'cursorpos')))
         try:
             pressed = True  # Also release when QMP delivered a press but lost its reply.
-            a['pointer'](name, True)
-            time.sleep(.05)
+            try:
+                a['pointer'](name, True)
+                _, admitted = interaction_guard()
+                same_target(initial, observed_target(admitted))
+            except BaseException:
+                # Retire only this identified example before balancing a stale
+                # capture. No cancellation key is sent to foreign/auth UI.
+                retire_example()
+                raise
         finally:
             a['pointer'](name, False)
             pressed = False
+
+    def retire_example():
+        arguments = ['lucent-application-intent-', unit, binary, run_id]
+        if example_identity is not None:
+            arguments.append(json.dumps(example_identity))
+        require(json.loads(session('python3', '-c', RETIRE, *arguments))['retired'],
+                'independent_example_retired')
 
     try:
         h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(fixture)],
                  data=(ROOT / 'vm/fixtures/application-intent-fixture.py').read_bytes(), timeout=20)
         h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(scratch + '/owned_application_units.py')],
                  data=(ROOT / 'vm/owned_application_units.py').read_bytes(), timeout=20)
+        h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(scratch + '/application_intent_policy.py')],
+                 data=(ROOT / 'vm/application_intent_policy.py').read_bytes(), timeout=20)
         initialized = True
         entry = json.loads(call('initialize'))
+        baseline = observe_native(False)['baseline']
         h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(binary)],
                  data=example.read_bytes(), timeout=30)
         require(remote('sha256sum', binary).split()[0] == manifest['binaries']['application-intent']['sha256'],
@@ -250,7 +272,19 @@ def suite(args, results):
                 '--property=UMask=0077', binary, '--app', entry['app_id'], '--action', 'Probe',
                 '--target', scratch + '/' + entry['files'][0]['name'],
                 '--target', scratch + '/' + entry['files'][1]['name'])
-        eventually(lambda: bool(find_surface(example_state(), 'intent')['hits']), 'independent_native_example_ready')
+        admitted = None
+        def ready():
+            nonlocal admitted
+            try:
+                value = observe_native()
+                if find_surface(value['example_state'], 'intent')['hits']:
+                    admitted = value
+                    return True
+                return False
+            except Exception:
+                return None
+        eventually(ready, 'independent_native_example_ready')
+        example_identity, example_layer = admitted['example'], admitted['intent_layer']
 
         # The first physical launch starts a fresh private Chromium profile.
         # We separately observe focus; token presence proves child delivery only,
@@ -262,7 +296,7 @@ def suite(args, results):
                 and event['fresh_token_present'] and not event['legacy_startup_present']
                 and example_state()['client']['fresh_token'], 'first_physical_token_delivered_to_owned_child')
         def focused_owned_browser():
-            clients = interaction_guard()
+            clients, _ = interaction_guard()
             focused = json.loads(session('hyprctl', '-j', 'activewindow'))
             return bool(focused) and focused.get('class') == entry['class'] and any(
                 client.get('address') == focused.get('address') and client.get('pid') == focused.get('pid')
@@ -308,9 +342,7 @@ def suite(args, results):
                 failures.append('pointer_release')
         if example_attempted:
             try:
-                require(json.loads(session('python3', '-c', RETIRE,
-                    'lucent-application-intent-', unit, binary, run_id))['retired'],
-                    'independent_example_retired')
+                retire_example()
                 cleanup['example_retired'] = True
             except Exception:
                 failures.append('example_retirement')
@@ -336,16 +368,16 @@ def suite(args, results):
         except Exception:
             failures.append('caller_preservation')
         try:
-            interaction_guard()
+            eventually(lambda: bool(interaction_guard(False)), 'owned_example_layers_retired_before_cursor_restore')
             cursor = json.loads(session('hyprctl', '-j', 'cursorpos'))
-            require(all(abs(cursor[key] - last_cursor[key]) <= 2 for key in ('x', 'y')),
-                    'cursor_still_owned_before_restore')
-            h['move'](name, monitor, original_cursor['x'], original_cursor['y'])
+            cursor_owner.begin(cursor, cursor_owner.initial)
+            h['qmp'](name, absolute_move(cursor_owner.initial))
             def restored():
                 cursor = json.loads(session('hyprctl', '-j', 'cursorpos'))
-                return all(abs(cursor[key] - original_cursor[key]) <= 2 for key in ('x', 'y'))
+                return cursor_owner.observe(cursor) == cursor_owner.initial
             eventually(restored, 'original_cursor_restored', timeout=3)
-            interaction_guard()
+            cursor_owner.finish(json.loads(session('hyprctl', '-j', 'cursorpos')))
+            interaction_guard(False)
             cleanup['output_workspace_and_cursor_preserved'] = True
         except Exception:
             failures.append('output_workspace_cursor_preservation')
@@ -366,6 +398,7 @@ def main():
     parser.add_argument('--example-binary')
     parser.add_argument('--report')
     args = parser.parse_args()
+    signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     load_helpers()
     result = {'passed': False, 'checks': {},
               'scope': 'Fresh token delivery to owned children and observed browser focus; no Chromium protocol-consumption claim'}
@@ -376,6 +409,8 @@ def main():
         result['passed'] = True
     except CheckFailure as error:
         result['failure'] = str(error)
+    except KeyboardInterrupt:
+        result['failure'] = 'native_application_acceptance_interrupted'
     except Exception:
         result['failure'] = 'bounded_native_application_acceptance_failure'
     path = Path(args.report or lab.ROOT / 'reports/local/application-intent-native.json')
