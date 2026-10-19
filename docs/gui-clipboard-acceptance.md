@@ -158,6 +158,14 @@ unique-header, Upgrade/Connection, extension refusal and size/deadline checks
 remain required. Status metadata alone grants no admission. The host retains
 the failed operation separately from any
 later restoration failure; private command logs contain the guest diagnostics.
+The host additionally records its fixed suite/restoration phase, error class,
+and at most 12 basename/function/line frames from the exact loaded host, Notes
+and input-policy sources. A reason is exposed only when it is a bounded label
+literal on that trusted call path; arbitrary exception values and private paths
+remain excluded. Each outer restoration failure has its own record. A successful
+peer retry clears its earlier failure, and a peer error is attributed to the
+suite only when it is the same propagated exception. An earlier scope-readiness
+retry cannot become the diagnosis of a later unrelated host error.
 
 Notes restoration starts only after original-browser retirement and a fresh
 unlocked, idle, no-foreign-client/cursor guard. If either fails, the driver leaves
@@ -191,6 +199,13 @@ remain refused. A separate guarded recovery restored the original desktop,
 settings/media/clipboard/workspace/cursor/idle state. The failed attempt remains
 failed; scope readiness and status parsing corrections have local boundary-test
 evidence pending another native transfer run.
+
+The subsequent frozen `b6323e9` attempt passed exact real-browser admission and
+owned-browser retirement, then failed with a generic host `ValueError` before
+clipboard transfers. Notes/cursor restoration did not pass. The original report
+retains those results; the added host phase/source diagnostics do not establish
+the underlying cause or a successful transfer. Independent recovery is separate
+from this failed test's automatic-restoration flags.
 
 This test does not establish rich HTML/image clipboard behavior, other
 applications, delayed-provider/focus-retirement races, physical hardware, IME

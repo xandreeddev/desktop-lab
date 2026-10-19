@@ -198,7 +198,9 @@ class PeerFailureEvidence(unittest.TestCase):
             h=types.SimpleNamespace(last_peer_failure=None)
             def suite(_h,_result):
                 h.last_peer_failure=dict(original)
-                raise driver.CheckFailure('original_browser_full_identity_available')
+                error=driver.CheckFailure('original_browser_full_identity_available')
+                h.last_peer_error=error
+                raise error
             def restore(_h,result):
                 h.last_peer_failure=dict(later);result['restoration']['owned_browser_retired']=False
             # Hashing support files still uses the actual source tree; place
@@ -215,6 +217,83 @@ class PeerFailureEvidence(unittest.TestCase):
             self.assertEqual(result['primary_peer_failure'],original)
             self.assertEqual(result['restoration_peer_failure'],later)
             self.assertFalse(result['passed'])
+
+    def test_successful_peer_call_clears_earlier_expected_readiness_failure(self):
+        h=driver.Harness.__new__(driver.Harness);h.peer_initialized=True
+        h.peer_directory='/private/run';h.tag='a'*24
+        h.session=Mock(side_effect=[driver.CheckFailure('bounded_command_failed'),b'{}'])
+        with self.assertRaises(driver.CheckFailure):h.call_peer('admit')
+        self.assertIsNotNone(h.last_peer_failure)
+        self.assertEqual(h.call_peer('admit'),{})
+        self.assertIsNone(h.last_peer_failure);self.assertIsNone(h.last_peer_error)
+
+    def test_unrelated_host_error_does_not_inherit_an_earlier_peer_retry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            h=driver.Harness.__new__(driver.Harness);h.peer_initialized=True
+            h.peer_directory='/private/run';h.tag='a'*24
+            h.session=Mock(side_effect=[driver.CheckFailure('bounded_command_failed'),b'{}'])
+            def suite(_h,_result):
+                try:h.call_peer('admit')
+                except driver.CheckFailure:pass
+                h.call_peer('admit')
+                h.phase='notes_visibility'
+                raise ValueError('private unrelated payload')
+            actual_root=driver.ROOT;temporary_root=Path(directory)
+            (temporary_root/'vm').symlink_to(actual_root/'vm',target_is_directory=True)
+            with patch.object(driver,'ROOT',temporary_root),patch.object(driver,'Harness',return_value=h), \
+                 patch.object(driver,'suite',side_effect=suite),patch.object(driver,'restore'), \
+                 patch.object(driver.signal,'signal'),patch.object(driver.argparse.ArgumentParser,'parse_args',
+                    return_value=types.SimpleNamespace(source_commit='a'*40,desktop_sha256='b'*64)), \
+                 redirect_stdout(io.StringIO()):self.assertEqual(driver.main(),1)
+            result=json.loads(next((temporary_root/'reports/local').glob('*/report.json')).read_text())
+            self.assertEqual(result['primary_failure']['phase'],'notes_visibility')
+            self.assertEqual(result['primary_failure']['error_class'],'ValueError')
+            self.assertNotIn('primary_peer_failure',result);self.assertNotIn('restoration_peer_failure',result)
+            self.assertNotIn('private unrelated payload',json.dumps(result));self.assertFalse(result['passed'])
+
+
+class HostFailureDetails(unittest.TestCase):
+    def test_actual_cursor_guard_reason_and_trusted_frames_survive_without_coordinates(self):
+        cursor=driver.input_policy.CursorOwnership({'x':10,'y':20})
+        try:cursor.observe({'x':10,'y':44})
+        except Exception as error:details=driver.failure_details(error,'browser_window')
+        self.assertEqual(details['phase'],'browser_window')
+        self.assertEqual(details['fixed_reason'],'application_cursor_authority_lost')
+        self.assertEqual(details['error_class'],'ValueError')
+        self.assertTrue(details['trace_frames'])
+        self.assertTrue(all(frame['source']=='application_intent_policy.py' for frame in details['trace_frames']))
+        self.assertNotIn(str(driver.ROOT),json.dumps(details));self.assertNotIn('coordinates',json.dumps(details))
+
+    def test_safe_looking_payload_from_an_untrusted_same_basename_is_not_a_reason_or_frame(self):
+        namespace={}
+        exec(compile('def fail():\n raise ValueError("private_credential")\n',
+                     '/private/test-gui-clipboard.py','exec'),namespace)
+        try:namespace['fail']()
+        except Exception as error:details=driver.failure_details(error,['private phase'])
+        self.assertEqual(details['fixed_reason'],'unclassified_host_failure')
+        self.assertEqual(details['phase'],'native_suite');self.assertEqual(details['trace_frames'],[])
+        self.assertNotIn('private',json.dumps(details))
+
+    def test_trusted_recursion_is_bounded_without_exception_payload_or_paths(self):
+        namespace={}
+        exec(compile('def fail(n):\n if n: return fail(n-1)\n raise ValueError("private payload")\n',
+                     driver.__file__,'exec'),namespace)
+        try:namespace['fail'](30)
+        except Exception as error:details=driver.failure_details(error,'notes_visibility')
+        self.assertEqual(len(details['trace_frames']),12);self.assertTrue(details['trace_truncated'])
+        self.assertEqual(details['fixed_reason'],'unclassified_host_failure')
+        self.assertNotIn('private payload',json.dumps(details));self.assertNotIn(str(driver.ROOT),json.dumps(details))
+
+    def test_suite_and_each_outer_restoration_failure_are_kept_separately(self):
+        h=types.SimpleNamespace(last_peer_failure=None,last_peer_error=None)
+        result={'primary_failure':{'phase':'browser_window'},'restoration':{}}
+        for phase in ('browser_retirement','notes_restoration','cursor_restoration'):
+            try:raise ValueError('private payload')
+            except Exception as error:driver.record_restoration_failure(h,result,error,phase)
+        self.assertEqual(set(result['restoration_errors']),
+                         {'browser_retirement','notes_restoration','cursor_restoration'})
+        self.assertEqual(result['primary_failure'],{'phase':'browser_window'})
+        self.assertNotIn('private payload',json.dumps(result))
 
 
 class BindingAdmissionTests(unittest.TestCase):

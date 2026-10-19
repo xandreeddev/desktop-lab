@@ -35,6 +35,49 @@ require, private, CheckFailure = notes.require, notes.private, notes.CheckFailur
 input_policy = notes.load('gui_clipboard_input_policy', ROOT / 'vm/application_intent_policy.py')
 SOURCE_TEXT = 'browser one\n雪 e\u0301 👩\u200d💻\nlast line\n'
 DESTINATION_TEXT = 'notes one\n\nnotes two\n'
+HOST_PHASES = frozenset(('harness_init', 'native_suite', 'preflight', 'settings_checkpoint',
+    'clipboard_checkpoint', 'peer_preparation', 'browser_start', 'browser_origin', 'browser_admission',
+    'browser_window', 'notes_visibility', 'browser_copy', 'browser_to_notes', 'notes_copy',
+    'notes_to_browser', 'browser_retirement', 'notes_restoration', 'cursor_restoration',
+    'profile_cleanup', 'unexpected_restoration'))
+HOST_SOURCES = {str(Path(__file__)): 'test-gui-clipboard.py',
+    str(Path(notes.__file__)): 'test-multiline-notes.py',
+    str(Path(input_policy.__file__)): 'application_intent_policy.py'}
+
+
+def failure_details(error, phase):
+    """Bounded trusted code locations and literal labels, never exception payloads."""
+    known = ('CheckFailure', 'ValueError', 'AssertionError', 'OSError', 'FileNotFoundError',
+             'PermissionError', 'TimeoutError', 'TimeoutExpired', 'KeyError', 'LookupError',
+             'JSONDecodeError', 'UnicodeDecodeError', 'ConnectionRefusedError')
+    result = {'phase': phase if type(phase) is str and phase in HOST_PHASES else 'native_suite',
+              'error_class': type(error).__name__ if type(error).__name__ in known else 'OtherError',
+              'fixed_reason': 'unclassified_host_failure', 'trace_frames': []}
+    reason = error.args[0] if len(error.args) == 1 and type(error.args[0]) is str else None
+    reason = reason if reason is not None and re.fullmatch('[a-z][a-z0-9_]{0,127}', reason) else None
+    trace = error.__traceback__; observed = 0; trusted = 0
+    while trace is not None and observed < 64:
+        code = trace.tb_frame.f_code; source = HOST_SOURCES.get(code.co_filename)
+        if source is not None:
+            trusted += 1
+            # A syntactically safe user value is not a reason. It must also be
+            # a literal in this exact source-pinned host call path.
+            if isinstance(error, (CheckFailure, ValueError, AssertionError)) and reason in code.co_consts:
+                result['fixed_reason'] = reason or 'unclassified_host_failure'
+            if len(result['trace_frames']) < 12:
+                result['trace_frames'].append({'source': source,
+                    'function': code.co_name if re.fullmatch('[A-Za-z_][A-Za-z0-9_]{0,95}', code.co_name) else 'module',
+                    'line': trace.tb_lineno if 0 < trace.tb_lineno <= 1000000 else 0})
+        trace = trace.tb_next; observed += 1
+    result['trace_truncated'] = trace is not None or trusted > 12
+    return result
+
+
+def record_restoration_failure(h, result, error, phase):
+    details = failure_details(error, phase)
+    if error is getattr(h, 'last_peer_error', None):
+        details['peer'] = copy.deepcopy(h.last_peer_failure)
+    result.setdefault('restoration_errors', {})[phase] = details
 
 
 def sha(text):
@@ -128,6 +171,8 @@ class Harness(notes.Harness):
         self.restoring_desktop = False
         self.notes_press_target = None
         self.last_peer_failure = None
+        self.last_peer_error = None
+        self.phase = 'harness_init'
         self.notes_workspace = 'lucent-clipboard-notes-' + self.tag
         self.browser_workspace = 'lucent-clipboard-browser-' + self.tag
 
@@ -139,14 +184,17 @@ class Harness(notes.Harness):
             require(data is None, 'one_fixed_peer_authority_payload')
             data = json.dumps({'origin': self.browser_origin, 'identity': self.browser_identity}).encode()
         try:
-            return json.loads(self.session('/usr/bin/python3', self.peer_directory + '/fixture.py',
+            value = json.loads(self.session('/usr/bin/python3', self.peer_directory + '/fixture.py',
                                            operation, self.peer_directory, self.tag,
                                            *arguments, data=data, timeout=25))
+            self.last_peer_failure = self.last_peer_error = None
+            return value
         except Exception as error:
             self.last_peer_failure = {'operation': operation,
                 'error_class': type(error).__name__ if type(error).__name__ in (
                     'CheckFailure', 'ValueError', 'OSError', 'TimeoutError', 'JSONDecodeError') else 'OtherError',
                 'fixed_reason': 'gui_peer_operation_failed'}
+            self.last_peer_error = error
             raise
 
     def input_guard(self):
@@ -308,6 +356,7 @@ class Harness(notes.Harness):
 
 
 def suite(h, result):
+    h.phase = 'preflight'
     notes.preflight(h)
     require_safe_bindings(json.loads(h.session('hyprctl', '-j', 'binds')))
     require(h.monitor['width'] == 1920 and h.monitor['height'] == 1080 and h.monitor['scale'] == 1,
@@ -317,6 +366,7 @@ def suite(h, result):
     h.cursor_owner = input_policy.CursorOwnership(h.original_cursor)
     h.desktop_pid = h.verify_binary()
     h.input_guard()
+    h.phase = 'settings_checkpoint'
     baseline = h.checkpoint('create')
     h.checkpointed = True
     private(h.directory / 'original-checkpoint.json', baseline)
@@ -329,12 +379,14 @@ def suite(h, result):
     h.notes.add(baseline['settings']['notes'])
     h.add_layout(baseline['settings'])
     h.checkpoint('awake')
+    h.phase = 'clipboard_checkpoint'
     h.clipboard = h.clip('create')
     require(h.clipboard['supported'], 'original_clipboard_supports_exact_text_restoration')
     h.clipboard_hashes.update((h.clip('read')['sha256'], sha(''), sha(SOURCE_TEXT), sha(DESTINATION_TEXT)))
     result['checks']['original_clipboard_checkpoint_and_history_pause'] = True
 
     # Every path below is newly owned; no existing Chromium profile is opened.
+    h.phase = 'peer_preparation'
     h.peer_directory = h.remote('mktemp', '-d', '/tmp/lucent-gui-clipboard.XXXXXXXXXXXX').decode().strip()
     require(re.fullmatch(r'/tmp/lucent-gui-clipboard\.[A-Za-z0-9]{12}', h.peer_directory), 'private_peer_directory')
     for source, name in ((ROOT / 'vm/fixtures/gui-clipboard-peer.py', 'fixture.py'),
@@ -360,6 +412,7 @@ def suite(h, result):
     private(h.directory / 'browser-attempt.json', {
         'unit': 'lucent-gui-clipboard-' + h.tag + '.service',
         'directory': h.peer_directory, 'run_id': h.tag, 'typed_name_absent': True})
+    h.phase = 'browser_start'
     h.browser_attempted = True
     h.session('systemd-run', '--user', '--quiet', '--collect', '--property=Type=exec',
               '--property=RuntimeMaxSec=210s', '--property=TimeoutStopSec=10s',
@@ -371,14 +424,17 @@ def suite(h, result):
     def capture_origin():
         h.browser_origin = h.call_peer('origin')
         return True
+    h.phase = 'browser_origin'
     h.eventually(capture_origin, 'original_browser_wrapper_receipt_available')
     private(h.directory / 'browser-origin.json', h.browser_origin)
     def capture_browser():
         h.browser_identity = h.call_peer('admit')
         return True
+    h.phase = 'browser_admission'
     h.eventually(capture_browser, 'original_browser_full_identity_available', timeout=35)
     private(h.directory / 'browser-admission.json', h.browser_identity)
     h.browser_started = True
+    h.phase = 'browser_window'
     h.eventually(lambda: len(json.loads(h.session('hyprctl', '-j', 'clients'))) == 1,
                  'owned_real_chromium_window', timeout=35)
     current_window = json.loads(h.session('hyprctl', '-j', 'clients'))
@@ -389,6 +445,7 @@ def suite(h, result):
     h.input_guard()
     result['checks']['real_owned_wayland_browser_and_unit'] = True
 
+    h.phase = 'notes_visibility'
     settings = copy.deepcopy(baseline['settings'])
     layout = notes.expected_layout(h, settings)
     if 'notes' not in layout['visible_widgets']:
@@ -398,10 +455,12 @@ def suite(h, result):
     h.cli('widget', 'notes', 'show')
     h.saved()
 
+    h.phase = 'browser_copy'
     source = h.focus_browser('seed')
     require(source['sha256'] == sha(SOURCE_TEXT), 'owned_browser_source_selected')
     h.key(29, notes.LETTERS['c'])
     h.eventually(lambda: h.clip('read')['sha256'] == sha(SOURCE_TEXT), 'real_browser_copy_offer')
+    h.phase = 'browser_to_notes'
     h.focus_notes()
     h.notes.add(SOURCE_TEXT)
     h.key(29, 30)
@@ -411,10 +470,12 @@ def suite(h, result):
                             multiline_combining_emoji_cjk_preserved=True,
                             browser_offer_replaces_notes_selection=True)
 
+    h.phase = 'notes_copy'
     h.replace(DESTINATION_TEXT)
     h.key(29, 30)
     h.key(29, notes.LETTERS['c'])
     h.eventually(lambda: h.clip('read')['sha256'] == sha(DESTINATION_TEXT), 'real_native_notes_copy_offer')
+    h.phase = 'notes_to_browser'
     h.focus_browser('clear')
     h.key(29, notes.LETTERS['v'])
     h.eventually(lambda: h.call_peer('dom', 'read')['sha256'] == sha(DESTINATION_TEXT),
@@ -429,6 +490,7 @@ def restore(h, result):
     h.target = None
     h.input_deadline = None
     if h.browser_attempted:
+        h.phase = 'browser_retirement'
         try:
             require(h.start_acknowledged and h.browser_origin is not None,
                     'acknowledged_original_browser_receipt_required_for_retirement')
@@ -438,18 +500,22 @@ def restore(h, result):
             h.eventually(lambda: not json.loads(h.session('hyprctl', '-j', 'clients')),
                          'owned_browser_windows_retired', timeout=15)
             result['restoration']['owned_browser_retired'] = True
-        except Exception:
+        except Exception as error:
+            record_restoration_failure(h, result, error, h.phase)
             result['restoration']['owned_browser_retired'] = False
     # Do not stop/restart Lucent under foreign/secure UI or uncertain browser
     # ownership. Retain private checkpoints for guarded manual restoration.
+    h.phase = 'notes_restoration'
     try:
         require(not h.browser_attempted or result['restoration'].get('owned_browser_retired'),
                 'owned_browser_retired_before_notes_restoration')
         h.input_guard()
         notes.restore(h, result)
-    except Exception:
+    except Exception as error:
+        record_restoration_failure(h, result, error, h.phase)
         result['restoration']['guarded_notes_restoration'] = False
     if h.original_cursor is not None:
+        h.phase = 'cursor_restoration'
         try:
             current = json.loads(h.session('hyprctl', '-j', 'cursorpos'))
             require(current == h.last_cursor, 'cursor_still_at_last_owned_position')
@@ -458,13 +524,16 @@ def restore(h, result):
             require(json.loads(h.session('hyprctl', '-j', 'cursorpos')) == h.original_cursor,
                     'original_cursor_restored')
             result['restoration']['original_cursor'] = True
-        except Exception:
+        except Exception as error:
+            record_restoration_failure(h, result, error, h.phase)
             result['restoration']['original_cursor'] = False
     if h.peer_initialized and result.get('completed_checks') and all(result['restoration'].values()):
+        h.phase = 'profile_cleanup'
         try:
             h.call_peer('cleanup')
             result['restoration']['owned_private_profile_removed'] = True
-        except Exception:
+        except Exception as error:
+            record_restoration_failure(h, result, error, h.phase)
             result['restoration']['owned_private_profile_removed'] = False
 
 
@@ -495,17 +564,24 @@ def main():
     signal.signal(signal.SIGINT, interrupted)
     try:
         h = Harness(args, directory)
+        h.phase = 'native_suite'
         suite(h, result)
         result['completed_checks'] = True
     except Exception as error:
-        result['failed_check'] = str(error) if isinstance(error, CheckFailure) else type(error).__name__
-        if h is not None and getattr(h, 'last_peer_failure', None) is not None:
+        details = failure_details(error, getattr(h, 'phase', 'harness_init'))
+        result['primary_failure'] = details
+        result['failed_check'] = details['fixed_reason'] if details['fixed_reason'] != 'unclassified_host_failure' else details['error_class']
+        if h is not None and error is getattr(h, 'last_peer_error', None):
             result['primary_peer_failure'] = copy.deepcopy(h.last_peer_failure)
     finally:
         if h is not None:
+            # Suite retries are historical once restoration begins; only a
+            # failure from a restoration operation belongs to this phase.
+            h.last_peer_failure = h.last_peer_error = None
             try:
                 restore(h, result)
-            except Exception:
+            except Exception as error:
+                record_restoration_failure(h, result, error, 'unexpected_restoration')
                 result['restoration']['unexpected_restoration_failure'] = False
             if getattr(h, 'last_peer_failure', None) is not None \
                     and h.last_peer_failure != result.get('primary_peer_failure'):
