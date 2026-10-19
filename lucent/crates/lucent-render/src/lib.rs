@@ -17,6 +17,8 @@ mod presentation;
 mod profiling;
 pub use profiling::{PaintProfile, RenderProfile, ResourceProfile};
 mod fallback;
+#[cfg(all(test, target_os = "linux"))]
+mod font_resources;
 mod raster;
 mod scene;
 pub use cache::CacheStats;

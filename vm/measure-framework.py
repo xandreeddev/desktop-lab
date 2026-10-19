@@ -29,15 +29,20 @@ def stay_awake(remote):
 
 
 @contextmanager
-def frame_profiling(remote, session, enabled):
+def frame_profiling(remote, session, enabled, presentation=False):
     """A private runtime-only unit override, removed even after measurement failure."""
-    if not enabled:
+    if not enabled and not presentation:
         yield
         return
     tag = uuid.uuid4().hex
     prefix = "from pathlib import Path; import os,sys; p=Path('/run/user')/str(os.getuid())/'systemd/user/lucent.service.d'/('90-lucent-measure-'+sys.argv[1]+'.conf'); "
     try:
-        remote('python3', '-c', prefix + "p.parent.mkdir(parents=True,exist_ok=True); p.open('x').write('[Service]\\nEnvironment=LUCENT_PROFILE_FRAMES=1\\n')", tag)
+        config = '[Service]\n'
+        if enabled:
+            config += 'Environment=LUCENT_PROFILE_FRAMES=1\n'
+        if presentation:
+            config += 'Environment=LUCENT_PROFILE_PRESENTATION=1\n'
+        remote('python3', '-c', prefix + "p.parent.mkdir(parents=True,exist_ok=True); p.open('x').write("+repr(config)+")", tag)
         session('systemctl', '--user', 'daemon-reload')
         yield
     finally:
@@ -73,7 +78,7 @@ def resident_breakdown(remote, pid):
             for key, value in [line.split(':', 1)] if key in keys}
 
 
-def measure(h, seconds, require_profile=False):
+def measure(h, seconds, require_profile=False, require_presentation=False):
     cli, inspect, session, remote = h['cli'], h['inspect'], h['session'], h['remote']
     # Capture provenance before the workload; development may continue during a long idle run.
     root = Path(__file__).resolve().parents[1]
@@ -85,6 +90,8 @@ def measure(h, seconds, require_profile=False):
     h['eventually'](lambda: inspect()['client']['background_ready'], 'Startup did not produce a wallpaper', timeout=60)
     ready_ms = (time.monotonic() - started) * 1000
     startup = inspect()
+    if require_presentation and not startup.get('presentation_feedback', {}).get('enabled'):
+        raise AssertionError('Presentation feedback did not activate; check the installed runtime and temporary override')
     if require_profile and not startup.get('frame_profiling'):
         raise AssertionError('Frame profiling did not activate; install the profiling-capable runtime and check service overrides')
     cli('launcher', 'close')
@@ -113,7 +120,11 @@ def measure(h, seconds, require_profile=False):
         intervals = [b-a for a, b in zip(frames, frames[1:])]
         if len(intervals) < 2:
             raise AssertionError('Too few submitted frames to measure animation')
-        transitions.append({'action': action, 'warmup': len(transitions) < 2, 'frames': len(frames),
+        compositor = runpy.run_path(str(root/'vm/measure-daily-resources.py'), run_name='presentation_helpers')['presentation_intervals']
+        presentation = compositor([sample for sample in surface.get('presentation', {}).get('samples', []) if sample['requested_at_ms'] >= start])
+        transitions.append({'action': action, 'warmup': len(transitions) < 2,
+                            'cache_phase': 'first_after_process_restart' if len(transitions) < 2 else 'warm',
+                            'compositor_presentation': presentation, 'frames': len(frames),
                             'median_frame_interval_ms': round(statistics.median(intervals), 2),
                             'max_frame_interval_ms': round(max(intervals), 2),
                             'observed_frame_span_ms': round(frames[-1]-frames[0], 2),
@@ -150,6 +161,7 @@ def measure(h, seconds, require_profile=False):
               'restart_to_background_ready_ms': round(ready_ms, 2),
               'animations': transitions, 'idle': idle, 'idle_extra_frames': extra,
               'frame_profiling': before_idle.get('frame_profiling', False),
+              'presentation_capture': after_idle.get('presentation_feedback'),
               'startup_profiles': {s['id']: summarize_profiles(s, 0) for s in startup['surfaces']} if require_profile else None,
               'profile_memory_before_idle': before_idle.get('profile_memory'),
               'profile_memory_after_idle': after_idle.get('profile_memory'),
@@ -176,14 +188,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--seconds', type=int, default=120)
     parser.add_argument('--profile', action='store_true', help='Temporarily enable bounded per-frame CPU-stage profiling')
+    parser.add_argument('--presentation', action='store_true', help='Temporarily observe compositor presentation timestamps independently of submissions')
     args = parser.parse_args()
     if args.seconds < 1:
         parser.error('seconds must be positive')
     h = runpy.run_path(str(Path(__file__).with_name('test-framework.py')), run_name='harness')
     with stay_awake(h['remote']):
-        with frame_profiling(h['remote'], h['session'], args.profile):
-            measure(h, args.seconds, args.profile)
-        if args.profile:
+        with frame_profiling(h['remote'], h['session'], args.profile, args.presentation):
+            measure(h, args.seconds, args.profile, args.presentation)
+        if args.profile or args.presentation:
             h['eventually'](lambda: h['inspect']()['client']['background_ready'], 'Original runtime did not become ready after profiling', timeout=60)
 
 
