@@ -1,6 +1,8 @@
 //! Layout, hit testing and retained interaction state for declarative components.
+mod overlay;
 mod pointer;
 use lucent_api::*;
+pub use overlay::OverlayScene;
 mod scroll;
 pub use scroll::{FocusClip, ScrollHit};
 #[cfg(test)]
@@ -97,6 +99,7 @@ pub struct Scene<M> {
     pub paint: Vec<Paint>,
     pub hits: Vec<Hit<M>>,
     pub regions: Vec<Clip>,
+    pub overlays: OverlayScene<M>,
 }
 impl<M> Default for Scene<M> {
     fn default() -> Self {
@@ -104,6 +107,7 @@ impl<M> Default for Scene<M> {
             paint: vec![],
             hits: vec![],
             regions: vec![],
+            overlays: OverlayScene::default(),
         }
     }
 }
@@ -301,6 +305,8 @@ impl Layout {
         now: f64,
     ) -> Scene<M> {
         let mut scene = Scene::default();
+        let overlays = overlay::Definitions::new(root);
+        overlays.request(&mut scene.overlays);
         let rect = Rect::new(0., 0., width, height);
         self.place(
             root,
@@ -319,6 +325,7 @@ impl Layout {
             }]),
             "root",
         );
+        self.compose_overlays(overlays, rect, &mut scene, interaction, now);
         scene
     }
     #[allow(clippy::too_many_arguments)]
@@ -364,6 +371,7 @@ impl Layout {
         } else {
             clip.clone()
         };
+        scene.overlays.anchor(&id, rect, &clip);
         let p = e.style.padding;
         let inner = Rect::new(
             rect.x + p.horizontal,
@@ -467,6 +475,7 @@ impl Layout {
             || e.text_edit.is_some()
             || e.drag.is_some()
             || e.hover.is_some()
+            || e.tooltip.is_some()
             || e.slider.is_some()
             || e.scroll.is_some();
         if e.style.background.3 > 0. && alpha > 0. {
@@ -893,6 +902,7 @@ pub struct Interaction<M> {
     input_buffer: Option<(String, String)>,
     slider_buffer: Option<(String, f32)>,
     scroll_buffer: BTreeMap<String, f32>,
+    overlays: overlay::State<M>,
     text_navigation: Option<text_area::Navigation>,
 }
 impl<M> Default for Interaction<M> {
@@ -909,6 +919,7 @@ impl<M> Default for Interaction<M> {
             input_buffer: None,
             slider_buffer: None,
             scroll_buffer: BTreeMap::new(),
+            overlays: overlay::State::default(),
             text_navigation: None,
         }
     }
@@ -1017,6 +1028,7 @@ impl<M: Clone> Interaction<M> {
                 .find(|h| &h.id == id && h.input.is_some())
                 .map(|h| (id.clone(), h.value.clone()))
         });
+        self.synchronize_overlays(scene);
     }
     /// Whether current input contains a multiline editor. Runtime uses this to
     /// refresh CPU geometry before queued native input, without a GPU submission.
@@ -1048,9 +1060,14 @@ impl<M: Clone> Interaction<M> {
     }
     pub fn animating(&self, now: f64) -> bool {
         self.motions.values().any(|m| m.active(now))
+            || self
+                .overlays
+                .motion
+                .is_some_and(|motion| motion.active(now))
     }
     /// A surface leave ends hover without fabricating a pointer position or dragging.
     pub fn leave(&mut self, now: f64) {
+        self.overlays.hover = None;
         self.alternate_press = None;
         if let Some(old) = self.hovered.take() {
             self.motions.entry(old).or_insert(Motion::fixed(1.)).target(
@@ -1066,6 +1083,7 @@ impl<M: Clone> Interaction<M> {
         let mut out = vec![];
         let hit = scene.hits.iter().rev().find(|h| h.contains(x, y));
         let id = hit.map(|h| h.id.clone());
+        self.observe_tooltip_hover(hit, now);
         if id != self.hovered {
             if let Some(old) = &self.hovered {
                 self.motions
@@ -1142,6 +1160,10 @@ impl<M: Clone> Interaction<M> {
         y: f32,
         modifiers: KeyModifiers,
     ) -> Option<M> {
+        self.overlays.suppressed = self.hovered.clone();
+        if let Some(message) = self.popover_outside_press(scene, x, y) {
+            return Some(message);
+        }
         self.focus_visible = false;
         self.slider_buffer = None;
         self.text_navigation = None;
@@ -1277,7 +1299,9 @@ impl<M: Clone> Interaction<M> {
         )
     }
     pub fn wheel(&mut self, scene: &Scene<M>, x: f32, y: f32, event: WheelEvent) -> Option<Vec<M>> {
-        let hit = scene.hits.iter().rev().find(|h| h.contains(x, y))?;
+        let Some(hit) = scene.hits.iter().rev().find(|h| h.contains(x, y)) else {
+            return scene.overlays.has_active_popover().then(Vec::new);
+        };
         if !event.horizontal.is_finite() || !event.vertical.is_finite() {
             return Some(vec![]);
         }
@@ -1304,9 +1328,16 @@ impl<M: Clone> Interaction<M> {
                 return Some(vec![scroll.event(value)]);
             }
         }
-        handled.then(Vec::new)
+        (handled || scene.overlays.has_active_popover()).then(Vec::new)
     }
     pub fn key(&mut self, scene: &Scene<M>, key: &Key) -> Vec<M> {
+        if let Some(messages) = self.popover_key(scene, key) {
+            return messages;
+        }
+        self.key_controls(scene, key)
+    }
+    fn key_controls(&mut self, scene: &Scene<M>, key: &Key) -> Vec<M> {
+        self.suppress_tooltip_key(scene, key);
         self.focus_visible = true;
         if matches!(key.unmodified(), Key::ContextMenu) {
             return scene
@@ -1390,7 +1421,7 @@ impl<M: Clone> Interaction<M> {
                 (start + step) % count
             };
             let hit = &scene.hits[index];
-            hit.tab_stop
+            (hit.tab_stop && scene.overlays.allows_focus(&hit.id))
                 .then(|| scroll::reveal(hit, &self.scroll_buffer))
                 .flatten()
                 .map(|plan| (hit, plan))

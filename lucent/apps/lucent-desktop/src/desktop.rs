@@ -2139,7 +2139,8 @@ impl api::Application for Desktop {
                 margins: Default::default(),
                 redraw_group: None,
                 width: 0,
-                height: panel::BAR_HEIGHT as u32,
+                height: (panel::BAR_HEIGHT + lucent_design::component::tooltip::SURFACE_ROOM)
+                    as u32,
                 exclusive_zone: panel::BAR_HEIGHT as i32,
                 keyboard: Keyboard::None,
                 visible: self.bar_visible,

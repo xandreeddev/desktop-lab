@@ -219,7 +219,8 @@ impl Desktop {
                 0,
                 bar_icon("apps")
                     .on_click(Message::Tray(crate::tray::Message::Toggle))
-                    .id("bar-tray"),
+                    .id("bar-tray")
+                    .tooltip(self.theme().tooltip("Application tray", OverlaySide::Below)),
             );
         }
         if geometry.show_mute {
