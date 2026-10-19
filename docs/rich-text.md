@@ -1,11 +1,12 @@
 # Inline text: content, interaction and painting
 
 Source scope: accepted main `d00014509f13125fe4ccab3ce2e1fa3961a40dd3` includes the
-verified Display milestone. New script/bidi/fallback and ordinary IME paths belong to
-the implemented, unmerged cohort `5d3501ebd9e02dccca62f7c2f9cae59056e40a7a` (executable
-checks at `eec582ab`). Its controlled shaping/pixel/proxy checks do not establish native
-compositor IME interoperability. See [current readiness](current-readiness.md) for
-delivery and acceptance boundaries.
+verified Display milestone. The implemented, unmerged Text cohort is
+`9a3a51fce0d61a331c2c887ec02a60c31293049e`, including the soft-wrap bidi correction.
+Its Rust/visual and native acceptance remain pending. The earlier `5d3501eb`
+cohort's passing checks retain their original source scope; they do not validate
+this correction or establish native compositor IME interoperability. See
+[current readiness](current-readiness.md) for delivery and acceptance boundaries.
 
 `Element::rich_text(Vec<TextSpan>)` is a framework control. It knows registered
 font indices, colors, underline and opaque action identities. It does not parse

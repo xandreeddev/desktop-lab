@@ -4,12 +4,12 @@
   "status": "in_progress",
   "completion_rule": "An item is verified only when its behavior, boundary checks, documentation and applicable native integration checks have evidence. Implemented without verification remains incomplete.",
   "current_rollup": {
-    "snapshot_source_commit": "d0611935f6db0afe690826ba7190bd6650d814aa",
+    "snapshot_source_commit": "9a3a51fce0d61a331c2c887ec02a60c31293049e",
     "snapshot_date": "2026-10-19",
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted main d0001450 includes merged Display PR86. This documentation/native-tool snapshot also contains implemented, unmerged Text 5d3501eb and Application bb304907 source; those are not counted as delivered or natively accepted. Historical reports retain their exact execution sources and limitations.",
+    "scope": "Accepted main d0001450 includes merged Display PR86. Separately identified implemented, unmerged cohorts are Text 9a3a51fc and Application bb304907; those are not counted as delivered or natively accepted. Historical reports retain their exact execution sources and limitations.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -60,8 +60,8 @@
       {
         "id": "international-text",
         "status": "implemented_unmerged_native_pending",
-        "implemented": "Accepted main retains controlled editing/clipboard and the earlier shaping path. Implemented unmerged Text 5d3501eb adds script shaping, bidi visual source/caret maps, bounded fallback and opt-in IME with separately recorded controlled checks.",
-        "remaining": "Merge/deployment, preserving hard-paragraph bidi levels/context across soft rows, and native compositor IME acceptance; native pixel/scroll details, delayed clipboard/focus races and third-party GUI clipboard. Accessibility remains user-deferred.",
+        "implemented": "Accepted main retains controlled editing/clipboard and the earlier shaping path. Implemented unmerged Text 9a3a51fc adds script/fallback shaping and ordinary IME plus hard-paragraph levels across soft wraps, exact row-bound resolved context, line-local L1/L2, tab separator projection and stale-context cache canonicalization.",
+        "remaining": "Strict Rust/visual execution at 9a3a51fc, merge/deployment and native compositor IME acceptance; native pixel/scroll details, delayed clipboard/focus races and third-party GUI clipboard. Earlier 5d3501eb checks do not validate this correction. Accessibility remains user-deferred.",
         "guides": [
           "docs/text-editing.md",
           "docs/multiline-text.md",
@@ -162,15 +162,17 @@
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
-    "validation": "Display strict source a770: 821 Rust / 76 ignored, 109 Python and 582 tokens; compiled a7f differs only by four reviewed loading PNGs. Twenty-eight final non-updating Vulkan Display comparisons, guarded four-artifact deployment and seven actual native flows at c43 pass. Tooling b259 passes 116 Python checks, then one read-only proof validates the exact expected crash transition offline. Display merged through PR86 at d0001450. This documentation branch has not rerun Rust, GPU or native checks; its site/exact-head CI remain separate delivery gates.",
+    "validation": "Display strict source a770: 821 Rust / 76 ignored, 109 Python and 582 tokens; compiled a7f differs only by four reviewed loading PNGs. Twenty-eight final non-updating Vulkan Display comparisons, guarded four-artifact deployment and seven actual native flows at c43 pass. Tooling b259 passes 116 Python checks, then one read-only proof validates the exact expected crash transition offline. Display merged through PR86 at d0001450. This documentation branch has not rerun Rust, GPU or native checks; its site/exact-head CI remain separate delivery gates. Text 9a3a51fc has independent source review only at this snapshot; its strict Rust/visual and native checks remain pending. The prior 5d3501eb full 832-case visual CI passes only at its historical source. Exact-version driver install/rollback is verified; no native-context XML candidate or hardware Vulkan proof yet.",
     "accepted_main_base_commit": "d00014509f13125fe4ccab3ce2e1fa3961a40dd3",
     "implemented_unmerged_cohorts": [
       {
         "feature": "international-text",
-        "source_commit": "5d3501ebd9e02dccca62f7c2f9cae59056e40a7a",
-        "executable_checks_source_commit": "eec582ab0aa7c06b4ed30d24a0670c6a1df91e21",
-        "implementation": "Script shaping, paragraph bidi/visual stops, bounded fallback and opt-in text-input-v3 composition with secure-client opt-out.",
-        "pending": "Merge/deployment; wrapped mixed-direction paragraph/isolate correctness; native compositor IME and wider native text/GUI clipboard acceptance."
+        "source_commit": "9a3a51fce0d61a331c2c887ec02a60c31293049e",
+        "implementation": "Script shaping, deterministic fallback and ordinary opt-in IME, plus hard-paragraph levels across soft wraps, exact row-bound context, line-local upstream L1/L2, canonical tab separator projection and a stale-context text-cache guard.",
+        "pending": "Strict Rust/visual execution at 9a3a51fc; merge/deployment; native compositor IME and wider native text/GUI clipboard acceptance.",
+        "historical_executable_checks_source_commit": "eec582ab0aa7c06b4ed30d24a0670c6a1df91e21",
+        "historical_full_visual_source_commit": "5d3501ebd9e02dccca62f7c2f9cae59056e40a7a",
+        "historical_full_visual_cases": 832
       },
       {
         "feature": "application-integration",
@@ -180,7 +182,9 @@
       }
     ],
     "gpu_candidate": {
-      "status": "prepared_not_executed_at_documentation_snapshot",
+      "status": "driver_install_rollback_verified_xml_candidate_not_run",
+      "driver_install_rollback_verified": true,
+      "xml_candidate_executed": false,
       "hardware_acceptance": false,
       "performance_acceptance": false
     }
