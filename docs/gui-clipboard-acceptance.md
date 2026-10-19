@@ -24,6 +24,14 @@ helper may use `wl-copy` afterward to restore the original clipboard payload.
 
 ## Execution
 
+The frozen `41826937` native run passed browser-to-Notes transfer, exact
+multiline/combining/emoji/CJK preservation and replacement of the Notes
+selection. It then reached the Notes copy offer but refused reciprocal
+browser input because the original fixed 170-second input window expired.
+All 11 automatic restoration checks passed. The longer finite budgets below
+address measured guard/SSH overhead; reciprocal browser paste remains
+unaccepted until a fresh native run completes. That failed receipt is retained.
+
 Use the exclusive VM test lane after deploying and verifying the identified
 release. Do not run this alongside builds, benchmarks, another input driver or
 manual interaction. It does not boot, unlock or deploy the VM.
@@ -104,12 +112,18 @@ clipboard-provider process. Original text and Notes never enter the public
 report. Private evidence remains under `reports/local/` with mode 0700/0600.
 
 Chromium can move its original main process into a registered application scope.
-The original service's 210-second limit alone is not proof that this scope and
+The original service's 360-second limit alone is not proof that this scope and
 its descendants have drained. The wrapper starts a separate owned watchdog
 before exec. Its original unit receipt is durable before launch continues; it
 captures the same browser lease used by the host, requests graceful PIDfd
-retirement after 180 seconds, and verifies the original service and scope drain.
-The watchdog has its own 240-second systemd limit and 235-second process alarm.
+retirement after 330 seconds, and verifies the original service and scope drain.
+The watchdog has its own 390-second systemd limit and 385-second process alarm,
+preserving the existing 55-second retirement allowance. The host input window is
+a fixed 300 seconds from before browser startup and is never renewed by successful
+guards. Keep an outer host limit of at least 600 seconds with a 90-second stop
+allowance so normal interruption can run the guarded restoration path, including
+the 35-second desktop stability check. None of these limits grants permission to
+retry input or skip ownership/focus checks.
 An unverified lease or failed drain remains a failure with private evidence.
 **A host crash does not automatically restore
 Notes, clipboard history or its helper.** The private checkpoint and recovery

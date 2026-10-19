@@ -76,10 +76,14 @@ class InputAdmissionTests(unittest.TestCase):
 
     def test_timeout_cannot_be_extended_by_successful_previous_checks(self):
         h = self.harness()
-        h.input_deadline = 0
-        with self.assertRaisesRegex(driver.CheckFailure, 'bounded_native_input_window'):
+        h.input_deadline = 100 + driver.INPUT_WINDOW_SECONDS
+        with patch.object(driver.time, 'monotonic', return_value=399.99):
             h.input_guard()
-        self.assertEqual(self.peer_calls, [])
+        admitted_calls = list(self.peer_calls)
+        with patch.object(driver.time, 'monotonic', return_value=400), \
+             self.assertRaisesRegex(driver.CheckFailure, 'bounded_native_input_window'):
+            h.input_guard()
+        self.assertEqual(self.peer_calls, admitted_calls)
 
     def test_same_class_replacement_window_cannot_inherit_input_authority(self):
         h = self.harness()
