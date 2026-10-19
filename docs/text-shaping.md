@@ -105,9 +105,11 @@ Glyph dimensions, finite bearings and pixel count are validated before coverage
 allocation. One temporary outline has a bounded command count; masks are released
 after composing the string. No additional retained per-glyph map exists: the
 renderer's existing byte-budgeted text texture cache remains the reuse boundary.
-This closes the source-level whole-font outline allocation path. Actual cold/warm
-RSS, performance and 1×/2× raster acceptance still require recorded execution;
-source inspection alone is not a measured memory improvement.
+This closes the source-level whole-font outline allocation path. The
+[current-cohort preparation probe](../reports/measurements/lucent-font-preparation.json)
+records isolated cold/warm RSS and raster cost; it does not establish a historical
+reduction or desktop memory acceptance. The explicit Arabic style-mask Vulkan
+regression passes at 1×/2×. Broader native workload results remain separate.
 
 ## Input-method ownership
 
@@ -162,18 +164,22 @@ the example with a controlled, non-replacing native input-method peer. It refuse
 an existing input-method owner and requires exact deployed binary hashes and an
 idle unlocked guest before sending native input.
 
-The initial source cohort compiled the core crates and executed targeted API,
-Wayland and raster tests. It exposed incorrect test assumptions about Arabic
-glyph counts and bidi caret affinity, and a fixture assertion that read the
-intentionally empty legacy hit value. Subsequent source changes correct those
-tests, preserve visual affinity and add paragraph, metrics, atomic-edit and native
-protocol regression cases. This final cohort still requires its own compile,
-test and 1×/2× visual runs. Remote CI for `0bfdd8a0f69` passed strict workspace
-Clippy, then ran 94 UI tests successfully and exposed two failures: independently
-shaped Arabic styles and oversized-grapheme culling. The shared-mask and bounded
-coverage corrections above follow those failures; their new cohort has not yet
-been verified. No native compositor IME interoperability or memory
-acceptance is claimed by the presence of the harness or these source cases.
+The combined source `eec582ab0aa7c06b4ed30d24a0670c6a1df91e21` passes
+locked/offline local formatting, strict all-target workspace Clippy and the full
+workspace tests. [Its exact-source CI run](https://github.com/xandreeddev/desktop-lab/actions/runs/39303230650)
+also passes the workspace and controlled native service-protocol tests. This
+includes whole-paragraph bidi, mixed-script itemization, long-cluster reference
+comparisons, atomic composition and the local-socket keyboard/seat retirement
+regression. The latter exercises owned Wayland proxy lifetimes without connecting
+to the host display or claiming interoperability with a compositor input method.
+
+The explicit local Vulkan filters pass on RADV, including the Arabic style-mask
+comparison at 1×/2× and actual texture-alias/pixel tracing. The complete desktop
+CI render completed at 832 cases; 423 intentionally changed typography references
+were reviewed selectively, preserving 409 passing references. The final
+updated-reference full CI remains a separate gate; see the linked review.
+No native compositor IME interoperability or desktop memory acceptance is claimed
+by these controlled results.
 Accessibility bridging remains explicitly deferred by the user.
 
 
@@ -190,4 +196,5 @@ from distinct prepared-frame advancement, with no pixel-visibility claim. None
 of this changes text density,
 frame demand or the domain/component contracts. See [daily-performance.md](daily-performance.md)
 for the matched static/video workloads and protocol-flag limits. Compilation and
-measured resource/presentation acceptance for this combined cohort remain pending.
+controlled alias/pixel tests pass for the source above. Measured desktop
+resource/presentation acceptance remains pending.
