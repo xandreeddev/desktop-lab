@@ -19,7 +19,9 @@ import urllib.request
 
 sys.dont_write_bytecode = True
 from cdp_peer import Peer
-from owned_application_units import assert_unit_identity, retire_unit, unit_snapshot
+from owned_application_units import (assert_unit_identity, assert_unit_origin,
+                                     capture_unit_origin, process_snapshot,
+                                     retire_original_unit, retire_unit, unit_snapshot)
 
 SOURCE_TEXT = 'browser one\n雪 e\u0301 👩\u200d💻\nlast line\n'
 
@@ -38,10 +40,19 @@ def regular(path, limit=262144):
     with os.fdopen(descriptor, 'rb') as stream:
         before = os.fstat(stream.fileno())
         require(stat.S_ISREG(before.st_mode) and before.st_uid == os.getuid()
-                and before.st_size <= limit)
+                and 0 <= before.st_size <= limit)
+        identity = stable_file_identity(before)
+        require(stable_file_identity(path.lstat()) == identity)
         data = stream.read(limit + 1)
-        require(len(data) <= limit and os.fstat(stream.fileno()) == before)
+        require(len(data) <= limit and stable_file_identity(os.fstat(stream.fileno())) == identity
+                and stable_file_identity(path.lstat()) == identity)
         return data
+
+
+def stable_file_identity(value):
+    # Cold reads can change only atime; all identity/content metadata stays pinned.
+    return [value.st_dev, value.st_ino, value.st_mode, value.st_uid, value.st_gid,
+            value.st_size, value.st_mtime_ns, value.st_ctime_ns]
 
 
 def private(path, data):
@@ -78,6 +89,7 @@ def unit_name(run_id):
 
 def initialize(directory, run_id):
     directory, _ = context(directory, run_id, False)
+    require(unit_snapshot(unit_name(run_id))['load'] == 'not-found')
     require(Path('/usr/bin/chromium').is_file() and os.access('/usr/bin/chromium', os.X_OK))
     title = 'Lucent Clipboard ' + run_id
     document = ('<!doctype html><meta charset="utf-8"><title>' + title + '</title>'
@@ -94,18 +106,30 @@ def initialize(directory, run_id):
     print(json.dumps({'class': manifest['class'], 'source_sha256': digest(SOURCE_TEXT.encode())}))
 
 
-def owned_unit(directory, run_id, active=True):
+def absent(directory, run_id):
+    context(directory, run_id)
+    require(unit_snapshot(unit_name(run_id))['load'] == 'not-found')
+    print(json.dumps({'owned_unit_name_absent': True}))
+
+
+def owned_unit(directory, run_id, captured):
+    require(captured == json.loads(regular(directory / 'admission.json')))
     value = unit_snapshot(unit_name(run_id))
     assert_unit_identity(value, unit_name(run_id), argv(directory, run_id))
-    if active:
-        require(value['active'] == 'active' and value['main_pid'] > 1 and value['group'])
+    require(value['active'] == 'active' and value['main_pid'] > 1 and value['group'])
+    require({key: item for key, item in value.items() if key != 'active'} ==
+            {key: item for key, item in captured['unit'].items() if key != 'active'})
+    process = process_snapshot(value['main_pid'], max_executable_bytes=512*1024*1024)
+    require({key: item for key, item in process.items() if key != 'sha256'} ==
+            {key: item for key, item in captured['process'].items() if key != 'sha256'})
     return value
 
 
 def serve(directory, run_id):
     directory, manifest = context(directory, run_id)
-    value = owned_unit(directory, run_id)
-    require(value['main_pid'] == os.getpid() and not os.path.lexists(directory / 'profile'))
+    origin = capture_unit_origin(unit_name(run_id), argv(directory, run_id))
+    require(not os.path.lexists(directory / 'profile'))
+    private(directory / 'origin.json', json.dumps(origin).encode())
     command = ['/usr/bin/chromium', '--user-data-dir=' + str(directory / 'profile'),
                '--class=' + manifest['class'], '--ozone-platform=wayland',
                '--no-first-run', '--no-default-browser-check', '--disable-sync',
@@ -115,13 +139,48 @@ def serve(directory, run_id):
     os.execv(command[0], command)
 
 
-def clients(directory, run_id, values):
+def origin(directory, run_id):
+    directory, _ = context(directory, run_id)
+    receipt = json.loads(regular(directory / 'origin.json'))
+    value = unit_snapshot(unit_name(run_id))
+    assert_unit_origin(value, unit_name(run_id), argv(directory, run_id), receipt,
+                       max_executable_bytes=512*1024*1024)
+    print(json.dumps(receipt))
+
+
+def admit(directory, run_id):
     directory, manifest = context(directory, run_id)
+    if (directory / 'admission.json').exists():
+        captured = json.loads(regular(directory / 'admission.json'))
+        owned_unit(directory, run_id, captured)
+    else:
+        receipt = json.loads(regular(directory / 'origin.json'))
+        # The port and exact owned page exist only after Chromium has exec'd;
+        # never freeze an intermediate Python/shell executable as the browser.
+        peer = page(directory, manifest)
+        peer.close()
+        value = unit_snapshot(unit_name(run_id))
+        current = assert_unit_origin(value, unit_name(run_id), argv(directory, run_id), receipt,
+                                     max_executable_bytes=512*1024*1024, hashed=True)
+        require(value['active'] == 'active' and current is not None
+                and isinstance(current.get('sha256'), str)
+                and re.fullmatch(r'[0-9a-f]{64}', current['sha256']))
+        captured = {'unit': value, 'process': current}
+        require(unit_snapshot(unit_name(run_id)) == value)
+        private(directory / 'admission.json', json.dumps(captured).encode())
+        owned_unit(directory, run_id, captured)
+    print(json.dumps(captured))
+
+
+def clients(directory, run_id, request):
+    directory, manifest = context(directory, run_id)
+    values = request['clients']
     require(isinstance(values, list) and len(values) <= 1)
-    unit = owned_unit(directory, run_id)
+    unit = owned_unit(directory, run_id, request['identity'])
     for value in values:
         require(value.get('class') == manifest['class'] and type(value.get('pid')) is int
-                and value['pid'] > 1)
+                and value['pid'] == unit['main_pid'] and value.get('workspace', {}).get('name') ==
+                'lucent-clipboard-browser-' + run_id)
         process = Path('/proc') / str(value['pid'])
         require(process.stat().st_uid == os.getuid())
         groups = [line.split(':', 2)[2] for line in regular(process / 'cgroup').decode().splitlines()
@@ -149,9 +208,9 @@ def page(directory, manifest):
     return Peer.connect(target['webSocketDebuggerUrl'], port, target['id'])
 
 
-def dom(directory, run_id, operation):
+def dom(directory, run_id, operation, request):
     directory, manifest = context(directory, run_id)
-    owned_unit(directory, run_id)
+    owned_unit(directory, run_id, request['identity'])
     require(operation in ('seed', 'clear', 'read'))
     # No navigator.clipboard, Input.dispatchKeyEvent or document.execCommand.
     prepare = ('e.value=' + json.dumps(SOURCE_TEXT) + ';e.focus();e.select();') if operation == 'seed' else (
@@ -175,33 +234,46 @@ def dom(directory, run_id, operation):
                       'bytes': len(value['value'].encode())}))
 
 
-def retire(directory, run_id):
+def retire_owned(directory, run_id, request):
     directory, _ = context(directory, run_id)
-    retire_unit(unit_name(run_id), argv(directory, run_id))
+    if request.get('identity') is not None:
+        captured = request['identity']
+        require(captured == json.loads(regular(directory / 'admission.json')))
+        retire_unit(unit_name(run_id), argv(directory, run_id), captured=captured,
+                    max_executable_bytes=512*1024*1024)
+    else:
+        receipt = request['origin']
+        require(receipt == json.loads(regular(directory / 'origin.json')))
+        retire_original_unit(unit_name(run_id), argv(directory, run_id), receipt,
+                             max_executable_bytes=512*1024*1024)
+
+
+def retire(directory, run_id, request):
+    retire_owned(directory, run_id, request)
     print(json.dumps({'owned_browser_unit_retired': True}))
 
 
-def cleanup(directory, run_id):
+def cleanup(directory, run_id, request):
     directory, _ = context(directory, run_id)
-    retire_unit(unit_name(run_id), argv(directory, run_id))
+    retire_owned(directory, run_id, request)
     require(set(path.name for path in directory.iterdir()) <= {
         'fixture.py', 'owned_application_units.py', 'cdp_peer.py', 'manifest.json',
-        'document.html', 'profile'})
+        'document.html', 'profile', 'origin.json', 'admission.json'})
     shutil.rmtree(directory)
     print(json.dumps({'owned_private_profile_removed': True}))
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('initialize', 'serve', 'clients', 'dom', 'retire', 'cleanup'))
+    parser.add_argument('operation', choices=('initialize', 'absent', 'serve', 'origin', 'admit', 'clients', 'dom', 'retire', 'cleanup'))
     parser.add_argument('directory')
     parser.add_argument('run_id')
     parser.add_argument('extra', nargs='?')
     args = parser.parse_args()
-    if args.operation == 'clients':
-        clients(args.directory, args.run_id, json.load(sys.stdin))
+    if args.operation in ('clients', 'retire', 'cleanup'):
+        globals()[args.operation](args.directory, args.run_id, json.load(sys.stdin))
     elif args.operation == 'dom':
-        dom(args.directory, args.run_id, args.extra)
+        dom(args.directory, args.run_id, args.extra, json.load(sys.stdin))
     else:
         globals()[args.operation](args.directory, args.run_id)
 

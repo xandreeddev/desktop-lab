@@ -49,11 +49,16 @@ geometry, current workspace, closed shell panels, and every managed window.
 Every native layer must also belong to the current verified desktop executable;
 a matching `lucent-` namespace alone never grants input authority.
 Only the exact browser class with the original typed systemd `ExecStart` argv
-and process cgroup is admitted. A native active window alone is insufficient:
+and process cgroup is admitted. The native window address, original main PID,
+process birth, executable metadata and unit InvocationID remain frozen across
+input. The browser must remain on its dedicated workspace; Notes input also
+requires that no managed window has keyboard focus. A native active window alone is insufficient:
 the owned page must also report `document.hasFocus()` and the correct active
 textarea immediately before browser keyboard input. Tested text keys, chords,
 left-button and catchall bindings are rechecked against the compositor. Copy/paste additionally requires the selection's
 hash to be the original captured offer or one of this invocation's fixtures.
+Independent cursor movement permanently retires this invocation's pointer and
+input authority, even if the pointer later returns to its previous position.
 
 The DevTools client accepts only that profile's loopback port and exact page
 target for the owned file/title. It verifies the WebSocket handshake, rejects
@@ -88,6 +93,26 @@ workspace, cursor and idle marker when ownership still holds. A foreign workspac
 change blocks the restoration focus dispatch rather than taking focus away from
 that workspace.
 
+Typed unit-name absence is required during initialization and immediately before
+launch. The original wrapper writes a private InvocationID/PID-birth receipt
+before it execs Chromium. Only an acknowledged start followed by that original
+receipt can authorize retirement; full browser admission additionally waits for
+the owned page and hashes the running executable once. Subsequent checks compare
+its stable metadata and process birth instead of rehashing Chromium on every key.
+A refused or lost start reply cannot authorize stopping an existing lookalike.
+All explicit retirement paths carry either the original wrapper receipt or the
+captured browser identity and refuse same-name successor invocations, including
+those observed after StopUnit. The original unit keeps its own systemd lifetime
+limit; the harness never substitutes name-only fallback cleanup.
+
+Notes restoration starts only after original-browser retirement and a fresh
+unlocked, idle, no-foreign-client/cursor guard. If either fails, the driver leaves
+the desktop service running and retains the private Notes/clipboard checkpoint
+for guarded recovery. It does not stop the desktop under new authorization UI.
+Fixture reads pin device, inode, mode, owner, group, size, modification time and
+change time, plus bounded bytes and pathname identity. Read-access time alone is
+excluded because a cold read may legitimately update it under relatime.
+
 This test does not establish rich HTML/image clipboard behavior, other
 applications, delayed-provider/focus-retirement races, physical hardware, IME
 input or rendered complex-script correctness. Those remain separate acceptance.
@@ -96,4 +121,5 @@ Transport boundary checks without a VM:
 
 ```sh
 python3 -m unittest discover -s tests -p test_cdp_peer.py -v
+python3 -m unittest discover -s tests -p 'test_gui_clipboard*.py' -v
 ```
