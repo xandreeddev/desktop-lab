@@ -273,6 +273,34 @@ pub enum NetworkCommand {
         remember: bool,
     },
 }
+/// A single interactive credential exchange, retired on cancellation, profile
+/// replacement, daemon loss or response. It is not a saved profile identity.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct NetworkCredentialRequestId(u64);
+impl NetworkCredentialRequestId {
+    pub fn new(value: u64) -> Result<Self> {
+        if value == 0 {
+            return Err(DomainError::Invalid(
+                "Network credential identity is empty".into(),
+            ));
+        }
+        Ok(Self(value))
+    }
+    pub fn value(self) -> u64 {
+        self.0
+    }
+}
+/// Nonsecret description of an actual backend credential request. The stable
+/// profile key describes the destination; only the live request authorizes reply.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NetworkCredentialRequest {
+    pub id: NetworkCredentialRequestId,
+    pub profile: NetworkProfileKey,
+    pub name: String,
+    pub ssid: NetworkSsid,
+    pub security: WifiSecurity,
+    pub new_secret_required: bool,
+}
 pub trait NetworkPort: Send + Sync {
     /// One cancellable observer owns the native connection and reconnects. An
     /// error is unavailable state, never a fabricated disconnected snapshot.
@@ -283,6 +311,33 @@ pub trait NetworkPort: Send + Sync {
     /// operation; cancellation cannot undo it. Forget deactivates then deletes,
     /// and is not atomic. Known-stale identities fail instead of retargeting.
     fn control(&self, command: NetworkCommand) -> Result<()>;
+    /// Observe actual interactive requests independently of command admission.
+    /// This must continue while a native activation is awaiting its reply. The
+    /// snapshot contains no credentials; an empty list retires previous requests.
+    fn watch_credentials(
+        &self,
+        emit: &mut dyn FnMut(Result<Vec<NetworkCredentialRequest>>),
+        stop: &dyn StopSignal,
+    ) {
+        emit(Err(DomainError::Unavailable(
+            "Network credential prompts are unavailable".into(),
+        )));
+        while !stop.cancelled() {
+            stop.wait(std::time::Duration::from_secs(1));
+        }
+    }
+    /// Consume a response to exactly one still-live request. None explicitly
+    /// cancels it. Success acknowledges answer delivery, not association or save.
+    /// Never retain/replay the credentials, even after an uncertain completion.
+    fn answer_credentials(
+        &self,
+        _request: NetworkCredentialRequestId,
+        _credentials: Option<WifiCredentials>,
+    ) -> Result<()> {
+        Err(DomainError::Unavailable(
+            "Network credential responses are unavailable".into(),
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -299,6 +354,8 @@ mod tests {
     }
     #[test]
     fn handles_strength_and_stable_keys_have_distinct_validated_invariants() {
+        assert!(NetworkCredentialRequestId::new(0).is_err());
+        assert_eq!(NetworkCredentialRequestId::new(7).unwrap().value(), 7);
         assert!(NetworkObjectId::new(0).is_err());
         assert_eq!(NetworkObjectId::new(3).unwrap().value(), 3);
         assert!(NetworkStrength::new(101).is_err());

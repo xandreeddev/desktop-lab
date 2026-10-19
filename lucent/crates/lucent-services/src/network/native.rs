@@ -132,6 +132,7 @@ fn removed_object(error: &zbus::Error, path: &str, interface: &str, member: &str
 pub(super) async fn connect(
     address: Option<&str>,
     timeout: Duration,
+    secret_agent: bool,
 ) -> Result<(Transport, Signals)> {
     let deadline = Instant::now() + timeout;
     bounded(
@@ -142,7 +143,13 @@ pub(super) async fn connect(
             }
             .map_err(bus_error)?;
             let connection = builder
-                .method_timeout(timeout)
+                // Each ordinary call still has its owner's absolute deadline.
+                // A real SecretAgent exchange may legitimately wait for a user.
+                .method_timeout(if secret_agent {
+                    timeout + timeout + agent::PROMPT_TIMEOUT
+                } else {
+                    timeout
+                })
                 .build()
                 .await
                 .map_err(bus_error)?;
@@ -208,6 +215,7 @@ async fn service_owner(connection: &Connection) -> Result<String> {
 }
 #[derive(Default)]
 pub(super) struct Notices {
+    pub credentials: Option<Arc<agent::Hub>>,
     pub dirty: bool,
     pub removed: BTreeSet<String>,
 }
@@ -216,6 +224,31 @@ impl Notices {
         self.dirty = true;
         let header = message.header();
         let member = header.member().map(|s| s.as_str()).unwrap_or("");
+        // While Activate is awaiting an interactive reply, snapshots are
+        // deferred. Retire this exact profile's credential authority as soon
+        // as its settings change instead of leaving the old prompt usable.
+        // The stream is pinned to the current unique NetworkManager sender.
+        let profile_changed = match member {
+            "Updated" if header.interface().is_some_and(|i| i.as_str() == PROFILE) => true,
+            "PropertiesChanged"
+                if header
+                    .interface()
+                    .is_some_and(|i| i.as_str() == "org.freedesktop.DBus.Properties") =>
+            {
+                let (interface, _changed, _invalidated) = message
+                    .body()
+                    .deserialize::<(String, Properties, Vec<String>)>()
+                    .map_err(|_| protocol())?;
+                interface == PROFILE
+            }
+            _ => false,
+        };
+        if profile_changed
+            && let Some(path) = header.path()
+            && let Some(hub) = &self.credentials
+        {
+            hub.invalidate(path.as_str());
+        }
         let removed = match member {
             "DeviceRemoved" | "AccessPointRemoved" | "ConnectionRemoved" => Some(
                 message
@@ -230,6 +263,9 @@ impl Notices {
             _ => None,
         };
         if let Some(path) = removed {
+            if let Some(hub) = &self.credentials {
+                hub.invalidate(&path);
+            }
             if self.removed.len() >= REMOVAL_LIMIT {
                 return Err(unavailable(
                     "Network change burst exceeded the observation bound",
@@ -306,8 +342,20 @@ impl Signals {
         stop: &dyn StopSignal,
         notices: &mut Notices,
     ) -> Result<T> {
+        self.pump_interactive(operation, deadline, stop, notices, &|| None)
+            .await
+    }
+    pub async fn pump_interactive<T>(
+        &mut self,
+        operation: impl Future<Output = Result<T>>,
+        deadline: Option<Instant>,
+        stop: &dyn StopSignal,
+        notices: &mut Notices,
+        interactive: &dyn Fn() -> Option<Instant>,
+    ) -> Result<T> {
         let mut operation = pin!(operation);
         loop {
+            let deadline = interactive().or(deadline);
             if stop.cancelled() {
                 return Err(unavailable("Network observation cancelled"));
             }

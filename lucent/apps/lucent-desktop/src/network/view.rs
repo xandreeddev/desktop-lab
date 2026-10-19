@@ -177,25 +177,35 @@ impl Network {
         } else if !supported {
             rows.push(text("Choose an existing configured profile. Creating this security type is not supported yet.",theme));
         }
-        rows.push(button(
-            if form.remember {
-                "Remember network · on"
-            } else {
-                "Remember network · off"
-            },
-            "network-remember",
-            Message::Remember(generation),
-            self.active.is_none(),
-            theme,
-        ));
+        if !matches!(form.target, Target::Credentials { .. }) {
+            rows.push(button(
+                if form.remember {
+                    "Remember network · on"
+                } else {
+                    "Remember network · off"
+                },
+                "network-remember",
+                Message::Remember(generation),
+                self.active.is_none(),
+                theme,
+            ));
+        } else {
+            rows.push(text("Update the password for this saved connection. NetworkManager manages its storage; no duplicate profile is created.", theme).font(font::CAPTION));
+        }
         rows.push(
             Element::row(vec![
                 button("Back", "network-form-back", Message::Cancel, true, theme),
                 button(
-                    "Connect",
+                    if form.credential_request().is_some() {
+                        "Continue"
+                    } else {
+                        "Connect"
+                    },
                     "network-connect",
                     Message::Submit(generation),
-                    supported && self.active.is_none(),
+                    supported
+                        && self.credential_reply.is_none()
+                        && (form.credential_request().is_some() || self.active.is_none()),
                     theme,
                 )
                 .background(theme.primary)

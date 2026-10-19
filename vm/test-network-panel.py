@@ -10,6 +10,8 @@ import argparse
 import ast
 import importlib.util
 import json
+import os
+import stat
 from pathlib import Path
 from native_surfaces import active_surfaces, find_surface, role
 import runpy
@@ -18,6 +20,7 @@ import subprocess
 import time
 import uuid
 import lab
+from preservation_fingerprint import fingerprint
 
 spec = importlib.util.spec_from_file_location('network_input', Path(__file__).with_name('test-framework.py'))
 v = importlib.util.module_from_spec(spec)
@@ -67,7 +70,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--login-file', type=Path, required=True)
     args = parser.parse_args()
-    password = next(line.split(':',1)[1].strip() for line in args.login_file.read_text().splitlines() if line.startswith('Password:'))
+    info=args.login_file.lstat()
+    assert stat.S_ISREG(info.st_mode) and info.st_uid==os.getuid() and stat.S_IMODE(info.st_mode)==0o600 and info.st_size<=8192
+    descriptor=os.open(args.login_file,os.O_RDONLY|os.O_NOFOLLOW)
+    with os.fdopen(descriptor) as stream:
+        content=stream.read(8193)
+    assert len(content)<=8192
+    passwords=[line.split(':',1)[1].strip() for line in content.splitlines() if line.startswith('Password:')]
+    assert len(passwords)==1 and 0<len(passwords[0])<=4096
+    password=passwords.pop()
 
     def root(*command):
         return subprocess.check_output(lab.ssh_args('lucent') + ['sudo -S -p "" '+shlex.join(command)], input=password+'\n', text=True, stderr=subprocess.DEVNULL)
@@ -81,6 +92,7 @@ def main():
     routes=json.loads(v.remote('ip','-j','route','show','default'))
     desktop_pid=v.remote('pgrep','-x','lucent-desktop').strip()
     wallpaper=v.inspect()['client']['wallpaper']
+    before_preservation=fingerprint(v.session)
     directory='/tmp/lucent-network-'+uuid.uuid4().hex
     v.remote('mkdir','-m','700',directory)
     subprocess.run(lab.ssh_args('lucent')+['cat > '+shlex.quote(directory+'/fixture.py')],input=Path(__file__).with_name('network_fixture.py').read_bytes(),check=True)
@@ -129,6 +141,55 @@ def main():
         click('network-tab-Saved');click('network-activate-'+str(profile['id']))
         v.eventually(connected,'Saved activation did not connect',timeout=35)
         assert v.remote('nmcli','-g','GENERAL.CON-UUID','device','show',fixture['station']).strip()==profile['key']
+        # Repair an existing saved profile through the actual SecretAgent
+        # request, never by starting another AddAndActivate join.
+        def disconnect_fixture():
+            click('network-tab-Active')
+            current=next(c for c in state()['connections'] if device['id'] in c['devices'])
+            click('network-disconnect-'+str(current['id']))
+            v.eventually(lambda:not connected() and not any(device['id'] in c['devices'] for c in state()['connections']),'Owned profile did not disconnect',timeout=35)
+            click('network-tab-Saved')
+
+        def same_profile():
+            matches=[p for p in state()['profiles'] if p['ssid']==ssid]
+            assert len(matches)==1 and matches[0]['key']==profile['key'], 'Credential repair created or replaced the saved profile'
+            return matches[0]
+
+        disconnect_fixture()
+        root('python3',directory+'/fixture.py','wrong-secret',directory,profile['key'])
+        click('network-activate-'+str(same_profile()['id']))
+        v.eventually(lambda:state()['form'] is not None and state()['form'].get('credential_request') is not None,'Wrong saved password did not produce a native credential request',timeout=95)
+        cancelled_generation=state()['form']['generation']
+        field='network-password-'+str(cancelled_generation)
+        click(field);enter('discard-this-fixture-value',field)
+        assert 'discard-this-fixture-value' not in json.dumps(v.inspect())
+        v.key(1) # Native Escape cancels this exchange, keeping the panel open.
+        v.eventually(lambda:state()['form'] is None and not state()['busy'],'Credential cancellation did not retire the form',timeout=35)
+        v.eventually(lambda:not connected() and not any(device['id'] in c['devices'] for c in state()['connections']),'Cancelled authentication remained active',timeout=35)
+        same_profile()
+        root('python3',directory+'/fixture.py','clear-secret',directory,profile['key'])
+        click('network-activate-'+str(same_profile()['id']))
+        v.eventually(lambda:state()['form'] is not None and state()['form'].get('credential_request') is not None,'Missing saved password did not produce a native credential request',timeout=35)
+        generation=state()['form']['generation']
+        assert generation!=cancelled_generation
+        field='network-password-'+str(generation)
+        click(field);enter(fixture['password'],field)
+        assert fixture['password'] not in json.dumps(v.inspect())
+        assert not any(h['id']=='network-remember' for h in panel()['hits']), 'Secret repair must retain the original profile storage policy'
+        v.key(28)
+        v.eventually(connected,'Saved-password repair did not associate',timeout=35)
+        assert v.remote('nmcli','-g','GENERAL.CON-UUID','device','show',fixture['station']).strip()==profile['key']
+        assert '198.18.0.' in v.remote('nmcli','-g','IP4.ADDRESS','device','show',fixture['station'])
+        assert json.loads(root('python3',directory+'/fixture.py','verify-secret',directory,profile['key']))['stored_secret_matches']
+        same_profile()
+        disconnect_fixture()
+        click('network-activate-'+str(same_profile()['id']))
+        v.eventually(connected,'Repaired saved password did not persist for reconnection',timeout=35)
+        assert state()['form'] is None
+        same_profile()
+        checks += ['wrong_saved_password_native_request_cancel_no_inspector_secret',
+                   'missing_saved_password_masked_secret_agent_reply_same_uuid_no_duplicate',
+                   'system_owned_password_persistence_and_subsequent_dhcp_reconnection']
         click('network-forget-'+str(profile['id']))
         assert any(p['key']==profile['key'] for p in state()['profiles'])
         click('network-forget-confirm')
@@ -165,14 +226,21 @@ def main():
         (v.REPORT/'network-panel-native-failure.json').write_text(json.dumps(v.inspect(),indent=2))
         raise
     finally:
-        v.cli('network','close')
-        if started: root('python3',directory+'/fixture.py','stop',directory)
-        root('rm','-r',directory)
+        # UI failure must not skip teardown of the owned simulated radio/AP.
+        # Keep root's private fixture state if teardown cannot be verified.
+        try:
+            v.cli('network','close')
+        finally:
+            if started:
+                restored=json.loads(root('python3',directory+'/fixture.py','stop',directory))
+                assert restored.get('restored') is True
+            assert fingerprint(v.session)==before_preservation, 'Preserved desktop/settings/media/export/supervisor state changed; no automatic file restore'
+            root('rm','-r',directory)
     assert sorted(v.remote('nmcli','-t','-f','UUID,NAME,TYPE','connection','show').splitlines())==sorted(before)
     assert json.loads(v.remote('ip','-j','route','show','default'))==routes
     assert v.remote('pgrep','-x','lucent-desktop').strip()==desktop_pid
     assert v.inspect()['client']['wallpaper']==wallpaper
-    checks += ['original_profiles_routes_wallpaper_desktop_and_fixture_cleanup']
+    checks += ['original_profiles_routes_wallpaper_desktop_and_fixture_cleanup','exact_settings_inode_media_exports_clipboard_history_supervisor_and_binary_preserved']
     report={'checks':checks,'binary_sha256':v.remote('sha256sum','.local/bin/lucent-desktop').split()[0],
         'scope':'Regular-user native panel with real pointer/keyboard, NetworkManager and owned simulated WPA2/hidden radios. No physical Wi-Fi, SAE/OWE/enterprise, captive-portal or suspend proof.'}
     (v.REPORT/'lucent-network-panel-native.json').write_text(json.dumps(report,indent=2)+'\n')
