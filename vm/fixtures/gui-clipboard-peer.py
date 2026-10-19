@@ -30,11 +30,12 @@ import owned_chromium_lease as chromium
 
 SOURCE_TEXT = 'browser one\n雪 e\u0301 👩\u200d💻\nlast line\n'
 DESTINATION_TEXT = 'notes one\n\nnotes two\n'
+FIXTURE_MIME_PRIORITY = ('text/plain;charset=utf-8', 'UTF8_STRING', 'text/plain')
 TEXT_ALIASES = ('text/plain;charset=utf-8', 'text/plain;charset=UTF-8',
                 'text/plain', 'UTF8_STRING', 'STRING', 'TEXT')
 EVENT_KEYS = ('trusted_copy', 'untrusted_copy', 'trusted_paste', 'untrusted_paste',
               'ctrl_c_down', 'ctrl_c_up', 'ctrl_v_down', 'ctrl_v_up')
-OPERATIONS = ('initialize', 'absent', 'serve', 'origin', 'admit', 'clients', 'dom', 'clipboard-observe', 'retire', 'cleanup', 'watchdog')
+OPERATIONS = ('initialize', 'absent', 'serve', 'origin', 'admit', 'clients', 'dom', 'clipboard-observe', 'fixture-clipboard', 'retire', 'cleanup', 'watchdog')
 
 
 def failure_details(error, operation):
@@ -498,6 +499,33 @@ def clipboard_observation(read=bounded_clipboard_read):
     return result
 
 
+def fixture_clipboard_offer(read=bounded_clipboard_read):
+    """Read one native-supported UTF-8 flavor, accepting only compiled fixtures."""
+    deadline = time.monotonic() + 10
+    code, data, _error = read(['wl-paste', '--list-types'], 16384, deadline)
+    require(code == 0 and len(data) <= 16384)
+    offered = data.decode('utf-8').splitlines()
+    require(0 < len(offered) <= 64 and all(0 < len(mime) <= 256 for mime in offered))
+    # Match the native backend's preference; other/duplicate MIME entries and
+    # legacy aliases confer no authority and are never requested by this test.
+    mime = next((value for value in FIXTURE_MIME_PRIORITY if value in offered), None)
+    require(mime is not None)
+    code, data, _error = read(['wl-paste', '--no-newline', '--type', mime], 65536, deadline)
+    require(code == 0 and len(data) <= 65536)
+    fixture = next((name for name, text in (('source', SOURCE_TEXT), ('destination', DESTINATION_TEXT))
+                    if data == text.encode('utf-8')), None)
+    require(fixture is not None)
+    return {'fixture': fixture, 'sha256': digest(data), 'empty': False, 'mime': mime}
+
+
+def fixture_clipboard(directory, run_id, request):
+    directory, _manifest = context(directory, run_id)
+    owned_unit(directory, run_id, request['identity'])
+    observation = fixture_clipboard_offer()
+    owned_unit(directory, run_id, request['identity'])
+    print(json.dumps(observation))
+
+
 def clipboard_observe(directory, run_id, request):
     directory, _manifest = context(directory, run_id)
     owned_unit(directory, run_id, request['identity'])
@@ -565,6 +593,8 @@ def main():
     args = parser.parse_args()
     if args.operation in ('clients', 'retire', 'cleanup'):
         globals()[args.operation](args.directory, args.run_id, json.load(sys.stdin))
+    elif args.operation == 'fixture-clipboard':
+        fixture_clipboard(args.directory, args.run_id, json.load(sys.stdin))
     elif args.operation == 'clipboard-observe':
         clipboard_observe(args.directory, args.run_id, json.load(sys.stdin))
     elif args.operation == 'dom':

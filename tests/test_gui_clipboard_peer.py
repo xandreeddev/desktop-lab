@@ -369,8 +369,6 @@ class FixedPeerDiagnostics(unittest.TestCase):
         self.assertNotIn('private',json.dumps(details))
 
 
-if __name__ == '__main__':
-    unittest.main()
 
 
 class ClipboardOfferDiagnostics(unittest.TestCase):
@@ -567,3 +565,85 @@ class ClipboardDiagnosticFailureReasons(unittest.TestCase):
             diagnostic = peer.clipboard_observation(read)
             with self.subTest(types=types):
                 self.assertEqual(diagnostic['inherited_reader_compatibility'], inherited.get('unsupported', 'supported'))
+
+
+class CanonicalFixtureClipboard(unittest.TestCase):
+    def read(self, offered, payloads):
+        calls = []
+        def read(command, limit, deadline):
+            calls.append(command)
+            self.assertGreater(deadline, peer.time.monotonic())
+            if command == ['wl-paste', '--list-types']:
+                self.assertEqual(limit, 16384)
+                return 0, '\n'.join(offered).encode(), b''
+            self.assertEqual(limit, 65536)
+            return 0, payloads[command[-1]], b''
+        return read, calls
+
+    def test_real_browser_extra_duplicate_and_legacy_formats_use_one_exact_utf8_flavor(self):
+        read, calls = self.read(
+            ['STRING', 'text/plain', 'text/html', 'UTF8_STRING', 'text/plain;charset=utf-8',
+             'private/custom-format', 'text/plain;charset=utf-8'],
+            {'text/plain;charset=utf-8': peer.SOURCE_TEXT.encode(), 'STRING': b'legacy\xff'})
+        result = peer.fixture_clipboard_offer(read)
+        self.assertEqual(result, {'fixture': 'source', 'sha256': peer.digest(peer.SOURCE_TEXT.encode()),
+                                  'empty': False, 'mime': 'text/plain;charset=utf-8'})
+        self.assertEqual(calls, [['wl-paste', '--list-types'],
+                                ['wl-paste', '--no-newline', '--type', 'text/plain;charset=utf-8']])
+
+    def test_preference_matches_production_and_both_compiled_fixtures_are_accepted(self):
+        for offered, expected in ((['text/plain', 'UTF8_STRING'], 'UTF8_STRING'),
+                                  (['text/plain'], 'text/plain')):
+            read, _calls = self.read(offered, {expected: peer.DESTINATION_TEXT.encode()})
+            result = peer.fixture_clipboard_offer(read)
+            self.assertEqual(result['mime'], expected)
+            self.assertEqual(result['fixture'], 'destination')
+        # A lower-priority valid alias cannot rescue an invalid preferred one.
+        read, calls = self.read(['text/plain', 'UTF8_STRING'], {
+            'UTF8_STRING': b'unknown text', 'text/plain': peer.SOURCE_TEXT.encode()})
+        with self.assertRaises(ValueError):
+            peer.fixture_clipboard_offer(read)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[-1][-1], 'UTF8_STRING')
+
+    def test_unknown_invalid_oversize_and_normalized_variants_never_gain_fixture_authority(self):
+        for data in (b'private incoming content', b'\xff', b'x' * 65537,
+                     peer.SOURCE_TEXT.replace('\n', '\r\n').encode(),
+                     peer.SOURCE_TEXT.removesuffix('\n').encode(), b''):
+            read, _calls = self.read(['text/plain'], {'text/plain': data})
+            with self.subTest(data_length=len(data)), self.assertRaises(ValueError):
+                peer.fixture_clipboard_offer(read)
+
+    def test_no_supported_utf8_flavor_refuses_before_reading_other_payloads(self):
+        for offered in ([], ['STRING', 'TEXT'], ['text/html'], ['text/plain;charset=UTF-8']):
+            read, calls = self.read(offered, {})
+            with self.subTest(offered=offered), self.assertRaises(ValueError):
+                peer.fixture_clipboard_offer(read)
+            self.assertEqual(calls, [['wl-paste', '--list-types']])
+
+    def test_unknown_or_retired_browser_lease_cannot_read_or_emit_fixture_proof(self):
+        request = {'identity': {'original': True}}
+        for failures in ([ValueError('retired')], [None, ValueError('replaced')]):
+            with patch.object(peer, 'context', return_value=(Path('/owned'), {})), \
+                 patch.object(peer, 'owned_unit', side_effect=failures) as lease, \
+                 patch.object(peer, 'fixture_clipboard_offer', return_value={'fixture': 'source'}) as read, \
+                 patch('builtins.print') as output:
+                with self.subTest(boundary=len(failures)), self.assertRaises(ValueError):
+                    peer.fixture_clipboard('/owned', 'a' * 24, request)
+                self.assertEqual(lease.call_count, len(failures))
+                self.assertEqual(read.call_count, len(failures) - 1)
+                output.assert_not_called()
+
+    def test_success_is_emitted_only_after_both_fresh_browser_lease_checks(self):
+        request = {'identity': {'original': True}}
+        events = []
+        with patch.object(peer, 'context', return_value=(Path('/owned'), {})), \
+             patch.object(peer, 'owned_unit', side_effect=lambda *_args: events.append('lease')), \
+             patch.object(peer, 'fixture_clipboard_offer', side_effect=lambda: events.append('read') or {'fixture': 'source'}), \
+             patch('builtins.print', side_effect=lambda *_args: events.append('emit')):
+            peer.fixture_clipboard('/owned', 'a' * 24, request)
+        self.assertEqual(events, ['lease', 'read', 'lease', 'emit'])
+
+
+if __name__ == '__main__':
+    unittest.main()
