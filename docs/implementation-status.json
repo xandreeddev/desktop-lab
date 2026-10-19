@@ -3,6 +3,144 @@
   "baseline": "395498fdd38012f8443621f4880fb8056f83b280",
   "status": "in_progress",
   "completion_rule": "An item is verified only when its behavior, boundary checks, documentation and applicable native integration checks have evidence. Implemented without verification remains incomplete.",
+  "current_rollup": {
+    "snapshot_source_commit": "e279f7b587caff0158cdb0d1fc4132575ac55c0c",
+    "snapshot_date": "2026-10-19",
+    "status": "in_progress",
+    "all_seven_requested_gaps_closed": false,
+    "guide": "docs/current-readiness.md",
+    "scope": "Accepted-main reconciliation only. Unmerged feature branches are not counted as implemented or accepted. Reports below were executed at their own source commits; this documentation change reruns no native tests or benchmarks.",
+    "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
+    "evidence_definitions": {
+      "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
+      "automated_checks": "Named pure, protocol, client or pixel checks at the listed source. An owned private-bus peer is not an arbitrary production application.",
+      "owned_native_fixture": "Listed binary interacted through the actual compositor with owned peers/input and stated restoration checks. Scope remains the specific workflow/output configuration.",
+      "real_application_or_hardware": "A report must identify the actual external application or physical device and workload. Owned fixture success does not imply this acceptance.",
+      "merged": "Code is in accepted main, independent of native or hardware acceptance."
+    },
+    "requested_gaps": [
+      {
+        "id": "saved-wifi-credential-recovery",
+        "status": "pending_in_accepted_main",
+        "implemented": "Native scanning, visible/hidden joins, saved activation, targeted disconnect and confirmed Forget.",
+        "remaining": "Secure saved-profile credential prompt/repair preserving the same profile without duplicates, NetworkManager SecretAgent lifetimes and recovery acceptance. Enterprise/WEP and physical-radio validation are separate.",
+        "guide": "docs/native-network.md"
+      },
+      {
+        "id": "safe-display-configuration",
+        "status": "pending_in_accepted_main",
+        "implemented": "Named output hosts, saved widget profiles, fractional density and immediate-command display picker.",
+        "remaining": "Resolution/layout draft with Apply/Keep/Revert and automatic rollback. Simultaneous-output placement/input, hotplug/suspend and secure-output acceptance.",
+        "guides": [
+          "docs/monitor-layouts.md",
+          "docs/fractional-scaling.md"
+        ]
+      },
+      {
+        "id": "resources-and-animation",
+        "status": "target_unmet",
+        "implemented": "Event-driven redraw, bounded image/preview ownership and physical-cover video conversion.",
+        "normal_desktop_rss_target_mib": 300,
+        "latest_recorded_video_sample": {
+          "source_commit": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+          "report": "reports/measurements/lucent-weather.json",
+          "seconds": 120.001,
+          "mean_rss_mib": 424.12,
+          "peak_rss_mib": 424.15,
+          "main_cpu_percent_one_core": 148.649,
+          "environment": "One-output llvmpipe software-Vulkan VM with a 3840x2160 source fitted to 1920x1080. No matched before/after comparison.",
+          "actual_60_fps_presentation_established": false
+        },
+        "remaining": "Newer accepted preview/invalidation changes need identified-source matched idle/animated and cold/warm resource/presentation evidence. Preserve density, antialiasing, effects and motion; submit counts are not scanout or actual FPS."
+      },
+      {
+        "id": "international-text",
+        "status": "pending_in_accepted_main",
+        "implemented": "Controlled ordinary/multiline editing, grapheme navigation, bounded undo/redo and clipboard transfers; scoped native Notes editing/clipboard/persistence.",
+        "remaining": "Complex-script shaping, bidi, font fallback and IME. Native pixel/scroll details, delayed clipboard/focus races and third-party GUI clipboard interoperability.",
+        "guides": [
+          "docs/text-editing.md",
+          "docs/multiline-text.md"
+        ]
+      },
+      {
+        "id": "application-integration",
+        "status": "incomplete",
+        "implemented": "Live catalog, identity-preserving selection, persisted pins/reorder, ordinary activation and desktop-entry action paths.",
+        "remaining": "Fresh activation authority, file/URI opening, remaining desktop-entry handling and native third-party action/activation acceptance.",
+        "guides": [
+          "docs/application-activation.md",
+          "docs/application-catalog.md",
+          "docs/application-actions.md"
+        ]
+      },
+      {
+        "id": "real-world-validation",
+        "status": "partial_owned_native_evidence",
+        "implemented": "Source-specific owned native Notes/clipboard, SNI/DBusMenu tray, single-output video density fit, live previews, System invalidation, virtual Bluetooth and other recorded workflows.",
+        "remaining": "Simultaneous monitors, hotplug, suspend/resume, physical Bluetooth/audio/power/radio hardware, third-party tray applications and GUI clipboard interoperability. No blanket hardware, secure-output or 60 FPS claim."
+      },
+      {
+        "id": "documentation-accuracy",
+        "status": "source_reconciled_site_validation_pending",
+        "implemented": "Current guides/skills distinguish accepted Notes, owned native tray, weather, previews and single-output live-fit evidence from historical pending summaries.",
+        "remaining": "Astro/site checks for this branch and continued source-specific reconciliation after later PRs merge. Historical reports remain unchanged."
+      }
+    ],
+    "scoped_native_evidence": [
+      {
+        "feature": "notes",
+        "source_commit": "3806bcfc00e54842022d4f274a092f132c284de8",
+        "report": "reports/measurements/lucent-multiline-notes.json",
+        "accepted": "17 functional and 9 restoration checks: native editing/selection/grapheme/undo, wl-copy/wl-paste exchange, resized editor, restart persistence and stable restoration.",
+        "not_established": "Third-party GUI clipboard; native pixel/scroll details, thumb drag, delayed transfer/focus races, shaping/bidi/fallback/IME. One output only."
+      },
+      {
+        "feature": "tray",
+        "source_commit": "b8a69c8fd900b8f4856f70a71d923e677e26a792",
+        "report": "reports/measurements/lucent-tray-bar.json",
+        "accepted": "Owned SNI/DBusMenu native VM gestures, overflow keyboard access, status/owner retirement and stale-reply handling.",
+        "not_established": "Third-party application interoperability, XEmbed, application-owned popup placement, horizontal/high-resolution native wheel, hardware/performance."
+      },
+      {
+        "feature": "live-display-fit",
+        "source_commit": "83a02372ff7b3313931b475bc650521c6adb19ac",
+        "report": "reports/measurements/lucent-live-display-fit.json",
+        "accepted": "Single-output video resize, integer/fractional density, latest-target burst and producer retirement with original state restoration.",
+        "not_established": "Simultaneous output placement/input, alpha-safe fit, hardware decode, seamless playhead retargeting or actual 60 FPS; software resource targets unmet."
+      },
+      {
+        "feature": "weather",
+        "source_commit": "579c62cb9a78369f2f47a0e51bc6a826d06373c6",
+        "report": "reports/measurements/lucent-weather.json",
+        "accepted": "Strict/visual checks, one-output native opening/focus/panel routing, Tab-only field focus and one production forecast.",
+        "not_established": "Native form mutation/Apply/units/clipboard/scroll, failure/retry and precise animation timing. Separate release migration intentionally changed weather settings; later read-only cohort preserved its entry state."
+      },
+      {
+        "feature": "live-previews",
+        "source_commit": "ba693fb940522db8348b77a4d111126c12abdde7",
+        "report": "reports/measurements/lucent-live-wallpaper-previews.json",
+        "accepted": "One 1x output owned GIF changing crops, select-only browsing, Tab/wheel, same-path Retry/Refresh, close/reopen, explicit Apply and exact restoration; 796 software-Vulkan comparisons.",
+        "not_established": "Preview-specific RSS/decoder concurrency, actual presentation/smoothness, multi-output/fractional/codec/hardware behavior."
+      },
+      {
+        "feature": "system-widget-invalidation",
+        "source_commit": "82a27a46cfd474370ab66b3d5f8fc5be70517e6d",
+        "report": "reports/measurements/lucent-system-widget-invalidation.json",
+        "accepted": "One-output 13.765-second native routing: System 3 submissions, background 261, unrelated Calendar/Clock 0.",
+        "not_established": "CPU/RSS savings, GPU execution, output FPS or broader multi-output behavior."
+      },
+      {
+        "feature": "bluetooth-rejection",
+        "source_commit": "3ff2aa3aeabe4c44eb56defa34ac161dd75c4493",
+        "report": "reports/measurements/lucent-bluetooth-rejection.json",
+        "accepted": "Two software HCI controllers: native pairing/bonding, explicit decline/Escape termination, unpaired Disconnect and compatibility routing without automatic trust.",
+        "not_established": "Physical radio/profile compatibility, native incoming/service authorization, PIN entry or later pending-profile cancellation."
+      }
+    ],
+    "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
+    "validation": "Documentation source reconciliation, reference/ancestry and historical-ledger-preservation checks only. Site build/check and new native/resource runs are not claimed by this change."
+  },
   "requirements": [
     {
       "id": "application-lifetime",
