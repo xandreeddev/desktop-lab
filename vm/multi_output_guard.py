@@ -18,12 +18,22 @@ import struct
 import subprocess
 import time
 
-from multi_output_policy import (Blocked, case_layout, matches_case, monitor_signature,
-                                 owned_name, output, require, unchanged_layout, unique)
+from multi_output_policy import (Blocked, CursorOwnership, case_layout, hit_center, host,
+                                 layer_for, matches_case, monitor_signature, owned_name,
+                                 output, require, require_owned_layers, require_unbound_input,
+                                 surface, unchanged_layout, unique)
 
 
 LEASE_SECONDS = 240
 CLI = str(Path.home() / '.local/bin/lucent-cli')
+REVIEWED_HYPRLAND_COMMIT = 'efb50993780079460b0cbed1363e2166a2de1d9f'
+REMOVAL_SOURCE = ('https://github.com/hyprwm/Hyprland/blob/' + REVIEWED_HYPRLAND_COMMIT
+                  + '/src/output/Monitor.cpp#L439')
+
+
+def require_reviewed_hyprland(value):
+    require(value.get('commit') == REVIEWED_HYPRLAND_COMMIT and value.get('dirty') is False,
+            'installed_hyprland_commit_requires_matching_removal_source_review')
 
 
 def command(*args):
@@ -156,23 +166,13 @@ def compositor():
             'socket': [info.st_dev, info.st_ino]}
 
 
-def no_authorization_or_foreign_windows():
+def no_authorization_or_foreign_windows(desktop_pid):
     require(json.loads(hypr('-j', 'locked')) == {'locked': False}, 'unlocked_compositor_required')
     require(command('omarchy-shell', 'lock', 'isLocked') == 'false', 'unlocked_session_required')
     require(json.loads(hypr('-j', 'clients')) == [], 'no_windows_on_any_workspace_required')
     layers = hypr('-j', 'layers')
     require('lucent-authorization-' not in layers, 'no_authorization_surface_required')
-    def namespaces(value):
-        if isinstance(value, dict):
-            if 'namespace' in value:
-                yield value['namespace']
-            for child in value.values():
-                yield from namespaces(child)
-        elif isinstance(value, list):
-            for child in value:
-                yield from namespaces(child)
-    require(all(isinstance(name, str) and name.startswith('lucent-')
-                for name in namespaces(json.loads(layers))), 'no_foreign_layer_surfaces_required')
+    require_owned_layers(json.loads(layers), desktop_pid)
     client = inspect()['client']
     require(not client.get('network', {}).get('form')
             and not any(client.get('bluetooth', {}).get(key)
@@ -187,7 +187,7 @@ def idle(client):
             'widgets_editing', 'widget_grid', 'wallpaper_busy', 'error', 'settings_error',
             'settings_save_error')), 'settled_idle_desktop_required')
     for name in ('audio', 'media', 'network', 'bluetooth', 'power', 'tray', 'weather',
-                 'live_wallpaper', 'settings', 'application_actions'):
+                 'live_wallpaper', 'settings', 'displays', 'application_actions'):
         require(not any(client.get(name, {}).get(key) for key in ('open', 'visible', 'busy')),
                 'all_panels_closed_and_idle_required')
     require(client.get('settings_writable') and client.get('settings_save_status') == 'saved'
@@ -235,6 +235,7 @@ class Lease:
     def create(self):
         require(self.expected is None, 'output_already_owned')
         self.checked()
+        self.backend.input_preflight()
         self.backend.create(self.name)
         # The create acknowledgement authorizes exactly the new monitor returned
         # by this compositor, including its initial default layout. If it cannot
@@ -249,6 +250,7 @@ class Lease:
     def configure(self, scale):
         require(self.expected is not None, 'owned_output_required')
         self.checked()
+        self.backend.input_preflight()
         case = case_layout(self.name, self.baseline, scale)
         before = self.expected
         self.pending_case = case
@@ -285,14 +287,18 @@ class Native:
         with Path(f'/proc/{self.pid}/exe').open('rb') as executable:
             actual = hashlib.file_digest(executable, 'sha256').hexdigest()
         require(actual == sha, 'running_release_identity_mismatch')
-        idle(no_authorization_or_foreign_windows())
+        self.hyprland_version = json.loads(hypr('-j', 'version'))
+        require_reviewed_hyprland(self.hyprland_version)
+        idle(no_authorization_or_foreign_windows(self.pid))
+        require_unbound_input(json.loads(hypr('-j', 'binds')))
         self.files = preserved_files(True)
         self.pointer = json.loads(hypr('-j', 'cursorpos'))
+        self.cursor = CursorOwnership((self.pointer['x'], self.pointer['y']))
         self.baseline = [monitor_signature(m) for m in self.monitors()]
         require(len(self.baseline) == 1, 'one_original_output_required')
         native = self.monitors()[0]
         require(native['width'] <= 2560 and native['height'] <= 1440
-                and 1 <= native['scale'] <= 2
+                and native['scale'] == 1 and native['width'] % 2 == 0 and native['height'] % 2 == 0
                 and abs(native['x']) <= 16384 and abs(native['y']) <= 16384,
                 'bounded_original_physical_workload_required')
         require(native.get('activeWorkspace', {}).get('id', 0) > 0
@@ -315,7 +321,7 @@ class Native:
         current = preserved_files(full)
         require(current == (self.files if full else without_hashes(self.files)),
                 'configuration_settings_or_media_changed')
-        no_authorization_or_foreign_windows()
+        no_authorization_or_foreign_windows(self.pid)
         original = unique(self.monitors(), lambda value: value['name'] == self.baseline[0]['name'],
                           'original_output_missing')
         require(original.get('activeWorkspace', {}).get('id') in
@@ -377,15 +383,54 @@ class Native:
         require(hypr('eval', code) == 'ok', 'owned_monitor_configuration_rejected')
 
     def remove(self, name):
+        current = json.loads(hypr('-j', 'cursorpos'))
+        authorized = self.cursor.owns(current)
+        # Pinned v0.56.2 onDisconnect moves to the sole backup output's
+        # transformed physical center. Original 1x/even extents make it exact.
+        backup = self.baseline[0]
+        destination = (backup['x'] + backup['width'] // 2, backup['y'] + backup['height'] // 2)
+        if authorized:
+            self.cursor.begin(current, destination)
         require(hypr('output', 'remove', name) == 'ok', 'owned_output_remove_rejected')
+        if authorized:
+            try:
+                self.cursor.confirm(json.loads(hypr('-j', 'cursorpos')))
+            except Blocked:
+                # Do not undo the safe output removal or adopt an unknown
+                # backend position. Future input/restoration stays blocked.
+                pass
+
+    def input_preflight(self):
+        require_unbound_input(json.loads(hypr('-j', 'binds')))
+        self.cursor.check(json.loads(hypr('-j', 'cursorpos')))
+
+    def warp_hit(self, name, identifier, generation, global_id):
+        self.input_preflight()
+        state = inspect()
+        require(host(state, name)['generation'] == generation and output(state, name)['global'] == global_id,
+                'guardian_hit_host_lifetime_changed')
+        source = surface(state, name, 'bar')
+        layers = json.loads(hypr('-j', 'layers'))
+        require_owned_layers(layers, self.pid)
+        native = layer_for(layers, name, source, self.pid)
+        monitor = unique(self.monitors(), lambda value: value['name'] == name, 'guardian_hit_output_missing')
+        destination = hit_center(monitor, source, native, identifier)
+        self.cursor.begin(json.loads(hypr('-j', 'cursorpos')), destination)
+        require(hypr('dispatch', f'hl.dsp.cursor.move({{x={destination[0]},y={destination[1]}}})') == 'ok',
+                'guardian_hit_cursor_warp_rejected')
+        self.cursor.confirm(json.loads(hypr('-j', 'cursorpos')))
+        return {'point': destination, 'surface': source['id'], 'generation': generation, 'global': global_id}
 
     def restore_focus(self):
         self.preserve()
+        self.input_preflight()
         require(hypr('dispatch', f'hl.dsp.focus({{workspace="{self.workspace}"}})') == 'ok',
                 'original_workspace_focus_restore_failed')
         x, y = self.pointer['x'], self.pointer['y']
+        self.cursor.begin(json.loads(hypr('-j', 'cursorpos')), (int(x), int(y)))
         require(hypr('dispatch', f'hl.dsp.cursor.move({{x={int(x)},y={int(y)}}})') == 'ok',
                 'original_cursor_restore_failed')
+        self.cursor.confirm(json.loads(hypr('-j', 'cursorpos')))
         current = self.monitors()
         require(len(current) == 1 and current[0]['activeWorkspace']['id'] == self.workspace,
                 'original_workspace_not_restored')
@@ -397,7 +442,8 @@ def serve(directory, name, sha):
     lease = Lease(backend, name, backend.baseline)
     private_json(directory / 'checkpoint.json', {'files': backend.files,
                  'supervisor': backend.supervisor, 'compositor': backend.compositor,
-                 'baseline': backend.baseline, 'workspace': backend.workspace, 'pointer': backend.pointer})
+                 'baseline': backend.baseline, 'workspace': backend.workspace, 'pointer': backend.pointer,
+                 'hyprland_version': backend.hyprland_version, 'removal_source': REMOVAL_SOURCE})
     lock_path = Path(os.environ['XDG_RUNTIME_DIR']) / 'lucent-native-multi-output.lock'
     descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, 'r+') as lock:
@@ -417,7 +463,8 @@ def serve(directory, name, sha):
         server.listen(1)
         server.settimeout(.5)
         private_json(directory / 'ready.json', {'ready': True, 'desktop_pid': backend.pid,
-                     'baseline': backend.baseline, 'lease_seconds': LEASE_SECONDS})
+                     'baseline': backend.baseline, 'lease_seconds': LEASE_SECONDS,
+                     'hyprland_version': backend.hyprland_version, 'removal_source': REMOVAL_SOURCE})
         try:
             while not finished and time.monotonic() < deadline:
                 try:
@@ -442,7 +489,8 @@ def serve(directory, name, sha):
                         require(type(request) is dict and time.monotonic() < deadline,
                                 'absolute_guard_deadline_expired')
                         operation = request.get('operation')
-                        require(set(request) <= {'operation', 'scale'}, 'invalid_guard_request_fields')
+                        require(set(request) <= {'operation', 'scale', 'monitor', 'identifier', 'generation', 'global'},
+                                'invalid_guard_request_fields')
                         if operation == 'create':
                             value = lease.create()
                         elif operation == 'configure':
@@ -451,7 +499,17 @@ def serve(directory, name, sha):
                             value = lease.remove()
                         elif operation == 'status':
                             lease.checked()
+                            backend.input_preflight()
                             value = lease.status()
+                        elif operation == 'warp':
+                            lease.checked()
+                            require(request.get('monitor') in (lease.name, lease.baseline[0]['name'])
+                                    and request.get('identifier') in ('bar-audio', 'bar-network')
+                                    and type(request.get('generation')) is int and request['generation'] > 0
+                                    and type(request.get('global')) is int and request['global'] > 0,
+                                    'validated_native_bar_hit_request_required')
+                            value = backend.warp_hit(request['monitor'], request['identifier'],
+                                                     request['generation'], request['global'])
                         elif operation == 'finish':
                             lease.checked()
                             finished, value = True, {'finishing': True}
@@ -469,19 +527,21 @@ def serve(directory, name, sha):
             server.close()
             result = {'requested_finish': finished and failure is None,
                       'expired': time.monotonic() >= deadline, 'failure': failure,
-                      'removed_only_owned_output': False, 'preserved': False}
+                      'removed_only_owned_output': False, 'preserved': False, 'cursor_restored': False}
             try:
                 lease.remove()
-                backend.restore_focus()
+                result['removed_only_owned_output'] = True
                 backend.preserve(full=True)
-                result.update(removed_only_owned_output=True, preserved=True)
+                result['preserved'] = True
+                backend.restore_focus()
+                result['cursor_restored'] = True
             except Exception as error:
                 result['cleanup_blocked'] = str(error) if isinstance(error, Blocked) else type(error).__name__
             result['last_owned_identity'] = lease.status()
             private_json(directory / 'finished.json', result)
 
 
-def request(directory, operation, scale):
+def request(directory, operation, scale, monitor=None, identifier=None, generation=None, global_id=None):
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
         deadline = time.monotonic() + 35
         client.settimeout(35)
@@ -489,6 +549,8 @@ def request(directory, operation, scale):
         value = {'operation': operation}
         if scale is not None:
             value['scale'] = scale
+        if operation == 'warp':
+            value.update(monitor=monitor, identifier=identifier, generation=generation, **{'global': global_id})
         client.sendall((json.dumps(value) + '\n').encode())
         result = bytearray()
         while b'\n' not in result and len(result) <= 65536:
@@ -509,6 +571,10 @@ def main():
     parser.add_argument('argument')
     parser.add_argument('--sha256')
     parser.add_argument('--scale', type=float)
+    parser.add_argument('--monitor')
+    parser.add_argument('--identifier')
+    parser.add_argument('--generation', type=int)
+    parser.add_argument('--global-id', type=int)
     args = parser.parse_args()
     info = args.directory.lstat()
     require(args.directory.is_absolute() and args.directory.resolve() == args.directory
@@ -525,7 +591,8 @@ def main():
                 'blocked': str(error) if isinstance(error, Blocked) else type(error).__name__})
             raise SystemExit(1) from None
     else:
-        request(args.directory, args.argument, args.scale)
+        request(args.directory, args.argument, args.scale, args.monitor, args.identifier,
+                args.generation, args.global_id)
 
 
 if __name__ == '__main__':

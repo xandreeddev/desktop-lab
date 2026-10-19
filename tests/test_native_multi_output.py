@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'vm'))
@@ -43,11 +44,15 @@ class Backend:
         self.fail_configure = False
         self.fail_remove = False
         self.files, self.supervisor, self.compositor = {}, {}, {}
+        self.hyprland_version = {'commit': 'private-fixture-not-a-native-proof', 'dirty': False}
         self.pointer, self.workspace, self.pid = {'x': 10, 'y': 80}, 1, 123
         self.restored = False
 
     def preserve(self, full=False):
         policy.require(not self.changed, 'fixture_concurrent_settings_change')
+
+    def input_preflight(self):
+        self.preserve()
 
     def monitors(self):
         return copy.deepcopy(self.baseline + self.extra + ([self.current] if self.current else []))
@@ -152,6 +157,102 @@ class NativeGeometry(unittest.TestCase):
             with self.assertRaises(policy.Blocked):
                 policy.button_event(value)
 
+    def test_foreign_same_prefix_layer_client_cannot_claim_desktop_input_authority(self):
+        layers = {'DP-1': {'levels': {'2': [{'namespace': 'lucent-bar', 'pid': 123}]}}}
+        policy.require_owned_layers(layers, 123)
+        for pid in (999, None):
+            layers['DP-1']['levels']['2'].append({'namespace': 'lucent-overlay', 'pid': pid})
+            with self.assertRaisesRegex(policy.Blocked, 'foreign_native_layer_owner'):
+                policy.require_owned_layers(layers, 123)
+            layers['DP-1']['levels']['2'].pop()
+
+    def test_plain_escape_pointer_and_catchall_bindings_are_rechecked_without_rejecting_super_drag(self):
+        policy.require_unbound_input([{'modmask': 64, 'key': 'mouse:272'}, {'modmask': 0, 'key': 'F1'}])
+        for binding in ({'modmask': 0, 'key': 'Escape'}, {'modmask': 2, 'key': 'mouse:272'},
+                        {'modmask': 16, 'keycode': 1}, {'modmask': 0, 'key': 'catchall'},
+                        {'modmask': 0, 'key': '', 'catch_all': True}):
+            with self.subTest(binding=binding), self.assertRaises(policy.Blocked):
+                policy.require_unbound_input([binding])
+
+    def test_new_display_settings_panel_is_part_of_idle_and_closed_foreground_checks(self):
+        client = {'settings_writable': True, 'settings_save_status': 'saved',
+                  'background_ready': True, 'named_monitor_hosts': True}
+        guard.idle(client)
+        client['displays'] = {'open': True}
+        with self.assertRaisesRegex(policy.Blocked, 'all_panels_closed'):
+            guard.idle(client)
+        client.update(launcher=False, notification_history_open=False)
+        vm = type('VM', (), {'inspect': lambda _: {'client': client}})()
+        with self.assertRaisesRegex(policy.Blocked, 'foreground_panel'):
+            driver.Run(vm, Path('/unused'), '/unused', 123).panels_stay_closed(.01)
+
+    def test_removal_postimage_requires_the_exact_reviewed_hyprland_source_commit(self):
+        guard.require_reviewed_hyprland({'commit': guard.REVIEWED_HYPRLAND_COMMIT, 'dirty': False})
+        for value in ({'commit': 'unknown-source', 'dirty': False},
+                      {'commit': guard.REVIEWED_HYPRLAND_COMMIT, 'dirty': True}, {}):
+            with self.assertRaisesRegex(policy.Blocked, 'matching_removal_source_review'):
+                guard.require_reviewed_hyprland(value)
+
+
+class CursorAuthority(unittest.TestCase):
+    def test_only_exact_declared_guardian_warp_or_known_removal_postimage_is_admitted(self):
+        cursor = policy.CursorOwnership((10, 80))
+        cursor.begin({'x': 10, 'y': 80}, (2012, 20))
+        cursor.confirm({'x': 2012, 'y': 20})
+        cursor.begin({'x': 2012, 'y': 20}, (960, 540))
+        # A lost reply may reconcile only the exact already-declared postimage.
+        cursor.check({'x': 960, 'y': 540})
+        self.assertEqual(cursor.expected, (960, 540))
+        self.assertIsNone(cursor.pending)
+        cursor.begin({'x': 960, 'y': 540}, (10, 80))
+        cursor.confirm({'x': 10, 'y': 80})
+
+    def test_user_movement_or_unknown_backend_warp_permanently_blocks_our_restoration(self):
+        for unknown in ({'x': 11, 'y': 80}, {'x': 0, 'y': 0}, None, {'x': True, 'y': False}):
+            cursor = policy.CursorOwnership((10, 80))
+            with self.assertRaisesRegex(policy.Blocked, 'foreign_or_uncertain'):
+                cursor.check(unknown)
+            with self.assertRaises(policy.Blocked):
+                cursor.begin({'x': 10, 'y': 80}, (100, 100))
+        cursor = policy.CursorOwnership((10, 80))
+        cursor.begin({'x': 10, 'y': 80}, (960, 540))
+        with self.assertRaisesRegex(policy.Blocked, 'postimage_differs'):
+            cursor.confirm({'x': 959, 'y': 540})
+        self.assertTrue(cursor.lost)
+
+    def test_native_cleanup_still_removes_owned_output_but_never_restores_over_user_movement(self):
+        native = object.__new__(guard.Native)
+        native.baseline = [monitor()]
+        native.cursor = policy.CursorOwnership((2012, 20))
+        native.preserve = lambda: None
+        calls = []
+        def hypr(*args):
+            calls.append(args)
+            if args == ('-j', 'cursorpos'):
+                return json.dumps({'x': 30, 'y': 80})
+            if args == ('-j', 'binds'):
+                return '[]'
+            self.assertEqual(args, ('output', 'remove', NAME))
+            return 'ok'
+        with patch.object(guard, 'hypr', side_effect=hypr):
+            native.remove(NAME)
+            with self.assertRaisesRegex(policy.Blocked, 'foreign_or_uncertain'):
+                native.restore_focus()
+        self.assertIn(('output', 'remove', NAME), calls)
+        self.assertFalse(any(args[0] == 'dispatch' for args in calls))
+        self.assertTrue(native.cursor.lost)
+
+    def test_native_remove_reconciles_only_the_declared_backup_center_without_adopting_other_warps(self):
+        for point, lost in (({'x': 960, 'y': 540}, False), ({'x': 959, 'y': 540}, True)):
+            native = object.__new__(guard.Native)
+            native.baseline = [monitor()]
+            native.cursor = policy.CursorOwnership((2012, 20))
+            replies = iter([json.dumps({'x': 2012, 'y': 20}), 'ok', json.dumps(point)])
+            with patch.object(guard, 'hypr', side_effect=lambda *_: next(replies)):
+                native.remove(NAME)
+            self.assertEqual(native.cursor.lost, lost)
+            self.assertEqual(native.cursor.expected, (2012, 20) if lost else (960, 540))
+
 
 class Ownership(unittest.TestCase):
     def setUp(self):
@@ -249,7 +350,6 @@ class RealInputAdmission(unittest.TestCase):
     def run_fixture(self):
         vm = InputVM()
         run = driver.Run(vm, Path('/unused-private-fixture'), '/unused-private-fixture', 123)
-        run.lease = lambda _operation: {}
         bar = {'id': 'bar-owned', 'role': 'bar', 'instance': 'owned', 'output': NAME,
                'width': 1024, 'height': 48, 'pointer_input': 'content',
                'hits': [{'id': 'bar-audio', 'x': 80, 'y': 8, 'width': 24, 'height': 24,
@@ -259,6 +359,15 @@ class RealInputAdmission(unittest.TestCase):
                  'output': {'name': NAME, 'global': 101}, 'bar': bar,
                  'layers': {'bar-owned': {'x': 0, 'y': 0}}}
         run.settled = lambda _name: copy.deepcopy(value)
+        vm.inspect = lambda: {'client': {'named_monitor_hosts': True, 'monitor_hosts': [value['host']]},
+                              'outputs': [value['output']], 'surfaces': [value['bar']]}
+        def lease(operation, **_kwargs):
+            if operation == 'warp':
+                point = policy.hit_center(value['monitor'], value['bar'], value['layers']['bar-owned'], 'bar-audio')
+                vm.position = dict(zip(('x', 'y'), point))
+                return {'point': point, 'surface': value['bar']['id']}
+            return {}
+        run.lease = lease
         return run, vm, value
 
     def test_independently_verified_warp_is_followed_by_actual_typed_qmp_press_and_release(self):
@@ -293,8 +402,9 @@ class RealInputAdmission(unittest.TestCase):
     def test_hotplug_requires_fresh_pointer_focus_from_the_down_event_before_removal(self):
         run, vm, value = self.run_fixture()
         def inspect():
-            self.assertEqual(vm.events, [policy.button_event(True)])
-            value['bar'].update(focus='bar-audio', focus_visible=False)
+            if vm.events:
+                self.assertEqual(vm.events, [policy.button_event(True)])
+                value['bar'].update(focus='bar-audio', focus_visible=False)
             return {'client': {'named_monitor_hosts': True, 'monitor_hosts': [value['host']]},
                     'outputs': [value['output']], 'surfaces': [value['bar']]}
         vm.inspect = inspect
@@ -304,6 +414,35 @@ class RealInputAdmission(unittest.TestCase):
         vm.events.clear()
         with self.assertRaisesRegex(policy.Blocked, 'fresh_native_press_focus_required'):
             run.press_action(NAME, 'bar-audio', fresh_focus=True)
+        self.assertEqual(vm.events, [])
+
+    def test_late_guard_rejection_after_warp_and_settling_prevents_any_physical_down(self):
+        run, vm, _ = self.run_fixture()
+        original = run.lease
+        status = 0
+        def lease(operation, **kwargs):
+            nonlocal status
+            if operation == 'status':
+                status += 1
+                if status == 2:
+                    raise policy.Blocked('fixture_foreign_layer_arrived_after_geometry')
+            return original(operation, **kwargs)
+        run.lease = lease
+        with self.assertRaisesRegex(policy.Blocked, 'foreign_layer_arrived'):
+            run.press_audio(NAME)
+        self.assertEqual(status, 2)
+        self.assertEqual(vm.events, [])
+
+    def test_host_retirement_after_final_guard_check_also_prevents_physical_down(self):
+        run, vm, value = self.run_fixture()
+        def inspect():
+            current = copy.deepcopy(value['host'])
+            current['generation'] += 1
+            return {'client': {'named_monitor_hosts': True, 'monitor_hosts': [current]},
+                    'outputs': [value['output']], 'surfaces': [value['bar']]}
+        vm.inspect = inspect
+        with self.assertRaisesRegex(policy.Blocked, 'final_input_admission'):
+            run.press_audio(NAME)
         self.assertEqual(vm.events, [])
 
 

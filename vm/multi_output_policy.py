@@ -155,6 +155,78 @@ def cursor_matches(position, expected):
             for axis, value in zip(('x', 'y'), expected)))
 
 
+def require_owned_layers(layers, pid):
+    require(type(pid) is int and pid > 1, 'captured_desktop_layer_owner_required')
+    def visit(value):
+        if isinstance(value, dict):
+            if 'namespace' in value:
+                require(isinstance(value['namespace'], str) and value['namespace'].startswith('lucent-')
+                        and not value['namespace'].startswith('lucent-authorization-')
+                        and value.get('pid') == pid, 'foreign_native_layer_owner_or_authorization')
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+    visit(layers)
+
+
+def require_unbound_input(bindings):
+    require(type(bindings) is list and len(bindings) <= 4096, 'bounded_native_bindings_required')
+    symbols = {'escape', 'esc', 'mouse:272', 'mouse:left', 'catchall', 'any',
+               'code:1', 'code:9', 'code:272', 'code:280'}
+    for binding in bindings:
+        require(type(binding) is dict and type(binding.get('modmask')) is int,
+                'complete_native_binding_required')
+        if binding['modmask'] & ~(2 | 16) != 0:
+            continue
+        require(not binding.get('catch_all', False)
+                and str(binding.get('key', '')).lower() not in symbols
+                and binding.get('keycode', 0) not in (1, 9, 272, 280),
+                'escape_or_plain_pointer_binding_intercepts_native_test')
+
+
+class CursorOwnership:
+    """Only captured initial position or an exact declared transition is owned."""
+    def __init__(self, initial):
+        require(len(initial) == 2 and all(type(value) is int for value in initial),
+                'exact_initial_native_cursor_required')
+        self.expected = tuple(initial)
+        self.pending = None
+        self.lost = False
+
+    def owns(self, current):
+        if self.lost:
+            return False
+        # Exact integer cursorpos, not an arbitrary nearby point or backend warp.
+        point = ((current.get('x'), current.get('y')) if isinstance(current, dict)
+                 and all(type(current.get(key)) is int for key in ('x', 'y')) else None)
+        if point is None or point not in (self.expected, self.pending):
+            self.lost = True
+            return False
+        if self.pending is not None and point == self.pending:
+            self.expected, self.pending = self.pending, None
+        return True
+
+    def check(self, current):
+        require(self.owns(current), 'foreign_or_uncertain_cursor_movement_blocks_warp')
+
+    def begin(self, current, destination):
+        self.check(current)
+        require(len(destination) == 2 and all(type(value) is int for value in destination),
+                'exact_guardian_cursor_destination_required')
+        self.pending = tuple(destination)
+
+    def confirm(self, current):
+        require(self.pending is not None, 'declared_cursor_transition_required')
+        point = ((current.get('x'), current.get('y')) if isinstance(current, dict)
+                 and all(type(current.get(key)) is int for key in ('x', 'y')) else None)
+        if point != self.pending:
+            self.lost = True
+            raise Blocked('native_cursor_postimage_differs_from_declared_transition')
+        self.expected, self.pending = self.pending, None
+
+
 def retired(state, name, native_ids):
     return (not any(h['id'] == name for h in state['client']['monitor_hosts'])
             and not any(o.get('name') == name for o in state['outputs'])

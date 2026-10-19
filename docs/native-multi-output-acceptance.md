@@ -20,9 +20,11 @@ boots, unlocks, builds, deploys or restarts anything.
 
 Required initial state:
 
-- One active, untransformed native output, at most 2560×1440 physical pixels and
-  scale 1–2, with exactly one existing ordinary workspace and no special workspace.
-- No ordinary windows on any workspace, no foreign layer surfaces, no lock or
+- One active, untransformed native output, at most 2560×1440 physical pixels,
+  with even extents and scale 1×, exactly one existing ordinary workspace and no
+  special workspace. The secondary still exercises 2× and 1.25×.
+- No ordinary windows on any workspace, no foreign layer surfaces (every layer
+  PID must equal the captured desktop PID, including `lucent-` namespaces), no lock or
   authorization UI, and no Wi-Fi/Bluetooth credential form or pending request.
 - Closed idle panels, no notification toasts, no widget editing, saved writable
   preferences, a ready background and settled wallpaper transitions.
@@ -33,6 +35,13 @@ Required initial state:
   build report. Its `source_commit` is recorded as that build's source identity.
 - The configured current Lua API supports `hl.monitor`, `hl.dispatch` and
   `hl.dsp.cursor.move`. A backend without headless output/input support is blocked.
+- `hyprctl -j version` must report the reviewed v0.56.2 source commit
+  `efb50993780079460b0cbed1363e2166a2de1d9f`, with `dirty=false`. Other releases or
+  patched builds need a matching source review before admission. The observed
+  version and pinned removal source URL enter the private receipt.
+- No plain Escape, left-button or catch-all compositor binding may intercept the
+  tested input. Caps/Num Lock variants count as plain. Normal Super+mouse binds
+  remain permitted. Initial and fresh input guards inspect actual bindings.
 
 From the repository containing the prepared private VM inventory:
 
@@ -71,9 +80,12 @@ The evidence also records live-playback route/payload observations if present;
 it does not require or install a video workload.
 
 Each output's audio control is clicked using actual QMP left-button down/up
-events. The compositor cursor is first moved with its documented Lua dispatcher
+events. The independent guardian moves the cursor only to an independently
+observed allowed bar hit, using its documented Lua dispatcher
 and verified independently through `cursorpos`. The driver revalidates the host,
-surface and hit geometry after the warp and before pressing; it then verifies
+surface and hit geometry after the warp. After potentially slow settling it
+rechecks OS/layer/credential/binding/cursor authority and freshly binds the host
+generation, native global and hit before pressing. It then verifies
 that QMP button delivery did not warp the cursor elsewhere. The audio panel must
 actually open on the exact target host and render before Escape closes it.
 There is no `lucent-cli audio open` fallback. If real input cannot be established,
@@ -120,6 +132,21 @@ windows. The original workspace must remain the captured workspace or an empty
 workspace created by this lease. A foreign workspace/special-workspace change
 blocks restoration. Headless creation never authorizes reuse of a preexisting
 workspace.
+
+Cursor authority is separate from output-removal authority. Only the captured
+initial position, an independently verified guardian hit warp, or a declared
+exact postimage is owned. The host cannot supply arbitrary coordinates. The
+pinned v0.56.2 `CMonitor::onDisconnect` moves to the sole backup monitor's
+transformed physical center. With the original output at 1× and even extents,
+the guardian computes that exact point before its removal, verifies the native
+result and accepts it only if the pre-removal cursor was still lease-owned.
+An unpredicted backend relocation or user movement permanently retires cursor
+authority, even if the cursor later returns to an earlier point. It blocks new
+test input/configuration and our workspace/cursor restoration. The independent
+owner can still remove its exact unchanged output; that compositor operation
+may itself relocate the cursor. A separate `cursor_restored` receipt must pass
+before the complete harness can pass. Nothing adopts an unknown physical/QMP
+backend warp as a new valid cursor position.
 
 It snapshots user Hyprland configuration directory/file/link identities, exact
 settings file identity/hash, the wallpaper symlink/target, referenced live media
@@ -184,5 +211,8 @@ Primary sources checked for the command/coordinate contract:
   confirms Lua dispatch wraps `hl.dispatch(...)`, layer serialization and global cursorpos.
 - [Hyprland layer implementation](https://github.com/hyprwm/Hyprland/blob/main/src/desktop/view/LayerSurface.cpp)
   adds monitor position to layer-local geometry when constructing global damage.
+- [Reviewed v0.56.2 output removal](https://github.com/hyprwm/Hyprland/blob/efb50993780079460b0cbed1363e2166a2de1d9f/src/output/Monitor.cpp#L439)
+  defines the exact declared backup-center cursor transition. Runtime admission
+  requires this source commit, rather than inferring installed behavior from main.
 - The current Display adapter's `lucent-services/src/displays/native.rs` uses the
   same `hl.monitor({output,disabled,mode,position,scale,transform})` path.

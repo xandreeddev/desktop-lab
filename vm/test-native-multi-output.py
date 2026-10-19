@@ -116,10 +116,13 @@ class Run:
             private_json(self.directory / f'{self.sequence:02d}-{label}.json', value)
         print(json.dumps({'check': label, 'passed': True}), flush=True)
 
-    def lease(self, operation, scale=None):
+    def lease(self, operation, scale=None, **hit):
         args = ['python3', self.guest + '/multi_output_guard.py', 'request', self.guest, operation]
         if scale is not None:
             args += ['--scale', str(scale)]
+        for key in ('monitor', 'identifier', 'generation', 'global_id'):
+            if key in hit:
+                args += ['--' + key.replace('_', '-'), str(hit[key])]
         value = json.loads(self.vm.session(*args))
         require(value.get('ok') is True, 'lease_' + str(value.get('blocked', 'request_failed')))
         return value['value']
@@ -175,9 +178,12 @@ class Run:
 
         return eventually(ready, 'native_host_geometry_did_not_settle')
 
-    def warp(self, point):
-        require(self.vm.hypr('dispatch', f'hl.dsp.cursor.move({{x={point[0]},y={point[1]}}})') == 'ok',
-                'documented_native_cursor_warp_unavailable')
+    def warp(self, name, identifier, observation, point):
+        result = self.lease('warp', monitor=name, identifier=identifier,
+                            generation=observation['host']['generation'],
+                            global_id=observation['output']['global'])
+        require(tuple(result['point']) == point and result['surface'] == observation['bar']['id'],
+                'guardian_observed_hit_differs_from_host_geometry')
         eventually(lambda: cursor_matches(json.loads(self.vm.hypr('-j', 'cursorpos')), point),
                    'headless_cursor_warp_did_not_reach_target', timeout=3)
 
@@ -191,7 +197,7 @@ class Run:
         if fresh_focus:
             require(value['bar'].get('focus') != identifier, 'fresh_native_press_focus_required')
         point = hit_center(value['monitor'], value['bar'], value['layers'][value['bar']['id']], identifier)
-        self.warp(point)
+        self.warp(name, identifier, value, point)
         # Read the same source/native host again after entering it. A source or
         # geometry change invalidates this press instead of reusing stale hits.
         after = self.settled(name)
@@ -199,6 +205,19 @@ class Run:
                 and after['output']['global'] == value['output']['global']
                 and hit_center(after['monitor'], after['bar'], after['layers'][after['bar']['id']],
                                identifier) == point, 'hit_retired_before_native_press')
+        self.current_cursor(point)
+        # Geometry settling may be slow on a software-rendered guest. Recheck
+        # OS/credential/layer/binding/cursor authority after it, then bind a fresh
+        # SDK host/global/hit observation immediately before the physical down.
+        self.lease('status')
+        admitted = self.vm.inspect()
+        admitted_source = surface(admitted, name, 'bar')
+        require(host(admitted, name)['generation'] == after['host']['generation']
+                and output(admitted, name)['global'] == after['output']['global']
+                and admitted_source['id'] == after['bar']['id']
+                and hit_center(after['monitor'], admitted_source,
+                               after['layers'][after['bar']['id']], identifier) == point,
+                'host_or_hit_retired_at_final_input_admission')
         self.current_cursor(point)
         self.held = True  # An uncertain QMP acknowledgement still needs one release.
         self.vm.button(True)
@@ -224,7 +243,7 @@ class Run:
             require(not client['launcher'] and not client['notification_history_open']
                     and all(not any(client.get(name, {}).get(key) for key in ('open', 'visible'))
                             for name in ('audio', 'network', 'bluetooth', 'power', 'tray',
-                                         'weather', 'media', 'live_wallpaper', 'settings')),
+                                         'weather', 'media', 'live_wallpaper', 'settings', 'displays')),
                     'retired_press_or_release_opened_a_foreground_panel')
             time.sleep(.1)
 
@@ -398,7 +417,8 @@ def main():
                 # expires. Leave its directory/unit intact for that cleanup.
                 finish = eventually(finished, 'independent_cleanup_pending', timeout=35)
                 private_json(directory / 'cleanup.json', finish)
-                require(finish.get('preserved') and finish.get('removed_only_owned_output'),
+                require(finish.get('preserved') and finish.get('removed_only_owned_output')
+                        and finish.get('cursor_restored'),
                         'independent_cleanup_or_preservation_blocked')
                 if 'blocked' not in report:
                     require(not vm.inspect()['client']['audio']['open'], 'final_owned_panel_still_open')
