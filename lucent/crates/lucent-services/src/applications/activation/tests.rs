@@ -372,7 +372,8 @@ struct OpenApplication {
 }
 #[zbus::interface(name = "org.freedesktop.Application")]
 impl OpenApplication {
-    fn activate(&self, _: HashMap<String, zbus::zvariant::OwnedValue>) {
+    fn activate(&self, data: HashMap<String, zbus::zvariant::OwnedValue>) {
+        assert!(data.is_empty());
         self.calls.lock().unwrap().activated += 1;
     }
     async fn open(
