@@ -127,17 +127,27 @@ class Harness(notes.Harness):
         self.desktop_pid = None
         self.restoring_desktop = False
         self.notes_press_target = None
+        self.last_peer_failure = None
         self.notes_workspace = 'lucent-clipboard-notes-' + self.tag
         self.browser_workspace = 'lucent-clipboard-browser-' + self.tag
 
     def call_peer(self, operation, *arguments, data=None):
+        require(operation in ('initialize', 'absent', 'origin', 'admit', 'clients', 'dom', 'retire', 'cleanup'),
+                'fixed_gui_peer_operation')
         require(self.peer_initialized or operation == 'initialize', 'owned_peer_initialized')
         if operation in ('dom', 'retire', 'cleanup'):
             require(data is None, 'one_fixed_peer_authority_payload')
             data = json.dumps({'origin': self.browser_origin, 'identity': self.browser_identity}).encode()
-        return json.loads(self.session('/usr/bin/python3', self.peer_directory + '/fixture.py',
-                                       operation, self.peer_directory, self.tag,
-                                       *arguments, data=data, timeout=25))
+        try:
+            return json.loads(self.session('/usr/bin/python3', self.peer_directory + '/fixture.py',
+                                           operation, self.peer_directory, self.tag,
+                                           *arguments, data=data, timeout=25))
+        except Exception as error:
+            self.last_peer_failure = {'operation': operation,
+                'error_class': type(error).__name__ if type(error).__name__ in (
+                    'CheckFailure', 'ValueError', 'OSError', 'TimeoutError', 'JSONDecodeError') else 'OtherError',
+                'fixed_reason': 'gui_peer_operation_failed'}
+            raise
 
     def input_guard(self):
         if self.input_deadline is not None:
@@ -489,12 +499,17 @@ def main():
         result['completed_checks'] = True
     except Exception as error:
         result['failed_check'] = str(error) if isinstance(error, CheckFailure) else type(error).__name__
+        if h is not None and getattr(h, 'last_peer_failure', None) is not None:
+            result['primary_peer_failure'] = copy.deepcopy(h.last_peer_failure)
     finally:
         if h is not None:
             try:
                 restore(h, result)
             except Exception:
                 result['restoration']['unexpected_restoration_failure'] = False
+            if getattr(h, 'last_peer_failure', None) is not None \
+                    and h.last_peer_failure != result.get('primary_peer_failure'):
+                result['restoration_peer_failure'] = copy.deepcopy(h.last_peer_failure)
         result['passed'] = bool(result.get('completed_checks') and result['restoration']
                                 and all(result['restoration'].values()))
         private(directory / 'report.json', result)

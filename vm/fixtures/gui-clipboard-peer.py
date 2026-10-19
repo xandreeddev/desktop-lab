@@ -28,6 +28,43 @@ from owned_application_units import (assert_unit_origin, capture_unit_origin,
 import owned_chromium_lease as chromium
 
 SOURCE_TEXT = 'browser one\n雪 e\u0301 👩\u200d💻\nlast line\n'
+OPERATIONS = ('initialize', 'absent', 'serve', 'origin', 'admit', 'clients', 'dom', 'retire', 'cleanup', 'watchdog')
+
+
+def failure_details(error, operation):
+    """Fixed metadata only; never expose text, argv, headers or exception payload."""
+    classes = ('AssertionError', 'ValueError', 'OSError', 'FileNotFoundError', 'PermissionError',
+               'TimeoutError', 'TimeoutExpired', 'ConnectionRefusedError', 'ConnectionResetError',
+               'HTTPError', 'URLError', 'JSONDecodeError', 'UnicodeDecodeError', 'PeerError')
+    reasons = {'owned_chromium_lease_refused', 'unit_observation_changed', 'unit_observation_deadline',
+               'unit_exec_start_shape', 'websocket_upgrade_required', 'verified_uncompressed_upgrade_required',
+               'unique_upgrade_headers_required', 'bounded_upgrade_required', 'upgrade_closed',
+               'owned_loopback_page_endpoint_required', 'owned_port_required', 'owned_target_required',
+               'peer_closed', 'peer_deadline', 'successful_cdp_response_required',
+               'successful_dom_evaluation_required', 'matching_response_required'}
+    result = {'operation': operation if operation in OPERATIONS else 'unknown',
+              'error_class': type(error).__name__ if type(error).__name__ in classes else 'OtherError',
+              'fixed_reason': 'unclassified_peer_failure', 'trace_frames': []}
+    if len(error.args) == 1 and type(error.args[0]) is str and len(error.args[0]) <= 128:
+        reason = error.args[0]
+        if reason in reasons: result['fixed_reason'] = reason
+        elif reason == 'Owned GUI clipboard peer identity failed': result['fixed_reason'] = 'owned_peer_identity_refused'
+    status = getattr(error, 'upgrade_status', None)
+    if type(status) is dict and set(status) == {'http_version', 'status_code'} \
+            and type(status['http_version']) is str and re.fullmatch(r'[0-9]{1,2}(?:\.[0-9]{1,2})?', status['http_version']) \
+            and type(status['status_code']) is int and 100 <= status['status_code'] <= 599:
+        result['upgrade_status'] = dict(status)
+    trace = error.__traceback__; observed = 0
+    while trace is not None and observed < 64 and len(result['trace_frames']) < 12:
+        code = trace.tb_frame.f_code; source = Path(code.co_filename).name
+        if source == 'fixture.py': source = 'gui-clipboard-peer.py'
+        if source in ('gui-clipboard-peer.py', 'owned_chromium_lease.py', 'owned_application_units.py', 'cdp_peer.py'):
+            result['trace_frames'].append({'source': source,
+                'function': code.co_name if re.fullmatch('[A-Za-z_][A-Za-z0-9_]{0,95}', code.co_name) else 'module',
+                'line': trace.tb_lineno if 0 < trace.tb_lineno <= 1000000 else 0})
+        trace = trace.tb_next; observed += 1
+    result['trace_truncated'] = trace is not None
+    return result
 
 
 def require(value):
@@ -145,8 +182,7 @@ def absent(directory, run_id):
 def owned_unit(directory, run_id, captured):
     require(captured == json.loads(regular(directory / 'admission.json')))
     directory, manifest = context(directory, run_id)
-    receipt = json.loads(regular(directory / 'origin.json'))
-    chromium.observe(receipt, manifest['startup'], captured['lease'])
+    require(captured['lease'] == browser_lease(directory, run_id))
     require(browser_endpoint(directory) == captured['endpoint'])
     return captured
 
@@ -174,8 +210,35 @@ def serve(directory, run_id):
 def origin(directory, run_id):
     directory, _ = context(directory, run_id)
     receipt = json.loads(regular(directory / 'origin.json'))
-    require(receipt == admit(directory, run_id, emit=False)['lease']['origin'])
+    value, process = receipt['unit'], receipt['process']
+    require(value['argv'] == argv(directory, run_id) and value['executable'] == '/usr/bin/python3'
+            and value['transient'] and value['active'] in ('active', 'activating')
+            and re.fullmatch('[0-9a-f]{32}', value['invocation']) and set(value['invocation']) != {'0'}
+            and type(process['pid']) is int and process['pid'] > 1 and process['pid'] == value['main_pid']
+            and type(process['start']) is str and process['start'].isdigit()
+            and process['group'] == value['group'] and value['group'].endswith('/'+unit_name(run_id)))
+    # Returning immutable pre-exec evidence grants no input or signal authority.
+    # Those still need the current process lease (and full page admission for input).
     print(json.dumps(receipt))
+
+
+def browser_lease(directory, run_id, retiring=False):
+    directory, manifest = context(directory, run_id)
+    receipt = json.loads(regular(directory / 'origin.json'))
+    path = directory / 'browser-lease.json'
+    if os.path.lexists(path):
+        captured = json.loads(regular(path))
+        require(captured['origin'] == receipt and captured['declared'] == manifest['startup'])
+        if chromium.original_gone(captured['process']):
+            require(retiring and chromium.retired(captured))
+            return captured
+        return chromium.observe(receipt, manifest['startup'], captured)
+    captured = chromium.observe(receipt, manifest['startup'])
+    try:
+        private(path, json.dumps(captured).encode())
+    except FileExistsError:
+        require(json.loads(regular(path)) == captured)
+    return chromium.observe(receipt, manifest['startup'], captured)
 
 
 def admit(directory, run_id, emit=True):
@@ -184,12 +247,11 @@ def admit(directory, run_id, emit=True):
         captured = json.loads(regular(directory / 'admission.json'))
         owned_unit(directory, run_id, captured)
     else:
-        receipt = json.loads(regular(directory / 'origin.json'))
+        lease = browser_lease(directory, run_id)
         # The port and exact owned page exist only after Chromium has exec'd;
         # never freeze an intermediate Python/shell executable as the browser.
         peer, control = page(directory, manifest, capture=True)
         peer.close()
-        lease = chromium.observe(receipt, manifest['startup'])
         captured = {'lease':lease, **control}
         try:
             private(directory / 'admission.json', json.dumps(captured).encode())
@@ -286,15 +348,14 @@ def retire_owned(directory, run_id, request):
     if request.get('identity') is not None:
         captured = request['identity']
         require(captured == json.loads(regular(directory / 'admission.json')))
-        chromium.retire(captured['lease'])
+        lease = browser_lease(directory, run_id, retiring=True)
+        require(lease == captured['lease'])
     else:
         receipt = request['origin']
         require(receipt == json.loads(regular(directory / 'origin.json')))
-        if not os.path.lexists(directory / 'admission.json'):
-            admit(directory, run_id, emit=False)
-        captured = json.loads(regular(directory / 'admission.json'))
-        require(receipt == captured['lease']['origin'])
-        chromium.retire(captured['lease'])
+        lease = browser_lease(directory, run_id, retiring=True)
+        require(receipt == lease['origin'])
+    chromium.retire(lease)
     watched = json.loads(regular(directory / 'watchdog-origin.json'))
     retire_original_unit(watchdog_name(run_id), watchdog_argv(directory, run_id), watched)
 
@@ -307,13 +368,13 @@ def watchdog(directory, run_id):
     started = time.monotonic()
     while True:
         try:
-            captured = admit(directory, run_id, emit=False)
+            lease = browser_lease(directory, run_id)
             break
         except Exception:
             require(time.monotonic()-started < 35)
             time.sleep(.15)
     time.sleep(max(0, 180-(time.monotonic()-started)))
-    chromium.retire(captured['lease'])
+    chromium.retire(lease)
 
 
 def retire(directory, run_id, request):
@@ -327,14 +388,14 @@ def cleanup(directory, run_id, request):
     require(set(path.name for path in directory.iterdir()) <= {
         'fixture.py', 'owned_application_units.py', 'cdp_peer.py', 'manifest.json',
         'document.html', 'profile', 'origin.json', 'admission.json',
-        'owned_chromium_lease.py', 'watchdog-origin.json'})
+        'owned_chromium_lease.py', 'watchdog-origin.json', 'browser-lease.json'})
     shutil.rmtree(directory)
     print(json.dumps({'owned_private_profile_removed': True}))
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('initialize', 'absent', 'serve', 'origin', 'admit', 'clients', 'dom', 'retire', 'cleanup', 'watchdog'))
+    parser.add_argument('operation', choices=OPERATIONS)
     parser.add_argument('directory')
     parser.add_argument('run_id')
     parser.add_argument('extra', nargs='?')
@@ -350,7 +411,8 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except Exception:
+    except Exception as error:
         # No browser/profile contents or unsolicited protocol errors in output.
-        print('Owned GUI clipboard peer operation failed', file=sys.stderr)
+        print(json.dumps(failure_details(error, sys.argv[1] if len(sys.argv) > 1 else None),
+                         sort_keys=True), file=sys.stderr)
         raise SystemExit(1)

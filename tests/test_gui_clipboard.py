@@ -3,8 +3,12 @@
 import importlib.util
 import copy
 import json
+import io
 from pathlib import Path
 import unittest
+import tempfile
+from contextlib import redirect_stdout
+import types
 from unittest.mock import Mock, patch
 
 
@@ -175,6 +179,42 @@ class CursorPositioningTests(unittest.TestCase):
             h.move(960, 138)
         self.assertEqual(calls, [('hyprctl', '-j', 'cursorpos')])
         h.qmp.assert_not_called()
+
+
+class PeerFailureEvidence(unittest.TestCase):
+    def test_failed_peer_operation_has_bounded_metadata_without_raw_arguments_or_payload(self):
+        h=driver.Harness.__new__(driver.Harness);h.peer_initialized=True
+        h.peer_directory='/private/run';h.tag='a'*24
+        h.session=Mock(side_effect=driver.CheckFailure('bounded_command_failed'))
+        with self.assertRaises(driver.CheckFailure):h.call_peer('admit')
+        self.assertEqual(h.last_peer_failure,{'operation':'admit','error_class':'CheckFailure',
+                                            'fixed_reason':'gui_peer_operation_failed'})
+        self.assertNotIn('/private',json.dumps(h.last_peer_failure))
+
+    def test_primary_peer_failure_survives_a_different_cleanup_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            original={'operation':'admit','error_class':'CheckFailure','fixed_reason':'gui_peer_operation_failed'}
+            later=dict(original,operation='retire')
+            h=types.SimpleNamespace(last_peer_failure=None)
+            def suite(_h,_result):
+                h.last_peer_failure=dict(original)
+                raise driver.CheckFailure('original_browser_full_identity_available')
+            def restore(_h,result):
+                h.last_peer_failure=dict(later);result['restoration']['owned_browser_retired']=False
+            # Hashing support files still uses the actual source tree; place
+            # only the result directory beneath the temporary root via mkdir.
+            actual_root=driver.ROOT;temporary_root=Path(directory)
+            (temporary_root/'vm').symlink_to(actual_root/'vm',target_is_directory=True)
+            with patch.object(driver,'ROOT',temporary_root),patch.object(driver,'Harness',return_value=h), \
+                 patch.object(driver,'suite',side_effect=suite),patch.object(driver,'restore',side_effect=restore), \
+                 patch.object(driver.signal,'signal'),patch.object(driver.argparse.ArgumentParser,'parse_args',
+                    return_value=types.SimpleNamespace(source_commit='a'*40,desktop_sha256='b'*64)), \
+                 redirect_stdout(io.StringIO()):self.assertEqual(driver.main(),1)
+            reports=list((temporary_root/'reports/local').glob('*/report.json'))
+            self.assertEqual(len(reports),1);result=json.loads(reports[0].read_text())
+            self.assertEqual(result['primary_peer_failure'],original)
+            self.assertEqual(result['restoration_peer_failure'],later)
+            self.assertFalse(result['passed'])
 
 
 class BindingAdmissionTests(unittest.TestCase):

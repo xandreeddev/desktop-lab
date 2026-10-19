@@ -1,8 +1,11 @@
 # Real application clipboard acceptance
 
 `vm/test-gui-clipboard.py` extends the existing native Notes tests with a real
-Chromium Wayland window. **Native execution of this new test is pending.** Its
-transport unit tests establish bounded protocol handling, not clipboard success.
+Chromium Wayland window. The first native `d28fbe6b` run failed before transfers
+at `original_browser_wrapper_receipt_available`; only clipboard checkpoint/history
+pause passed. Its original failed/restoration flags remain unchanged. Corrected
+tooling still requires a fresh native run. Transport tests establish bounded
+protocol handling, not clipboard success.
 
 The two transfers use actual VM `Ctrl+C`/`Ctrl+V` keyboard delivery:
 
@@ -112,12 +115,17 @@ that workspace.
 Typed unit-name absence is required during initialization and immediately before
 launch. The original wrapper writes a private InvocationID/PID-birth receipt
 before it execs Chromium. Only an acknowledged start followed by that original
-receipt can authorize retirement; full browser admission additionally waits for
-the owned page, pins the installed root-owned Chromium executable and captures its
-running identity. The test-only [Chromium lease](native-chromium-lease.md) retains
+receipt can nominate that original lifetime for guarded retirement. Returning the
+receipt reads immutable pre-exec evidence; it neither requires page readiness nor
+grants input or signal authority. A separate durable process lease pins the
+installed root-owned Chromium executable and current running identity without
+requiring CDP, the endpoint file or the document. The test-only
+[Chromium lease](native-chromium-lease.md) retains
 the original PID birth and service invocation across the normal scope migration.
 It freezes the existing registered scope invocation/cgroup, opaque process-title
-digest, DevTools port-file inode/digest and exact original control target.
+digest. Full browser admission separately requires the exact owned page and pins
+the DevTools port-file inode/digest and original control target. Only this full
+admission can authorize DOM preparation or input.
 Subsequent checks compare these stable identities instead of rehashing Chromium
 on every key.
 A refused or lost start reply cannot authorize stopping an existing lookalike.
@@ -128,6 +136,22 @@ They never stop a guessed application scope or use name-only fallback cleanup.
 Only the separately captured watchdog is retired through the generic unit API.
 The wrapper fsyncs both its receipt file and parent directory before exec.
 
+Fallback retirement and the independent watchdog use that same durable process
+lease, even if page admission or a handshake fails. They do not call page
+admission to acquire cleanup authority. A drained original process can be
+recognized only by the captured service/scope and recursive-cgroup proof;
+retirement never adopts a successor or signals a guessed scope. Failed runs keep
+the private process lease alongside origin and page-admission evidence.
+
+Guest failures emit bounded JSON with a fixed operation/class/allowlisted reason
+and at most 12 source-basename/function/line locations. The staged `fixture.py`
+name is normalized to its source name. A rejected WebSocket upgrade may add only
+the bounded HTTP version and three-digit status code; no reason phrase, headers,
+URL, exception text, document or clipboard content is emitted. **Handshake
+acceptance remains unchanged**: collecting status metadata does not accept an
+alternate response. The host retains the failed operation separately from any
+later restoration failure; private command logs contain the guest diagnostics.
+
 Notes restoration starts only after original-browser retirement and a fresh
 unlocked, idle, no-foreign-client/cursor guard. If either fails, the driver leaves
 the desktop service running and retains the private Notes/clipboard checkpoint
@@ -135,6 +159,16 @@ for guarded recovery. It does not stop the desktop under new authorization UI.
 Fixture reads pin device, inode, mode, owner, group, size, modification time and
 change time, plus bounded bytes and pathname identity. Read-access time alone is
 excluded because a cold read may legitimately update it under relatime.
+
+The first native attempt coupled receipt retrieval to full page admission, so
+an unrelated page/endpoint failure could hide an already published origin and
+block normal host cleanup. Its 50-byte generic stderr did not identify that
+underlying failure; no alternate HTTP status or transport defect is inferred.
+After that failed run, a separate guarded recovery verified original browser and
+watchdog/service/scope drainage, unchanged settings/wallpaper/media/exports, and
+restored history/service/workspace/cursor/idle state. Its first refused recovery
+and the original failed test remain historical. The new separation and
+diagnostics have source/pure-test evidence, not a passed native transfer.
 
 This test does not establish rich HTML/image clipboard behavior, other
 applications, delayed-provider/focus-retirement races, physical hardware, IME

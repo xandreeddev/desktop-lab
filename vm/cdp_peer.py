@@ -44,6 +44,7 @@ class Peer:
                 and value.path == '/devtools/page/' + target and not value.query
                 and not value.fragment, 'owned_loopback_page_endpoint_required')
         connection = socket.create_connection(('127.0.0.1', port), timeout=3)
+        upgrade_status = None
         try:
             key = base64.b64encode(os.urandom(16)).decode('ascii')
             connection.sendall(('GET ' + value.path + ' HTTP/1.1\r\nHost: ' + value.netloc
@@ -61,6 +62,9 @@ class Peer:
             header, buffered = bytes(raw).split(b'\r\n\r\n', 1)
             require(len(header) <= 16384, 'bounded_upgrade_required')
             lines = header.decode('ascii').split('\r\n')
+            status = re.match(r'^HTTP/([0-9]{1,2}(?:\.[0-9]{1,2})?) ([1-5][0-9]{2})(?: |$)', lines[0])
+            if status:
+                upgrade_status = {'http_version': status[1], 'status_code': int(status[2])}
             require(lines[0] == 'HTTP/1.1 101 Switching Protocols', 'websocket_upgrade_required')
             headers = {}
             for line in lines[1:]:
@@ -75,7 +79,9 @@ class Peer:
                     and 'sec-websocket-extensions' not in headers,
                     'verified_uncompressed_upgrade_required')
             return cls(connection, buffered)
-        except BaseException:
+        except BaseException as error:
+            if isinstance(error, PeerError) and upgrade_status is not None:
+                error.upgrade_status = upgrade_status
             connection.close()
             raise
 

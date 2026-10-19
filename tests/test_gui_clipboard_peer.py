@@ -131,9 +131,9 @@ class OriginalBrowserAuthority(unittest.TestCase):
         def read(path):return json.dumps(lease if path.name=='admission.json' else lease['lease']['origin']).encode()
         with patch.object(peer,'context',return_value=(Path('/owned'),{'startup':lease['lease']['declared']})), \
              patch.object(peer,'browser_endpoint',return_value=lease['endpoint']), \
-             patch.object(peer,'regular',side_effect=read),patch.object(peer.chromium,'observe',return_value=lease['lease']) as observe:
+             patch.object(peer,'regular',side_effect=read),patch.object(peer,'browser_lease',return_value=lease['lease']) as observe:
             self.assertEqual(peer.owned_unit(Path('/owned'),self.run_id,lease),lease)
-            observe.assert_called_once_with(lease['lease']['origin'],lease['lease']['declared'],lease['lease'])
+            observe.assert_called_once_with(Path('/owned'),self.run_id)
             observe.side_effect=ValueError('scope_or_birth_replaced')
             with self.assertRaises(ValueError):peer.owned_unit(Path('/owned'),self.run_id,lease)
             observe.reset_mock()
@@ -148,11 +148,11 @@ class OriginalBrowserAuthority(unittest.TestCase):
             connection = Mock()
             with patch.object(peer, 'context', return_value=(path, {'startup':proof['lease']['declared']})), \
                  patch.object(peer, 'page', return_value=(connection,{'endpoint':proof['endpoint'],'control':proof['control']})) as page, \
-                 patch.object(peer.chromium, 'observe', return_value=proof['lease']) as origin, \
+                 patch.object(peer, 'browser_lease', return_value=proof['lease']) as origin, \
                  patch.object(peer, 'owned_unit'), patch('builtins.print'):
                 peer.admit(path, self.run_id)
             page.assert_called_once();connection.close.assert_called_once()
-            origin.assert_called_once_with(proof['lease']['origin'],proof['lease']['declared'])
+            origin.assert_called_once_with(path,self.run_id)
             self.assertEqual(json.loads((path/'admission.json').read_bytes()), proof)
 
     def test_chromium_client_must_be_original_main_pid_on_its_private_workspace(self):
@@ -172,7 +172,7 @@ class OriginalBrowserAuthority(unittest.TestCase):
         proof = self.lease()
         def read(path):return json.dumps(proof if path.name=='admission.json' else proof['lease']['origin']).encode()
         with patch.object(peer, 'context', return_value=(Path('/owned'), {})), \
-             patch.object(peer, 'regular', side_effect=read),patch.object(peer,'admit',return_value=proof), \
+             patch.object(peer, 'regular', side_effect=read),patch.object(peer,'browser_lease',return_value=proof['lease']), \
              patch.object(peer.chromium, 'retire') as retire, patch.object(peer, 'retire_original_unit') as original:
             peer.retire_owned('/owned', self.run_id, {'identity': proof})
             retire.assert_called_once_with(proof['lease'])
@@ -189,6 +189,7 @@ class OriginalBrowserAuthority(unittest.TestCase):
         proof = self.lease()
         with patch.object(peer, 'context', return_value=(Path('/owned'), {})), \
              patch.object(peer, 'regular', return_value=json.dumps(proof).encode()), \
+             patch.object(peer, 'browser_lease', return_value=proof['lease']), \
              patch.object(peer.chromium, 'retire', side_effect=AssertionError('successor')), \
              patch.object(peer.shutil, 'rmtree') as remove:
             with self.assertRaises(AssertionError):
@@ -201,13 +202,15 @@ class OriginalBrowserAuthority(unittest.TestCase):
             path=Path(directory)
             def admitted(*_args,**_kw):
                 self.assertEqual(json.loads((path/'watchdog-origin.json').read_bytes()),proof)
-                return lease
+                return lease['lease']
             with patch.object(peer,'context',return_value=(path,{})), \
                  patch.object(peer,'capture_unit_origin',return_value=proof), \
-                 patch.object(peer,'admit',side_effect=admitted),patch.object(peer.signal,'alarm'), \
-                 patch.object(peer.time,'sleep'),patch.object(peer.chromium,'retire') as retired:
+                 patch.object(peer,'browser_lease',side_effect=admitted),patch.object(peer.signal,'alarm'), \
+                 patch.object(peer.time,'sleep'),patch.object(peer.chromium,'retire') as retired, \
+                 patch.object(peer,'admit') as page_admission,patch.object(peer,'page') as page:
                 peer.watchdog(path,self.run_id)
             retired.assert_called_once_with(lease['lease'])
+            page_admission.assert_not_called();page.assert_not_called()
 
     def test_replaced_endpoint_file_is_refused_before_any_http_request(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -233,6 +236,107 @@ class OriginalBrowserAuthority(unittest.TestCase):
              patch.object(peer.Peer,'connect') as connect,self.assertRaises(ValueError):
             peer.page(Path('/owned'),manifest,expected=expected)
         connect.assert_not_called()
+
+
+class SeparateProcessLease(unittest.TestCase):
+    run_id=OriginalBrowserAuthority.run_id
+
+    def proof(self, path):
+        value=OriginalBrowserAuthority().lease()
+        value['lease']['origin']['unit']['argv']=peer.argv(path,self.run_id)
+        return value
+
+    def test_original_receipt_remains_available_without_browser_page_or_process_admission(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory);proof=self.proof(path)['lease']['origin']
+            peer.private(path/'origin.json',json.dumps(proof).encode())
+            with patch.object(peer,'context',return_value=(path,{})),patch.object(peer,'admit') as admit, \
+                 patch.object(peer,'page') as page,patch.object(peer.chromium,'observe') as observe, \
+                 patch('builtins.print') as output:
+                peer.origin(path,self.run_id)
+            self.assertEqual(json.loads(output.call_args.args[0]),proof)
+            admit.assert_not_called();page.assert_not_called();observe.assert_not_called()
+
+    def test_process_lease_is_durable_and_revalidated_without_any_cdp_dependency(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory);proof=self.proof(path);lease=proof['lease']
+            peer.private(path/'origin.json',json.dumps(lease['origin']).encode())
+            with patch.object(peer,'context',return_value=(path,{'startup':lease['declared']})), \
+                 patch.object(peer.chromium,'observe',return_value=lease) as observe, \
+                 patch.object(peer.chromium,'original_gone',return_value=False),patch.object(peer,'page') as page:
+                self.assertEqual(peer.browser_lease(path,self.run_id),lease)
+                self.assertEqual(json.loads((path/'browser-lease.json').read_bytes()),lease)
+                observe.reset_mock();self.assertEqual(peer.browser_lease(path,self.run_id),lease)
+            observe.assert_called_once_with(lease['origin'],lease['declared'],lease)
+            page.assert_not_called();self.assertFalse((path/'admission.json').exists())
+
+    def test_failed_page_admission_neither_grants_input_nor_blocks_process_only_cleanup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory);proof=self.proof(path);lease=proof['lease']
+            peer.private(path/'origin.json',json.dumps(lease['origin']).encode())
+            peer.private(path/'watchdog-origin.json',json.dumps(lease['origin']).encode())
+            with patch.object(peer,'context',return_value=(path,{'startup':lease['declared']})), \
+                 patch.object(peer,'browser_lease',return_value=lease), \
+                 patch.object(peer,'page',side_effect=ValueError('not ready')) as page, \
+                 patch.object(peer.chromium,'retire') as retire,patch.object(peer,'retire_original_unit') as watched:
+                with self.assertRaises(ValueError):peer.admit(path,self.run_id)
+                self.assertFalse((path/'admission.json').exists());page.reset_mock()
+                with self.assertRaises(FileNotFoundError):
+                    peer.dom(path,self.run_id,'read',{'identity':proof})
+                page.assert_not_called()
+                peer.retire_owned(path,self.run_id,{'identity':None,'origin':lease['origin']})
+            retire.assert_called_once_with(lease);watched.assert_called_once()
+            self.assertTrue((path/'origin.json').exists())
+
+    def test_retired_lease_cannot_grant_input_or_adopt_a_successor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory);lease=self.proof(path)['lease']
+            peer.private(path/'origin.json',json.dumps(lease['origin']).encode())
+            peer.private(path/'browser-lease.json',json.dumps(lease).encode())
+            with patch.object(peer,'context',return_value=(path,{'startup':lease['declared']})), \
+                 patch.object(peer.chromium,'original_gone',return_value=True), \
+                 patch.object(peer.chromium,'retired',return_value=True) as retired, \
+                 patch.object(peer.chromium,'observe') as observe:
+                with self.assertRaises(ValueError):peer.browser_lease(path,self.run_id)
+                self.assertEqual(peer.browser_lease(path,self.run_id,retiring=True),lease)
+            retired.assert_called_once_with(lease);observe.assert_not_called()
+
+    def test_replaced_lease_origin_or_frozen_lifetime_never_becomes_new_cleanup_authority(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory);lease=self.proof(path)['lease']
+            peer.private(path/'origin.json',json.dumps(lease['origin']).encode())
+            peer.private(path/'browser-lease.json',json.dumps(lease).encode())
+            with patch.object(peer,'context',return_value=(path,{'startup':lease['declared']})), \
+                 patch.object(peer.chromium,'original_gone',return_value=False), \
+                 patch.object(peer.chromium,'observe',side_effect=ValueError('successor')), \
+                 patch.object(peer.chromium,'retire') as retire:
+                with self.assertRaises(ValueError):
+                    peer.retire_owned(path,self.run_id,{'identity':None,'origin':lease['origin']})
+            retire.assert_not_called()
+
+
+class FixedPeerDiagnostics(unittest.TestCase):
+    def test_staged_source_and_safe_http_status_survive_without_any_private_payload(self):
+        from cdp_peer import PeerError
+        error=PeerError('websocket_upgrade_required')
+        error.upgrade_status={'http_version':'1.1','status_code':101}
+        namespace={'error':error}
+        exec(compile('def fail():\n raise error\n','/private/run/fixture.py','exec'),namespace)
+        try:namespace['fail']()
+        except Exception as observed:details=peer.failure_details(observed,'admit')
+        self.assertEqual(details['upgrade_status'],{'http_version':'1.1','status_code':101})
+        self.assertEqual(details['fixed_reason'],'websocket_upgrade_required')
+        self.assertEqual(details['trace_frames'],[{'source':'gui-clipboard-peer.py','function':'fail','line':2}])
+        self.assertNotIn('/private',json.dumps(details))
+
+    def test_unknown_reason_operation_or_forged_status_never_emits_payload(self):
+        error=ValueError('private document and credential')
+        error.upgrade_status={'http_version':'private header','status_code':999}
+        details=peer.failure_details(error,'private operation')
+        self.assertEqual(details['operation'],'unknown')
+        self.assertEqual(details['fixed_reason'],'unclassified_peer_failure')
+        self.assertNotIn('upgrade_status',details)
+        self.assertNotIn('private',json.dumps(details))
 
 
 if __name__ == '__main__':

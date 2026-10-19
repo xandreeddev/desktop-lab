@@ -112,9 +112,22 @@ class PeerTests(unittest.TestCase):
         connection = Connection(b'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n'
                                 b'Connection: Upgrade\r\nSec-WebSocket-Accept: forged\r\n\r\n')
         with patch.object(cdp.socket, 'create_connection', return_value=connection):
-            with self.assertRaisesRegex(cdp.PeerError, 'verified_uncompressed_upgrade_required'):
+            with self.assertRaisesRegex(cdp.PeerError, 'verified_uncompressed_upgrade_required') as observed:
                 cdp.Peer.connect('ws://127.0.0.1:9222/devtools/page/A', 9222, 'A')
         self.assertTrue(connection.closed)
+        self.assertEqual(observed.exception.upgrade_status,{'http_version':'1.1','status_code':101})
+
+    def test_unexpected_status_diagnostics_do_not_relax_acceptance_or_expose_reason_headers(self):
+        for line,expected in ((b'HTTP/1.1 101 PRIVATE REASON',{'http_version':'1.1','status_code':101}),
+                              (b'HTTP/1.0 403 PRIVATE REASON',{'http_version':'1.0','status_code':403}),
+                              (b'PRIVATE STATUS',None)):
+            connection=Connection(line+b'\r\nPrivate-Header: secret\r\n\r\n')
+            with self.subTest(line=line),patch.object(cdp.socket,'create_connection',return_value=connection), \
+                 self.assertRaisesRegex(cdp.PeerError,'^websocket_upgrade_required$') as observed:
+                cdp.Peer.connect('ws://127.0.0.1:9222/devtools/page/A',9222,'A')
+            self.assertEqual(getattr(observed.exception,'upgrade_status',None),expected)
+            self.assertTrue(connection.closed)
+            self.assertNotIn('PRIVATE',str(observed.exception));self.assertNotIn('secret',str(observed.exception))
 
     def test_masked_binary_or_invalid_continuation_is_rejected(self):
         for data in (b'\x81\x80', frame(b'xx', opcode=2), frame(b'xx', opcode=0),
