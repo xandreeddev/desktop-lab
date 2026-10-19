@@ -179,6 +179,8 @@ pub(super) fn project<M: Clone>(
                 hit.inner,
                 element.style.caret_width,
                 true,
+                id,
+                None,
             )
         }
         Kind::TextArea {
@@ -251,7 +253,10 @@ mod tests {
         assert!(input.set_preedit(&scene, Some(("語".into(), 3, 3))));
         let projected = layout.build(&tree, 240., 40., &input, 0.);
         assert_eq!(value, "a日b");
-        assert_eq!(projected.hits[0].value, value);
+        assert!(
+            projected.hits[0].value.is_empty(),
+            "ordinary controls do not duplicate canonical text in legacy buffers"
+        );
         assert_eq!(
             projected.hits[0].text.as_ref().unwrap().value.as_ref(),
             value

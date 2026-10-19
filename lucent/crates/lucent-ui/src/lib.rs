@@ -463,6 +463,8 @@ impl Layout {
                 inner,
                 e.style.caret_width,
                 interaction.focus.as_deref() == Some(&id),
+                &id,
+                interaction.text_single_navigation.as_ref(),
             ))
         } else {
             prepared_area
@@ -914,6 +916,7 @@ pub struct Interaction<M> {
     scroll_buffer: BTreeMap<String, f32>,
     overlays: overlay::State<M>,
     text_navigation: Option<text_area::Navigation>,
+    text_single_navigation: Option<text_input::Navigation>,
     composition: Option<composition::Composition>,
 }
 impl<M> Default for Interaction<M> {
@@ -932,6 +935,7 @@ impl<M> Default for Interaction<M> {
             scroll_buffer: BTreeMap::new(),
             overlays: overlay::State::default(),
             text_navigation: None,
+            text_single_navigation: None,
             composition: None,
         }
     }
@@ -1042,6 +1046,15 @@ impl<M: Clone> Interaction<M> {
                 .any(|hit| Some(&hit.id) == self.focus.as_ref() && navigation.compatible(hit))
         }) {
             self.text_navigation = None;
+            self.text_single_navigation = None;
+        }
+        if self.text_single_navigation.as_ref().is_some_and(|nav| {
+            !scene
+                .hits
+                .iter()
+                .any(|hit| Some(&hit.id) == self.focus.as_ref() && nav.compatible(hit))
+        }) {
+            self.text_single_navigation = None;
         }
         self.input_buffer = self.focus.as_ref().and_then(|id| {
             scene
@@ -1143,9 +1156,14 @@ impl<M: Clone> Interaction<M> {
                 && let Some(caret) = text.at_point(x, y)
             {
                 let navigation = text_area::pointer_navigation(&press.hit, x, y, anchor);
-                if press.text_last != Some(caret) || self.text_navigation != navigation {
+                let single_navigation = text_input::pointer_navigation(&press.hit, x, y, anchor);
+                if press.text_last != Some(caret)
+                    || self.text_navigation != navigation
+                    || self.text_single_navigation != single_navigation
+                {
                     press.text_last = Some(caret);
                     self.text_navigation = navigation;
+                    self.text_single_navigation = single_navigation;
                     out.push(callback(TextEdit::Select { anchor, caret }));
                 }
             }
@@ -1189,6 +1207,7 @@ impl<M: Clone> Interaction<M> {
         self.focus_visible = false;
         self.slider_buffer = None;
         self.text_navigation = None;
+        self.text_single_navigation = None;
         self.press = scene
             .hits
             .iter()
@@ -1253,6 +1272,7 @@ impl<M: Clone> Interaction<M> {
                 .as_ref()
                 .map_or((x, y), |text| text_area::press_point(text, x, y));
             self.text_navigation = text_area::pointer_navigation(&press.hit, x, y, anchor);
+            self.text_single_navigation = text_input::pointer_navigation(&press.hit, x, y, anchor);
             return Some(callback(TextEdit::Select { anchor, caret }));
         }
         if let Some(p) = &self.press
@@ -1280,6 +1300,7 @@ impl<M: Clone> Interaction<M> {
                     .map(|caret| callback(TextEdit::Select { anchor, caret }));
             }
             self.text_navigation = text_area::pointer_navigation(&p.hit, x, y, anchor);
+            self.text_single_navigation = text_input::pointer_navigation(&p.hit, x, y, anchor);
             return text
                 .at_point(x, y)
                 .map(|caret| callback(TextEdit::Select { anchor, caret }));
@@ -1399,7 +1420,9 @@ impl<M: Clone> Interaction<M> {
         {
             if let (Some(text), Some(callback)) = (&hit.text, &hit.text_edit) {
                 if !text.is_multiline() && !text.value.is_ascii() {
-                    if let Some(edit) = text_input::visual_key(text, key) {
+                    if let Some(edit) =
+                        text_input::visual_key(hit, key, &mut self.text_single_navigation)
+                    {
                         return vec![callback(edit)];
                     }
                 }
@@ -1460,6 +1483,7 @@ impl<M: Clone> Interaction<M> {
         };
         self.focus = Some(hit.id.clone());
         self.text_navigation = None;
+        self.text_single_navigation = None;
         self.slider_buffer = None;
         self.select_all = false;
         self.input_buffer = hit

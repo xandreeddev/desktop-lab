@@ -9,6 +9,7 @@ pub struct TextHit {
     pub(super) boundaries: Arc<[(usize, f32)]>,
     pub(super) area: Option<Arc<super::text_area::AreaGeometry>>,
     pub(super) composition_cursor: Option<Rect>,
+    pub(super) caret_stop: usize,
 }
 impl TextHit {
     /// Logical cursor bounds for native input-method candidate placement.
@@ -18,11 +19,7 @@ impl TextHit {
         }
         if let Some(area) = &self.area {
             let row = &area.rows[area.caret_row];
-            let x = row
-                .stops
-                .iter()
-                .find(|(byte, _)| *byte == self.selection.caret())
-                .map_or(0., |(_, x)| *x);
+            let x = row.stops[area.caret_stop].1;
             Rect::new(
                 self.inner.x + x,
                 self.inner.y + area.caret_row as f32 * area.line_height - self.scroll,
@@ -76,12 +73,17 @@ impl TextHit {
             .map(|(at, _)| *at)
     }
     fn advance(&self, at: usize) -> f32 {
-        self.boundaries
-            .iter()
-            .find(|(byte, _)| *byte == at)
-            .map_or(0., |(_, x)| *x)
+        if at == self.selection.caret() {
+            self.boundaries[self.caret_stop].1
+        } else {
+            self.boundaries
+                .iter()
+                .find(|(byte, _)| *byte == at)
+                .map_or(0., |(_, x)| *x)
+        }
     }
 }
+#[allow(clippy::too_many_arguments)]
 pub(super) fn geometry(
     font: &crate::text::Font,
     value: &str,
@@ -90,6 +92,8 @@ pub(super) fn geometry(
     inner: Rect,
     caret_width: f32,
     focused: bool,
+    id: &str,
+    navigation: Option<&Navigation>,
 ) -> TextHit {
     let display = if value.contains(['\n', '\r']) {
         std::borrow::Cow::Owned(value.replace(['\n', '\r'], " "))
@@ -99,14 +103,32 @@ pub(super) fn geometry(
     let selection = selection.reconciled(value);
     let shaped = text::shape(font, &display, size);
     let boundaries = shaped.stops.clone();
-    let advance = boundaries
-        .iter()
-        .find(|(byte, _)| *byte == selection.caret())
-        .map_or(0., |(_, x)| *x);
-    let anchor = boundaries
-        .iter()
-        .find(|(byte, _)| *byte == selection.anchor())
-        .map_or(advance, |(_, x)| *x);
+    let caret_stop = navigation
+        .filter(|nav| {
+            nav.id == id
+                && nav.value.as_ref() == value
+                && nav.selection == selection
+                && nav.inner == inner
+                && nav.boundaries.as_ref() == boundaries.as_slice()
+        })
+        .map_or_else(
+            || {
+                boundaries
+                    .iter()
+                    .position(|(byte, _)| *byte == selection.caret())
+                    .unwrap_or(0)
+            },
+            |nav| nav.stop,
+        );
+    let advance = boundaries[caret_stop].1;
+    let anchor = if selection.anchor() == selection.caret() {
+        advance
+    } else {
+        boundaries
+            .iter()
+            .find(|(byte, _)| *byte == selection.anchor())
+            .map_or(advance, |(_, x)| *x)
+    };
     let visible_edge = if (anchor - advance).abs() + caret_width <= inner.w {
         anchor.max(advance)
     } else {
@@ -125,6 +147,7 @@ pub(super) fn geometry(
         boundaries: boundaries.into(),
         area: None,
         composition_cursor: None,
+        caret_stop,
     }
 }
 pub(super) fn paint<M>(
@@ -205,7 +228,65 @@ pub(super) fn paint<M>(
         });
     }
 }
-pub(super) fn visual_key(hit: &TextHit, key: &Key) -> Option<TextEdit> {
+#[derive(Clone, PartialEq)]
+pub(super) struct Navigation {
+    id: String,
+    value: Arc<str>,
+    selection: TextSelection,
+    inner: Rect,
+    boundaries: Arc<[(usize, f32)]>,
+    stop: usize,
+}
+impl Navigation {
+    pub fn compatible<M>(&self, hit: &Hit<M>) -> bool {
+        hit.id == self.id
+            && hit.text.as_ref().is_some_and(|text| {
+                text.area.is_none()
+                    && text.value == self.value
+                    && text.selection == self.selection
+                    && text.inner == self.inner
+                    && text.boundaries == self.boundaries
+            })
+    }
+}
+pub(super) fn pointer_navigation<M>(
+    hit: &Hit<M>,
+    x: f32,
+    y: f32,
+    anchor: usize,
+) -> Option<Navigation> {
+    let text = hit.text.as_ref()?;
+    if text.is_multiline() || !x.is_finite() || !y.is_finite() {
+        return None;
+    }
+    let target = x - text.inner.x + text.scroll;
+    let stop = text
+        .boundaries
+        .iter()
+        .enumerate()
+        .min_by(|(_, (_, a)), (_, (_, b))| (a - target).abs().total_cmp(&(b - target).abs()))?
+        .0;
+    let caret = text.boundaries[stop].0;
+    let mut selection = text.selection;
+    let mut value = text.value.to_string();
+    selection
+        .apply(&mut value, TextEdit::Select { anchor, caret }, usize::MAX)
+        .ok()?;
+    Some(Navigation {
+        id: hit.id.clone(),
+        value: text.value.clone(),
+        selection,
+        inner: text.inner,
+        boundaries: text.boundaries.clone(),
+        stop,
+    })
+}
+pub(super) fn visual_key<M>(
+    hit: &Hit<M>,
+    key: &Key,
+    navigation: &mut Option<Navigation>,
+) -> Option<TextEdit> {
+    let text = hit.text.as_ref()?;
     let (key, modifiers) = match key {
         Key::Modified { key, modifiers } => (key.as_ref(), *modifiers),
         _ => (key, KeyModifiers::default()),
@@ -217,28 +298,57 @@ pub(super) fn visual_key(hit: &TextHit, key: &Key) -> Option<TextEdit> {
     {
         return None;
     }
-    // Only the prepared visual source map may determine a visual move.
-    let stops = &hit.boundaries;
-    let current = stops
-        .iter()
-        .position(|(byte, _)| *byte == hit.selection.caret())?;
-    let index = match key {
-        Key::Left => current.saturating_sub(1),
-        Key::Right => (current + 1).min(stops.len() - 1),
-        Key::Home => 0,
-        Key::End => stops.len() - 1,
-        _ => unreachable!(),
-    };
-    let caret = stops[index].0;
-    Some(TextEdit::Select {
-        anchor: if modifiers.shift {
-            hit.selection.anchor()
+    let stops = &text.boundaries;
+    let current = navigation
+        .as_ref()
+        .filter(|nav| nav.compatible(hit))
+        .map_or(text.caret_stop, |nav| nav.stop);
+    let range = text.selection.range(&text.value);
+    let collapse = !modifiers.shift && !range.is_empty() && matches!(key, Key::Left | Key::Right);
+    let stop = if collapse {
+        let eligible = stops
+            .iter()
+            .enumerate()
+            .filter(|(_, (byte, _))| *byte >= range.start && *byte <= range.end);
+        if matches!(key, Key::Left) {
+            eligible.map(|(index, _)| index).next().unwrap_or(current)
         } else {
-            caret
-        },
-        caret,
-    })
+            eligible
+                .map(|(index, _)| index)
+                .next_back()
+                .unwrap_or(current)
+        }
+    } else {
+        match key {
+            Key::Left => current.saturating_sub(1),
+            Key::Right => (current + 1).min(stops.len() - 1),
+            Key::Home => 0,
+            Key::End => stops.len() - 1,
+            _ => unreachable!(),
+        }
+    };
+    let caret = stops[stop].0;
+    let anchor = if modifiers.shift {
+        text.selection.anchor()
+    } else {
+        caret
+    };
+    let mut selection = text.selection;
+    let mut value = text.value.to_string();
+    selection
+        .apply(&mut value, TextEdit::Select { anchor, caret }, usize::MAX)
+        .ok()?;
+    *navigation = Some(Navigation {
+        id: hit.id.clone(),
+        value: text.value.clone(),
+        selection,
+        inner: text.inner,
+        boundaries: text.boundaries.clone(),
+        stop,
+    });
+    Some(TextEdit::Select { anchor, caret })
 }
+
 pub(super) fn key(key: &Key) -> Option<TextEdit> {
     let (key, modifiers) = match key {
         Key::Modified { key, modifiers } => (key.as_ref(), *modifiers),
@@ -532,5 +642,139 @@ mod placeholder_styling {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod bidi_navigation {
+    use super::*;
+    fn layout() -> Layout {
+        Layout::new(Arc::new(vec![
+            text::Font::from_bytes(
+                include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf").as_slice(),
+                Default::default(),
+            )
+            .unwrap(),
+        ]))
+    }
+    fn tree(
+        value: &str,
+        selection: TextSelection,
+        multiline: bool,
+        width: f32,
+    ) -> Element<TextEdit> {
+        if multiline {
+            Element::text_area(
+                value,
+                selection,
+                "",
+                ScrollSpec::new(0., 24.).unwrap(),
+                |edit| edit,
+                |_| TextEdit::Clear,
+            )
+        } else {
+            Element::text_input(value, selection, "", |edit| edit)
+        }
+        .id("field")
+        .autofocus()
+        .size(width, 180.)
+        .font(20.)
+    }
+    fn apply(
+        input: &mut Interaction<TextEdit>,
+        scene: &Scene<TextEdit>,
+        key: Key,
+        value: &mut String,
+        selection: &mut TextSelection,
+    ) {
+        for edit in input.key(scene, &key) {
+            selection.apply(value, edit, 8192).unwrap();
+        }
+    }
+    #[test]
+    fn single_line_arrows_walk_every_visual_stop_without_directional_boundary_loops() {
+        let layout = layout();
+        for source in ["אבג", "abc אבג def", "مرحبا world 123"] {
+            let mut value = source.to_string();
+            let mut selection = TextSelection::default();
+            let mut input = Interaction::default();
+            let mut scene = layout.build(
+                &tree(&value, selection, false, 600.),
+                600.,
+                180.,
+                &input,
+                0.,
+            );
+            input.synchronize(&scene);
+            apply(&mut input, &scene, Key::Home, &mut value, &mut selection);
+            let expected = text::shape(&layout.fonts[0], source, 20.).stops;
+            for (index, (byte, x)) in expected.iter().enumerate() {
+                scene = layout.build(
+                    &tree(&value, selection, false, 600.),
+                    600.,
+                    180.,
+                    &input,
+                    0.,
+                );
+                input.synchronize(&scene);
+                let hit = scene.hits[0].text.as_ref().unwrap();
+                assert_eq!(selection.caret(), *byte, "{source}: stop {index}");
+                assert_eq!(hit.caret_stop, index);
+                assert!((hit.caret_rect().x - hit.inner.x - *x).abs() < 0.001);
+                apply(&mut input, &scene, Key::Right, &mut value, &mut selection);
+            }
+            for index in (0..expected.len()).rev() {
+                scene = layout.build(
+                    &tree(&value, selection, false, 600.),
+                    600.,
+                    180.,
+                    &input,
+                    0.,
+                );
+                input.synchronize(&scene);
+                assert_eq!(scene.hits[0].text.as_ref().unwrap().caret_stop, index);
+                apply(&mut input, &scene, Key::Left, &mut value, &mut selection);
+            }
+            assert_eq!(value, source);
+        }
+    }
+    #[test]
+    fn multiline_visual_affinity_survives_directional_and_wrap_boundaries() {
+        let layout = layout();
+        let source = "abc אבג def مرحبا world";
+        let mut value = source.to_string();
+        let mut selection = TextSelection::default();
+        let mut input = Interaction::default();
+        let mut scene = layout.build(&tree(&value, selection, true, 100.), 100., 180., &input, 0.);
+        input.synchronize(&scene);
+        apply(&mut input, &scene, Key::Home, &mut value, &mut selection);
+        let expected = scene.hits[0]
+            .text
+            .as_ref()
+            .unwrap()
+            .area
+            .as_ref()
+            .unwrap()
+            .rows
+            .iter()
+            .enumerate()
+            .flat_map(|(row, line)| {
+                line.stops
+                    .iter()
+                    .enumerate()
+                    .map(move |(stop, (byte, _))| (row, stop, *byte))
+            })
+            .collect::<Vec<_>>();
+        for (row, stop, byte) in expected {
+            scene = layout.build(&tree(&value, selection, true, 100.), 100., 180., &input, 0.);
+            input.synchronize(&scene);
+            let area = scene.hits[0].text.as_ref().unwrap().area.as_ref().unwrap();
+            assert_eq!(
+                (area.caret_row, area.caret_stop, selection.caret()),
+                (row, stop, byte)
+            );
+            apply(&mut input, &scene, Key::Right, &mut value, &mut selection);
+        }
+        assert_eq!(value, source);
     }
 }

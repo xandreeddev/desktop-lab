@@ -11,6 +11,13 @@ pub(super) struct Row {
     pub(super) segments: Arc<[(Range<usize>, f32, f32)]>,
 }
 impl Row {
+    fn stop(&self, x: f32) -> usize {
+        self.stops
+            .iter()
+            .enumerate()
+            .min_by(|(_, (_, a)), (_, (_, b))| (a - x).abs().total_cmp(&(b - x).abs()))
+            .map_or(0, |(index, _)| index)
+    }
     fn at(&self, x: f32) -> usize {
         self.stops
             .iter()
@@ -50,6 +57,7 @@ pub(super) struct AreaGeometry {
     pub rows: Arc<[Row]>,
     pub line_height: f32,
     pub caret_row: usize,
+    pub caret_stop: usize,
     pub content_height: f32,
 }
 /// Transient visual affinity and vertical goal; never canonical text state.
@@ -60,6 +68,7 @@ pub(super) struct Navigation {
     anchor: usize,
     caret: usize,
     row: usize,
+    stop: usize,
     goal_x: Option<f32>,
     width: f32,
     height: f32,
@@ -88,7 +97,7 @@ impl Navigation {
         inner: Rect,
         line_height: f32,
         rows: &[Row],
-    ) -> Option<usize> {
+    ) -> Option<(usize, usize)> {
         (self.id == id
             && self.value.as_ref() == value
             && self.anchor == selection.anchor()
@@ -97,7 +106,7 @@ impl Navigation {
             && self.height == inner.h
             && self.line_height == line_height
             && self.rows.as_ref() == rows)
-            .then_some(self.row)
+            .then_some((self.row, self.stop))
     }
 }
 fn display_grapheme(grapheme: &str) -> std::borrow::Cow<'_, str> {
@@ -221,14 +230,23 @@ pub(super) fn geometry(
         .iter()
         .rposition(|row| row.range.start <= selection.caret())
         .unwrap_or(0);
-    let caret_row = navigation
+    let (caret_row, caret_stop) = navigation
         .and_then(|nav| nav.affinity(id, value, selection, inner, line_height, &rows))
-        .filter(|row| {
-            rows.get(*row).is_some_and(|row| {
-                row.range.contains(&selection.caret()) || row.range.end == selection.caret()
-            })
+        .filter(|(row, stop)| {
+            rows.get(*row)
+                .and_then(|row| row.stops.get(*stop))
+                .is_some_and(|(byte, _)| *byte == selection.caret())
         })
-        .unwrap_or(default);
+        .unwrap_or_else(|| {
+            (
+                default,
+                rows[default]
+                    .stops
+                    .iter()
+                    .position(|(byte, _)| *byte == selection.caret())
+                    .unwrap_or(0),
+            )
+        });
     let content_height = rows.len() as f32 * line_height;
     TextHit {
         value: Arc::from(value),
@@ -237,10 +255,12 @@ pub(super) fn geometry(
         scroll: spec.offset().min((content_height - inner.h).max(0.)),
         boundaries: Arc::from([]),
         composition_cursor: None,
+        caret_stop: 0,
         area: Some(Arc::new(AreaGeometry {
             rows: rows.into(),
             line_height,
             caret_row,
+            caret_stop,
             content_height,
         })),
     }
@@ -282,6 +302,7 @@ pub(super) fn pointer_navigation<M>(
         anchor,
         caret,
         row,
+        stop: text.area.as_ref()?.rows[row].stop(x - text.inner.x),
         goal_x: None,
         width: text.inner.w,
         height: text.inner.h,
@@ -310,9 +331,10 @@ pub(super) fn key<M>(
     }
     let current = navigation.as_ref().filter(|nav| nav.compatible(hit));
     let row = current.map_or(area.caret_row, |nav| nav.row);
+    let stop = current.map_or(area.caret_stop, |nav| nav.stop);
     let goal_x = current
         .and_then(|nav| nav.goal_x)
-        .unwrap_or_else(|| area.rows[row].x(text.selection.caret()));
+        .unwrap_or(area.rows[row].stops[stop].1);
     let page = (text.inner.h / area.line_height).floor().max(1.) as usize;
     let target_row = match key {
         Key::Up if !modifiers.control => Some(row.saturating_sub(1)),
@@ -321,36 +343,52 @@ pub(super) fn key<M>(
         Key::PageDown if !modifiers.control => Some((row + page).min(area.rows.len() - 1)),
         _ => None,
     };
-    let (caret, target_row, goal) = if let Some(target) = target_row {
-        (area.rows[target].at(goal_x), target, Some(goal_x))
+    let (target_row, target_stop, goal) = if let Some(target) = target_row {
+        (target, area.rows[target].stop(goal_x), Some(goal_x))
     } else {
         match key {
             Key::Left | Key::Right if !modifiers.control && !text.value.is_ascii() => {
-                let stops = &area.rows[row].stops;
-                let index = stops
-                    .iter()
-                    .position(|(byte, _)| *byte == text.selection.caret())
-                    .unwrap_or(0);
-                if matches!(key, Key::Left) {
-                    if index == 0 && row > 0 {
-                        (area.rows[row - 1].stops.last().unwrap().0, row - 1, None)
+                let range = text.selection.range(&text.value);
+                if !modifiers.shift && !range.is_empty() {
+                    let eligible = area
+                        .rows
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(row, line)| {
+                            line.stops
+                                .iter()
+                                .enumerate()
+                                .map(move |(stop, (byte, _))| (row, stop, *byte))
+                        })
+                        .filter(|(_, _, byte)| *byte >= range.start && *byte <= range.end);
+                    let target = if matches!(key, Key::Left) {
+                        eligible.map(|(row, stop, _)| (row, stop)).next()
                     } else {
-                        (stops[index.saturating_sub(1)].0, row, None)
+                        eligible.map(|(row, stop, _)| (row, stop)).next_back()
                     }
-                } else if index + 1 == stops.len() && row + 1 < area.rows.len() {
-                    (area.rows[row + 1].stops[0].0, row + 1, None)
+                    .unwrap_or((row, stop));
+                    (target.0, target.1, None)
+                } else if matches!(key, Key::Left) {
+                    if stop == 0 && row > 0 {
+                        (row - 1, area.rows[row - 1].stops.len() - 1, None)
+                    } else {
+                        (row, stop.saturating_sub(1), None)
+                    }
+                } else if stop + 1 == area.rows[row].stops.len() && row + 1 < area.rows.len() {
+                    (row + 1, 0, None)
                 } else {
-                    (stops[(index + 1).min(stops.len() - 1)].0, row, None)
+                    (row, (stop + 1).min(area.rows[row].stops.len() - 1), None)
                 }
             }
-            Key::Home if !modifiers.control => (area.rows[row].stops[0].0, row, None),
-            Key::End if !modifiers.control => (area.rows[row].stops.last().unwrap().0, row, None),
+            Key::Home if !modifiers.control => (row, 0, None),
+            Key::End if !modifiers.control => (row, area.rows[row].stops.len() - 1, None),
             _ => {
                 *navigation = None;
                 return super::text_input::key(input_key);
             }
         }
     };
+    let caret = area.rows[target_row].stops[target_stop].0;
     let anchor = if modifiers.shift {
         text.selection.anchor()
     } else {
@@ -362,6 +400,7 @@ pub(super) fn key<M>(
         anchor,
         caret,
         row: target_row,
+        stop: target_stop,
         goal_x: goal,
         width: text.inner.w,
         height: text.inner.h,
@@ -485,7 +524,7 @@ pub(super) fn paint<M>(
         let row = &area.rows[area.caret_row];
         scene.paint.push(Paint::Shape {
             rect: Rect::new(
-                (hit.inner.x + row.x(hit.selection.caret()))
+                (hit.inner.x + row.stops[area.caret_stop].1)
                     .min(hit.inner.x + (hit.inner.w - style.caret_width).max(0.))
                     .max(hit.inner.x),
                 hit.inner.y + area.caret_row as f32 * area.line_height - hit.scroll

@@ -367,14 +367,21 @@ mod international_tests {
         .unwrap()
     }
     #[test]
-    fn arabic_shapes_contextual_forms_and_ligatures_with_visual_source_stops() {
+    fn arabic_shapes_contextual_forms_against_harfbuzz_reference() {
         let font = font();
         let value = "سلام";
         let shaped = shape(&font, value, 24.);
         assert!(shaped.glyphs.iter().all(|g| g.id != 0));
-        assert!(
-            shaped.glyphs.len() < value.chars().count(),
-            "lam alef ligature must shape"
+        // Reference from system HarfBuzz using this exact checked-in face.
+        // This Noto Sans Arabic revision uses contextual forms, without merging
+        // lam/alef into one glyph. Glyph count alone cannot prove shaping.
+        assert_eq!(
+            shaped
+                .glyphs
+                .iter()
+                .map(|glyph| (glyph.id, glyph.cluster.start))
+                .collect::<Vec<_>>(),
+            [(74, 6), (11, 4), (71, 2), (37, 0)]
         );
         assert!(shaped.stops.windows(2).all(|p| p[0].1 <= p[1].1));
         assert!(shaped.x(0) > shaped.x(value.len()));
@@ -404,7 +411,26 @@ mod international_tests {
             assert!(shaped.stops.iter().any(|(byte, _)| *byte == boundary));
         }
         let hebrew = value.find('א').unwrap();
-        assert!(shaped.x(hebrew) > shaped.x(hebrew + "אב".len()));
+        let aleph = shaped
+            .segments
+            .iter()
+            .find(|(r, _, _)| r.start == hebrew)
+            .unwrap();
+        let gimel = shaped
+            .segments
+            .iter()
+            .find(|(r, _, _)| r.start == hebrew + "אב".len())
+            .unwrap();
+        assert!(aleph.1 > gimel.1 && aleph.1 > aleph.2);
+        assert_eq!(
+            shaped
+                .stops
+                .iter()
+                .filter(|(byte, _)| *byte == hebrew)
+                .count(),
+            2,
+            "directional boundary retains both visual affinities"
+        );
         assert_eq!(shaped.selection(0..hebrew + "א".len()).len(), 2);
         assert!(shaped.glyphs.iter().all(|g| g.id != 0));
     }
