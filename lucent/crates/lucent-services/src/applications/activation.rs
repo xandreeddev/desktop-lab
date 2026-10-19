@@ -38,9 +38,11 @@ fn error(error: zbus::Error) -> ActivationError {
         _ => ActivationError::Failed,
     }
 }
+#[cfg(test)]
 pub(super) fn activate(id: &AppId, address: Option<&str>) -> Result<(), ActivationError> {
     activate_for(id, address, Duration::from_secs(5))
 }
+#[cfg(test)]
 pub(super) fn activate_action(
     id: &AppId,
     action: &ApplicationActionId,
@@ -48,6 +50,7 @@ pub(super) fn activate_action(
 ) -> Result<(), ActivationError> {
     request_for(id, Some(action), address, Duration::from_secs(5))
 }
+#[cfg(test)]
 fn activate_for(
     id: &AppId,
     address: Option<&str>,
@@ -55,6 +58,7 @@ fn activate_for(
 ) -> Result<(), ActivationError> {
     request_for(id, None, address, timeout)
 }
+#[cfg(test)]
 fn request_for(
     id: &AppId,
     action: Option<&ApplicationActionId>,
@@ -76,6 +80,9 @@ pub(super) fn request_context(
     address: Option<&str>,
     timeout: Duration,
 ) -> Result<(), ActivationError> {
+    if timeout.is_zero() {
+        return Err(ActivationError::Failed);
+    }
     let (name, path) = endpoint(id)?;
     let deadline = Instant::now() + timeout;
     futures_lite::future::block_on(async {
@@ -146,8 +153,9 @@ pub(super) fn request_context(
             },
         )
         .await;
+        let close_deadline = deadline.min(Instant::now() + Duration::from_millis(250));
         let _ = futures_lite::future::or(connection.close(), async {
-            async_io::Timer::after(Duration::from_millis(250)).await;
+            async_io::Timer::at(close_deadline).await;
             Err(zbus::Error::Failure(
                 "Activation connection close timed out".into(),
             ))

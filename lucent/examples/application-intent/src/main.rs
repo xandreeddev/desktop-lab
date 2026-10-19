@@ -76,9 +76,14 @@ impl Component for IntentExample {
                 self.busy = true;
                 self.fresh_token = false;
                 self.status = "Requesting intent from this input event…".into();
-                effects.activation_token(self.application.id.as_str(), move |outcome| {
-                    Message::Prepared(operation, outcome)
-                });
+                let app_id = self
+                    .application
+                    .id
+                    .as_str()
+                    .strip_suffix(".desktop")
+                    .unwrap_or(self.application.id.as_str());
+                effects
+                    .activation_token(app_id, move |outcome| Message::Prepared(operation, outcome));
             }
             Message::Prepared(operation, outcome) if self.busy => {
                 let context = match outcome {

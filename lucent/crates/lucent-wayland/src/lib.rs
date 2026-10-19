@@ -1585,6 +1585,11 @@ impl<A: Application> PointerHandler for State<A> {
         events: &[PointerEvent],
     ) {
         for event in events {
+            // A wl_pointer.frame may contain several distinct native events.
+            // Reconciliation for the next event must not borrow a preceding
+            // button's unused authority (including when it is Motion/Leave).
+            self.input_serial = None;
+            self.activation.input = None;
             let Some(id) = self.id_for(&event.surface) else {
                 continue;
             };

@@ -319,6 +319,11 @@ fn primary_activate_method_does_not_substitute_for_an_unsupported_action() {
 struct WrongReply;
 #[zbus::interface(name = "org.freedesktop.Application")]
 impl WrongReply {
+    fn open(&self, uris: Vec<String>, data: HashMap<String, zbus::zvariant::OwnedValue>) -> u32 {
+        assert_eq!(uris, ["file:///tmp/owned%20file"]);
+        assert!(data.is_empty());
+        1
+    }
     async fn activate_action(
         &self,
         action: String,
@@ -352,5 +357,138 @@ fn malformed_action_acknowledgement_is_uncertain_not_unsupported() {
         ),
         Err(ActivationError::Failed)
     );
+    drop(connection);
+}
+
+#[derive(Default, Debug, PartialEq, Eq)]
+struct OpenCalls {
+    activated: usize,
+    opened: Vec<Vec<String>>,
+}
+struct OpenApplication {
+    calls: Arc<Mutex<OpenCalls>>,
+    deny: bool,
+    delay: Duration,
+}
+#[zbus::interface(name = "org.freedesktop.Application")]
+impl OpenApplication {
+    fn activate(&self, _: HashMap<String, zbus::zvariant::OwnedValue>) {
+        self.calls.lock().unwrap().activated += 1;
+    }
+    async fn open(
+        &self,
+        uris: Vec<String>,
+        data: HashMap<String, zbus::zvariant::OwnedValue>,
+    ) -> zbus::fdo::Result<()> {
+        assert!(data.is_empty());
+        self.calls.lock().unwrap().opened.push(uris);
+        if !self.delay.is_zero() {
+            async_io::Timer::after(self.delay).await;
+        }
+        if self.deny {
+            Err(zbus::fdo::Error::AccessDenied("owned Open refusal".into()))
+        } else {
+            Ok(())
+        }
+    }
+}
+#[test]
+fn open_denial_and_uncertain_timeout_are_not_absence_or_primary_activation() {
+    for (deny, delay, expected) in [
+        (false, Duration::ZERO, Ok(())),
+        (true, Duration::ZERO, Err(ActivationError::Failed)),
+        (
+            false,
+            Duration::from_millis(300),
+            Err(ActivationError::Failed),
+        ),
+    ] {
+        let bus = Bus::new();
+        let calls = Arc::new(Mutex::new(OpenCalls::default()));
+        let connection = futures_lite::future::block_on(
+            Builder::address(bus.address.as_str())
+                .unwrap()
+                .name("org.example.Open")
+                .unwrap()
+                .serve_at(
+                    "/org/example/Open",
+                    OpenApplication {
+                        calls: calls.clone(),
+                        deny,
+                        delay,
+                    },
+                )
+                .unwrap()
+                .build(),
+        )
+        .unwrap();
+        let uris = vec!["file:///tmp/owned%20file".into()];
+        let started = Instant::now();
+        assert_eq!(
+            request_context(
+                &AppId::new("org.example.Open.desktop").unwrap(),
+                Operation::Open(&uris),
+                None,
+                Some(&bus.address),
+                Duration::from_millis(200),
+            ),
+            expected,
+        );
+        assert!(started.elapsed() < Duration::from_secs(2));
+        assert_eq!(
+            *calls.lock().unwrap(),
+            OpenCalls {
+                activated: 0,
+                opened: vec![uris],
+            }
+        );
+        drop(connection);
+    }
+}
+#[test]
+fn malformed_open_acknowledgement_is_uncertain_and_missing_open_is_definitive() {
+    let bus = Bus::new();
+    let count = Arc::new(Mutex::new(0));
+    let connection = futures_lite::future::block_on(
+        Builder::address(bus.address.as_str())
+            .unwrap()
+            .name("org.example.Open")
+            .unwrap()
+            .serve_at("/org/example/Open", WrongReply)
+            .unwrap()
+            .serve_at(
+                "/org/example/OnlyActivate",
+                Application {
+                    count: count.clone(),
+                    deny: false,
+                    delay: Duration::ZERO,
+                },
+            )
+            .unwrap()
+            .name("org.example.OnlyActivate")
+            .unwrap()
+            .build(),
+    )
+    .unwrap();
+    let uris = vec!["file:///tmp/owned%20file".into()];
+    for (id, expected) in [
+        ("org.example.Open.desktop", ActivationError::Failed),
+        (
+            "org.example.OnlyActivate.desktop",
+            ActivationError::Unsupported,
+        ),
+    ] {
+        assert_eq!(
+            request_context(
+                &AppId::new(id).unwrap(),
+                Operation::Open(&uris),
+                None,
+                Some(&bus.address),
+                Duration::from_secs(1),
+            ),
+            Err(expected),
+        );
+    }
+    assert_eq!(*count.lock().unwrap(), 0);
     drop(connection);
 }

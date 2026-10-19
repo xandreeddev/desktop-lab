@@ -11,18 +11,15 @@ pub(super) fn application_with_context(
     app: &Application,
     context: &lucent_domain::ApplicationLaunchContext,
 ) -> Result<()> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     if let ApplicationLaunch::DesktopService { fallback } = &app.launch {
-        let result = if context.activation_token().is_none() {
-            super::activation::activate(&app.id, None)
-        } else {
-            super::activation::request_context(
-                &app.id,
-                super::activation::Operation::Activate,
-                context.activation_token(),
-                None,
-                std::time::Duration::from_secs(5),
-            )
-        };
+        let result = super::activation::request_context(
+            &app.id,
+            super::activation::Operation::Activate,
+            context.activation_token(),
+            None,
+            deadline.saturating_duration_since(std::time::Instant::now()),
+        );
         match result {
             Ok(()) => return Ok(()),
             Err(super::activation::ActivationError::Unsupported) => {}
@@ -42,7 +39,7 @@ pub(super) fn application_with_context(
         .launch
         .command()
         .ok_or_else(|| DomainError::Invalid("Application launch is unavailable".into()))?;
-    executable_with_context(launch, context)
+    executable_before(launch, context, deadline)
 }
 
 pub(super) fn action_with_context(
@@ -50,26 +47,23 @@ pub(super) fn action_with_context(
     action: &ApplicationAction,
     context: &lucent_domain::ApplicationLaunchContext,
 ) -> Result<()> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     let command = if matches!(action.launch, ApplicationLaunch::DesktopService { .. }) {
         action_fallback(
             action,
-            if context.activation_token().is_none() {
-                super::activation::activate_action(&app.id, &action.id, None)
-            } else {
-                super::activation::request_context(
-                    &app.id,
-                    super::activation::Operation::Action(&action.id),
-                    context.activation_token(),
-                    None,
-                    std::time::Duration::from_secs(5),
-                )
-            },
+            super::activation::request_context(
+                &app.id,
+                super::activation::Operation::Action(&action.id),
+                context.activation_token(),
+                None,
+                deadline.saturating_duration_since(std::time::Instant::now()),
+            ),
         )?
     } else {
         action.launch.command()
     };
     if let Some(command) = command {
-        executable_with_context(command, context)?;
+        executable_before(command, context, deadline)?;
     }
     Ok(())
 }
@@ -93,16 +87,6 @@ fn action_fallback(
     }
 }
 
-pub(super) fn executable_with_context(
-    launch: &LaunchCommand,
-    context: &lucent_domain::ApplicationLaunchContext,
-) -> Result<()> {
-    executable_before(
-        launch,
-        context,
-        std::time::Instant::now() + std::time::Duration::from_secs(5),
-    )
-}
 pub(super) fn executable_before(
     launch: &LaunchCommand,
     context: &lucent_domain::ApplicationLaunchContext,
