@@ -503,6 +503,12 @@
   --component-weather-panel-width: var(--component-network-width);
   --component-weather-panel-height: var(--component-network-height);
   --component-weather-panel-text-lines: var(--component-network-status-lines);
+  --component-displays-width: 560px;
+  --component-displays-height: 720px;
+  --component-displays-header-height: var(--component-bluetooth-header-height);
+  --component-displays-slide-distance: var(--component-bluetooth-slide-distance);
+  --component-displays-title-lines: var(--component-bluetooth-title-lines);
+  --component-displays-status-lines: var(--component-bluetooth-status-lines);
   --icon-tiny: 16px;
   --icon-small: 17px;
   --icon-compact: 18px;

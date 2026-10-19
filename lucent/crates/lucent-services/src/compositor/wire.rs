@@ -9,7 +9,7 @@ const RESPONSE_LIMIT: usize = 4 * 1024 * 1024;
 const EVENT_LIMIT: usize = 64 * 1024;
 pub(super) const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 
-pub(super) fn connect(path: &Path) -> io::Result<UnixStream> {
+pub(crate) fn connect(path: &Path) -> io::Result<UnixStream> {
     let stream = async_io::block_on(future::or(Async::<UnixStream>::connect(path), async {
         Timer::after(REQUEST_TIMEOUT).await;
         Err(io::Error::from(io::ErrorKind::TimedOut))
