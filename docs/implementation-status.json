@@ -162,7 +162,7 @@
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
-    "validation": "Display strict source a770: 821 Rust / 76 ignored, 109 Python and 582 tokens; compiled a7f differs only by four reviewed loading PNGs. Twenty-eight final non-updating Vulkan Display comparisons, guarded four-artifact deployment and seven actual native flows at c43 pass. Tooling b259 passes 116 Python checks, then one read-only proof validates the exact expected crash transition offline. Display merged through PR86 at d0001450. This documentation branch has not rerun Rust, GPU or native checks; its site/exact-head CI remain separate delivery gates. Text 9a3a51fc has independent source review only at this snapshot; its strict Rust/visual and native checks remain pending. The prior 5d3501eb full 832-case visual CI passes only at its historical source. Exact-version driver install/rollback is verified; no native-context XML candidate or hardware Vulkan proof yet.",
+    "validation": "Display strict source a770: 821 Rust / 76 ignored, 109 Python and 582 tokens; compiled a7f differs only by four reviewed loading PNGs. Twenty-eight final non-updating Vulkan Display comparisons, guarded four-artifact deployment and seven actual native flows at c43 pass. Tooling b259 passes 116 Python checks, then one read-only proof validates the exact expected crash transition offline. Display merged through PR86 at d0001450. This documentation branch has not rerun Rust, GPU or native checks; its site/exact-head CI remain separate delivery gates. Text 9a3a51fc has independent source review only at this snapshot; its strict Rust/visual and native checks remain pending. The prior 5d3501eb full 832-case visual CI passes only at its historical source. The later AMD native-context candidate passed actual RADV RENOIR enumeration, native login and initial hardware shell rendering before the home Btrfs st_dev 56-to-57 preservation rejection, prior to the three-second liveness gate. Independent recovery verifies original software semantics, all 963 original package versions and exact non-device state with 189 device-only remaps. This is no stable presentation, FPS or RSS acceptance; the original failed preservation result remains recorded.",
     "accepted_main_base_commit": "d00014509f13125fe4ccab3ce2e1fa3961a40dd3",
     "implemented_unmerged_cohorts": [
       {
@@ -182,11 +182,26 @@
       }
     ],
     "gpu_candidate": {
-      "status": "driver_install_rollback_verified_xml_candidate_not_run",
+      "status": "hardware_initialization_observed_preservation_rejected_software_restored",
       "driver_install_rollback_verified": true,
-      "xml_candidate_executed": false,
+      "xml_candidate_executed": true,
+      "radv_renoir_enumeration_passed": true,
+      "native_login_hardware_adapter_initial_frames_passed": true,
+      "preservation_gate_passed": false,
+      "planned_three_second_liveness_established": false,
+      "observed_home_btrfs_device_remap": [
+        56,
+        57
+      ],
+      "rollback_verified": true,
+      "original_package_versions_restored": 963,
+      "identities_with_only_device_remap": 189,
+      "nondevice_state_exact": true,
+      "baseline_mount_uuid_recorded": false,
+      "restored_software_source_commit": "a7f41eccdcd8eca51e8e5ee878d8f489d8d4bde5",
       "hardware_acceptance": false,
-      "performance_acceptance": false
+      "performance_acceptance": false,
+      "scope": "Actual hardware enumeration and initial rendered shell passed, then the device-identity preservation guard rejected the candidate before the liveness gate. The original failed result is retained; independent recovery acknowledges only the observed device remap, with no stable presentation, FPS or RSS claim."
     }
   },
   "requirements": [

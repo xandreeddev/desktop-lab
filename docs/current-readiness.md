@@ -56,11 +56,16 @@ their stated source; delivery and acceptance must be identified separately.
 | Application `bb304907` | Domain open/context values, XDG adapter dispatch/revalidation and generic opt-in Wayland activation effects; standalone intent consumer and owned native harness. | Implemented, unmerged. Native launch/open/action proof has not run; [activation](application-activation.md) separates physical input from socket commands. |
 | Native-tool snapshot `d0611935` | Source includes guarded acceptance tools for real applications, GUI clipboard, third-party tray, simultaneous outputs and suspend/recovery. | Tool existence is not acceptance. Those native cases, physical devices and hardware pacing remain pending. |
 
-The exact-version guest driver installation and rollback have been verified, but
-the prepared native-context XML candidate has not been applied at this snapshot.
-This establishes package recovery, with no hardware Vulkan or performance proof.
-No hardware result supersedes the software-Vulkan RSS failure below. Resource
-probes, GPU enumeration, native presentation and smooth 60 FPS are separate evidence.
+The controlled AMD native-context candidate executed: RADV RENOIR enumeration,
+native login, hardware adapter selection and initial rendered shell frames passed.
+The preservation gate then detected the home Btrfs device identity changing from
+56 to 57, before the planned three-second liveness gate. Recovery verified the
+original software domain semantics, all 963 original package versions, removal of
+the owned RADV addition and exact non-device state; 189 captured identities retain
+only that acknowledged device remap. The original failed preservation result is
+retained. See [the dated Vulkan trial](lucent-vulkan.md). This is no stable hardware
+presentation, FPS or RSS acceptance and does not supersede the software-Vulkan
+resource failure below.
 
 ## Source-specific native evidence
 

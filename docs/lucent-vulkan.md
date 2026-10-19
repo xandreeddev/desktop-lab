@@ -1,6 +1,6 @@
 # Vulkan in the Lucent test VM
 
-The prepared Lucent VM runs the full native desktop through **software Vulkan**:
+The restored Lucent VM runs the full native desktop through **software Vulkan**:
 wgpu selects Mesa lavapipe, reported as `llvmpipe` with `device_type: Cpu`.
 Hyprland retains the guest's original virtio/virgl graphics device. The selected
 renderer is observable in `lucent-cli inspect` and Lucent's startup log; using
@@ -71,7 +71,39 @@ This distinction matters: changing Lucent's adapter preference or forcing a gues
 ICD cannot repair a host renderer that failed to initialize. The failed trial
 should not be repeated unchanged as a performance test.
 
-## A hardware path still needs implementation and acceptance
+## AMD native-context trial on 2026-10-19
+
+A separate bounded trial used AMD DRM native context rather than Venus. It kept
+one virtio GPU, EGL, 3 GiB RAM, four vCPUs, shared memfd backing, blob resources
+and a 512 MiB host-visible aperture. The candidate enabled
+`drm_native_context=true` with `venus=false`; the host's global sandbox and
+existing security arguments stayed unchanged. The guest's matching RADV package
+was an owned, reversible addition.
+
+The RADV-only driver probe ran first and passed: Mesa 26.2.2 enumerated
+**AMD Radeon Graphics (RADV RENOIR)** as an integrated GPU. Candidate boot, native
+login, Lucent's hardware-adapter gate and initial rendered shell frames also
+passed for the identified `a7f41ecc` release. This is actual guest hardware-path
+initialization evidence, beyond the earlier host-only offscreen checks.
+
+The next preservation check rejected the candidate because the home Btrfs
+filesystem's observed `st_dev` changed from 56 to 57. It stopped before the
+planned three-second liveness gate; the initial frames do not establish stable
+hardware presentation. The original failed preservation result remains recorded.
+
+Independent recovery verified the original software graphics semantics, all 963
+original package versions, removal of the owned RADV addition, and exact settings,
+media, sources and other non-device identity fields. Across 189 captured
+identities, only the acknowledged device remap remained. The baseline did not
+record a mount UUID, so this is a qualified device-remap recovery proof rather
+than a claim that every raw identity field remained equal. The original
+`a7f41ecc` desktop is running again on software Vulkan.
+
+These scoped trial receipts are not a hardware performance report. Stable
+presentation, FPS, animation pacing, RSS, GPU memory and hardware decoding remain
+unaccepted. The software-Vulkan resource measurements retain their original scope.
+
+## A separate external-renderer integration remains unimplemented
 
 Keep the host's global sandbox policy. Libvirt documents
 [its seccomp boundary](https://libvirt.org/kbase/qemu-passthrough-security.html)
@@ -111,4 +143,5 @@ release rollback.
 stock-shell restoration. [Current readiness](current-readiness.md) records the
 remaining resource and presentation targets. Software-Vulkan functional tests,
 host offscreen GPU checks and visible changing pixels retain their individual
-scopes; none proves guest hardware acceleration or sustained 60 FPS.
+scopes. The AMD trial additionally establishes initial guest hardware rendering,
+while stable presentation and sustained 60 FPS remain unverified.
