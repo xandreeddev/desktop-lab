@@ -1,6 +1,7 @@
 """Input authority checks for the real-browser clipboard acceptance driver."""
 
 import importlib.util
+import copy
 import json
 from pathlib import Path
 import unittest
@@ -169,6 +170,77 @@ class NativeLayerAdmissionTests(unittest.TestCase):
     def test_authorization_layer_is_refused_even_with_same_process_owner(self):
         with self.assertRaises(driver.CheckFailure):
             driver.require_desktop_layers({'namespace': 'lucent-authorization-test', 'pid': 42}, 42)
+
+
+class NotesPointerLifetimeTests(unittest.TestCase):
+    def fixture(self):
+        surface = {'id': 'widgets', 'instance': 'one', 'output': 'Virtual-1', 'frames': 1,
+                   'native_frames': 1, 'pointer_input': 'content', 'width': 640, 'height': 480}
+        hit = {'id': 'notes-input', 'x': 24, 'y': 60, 'width': 592, 'height': 240,
+               'clip': {'x': 0, 'y': 0, 'width': 640, 'height': 480}}
+        layer = {'namespace': 'lucent-widgets', 'pid': 42, 'address': '0xabc',
+                 'x': 640, 'y': 100, 'w': 640, 'h': 480}
+        return surface, hit, layer
+
+    def target(self):
+        return driver.notes_pointer_target(*self.fixture(), 42)
+
+    def test_target_binds_layer_instance_geometry_clip_and_submitted_surface(self):
+        surface, hit, layer = self.fixture()
+        target = self.target()
+        self.assertEqual(target['point'], (960, 280))
+        for source, key, value in ((surface, 'instance', 'two'), (surface, 'output', 'Virtual-2'),
+                                   (layer, 'address', '0xdef'), (layer, 'x', 650), (hit, 'x', 25)):
+            changed = [copy.deepcopy(item) for item in (surface, hit, layer)]
+            changed[(surface, hit, layer).index(source)][key] = value
+            with self.subTest(key=key, value=value):
+                self.assertNotEqual(driver.notes_pointer_target(*changed, 42), target)
+        for index, key, value in ((0, 'native_frames', 0), (0, 'pointer_input', 'none'),
+                                   (2, 'pid', 99), (2, 'address', ''), (2, 'w', 630),
+                                   (1, 'clip', {'x': 0, 'y': 0, 'width': 640, 'height': 200})):
+            changed = [copy.deepcopy(item) for item in (surface, hit, layer)];changed[index][key] = value
+            with self.subTest(key=key, value=value), self.assertRaises(driver.CheckFailure):
+                driver.notes_pointer_target(*changed, 42)
+
+    def harness(self):
+        h = driver.Harness.__new__(driver.Harness)
+        h.input_guard = Mock();h.move = Mock();h.qmp = Mock();h.eventually = Mock()
+        h.notes_press_target = None
+        h.notes_surface = lambda: ({'focus': 'notes-input'}, {})
+        return h
+
+    def test_moved_recreated_clipped_or_retired_notes_never_gets_physical_down(self):
+        target = self.target()
+        variants = []
+        for part, key, value in (('layer', 'address', '0xdef'), ('layer', 'x', 650), ('hit', 'x', 25)):
+            changed = copy.deepcopy(target);changed[part][key] = value;variants.append(changed)
+        changed = copy.deepcopy(target);changed['instance'] = 'replacement';variants.append(changed)
+        variants += [driver.CheckFailure('fully_visible_notes_pointer_target'),
+                     driver.CheckFailure('submitted_notes_pointer_target')]
+        for changed in variants:
+            h = self.harness();h.current_notes_target = Mock(side_effect=[target, target, changed])
+            with self.subTest(changed=changed), patch.object(driver.time, 'sleep'), self.assertRaises(driver.CheckFailure):
+                h.focus()
+            h.qmp.assert_not_called()
+            h.move.assert_called_once_with(*target['point'])
+
+    def test_changed_target_after_slow_guard_is_rejected_before_qmp_command(self):
+        h = InputAdmissionTests().harness();h.target = None
+        h.notes_press_target = self.target();changed = copy.deepcopy(h.notes_press_target)
+        changed['layer']['address'] = '0xdef'
+        h.current_notes_target = Mock(return_value=changed);h.run = Mock()
+        with self.assertRaisesRegex(driver.CheckFailure, 'same_notes_hit_and_native_lifetime_before_press'):
+            h.qmp([{'type': 'btn', 'data': {'button': 'left', 'down': True}}])
+        h.run.assert_not_called()
+
+    def test_lost_down_reply_still_balances_release_and_retires_pending_target(self):
+        h = self.harness();target = self.target()
+        h.current_notes_target = Mock(return_value=target)
+        h.qmp.side_effect = [driver.CheckFailure('lost_down_reply'), None]
+        with patch.object(driver.time, 'sleep'), self.assertRaisesRegex(driver.CheckFailure, 'lost_down_reply'):
+            h.focus()
+        self.assertEqual([call.args[0][0]['data']['down'] for call in h.qmp.call_args_list], [True, False])
+        self.assertIsNone(h.notes_press_target)
 
 
 class RestorationAdmissionTests(unittest.TestCase):

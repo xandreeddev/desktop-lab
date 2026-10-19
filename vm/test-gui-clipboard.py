@@ -17,6 +17,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -78,6 +79,36 @@ def require_desktop_layers(layers, pid):
     visit(layers)
 
 
+def notes_pointer_target(surface, hit, layer, desktop_pid):
+    """One current fully visible Notes hit and exact native layer lifetime."""
+    require(surface.get('frames', 0) > 0 and surface.get('native_frames', 0) > 0
+            and surface.get('pointer_input') in ('all', 'content') and hit.get('id') == 'notes-input',
+            'submitted_notes_pointer_target')
+    require(layer.get('namespace') == 'lucent-' + surface['id'] and layer.get('pid') == desktop_pid
+            and isinstance(layer.get('address'), str) and bool(layer['address']), 'exact_notes_native_layer_lifetime')
+    clip = hit['clip']
+    values = [source.get(key) for source, keys in (
+        (surface, ('width', 'height')), (layer, ('x', 'y', 'w', 'h')),
+        (hit, ('x', 'y', 'width', 'height')), (clip, ('x', 'y', 'width', 'height')))
+        for key in keys]
+    require(all(type(value) in (int, float) and math.isfinite(value) for value in values),
+            'finite_notes_pointer_geometry')
+    require(abs(layer['w'] - surface['width']) <= .5 and abs(layer['h'] - surface['height']) <= .5,
+            'current_notes_native_layer_geometry')
+    left, top = max(hit['x'], clip['x'], 0), max(hit['y'], clip['y'], 0)
+    right = min(hit['x'] + hit['width'], clip['x'] + clip['width'], surface['width'])
+    bottom = min(hit['y'] + hit['height'], clip['y'] + clip['height'], surface['height'])
+    require(right - left > 10 and bottom - top > 10
+            and right - left >= hit['width'] - .5 and bottom - top >= hit['height'] - .5,
+            'fully_visible_notes_pointer_target')
+    point = (round(layer['x'] + (left + right) / 2), round(layer['y'] + (top + bottom) / 2))
+    require(0 <= point[0] < 1920 and 0 <= point[1] < 1080, 'notes_pointer_target_on_prepared_output')
+    return {'id': surface['id'], 'instance': surface.get('instance'), 'output': surface.get('output'),
+            'layer': {key: layer[key] for key in ('address', 'namespace', 'pid', 'x', 'y', 'w', 'h')},
+            'hit': {key: copy.deepcopy(hit[key]) for key in ('id', 'x', 'y', 'width', 'height', 'clip')},
+            'point': point}
+
+
 class Harness(notes.Harness):
     def __init__(self, args, directory):
         super().__init__(args, directory)
@@ -94,6 +125,7 @@ class Harness(notes.Harness):
         self.cursor_owner = None
         self.desktop_pid = None
         self.restoring_desktop = False
+        self.notes_press_target = None
         self.notes_workspace = 'lucent-clipboard-notes-' + self.tag
         self.browser_workspace = 'lucent-clipboard-browser-' + self.tag
 
@@ -158,6 +190,11 @@ class Harness(notes.Harness):
                     and active.get('pid') == clients[0].get('pid')
                     and workspace.get('name') == self.browser_workspace, 'exact_browser_native_focus')
             require(self.call_peer('dom', 'read')['focused'], 'owned_browser_document_has_keyboard_focus')
+        # qmp() invokes this guard immediately before sending a physical down.
+        # Keep target validation last, after all slower session/DOM checks.
+        if getattr(self, 'notes_press_target', None) is not None:
+            require(self.current_notes_target() == self.notes_press_target,
+                    'same_notes_hit_and_native_lifetime_before_press')
 
     def move(self, x, y):
         self.input_guard()
@@ -172,6 +209,41 @@ class Harness(notes.Harness):
     def key(self, *codes):
         require(self.target in ('notes', 'browser'), 'concrete_keyboard_target_required')
         super().key(*codes)
+
+    def current_notes_target(self):
+        surface, hit = self.notes_surface()
+        return notes_pointer_target(surface, hit, self.origin(surface), self.desktop_pid)
+
+    def focus(self):
+        self.input_guard()
+        previous = None
+        for _ in range(40):
+            try:
+                target = self.current_notes_target()
+            except (CheckFailure, LookupError):
+                time.sleep(.15)
+                continue
+            if previous == target:
+                self.move(*target['point'])
+                time.sleep(.12)
+                self.input_guard()
+                require(self.current_notes_target() == target, 'same_notes_hit_and_native_lifetime_before_press')
+                # Balance even when a down event reached QMP but its reply was
+                # lost. A stale target never authorizes the down event at all.
+                self.notes_press_target = target
+                try:
+                    self.qmp([{'type': 'btn', 'data': {'button': 'left', 'down': True}}])
+                    time.sleep(.05)
+                finally:
+                    try:
+                        self.qmp([{'type': 'btn', 'data': {'button': 'left', 'down': False}}])
+                    finally:
+                        self.notes_press_target = None
+                self.eventually(lambda: self.notes_surface()[0]['focus'] == 'notes-input', 'native_notes_focus')
+                return
+            previous = target
+            time.sleep(.15)
+        raise CheckFailure('stable_notes_hit_geometry')
 
     def stop_quiescent(self):
         # A failure during secure/foreign interaction never stops that desktop.

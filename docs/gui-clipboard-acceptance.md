@@ -43,6 +43,11 @@ unique named workspaces and transient unit belong only to that invocation.
 Native layer/hit geometry supplies the Notes pointer destination. The two
 workspaces let the actual browser window and desktop Notes receive focus
 without changing tiling rules or introducing an always-on-top test surface.
+Notes clicks bind the submitted field, full visible clip, surface instance/output
+and exact native layer address/PID/geometry. They revalidate that lifetime after
+pointer settling and as the final input guard before physical button-down;
+moved, clipped, retired or recreated targets refuse the press. An attempted
+button-down always receives its balancing release, including lost replies.
 
 Before each input the driver checks lock/authorization state, native output
 geometry, current workspace, closed shell panels, and every managed window.
@@ -104,6 +109,7 @@ All explicit retirement paths carry either the original wrapper receipt or the
 captured browser identity and refuse same-name successor invocations, including
 those observed after StopUnit. The original unit keeps its own systemd lifetime
 limit; the harness never substitutes name-only fallback cleanup.
+The wrapper fsyncs both its receipt file and parent directory before exec.
 
 Notes restoration starts only after original-browser retirement and a fresh
 unlocked, idle, no-foreign-client/cursor guard. If either fails, the driver leaves

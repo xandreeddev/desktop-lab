@@ -99,11 +99,16 @@ class OriginalBrowserAuthority(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory);proof = self.proof()
             manifest = {'class': 'Owned', 'uri': 'file:///owned/document.html'}
+            barriers = [];real_fsync = os.fsync
+            def sync(descriptor):
+                real_fsync(descriptor);barriers.append(descriptor)
             def execute(*_args):
                 self.assertEqual(json.loads((path/'origin.json').read_bytes()), proof)
+                self.assertEqual(len(barriers), 2)  # Receipt and parent durable before exec.
                 raise RuntimeError('no real exec')
             with patch.object(peer, 'context', return_value=(path, manifest)), \
                  patch.object(peer, 'capture_unit_origin', return_value=proof), \
+                 patch.object(peer.os, 'fsync', side_effect=sync), \
                  patch.object(peer.os, 'execv', side_effect=execute):
                 with self.assertRaisesRegex(RuntimeError, 'no real exec'):
                     peer.serve(path, self.run_id)
