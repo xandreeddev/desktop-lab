@@ -396,6 +396,29 @@ impl Network {
         {
             self.forget = None;
         }
+        // Keep close-before-ack authority only for the captured activation.
+        // A fresh observed successful connection retires it; otherwise closing
+        // the panel later could suppress a genuinely new background prompt.
+        if self.active.is_none()
+            && let Some(key) = self.activation_profile.as_ref()
+        {
+            let settled = self.snapshot().is_some_and(|snapshot| {
+                snapshot
+                    .profiles
+                    .iter()
+                    .find(|p| &p.key == key)
+                    .is_none_or(|profile| {
+                        snapshot.connections.iter().any(|c| {
+                            c.profile == Some(profile.id)
+                                && c.state == NetworkConnectionState::Connected
+                        })
+                    })
+            });
+            if settled {
+                self.activation_profile = None;
+                self.dismissed_profile = None;
+            }
+        }
         if let Some(scan) = &self.scan {
             match self.snapshot().and_then(|s| s.device(scan.device)) {
                 None => self.scan = None,

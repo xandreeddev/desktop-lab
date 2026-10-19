@@ -319,7 +319,7 @@ fn hidden_network_text_is_current_bounded_and_clipboard_tickets_do_not_cross_for
     assert_eq!(client.form.as_ref().unwrap().password_length(), 0);
 }
 
-fn credential_request(value: u64) -> NetworkCredentialRequest {
+pub(crate) fn credential_request(value: u64) -> NetworkCredentialRequest {
     NetworkCredentialRequest {
         id: NetworkCredentialRequestId::new(value).unwrap(),
         profile: NetworkProfileKey::new("fixture-profile").unwrap(),
@@ -466,5 +466,32 @@ fn request_before_first_network_snapshot_waits_for_profile_authority() {
     assert_eq!(
         client.form.as_ref().unwrap().credential_request(),
         Some(NetworkCredentialRequestId::new(5).unwrap())
+    );
+}
+
+#[test]
+fn observed_saved_connection_retires_close_suppression_for_future_requests() {
+    let (mut client, _, mut effects) = client();
+    let mut connecting = fixture();
+    connecting.devices[0].state = NetworkDeviceState::Connecting;
+    connecting.connections[0].state = NetworkConnectionState::Connecting;
+    client.update(Message::Observed(Ok(connecting)), &mut effects);
+    client.update(
+        Message::Request(Control::Activate(id(3), Some(id(1)))),
+        &mut effects,
+    );
+    complete(&mut client, &mut effects);
+    assert!(client.activation_profile.is_some());
+    client.update(Message::Observed(Ok(fixture())), &mut effects);
+    assert!(client.activation_profile.is_none());
+    client.update(Message::Close, &mut effects);
+    client.update(
+        Message::Credentials(Ok(vec![credential_request(8)])),
+        &mut effects,
+    );
+    assert!(client.open); // This is a new actual backend request, not the old activation.
+    assert_eq!(
+        client.form.as_ref().unwrap().credential_request(),
+        Some(NetworkCredentialRequestId::new(8).unwrap())
     );
 }
