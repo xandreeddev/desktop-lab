@@ -1,0 +1,195 @@
+{
+  "schema": 1,
+  "milestone": "transactional-native-display-settings",
+  "status": "strict-visual-guarded-vm-native-verified-for-single-output-qemu",
+  "implementation_source_commit": "a7f41eccdcd8eca51e8e5ee878d8f489d8d4bde5",
+  "native_harness_source_commit": "c43df300b778ff48a4fc912f801cc5f5b34b4344",
+  "offline_acceptance_source_commit": "b259ea29da3f8f8a453dcb956f558a14c3011b90",
+  "scope": "Native advertised mode/refresh, scale and position edits, explicit Keep/Revert, independent timeout and desktop-crash EOF rollback. Physical and multiple-output acceptance remain separate.",
+  "architecture": {
+    "domain": "Checked DisplayMode, DisplayScale, DisplayPosition and transient DisplayTransactionId; DisplayPort describes fresh read, ordered observation and apply/keep/revert without native IO or rendering types.",
+    "use_case": "Whole-layout validation rejects stale captured baselines, unsupported changed modes, invalid logical dimensions, ambiguous outputs and disabling every output before mutation.",
+    "adapter": "HyprlandDisplays pins the native socket lifetime and launches the same running executable in private guard mode. Fresh reads and watch captures share serialized native queries with monotonically ordered results. The guard checks actual output state and owns a 15-second boot-time deadline, UI-pipe EOF rollback and verified persistence.",
+    "client": "Native SDK fields, controlled scrolling, buttons and motion use generated component.displays semantic tokens. Drafts perform no OS writes; explicit messages use the injected port on the existing bounded controls queue.",
+    "persistence": "Keep preserves preceding user monitors.lua bytes and writes one marked tail using bounded owned-file capture, create_new staging, exact original-inode checkpoint and atomic exchange. Concurrent foreign changes retain checkpoints instead of being overwritten."
+  },
+  "strict_checks": {
+    "execution_source_commit": "a7709d6d238a0db737411cc5d3ad5d10aceb0162",
+    "steps": [
+      {
+        "step": "clean",
+        "exit": 0,
+        "seconds": 0.31
+      },
+      {
+        "step": "fmt",
+        "exit": 0,
+        "seconds": 1.77
+      },
+      {
+        "step": "clippy",
+        "exit": 0,
+        "seconds": 39.1
+      },
+      {
+        "step": "workspace",
+        "exit": 0,
+        "seconds": 176.84
+      },
+      {
+        "step": "python",
+        "exit": 0,
+        "seconds": 1.04
+      },
+      {
+        "step": "design",
+        "exit": 0,
+        "seconds": 0.08
+      }
+    ],
+    "rust_passed": 821,
+    "rust_ignored": 76,
+    "python_passed": 109,
+    "generated_tokens_verified": 582,
+    "source_equivalence": "The compiled source differs from the strict execution source only by four reviewed Display loading PNGs. Later native-verification tooling was checked separately; executable, design token and visual-test sources remain unchanged.",
+    "final_native_harness_python_and_syntax_passed": true
+  },
+  "visual_checks": {
+    "source_commit": "a7f41eccdcd8eca51e8e5ee878d8f489d8d4bde5",
+    "comparisons_passed": 28,
+    "scenarios": [
+      "loading",
+      "unavailable",
+      "controls",
+      "narrow",
+      "confirmation",
+      "failed",
+      "last"
+    ],
+    "palettes": [
+      "dark",
+      "light"
+    ],
+    "density_scales": [
+      1,
+      2
+    ],
+    "initial_nonupdate_actuals_all_reviewed": true,
+    "new_goldens_only": 28,
+    "existing_goldens_or_tolerances_changed": false,
+    "comparison_used_update_flag": false,
+    "backend": "Physical AMD Vulkan offscreen. Pixel/layout evidence, not GPU timing, pacing or scanout."
+  },
+  "release": {
+    "source_commit": "a7f41eccdcd8eca51e8e5ee878d8f489d8d4bde5",
+    "desktop_sha256": "2fb52754e75c34d9d73fff26d72a240f3e9a8d8672563bb6e0e404e9427a4f78",
+    "cli_sha256": "94d45e25be64d264203179b619f84c0f847e629227c9ed3a2b357c9a415ab881",
+    "managed_script_sha256": {
+      "compat.py": "53c134289a84c1af54cd8464d8370e69327ce03ae07c822d790c6af469a13156",
+      "controls.py": "222e662ea2b5046f6c8db99a02fc6c14fbd91473f5baa9a2410bb55a7d80b833"
+    }
+  },
+  "guarded_deployment": {
+    "passed": true,
+    "stable_supervision_seconds": 42.651,
+    "settings_bytes_and_inode_preserved": true,
+    "legacy_media_exports_preserved": true,
+    "initially_empty_clipboard_and_history_preserved": true,
+    "supervisor_preserved": true,
+    "effective_kill_mode": "mixed",
+    "binaries_count": 2,
+    "managed_scripts_count": 2,
+    "binary_deployment_rollback_needed": false,
+    "binary_deployment_rollback_exercised": false
+  },
+  "verification_tooling_checks": {
+    "source_commit": "b259ea29da3f8f8a453dcb956f558a14c3011b90",
+    "python_passed": 116,
+    "native_and_embedded_script_syntax_passed": true,
+    "rust_or_renderer_sources_changed": false
+  },
+  "native_checks": {
+    "harness_source_commit": "c43df300b778ff48a4fc912f801cc5f5b34b4344",
+    "harness_sha256": "50de476dd2b6827ec802103c1b5c2fd912d71011bfd19760107a1ad021789aea",
+    "offline_validator_source_commit": "b259ea29da3f8f8a453dcb956f558a14c3011b90",
+    "offline_validator_sha256": "1399eebb03af1ae2408124c0b46706f109ed99cc49f8cd00165021d935cab0be",
+    "binary_compilation_source_commit": "a7f41eccdcd8eca51e8e5ee878d8f489d8d4bde5",
+    "seconds": 142.333,
+    "passed": true,
+    "checks": [
+      "compatibility_open_and_escape",
+      "mode_draft_performs_no_native_change",
+      "mode_apply_and_explicit_revert",
+      "scale_apply_and_timeout_revert",
+      "position_apply_and_keep",
+      "keep_file_and_native_independent_restore",
+      "desktop_crash_eof_rollback_and_supervisor_recovery"
+    ],
+    "crash_tested": true,
+    "independent_restoration": {
+      "restoration": true
+    },
+    "exact_preservation_fingerprint_verified": true,
+    "managed_scripts_unchanged": true,
+    "original_run_preservation_assertion_passed": false,
+    "post_run_contract_correction": true,
+    "all_file_hashes_and_identities_unchanged": true,
+    "expected_service_restart_delta": 1,
+    "unit_and_supervisor_identity_verified": true,
+    "old_ui_retired_verified": true,
+    "rendered_beyond_deadline_verified": true,
+    "scope": "single-output QEMU native panel input and observed layout; no physical/multi-output claims"
+  },
+  "native_diagnostics": [
+    {
+      "observation": "Advertised 1280x800@74.99Hz applies as exactly 74.994Hz in this guest.",
+      "requested_millihertz": 74990,
+      "observed_millihertz": 74994,
+      "seconds_after_apply": 6.728,
+      "resolution": "The harness pins that exact measured mode-only postimage; no production tolerance was changed. Earlier exact-comparison failures restored original layout and full preservation fingerprint."
+    },
+    {
+      "observation": "After the test independently restored native X=0, a retained dirty draft rendered X=16. Reset rendered X=0, but this single-field comparison did not prove that the complete cached configuration was current; a later native Apply still rejected its stale baseline.",
+      "resolution": "Open and Reset now request a fresh complete DisplayPort.read on the existing worker queue. Ordered snapshots reject older watch/read results; cancelled and replaced request generations cannot reset a later draft. Native acceptance uses this production refresh path without a compositor-reload test workaround."
+    },
+    {
+      "observation": "Two seven-check native runs completed all functional flows and restored user files, but their original generic fingerprint assertion expected an unchanged service PID and restart count after deliberately killing the UI.",
+      "resolution": "Private before/after evidence showed every file hash and identity unchanged; only service.MainPID and NRestarts changed, with exactly one restart. An explicit post-run contract correction validates unchanged unit/drop-ins, argv, executable and cgroup, new supervisor/UI births, the retired old UI and rendered recovery beyond the deadline. It permits exactly those two service transitions. The original failed assertions are retained, and acceptance reuses the measured capture with one read-only recovery probe rather than replaying the seven inputs."
+    }
+  ],
+  "separate_resource_baseline": {
+    "source_commit": "a7f41eccdcd8eca51e8e5ee878d8f489d8d4bde5",
+    "desktop_sha256": "2fb52754e75c34d9d73fff26d72a240f3e9a8d8672563bb6e0e404e9427a4f78",
+    "seconds": 120.0008014269988,
+    "rss_samples": 480,
+    "sample_period_seconds": 0.25,
+    "rss_mib_mean": 384.82081705729166,
+    "rss_mib_peak_interval": 403.87890625,
+    "main_cpu_percent_one_core": 101.46598902014117,
+    "max_swap_mib": 0.0,
+    "normal_desktop_rss_target_mib": 300,
+    "target_met": false,
+    "environment": "One-output QEMU, llvmpipe LLVM 22.1.8 / Mesa 26.2.2 software Vulkan; 1920x1080 scale 1 at 60 Hz.",
+    "workload": "H.264 yuv420p 3840x2160 at 60/1 FPS, duration 28.333333 s, source-rate setting, fitted to 1920x1080.",
+    "source_settings_media_outputs_and_playback_preserved": true,
+    "cpu_stage_or_presentation_instrumentation_enabled": false,
+    "actual_60_fps_presentation_established": false,
+    "scope": "Separate read-only uninstrumented 120-second sample after Display acceptance. RSS includes software-driver mappings. Different source/workload cohort from Weather; no isolated improvement, scanout, sustained animation or physical-GPU result is claimed."
+  },
+  "protocol_references": [
+    "https://wiki.hypr.land/configuring/core/monitors/",
+    "https://wiki.hypr.land/IPC/",
+    "https://github.com/omacom/omarchy/blob/master/config/hypr/hyprland.lua"
+  ],
+  "remaining": [
+    "Actual simultaneous outputs, output enable/disable/rotation, physical modes, hotplug, fractional density and hardware visibility need their own native acceptance.",
+    "Suspend/resume, compositor restart during confirmation and broad third-party external-layout interoperability need separate native acceptance; source regressions cover socket-instance retirement.",
+    "HDR/color-management, active VRR, mirroring, custom modelines and EDID overrides are not offered as editable policies.",
+    "Host loss between Keep success and capture of the new file identity can retain the original checkpoint for manual recovery; automatic restoration is not claimed in that interval.",
+    "The separate same-binary live-video resource sample remains above 300 MiB RSS. The Display interaction test itself measures no RSS; GPU memory, animation pacing, actual 60 FPS presentation and scanout remain unverified. Other shell-wide goal gaps are tracked independently."
+  ],
+  "privacy": {
+    "credentials_personal_state_monitor_names_native_capture_paths_published": false,
+    "new_visuals_use_only_synthetic_fixtures": true
+  }
+}
