@@ -1,11 +1,13 @@
 # Standard application activation
 
-Source scope: accepted main `b474d1fe` includes normally merged PR87 and the coherent
-deployed `8e6d074b` runtime, including Application integration `bb304907`. Fresh
-intent tokens, explicit file/URI Open and the expanded XDG parser/observer are
+Source scope: accepted main `8ca4e820` includes normally merged PR89 at exact
+`80c8502a`, the independent `d1fff2d8` consumer, and the earlier PR87 runtime.
+The coherent deployed runtime remains `8e6d074b`, including Application
+integration `bb304907`. Fresh intent tokens, explicit file/URI Open and the
+expanded XDG parser/observer are
 implemented and included in that release. Its six CI checks pass. A later native
 Chromium run passes all nine feature and eight restoration checks using the
-unmerged independent `d1fff2d8` consumer and `b6323e9` harness; deployed desktop
+independent `d1fff2d8` consumer, now merged through PR89, and `b6323e9` harness; deployed desktop
 and CLI remain unchanged. Focus is observed without a compositor forced-focus
 command. Earlier failed and partial reports retain their results. This scoped
 result does not establish other applications, remote URI handlers or Chromium's
@@ -135,7 +137,7 @@ Declared desktop actions predate this milestone and already have owned native
 acceptance; see [application-actions.md](application-actions.md). The token,
 Open, parser and observation changes are merged in the deployed `8e` release,
 whose full workspace/protocol CI and 832 visual cases pass. A later real-Chromium
-run with the unmerged `d1fff2d8` independent consumer passes nine feature and
+run with the `d1fff2d8` independent consumer, now merged through PR89, passes nine feature and
 eight restoration checks, including observed first-launch focus. This verifies
 one local-document workload, not broad third-party compatibility. Current evidence and remaining checks
 are tracked in `docs/daily-use-completion.json`.
@@ -359,6 +361,11 @@ parser test covers successful HTTP `%u` and `%U` expansion with encoded percent,
 Unicode, query and fragment values; its execution requires the next Rust check.
 Native `%u`, default URI handlers, external navigation and broad browser
 compatibility remain outside this `%U` fixture's scope.
+
+The following result sections preserve the delivery state at each native run.
+Their capture-time unmerged flags remain historical; the current accepted main
+above now includes the d1 consumer through PR89. The recorded production binaries
+remain the separate coherent 8e release.
 
 ## Fresh real-application result: file opening passes, focus remains failed
 

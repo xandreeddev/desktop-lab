@@ -124,7 +124,7 @@ class OriginalBrowserAuthority(unittest.TestCase):
                  patch.object(peer.os, 'execv', side_effect=execute):
                 with self.assertRaisesRegex(RuntimeError, 'no real exec'):
                     peer.serve(path, self.run_id)
-            self.assertIn('--property=RuntimeMaxSec=240s',started.call_args.args[0])
+            self.assertIn('--property=RuntimeMaxSec=390s',started.call_args.args[0])
             self.assertIn('--unit='+peer.watchdog_name(self.run_id),started.call_args.args[0])
 
     def test_input_rejects_same_argv_successor_or_reborn_executable(self):
@@ -206,10 +206,13 @@ class OriginalBrowserAuthority(unittest.TestCase):
                 return lease['lease']
             with patch.object(peer,'context',return_value=(path,{})), \
                  patch.object(peer,'capture_unit_origin',return_value=proof), \
-                 patch.object(peer,'browser_lease',side_effect=admitted),patch.object(peer.signal,'alarm'), \
-                 patch.object(peer.time,'sleep'),patch.object(peer.chromium,'retire') as retired, \
+                 patch.object(peer,'browser_lease',side_effect=admitted),patch.object(peer.signal,'alarm') as alarm, \
+                 patch.object(peer.time,'monotonic',return_value=100), \
+                 patch.object(peer.time,'sleep') as sleep,patch.object(peer.chromium,'retire') as retired, \
                  patch.object(peer,'admit') as page_admission,patch.object(peer,'page') as page:
                 peer.watchdog(path,self.run_id)
+            alarm.assert_called_once_with(385)
+            sleep.assert_called_once_with(330)
             retired.assert_called_once_with(lease['lease'])
             page_admission.assert_not_called();page.assert_not_called()
 

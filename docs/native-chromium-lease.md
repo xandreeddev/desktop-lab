@@ -47,8 +47,8 @@ The App fixture reuses its existing independent watchdog and durable first-brows
 lease; forwarding wrapper services retain their strict generic origin checks.
 The GUI wrapper starts a separate watchdog before exec, records its own original
 unit receipt, and requires a durable browser admission before host input. That
-watchdog requests lease retirement after 180 seconds; its own unit and process
-have independent 240/235-second limits. These limits bound the helper; they are
+watchdog requests lease retirement after 330 seconds; its own unit and process
+have independent 390/385-second limits. These limits bound the helper; they are
 not substitutes for a successful process/scope drain observation. Notes and
 clipboard restoration still require the normal guarded live-host path.
 

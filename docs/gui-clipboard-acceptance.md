@@ -1,11 +1,17 @@
 # Real application clipboard acceptance
 
 `vm/test-gui-clipboard.py` extends the existing native Notes tests with a real
-Chromium Wayland window. The first native `d28fbe6b` run failed before transfers
-at `original_browser_wrapper_receipt_available`; only clipboard checkpoint/history
-pause passed. Its original failed/restoration flags remain unchanged. Corrected
-tooling still requires a fresh native run. Transport tests establish bounded
-protocol handling, not clipboard success.
+Chromium Wayland window. The frozen `2044e54f` harness passes all nine interaction
+and twelve restoration checks on the unchanged deployed `8e6d074b` desktop. The
+[sanitized native report](../reports/measurements/lucent-native-gui-clipboard-2044.json)
+records that result.
+
+The first native `d28fbe6b` run failed before transfers at
+`original_browser_wrapper_receipt_available`; only clipboard checkpoint/history
+pause passed. Its original failed/restoration flags remain unchanged. Transport
+tests alone establish bounded protocol handling, not clipboard success.
+Historical attempt notes below retain their capture-time pending status; the
+later pass supersedes only this scoped acceptance gap.
 
 The two transfers use actual VM `Ctrl+C`/`Ctrl+V` keyboard delivery:
 
@@ -23,6 +29,25 @@ offers; it is not the source of either test transfer. The existing restoration
 helper may use `wl-copy` afterward to restore the original clipboard payload.
 
 ## Execution
+
+The complete `2044e54f` run exercises both directions between an owned real
+Chromium Wayland textarea and native Notes, on one virtual output. It preserves
+multiline UTF-8, combining marks, emoji/CJK, blank lines and a trailing newline,
+and replaces the selected destination text. Actual native keyboard delivery
+performs both transfers; CDP only prepares and reads the owned textarea.
+All nine interaction checks and twelve automatic restoration checks pass,
+including exact original settings, wallpaper/media/exports, clipboard/history,
+output/workspace/cursor and idle state, owned browser/checkpoint/profile
+retirement, and the normal desktop's 35-second stability check. This result
+changes acceptance evidence, not production code or its deployed binaries.
+
+The frozen `41826937` native run passed browser-to-Notes transfer, exact
+multiline/combining/emoji/CJK preservation and replacement of the Notes
+selection. It then reached the Notes copy offer but refused reciprocal
+browser input because the original fixed 170-second input window expired.
+All 11 automatic restoration checks passed. The longer finite budgets below
+address measured guard/SSH overhead; reciprocal browser paste remains
+unaccepted until a fresh native run completes. That failed receipt is retained.
 
 Use the exclusive VM test lane after deploying and verifying the identified
 release. Do not run this alongside builds, benchmarks, another input driver or
@@ -104,12 +129,18 @@ clipboard-provider process. Original text and Notes never enter the public
 report. Private evidence remains under `reports/local/` with mode 0700/0600.
 
 Chromium can move its original main process into a registered application scope.
-The original service's 210-second limit alone is not proof that this scope and
+The original service's 360-second limit alone is not proof that this scope and
 its descendants have drained. The wrapper starts a separate owned watchdog
 before exec. Its original unit receipt is durable before launch continues; it
 captures the same browser lease used by the host, requests graceful PIDfd
-retirement after 180 seconds, and verifies the original service and scope drain.
-The watchdog has its own 240-second systemd limit and 235-second process alarm.
+retirement after 330 seconds, and verifies the original service and scope drain.
+The watchdog has its own 390-second systemd limit and 385-second process alarm,
+preserving the existing 55-second retirement allowance. The host input window is
+a fixed 300 seconds from before browser startup and is never renewed by successful
+guards. Keep an outer host limit of at least 600 seconds with a 90-second stop
+allowance so normal interruption can run the guarded restoration path, including
+the 35-second desktop stability check. None of these limits grants permission to
+retry input or skip ownership/focus checks.
 An unverified lease or failed drain remains a failure with private evidence.
 **A host crash does not automatically restore
 Notes, clipboard history or its helper.** The private checkpoint and recovery

@@ -30,6 +30,10 @@ import owned_chromium_lease as chromium
 
 SOURCE_TEXT = 'browser one\n雪 e\u0301 👩\u200d💻\nlast line\n'
 DESTINATION_TEXT = 'notes one\n\nnotes two\n'
+# Leave the existing 55 seconds for lease retirement after the longer input run.
+WATCHDOG_RETIRE_AFTER_SECONDS = 330
+WATCHDOG_ALARM_SECONDS = 385
+WATCHDOG_RUNTIME_SECONDS = 390
 FIXTURE_MIME_PRIORITY = ('text/plain;charset=utf-8', 'UTF8_STRING', 'text/plain')
 TEXT_ALIASES = ('text/plain;charset=utf-8', 'text/plain;charset=UTF-8',
                 'text/plain', 'UTF8_STRING', 'STRING', 'TEXT')
@@ -210,7 +214,7 @@ def serve(directory, run_id):
     private(directory / 'origin.json', json.dumps(origin).encode())
     require(unit_snapshot(watchdog_name(run_id))['load'] == 'not-found')
     subprocess.run(['systemd-run', '--user', '--quiet', '--collect', '--property=Type=exec',
-                    '--property=RuntimeMaxSec=240s', '--property=TimeoutStopSec=10s',
+                    f'--property=RuntimeMaxSec={WATCHDOG_RUNTIME_SECONDS}s', '--property=TimeoutStopSec=10s',
                     '--unit='+watchdog_name(run_id), *watchdog_argv(directory, run_id)], check=True, timeout=10)
     deadline = time.monotonic()+10
     while not os.path.lexists(directory / 'watchdog-origin.json'):
@@ -553,7 +557,7 @@ def retire_owned(directory, run_id, request):
 
 def watchdog(directory, run_id):
     directory, _ = context(directory, run_id)
-    signal.alarm(235)
+    signal.alarm(WATCHDOG_ALARM_SECONDS)
     receipt = capture_unit_origin(watchdog_name(run_id), watchdog_argv(directory, run_id))
     private(directory / 'watchdog-origin.json', json.dumps(receipt).encode())
     started = time.monotonic()
@@ -564,7 +568,7 @@ def watchdog(directory, run_id):
         except Exception:
             require(time.monotonic()-started < 35)
             time.sleep(.15)
-    time.sleep(max(0, 180-(time.monotonic()-started)))
+    time.sleep(max(0, WATCHDOG_RETIRE_AFTER_SECONDS-(time.monotonic()-started)))
     chromium.retire(lease)
 
 

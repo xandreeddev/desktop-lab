@@ -124,8 +124,10 @@ overflow control remains available even when every icon fits. IPC is `tray
 open`, `tray toggle` or `tray close`. At very narrow widths the bar hides its
 tray shortcut to retain the active workspace control; IPC remains available.
 Other native control panels close when this one opens. XEmbed legacy tray
-proxies, visual order/pinning preferences and third-party application acceptance
-remain pending.
+proxies, visual order/pinning preferences and broader third-party application
+acceptance remain pending. One genuine wired-only NetworkManager Applet item
+now passes native Lucent bar/menu input and its Connection Information action;
+see the [third-party acceptance guide](third-party-tray.md).
 
 ## Independent consumer and validation
 
@@ -151,3 +153,10 @@ The [tray bar acceptance report](../reports/measurements/lucent-tray-bar.json) r
 536 Rust tests, 93 Python checks, 52 focused Vulkan comparisons and the executed
 native fixture path, including overflow keyboard activation. It keeps third-party
 compatibility, overlay click behavior and unmeasured performance explicit.
+
+The later [real NetworkManager Applet report](../reports/measurements/lucent-native-third-party-tray-8e.json)
+passes five interaction and four cleanup checks on unchanged `8e6d074b`, one
+wired-only virtual output. A separate fresh post-removal observation passes
+thirteen preservation checks, including all 964 original packages/reasons and
+the five test packages absent. Other tray apps, wireless/secret-agent workflows,
+nested menus, physical hardware, icon pixels and performance remain unverified.

@@ -10,7 +10,7 @@ verified through one preferred UTF-8 flavor; unrelated browser formats are not
 requested. Original clipboard checkpoint and restoration remain text-only.
 
 Ordinary failure restores them through the existing guarded Notes harness. A
-host crash leaves an owned watchdog to request lease retirement after 180 seconds;
+host crash leaves an owned watchdog to request lease retirement after 330 seconds;
 failed lease/drain proof stays explicit. It does not automatically restore Notes:
 the private recovery checkpoint is retained. No
 physical-device, rich-HTML clipboard, other browser or focus-race claim is made.
@@ -38,6 +38,8 @@ require, private, CheckFailure = notes.require, notes.private, notes.CheckFailur
 input_policy = notes.load('gui_clipboard_input_policy', ROOT / 'vm/application_intent_policy.py')
 SOURCE_TEXT = 'browser one\n雪 e\u0301 👩\u200d💻\nlast line\n'
 DESTINATION_TEXT = 'notes one\n\nnotes two\n'
+INPUT_WINDOW_SECONDS = 300
+BROWSER_RUNTIME_SECONDS = 360
 HOST_PHASES = frozenset(('harness_init', 'native_suite', 'preflight', 'settings_checkpoint',
     'clipboard_checkpoint', 'peer_preparation', 'browser_start', 'browser_origin', 'browser_admission',
     'browser_window', 'notes_visibility', 'browser_copy', 'browser_to_notes', 'notes_copy',
@@ -510,7 +512,7 @@ def suite(h, result):
     require(h.peer['source_sha256'] == sha(SOURCE_TEXT), 'matching_owned_source_fixture')
     private(h.directory / 'peer-recovery.json', {'directory': h.peer_directory, 'run_id': h.tag})
 
-    h.input_deadline = time.monotonic() + 170
+    h.input_deadline = time.monotonic() + INPUT_WINDOW_SECONDS
     h.workspace_focus(h.browser_workspace)
     require(h.call_peer('absent')['owned_unit_name_absent'], 'typed_browser_unit_name_absent_before_start')
     # Chromium may migrate to its own registered scope. A distinct owned peer
@@ -522,7 +524,7 @@ def suite(h, result):
     h.phase = 'browser_start'
     h.browser_attempted = True
     h.session('systemd-run', '--user', '--quiet', '--collect', '--property=Type=exec',
-              '--property=RuntimeMaxSec=210s', '--property=TimeoutStopSec=10s',
+              f'--property=RuntimeMaxSec={BROWSER_RUNTIME_SECONDS}s', '--property=TimeoutStopSec=10s',
               '--unit=lucent-gui-clipboard-' + h.tag + '.service',
               '/usr/bin/python3', h.peer_directory + '/fixture.py', 'serve', h.peer_directory, h.tag)
     h.start_acknowledged = True
