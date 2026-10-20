@@ -16,6 +16,7 @@ mod extent;
 mod presentation;
 mod profiling;
 mod stream_trace;
+mod stream_upload;
 pub use profiling::{PaintProfile, RenderProfile, ResourceProfile};
 pub use stream_trace::StreamTrace;
 mod fallback;
@@ -62,6 +63,7 @@ pub struct Gpu {
     sampler: Sampler,
     fonts: Arc<Vec<lucent_ui::text::Font>>,
     cache: RefCell<ResourceCache<TextureResource>>,
+    stream_uploads: RefCell<stream_upload::Pool>,
     white: RefCell<Option<Rc<TextureResource>>>,
     device_failure: Arc<Mutex<Option<String>>>,
     pub adapter_description: String,
@@ -212,6 +214,7 @@ impl Gpu {
             sampler,
             fonts,
             cache: RefCell::new(ResourceCache::new(64 * 1024 * 1024, 1024)),
+            stream_uploads: RefCell::new(stream_upload::Pool::default()),
             white: RefCell::new(None),
             device_failure,
             adapter_description,
@@ -323,6 +326,7 @@ impl Gpu {
         data: &lucent_api::ImageData,
         profile: &mut ResourceProfile,
         enabled: bool,
+        updates: &mut stream_upload::StreamUpdates,
     ) -> Rc<TextureResource> {
         let streamed = data.stream_revision();
         let key = streamed.map_or_else(
@@ -332,33 +336,8 @@ impl Gpu {
         if let Some(texture) = self.cache.borrow_mut().get(&key) {
             if let Some((_, revision)) = streamed {
                 if texture.width == data.width() as f32 && texture.height == data.height() as f32 {
-                    if texture.revision.get() != revision {
-                        let started = profiling::start(enabled);
-                        self.queue.write_texture(
-                            TexelCopyTextureInfo {
-                                texture: &texture._texture,
-                                mip_level: 0,
-                                origin: Origin3d::ZERO,
-                                aspect: TextureAspect::All,
-                            },
-                            data.pixels(),
-                            TexelCopyBufferLayout {
-                                offset: 0,
-                                bytes_per_row: Some(data.width() * 4),
-                                rows_per_image: Some(data.height()),
-                            },
-                            Extent3d {
-                                width: data.width(),
-                                height: data.height(),
-                                depth_or_array_layers: 1,
-                            },
-                        );
-                        texture.revision.set(revision);
-                        *texture.image_lifetime.borrow_mut() = Some(data.lifetime());
-                        if enabled {
-                            profile.texture_upload += profiling::elapsed(started);
-                            profile.texture_upload_bytes += data.bytes() as u64;
-                        }
+                    if updates.revision(&texture) != revision {
+                        updates.defer(&texture, data, revision);
                     }
                     return texture;
                 }
@@ -461,6 +440,7 @@ struct PreparedScene {
     clips: Vec<u8>,
     textures: Vec<Rc<TextureResource>>,
     geometry: scene::Geometry,
+    stream_updates: stream_upload::StreamUpdates,
 }
 struct ValidatedScene<'a> {
     width: u32,
@@ -571,6 +551,15 @@ impl Canvas {
             ..
         } = *validated;
         let scale = density.factor();
+        let mut stream_updates = stream_upload::StreamUpdates::default();
+        stream_updates.reserve(
+            paint
+                .iter()
+                .filter(|primitive| {
+                    matches!(primitive, Paint::Image { data, .. } if data.stream_revision().is_some())
+                })
+                .count(),
+        )?;
         let mut records = Vec::new();
         records.try_reserve_exact(paint.len() * scene::INSTANCE_BYTES as usize)?;
         let mut textures = Vec::new();
@@ -642,7 +631,12 @@ impl Canvas {
                     } else {
                         0.
                     },
-                    self.gpu.image(data, &mut profile.resources, self.profiling),
+                    self.gpu.image(
+                        data,
+                        &mut profile.resources,
+                        self.profiling,
+                        &mut stream_updates,
+                    ),
                 ),
                 Paint::Text {
                     rect,
@@ -762,6 +756,7 @@ impl Canvas {
             clips: clip_records,
             textures,
             geometry,
+            stream_updates,
         })
     }
     /// Draw a scene to a compatible BGRA8 target from this canvas's device.
@@ -803,6 +798,7 @@ impl Canvas {
             clips,
             textures,
             geometry,
+            stream_updates,
         } = match self.prepare(&validated, &mut profile) {
             Ok(prepared) => prepared,
             Err(error) => {
@@ -860,9 +856,17 @@ impl Canvas {
         .flat_map(|f| f.to_ne_bytes())
         .collect();
         self.gpu.queue.write_buffer(&self.viewport, 0, &view_bytes);
+        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
+        let upload_started = profiling::start(self.profiling && !stream_updates.is_empty());
+        let mut pool = self.gpu.stream_uploads.borrow_mut();
+        let mut uploads = pool.begin(&self.gpu.device, !stream_updates.is_empty());
+        let uploaded_bytes = stream_updates.encode(&self.gpu, &mut uploads, &mut encoder);
+        if self.profiling {
+            profile.resources.texture_upload += profiling::elapsed(upload_started);
+            profile.resources.texture_upload_bytes += uploaded_bytes;
+        }
         profile.prepare = validated.validation + profiling::elapsed(started);
         let started = profiling::start(self.profiling);
-        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
         {
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 color_attachments: &[Some(RenderPassColorAttachment {
@@ -887,7 +891,12 @@ impl Canvas {
         let command = encoder.finish();
         profile.encode = profiling::elapsed(started);
         let started = profiling::start(self.profiling);
+        uploads.submitting();
         self.gpu.queue.submit([command]);
+        uploads.submitted();
+        drop(uploads);
+        drop(pool);
+        stream_updates.commit();
         profile.submit = profiling::elapsed(started);
         let started = profiling::start(self.profiling);
         // Keep each surface's current scene resident, including while other
