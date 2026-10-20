@@ -7,6 +7,14 @@ def require(condition, label):
         raise ValueError(label)
 
 
+def http_open_count(http_mode, field_code='%U'):
+    """Fixture cardinality; singular URI expansion is admitted only in HTTP mode."""
+    require(type(http_mode) is bool and type(field_code) is str
+            and field_code in ('%u', '%U'), 'known_http_uri_field_code_required')
+    require(http_mode or field_code == '%U', 'singular_field_code_requires_http_mode')
+    return 1 if field_code == '%u' else 2
+
+
 def unbound_pointer(bindings):
     require(type(bindings) is list and len(bindings) <= 4096, 'bounded_actual_pointer_bindings')
     for binding in bindings:

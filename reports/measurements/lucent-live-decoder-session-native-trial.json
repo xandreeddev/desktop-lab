@@ -1,0 +1,158 @@
+{
+  "schema": 1,
+  "status": "normal-resources-collected-host-ineligible",
+  "source_commit": "bf98d63e210723b23c453f26ab2ecd9c44172a51",
+  "production_candidate_is_accepted_main": false,
+  "scope": "Recorded live-decoder-session trial. A coherent native deployment and one normal uninstrumented resource interval pass their preservation checks; host pressure prevents normal-budget acceptance. No presentation interval was collected for this source.",
+  "candidate_change": "Adapter-local reuse of the live decoder session between source loops, with validated rewind and fallback reopening. Public ports, output density, pixel quality and source-rate playback policy retain their existing contracts.",
+  "evidence_sha256": {
+    "release_manifest": "23a7c20449dba8bf037cae061f90cd3bf6cd9126f6ac39c3fdc25f5aa278ab91",
+    "focused_build_and_media_checks": "ca5a9462e773656586381a0e375a7d6fe7ed3ac49919ecd3c9f090f35d29c801",
+    "deployment": "b9da5032b4341aa0c8777d43f7c82922483af30434571849d0d5630778a4db97",
+    "normal_measurement": "33e6bac3f2ce957fec5fa4ba7800d6b770eed1af5b2f5b16a2b6bebf7085734f"
+  },
+  "binaries": {
+    "lucent-desktop": {
+      "sha256": "28515e2d188396baff82f2e3b8574ba56bc2aebcdb34b472a3bed2df0fc4aeec",
+      "bytes": 37076712
+    },
+    "lucent-cli": {
+      "sha256": "4779a67d85f8c61e144a33e49030c5a63086de8ee5eb3c6fa8ce9de79ae46c28",
+      "bytes": 409112
+    },
+    "lucent-menu": {
+      "sha256": "adeea701843131edbbba1fa60c8b3dceb535cfa8301d66640be4f5cd61aeff97",
+      "bytes": 24183640
+    },
+    "lucent-lock": {
+      "sha256": "9a7b1d686540528b33777e387e0f0242348468e7008b80afa99b7a501e9c2052",
+      "bytes": 26858056
+    },
+    "lucent-greeter": {
+      "sha256": "396d96d8a8086ac6d74922a581fd4fad79bf7592766e9d3d0f988d3f2219e8f7",
+      "bytes": 26710392
+    },
+    "lucent-polkit": {
+      "sha256": "cf822725f17af4e29c198c28a8f9b0c6860978b1be114d4ec4f63ca33191caad",
+      "bytes": 24406528
+    },
+    "international-text": {
+      "sha256": "4e604bfe87abe7d29e5b9f22c8608adc24941b279a7b5ec4a8dbb0802beadae6",
+      "bytes": 24094120
+    },
+    "input-method-peer": {
+      "sha256": "ae704abdc17de18c55a08620f3bc4b8f7c38d45293d4f8b043856486fa97186a",
+      "bytes": 940024
+    },
+    "application-intent": {
+      "sha256": "6876a929f9c51064bae04ee99fafd7930d2d99ac16629af1708f21f42cd16100",
+      "bytes": 26308736
+    }
+  },
+  "local_validation": {
+    "source_commit": "bf98d63e210723b23c453f26ab2ecd9c44172a51",
+    "format_passed": true,
+    "strict_workspace_all_target_release_clippy_passed": true,
+    "video_tests_passed": 39,
+    "preview_tests_included": 10,
+    "coherent_release_binaries_built": 9,
+    "full_final_source_ci": {
+      "status": "separate_pending_verification",
+      "source_commit": "bf98d63e210723b23c453f26ab2ecd9c44172a51"
+    },
+    "scope": "Actual focused checks and locked/offline coherent build; this does not claim a full workspace unit-test, service-protocol or desktop-visual run on this source."
+  },
+  "deployment": {
+    "success": true,
+    "coherent_six_and_root_verified": true,
+    "supervised_beyond_initial_deadline": true,
+    "user_state_preserved": true,
+    "secure_configuration_preserved": true,
+    "greetd_restarted": false,
+    "settings_or_theme_written": false,
+    "rollback_required": false,
+    "acceptance_executables_installed": false,
+    "acceptance_executables_staged": true
+  },
+  "workload": {
+    "graphics": "AMD RADV RENOIR Vulkan, Mesa 26.2.2",
+    "source_codec": "h264",
+    "source_pixel_format": "yuv420p",
+    "source_width": 3840,
+    "source_height": 2160,
+    "nominal_source_rate": "60/1",
+    "fps_setting": "source",
+    "output_width": 1920,
+    "output_height": 1080,
+    "output_scale": 1,
+    "output_refresh_hz": 60
+  },
+  "normal_uninstrumented": {
+    "eligible": false,
+    "ineligible_reasons": [
+      "host_swap_activity",
+      "host_full_stall_pressure"
+    ],
+    "normal_uninstrumented_rss_target_met": null,
+    "preservation_verified": true,
+    "resources": {
+      "seconds": 120.0011933450005,
+      "rss_mib_mean": 246.49579201461378,
+      "rss_mib_max_interval": 246.859375,
+      "rss_sample_count": 479,
+      "sample_period_seconds": 0.25,
+      "process_lifetime_high_water_mib": 246.859375,
+      "cpu_percent_one_core": 197.1897057054212,
+      "swap_mib_max": 0.0
+    },
+    "host_pressure": {
+      "cpu_busy_fraction": 0.5568700917007745,
+      "ineligible_reasons": [
+        "host_swap_activity",
+        "host_full_stall_pressure"
+      ],
+      "minimum_available_mib": 3907.99609375,
+      "psi_fraction": {
+        "cpu": {
+          "full": 0.0,
+          "some": 0.023105747189785517
+        },
+        "io": {
+          "full": 0.3012148497480765,
+          "some": 0.607211856753486
+        },
+        "memory": {
+          "full": 2.27808011861043e-06,
+          "some": 3.130311529889152e-06
+        }
+      },
+      "seconds": 122.03258249300416,
+      "swap_in_delta": 6381,
+      "swap_out_delta": 0
+    }
+  },
+  "presentation": {
+    "source_pts_samples": 0,
+    "presentation_samples": 0,
+    "fps_measured": false,
+    "native_60fps_accepted": false
+  },
+  "independent_renderer_candidate": {
+    "source_commit": "1db58a008b48bd4279b74bf5633159c99db45472",
+    "local_checks_passed": true,
+    "format_and_strict_workspace_all_target_release_clippy_passed": true,
+    "pure_row_layout_tests_passed": 2,
+    "headless_vulkan_correctness_lifecycle_tests_passed": 5,
+    "deployed": false,
+    "native_resources_or_fps_accepted": false,
+    "scope": "Separate unmerged renderer candidate. Source and headless correctness checks do not change the recorded bf98 native result.",
+    "separate_offscreen_cpu_diagnostic_passed": true,
+    "diagnostic_scope": "Separate archived-binary offscreen/readback-synchronized CPU upload diagnostic only; the two upload paths have effectively similar observed CPU cost. No native FPS, RSS, GPU-time or causal desktop improvement is established."
+  },
+  "limits": [
+    "Observed mean and sampled peak RSS are below 300 MiB, but host swap activity and I/O stalls make normal-budget acceptance null. Zero guest-process swap does not establish a pressure-free host.",
+    "No source-specific compositor presentation/FPS interval, causal before/after comparison, CPU saving, decoded-frame drop attribution, pixel-visibility or physical-scanout acceptance is established.",
+    "Earlier 9b normal/presentation and accepted-baseline 8e results retain their own sources, workloads and limitations. They are not presentation evidence for bf98.",
+    "Coherent deployment does not rerun every earlier native application, IME, clipboard, tray or multi-output acceptance suite. Full exact-head CI and this documentation change have separate gates."
+  ]
+}
