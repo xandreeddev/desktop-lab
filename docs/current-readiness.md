@@ -1,22 +1,24 @@
 # Current daily-use readiness
 
-Accepted main is `d01ff7dbe3a9ba4da029f78d87e87b0e8aa95a85`
-([PR91](https://github.com/xandreeddev/desktop-lab/pull/91)), merged normally at
-2026-10-20 00:30:40 UTC after all six required checks passed on exact
-`fdfa39c88a16a011f7204f7406b42f86ccc77ec7` with CLEAN mergeability. It includes
-PR89's independent `d1fff2d8` application consumer and the earlier PR87
-Text/Application runtime. The accepted runtime baseline remains `8e6d074b`.
-The VM currently runs the coherent, **unmerged and performance-unaccepted**
-`9b5420b7` trial. Its separate HTTP URI test passes eleven native checks and
-nine restoration checks; that result does not accept the trial's memory or FPS.
-Merging, deployment and native acceptance remain separate facts. Newer
-documentation and harness changes do not repeat earlier runtime tests.
+Accepted main is `6b50bd5e95347faa8a59535b9360bc864df02344`
+([PR92](https://github.com/xandreeddev/desktop-lab/pull/92)), merged normally at
+2026-10-20 07:22:01 UTC after all six required checks passed on exact
+`fb4f65a8e6e1943dd6c160a5cc25758df7a4eb64` with CLEAN mergeability. It includes
+the HTTP URI acceptance follow-up, PR91 and the earlier PR87 Text/Application
+runtime. The accepted runtime baseline remains `8e6d074b`.
+As of this recorded reconciliation, the latest deployed trial is coherent
+**unmerged and performance-unaccepted** `bf98d63e`. It passes guarded deployment
+and a normal resource observation, but host pressure prevents budget acceptance
+and no FPS interval was collected for this source. The earlier `9b5420b7` HTTP
+URI run still passes eleven native and nine restoration checks at its own source;
+that result does not rerun on `bf98`. Merging, deployment and native acceptance
+remain separate facts. This guide records receipts rather than monitoring a live VM.
 
-[Pages run 39348072728](https://github.com/xandreeddev/desktop-lab/actions/runs/39348072728)
-published accepted `d01ff7db` successfully. The public desktop/library HTML
-returns HTTP 200 and exactly matches its deployed artifact; source links pin the
-exact workflow commit. The earlier `8ca4e820` publication retains its separately verified public
-HTML receipt. Checks for this later URI documentation follow-up remain separate.
+[Pages run 39386036668](https://github.com/xandreeddev/desktop-lab/actions/runs/39386036668)
+published accepted `6b50bd5e` successfully. Public desktop/library HTML returns
+HTTP 200, exactly matches the deployed artifact and pins source links to the
+workflow commit. Earlier `d01ff7db` and `8ca4e820` publications retain their own
+receipts. Checks and publication for this later decoder-results follow-up remain separate.
 
 The earlier three-second RADV liveness trial remains scoped to `a7f41ecc`.
 A later 16-check native run on `8e6d074b` passes two-output density/input and
@@ -63,7 +65,7 @@ ledger's requirement history remains useful for the broader backlog.
 | --- | --- | --- |
 | Saved Wi-Fi recovery | Merged native masked SecretAgent repair retains the saved profile UUID and storage policy. Fourteen native NetworkManager/GUI checks pass against owned simulated WPA2/hidden radios, including cancellation, repair, DHCP, saved reconnection and exact restoration. | Enterprise/WEP provisioning, agent-owned vaults and physical-radio acceptance remain separate gaps; they are not implied by the owned fixture. |
 | Safe display settings | Native whole-layout drafts, fresh ordered observations, Apply → Keep/Revert and independent 15-second/UI-crash EOF rollback. Seven actual one-output QEMU flows pass for mode, scale, position, persistence and recovery. File preservation is exact; the expected one-restart service transition is validated explicitly. | Physical/multiple outputs, native enable/disable/rotation, fractional display-settings input, hotplug, suspend/resume, compositor restart and secure-output acceptance remain open. The Keep-to-file-identity-capture host-loss interval retains manual recovery. |
-| Resources and animation | Event-driven redraw and physical-cover conversion are implemented. The accepted-baseline `8e6d074b` run observed 217.28/221.92 MiB normal mean/peak RSS and 26.9992 distinct revision advances/s in a separate instrumented run. The current, unmerged `9b5420b7` trial observed **374.464/398.652 MiB** normal mean/peak RSS, **174.232% of one logical core**, and **31.642 distinct prepared-revision advances/s** in compositor feedback. Profiling restores off with fresh read-only verification. | Both cohorts remain host-pressure-ineligible; the current trial exceeds the observed 300 MiB budget and does not establish 60 FPS. No causal speedup, decoded-frame drop, pixel-visibility or physical-scanout claim. CPU-stage attribution and a quality-preserving improvement remain required. See [the source-specific 9b report](../reports/measurements/lucent-live-threading-9b-native-trial.json) and [presentation analysis](native-presentation-analysis.md). |
+| Resources and animation | Event-driven redraw and physical-cover conversion are implemented. The latest recorded, unmerged `bf98d63e` decoder-session trial observed **246.496/246.859 MiB** normal mean/peak RSS and **197.190% of one logical core** over 120.001 s, with zero guest-process swap and preservation verified. The accepted-baseline `8e` and earlier `9b` resource/presentation reports remain separate. | Host swap and I/O stalls make the bf98 observation ineligible; normal-budget acceptance is null despite the observed RSS being below 300 MiB. No bf98 FPS interval or causal before/after improvement is established. The earlier 9b 31.642 prepared-revision advances/s is not a bf98 result. Eligible normal/animated, cold/warm and presentation evidence remains required. See [the source-specific decoder report](../reports/measurements/lucent-live-decoder-session-native-trial.json) and [presentation analysis](native-presentation-analysis.md). |
 | International text | Merged `8e6d074b` implements script shaping, hard-paragraph context across soft wraps, exact row-bound visual source/caret maps, tab separator projection, deterministic fallback and opt-in text-input-v3 composition. Five owned native feature checks pass: visible preedit/caret advance, CJK commit/delete/history, masked-focus retirement, multiline composition and RTL navigation. | The fresh owned native suite passes all five feature and five restoration checks; earlier cleanup failures retain their original results. Third-party IME, broader native pixel/scroll details, delayed clipboard/focus races, physical/cross-output text and broader GUI clipboard coverage remain pending. The later Chromium/Notes test passes both directions with nine interaction and twelve restoration checks on one virtual output. Exact merged `8e6d074b` passes six CI checks, full workspace, six controlled service-protocol filters and 832 Vulkan desktop cases; those checks retain their own scope. |
 | Application integration | Accepted main includes fresh input-bound context, explicit file/URI Open and expanded XDG parsing. The accepted-baseline `8e` local-file run passes nine feature/eight restoration checks with independent d1 consumer. A separate coherent `9b` trial passes eleven native HTTP URI/nine restoration checks: pointer, socket and CLI Open each create both fresh exact HTTP documents in real Chromium, with observed first-launch focus. | Direct token consumption, native `%u`, default handlers, external navigation, other applications, physical hardware and broader workflows remain unverified. The `9b` application result does not accept that trial’s performance. [Local-file report](../reports/measurements/lucent-native-application-intents-d1.json) and [HTTP URI report](../reports/measurements/lucent-native-http-uris-9b.json) retain separate scopes; earlier failures stay unchanged. |
 | Real-world validation | Several owned native workflows already pass. The coherent `8e6d074b` also passes 16 checks for two simultaneous compositor outputs, one headless, including real panel input at 1×/2×/1.25×, held-button retirement, same-name recreation and exact restoration. | Physical monitors/cable hotplug, suspend/resume, secure-output changes, physical Bluetooth/audio and other power/radio hardware, additional third-party tray applications/menus, other GUI clipboard applications, rich content and delayed-transfer/focus races need broader testing. One genuine wired-only NetworkManager Applet item/menu/information action passes five interaction, four cleanup and thirteen outside-worker preservation checks on unchanged `8e`. The owned real Chromium/Notes keyboard flow passes nine interaction and twelve restoration checks. The owned output test establishes no presentation FPS or multi-output Display settings transaction. |
@@ -181,7 +183,37 @@ table as a replacement for every acceptance record.
 
 ## Reading resource and animation claims
 
-The deployed `8e6d074b` RADV cohort records an uninstrumented 120.000492-second
+The latest recorded native trial is `bf98d63e`, whose coherent nine-binary
+release passes formatting, strict workspace/all-target release Clippy and all 39
+video tests, including 10 preview cases. Guarded deployment verifies the six
+managed user clients and root greeter, supervision beyond its startup deadline
+and preserved user/security state. Settings/theme and support files are not
+changed; greetd is not restarted. This is an unmerged trial, not accepted-main
+performance or a replay of the earlier 8e native suites.
+
+Its separate normal uninstrumented interval records 120.001193 s and 479 RSS
+samples at 0.25 s spacing: **246.495792 MiB mean / 246.859375 MiB sampled peak**,
+**197.189706% CPU of one logical core**, zero guest-process swap and preservation
+verified. The 4K60 H.264 source runs with source-rate playback on one 1080p60
+scale-1 RADV output. Host 6381 swap-in pages and I/O full-stall fraction 0.301215
+make the observation **ineligible**, with normal-budget acceptance null. The
+observed RSS is below 300 MiB; that is not an accepted resource target. No bf98
+PTS/presentation samples were collected, and no FPS or causal speedup is inferred.
+See the [sanitized decoder-session report](../reports/measurements/lucent-live-decoder-session-native-trial.json).
+
+The separate, unmerged renderer candidate `1db58a00` passes strict release
+Clippy, two pure row/layout tests and five headless Vulkan correctness/lifecycle
+tests. A separate offscreen CPU upload diagnostic also passes, with effectively
+similar observed costs for the pooled and fallback paths. That candidate is not
+deployed and has no native RSS/FPS result or established improvement; it does not
+change the recorded bf98 observation.
+
+The following accepted-baseline 8e observations retain their original source
+and measurement scope. The earlier [9b trial](../reports/measurements/lucent-live-threading-9b-native-trial.json)
+also retains its separate normal and instrumented results; neither is a bf98
+presentation measurement or a matched causal comparison.
+
+The accepted-baseline `8e6d074b` RADV cohort records an uninstrumented 120.000492-second
 interval with 480 RSS samples at 0.25-second spacing: **217.28 MiB mean /
 221.92 MiB sampled peak**, 112.25% CPU of one logical core and zero guest-process
 swap. The unchanged 4K60 H.264 video, source-rate setting and single 1080p60 output
