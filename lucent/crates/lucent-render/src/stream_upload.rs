@@ -43,15 +43,13 @@ impl Layout {
             bytes,
         })
     }
-    fn write(self, destination: &mut [u8], pixels: &[u8]) {
+    fn write(self, pixels: &[u8], mut write: impl FnMut(std::ops::Range<usize>, &[u8])) {
         if self.row == self.stride as usize {
-            destination[..pixels.len()].copy_from_slice(pixels);
+            write(0..pixels.len(), pixels);
         } else {
-            for (target, source) in destination
-                .chunks_exact_mut(self.stride as usize)
-                .zip(pixels.chunks_exact(self.row))
-            {
-                target[..self.row].copy_from_slice(source);
+            for (row, source) in pixels.chunks_exact(self.row).enumerate() {
+                let start = row * self.stride as usize;
+                write(start..start + self.row, source);
             }
         }
     }
@@ -325,7 +323,9 @@ impl Submission<'_> {
                 self.pool.counters.fallbacks += 1;
                 return false;
             };
-            layout.write(&mut view[..layout.bytes as usize], data.pixels());
+            layout.write(data.pixels(), |range, source| {
+                view.slice(range).copy_from_slice(source);
+            });
         }
         slot.buffer.unmap();
         let key = Key {

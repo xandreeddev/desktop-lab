@@ -31,7 +31,9 @@ fn upload_row_copy_preserves_rgba_and_does_not_copy_padding_as_pixels() {
     let pixels: Vec<_> = (0..65 * 3 * 4).map(|index| (index % 251) as u8).collect();
     let layout = Layout::rgba(65, 3, pixels.len(), 1536).unwrap();
     let mut padded = vec![0xab; layout.bytes as usize];
-    layout.write(&mut padded, &pixels);
+    layout.write(&pixels, |range, source| {
+        padded[range].copy_from_slice(source);
+    });
     for row in 0..3 {
         assert_eq!(
             &padded[row * 512..row * 512 + 260],
@@ -45,7 +47,9 @@ fn upload_row_copy_preserves_rgba_and_does_not_copy_padding_as_pixels() {
     }
     let tight = Layout::rgba(64, 1, 256, 256).unwrap();
     let mut destination = vec![0; 256];
-    tight.write(&mut destination, &pixels[..256]);
+    tight.write(&pixels[..256], |range, source| {
+        destination[range].copy_from_slice(source);
+    });
     assert_eq!(destination, pixels[..256]);
 }
 
@@ -61,7 +65,9 @@ fn image(data: Arc<ImageData>, rect: Rect) -> Paint {
     }
 }
 fn gpu() -> Rc<Gpu> {
-    Gpu::headless(Arc::new(vec![])).unwrap()
+    let gpu = Gpu::headless(Arc::new(vec![])).unwrap();
+    eprintln!("stream upload test adapter: {}", gpu.adapter_description);
+    gpu
 }
 fn solid(stream: &ImageStream, width: u32, height: u32, color: [u8; 4]) -> Arc<ImageData> {
     Arc::new(
