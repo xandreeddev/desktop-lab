@@ -619,7 +619,7 @@ impl DecoderSession {
             rate,
             origin,
             deadline,
-            ..
+            rewind_at,
         } = self;
         let mut timeline = PresentationTimeline::new((*time_base).into(), *rate);
         let mut clock = FrameClock::new(options.fps);
@@ -641,6 +641,13 @@ impl DecoderSession {
                     return Ok(false);
                 }
                 if converter.is_none() {
+                    // A demuxer may report start_time=0 while initial decoded
+                    // frames have no PTS. Seeking to that later known timestamp
+                    // need not reproduce this prefix; retain the old reopen
+                    // path rather than guessing away any source frames.
+                    if frame.timestamp().is_none() {
+                        *rewind_at = None;
+                    }
                     *converter = Some(match purpose {
                         DecodePurpose::Preview(preview) => {
                             FrameConverter::new_sized(&frame, None, Some(preview))?

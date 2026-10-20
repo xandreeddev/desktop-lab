@@ -769,43 +769,54 @@ fn video_live_h264_reuses_actual_contexts_and_conversion_storage_after_eof() {
     assert_eq!(storage_snapshot(&file), original);
 }
 
-/// Check the source timestamp itself: negative DTS from B-frame reorder is not
-/// evidence of a negative presentation start.
-fn first_decoded_pts(path: &Path) -> i64 {
+/// Observe actual decoded timestamps, including unknown values. Encoded
+/// negative timestamps can become missing PTS during demux; negative DTS alone
+/// is not evidence of a negative presentation start.
+fn decoded_timestamps(path: &Path) -> Vec<Option<i64>> {
     let mut input = ffmpeg::format::input(path).unwrap();
     let stream = input.streams().best(ffmpeg::media::Type::Video).unwrap();
     let index = stream.index();
     let mut context =
         ffmpeg::codec::context::Context::from_parameters(stream.parameters()).unwrap();
-    context.set_threading(DecodePurpose::Poster.threading(context.id()));
+    context.set_threading(DecodePurpose::LiveWallpaper.threading(context.id()));
     let mut decoder = context.decoder().video().unwrap();
+    let mut result = vec![];
+    let mut receive = |decoder: &mut ffmpeg::decoder::Video| {
+        loop {
+            let mut frame = ffmpeg::util::frame::video::Video::empty();
+            match decoder.receive_frame(&mut frame) {
+                Ok(()) => result.push(frame.timestamp()),
+                Err(ffmpeg::Error::Other { errno }) if errno == libc::EAGAIN => break,
+                Err(ffmpeg::Error::Eof) => break,
+                Err(error) => panic!("could not decode bounded timestamp fixture: {error}"),
+            }
+        }
+    };
     loop {
         let mut packet = ffmpeg::Packet::empty();
         match packet.read(&mut input) {
-            Ok(()) if packet.stream() == index => decoder.send_packet(&packet).unwrap(),
-            Ok(()) => continue,
-            Err(ffmpeg::Error::Eof) => {
-                decoder.send_eof().unwrap();
+            Ok(()) if packet.stream() == index => {
+                decoder.send_packet(&packet).unwrap();
+                receive(&mut decoder);
             }
+            Ok(()) => {}
+            Err(ffmpeg::Error::Eof) => break,
             Err(error) => panic!("could not read bounded timestamp fixture: {error}"),
         }
-        let mut frame = ffmpeg::util::frame::video::Video::empty();
-        match decoder.receive_frame(&mut frame) {
-            Ok(()) => return frame.timestamp().expect("fixture first PTS must be known"),
-            Err(ffmpeg::Error::Other { errno }) if errno == libc::EAGAIN => {}
-            Err(error) => panic!("timestamp fixture ended without a decoded PTS: {error}"),
-        }
     }
+    decoder.send_eof().unwrap();
+    receive(&mut decoder);
+    result
 }
 
 #[test]
-fn video_live_h264_signed_presentation_starts_preserve_complete_loop_output() {
+fn video_live_h264_positive_and_missing_initial_pts_preserve_complete_loop_output() {
     let root = Directory::new();
     ffmpeg::init().unwrap();
-    for (name, extra, sign) in [
-        ("positive.mp4", vec!["-output_ts_offset", "2"], 1),
+    for (name, extra, sign, missing_prefix) in [
+        ("positive.mp4", vec!["-output_ts_offset", "2"], 1, 0),
         (
-            "negative.mkv",
+            "missing-initial-pts.mkv",
             vec![
                 "-output_ts_offset",
                 "-0.3",
@@ -814,7 +825,8 @@ fn video_live_h264_signed_presentation_starts_preserve_complete_loop_output() {
                 "-f",
                 "matroska",
             ],
-            -1,
+            0,
+            3,
         ),
     ] {
         let file = h264_fixture_with_options(&root.0, name, &extra);
@@ -849,11 +861,17 @@ fn video_live_h264_signed_presentation_starts_preserve_complete_loop_output() {
             sign,
             "muxer normalized the requested presentation start"
         );
+        let raw_pts = decoded_timestamps(&file);
+        assert_eq!(raw_pts.len(), 8, "timestamp fixture must fully drain");
         assert_eq!(
-            first_decoded_pts(&file).signum(),
-            sign,
-            "fixture only shifted DTS, not presentation PTS"
+            raw_pts.iter().take_while(|pts| pts.is_none()).count(),
+            missing_prefix
         );
+        assert_eq!(raw_pts[missing_prefix].unwrap().signum(), sign);
+        // The negative output offset is not exposed as negative presentation
+        // timestamps by this Matroska demuxer: metadata is zero and the first
+        // three actual frames have unknown PTS. Do not claim negative coverage
+        // or use metadata zero to discard/reposition past that initial prefix.
         assert!(session.rewind_at.is_some());
         for cycle in 0..2 {
             let mut actual = vec![];
@@ -874,8 +892,14 @@ fn video_live_h264_signed_presentation_starts_preserve_complete_loop_output() {
                 actual, reference,
                 "offset source changed during cycle {cycle}"
             );
+            if missing_prefix > 0 {
+                assert!(
+                    session.rewind_at.is_none(),
+                    "unknown initial PTS must forbid reuse"
+                );
+            }
             if cycle == 0 && !session.rewind(&Never) {
-                // Some demuxers do not support this signed start. Exercise the
+                // Unknown initial PTS or an unsupported seek keeps the
                 // same one-attempt/drop-before-reopen fallback as the caller;
                 // the next cycle still has to match the complete source.
                 drop(session);
