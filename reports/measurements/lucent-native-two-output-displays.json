@@ -1,0 +1,169 @@
+{
+  "schema": 1,
+  "status": "corrected_owned_native_two_output_display_transactions_passed",
+  "overall_passed": true,
+  "scope": "Four native Display transaction flows with one original QEMU output and one exclusively owned temporary headless output. The corrected harness and independent restoration receipts are separate from the earlier failed attempt and its recovery. No production runtime changes or broader display/hardware acceptance are inferred.",
+  "sources": {
+    "accepted_main_commit": "2b3c6db4d2482cd8b8f0c4ee9fd0ed9c2640ce57",
+    "harness_source_commit": "86df4e5bcff5cea3ba85f17e400b88cacd70f4f4",
+    "managed_desktop_source_commit": "35ed87ed4c01cf62e3c8406b8abdcc0809cc155b",
+    "managed_desktop_binary_sha256": "6ff4e06b73f1a1f68f27cb0504c67710b0a9e118b181ba8ee41eb78d6251ef78",
+    "native_driver_sha256": "f951b3e02c0239d78ce375699dfd517a7c2e9c293313f285d1e683efb40a598e",
+    "independent_owner_sha256": "e311f903f087f35e83ed458ab4fb737cf60caa447ea91c72073d02c526c966a9",
+    "driver_path": "vm/test-multi-output-displays.py",
+    "owner_path": "vm/multi_output_display_guard.py",
+    "pure_test_path": "tests/test_multi_output_displays_policy.py",
+    "production_runtime_changed": false,
+    "scope": "Harness source 86df is separate from the managed 35ed performance trial and accepted main 2b. The change adds acceptance tooling and documentation, not production desktop/domain/renderer changes. Its final merge, exact-head CI and publication gates remain separate."
+  },
+  "evidence_sha256": {
+    "native_report": "c6d2224f8b2eb961b131612df76bbac2b94257becbfbcac854037654be0fd2dd",
+    "source_independent_staged_receipts": "632ff5cea5ec53c919da19af6f4dd6e766767f5d2ff7d30720f52341935d3315",
+    "post_run_normal_off_facts": "0a81858ca8a7cf0288ef2da126d25f41b25d407f5600b0dee3364e1c37a266ed",
+    "pre_run_normal_off_facts": "c686ff0b4a51787beb9fd735e26bcb24b521532366957e0942a5f89061656717",
+    "initial_failed_native_report": "3225fbd093f59fb9a09a934e67720d71b2837c92da728f87b8687c9e141859b9",
+    "separate_initial_failure_recovery": "7e9b346c3439fdf2f1db4aa345cb124c6201df498bc36961d25fab3e4b4977f6",
+    "full_python_tests": "97ff61c05d229e342659dfda79102b72c458af705c7ce432f67dc3eb41c60810"
+  },
+  "local_validation": {
+    "source_commit": "86df4e5bcff5cea3ba85f17e400b88cacd70f4f4",
+    "focused_pure_tests_passed": 13,
+    "full_python_tests_passed": 544,
+    "focused_tests_included_in_full_suite": true,
+    "full_suite_exit_code": 0,
+    "full_suite_log_sha256": "9202b736fed250ec91081051fedd40668ef1277d98011ddb26d75b62aa330f0e",
+    "scope": "Actual source-pinned Python validation, including cursor dispatch/postimage, uncertain ownership rejection, complete monitor-tail generation and atomic inode restoration regressions. No Cargo, renderer visual or hardware test result is inferred."
+  },
+  "native_workload": {
+    "simultaneous_outputs": 2,
+    "original_output": {
+      "logical_width": 1920,
+      "logical_height": 1080,
+      "scale": 1,
+      "refresh_hz": 60
+    },
+    "owned_headless_output": {
+      "initial_width": 1280,
+      "initial_height": 960,
+      "initial_scale": 1,
+      "horizontal_gap_from_original": 32,
+      "position_preview_delta_x": 16,
+      "fractional_preview_scale": 1.25,
+      "created_and_removed_by_owned_lease": true
+    },
+    "display_panel_on_original_output": true,
+    "display_panel_input_scale": 1,
+    "scope": "Pointer and keyboard input target the submitted, exclusive Display panel on the unchanged original 1\u00d7 output. A fractional scale is applied to the owned target output; the panel itself is not fractionally scaled.",
+    "native_pointer_and_keyboard_input_executed": true
+  },
+  "native_checks": [
+    "two_output_draft_has_no_native_effect",
+    "two_output_apply_explicit_revert",
+    "two_output_fractional_scale_timeout_revert",
+    "two_output_native_keep_complete_monitor_tail"
+  ],
+  "native_checks_passed": 4,
+  "native_flow_details": [
+    {
+      "check": "two_output_draft_has_no_native_effect",
+      "observed": "Editing the owned output position changes only the draft; both native output signatures remain unchanged."
+    },
+    {
+      "check": "two_output_apply_explicit_revert",
+      "observed": "Native Apply previews the owned output position by 16 logical pixels, then explicit Revert restores the whole baseline layout."
+    },
+    {
+      "check": "two_output_fractional_scale_timeout_revert",
+      "observed": "Native Apply previews scale 1.25 on the owned output; the independent confirmation timeout restores the complete baseline layout. No exact stopwatch latency or fractionally scaled panel input is claimed."
+    },
+    {
+      "check": "two_output_native_keep_complete_monitor_tail",
+      "observed": "Native Keep saves the complete two-output monitor tail while retaining the original prefix. The actual saved digest matches the predeclared intent. The retained original file is restored afterward."
+    }
+  ],
+  "owner_restoration_checks": {
+    "original_monitor_bytes_inode": true,
+    "only_owned_output_removed": true,
+    "original_workspace_cursor": true,
+    "same_cohort_settings_media_and_profiling": true,
+    "preservation_supervision_security_sources_and_profiles": true
+  },
+  "owner_positive_restoration_checks_passed": 5,
+  "preservation_policy": {
+    "raw_owner_restoration_boolean_entries": 6,
+    "policy_markers_not_counted_as_functional_checks": 1,
+    "monitor_ctime_and_link_count_claimed_unchanged": false,
+    "raw_no_unchanged_ctime_or_link_count_claim_marker": true,
+    "scope": "The original monitor bytes and inode are restored. Checkpoint hardlink creation/retention and atomic exchange can change ctime/link count and the parent directory timestamps; these are not claimed unchanged. The five positive owner checks are counted separately from this policy marker."
+  },
+  "source_independent_verification": {
+    "read_only": true,
+    "staged_json_receipts_captured": 8,
+    "staged_source_hashes_checked": 6,
+    "before_after_preservation_and_supervision_data_exact": true,
+    "before_after_preservation_and_supervision_raw_hashes_exact": true,
+    "saved_keep_matches_predeclared_intent": true,
+    "retained_original_monitor_digest_matches_checkpoint": true,
+    "original_owner_process_birth_and_recursive_cgroup_drained": true,
+    "owner_unit_inactive_with_zero_main_process": true,
+    "original_monitor_bytes_and_inode_restored": true,
+    "only_owned_output_removed": true,
+    "original_workspace_and_cursor_restored": true,
+    "original_settings_media_sources_security_profiles_and_supervision_preserved": true,
+    "scope": "Independent host-side reconciliation of retained private checkpoint/header/Keep/intent/finished and before/after receipts. Original inode and digest matching are checked privately; live paths, contents, configuration digests, output names and process/native identifiers are not published."
+  },
+  "fresh_post_run_normal_state": {
+    "independent_read_only_capture_passed": true,
+    "same_managed_desktop_process_identity": true,
+    "source_and_binary_unchanged": true,
+    "all_three_runtime_profiling_flags_off": true,
+    "all_non_frame_facts_exact_against_pre_run_reference": true,
+    "only_advancing_frame_counters_ignored": true,
+    "scope": "The complete fresh normal facts equal the reviewed pre-run facts after removing only authority.frames. No other timestamp, inode, source, security, settings, output or workspace differences are admitted by that comparison."
+  },
+  "historical_failed_attempt": {
+    "harness_source_commit": "7ebd0e846fa39c86a390d75d81b589863b373680",
+    "native_report_sha256": "3225fbd093f59fb9a09a934e67720d71b2837c92da728f87b8687c9e141859b9",
+    "success": false,
+    "native_feature_checks_passed": 0,
+    "reason": "The first harness used eval to construct a cursor-movement descriptor instead of dispatching it. The cursor postimage check rejected the flow before any functional transaction check passed; uncertain cursor ownership blocked automatic cleanup.",
+    "immutable_failed_report_preserved": true,
+    "separate_recovery": {
+      "success": true,
+      "recovery_receipt_sha256": "7e9b346c3439fdf2f1db4aa345cb124c6201df498bc36961d25fab3e4b4977f6",
+      "fresh_normal_off_receipt_sha256": "c686ff0b4a51787beb9fd735e26bcb24b521532366957e0942a5f89061656717",
+      "exactly_owned_panel_closed_and_headless_output_removed": true,
+      "no_cursor_warp_or_configuration_settings_write": true,
+      "source_security_supervision_preferences_original_output_workspace_cursor_preserved": true,
+      "scope": "A separately reviewed, one-use recovery closes only the anchored owned panel and removes the anchored headless output. It does not convert the failed test into a pass. The corrected native run has its own source and report."
+    }
+  },
+  "limits": [
+    "This is one owned virtual two-output topology, with all panel input on the original 1\u00d7 output; changing the target output to 1.25\u00d7 does not validate a fractionally scaled panel.",
+    "The four flows cover draft isolation, whole-layout explicit/timeout rollback and Keep persistence. They do not cover enable/disable, rotation, physical hotplug, suspend/resume, secure-output transitions or another compositor.",
+    "A source-pinned private owner and exact checkpoint enable guarded restoration. Lost ownership or host loss can still require manual review; retained checkpoints are not an automatic crash-recovery promise.",
+    "Source validation, this scoped native success, performance and delivery are separate gates. No pixel-fidelity, scanout, CPU/RSS saving or 60 FPS acceptance follows.",
+    "The earlier failed report remains failed and immutable; its successful recovery is separate from this corrected successful run."
+  ],
+  "delivery": {
+    "final_followup_exact_head_ci_passed": null,
+    "final_followup_site_checks_passed": null,
+    "final_followup_merged": false,
+    "final_followup_published": false,
+    "scope": "Actual local source and native evidence only. Root will reconcile later exact-head CI, merge and Pages receipts separately."
+  },
+  "privacy": {
+    "raw_live_paths_contents_credentials_process_or_native_identifiers_monitor_output_names_or_preference_digests_published": false
+  },
+  "broader_acceptance": {
+    "physical_displays_or_cable_hotplug": false,
+    "secure_output_changes": false,
+    "sleep_resume_or_compositor_restart": false,
+    "native_enable_disable_or_rotation": false,
+    "fractionally_scaled_display_panel_input": false,
+    "third_party_application_compatibility": false,
+    "frame_pacing_or_60fps": false,
+    "cpu_rss_or_gpu_resource_targets": false,
+    "power_loss_or_host_loss_automatic_recovery": false
+  }
+}
