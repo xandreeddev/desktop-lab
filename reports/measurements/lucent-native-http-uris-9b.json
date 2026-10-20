@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "status": "scoped_native_http_uri_acceptance_passed",
+  "overall_passed": true,
+  "production_source_commit": "9b5420b74c68bf9a9d4f3e47a8ecf17a0357bb45",
+  "harness_source_commit": "7a92749e3a453ba8d8557ae43f45f891ab05a1cf",
+  "production_candidate_is_accepted_main": false,
+  "production_candidate_note": "9b is an unmerged performance trial. This application result does not accept its RSS, CPU or presentation rate.",
+  "private_report_sha256": "3913742c579cf92a4f425333d34e90aa85fb7ce9639929c818f4f324b9d9f60b",
+  "binary_sha256": {
+    "lucent-desktop": "a37b83dada6336d2678c512d6aab845c8b22514c28c1aa137ec1792d319b7ce0",
+    "lucent-cli": "4779a67d85f8c61e144a33e49030c5a63086de8ee5eb3c6fa8ce9de79ae46c28",
+    "application-intent": "8dfa678d2e1c66b103948c1353108259aa0b74ac32446968106afdbd4c35cb00"
+  },
+  "host_harness_sha256": "b8ff1f066554331534e0c54f2ddac5f535d727fdafdfe2647b4ca934f9f43aa6",
+  "helper_sources_sha256": {
+    "fixture.py": "1adab11b016bcfbc86cc47aae9a66745b1e0a5ba3f1c28117e6eab742df07694",
+    "owned_application_units.py": "0082d9c4c87c36a7cc65f361304a2fbda174af83f30d6713720d709a9193d5b7",
+    "application_intent_policy.py": "c8903d689234c4c238303a579306bf8ec5ec0df1ca68dcdfed4021998de353be",
+    "application_intent_browser.py": "9f65cd623e387ef0afb18fca4ae6cf289f62b897f43716300602a9ed0e281d13",
+    "owned_chromium_lease.py": "393501ef04a9a9f6fab21ad154bcffe810ebe95774e47e7c759cf36cb180de4b"
+  },
+  "harness_checks": {
+    "original_watchdog_owns_loopback_http_listener": true,
+    "fresh_token_delivered_to_first_owned_child": true,
+    "fresh_browser_focus_observed": true,
+    "fresh_token_child_delivery_and_fresh_browser_focus_observed": true,
+    "real_browser_opened_space_percent_unicode_and_shell_literal_filenames": true,
+    "physical_launch_open_and_declared_action_deliver_fresh_tokens_to_children": true,
+    "later_socket_request_created_both_fresh_documents": true,
+    "each_open_action_socket_and_cli_created_both_fresh_documents": true,
+    "fresh_targets_retired_with_original_browser_control_preserved": true,
+    "desktop_cli_open_and_no_stale_token_reuse": true,
+    "physical_socket_and_cli_opened_both_fresh_owned_http_uris": true
+  },
+  "restoration": {
+    "example_socket_retired": true,
+    "example_retired": true,
+    "browser_retired": true,
+    "desktop_entry_retired": true,
+    "http_server_retired": true,
+    "watchdog_retired": true,
+    "settings_and_wallpaper_preserved": true,
+    "output_workspace_and_cursor_preserved": true,
+    "owned_scratch_and_entry_removed": true
+  },
+  "feature_checks_passed": 11,
+  "restoration_flags_passed": 9,
+  "legacy_check_label_note": "In --http-uris mode the filename-labelled aggregate includes physical HTTP Open and the declared local-file Action. The separate physical_socket_and_cli_opened_both_fresh_owned_http_uris flag identifies HTTP coverage; this is not a new all-local-file rerun.",
+  "native_workload": {
+    "output": "One virtual 1920x1080 scale-1 Wayland output",
+    "application": "Real owned Chromium profile",
+    "http_origin": "Two fixed hashed HTML bodies served by the original bounded watchdog on IPv4 loopback",
+    "open_requests": [
+      "native pointer Open",
+      "later private socket Open",
+      "desktop CLI Open"
+    ],
+    "entry_field_code": "%U",
+    "declared_action": "Two local file fixtures",
+    "verification": "Every Open requires two fresh CDP target identities with exact URLs and loaded titles; only those new targets retire and the original blank control remains."
+  },
+  "first_launch_focus_observed": true,
+  "compositor_forced_focus_used": false,
+  "chromium_protocol_token_consumption_established": false,
+  "owner_observed_runtime_seconds": 95.035,
+  "parser_regression": {
+    "source_commit": "7a92749e3a453ba8d8557ae43f45f891ab05a1cf",
+    "test": "applications::exec::tests::http_uri_fields_preserve_encoded_values_without_reexpansion",
+    "actually_executed": true,
+    "passed": true,
+    "ci_run": 39343459962,
+    "ci_job": 118370322870,
+    "scope": "Successful %u and %U expansion with encoded percent, Unicode, query and fragment values; no native %u claim."
+  },
+  "remaining": [
+    "Native %u invocations, default URI handlers, external navigation and other applications require separate acceptance.",
+    "This fixture does not establish direct activation-token consumption, physical devices, broad launcher/catalog/dock workflows or performance."
+  ],
+  "privacy": {
+    "private_paths_tokens_profiles_or_user_content_published": false
+  },
+  "historical_failures_unchanged": true
+}

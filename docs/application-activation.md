@@ -1,18 +1,18 @@
 # Standard application activation
 
-Source scope: accepted main `8ca4e820` includes normally merged PR89 at exact
-`80c8502a`, the independent `d1fff2d8` consumer, and the earlier PR87 runtime.
-The coherent deployed runtime remains `8e6d074b`, including Application
-integration `bb304907`. Fresh intent tokens, explicit file/URI Open and the
-expanded XDG parser/observer are
-implemented and included in that release. Its six CI checks pass. A later native
-Chromium run passes all nine feature and eight restoration checks using the
-independent `d1fff2d8` consumer, now merged through PR89, and `b6323e9` harness; deployed desktop
-and CLI remain unchanged. Focus is observed without a compositor forced-focus
-command. Earlier failed and partial reports retain their results. This scoped
-result does not establish other applications, remote URI handlers or Chromium's
-consumption of a particular token. See [current readiness](current-readiness.md)
-and [the source-specific report](../reports/measurements/lucent-native-application-intents-d1.json).
+Source scope: accepted main `d01ff7db` includes PR89's independent d1 consumer
+and the earlier PR87 runtime. Application integration `bb304907`, fresh intent
+tokens, explicit file/URI Open and expanded XDG parsing shipped in the coherent
+`8e6d074b` release. Its later real-Chromium local-file run passes nine feature
+and eight restoration checks. The VM now runs a coherent, unmerged `9b5420b7`
+performance trial; its separate HTTP URI run passes eleven native checks and
+nine restoration checks. Both observe first-launch focus without forcing it.
+Neither result establishes another application, default URI handler, external
+navigation or Chromium's consumption of a particular token. The `9b` application
+result does not accept its performance. Earlier failed and successful reports
+retain their exact sources and results; see [current readiness](current-readiness.md),
+[local-file evidence](../reports/measurements/lucent-native-application-intents-d1.json)
+and [HTTP URI evidence](../reports/measurements/lucent-native-http-uris-9b.json).
 
 An application can now declare a command or standard desktop-service activation.
 `ApplicationLaunch::Command` carries its parsed argument vector.
@@ -135,7 +135,7 @@ with observed focus or file loading.
 
 Declared desktop actions predate this milestone and already have owned native
 acceptance; see [application-actions.md](application-actions.md). The token,
-Open, parser and observation changes are merged in the deployed `8e` release,
+Open, parser and observation changes shipped in the accepted-baseline `8e` release,
 whose full workspace/protocol CI and 832 visual cases pass. A later real-Chromium
 run with the `d1fff2d8` independent consumer, now merged through PR89, passes nine feature and
 eight restoration checks, including observed first-launch focus. This verifies
@@ -320,6 +320,62 @@ Its separate bounded build and later native verification pass as recorded below.
 That later result does not isolate the cause of earlier focus failures. The
 compositor remains responsible for deciding whether to grant application focus.
 
+
+## Opt-in native HTTP URI acceptance: Chromium passes
+
+The `7a92749e` harness passes eleven native checks and all nine restoration
+checks with `--http-uris` against the coherent `9b5420b7` candidate. Native pointer,
+later socket and desktop CLI Open each load both fresh owned HTTP documents in
+real Chromium. First-launch focus is observed without forcing compositor focus.
+See [the source-specific result](../reports/measurements/lucent-native-http-uris-9b.json).
+The default invocation retains the existing local-file workload. The `9b` build
+is an unmerged performance trial; this application result does not accept its
+memory use, CPU cost or presentation rate.
+
+```sh
+python3 vm/test-application-intent.py \
+  --release-manifest /private/source-matched-cohort.json \
+  --http-uris --report /private/absent-uri-report.json
+```
+
+The identified release must include the independent application-intent example.
+That example already accepts typed URI targets, so this harness extension adds
+no framework API, domain contract or production behavior. Its owned `%U`
+desktop entry stays immutable during the run, and no user MIME associations are
+written. The declared Action still opens the two local-file fixtures; physical
+Open, later socket Open and desktop CLI Open instead use two encoded HTTP URIs.
+
+During its existing 210-second wait, the original watchdog process serves only
+two generated, hashed HTML bodies on an ephemeral IPv4 loopback listener. There
+is no additional process or thread, directory listing, redirect or external
+asset. Each connection has a one-second absolute header deadline, an 8192-byte
+request bound and a half-second write timeout. Responses close the connection
+and prohibit external resources with a content security policy. Readiness binds
+the original watchdog invocation/process and exact listener descriptor/inode to
+its current loopback TCP LISTEN row; later guards refuse changed authority.
+
+Each Open still requires two fresh CDP target IDs with exact expected URL and
+title, followed by retirement of only those targets and preservation of the
+original blank control. The original focus observation is retained without
+forcing compositor focus. Cleanup additionally requires the original watchdog
+cgroup to drain, including when HTTP readiness fails before the example starts.
+
+All 510 Python checks pass on the frozen harness source, including the 19 new
+pure fixture/admission cases; those pure cases create no listener or browser.
+The direct Rust parser regression also actually passes in exact-source
+[CI run 39343459962](https://github.com/xandreeddev/desktop-lab/actions/runs/39343459962).
+It covers successful HTTP `%u` and `%U` expansion with encoded percent,
+Unicode, query and fragment values.
+Native `%u`, default URI handlers, external navigation and broad browser
+compatibility remain outside this `%U` fixture's scope.
+
+The owner observed 95.035 seconds for the native run, not a performance
+benchmark. The original listener/watchdog, example/socket, browser and desktop
+entry retire. Settings, wallpaper, output/workspace and cursor remain preserved;
+only owned scratch is removed. Older failed and successful reports retain their
+original source and results. The older filename-labelled aggregate check also
+includes the declared local-file Action in HTTP mode; the explicit HTTP check
+identifies which three Open paths received URI coverage.
 
 The following result sections preserve the delivery state at each native run.
 Their capture-time unmerged flags remain historical; the current accepted main
