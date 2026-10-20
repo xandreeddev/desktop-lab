@@ -33,8 +33,9 @@ leaves the tested `35ed` runtime unchanged; later heads have their own gates.
 published accepted `2b3c6db4` successfully. Public desktop/library HTML returns
 HTTP 200, exactly matches the deployed artifact and pins source links to the
 workflow commit. Earlier `9129912b`, `6b50bd5e`, `d01ff7db` and `8ca4e820`
-publications retain their own receipts. This later CPU-shape/two-output follow-up
-still needs its own site, exact-head CI and publication gates. A later corrected
+publications retain their own receipts. At that snapshot, the subsequent
+CPU-shape/two-output follow-up's site, exact-head CI and publication gates were
+pending; its completed PR95 delivery is recorded above. The corrected
 `86df4e5b` harness passes four owned two-output Display flows on unchanged
 `35ed`; this documentation edit does not rerun them.
 
