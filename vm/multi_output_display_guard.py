@@ -234,7 +234,7 @@ class Owner(base.Native):
                     and request['global']==self.original_global,'exact_panel_host_required')
             point=p.hit_center(self.baseline[0],value['panel'],value['layer'],request['identifier'])
             self.cursor.begin(value['cursor'],point)
-            require(base.hypr('eval',f'hl.dsp.cursor.move({{x={point[0]},y={point[1]}}})')=='ok','panel_warp_rejected')
+            require(base.hypr('dispatch',f'hl.dsp.cursor.move({{x={point[0]},y={point[1]}}})')=='ok','panel_warp_rejected')
             self.cursor.confirm(json.loads(base.hypr('-j','cursorpos')))
             return {'point':point,'surface':value['panel']['id']}
         require(operation=='finish','known_display_test_operation_required')

@@ -89,6 +89,43 @@ class Boundaries(unittest.TestCase):
             with self.assertRaises(g.p.Blocked):g.keyboard_bindings([row])
         g.keyboard_bindings([{'modmask':64,'key':'a'}])
 
+    def panel_warp(self,move_on_dispatch):
+        owner=g.Owner.__new__(g.Owner)
+        owner.original_host={'generation':4};owner.original_global=9;owner.baseline=[{}]
+        owner.cursor=g.p.CursorOwnership((10,20))
+        current={'x':10,'y':20}
+        owner.status=Mock(return_value={'panel':{'id':'displays'},'layer':{},'cursor':dict(current)})
+        def hypr(*args):
+            if args==('dispatch','hl.dsp.cursor.move({x=30,y=40})'):
+                if move_on_dispatch:current.update(x=30,y=40)
+                return 'ok'
+            if args==('eval','hl.dsp.cursor.move({x=30,y=40})'):
+                return 'ok'  # Constructing a descriptor does not dispatch it.
+            if args==('-j','cursorpos'):return json.dumps(current)
+            self.fail('unexpected_native_cursor_operation')
+        request={'operation':'warp','monitor':'Virtual-1','generation':4,'global':9,'identifier':'display-reset'}
+        return owner,hypr,request
+
+    def test_panel_warp_dispatches_before_confirming_declared_cursor_postimage(self):
+        owner,hypr,request=self.panel_warp(True)
+        with patch.object(g.p,'hit_center',return_value=(30,40)),patch.object(g.base,'hypr',side_effect=hypr) as native:
+            result=owner.operation(request)
+        self.assertEqual(result,{'point':(30,40),'surface':'displays'})
+        self.assertEqual(native.call_args_list[0].args,('dispatch','hl.dsp.cursor.move({x=30,y=40})'))
+        self.assertEqual(owner.cursor.expected,(30,40));self.assertIsNone(owner.cursor.pending)
+        self.assertFalse(owner.cursor.lost)
+
+    def test_panel_warp_ack_without_actual_move_never_recovers_uncertain_cursor(self):
+        owner,hypr,request=self.panel_warp(False)
+        with patch.object(g.p,'hit_center',return_value=(30,40)),patch.object(g.base,'hypr',side_effect=hypr):
+            with self.assertRaisesRegex(g.p.Blocked,'native_cursor_postimage_differs_from_declared_transition'):
+                owner.operation(request)
+        self.assertTrue(owner.cursor.lost)
+        self.assertEqual(owner.cursor.expected,(10,20));self.assertEqual(owner.cursor.pending,(30,40))
+        for actual in ({'x':10,'y':20},{'x':30,'y':40}):
+            with self.assertRaisesRegex(g.p.Blocked,'foreign_or_uncertain_cursor_movement_blocks_warp'):
+                owner.cursor.check(actual)
+
     def test_headless_lifetime_and_original_output_cannot_be_adopted(self):
         original={'id':0,'name':'Virtual-1','description':'original','width':1920,'height':1080,
             'x':0,'y':0,'scale':1,'transform':0,'refreshRate':60,'disabled':False,'dpmsStatus':True}

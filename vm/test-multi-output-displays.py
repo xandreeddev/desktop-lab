@@ -14,7 +14,7 @@ PINS={
  'native':('vm/test-native-multi-output.py','c1fc9b0aecd910cc9e7e46247bb883f86bc3cb675c44216943f5f03f12fe0829'),
  'multi_output_guard':('vm/multi_output_guard.py','05cc165f9b823becd28e8a631920e120ceb75afd73e026a3b91a64404729d765'),
  'multi_output_policy':('vm/multi_output_policy.py','25c0e45f87c25363220cffdfd901774856c8792f7e4298946fc9011dbb2ebb58')}
-GUEST_SHA='e69a056b919d0fc29a69a62c34079481f6b3c62e9400fad1cda7a809b4b2014f'
+GUEST_SHA='e311f903f087f35e83ed458ab4fb737cf60caa447ea91c72073d02c526c966a9'
 
 def require(value,label):
     if not value: raise ValueError(label)
