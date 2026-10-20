@@ -1,0 +1,432 @@
+{
+  "schema": 1,
+  "status": "normal-and-instrumented-collected-host-ineligible",
+  "source_commit": "35ed87ed4c01cf62e3c8406b8abdcc0809cc155b",
+  "production_candidate_is_accepted_main": false,
+  "performance_accepted": false,
+  "scope": "Recorded native live-video trial. Normal uninstrumented resources, opt-in compositor/source metadata and later profiling restoration are separate observations. Host pressure prevents target acceptance.",
+  "candidate_change": "Combines the decoder-session reuse with a generic bounded renderer stream-upload pool and queue fallback. No quality, density, source-rate or public domain-port contract is reduced.",
+  "evidence_sha256": {
+    "release_manifest": "a12877373a6a43c9408ee4e969bfcd3a323cf382ea17c6602ca698600738e76e",
+    "focused_build_and_media_checks": "86596b9e45e3a7dd92f67f4e9464924d9e6a33f43fc5eed6599526297fc4f96a",
+    "deployment": "842cef26fd4c1c6f0762c4966f29fab01acb12c85e5cdc627390e1576a1c2fe8",
+    "normal_measurement": "d48e7d03ebba375d1da2e51c9c691805ec828fc7e17dac96eb09b2678e5c3323",
+    "normal_collector_report": "b182f081113d5ab9013e0cc9c2cb8e8c547b887eb268749ab5357bb9b8a19df0",
+    "presentation_measurement": "7d6c2dd1f7b5a1c663b6756d9b4b9195285b6f52a86716a06d6bee364185e221",
+    "presentation_collector_report": "4411d1e9a2f2e6e4ddbd12f98a2609fb088b9a1f19e0c056b45897557a21ecaf",
+    "analysis_helper": "ea55a19d104a701fd30fce860fb3df6e2884e02965912d42e5a7000931017ca8",
+    "profiling_restore": "fa8d7df00377657d63377479fad1fd8514e637af16033223f0627db573cda2d3",
+    "fresh_independent_profiling_off": "0c913077b180eadca17922ad23e6a85f4b565fe64c972e6a724640a3d5787af0"
+  },
+  "binaries": {
+    "lucent-desktop": {
+      "sha256": "6ff4e06b73f1a1f68f27cb0504c67710b0a9e118b181ba8ee41eb78d6251ef78",
+      "bytes": 37127016
+    },
+    "lucent-cli": {
+      "sha256": "4779a67d85f8c61e144a33e49030c5a63086de8ee5eb3c6fa8ce9de79ae46c28",
+      "bytes": 409112
+    },
+    "lucent-menu": {
+      "sha256": "6ad2dbfdcb1b987fb7d1ba3e61ef05a2dec6fc2edb956673450c29bfafe36257",
+      "bytes": 24236472
+    },
+    "lucent-lock": {
+      "sha256": "fef57d7f0fe9e256ce8d3cb762d9f67f79cf8798b5d7cf85528bed19f8742472",
+      "bytes": 26910888
+    },
+    "lucent-greeter": {
+      "sha256": "e9ad748699986bf67a5e81214daa1f63b5cf5f015837bb7fe33de13cefaf977c",
+      "bytes": 26763224
+    },
+    "lucent-polkit": {
+      "sha256": "4f048c7f382144717b52dbd3711d0717fe78ac7bc4a3d5ace7f957a08c4ec5af",
+      "bytes": 24459392
+    },
+    "international-text": {
+      "sha256": "c95c90122e53f99ca2f80f28c7707aeb5afe2ddc0b3c1d1a8a7e0ea15347f369",
+      "bytes": 24122328
+    },
+    "input-method-peer": {
+      "sha256": "ae704abdc17de18c55a08620f3bc4b8f7c38d45293d4f8b043856486fa97186a",
+      "bytes": 940024
+    },
+    "application-intent": {
+      "sha256": "4358761d1f0649619e884a4dc698f018c793526e1cb5ab667880e0e124a0867c",
+      "bytes": 26361600
+    }
+  },
+  "local_validation": {
+    "renderer_source_commit": "1db58a008b48bd4279b74bf5633159c99db45472",
+    "strict_workspace_all_target_release_clippy_passed": true,
+    "pure_row_layout_tests_passed": 2,
+    "headless_vulkan_correctness_lifecycle_tests_passed": 5,
+    "separate_offscreen_cpu_diagnostic_passed": true,
+    "coherent_release_binaries_built": 9,
+    "scope": "Renderer correctness checks and a coherent release are separate from native performance. The offscreen/readback-synchronized CPU diagnostic observed effectively similar pooled/fallback cost; it does not establish a desktop gain."
+  },
+  "delivery_at_reconciliation": {
+    "pull_request": 90,
+    "draft": true,
+    "merged": false,
+    "recorded_ci_head": "692dfcb1feec6776511ae06f03a30576b380bef7",
+    "required_checks_passed": 6,
+    "scope": "The later CI-only workflow child leaves the 35ed runtime files unchanged. This documentation follow-up needs its own final site/CI review; accepted main remains 6b50bd5e."
+  },
+  "deployment": {
+    "success": true,
+    "coherent_six_and_root_verified": true,
+    "supervised_beyond_initial_deadline": true,
+    "user_state_preserved": true,
+    "secure_configuration_preserved": true,
+    "greetd_restarted": false,
+    "settings_or_theme_written": false,
+    "rollback_required": false,
+    "acceptance_executables_installed": false,
+    "acceptance_executables_staged": true
+  },
+  "workload": {
+    "codec": "h264",
+    "width": 3840,
+    "height": 2160,
+    "nominal_source_rate": "60/1",
+    "fps_setting": "source",
+    "output_width": 1920,
+    "output_height": 1080,
+    "output_scale": 1,
+    "output_refresh_hz": 60.0
+  },
+  "normal_uninstrumented": {
+    "eligible": false,
+    "ineligible_reasons": [
+      "host_swap_activity",
+      "host_full_stall_pressure"
+    ],
+    "normal_uninstrumented_rss_target_met": null,
+    "preservation_verified": true,
+    "resources": {
+      "seconds": 120.00041898199561,
+      "rss_mib_mean": 250.5806640625,
+      "rss_mib_max_interval": 252.39453125,
+      "rss_sample_count": 480,
+      "sample_period_seconds": 0.25,
+      "process_lifetime_high_water_mib": 252.39453125,
+      "cpu_percent_one_core": 154.03279552526618,
+      "swap_mib_max": 0.0
+    },
+    "host_pressure": {
+      "cpu_busy_fraction": 0.2952379009777125,
+      "ineligible_reasons": [
+        "host_swap_activity",
+        "host_full_stall_pressure"
+      ],
+      "minimum_available_mib": 3375.4609375,
+      "psi_fraction": {
+        "cpu": {
+          "full": 0.0,
+          "some": 0.005838356855318558
+        },
+        "io": {
+          "full": 0.491987565856076,
+          "some": 0.6788860808420312
+        },
+        "memory": {
+          "full": 4.553010208856817e-05,
+          "some": 4.55711645904518e-05
+        }
+      },
+      "seconds": 121.76559563199407,
+      "swap_in_delta": 2916,
+      "swap_out_delta": 0
+    },
+    "source_pts_samples": 0,
+    "presentation_samples": 0
+  },
+  "instrumented_presentation": {
+    "eligible": false,
+    "ineligible_reasons": [
+      "host_swap_activity",
+      "host_full_stall_pressure",
+      "resource_reference_ineligible",
+      "host_psi_not_matched_io_full",
+      "host_psi_not_matched_io_some"
+    ],
+    "preservation_verified": true,
+    "resources": {
+      "seconds": 120.0004639750041,
+      "rss_mib_mean": 244.2538818359375,
+      "rss_mib_max_interval": 244.8515625,
+      "rss_sample_count": 480,
+      "sample_period_seconds": 0.25,
+      "process_lifetime_high_water_mib": 244.8515625,
+      "cpu_percent_one_core": 154.8327346790108,
+      "swap_mib_max": 0.0
+    },
+    "host_pressure": {
+      "cpu_busy_fraction": 0.2883772376260467,
+      "ineligible_reasons": [
+        "host_swap_activity",
+        "host_full_stall_pressure"
+      ],
+      "minimum_available_mib": 3656.890625,
+      "psi_fraction": {
+        "cpu": {
+          "full": 0.0,
+          "some": 0.0052610545535406944
+        },
+        "io": {
+          "full": 0.5480438236738097,
+          "some": 0.7242495869085993
+        },
+        "memory": {
+          "full": 2.209839342650883e-07,
+          "some": 2.209839342650883e-07
+        }
+      },
+      "seconds": 122.18082771397894,
+      "swap_in_delta": 1926,
+      "swap_out_delta": 0
+    },
+    "collector_request_lower_bound": {
+      "feedback_samples": 3934,
+      "presentation_clock_id": 1,
+      "presentation_span_ns": 122049995000,
+      "feedback_intervals_per_second": 32.22449947662841,
+      "presentation_interval": {
+        "count": 3933,
+        "min_ns": 16666000,
+        "p50_ns": 33333000,
+        "p95_ns": 33334000,
+        "p99_ns": 50000000,
+        "max_ns": 83333000,
+        "mean_ns": 31032289.600813627
+      },
+      "refresh_ns_histogram": {
+        "16666666": 3934
+      },
+      "flags_histogram": {
+        "7": 3934
+      },
+      "joined_source_samples": 3934,
+      "distinct_prepared_revisions_referenced": 3934,
+      "distinct_revision_advances": 3933,
+      "distinct_revision_advances_per_second": 32.22449947662841,
+      "adjacent_repeated_prepared_revisions": 0,
+      "referenced_source_pts": {
+        "same_cycle_positive_pts_intervals": {
+          "count": 3929,
+          "min_ns": 16666666,
+          "p50_ns": 33333333,
+          "p95_ns": 33333334,
+          "p99_ns": 50000000,
+          "max_ns": 83333333,
+          "mean_ns": 31038432.17154492
+        },
+        "pts_gap_ns_histogram": {
+          "16666666": 240,
+          "16666667": 484,
+          "33333333": 2018,
+          "33333334": 1012,
+          "50000000": 168,
+          "66666666": 3,
+          "66666667": 3,
+          "83333333": 1
+        },
+        "prepared_revision_step_histogram": {
+          "1": 728,
+          "2": 3029,
+          "3": 165,
+          "4": 6,
+          "5": 1
+        },
+        "cycle_or_generation_crossings_excluded": 4,
+        "adjacent_repeated_revisions": 0,
+        "nominal_source_rate": "60",
+        "nominal_rate_unaligned_intervals": 0,
+        "nominal_source_slots_not_referenced_between_same_cycle_samples_estimate": 3388
+      },
+      "prepared_catalog_between_first_and_last_reference": {
+        "records": 7317,
+        "revision_positions": 7317,
+        "unobserved_revision_positions": 0,
+        "observed_prepared_revisions_not_referenced_in_this_feedback_set": 3383,
+        "source_pts": {
+          "same_cycle_positive_pts_intervals": {
+            "count": 7312,
+            "min_ns": 16666666,
+            "p50_ns": 16666667,
+            "p95_ns": 16666667,
+            "p99_ns": 16666667,
+            "max_ns": 33333334,
+            "mean_ns": 16682622.173823852
+          },
+          "pts_gap_ns_histogram": {
+            "16666666": 2438,
+            "16666667": 4867,
+            "33333334": 7
+          },
+          "prepared_revision_step_histogram": {
+            "1": 7312
+          },
+          "cycle_or_generation_crossings_excluded": 4,
+          "adjacent_repeated_revisions": 0,
+          "nominal_source_rate": "60",
+          "nominal_rate_unaligned_intervals": 0,
+          "nominal_source_slots_not_referenced_between_same_cycle_samples_estimate": 7
+        }
+      },
+      "scope": "Successful compositor feedback with bound prepared-resource references; not pixel visibility, decoder completeness, scanout or accepted performance."
+    },
+    "nominal_resource_duration_request_window": {
+      "feedback_samples": 3868,
+      "presentation_clock_id": 1,
+      "presentation_span_ns": 119949995000,
+      "feedback_intervals_per_second": 32.23843402411146,
+      "presentation_interval": {
+        "count": 3867,
+        "min_ns": 16666000,
+        "p50_ns": 33333000,
+        "p95_ns": 33334000,
+        "p99_ns": 50000000,
+        "max_ns": 83333000,
+        "mean_ns": 31018876.389966384
+      },
+      "refresh_ns_histogram": {
+        "16666666": 3868
+      },
+      "flags_histogram": {
+        "7": 3868
+      },
+      "joined_source_samples": 3868,
+      "distinct_prepared_revisions_referenced": 3868,
+      "distinct_revision_advances": 3867,
+      "distinct_revision_advances_per_second": 32.23843402411146,
+      "adjacent_repeated_prepared_revisions": 0,
+      "referenced_source_pts": {
+        "same_cycle_positive_pts_intervals": {
+          "count": 3863,
+          "min_ns": 16666666,
+          "p50_ns": 33333333,
+          "p95_ns": 33333334,
+          "p99_ns": 50000000,
+          "max_ns": 83333333,
+          "mean_ns": 31029424.45456899
+        },
+        "pts_gap_ns_histogram": {
+          "16666666": 237,
+          "16666667": 474,
+          "33333333": 1986,
+          "33333334": 996,
+          "50000000": 164,
+          "66666666": 2,
+          "66666667": 3,
+          "83333333": 1
+        },
+        "prepared_revision_step_histogram": {
+          "1": 715,
+          "2": 2981,
+          "3": 161,
+          "4": 5,
+          "5": 1
+        },
+        "cycle_or_generation_crossings_excluded": 4,
+        "adjacent_repeated_revisions": 0,
+        "nominal_source_rate": "60",
+        "nominal_rate_unaligned_intervals": 0,
+        "nominal_source_slots_not_referenced_between_same_cycle_samples_estimate": 3329
+      },
+      "prepared_catalog_between_first_and_last_reference": {
+        "records": 7192,
+        "revision_positions": 7192,
+        "unobserved_revision_positions": 0,
+        "observed_prepared_revisions_not_referenced_in_this_feedback_set": 3324,
+        "source_pts": {
+          "same_cycle_positive_pts_intervals": {
+            "count": 7187,
+            "min_ns": 16666666,
+            "p50_ns": 16666667,
+            "p95_ns": 16666667,
+            "p99_ns": 16666667,
+            "max_ns": 33333334,
+            "mean_ns": 16682899.680116877
+          },
+          "pts_gap_ns_histogram": {
+            "16666666": 2397,
+            "16666667": 4783,
+            "33333334": 7
+          },
+          "prepared_revision_step_histogram": {
+            "1": 7187
+          },
+          "cycle_or_generation_crossings_excluded": 4,
+          "adjacent_repeated_revisions": 0,
+          "nominal_source_rate": "60",
+          "nominal_rate_unaligned_intervals": 0,
+          "nominal_source_slots_not_referenced_between_same_cycle_samples_estimate": 7
+        }
+      },
+      "scope": "Successful compositor feedback with bound prepared-resource references; not pixel visibility, decoder completeness, scanout or accepted performance."
+    },
+    "window_definition": {
+      "retained": "All retained history, including pre-observation samples.",
+      "collector": "request_at >= first observed desktop uptime; ending at last captured feedback.",
+      "nominal_resource_duration": "first desktop-uptime request boundary <= request_at < boundary + measured resource seconds; not synchronized resource/presentation clocks.",
+      "history_before_collector_boundary": 122,
+      "resource_seconds": 120.0004639750041,
+      "rate_denominator": "Own compositor last-first timestamp span; numerator is interval/advance count, not sample count.",
+      "quantiles": "Nearest rank ceil(N*p), integer nanoseconds; no interpolation.",
+      "source_cycle": "Non-increasing prepared PTS marks a cycle; all cross-cycle differences excluded.",
+      "nominal_slot_estimate": "Only same-cycle gaps within1us of an integer nominal-rate period; not a count of decoded, visible, or definitively dropped frames."
+    },
+    "capture_limits": {
+      "presentation_sampling_truncated": false,
+      "source_trace_sampling_truncated": false,
+      "observed_source_records": 7578,
+      "observed_presentation_samples_all_surfaces": 4165
+    },
+    "prepared_callback_wall_throughput": {
+      "scope": "Post-conversion/ImageStream-prepared callback counter observed before mailbox publication. Host monotonic RPC brackets bound elapsed wall time; this is not decoder/input FPS, UI consumption, pixel visibility or compositor presentation. Host eligibility is separate.",
+      "observations": 134,
+      "counter_delta": 7322,
+      "elapsed_wall_ns_min": 121771500024,
+      "elapsed_wall_ns_max": 122578293882,
+      "prepared_callbacks_per_second_min": 59.733251035852426,
+      "prepared_callbacks_per_second_max": 60.129012113318005,
+      "acceptance_established": false
+    },
+    "native_60fps_accepted": false,
+    "pixel_visibility_or_physical_scanout_established": false
+  },
+  "profiling_restoration": {
+    "success": true,
+    "phase": "restored",
+    "recovery_incomplete": false,
+    "current_recovery": {
+      "status": "verified-restored",
+      "runtime_flags_off": true
+    },
+    "fresh_independent_read_only_verification_passed": true,
+    "runtime_profiling": {
+      "frames": false,
+      "presentation": false,
+      "source_pts": false
+    },
+    "same_pid_preservation_claimed": false,
+    "shared_runtime_parent_timestamps_claimed_restored": false
+  },
+  "methodology": {
+    "distinct_revision_rate": "(distinct joined revisions - 1) * 1e9 / own compositor last-first presented timestamp span",
+    "gap_quantiles": "Nearest rank ceil(N*p), integer nanoseconds; no interpolation.",
+    "prepared_callback_rate": "Counter delta bounded by first/last host-monotonic RPC start/end brackets; no media PTS-as-wallclock inference."
+  },
+  "limits": [
+    "Observed normal RSS is below 300 MiB, but host pressure makes normal-budget acceptance null; zero guest-process swap does not imply a pressure-free host.",
+    "Approximately 60 prepared callbacks/s and 32.2245 joined distinct revision advances/s measure different stages. They do not attribute the bottleneck, establish decoder drops or prove pixel visibility/physical scanout.",
+    "Host pressure differs across normal, instrumented and historical cohorts. No causal pooled-upload gain, matched resource improvement or accepted 60 FPS is established.",
+    "The public inspector does not prove whether each upload used the pool or fallback. Headless correctness and CPU diagnostics retain their separate scope.",
+    "Earlier accepted-baseline 8e, 9b and bf98 evidence remains unchanged; coherent deployment does not rerun their native feature suites."
+  ],
+  "privacy": {
+    "private_paths_profiles_source_media_settings_or_process_identifiers_published": false
+  }
+}

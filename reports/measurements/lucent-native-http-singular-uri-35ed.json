@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "status": "scoped_native_singular_http_uri_acceptance_passed",
+  "overall_passed": true,
+  "production_source_commit": "35ed87ed4c01cf62e3c8406b8abdcc0809cc155b",
+  "harness_source_commit": "4c9a473919707c17a7b5106984c226474bb14d57",
+  "production_candidate_is_accepted_main": false,
+  "production_candidate_note": "35ed is an unmerged performance trial. This application result does not accept its RSS, CPU or presentation performance.",
+  "private_report_sha256": "6c959beb7352402180d600fc1bf287b41421c3347b47a65e68c88124fd67b8da",
+  "coherent_manifest_sha256": "a12877373a6a43c9408ee4e969bfcd3a323cf382ea17c6602ca698600738e76e",
+  "binary_sha256": {
+    "lucent-desktop": "6ff4e06b73f1a1f68f27cb0504c67710b0a9e118b181ba8ee41eb78d6251ef78",
+    "lucent-cli": "4779a67d85f8c61e144a33e49030c5a63086de8ee5eb3c6fa8ce9de79ae46c28",
+    "application-intent": "4358761d1f0649619e884a4dc698f018c793526e1cb5ab667880e0e124a0867c"
+  },
+  "host_harness_sha256": "18266ebd0cd2d5c599dde4a1d431a93c339b9f5c932e801e34ebeb7e0f4ede42",
+  "helper_sources_sha256": {
+    "fixture.py": "25e7332ef60c67797f0823104d5a617f9178bc59df900d49479cbcb0ebd566a7",
+    "owned_application_units.py": "0082d9c4c87c36a7cc65f361304a2fbda174af83f30d6713720d709a9193d5b7",
+    "application_intent_policy.py": "fd2ed71cfe4839b6c99bf10a6c97515ed20c19c09ece05b0c67a65921ea1bb94",
+    "application_intent_browser.py": "b63bbc572d5fb274339f8098934ab08685b854d4e14b4faa9b7c62051a1fd8d2",
+    "owned_chromium_lease.py": "393501ef04a9a9f6fab21ad154bcffe810ebe95774e47e7c759cf36cb180de4b"
+  },
+  "harness_checks": {
+    "owned_entry_uses_singular_uri_field_code": true,
+    "original_watchdog_owns_loopback_http_listener": true,
+    "fresh_token_delivered_to_first_owned_child": true,
+    "fresh_browser_focus_observed": true,
+    "fresh_token_child_delivery_and_fresh_browser_focus_observed": true,
+    "real_browser_opened_space_percent_unicode_and_shell_literal_filenames": true,
+    "physical_launch_open_and_declared_action_deliver_fresh_tokens_to_children": true,
+    "later_socket_request_created_single_fresh_http_document": true,
+    "each_open_action_socket_and_cli_created_exact_expected_documents": true,
+    "fresh_targets_retired_with_original_browser_control_preserved": true,
+    "desktop_cli_open_and_no_stale_token_reuse": true,
+    "physical_socket_and_cli_opened_single_fresh_owned_http_uri": true
+  },
+  "restoration": {
+    "example_socket_retired": true,
+    "example_retired": true,
+    "browser_retired": true,
+    "desktop_entry_retired": true,
+    "http_server_retired": true,
+    "watchdog_retired": true,
+    "settings_and_wallpaper_preserved": true,
+    "output_workspace_and_cursor_preserved": true,
+    "owned_scratch_and_entry_removed": true
+  },
+  "feature_checks_passed": 12,
+  "restoration_flags_passed": 9,
+  "legacy_check_label_note": "The filename-labelled aggregate includes physical HTTP Open and the declared two-local-file Action; it is not an all-local-file rerun.",
+  "native_workload": {
+    "output": "One virtual 1920x1080 scale-1 Wayland output",
+    "application": "Real owned Chromium profile",
+    "http_origin": "One fixed HTML document served by the original bounded watchdog on IPv4 loopback",
+    "open_requests": [
+      "native pointer Open",
+      "later private socket Open",
+      "desktop CLI Open"
+    ],
+    "entry_field_code": "%u",
+    "declared_action": "Two local file fixtures",
+    "verification": "Every Open requires exactly one fresh browser target identity with exact URI and loaded title. The Action requires two fresh local documents. Only those new targets retire; the original blank control remains."
+  },
+  "first_launch_focus_observed": true,
+  "compositor_forced_focus_used": false,
+  "chromium_protocol_token_consumption_established": false,
+  "owner_observed_runtime_seconds": 86.693,
+  "runtime_duration_is_benchmark": false,
+  "local_harness_validation": {
+    "targeted_offline_tests_passed": 90,
+    "new_field_code_tests_included": 13,
+    "independent_source_and_pure_review_accepted": true,
+    "scope": "Mock/pure and owned temporary-file tests only. Seven unchanged Unix-socket-bind cases in an earlier broader invocation were blocked by the sandbox and are not counted as passed."
+  },
+  "remaining": [
+    "Default URI handlers, external navigation, other applications and physical hardware need separate acceptance.",
+    "Fresh child token delivery and observed focus do not establish direct Chromium activation-token consumption.",
+    "This source-bound application fixture does not establish broad launcher/catalog/dock reliability or performance."
+  ],
+  "privacy": {
+    "private_paths_tokens_profiles_or_user_content_published": false
+  },
+  "historical_reports_unchanged": true
+}

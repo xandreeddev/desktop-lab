@@ -1,22 +1,29 @@
 # Current daily-use readiness
 
-Accepted main is `d01ff7dbe3a9ba4da029f78d87e87b0e8aa95a85`
-([PR91](https://github.com/xandreeddev/desktop-lab/pull/91)), merged normally at
-2026-10-20 00:30:40 UTC after all six required checks passed on exact
-`fdfa39c88a16a011f7204f7406b42f86ccc77ec7` with CLEAN mergeability. It includes
-PR89's independent `d1fff2d8` application consumer and the earlier PR87
-Text/Application runtime. The accepted runtime baseline remains `8e6d074b`.
-The VM currently runs the coherent, **unmerged and performance-unaccepted**
-`9b5420b7` trial. Its separate HTTP URI test passes eleven native checks and
-nine restoration checks; that result does not accept the trial's memory or FPS.
-Merging, deployment and native acceptance remain separate facts. Newer
-documentation and harness changes do not repeat earlier runtime tests.
+Accepted main is `6b50bd5e95347faa8a59535b9360bc864df02344`
+([PR92](https://github.com/xandreeddev/desktop-lab/pull/92)), merged normally at
+2026-10-20 07:22:01 UTC after all six required checks passed on exact
+`fb4f65a8e6e1943dd6c160a5cc25758df7a4eb64` with CLEAN mergeability. It includes
+the HTTP URI acceptance follow-up, PR91 and the earlier PR87 Text/Application
+runtime. The accepted runtime baseline remains `8e6d074b`.
+As of this recorded reconciliation, the latest deployed trial is coherent
+**unmerged and performance-unaccepted** `35ed87ed`. Its normal video interval
+observes 250.581/252.395 MiB mean/peak RSS; separate metadata records 32.2245
+joined prepared-revision advances/s and wall-time bounds of 59.7333–60.1290
+post-conversion prepared callbacks/s. Host pressure prevents resource and
+presentation acceptance. A separate `4c9a4739` harness passes twelve singular
+HTTP `%u` feature checks and nine restoration checks on that release. Earlier
+`8e`, `9b` and `bf98` results retain their sources. Merging, deployment and native
+acceptance remain separate facts; this guide records receipts rather than
+monitoring a live VM. [PR90](https://github.com/xandreeddev/desktop-lab/pull/90)
+remains a draft; all six checks pass on its CI-only `692dfcb1` child, which leaves
+the recorded `35ed` runtime unchanged. This documentation head has separate gates.
 
-[Pages run 39348072728](https://github.com/xandreeddev/desktop-lab/actions/runs/39348072728)
-published accepted `d01ff7db` successfully. The public desktop/library HTML
-returns HTTP 200 and exactly matches its deployed artifact; source links pin the
-exact workflow commit. The earlier `8ca4e820` publication retains its separately verified public
-HTML receipt. Checks for this later URI documentation follow-up remain separate.
+[Pages run 39386036668](https://github.com/xandreeddev/desktop-lab/actions/runs/39386036668)
+published accepted `6b50bd5e` successfully. Public desktop/library HTML returns
+HTTP 200, exactly matches the deployed artifact and pins source links to the
+workflow commit. Earlier `d01ff7db` and `8ca4e820` publications retain their own
+receipts. Checks and publication for this later URI/performance reconciliation remain separate.
 
 The earlier three-second RADV liveness trial remains scoped to `a7f41ecc`.
 A later 16-check native run on `8e6d074b` passes two-output density/input and
@@ -63,9 +70,9 @@ ledger's requirement history remains useful for the broader backlog.
 | --- | --- | --- |
 | Saved Wi-Fi recovery | Merged native masked SecretAgent repair retains the saved profile UUID and storage policy. Fourteen native NetworkManager/GUI checks pass against owned simulated WPA2/hidden radios, including cancellation, repair, DHCP, saved reconnection and exact restoration. | Enterprise/WEP provisioning, agent-owned vaults and physical-radio acceptance remain separate gaps; they are not implied by the owned fixture. |
 | Safe display settings | Native whole-layout drafts, fresh ordered observations, Apply → Keep/Revert and independent 15-second/UI-crash EOF rollback. Seven actual one-output QEMU flows pass for mode, scale, position, persistence and recovery. File preservation is exact; the expected one-restart service transition is validated explicitly. | Physical/multiple outputs, native enable/disable/rotation, fractional display-settings input, hotplug, suspend/resume, compositor restart and secure-output acceptance remain open. The Keep-to-file-identity-capture host-loss interval retains manual recovery. |
-| Resources and animation | Event-driven redraw and physical-cover conversion are implemented. The accepted-baseline `8e6d074b` run observed 217.28/221.92 MiB normal mean/peak RSS and 26.9992 distinct revision advances/s in a separate instrumented run. The current, unmerged `9b5420b7` trial observed **374.464/398.652 MiB** normal mean/peak RSS, **174.232% of one logical core**, and **31.642 distinct prepared-revision advances/s** in compositor feedback. Profiling restores off with fresh read-only verification. | Both cohorts remain host-pressure-ineligible; the current trial exceeds the observed 300 MiB budget and does not establish 60 FPS. No causal speedup, decoded-frame drop, pixel-visibility or physical-scanout claim. CPU-stage attribution and a quality-preserving improvement remain required. See [the source-specific 9b report](../reports/measurements/lucent-live-threading-9b-native-trial.json) and [presentation analysis](native-presentation-analysis.md). |
+| Resources and animation | The latest recorded, unmerged `35ed87ed` trial observes **250.581/252.395 MiB** normal mean/peak RSS and **154.033% of one logical core**. Its separate metadata interval records **32.2245 distinct prepared-revision advances/s** in compositor feedback, while RPC wall-time bounds record **59.7333–60.1290 prepared callbacks/s** before mailbox publication. Profiling restores off with fresh independent verification. | Both phases are host-pressure-ineligible; observed RSS below 300 MiB is not accepted budget evidence, and 60 FPS presentation is not established. No causal gain, bottleneck attribution, decoder-drop, pixel-visibility or physical-scanout claim. Eligible matched normal/animated and cold/warm evidence remains required. See [the source-specific upload trial](../reports/measurements/lucent-live-upload-35ed-native-trial.json) and [presentation analysis](native-presentation-analysis.md). |
 | International text | Merged `8e6d074b` implements script shaping, hard-paragraph context across soft wraps, exact row-bound visual source/caret maps, tab separator projection, deterministic fallback and opt-in text-input-v3 composition. Five owned native feature checks pass: visible preedit/caret advance, CJK commit/delete/history, masked-focus retirement, multiline composition and RTL navigation. | The fresh owned native suite passes all five feature and five restoration checks; earlier cleanup failures retain their original results. Third-party IME, broader native pixel/scroll details, delayed clipboard/focus races, physical/cross-output text and broader GUI clipboard coverage remain pending. The later Chromium/Notes test passes both directions with nine interaction and twelve restoration checks on one virtual output. Exact merged `8e6d074b` passes six CI checks, full workspace, six controlled service-protocol filters and 832 Vulkan desktop cases; those checks retain their own scope. |
-| Application integration | Accepted main includes fresh input-bound context, explicit file/URI Open and expanded XDG parsing. The accepted-baseline `8e` local-file run passes nine feature/eight restoration checks with independent d1 consumer. A separate coherent `9b` trial passes eleven native HTTP URI/nine restoration checks: pointer, socket and CLI Open each create both fresh exact HTTP documents in real Chromium, with observed first-launch focus. | Direct token consumption, native `%u`, default handlers, external navigation, other applications, physical hardware and broader workflows remain unverified. The `9b` application result does not accept that trial’s performance. [Local-file report](../reports/measurements/lucent-native-application-intents-d1.json) and [HTTP URI report](../reports/measurements/lucent-native-http-uris-9b.json) retain separate scopes; earlier failures stay unchanged. |
+| Application integration | Accepted main includes fresh input-bound context, explicit file/URI Open and expanded XDG parsing. Earlier local-file `8e` and HTTP `%U` `9b` results keep their original scope. The `4c9a4739` harness on coherent `35ed` passes **twelve singular HTTP `%u` feature and nine restoration checks**: pointer, socket and CLI Open each create exactly one fresh owned HTTP document; the declared Action still creates two local documents. | Direct token consumption, default handlers, external navigation, other applications, physical hardware and broader workflows remain unverified. Application acceptance does not accept the trial’s performance. [Singular HTTP report](../reports/measurements/lucent-native-http-singular-uri-35ed.json), [local-file report](../reports/measurements/lucent-native-application-intents-d1.json) and [plural HTTP report](../reports/measurements/lucent-native-http-uris-9b.json) retain separate scopes; earlier failures stay unchanged. |
 | Real-world validation | Several owned native workflows already pass. The coherent `8e6d074b` also passes 16 checks for two simultaneous compositor outputs, one headless, including real panel input at 1×/2×/1.25×, held-button retirement, same-name recreation and exact restoration. | Physical monitors/cable hotplug, suspend/resume, secure-output changes, physical Bluetooth/audio and other power/radio hardware, additional third-party tray applications/menus, other GUI clipboard applications, rich content and delayed-transfer/focus races need broader testing. One genuine wired-only NetworkManager Applet item/menu/information action passes five interaction, four cleanup and thirteen outside-worker preservation checks on unchanged `8e`. The owned real Chromium/Notes keyboard flow passes nine interaction and twelve restoration checks. The owned output test establishes no presentation FPS or multi-output Display settings transaction. |
 | Documentation accuracy | This reconciliation updates current summaries and repository skills against source-specific evidence. | Keep summaries and the ledger current when later PRs merge; site validation is required for this documentation change. Historical evidence must retain its original scope. |
 
@@ -74,9 +81,14 @@ uses harness `7a92749e` and coherent `9b5420b7` desktop/CLI/consumer. Pointer,
 socket and CLI Open each create two fresh exact HTTP documents in a real owned
 Chromium profile; the declared Action retains local-file coverage. All eleven
 feature and nine restoration checks pass. The direct `%u`/`%U` parser regression
-also actually passes exact-source CI. Native `%u`, default handlers, external
-navigation, other applications and direct token consumption remain unverified.
-This newer result does not rerun or overwrite the earlier local-file report.
+also actually passes exact-source CI. Those historical reports remain unchanged.
+A later [singular HTTP result](../reports/measurements/lucent-native-http-singular-uri-35ed.json)
+uses the version-controlled `4c9a4739` harness on coherent `35ed`: all twelve
+feature and nine restoration checks pass. Each pointer/socket/CLI Open requires
+one fresh exact HTTP document; the declared Action independently requires two
+local files. Default handlers, external navigation, other applications and direct
+activation-token consumption remain unverified. This does not rerun earlier
+local-file or plural-URI evidence or accept the trial’s performance.
 
 The relevant contract guides are [network](native-network.md),
 [safe display settings](native-displays.md), [output profiles](monitor-layouts.md), [density](fractional-scaling.md),
@@ -181,7 +193,52 @@ table as a replacement for every acceptance record.
 
 ## Reading resource and animation claims
 
-The deployed `8e6d074b` RADV cohort records an uninstrumented 120.000492-second
+The latest recorded native trial is `35ed87ed`, which combines decoder-session
+reuse and the bounded generic stream-upload pool. Its coherent nine-binary build
+and guarded deployment verify all six managed user clients and the root greeter,
+supervision beyond startup and preserved user/security state. Settings/theme are
+not changed and greetd is not restarted. The renderer’s source-specific strict
+Clippy, two pure and five headless Vulkan correctness/lifecycle tests pass; the
+separate offscreen CPU diagnostic observes effectively similar pooled/fallback
+cost. None of those checks establishes a native performance gain.
+
+The normal uninstrumented interval records **120.000419 s**, 480 samples at
+0.25 s spacing, **250.580664 MiB mean / 252.394531 MiB sampled peak RSS**,
+**154.032796% CPU of one logical core** and zero guest-process swap. Preservation
+passes. Host 2916 swap-in pages and I/O full-stall fraction 0.491988 make this
+interval **ineligible**, with normal-budget acceptance null despite observed
+RSS below 300 MiB. CPU and presentation tracing are off in this resource phase.
+
+A separate opt-in metadata interval joins all **3934 distinct prepared resource
+revisions** referenced by successful background feedback. Its **3933 advances /
+122.049995 compositor seconds = 32.224499 advances/s**; feedback cadence is the
+same because no revision repeats. Presentation gap p50/p95/p99/max is
+**33.333/33.334/50/83.333 ms**. One clock and flags `7` are consistent throughout;
+there are no ambiguous/missing joins or truncation. These bound references do
+not establish final pixel visibility or physical scanout.
+
+Separately, 134 host-monotonic RPC observations bound **7322 post-conversion,
+ImageStream-prepared callbacks** to **59.733251–60.129012 callbacks/s**. This is
+wall-time counter evidence before mailbox publication, not media-PTS-as-wallclock,
+decoder/input FPS or compositor presentation. The difference between stages does
+not identify a bottleneck or count decoder drops. The metadata interval is also
+**ineligible**, with 1926 host swap-in pages and I/O full-stall fraction 0.548044,
+plus an ineligible resource reference and unmatched I/O pressure. No accepted
+60 FPS, resource target or causal comparison follows.
+
+Profiling restoration passes, and fresh independent read-only facts confirm
+CPU, presentation and source tracing are off. This restarts controlled service
+lifetimes; it is not a same-PID or shared-directory-timestamp preservation claim.
+See the [sanitized upload-trial report](../reports/measurements/lucent-live-upload-35ed-native-trial.json)
+for hashes, exact windows, flags, preservation and limits.
+
+The earlier [bf98 decoder-session report](../reports/measurements/lucent-live-decoder-session-native-trial.json)
+and [9b trial](../reports/measurements/lucent-live-threading-9b-native-trial.json)
+retain their own resource results and limitations. The bf98 normal observation
+has no presentation interval. The following accepted-baseline 8e observations
+also retain their original source; none is a matched causal comparison with 35ed.
+
+The accepted-baseline `8e6d074b` RADV cohort records an uninstrumented 120.000492-second
 interval with 480 RSS samples at 0.25-second spacing: **217.28 MiB mean /
 221.92 MiB sampled peak**, 112.25% CPU of one logical core and zero guest-process
 swap. The unchanged 4K60 H.264 video, source-rate setting and single 1080p60 output
