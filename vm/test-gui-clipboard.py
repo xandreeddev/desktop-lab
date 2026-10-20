@@ -5,9 +5,12 @@ Run only in the idle, unlocked, single-output test VM. The browser has a unique
 profile, class, file and time-bounded transient unit. CDP prepares/selects that
 one textarea and reads its DOM; actual Ctrl+C/Ctrl+V goes through VM input.
 Existing Notes/clipboard/history/settings/media stay in private checkpoints.
+After the first trusted physical copy, only the two compiled fixtures may be
+verified through one preferred UTF-8 flavor; unrelated browser formats are not
+requested. Original clipboard checkpoint and restoration remain text-only.
 
 Ordinary failure restores them through the existing guarded Notes harness. A
-host crash leaves an owned watchdog to request lease retirement after 180 seconds;
+host crash leaves an owned watchdog to request lease retirement after 330 seconds;
 failed lease/drain proof stays explicit. It does not automatically restore Notes:
 the private recovery checkpoint is retained. No
 physical-device, rich-HTML clipboard, other browser or focus-race claim is made.
@@ -35,6 +38,8 @@ require, private, CheckFailure = notes.require, notes.private, notes.CheckFailur
 input_policy = notes.load('gui_clipboard_input_policy', ROOT / 'vm/application_intent_policy.py')
 SOURCE_TEXT = 'browser one\n雪 e\u0301 👩\u200d💻\nlast line\n'
 DESTINATION_TEXT = 'notes one\n\nnotes two\n'
+INPUT_WINDOW_SECONDS = 300
+BROWSER_RUNTIME_SECONDS = 360
 HOST_PHASES = frozenset(('harness_init', 'native_suite', 'preflight', 'settings_checkpoint',
     'clipboard_checkpoint', 'peer_preparation', 'browser_start', 'browser_origin', 'browser_admission',
     'browser_window', 'notes_visibility', 'browser_copy', 'browser_to_notes', 'notes_copy',
@@ -182,6 +187,7 @@ class Harness(notes.Harness):
         self.peer_initialized = self.browser_started = False
         self.browser_attempted = self.start_acknowledged = False
         self.browser_retired = False
+        self.fixture_clipboard_enabled = False
         self.browser_origin = self.browser_identity = None
         self.browser_window = None
         self.peer = None
@@ -200,10 +206,10 @@ class Harness(notes.Harness):
         self.browser_workspace = 'lucent-clipboard-browser-' + self.tag
 
     def call_peer(self, operation, *arguments, data=None):
-        require(operation in ('initialize', 'absent', 'origin', 'admit', 'clients', 'dom', 'clipboard-observe', 'retire', 'cleanup'),
+        require(operation in ('initialize', 'absent', 'origin', 'admit', 'clients', 'dom', 'clipboard-observe', 'fixture-clipboard', 'retire', 'cleanup'),
                 'fixed_gui_peer_operation')
         require(self.peer_initialized or operation == 'initialize', 'owned_peer_initialized')
-        if operation in ('dom', 'clipboard-observe', 'retire', 'cleanup'):
+        if operation in ('dom', 'clipboard-observe', 'fixture-clipboard', 'retire', 'cleanup'):
             require(data is None, 'one_fixed_peer_authority_payload')
             data = json.dumps({'origin': self.browser_origin, 'identity': self.browser_identity}).encode()
         try:
@@ -383,6 +389,46 @@ class Harness(notes.Harness):
         finally:
             self.browser_focus_snapshot = None
 
+    def arm_fixture_clipboard(self):
+        require(self.target == 'browser' and not self.fixture_clipboard_enabled,
+                'first_owned_browser_copy_required')
+        self.input_guard()
+        def trusted_copy_observed():
+            document = self.call_peer('dom', 'read')
+            return (document['focused'] and document['selection_complete']
+                    and document['sha256'] == sha(SOURCE_TEXT)
+                    and all(document['events'][key] >= 1
+                            for key in ('trusted_copy', 'ctrl_c_down', 'ctrl_c_up'))
+                    and document['events']['untrusted_copy'] == 0)
+        self.eventually(trusted_copy_observed, 'first_trusted_browser_copy_observed', timeout=5)
+        self.fixture_clipboard_enabled = True
+
+    def clip(self, operation, data=None):
+        if (operation not in ('read', 'owned')
+                or not getattr(self, 'fixture_clipboard_enabled', False)
+                or self.browser_retired):
+            # Original create/checkpoint/restore/verify and all pre-copy checks
+            # retain the inherited strict text-only preservation rules.
+            return super().clip(operation, data)
+        require(self.browser_started and self.start_acknowledged and self.browser_identity is not None,
+                'live_admitted_browser_required_for_fixture_clipboard')
+        require((operation == 'read' and data is None) or operation == 'owned',
+                'fixed_fixture_clipboard_operation')
+        observation = self.call_peer('fixture-clipboard')
+        require(type(observation) is dict and set(observation) == {'fixture', 'sha256', 'empty', 'mime'}
+                and observation.get('fixture') in ('source', 'destination')
+                and observation.get('sha256') == sha(SOURCE_TEXT if observation['fixture'] == 'source' else DESTINATION_TEXT)
+                and observation.get('empty') is False
+                and observation.get('mime') in ('text/plain;charset=utf-8', 'UTF8_STRING', 'text/plain'),
+                'exact_compiled_clipboard_fixture_required')
+        if operation == 'owned':
+            allowed = json.loads(data)
+            require(type(allowed) is list and len(allowed) <= 32
+                    and all(type(value) is str and re.fullmatch('[0-9a-f]{64}', value) for value in allowed)
+                    and observation['sha256'] in allowed, 'allowed_compiled_clipboard_fixture_required')
+            return {'owned_fixture_selection_current': True}
+        return observation
+
     def wait_browser_copy_offer(self, result):
         try:
             self.eventually(lambda: self.clip('read')['sha256'] == sha(SOURCE_TEXT),
@@ -466,7 +512,7 @@ def suite(h, result):
     require(h.peer['source_sha256'] == sha(SOURCE_TEXT), 'matching_owned_source_fixture')
     private(h.directory / 'peer-recovery.json', {'directory': h.peer_directory, 'run_id': h.tag})
 
-    h.input_deadline = time.monotonic() + 170
+    h.input_deadline = time.monotonic() + INPUT_WINDOW_SECONDS
     h.workspace_focus(h.browser_workspace)
     require(h.call_peer('absent')['owned_unit_name_absent'], 'typed_browser_unit_name_absent_before_start')
     # Chromium may migrate to its own registered scope. A distinct owned peer
@@ -478,7 +524,7 @@ def suite(h, result):
     h.phase = 'browser_start'
     h.browser_attempted = True
     h.session('systemd-run', '--user', '--quiet', '--collect', '--property=Type=exec',
-              '--property=RuntimeMaxSec=210s', '--property=TimeoutStopSec=10s',
+              f'--property=RuntimeMaxSec={BROWSER_RUNTIME_SECONDS}s', '--property=TimeoutStopSec=10s',
               '--unit=lucent-gui-clipboard-' + h.tag + '.service',
               '/usr/bin/python3', h.peer_directory + '/fixture.py', 'serve', h.peer_directory, h.tag)
     h.start_acknowledged = True
@@ -522,6 +568,7 @@ def suite(h, result):
     source = h.focus_browser('seed')
     require(source['sha256'] == sha(SOURCE_TEXT), 'owned_browser_source_selected')
     h.key(29, notes.LETTERS['c'])
+    h.arm_fixture_clipboard()
     h.wait_browser_copy_offer(result)
     h.phase = 'browser_to_notes'
     h.focus_notes()

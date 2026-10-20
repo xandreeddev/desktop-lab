@@ -30,11 +30,16 @@ import owned_chromium_lease as chromium
 
 SOURCE_TEXT = 'browser one\n雪 e\u0301 👩\u200d💻\nlast line\n'
 DESTINATION_TEXT = 'notes one\n\nnotes two\n'
+# Leave the existing 55 seconds for lease retirement after the longer input run.
+WATCHDOG_RETIRE_AFTER_SECONDS = 330
+WATCHDOG_ALARM_SECONDS = 385
+WATCHDOG_RUNTIME_SECONDS = 390
+FIXTURE_MIME_PRIORITY = ('text/plain;charset=utf-8', 'UTF8_STRING', 'text/plain')
 TEXT_ALIASES = ('text/plain;charset=utf-8', 'text/plain;charset=UTF-8',
                 'text/plain', 'UTF8_STRING', 'STRING', 'TEXT')
 EVENT_KEYS = ('trusted_copy', 'untrusted_copy', 'trusted_paste', 'untrusted_paste',
               'ctrl_c_down', 'ctrl_c_up', 'ctrl_v_down', 'ctrl_v_up')
-OPERATIONS = ('initialize', 'absent', 'serve', 'origin', 'admit', 'clients', 'dom', 'clipboard-observe', 'retire', 'cleanup', 'watchdog')
+OPERATIONS = ('initialize', 'absent', 'serve', 'origin', 'admit', 'clients', 'dom', 'clipboard-observe', 'fixture-clipboard', 'retire', 'cleanup', 'watchdog')
 
 
 def failure_details(error, operation):
@@ -209,7 +214,7 @@ def serve(directory, run_id):
     private(directory / 'origin.json', json.dumps(origin).encode())
     require(unit_snapshot(watchdog_name(run_id))['load'] == 'not-found')
     subprocess.run(['systemd-run', '--user', '--quiet', '--collect', '--property=Type=exec',
-                    '--property=RuntimeMaxSec=240s', '--property=TimeoutStopSec=10s',
+                    f'--property=RuntimeMaxSec={WATCHDOG_RUNTIME_SECONDS}s', '--property=TimeoutStopSec=10s',
                     '--unit='+watchdog_name(run_id), *watchdog_argv(directory, run_id)], check=True, timeout=10)
     deadline = time.monotonic()+10
     while not os.path.lexists(directory / 'watchdog-origin.json'):
@@ -365,6 +370,23 @@ def dom(directory, run_id, operation, request):
                       'bytes': len(value['value'].encode()), 'events': events}))
 
 
+class ClipboardObservationFailure(ValueError):
+    def __init__(self, reason):
+        require(reason in ('read_deadline', 'stdout_limit', 'stderr_limit'))
+        self.reason = reason
+        super().__init__('bounded_clipboard_observation_failed')
+
+
+def clipboard_failure(error):
+    if isinstance(error, ClipboardObservationFailure):
+        return error.reason
+    if isinstance(error, subprocess.TimeoutExpired):
+        return 'read_deadline'
+    if isinstance(error, OSError):
+        return 'reader_process_unavailable'
+    return 'reader_refused'
+
+
 def bounded_clipboard_read(command, limit, deadline):
     """Read-only child with bounded bytes/time; never put payloads in errors."""
     child = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -375,14 +397,16 @@ def bounded_clipboard_read(command, limit, deadline):
             os.set_blocking(stream.fileno(), False)
             selector.register(stream, selectors.EVENT_READ, index)
         while selector.get_map():
-            require(time.monotonic() < deadline)
+            if time.monotonic() >= deadline:
+                raise ClipboardObservationFailure('read_deadline')
             for key, _mask in selector.select(.05):
                 data = os.read(key.fd, 4096)
                 if not data:
                     selector.unregister(key.fileobj)
                     continue
                 output[key.data].extend(data)
-                require(len(output[key.data]) <= (limit if key.data == 0 else 4096))
+                if len(output[key.data]) > (limit if key.data == 0 else 4096):
+                    raise ClipboardObservationFailure('stdout_limit' if key.data == 0 else 'stderr_limit')
         return child.wait(timeout=max(.01, deadline - time.monotonic())), bytes(output[0]), bytes(output[1])
     finally:
         selector.close()
@@ -411,20 +435,40 @@ def fixture_payload_status(data):
 
 def clipboard_observation(read=bounded_clipboard_read):
     """Diagnose MIME compatibility without accepting offers or exposing user data."""
-    result = {'list_status': 'unavailable', 'known_text_aliases': [],
-              'other_mime_count': 0, 'payloads': {}, 'strict_text_only': None,
-              'all_read_alias_payloads_identical': None}
+    result = {'list_status': 'unavailable', 'list_failure': None, 'list_exit_status': None,
+              'entry_count': None, 'duplicate_entry_count': None, 'known_text_aliases': [],
+              'other_mime_count': 0, 'payloads': {}, 'payload_failures': {},
+              'strict_text_only': None, 'all_read_alias_payloads_identical': None,
+              'inherited_reader_compatibility': 'unavailable'}
     deadline = time.monotonic() + 10
     try:
         code, data, error = read(['wl-paste', '--list-types'], 16384, deadline)
-        if code == 1 and b'Nothing is copied' in error:
-            result['list_status'] = 'empty'
-            return result
-        require(code == 0)
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        result['list_failure'] = clipboard_failure(error)
+        return result
+    if type(code) is int and -255 <= code <= 255:
+        result['list_exit_status'] = code
+    if code == 1 and b'Nothing is copied' in error:
+        result['list_status'] = 'empty'
+        result['inherited_reader_compatibility'] = 'supported'
+        return result
+    if code != 0:
+        result['list_failure'] = 'reader_nonzero_exit'
+        return result
+    try:
         types = data.decode('utf-8').splitlines()
-        require(len(types) <= 64 and len(types) == len(set(types))
-                and all(0 < len(value) <= 256 for value in types))
-    except (OSError, ValueError, subprocess.TimeoutExpired):
+    except UnicodeDecodeError:
+        result['list_failure'] = 'types_non_utf8'
+        return result
+    result['entry_count'] = len(types)
+    result['duplicate_entry_count'] = len(types) - len(set(types))
+    # Duplicate advertised MIME entries are legal observations. The inherited
+    # reader uses a set for its admission and must not be diagnosed differently.
+    if len(types) > 64:
+        result['list_failure'] = 'too_many_type_entries'
+        return result
+    if not all(0 < len(value) <= 256 for value in types):
+        result['list_failure'] = 'invalid_mime_length'
         return result
     result['list_status'] = 'available'
     result['known_text_aliases'] = [value for value in TEXT_ALIASES if value in types]
@@ -434,15 +478,56 @@ def clipboard_observation(read=bounded_clipboard_read):
     for mime in result['known_text_aliases']:
         try:
             code, data, _error = read(['wl-paste', '--no-newline', '--type', mime], 65536, deadline)
-            require(code == 0)
-        except (OSError, ValueError, subprocess.TimeoutExpired):
+            if code != 0:
+                result['payloads'][mime] = 'unavailable'
+                result['payload_failures'][mime] = 'reader_nonzero_exit'
+                continue
+        except (OSError, ValueError, subprocess.TimeoutExpired) as error:
             result['payloads'][mime] = 'unavailable'
+            result['payload_failures'][mime] = clipboard_failure(error)
             continue
         result['payloads'][mime] = fixture_payload_status(data)
         payloads.append(data)
     if payloads:
         result['all_read_alias_payloads_identical'] = all(value == payloads[0] for value in payloads)
+    if not result['strict_text_only']:
+        result['inherited_reader_compatibility'] = 'nontext_or_sensitive_mime'
+    elif any(status == 'other_non_utf8' for status in result['payloads'].values()):
+        result['inherited_reader_compatibility'] = 'non_utf8_clipboard'
+    elif result['payload_failures']:
+        result['inherited_reader_compatibility'] = 'read_unavailable'
+    elif not result['all_read_alias_payloads_identical']:
+        result['inherited_reader_compatibility'] = 'different_mime_payloads'
+    else:
+        result['inherited_reader_compatibility'] = 'supported'
     return result
+
+
+def fixture_clipboard_offer(read=bounded_clipboard_read):
+    """Read one native-supported UTF-8 flavor, accepting only compiled fixtures."""
+    deadline = time.monotonic() + 10
+    code, data, _error = read(['wl-paste', '--list-types'], 16384, deadline)
+    require(code == 0 and len(data) <= 16384)
+    offered = data.decode('utf-8').splitlines()
+    require(0 < len(offered) <= 64 and all(0 < len(mime) <= 256 for mime in offered))
+    # Match the native backend's preference; other/duplicate MIME entries and
+    # legacy aliases confer no authority and are never requested by this test.
+    mime = next((value for value in FIXTURE_MIME_PRIORITY if value in offered), None)
+    require(mime is not None)
+    code, data, _error = read(['wl-paste', '--no-newline', '--type', mime], 65536, deadline)
+    require(code == 0 and len(data) <= 65536)
+    fixture = next((name for name, text in (('source', SOURCE_TEXT), ('destination', DESTINATION_TEXT))
+                    if data == text.encode('utf-8')), None)
+    require(fixture is not None)
+    return {'fixture': fixture, 'sha256': digest(data), 'empty': False, 'mime': mime}
+
+
+def fixture_clipboard(directory, run_id, request):
+    directory, _manifest = context(directory, run_id)
+    owned_unit(directory, run_id, request['identity'])
+    observation = fixture_clipboard_offer()
+    owned_unit(directory, run_id, request['identity'])
+    print(json.dumps(observation))
 
 
 def clipboard_observe(directory, run_id, request):
@@ -472,7 +557,7 @@ def retire_owned(directory, run_id, request):
 
 def watchdog(directory, run_id):
     directory, _ = context(directory, run_id)
-    signal.alarm(235)
+    signal.alarm(WATCHDOG_ALARM_SECONDS)
     receipt = capture_unit_origin(watchdog_name(run_id), watchdog_argv(directory, run_id))
     private(directory / 'watchdog-origin.json', json.dumps(receipt).encode())
     started = time.monotonic()
@@ -483,7 +568,7 @@ def watchdog(directory, run_id):
         except Exception:
             require(time.monotonic()-started < 35)
             time.sleep(.15)
-    time.sleep(max(0, 180-(time.monotonic()-started)))
+    time.sleep(max(0, WATCHDOG_RETIRE_AFTER_SECONDS-(time.monotonic()-started)))
     chromium.retire(lease)
 
 
@@ -512,6 +597,8 @@ def main():
     args = parser.parse_args()
     if args.operation in ('clients', 'retire', 'cleanup'):
         globals()[args.operation](args.directory, args.run_id, json.load(sys.stdin))
+    elif args.operation == 'fixture-clipboard':
+        fixture_clipboard(args.directory, args.run_id, json.load(sys.stdin))
     elif args.operation == 'clipboard-observe':
         clipboard_observe(args.directory, args.run_id, json.load(sys.stdin))
     elif args.operation == 'dom':
