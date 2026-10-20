@@ -36,6 +36,7 @@ notes = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(notes)
 require, private, CheckFailure = notes.require, notes.private, notes.CheckFailure
 input_policy = notes.load('gui_clipboard_input_policy', ROOT / 'vm/application_intent_policy.py')
+fixture_scratch = notes.load('gui_clipboard_fixture_scratch', ROOT / 'vm/owned_fixture_scratch.py')
 SOURCE_TEXT = 'browser one\n雪 e\u0301 👩\u200d💻\nlast line\n'
 DESTINATION_TEXT = 'notes one\n\nnotes two\n'
 INPUT_WINDOW_SECONDS = 300
@@ -496,8 +497,7 @@ def suite(h, result):
 
     # Every path below is newly owned; no existing Chromium profile is opened.
     h.phase = 'peer_preparation'
-    h.peer_directory = h.remote('mktemp', '-d', '/tmp/lucent-gui-clipboard.XXXXXXXXXXXX').decode().strip()
-    require(re.fullmatch(r'/tmp/lucent-gui-clipboard\.[A-Za-z0-9]{12}', h.peer_directory), 'private_peer_directory')
+    h.peer_directory = fixture_scratch.allocate(h.remote, 'lucent-gui-clipboard')
     for source, name in ((ROOT / 'vm/fixtures/gui-clipboard-peer.py', 'fixture.py'),
                          (ROOT / 'vm/owned_application_units.py', 'owned_application_units.py'),
                          (ROOT / 'vm/owned_chromium_lease.py', 'owned_chromium_lease.py'),
@@ -659,10 +659,12 @@ def main():
     result = {'passed': False, 'source_commit': args.source_commit,
               'binary_sha256': args.desktop_sha256, 'checks': {}, 'restoration': {},
               'harness_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+              'scratch_allocator_sha256': fixture_scratch.PROGRAM_SHA256,
               'support_sha256': {name: hashlib.sha256((ROOT / 'vm' / name).read_bytes()).hexdigest()
                                  for name in ('fixtures/gui-clipboard-peer.py', 'owned_application_units.py',
                                               'owned_chromium_lease.py', 'cdp_peer.py',
-                                              'application_intent_policy.py', 'test-multiline-notes.py')},
+                                              'application_intent_policy.py', 'test-multiline-notes.py',
+                                              'owned_fixture_scratch.py')},
               'scope': 'Real owned Chromium textarea and native Notes, single-output keyboard text transfers',
               'not_covered': ['rich HTML/images', 'other applications', 'delayed-provider and focus-retirement races',
                               'physical hardware', 'IME/shaping pixel correctness', 'automatic Notes restore after host crash'],

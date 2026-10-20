@@ -314,8 +314,6 @@ class ModeAndRetirement(unittest.TestCase):
             def remote(*args):
                 if args[0] == 'sha256sum' or args[0] == 'python3' and args[-1] != 'preferences':
                     return 'b' * 64
-                if args[0] == 'mktemp':
-                    return '/tmp/lucent-application-intent.abcdef'
                 return '{}'
             def require(condition, label):
                 if not condition:
@@ -350,6 +348,8 @@ class ModeAndRetirement(unittest.TestCase):
                 self.enterContext(patch.object(driver, key, value, create=True))
             results = {'checks': {}}
             with patch.object(driver, 'checked_binary', return_value=binary), \
+                 patch.object(driver.owned_fixture_scratch, 'allocate',
+                              return_value='/home/omarchy/.cache/lucent-acceptance/lucent-application-intent.abcdef123456'), \
                  patch.object(driver, 'fixture_command', side_effect=command), \
                  self.assertRaises(driver.FixtureFailure):
                 driver.suite(types.SimpleNamespace(release_manifest=str(manifest), example_binary=None,

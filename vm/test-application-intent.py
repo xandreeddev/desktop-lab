@@ -26,6 +26,7 @@ from native_surfaces import find_surface
 from application_intent_policy import (CursorOwnership, compositor_move, http_open_count,
                                       same_target, target as native_target)
 from application_intent_browser import fresh_documents
+import owned_fixture_scratch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -319,7 +320,9 @@ def suite(args, results):
     cursor_owner = CursorOwnership(original_cursor)
     name = lab.inventory()['vms']['lucent']['name']
     preferences = json.loads(remote('python3', '-c', a['PREFERENCES']))
-    scratch = remote('mktemp', '-d', '/tmp/lucent-application-intent.XXXXXXXXXXXX').strip()
+    def scratch_remote(*argv, **kwargs):
+        return h['run'](lab.ssh_args('lucent') + [shlex.join(argv)], **kwargs)
+    scratch = owned_fixture_scratch.allocate(scratch_remote, 'lucent-application-intent')
     run_id = scratch.rsplit('.', 1)[-1]
     diagnostics = lab.ROOT / 'reports/local' / ('application-intent-diagnostics-' + run_id)
     diagnostics.mkdir(mode=0o700)
@@ -499,6 +502,9 @@ def suite(args, results):
             ('application_intent_browser.py', ROOT / 'vm/application_intent_browser.py'),
             ('owned_chromium_lease.py', ROOT / 'vm/owned_chromium_lease.py'))}
         results['helper_sources_sha256'] = {name: hashlib.sha256(raw).hexdigest() for name, raw in sources.items()}
+        results['helper_sources_sha256']['owned_fixture_scratch.py'] = hashlib.sha256(
+            Path(owned_fixture_scratch.__file__).read_bytes()).hexdigest()
+        results['scratch_allocator_sha256'] = owned_fixture_scratch.PROGRAM_SHA256
         results['host_harness_sha256'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
         for filename, raw in sources.items():
             h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(scratch + '/' + filename)],
