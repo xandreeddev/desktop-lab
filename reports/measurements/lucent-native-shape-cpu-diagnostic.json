@@ -1,0 +1,314 @@
+{
+  "schema": 1,
+  "status": "scoped_native_shape_cpu_diagnostic_observed",
+  "overall_passed": true,
+  "performance_accepted": false,
+  "scope": "A separate geometry-only client records successful-submission CPU wall-time stages and compositor presentation feedback. Bounded execution, restoration and partial static visibility are separate from performance-target or bottleneck acceptance.",
+  "sources": {
+    "accepted_main_commit": "2b3c6db4d2482cd8b8f0c4ee9fd0ed9c2640ce57",
+    "managed_desktop_source_commit": "35ed87ed4c01cf62e3c8406b8abdcc0809cc155b",
+    "managed_desktop_binary_sha256": "6ff4e06b73f1a1f68f27cb0504c67710b0a9e118b181ba8ee41eb78d6251ef78",
+    "diagnostic_source_commit": "85a5be6375fab66743301bfe0341c911aac0ad3b",
+    "diagnostic_binary_sha256": "4a3ca729e60e309f6c92f02bde30adae5eb58a439e5b87b7d00a1375ee72e7c7",
+    "diagnostic_example_path": "lucent/examples/hello-layer/src/bin/frame-pacing.rs",
+    "native_profile_serializer_path": "lucent/crates/lucent-wayland/src/profiling.rs",
+    "native_runtime_path": "lucent/crates/lucent-wayland/src/lib.rs",
+    "delivery_scope": "The archived 85a5 example and managed 35ed performance trial are distinct from accepted main 2b3c. This is not a new full-shell deployment or merge/performance acceptance.",
+    "accepted_main_identity_scope": "Accepted main at report preparation after the native capture; the capture itself used the separately identified archived diagnostic and managed trial."
+  },
+  "evidence_sha256": {
+    "native_report": "8dcdd5dab08724ca1d5c2e6d9d723e7574571ee73a7c009e5dbe08d250cf661d",
+    "independent_review": "be0dcbf723fb4a4a1d4d2334069606d90c463362143ebfdf820f063855da19cb",
+    "diagnostic_build": "f9d04563ed0624bab43a3427b7404726441f3fa77366da7a34e7f0c5e12a8249",
+    "controller": "f59d9c98540e53b8152e588a3611932dd692f0762f37bc2ca8909ec18bda4022",
+    "pre_run_normal_off_reference": "004d212c52d7e811b0845a762150a1eedc89b488719a8be58f1411cde8998139",
+    "private_static_visual_review": "c2a381041ecc4886516c3399114a38a33c0189926cc6c77b9796c789ea6ef4b4",
+    "independent_post_run_normal_off_facts": "e68085b92bfbe0139c33fd0157660af466162a9174b618aef01e924ef0fa0c2d",
+    "exact_diagnostic_invocation_present_mode_journal": "c0c40b0eea52824067675be32f7b28dbcd9fa91854bfcb9af82f38a4935b3bb1"
+  },
+  "workload": {
+    "geometry_only": true,
+    "text_images_or_media_producer": false,
+    "warmup_seconds": 30,
+    "measurement_loop_wall_seconds": 121.06684637800208,
+    "one_named_virtual_output": true,
+    "logical_extent": [
+      1920,
+      1080
+    ],
+    "buffer_extent": [
+      1920,
+      1080
+    ],
+    "density": 1,
+    "output_refresh_hz": 60,
+    "layer": "background",
+    "exclusive_zone": -1,
+    "keyboard": "none",
+    "pointer_input": "none",
+    "managed_desktop_video_paused_during_diagnostic": true,
+    "diagnostic_profiling": {
+      "frames": true,
+      "presentation": true
+    },
+    "managed_desktop_profiling": {
+      "frames": false,
+      "presentation": false,
+      "source_pts": false
+    },
+    "native_reported_present_mode": "Mailbox",
+    "native_reported_supported_present_modes": [
+      "Mailbox",
+      "Fifo",
+      "Immediate"
+    ]
+  },
+  "local_validation": {
+    "archived_diagnostic_source_commit": "85a5be6375fab66743301bfe0341c911aac0ad3b",
+    "format_passed": true,
+    "strict_clippy_passed": true,
+    "focused_rust_tests_passed": 3,
+    "release_built": true,
+    "private_harness_pure_tests_passed": 29,
+    "scope": "Previously built immutable diagnostic binary, reused without Rust changes; 29 local harness regressions cover actual CPU fields, modes and bounded ring history. No whole-desktop retest is inferred."
+  },
+  "native_checks": {
+    "main_video_paused_and_saved": true,
+    "owned_native_background_and_no_video": true,
+    "warmed_30_seconds": true,
+    "complete_120_second_presentation_interval": true
+  },
+  "native_checks_passed": 4,
+  "restoration": {
+    "diagnostic_original_drained": true,
+    "ordinary_resume_and_exact_settings_bytes": true,
+    "all_original_facts_preserved": true,
+    "no_diagnostic_runtime_or_native_left": true,
+    "owned_stage_removed": true
+  },
+  "restoration_checks_passed": 5,
+  "post_run_normal_state": {
+    "independent_read_only_observation_passed": true,
+    "same_managed_desktop_process_identity": true,
+    "source_and_binary_unchanged": true,
+    "all_three_profiling_flags_off": true,
+    "original_settings_bytes_restored": true,
+    "settings_inode_replacement_expected": true,
+    "scope": "Ordinary pause/resume persistence may replace the settings inode; runtime socket/lock directory timestamps can advance. Other frozen facts and original process lifetimes remain guarded."
+  },
+  "presentation": {
+    "selected_feedback_samples": 5849,
+    "intervals": 5848,
+    "presentation_span_ns": 120899995000,
+    "feedback_intervals_per_compositor_second": 48.37055617744235,
+    "interval_ms": {
+      "mean": 20.67373375512996,
+      "p50": 16.667,
+      "p95": 33.334,
+      "p99": 33.334,
+      "maximum": 50.0
+    },
+    "nearest_60hz_interval_histogram": {
+      "1": 4489,
+      "2": 1312,
+      "3": 47
+    },
+    "clock_histogram": {
+      "1": 5849
+    },
+    "flags_histogram": {
+      "7": 5849
+    },
+    "refresh_ns_histogram": {
+      "16666666": 5849
+    },
+    "sync_output_count_histogram": {
+      "1": 5849
+    },
+    "selected_frame_index_gaps": 0,
+    "source_stream_references": 0,
+    "discarded_counter_delta": 0,
+    "presented_counter_delta_separate_from_selected_samples": 5851,
+    "flags_scope": "Protocol flags 7 report vsync, hardware clock and hardware completion; they do not establish final pixel visibility or physical scanout."
+  },
+  "successful_submission_cpu_profiles": {
+    "selected_rows": 5851,
+    "successful_submission_counter_delta": 5851,
+    "submission_span_ms": 120934.71529400002,
+    "submission_intervals_per_application_epoch_second": 48.37320686436708,
+    "submission_interval_ms": {
+      "mean": 20.672600904957267,
+      "p50": 16.89616499998374,
+      "p95": 33.653862999999546,
+      "p99": 35.31577899999684,
+      "maximum": 55.01739599998109
+    },
+    "total_ms": {
+      "mean": 0.6585063883096907,
+      "p50": 0.641767,
+      "p95": 0.946377,
+      "p99": 1.145934,
+      "maximum": 2.480036
+    },
+    "renderer_ms": {
+      "mean": 0.6201557525209366,
+      "p50": 0.603917,
+      "p95": 0.89054,
+      "p99": 1.088847,
+      "maximum": 2.4320660000000003
+    },
+    "stages_ms": {
+      "acquire": {
+        "mean": 0.11019012972141513,
+        "p50": 0.106331,
+        "p95": 0.164743,
+        "p99": 0.203126,
+        "maximum": 0.323032
+      },
+      "bookkeeping": {
+        "mean": 0.004286466245086311,
+        "p50": 0.003827,
+        "p95": 0.0072640000000000005,
+        "p99": 0.012293,
+        "maximum": 0.078149
+      },
+      "configure": {
+        "mean": 3.8691334814561614e-05,
+        "p50": 4e-05,
+        "p95": 5.1e-05,
+        "p99": 7.000000000000001e-05,
+        "maximum": 0.000741
+      },
+      "encode": {
+        "mean": 0.1325969716287814,
+        "p50": 0.12854500000000002,
+        "p95": 0.209657,
+        "p99": 0.257369,
+        "maximum": 0.482155
+      },
+      "input": {
+        "mean": 0.01289993915569988,
+        "p50": 0.011853,
+        "p95": 0.022763,
+        "p99": 0.033783,
+        "maximum": 0.105701
+      },
+      "layout": {
+        "mean": 0.015210109724833363,
+        "p50": 0.013836,
+        "p95": 0.026822,
+        "p99": 0.039305,
+        "maximum": 0.09238500000000001
+      },
+      "prepare": {
+        "mean": 0.05588747188514784,
+        "p50": 0.053172,
+        "p95": 0.090903,
+        "p99": 0.12155,
+        "maximum": 0.688627
+      },
+      "present": {
+        "mean": 0.11870944778670313,
+        "p50": 0.10908699999999999,
+        "p95": 0.18796700000000002,
+        "p99": 0.254173,
+        "maximum": 1.784016
+      },
+      "retire": {
+        "mean": 0.0016099706033156727,
+        "p50": 0.0014219999999999999,
+        "p95": 0.002785,
+        "p99": 0.0038469999999999997,
+        "maximum": 0.060164
+      },
+      "submit": {
+        "mean": 0.18362919227482483,
+        "p50": 0.17655500000000002,
+        "p95": 0.273659,
+        "p99": 0.346588,
+        "maximum": 1.5129110000000001
+      },
+      "view": {
+        "mean": 0.003854386942403008,
+        "p50": 0.003457,
+        "p95": 0.006522,
+        "p99": 0.013366000000000001,
+        "maximum": 0.056326
+      }
+    },
+    "prepare_breakdown_ms": {
+      "text_raster": {
+        "mean": 0.0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0,
+        "maximum": 0.0
+      },
+      "texture_upload": {
+        "mean": 0.0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0,
+        "maximum": 0.0
+      }
+    },
+    "resource_totals": {
+      "image_misses": 0,
+      "text_misses": 0,
+      "texture_upload_bytes": 0
+    },
+    "selected_frame_index_gaps": 0,
+    "history_limit": 120,
+    "retained_history_bound": 16384,
+    "scope": "Successful submissions only; durations are CPU-side wall time and can include blocking driver work. They are not GPU execution time, queue-completion time or a complete application-loop profile."
+  },
+  "joined_frame_scope": {
+    "feedbacks_with_cpu_profile": 5849,
+    "feedbacks_without_cpu_profile": 0,
+    "cpu_rows_without_selected_feedback": 2,
+    "terminal_boundary_difference_is_history_error": false,
+    "scope": "All 5,849 selected feedbacks join a CPU row. The 5,851 CPU rows include two final frames outside the saved feedback set. Different request/submission filtering and terminal in-flight feedback boundaries do not imply history loss."
+  },
+  "recipes": {
+    "quantiles": "Nearest rank: sort N values and select index ceil(N*p)-1; no interpolation. Means are arithmetic means. CPU durations and interval summaries here use milliseconds.",
+    "presentation_rate": "(selected_feedback_samples-1) divided by the first-to-last compositor presentation timestamp span in seconds. Do not divide submission counters by loop wall duration.",
+    "submission_rate": "(selected_cpu_rows-1) divided by the first-to-last submitted_ms span in seconds. This is successful-submission timing, not decoder/input FPS or scanout.",
+    "window": "The helper selects requested_at_ms or submitted_ms >= its first post-warmup inspect uptime. That exact lower-bound value is not saved; summaries are independently computed from the saved selected rows."
+  },
+  "source_based_timing_interpretation": {
+    "view_layout_input": "view builds the component tree; layout builds the scene; input measures interaction synchronization and native input-region construction, not user-input latency.",
+    "acquire": "CPU time around surface.get_current_texture, including swapchain acquire/fence work and any blocking driver work within that call.",
+    "present": "CPU time around pre-present protocol callback/feedback requests and wgpu Queue::present, including vkQueuePresentKHR on this Vulkan backend. Separate wp_presentation feedback records reported compositor presentation timestamps, not this CPU call duration.",
+    "prepare_breakdown": "text_raster and texture_upload are nested inside prepare. Do not add them again to prepare or add renderer_ms to its constituent stages.",
+    "outside_rows": "Application.update, queued event dispatch/wait, unsuccessful retries and complete-loop time are not measured by these successful frame rows. GPU execution and compositor scheduling are also not measured."
+  },
+  "static_visual_review": {
+    "one_private_capture_reviewed": true,
+    "part_of_shape_visible": true,
+    "motion_verified": false,
+    "pixel_fidelity_accepted": false,
+    "scope": "Root review sees the opaque diagnostic background and part of the cyan rounded rectangle behind the clock pill, with existing widgets, bar and dock visible. One static capture establishes partial visibility only; no whole-surface, smoothness or frame-by-frame pixel acceptance. Raw capture and its location are not published."
+  },
+  "observations": [
+    "The 5,851 recorded successful draws averaged 0.658506 ms and peaked at 2.480036 ms. Acquire averaged 0.110190 ms/max 0.323032 ms; present averaged 0.118709 ms/max 1.784016 ms. These rows do not contain 16\u201333 ms acquire/present CPU waits explaining the inter-submission gaps.",
+    "No image/text cache misses, texture upload bytes or raster/upload preparation time were recorded for this geometry-only workload.",
+    "Most inter-submission time is outside the recorded successful draw stages. Callback delivery, dispatch, other work, unsuccessful retries, GPU or compositor scheduling remain unattributed."
+  ],
+  "host_pressure_collected": false,
+  "process_cpu_usage_or_rss_collected": false,
+  "native_60fps_accepted": false,
+  "rss_300MiB_accepted": false,
+  "bottleneck_attributed": false,
+  "causal_improvement_established": false,
+  "limits": [
+    "No host-pressure eligibility collector ran, so this cadence and the short CPU stages do not accept a target or establish a renderer, compositor, driver or VM ceiling.",
+    "The earlier 37.05/s presentation-only shape run and 32.22/s live-video trial remain separate immutable observations. Different intervals, workloads and profiling modes prevent a causal improvement or regression conclusion.",
+    "Successful-only CPU profiling can omit slow or failed retry attempts. Short recorded stages do not measure application-update, event-queue or frame-callback delays.",
+    "The two terminal CPU rows without selected feedback are a scoped boundary difference, not missing-history or frame-drop proof.",
+    "One partially visible static capture is not animation-smoothness, whole-surface pixel or physical-scanout proof.",
+    "The exact diagnostic invocation reports Mailbox with Mailbox/Fifo/Immediate supported. No present-mode override was applied; this does not locate callback or compositor delay."
+  ],
+  "privacy": {
+    "raw_images_locations_credentials_process_identifiers_preference_digests_or_user_content_published": false
+  }
+}

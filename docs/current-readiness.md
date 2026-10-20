@@ -1,11 +1,11 @@
 # Current daily-use readiness
 
-Accepted main is `9129912bc79e4b8364fb09165ec2bd2ff3e425a0`
-([PR93](https://github.com/xandreeddev/desktop-lab/pull/93)), merged normally at
-2026-10-20 09:23:12 UTC after all six required checks passed on exact
-`880ce6cd7a57b7dae8b99e7b7568b5330f78f49d` with CLEAN mergeability. It includes
-the version-controlled singular URI harness and source-specific native results,
-alongside the earlier PR92/PR91 documentation and PR87 Text/Application runtime.
+Accepted main is `2b3c6db4d2482cd8b8f0c4ee9fd0ed9c2640ce57`
+([PR94](https://github.com/xandreeddev/desktop-lab/pull/94)), merged normally at
+2026-10-20 10:22:42 UTC after all six required checks passed on exact
+`105a1150eadd42298ff532f71c613476e54289d5` with CLEAN mergeability. It includes
+the private disk-cache browser fixture allocator and its separate native results,
+alongside the earlier PR93/PR92/PR91 documentation and PR87 Text/Application runtime.
 The accepted runtime baseline remains `8e6d074b`.
 As of this recorded reconciliation, the latest deployed trial is coherent
 **unmerged and performance-unaccepted** `35ed87ed`. Its normal video interval
@@ -20,12 +20,13 @@ monitoring a live VM. [PR90](https://github.com/xandreeddev/desktop-lab/pull/90)
 remains a draft. The recorded CI-only `692dfcb1` child passed all six checks and
 leaves the tested `35ed` runtime unchanged; later heads have their own gates.
 
-[Pages run 39400289854](https://github.com/xandreeddev/desktop-lab/actions/runs/39400289854)
-published accepted `9129912b` successfully. Public desktop/library HTML returns
+[Pages run 39407507695](https://github.com/xandreeddev/desktop-lab/actions/runs/39407507695)
+published accepted `2b3c6db4` successfully. Public desktop/library HTML returns
 HTTP 200, exactly matches the deployed artifact and pins source links to the
-workflow commit. Earlier `6b50bd5e`, `d01ff7db` and `8ca4e820` publications retain
-their own receipts. This later shape/storage follow-up needs its own site/CI
-and publication gates.
+workflow commit. Earlier `9129912b`, `6b50bd5e`, `d01ff7db` and `8ca4e820`
+publications retain their own receipts. This later CPU-shape/two-output follow-up
+still needs its own site, exact-head CI and publication gates; pending Display
+transactions have no new native acceptance from this documentation edit.
 
 The earlier three-second RADV liveness trial remains scoped to `a7f41ecc`.
 A later 16-check native run on `8e6d074b` passes two-output density/input and
@@ -72,7 +73,7 @@ ledger's requirement history remains useful for the broader backlog.
 | --- | --- | --- |
 | Saved Wi-Fi recovery | Merged native masked SecretAgent repair retains the saved profile UUID and storage policy. Fourteen native NetworkManager/GUI checks pass against owned simulated WPA2/hidden radios, including cancellation, repair, DHCP, saved reconnection and exact restoration. | Enterprise/WEP provisioning, agent-owned vaults and physical-radio acceptance remain separate gaps; they are not implied by the owned fixture. |
 | Safe display settings | Native whole-layout drafts, fresh ordered observations, Apply → Keep/Revert and independent 15-second/UI-crash EOF rollback. Seven actual one-output QEMU flows pass for mode, scale, position, persistence and recovery. File preservation is exact; the expected one-restart service transition is validated explicitly. | Physical/multiple outputs, native enable/disable/rotation, fractional display-settings input, hotplug, suspend/resume, compositor restart and secure-output acceptance remain open. The Keep-to-file-identity-capture host-loss interval retains manual recovery. |
-| Resources and animation | The latest recorded, unmerged `35ed87ed` trial observes **250.581/252.395 MiB** normal mean/peak RSS and **154.033% of one logical core**. Its separate metadata interval records **32.2245 distinct prepared-revision advances/s** in compositor feedback, while RPC wall-time bounds record **59.7333–60.1290 prepared callbacks/s** before mailbox publication. Profiling restores off with fresh independent verification. | Both phases are host-pressure-ineligible; observed RSS below 300 MiB is not accepted budget evidence, and 60 FPS presentation is not established. No causal gain, bottleneck attribution, decoder-drop, pixel-visibility or physical-scanout claim. A separate geometry-only client also records below 60 at 37.0500 feedback intervals/s, without a host-pressure sample; this is a shared-path observation, not attribution. Eligible matched normal/animated and cold/warm evidence remains required. See [the source-specific upload trial](../reports/measurements/lucent-live-upload-35ed-native-trial.json), [shape diagnostic](../reports/measurements/lucent-native-shape-diagnostic.json) and [presentation analysis](native-presentation-analysis.md). |
+| Resources and animation | The latest recorded, unmerged `35ed87ed` trial observes **250.581/252.395 MiB** normal mean/peak RSS and **154.033% of one logical core**. Its separate metadata interval records **32.2245 distinct prepared-revision advances/s** in compositor feedback, while RPC wall-time bounds record **59.7333–60.1290 prepared callbacks/s** before mailbox publication. Profiling restores off with fresh independent verification. | Both phases are host-pressure-ineligible; observed RSS below 300 MiB is not accepted budget evidence, and 60 FPS presentation is not established. No causal gain, bottleneck attribution, decoder-drop, pixel-visibility or physical-scanout claim. Separate geometry-only runs record 37.0500 and later 48.3706 feedback intervals/s; the latter has 0.6585 ms mean successful draw CPU wall time. Neither has a host-pressure sample or attributes the unmeasured gaps. The short successful draw stages exclude GPU, full-loop, callback/dispatch and failed-retry timing. Eligible matched normal/animated and cold/warm evidence remains required. See [the source-specific upload trial](../reports/measurements/lucent-live-upload-35ed-native-trial.json), [shape diagnostic](../reports/measurements/lucent-native-shape-diagnostic.json), [later CPU diagnostic](../reports/measurements/lucent-native-shape-cpu-diagnostic.json) and [presentation analysis](native-presentation-analysis.md). |
 | International text | Merged `8e6d074b` implements script shaping, hard-paragraph context across soft wraps, exact row-bound visual source/caret maps, tab separator projection, deterministic fallback and opt-in text-input-v3 composition. Five owned native feature checks pass: visible preedit/caret advance, CJK commit/delete/history, masked-focus retirement, multiline composition and RTL navigation. | The fresh owned native suite passes all five feature and five restoration checks; earlier cleanup failures retain their original results. Third-party IME, broader native pixel/scroll details, delayed clipboard/focus races, physical/cross-output text and broader GUI clipboard coverage remain pending. The later Chromium/Notes test passes both directions with nine interaction and twelve restoration checks on one virtual output. Exact merged `8e6d074b` passes six CI checks, full workspace, six controlled service-protocol filters and 832 Vulkan desktop cases; those checks retain their own scope. |
 | Application integration | Accepted main includes fresh input-bound context, explicit file/URI Open and expanded XDG parsing. Earlier local-file `8e` and HTTP `%U` `9b` results keep their original scope. The `4c9a4739` harness on coherent `35ed` passes **twelve singular HTTP `%u` feature and nine restoration checks**: pointer, socket and CLI Open each create exactly one fresh owned HTTP document; the declared Action still creates two local documents. | Direct token consumption, default handlers, external navigation, other applications, physical hardware and broader workflows remain unverified. Application acceptance does not accept the trial’s performance. [Singular HTTP report](../reports/measurements/lucent-native-http-singular-uri-35ed.json), [local-file report](../reports/measurements/lucent-native-application-intents-d1.json) and [plural HTTP report](../reports/measurements/lucent-native-http-uris-9b.json) retain separate scopes; earlier failures stay unchanged. |
 | Real-world validation | Several owned native workflows already pass. The coherent `8e6d074b` also passes 16 checks for two simultaneous compositor outputs, one headless, including real panel input at 1×/2×/1.25×, held-button retirement, same-name recreation and exact restoration. | Physical monitors/cable hotplug, suspend/resume, secure-output changes, physical Bluetooth/audio and other power/radio hardware, additional third-party tray applications/menus, other GUI clipboard applications, rich content and delayed-transfer/focus races need broader testing. One genuine wired-only NetworkManager Applet item/menu/information action passes five interaction, four cleanup and thirteen outside-worker preservation checks on unchanged `8e`. The owned real Chromium/Notes keyboard flow passes nine interaction and twelve restoration checks. The owned output test establishes no presentation FPS or multi-output Display settings transaction. |
@@ -250,8 +251,31 @@ native path also records below 60 in this run; that does not locate a bottleneck
 or establish a compositor/driver/VM cap. No host-pressure or resource collector
 ran. One private static image confirms only partial shape visibility beneath
 separate widgets, with no smoothness, whole-surface pixel or scanout acceptance.
-The example source is separate from accepted main `9129912b` and is not a new
-full-shell deployment.
+That report records accepted main `9129912b` at its own preparation time. The
+archived example is also distinct from later accepted main `2b3c6db4`; neither
+diagnostic is a new full-shell deployment.
+
+A later [CPU-profiled shape run](../reports/measurements/lucent-native-shape-cpu-diagnostic.json)
+reuses the same archived `85a5` binary while managed `35ed` stays normal with its
+profiling off. After 30 seconds of warmup, **5849 feedbacks / 5848 intervals over
+120.899995 compositor seconds = 48.370556 intervals/s** are recorded. All feedbacks
+join CPU rows; two additional terminal CPU rows are outside the saved feedback
+set, without lost history. All four execution and five restoration checks pass;
+a fresh independent normal-state capture confirms the same desktop lifetime and
+all three profiling flags off. One private static image confirms partial visibility.
+
+The **5851 successful draw rows average 0.658506 ms**, with p95 **0.946377 ms**,
+p99 **1.145934 ms** and maximum **2.480036 ms**. Acquire averages 0.110190 ms and
+present 0.118709 ms, with maxima 0.323032/1.784016 ms. No image/text misses or
+texture uploads are recorded. These are CPU wall times, including driver waits,
+not GPU execution or a full-loop profile. Present includes protocol requests and
+the presentation call; separate feedback reports compositor timestamps. The exact
+diagnostic unit journal also records Mailbox, with Fifo and Immediate supported;
+this is an observed mode, not a mode-comparison or pacing-cause result. Application
+updates, callback/dispatch delay and unsuccessful retries are outside these rows.
+The remaining cadence gaps are unattributed. No host-pressure or RSS collector
+ran, and different intervals/profiling prevent a causal comparison with the earlier
+37.05/s shape or 32.22/s video observations. No 300 MiB or 60 FPS acceptance follows.
 
 Separate operational cleanup archives and removes thirteen already-retired test
 payloads: nine owned browser profiles and four staged binaries. Observed tmpfs

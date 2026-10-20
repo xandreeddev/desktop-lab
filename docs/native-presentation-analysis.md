@@ -13,6 +13,15 @@ contains exact integer nanosecond statistics, provenance hashes, joins, resource
 observations, and restoration scope. Private receipts and prior failed attempts
 remain unchanged.
 
+The calculations below retain their original `8e` source. Later video and
+geometry-only observations are linked from [current readiness](current-readiness.md).
+The separate [CPU shape diagnostic](../reports/measurements/lucent-native-shape-cpu-diagnostic.json)
+records short successful CPU draw stages alongside presentation feedback. Those
+CPU wall-time stages can include driver waits but exclude GPU execution,
+application updates, callback/dispatch delay and failed retries. They cannot
+attribute the time between successful submissions or establish a causal gain
+against this earlier interval.
+
 ## Which interval is being measured?
 
 The collector retains rolling history from its first inspection. The raw file
