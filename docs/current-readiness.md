@@ -1,6 +1,15 @@
 # Current daily-use readiness
 
-Accepted main is `2b3c6db4d2482cd8b8f0c4ee9fd0ed9c2640ce57`
+The current integration base is accepted main
+`15e87287a79f4daca39bc42c1b5812a659e4e6cb`
+([PR95](https://github.com/xandreeddev/desktop-lab/pull/95)).
+[Pages run 39416696691](https://github.com/xandreeddev/desktop-lab/actions/runs/39416696691)
+publishes that exact merge; public desktop/library HTML returns HTTP 200 and
+matches the artifact and source links. The callback-observability follow-up keeps
+its own source, CI, merge and publication identities.
+
+The earlier delivery snapshot records accepted main
+`2b3c6db4d2482cd8b8f0c4ee9fd0ed9c2640ce57`
 ([PR94](https://github.com/xandreeddev/desktop-lab/pull/94)), merged normally at
 2026-10-20 10:22:42 UTC after all six required checks passed on exact
 `105a1150eadd42298ff532f71c613476e54289d5` with CLEAN mergeability. It includes
@@ -24,8 +33,9 @@ leaves the tested `35ed` runtime unchanged; later heads have their own gates.
 published accepted `2b3c6db4` successfully. Public desktop/library HTML returns
 HTTP 200, exactly matches the deployed artifact and pins source links to the
 workflow commit. Earlier `9129912b`, `6b50bd5e`, `d01ff7db` and `8ca4e820`
-publications retain their own receipts. This later CPU-shape/two-output follow-up
-still needs its own site, exact-head CI and publication gates. A later corrected
+publications retain their own receipts. At that snapshot, the subsequent
+CPU-shape/two-output follow-up's site, exact-head CI and publication gates were
+pending; its completed PR95 delivery is recorded above. The corrected
 `86df4e5b` harness passes four owned two-output Display flows on unchanged
 `35ed`; this documentation edit does not rerun them.
 
@@ -50,6 +60,19 @@ The shell's launcher, dock, widgets, notifications, lock/login and service panel
 are implemented. Several daily-use cases and their real-world acceptance remain
 unfinished. This guide corrects older “native testing pending” summaries where
 later evidence exists; it does not declare the entire desktop ready.
+
+A separate [callback-observability diagnostic](../reports/measurements/lucent-native-callback-timing.json)
+at `91b964ae` passes four execution and five restoration checks while preserving
+the normal `35ed87ed` desktop. Its 5,286 selected events have mean request-to-handler
+44.175852 ms, handler-to-next-attempt 0.006112 ms and attempt duration 1.603372 ms;
+2,641 feedbacks separately record 21.972535 intervals/s. These mixed wait and
+CPU wall-time measurements establish no causal bottleneck, eligible performance
+target or scanout claim. The [trace guide](frame-callback-timing.md) explains the
+bounded native ownership and separate clocks. This follow-up integrates only the
+standalone example and timing code on accepted main `15e87287`, without the
+unaccepted performance branch's renderer/video ancestors. Its final clean-source
+checks, native execution and delivery are separate from the `91b` evidence; no
+requested-gap status changes follow from the instrumentation alone.
 
 ## What the status words mean
 
