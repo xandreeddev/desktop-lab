@@ -1,0 +1,148 @@
+{
+  "schema": 1,
+  "status": "scoped_native_shape_diagnostic_observed",
+  "overall_passed": true,
+  "performance_accepted": false,
+  "scope": "Standalone geometry-only client using the public component API and shared native runtime. Successful bounded execution and restoration are separate from performance-target or bottleneck acceptance.",
+  "sources": {
+    "accepted_main_commit": "9129912bc79e4b8364fb09165ec2bd2ff3e425a0",
+    "managed_desktop_source_commit": "35ed87ed4c01cf62e3c8406b8abdcc0809cc155b",
+    "diagnostic_source_commit": "85a5be6375fab66743301bfe0341c911aac0ad3b",
+    "diagnostic_binary_sha256": "4a3ca729e60e309f6c92f02bde30adae5eb58a439e5b87b7d00a1375ee72e7c7",
+    "diagnostic_example_path": "lucent/examples/hello-layer/src/bin/frame-pacing.rs",
+    "delivery_scope": "The separate archived 85a5 example is not the accepted-main 912 desktop or a new full-shell deployment. The managed desktop stays on the 35ed trial."
+  },
+  "evidence_sha256": {
+    "native_report": "e472af1de3924726ae0e303fe63ae9a85ca1738596908719138b865355c2f1f6",
+    "diagnostic_build": "f9d04563ed0624bab43a3427b7404726441f3fa77366da7a34e7f0c5e12a8249",
+    "controller": "4bd738a56f4f38817a6953d3d32b109dc87bb94c4771464d4508607d0b7a0e50",
+    "pre_run_normal_off_reference": "3a6f762b0090a72220d7c9d26eb63a4f41d3d712e0151a218903dcd5ddf6cfbd",
+    "private_static_visual_review": "e7e25bac8ff868cb7562cb4ec565078fd5f523e82bad3bd4bc848eb489a03893",
+    "operational_cleanup_apply": "ef3b2961ee40241fb0807a27697fecb71ed8202defd02b104cb2fa9c4e05fdbd",
+    "independent_post_cleanup_observation": "822515dfa657aa07d7f9bb08fa73163247c006498a95ab9a8fc81d2410562408",
+    "normal_state_preservation_across_cleanup": "7dd89346a9b3ff99bb9c2ddbf477ebc4ec5ccaf688734c54e1f4a15481095f1c",
+    "independent_post_cleanup_normal_off_facts": "8407eedb6b03091f6d00d003f5e839829fb52106890747aebcc32751388e9e1c"
+  },
+  "public_api_path": {
+    "component": "Component::view reads ViewContext.now to describe a moving rounded rectangle over an opaque semantic-token background.",
+    "animation": "Application::animating requests continued redraw through the ordinary native frame-callback path; there is no source clock, timer, media producer, image or stream upload.",
+    "demand": "FrameDemand tracks dirty work and pending native callbacks; ready clears pending without discarding damage, while begin admits a dirty nonpending frame.",
+    "source": "lucent/crates/lucent-api/src/lib.rs",
+    "native_runtime": "lucent/crates/lucent-wayland/src/lib.rs"
+  },
+  "native_contract": {
+    "layer": "background",
+    "logical_width": 1920,
+    "logical_height": 1080,
+    "buffer_width": 1920,
+    "buffer_height": 1080,
+    "density": 1,
+    "output_refresh_hz": 60,
+    "exclusive_zone": -1,
+    "keyboard": "none",
+    "pointer_input": "none",
+    "media_producer": false,
+    "scope": "One explicitly named virtual output; desktop widgets/bar/dock remain separate visible layers."
+  },
+  "local_validation": {
+    "source_commit": "85a5be6375fab66743301bfe0341c911aac0ad3b",
+    "format_passed": true,
+    "strict_clippy_passed": true,
+    "focused_rust_tests_passed": 3,
+    "release_built": true,
+    "private_harness_pure_tests_passed": 22,
+    "scope": "Actual archived example build/checks and local harness regressions; no whole-desktop retest is inferred."
+  },
+  "native_checks": {
+    "main_video_paused_and_saved": true,
+    "owned_native_background_and_no_video": true,
+    "warmed_30_seconds": true,
+    "complete_120_second_presentation_interval": true
+  },
+  "native_checks_passed": 4,
+  "restoration": {
+    "diagnostic_original_drained": true,
+    "ordinary_resume_and_exact_settings_bytes": true,
+    "all_original_facts_preserved": true,
+    "no_diagnostic_runtime_or_native_left": true,
+    "owned_stage_removed": true
+  },
+  "restoration_checks_passed": 5,
+  "presentation": {
+    "selected_feedback_samples": 4468,
+    "intervals": 4467,
+    "presentation_span_ns": 120566662000,
+    "feedback_intervals_per_second": 37.05004290489522,
+    "interval_ns": {
+      "p50": 33333000,
+      "p95": 33334000,
+      "p99": 50000000,
+      "maximum": 66667000,
+      "minimum": 16666000,
+      "mean": 26990522.05059324
+    },
+    "clock_histogram": {
+      "1": 4468
+    },
+    "flags_histogram": {
+      "7": 4468
+    },
+    "refresh_ns_histogram": {
+      "16666666": 4468
+    },
+    "sync_output_count_histogram": {
+      "1": 4468
+    },
+    "selected_frame_index_gaps": 0,
+    "source_stream_references": 0,
+    "discarded_counter_delta": 0,
+    "presented_counter_delta_separate_from_selected_samples": 4470,
+    "measurement_loop_wall_seconds": 120.7817185640015,
+    "selected_first_to_last_request_span_seconds": 120.60019824,
+    "window_scope": "The executed helper selects requested_at_ms >= its first measurement inspect uptime. That exact lower-bound value is not saved; rates are independently recomputed from the saved selected feedback set, not the wall duration or submission counter.",
+    "quantiles": "Nearest rank ceil(N*p), integer nanoseconds; no interpolation.",
+    "flags_scope": "Protocol flags7 report vsync, hardware clock and hardware completion; they do not establish final pixel visibility or physical scanout."
+  },
+  "static_visual_review": {
+    "one_private_capture_reviewed": true,
+    "part_of_shape_visible": true,
+    "scope": "Root review sees the opaque diagnostic background and part of its cyan rounded rectangle beneath separate widgets. This is partial visibility in one static image, not a full-surface, animation-smoothness or frame-by-frame pixel acceptance. Raw image and private paths are not published."
+  },
+  "host_pressure_collected": false,
+  "rss_or_cpu_interval_collected": false,
+  "native_60fps_accepted": false,
+  "bottleneck_attributed": false,
+  "separate_operational_cleanup": {
+    "success": true,
+    "removed_retired_payloads": 13,
+    "removed_owned_profiles": 9,
+    "removed_staged_test_binaries": 4,
+    "retired_logical_content_bytes": 674885629,
+    "observed_tmpfs_available_bytes_before": 474701824,
+    "observed_tmpfs_available_bytes_after": 1108099072,
+    "observed_tmpfs_available_delta_bytes": 633397248,
+    "verified_archive_retained_on_disk": true,
+    "archive_bytes": 340596107,
+    "archive_sha256": "bf6e51c45cbfd3c15aff5aad08db4a28213d093324f216174461b0a2da59f3f0",
+    "all12_retained_metadata_exact": true,
+    "parent_directory_timestamps_preserved": false,
+    "unleased_profiles_retained": 3,
+    "processes_killed": 0,
+    "normal_state_preserved_except_advancing_frames": true,
+    "normal_runtime_profiling": {
+      "frames": false,
+      "presentation": false,
+      "source_pts": false
+    },
+    "scope": "Subsequent owned retired-fixture cleanup and independent read-only verification. It is not a before/after performance experiment, a new security acceptance or evidence of a memory/pacing gain."
+  },
+  "limits": [
+    "The geometry-only shared native path also records below 60 feedback intervals/s in this run; no host-pressure collector ran, so this does not accept a target or attribute a compositor, renderer, driver or VM ceiling.",
+    "The35ed video run and 85a5 shape run are separate workloads and intervals. Their observed rates do not isolate decoding, upload, scheduling or compositing costs.",
+    "One partially visible screenshot does not prove whole-surface visibility, animation smoothness, frame-by-frame pixels or physical scanout.",
+    "The managed desktop remains the 35ed unmerged performance trial; accepted main 912 and its publication have their own delivery receipts."
+  ],
+  "privacy": {
+    "raw_images_private_paths_credentials_profiles_process_identifiers_or_user_content_published": false
+  }
+}
