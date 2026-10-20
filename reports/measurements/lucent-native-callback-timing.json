@@ -1,0 +1,396 @@
+{
+  "schema": 1,
+  "status": "scoped_native_shape_callback_diagnostic_observed",
+  "overall_passed": true,
+  "performance_accepted": false,
+  "scope": "A separate geometry-only client records request-to-callback-handler and callback-to-next-attempt client wall times, successful draw stages and separate compositor presentation feedback. This is bounded diagnostic and restoration evidence, not compositor-only bottleneck attribution or performance acceptance.",
+  "sources": {
+    "accepted_main_commit_at_report_preparation": "15e87287a79f4daca39bc42c1b5812a659e4e6cb",
+    "managed_desktop_source_commit": "35ed87ed4c01cf62e3c8406b8abdcc0809cc155b",
+    "managed_desktop_binary_sha256": "6ff4e06b73f1a1f68f27cb0504c67710b0a9e118b181ba8ee41eb78d6251ef78",
+    "diagnostic_source_commit": "91b964ae1a69ea4933554fb2bfdbde91311f18f8",
+    "diagnostic_binary_sha256": "8953fd88e294c2ae5d064acbd19d05533aa3b81252478bc9864bc7dac5afbcae",
+    "diagnostic_example_path": "lucent/examples/hello-layer/src/bin/frame-pacing.rs",
+    "callback_serializer_path": "lucent/crates/lucent-wayland/src/pacing.rs",
+    "runtime_path": "lucent/crates/lucent-wayland/src/lib.rs",
+    "scope": "The archived diagnostic, currently recorded managed performance trial and accepted main are separate identities. No new managed desktop deployment or performance acceptance is implied.",
+    "native_execution_identity_scope": "Actual native execution used archived91b. A later clean-main integration of the same instrumentation is a different source identity; this receipt is not native execution or release validation of that later branch.",
+    "callback_serializer_sha256": "c07b92f8d51fed95906b1b0435a51f49fac6f837ba331bd4710b4d1959e77f2d"
+  },
+  "evidence_sha256": {
+    "native_report": "06e71be42e8a8bdff6193cbf86c15f3e7a579944f84277100672997068956a85",
+    "independent_review": "75fb9a85ffcca395db0d14a4e3a47d3dfecac9596c44e41b6ff16901f91646e3",
+    "diagnostic_build": "3d9bf7bce7d074822eceb82bf3d5e4520e672993ffdcc6a65dfae10cca7b4fc2",
+    "controller": "baa9c7a17a5e83aa367d5183f71542afa24590df53cb7cad1a8ad7bd994bc3a2",
+    "pre_run_normal_off_reference": "9454944e1e60ce4e19446cc75c5c646e87ba25a2522c2ce2b06c50ffedf730ea",
+    "fresh_post_run_normal_off_facts": "4a869255a8278be4ea8b44599422043c9da49b89444d9bedd7601039c085156e",
+    "post_run_normal_state_verification": "28b834fa934eea666ed49341b8b427435442c01930fdf2bbc770fdc3ffa14a9a",
+    "private_static_visual_review": "da3a0c93c11216c3dd591cec121be010d9b5451cd064981b1d00392dfd4e0907"
+  },
+  "local_validation": {
+    "diagnostic_build_steps_passed": [
+      "fmt",
+      "runtime-clippy",
+      "runtime-tests",
+      "clippy",
+      "tests",
+      "release"
+    ],
+    "runtime_tests_passed": 66,
+    "example_tests_passed": 3,
+    "scope": "Archived runtime and diagnostic example checks; not a full workspace gate or final documentation-head CI result."
+  },
+  "workload": {
+    "geometry_only": true,
+    "text_images_or_media_producer": false,
+    "warmup_seconds": 30,
+    "measurement_loop_wall_seconds": 120.46996808399854,
+    "one_virtual_output": true,
+    "logical_and_buffer_extent": [
+      1920,
+      1080
+    ],
+    "density": 1,
+    "output_refresh_hz": 60,
+    "layer": "background",
+    "exclusive_zone": -1,
+    "keyboard": "none",
+    "pointer_input": "none",
+    "managed_video_paused_during_diagnostic": true,
+    "diagnostic_profiling": {
+      "frames": true,
+      "presentation": true
+    },
+    "managed_desktop_profiling": {
+      "frames": false,
+      "presentation": false,
+      "source_pts": false
+    }
+  },
+  "native_checks": {
+    "main_video_paused_and_saved": true,
+    "owned_native_background_and_no_video": true,
+    "warmed_30_seconds": true,
+    "complete_120_second_presentation_interval": true
+  },
+  "native_checks_passed": 4,
+  "restoration": {
+    "diagnostic_original_drained": true,
+    "ordinary_resume_and_exact_settings_bytes": true,
+    "all_original_facts_preserved": true,
+    "no_diagnostic_runtime_or_native_left": true,
+    "owned_stage_removed": true
+  },
+  "restoration_checks_passed": 5,
+  "post_run_normal_state": {
+    "fresh_independent_all_flags_off": true,
+    "same_managed_desktop_lifetime": true,
+    "exact_original_settings_bytes_digest_mode_owner_size_and_linkcount_preserved": true,
+    "original_settings_inode_and_timestamps_claimed_unchanged": false,
+    "runtime_parent_inode_mode_owner_preserved": true,
+    "runtime_parent_entry_size_and_timestamps_claimed_unchanged": false,
+    "fresh_after_matches_raw_after_except_advancing_frames_via_existing_source_projection": true,
+    "scope": "Ordinary pause/resume saves are allowed to replace the settings inode and timestamps by the preexisting reviewed policy. Diagnostic socket/lock activity may change runtime-parent entry size/timestamps. An initial overstrict metadata comparison was retained as false; the existing policy, not a new weakened rule, passed. Fresh facts independently match the actual native final state."
+  },
+  "closed_event_window": {
+    "events": 5286,
+    "callbacks": 2643,
+    "completed_attempts": 2643,
+    "event_ids_contiguous": true,
+    "one_native_generation": true,
+    "history_ring_limit": 512,
+    "retained_event_limit": 32768,
+    "history_rows_trimmed_during_capture": 5286,
+    "collector_lost_events": false,
+    "native_retirement_or_counter_reset_observed": false,
+    "first_watermark_excludes_startup_history": true,
+    "scope": "Only closed event IDs after the first snapshot watermark through the final snapshot. Per-poll ring trimming is normal; contiguous merged IDs and counter deltas establish that retained closed events were not lost."
+  },
+  "correlation": {
+    "matched_callbacks": 2643,
+    "ambiguous_callbacks": 0,
+    "unmatched_callbacks": 0,
+    "overlapping_requests": 0,
+    "uncorrelated_requests": 0,
+    "unclosed_attempts": 0,
+    "unmatched_completions": 0,
+    "attempt_outcomes": {
+      "presented": 2643
+    },
+    "callback_to_attempt_joins": 2643,
+    "pending_callbacks_at_end": 1,
+    "active_attempt_at_end": false,
+    "ready_callback_at_end": false,
+    "scope": "The final outstanding callback request is normal endpoint state, not an unmatched observed callback. No artificial request or cross-generation join was made.",
+    "request_frame_plus_one_matches_each_admitted_attempt": true
+  },
+  "client_timings_ms": {
+    "request_to_callback_handler": {
+      "samples": 2643,
+      "mean": 44.17585244646236,
+      "p50": 47.4218,
+      "p95": 65.120047,
+      "p99": 70.662222,
+      "maximum": 83.487583,
+      "minimum": 14.807883
+    },
+    "callback_handler_to_next_attempt": {
+      "samples": 2643,
+      "mean": 0.006111755580779417,
+      "p50": 0.00517,
+      "p95": 0.01057,
+      "p99": 0.025377,
+      "maximum": 0.265313,
+      "minimum": 0.001132
+    },
+    "admitted_attempt_wall_time": {
+      "samples": 2643,
+      "mean": 1.6033720249716232,
+      "p50": 1.484542,
+      "p95": 2.609481,
+      "p99": 3.758969,
+      "maximum": 15.324306,
+      "minimum": 0.453971
+    },
+    "previous_attempt_finish_to_next_start": {
+      "samples": 2642,
+      "mean": 43.91181897388342,
+      "p50": 47.149422,
+      "p95": 64.759773,
+      "p99": 69.775123,
+      "maximum": 83.345904,
+      "minimum": 14.590211
+    },
+    "previous_attempt_tail_after_its_callback_request": {
+      "samples": 2642,
+      "mean": 0.25617594928084786,
+      "p50": 0.203746,
+      "p95": 0.521709,
+      "p99": 0.957583,
+      "maximum": 5.848123,
+      "minimum": 0.071315
+    },
+    "previous_attempt_finish_to_callback_handler": {
+      "samples": 2642,
+      "mean": 43.90570565594247,
+      "p50": 47.146367,
+      "p95": 64.754443,
+      "p99": 69.75715,
+      "maximum": 83.340965,
+      "minimum": 14.586153
+    },
+    "callback_handler_intervals": {
+      "samples": 2642,
+      "mean": 45.515096912566236,
+      "p50": 48.904568,
+      "p95": 66.483733,
+      "p99": 71.825315,
+      "maximum": 84.474211,
+      "minimum": 15.846972
+    },
+    "callback_handler_intervals_per_second": 21.970732083048922,
+    "scope": "All use one diagnostic process Instant epoch. Request time is sampled immediately before wl_surface.frame is marshalled, inside the render presentation closure, before the surrounding attempt finishes. Handler entry is recorded before SDK routing; next-attempt timing can include intentional idle in general. Request-to-handler includes remaining render/present work, protocol transport/flush, compositor decisions, OS scheduling and client event dispatch; it does not isolate any one of them."
+  },
+  "raw_core_callback_data": {
+    "u32_modulo_spacing_ms": {
+      "samples": 2642,
+      "mean": 45.51476154428463,
+      "p50": 50,
+      "p95": 67,
+      "p99": 68,
+      "maximum": 84,
+      "minimum": 16
+    },
+    "backward_transitions": 0,
+    "scope": "Core callback_data_ms has an undefined clock base and stays separate from local Instant and wp_presentation. No absolute cross-clock subtraction or wall-clock inference."
+  },
+  "presentation": {
+    "feedback_samples": 2641,
+    "interval_count": 2640,
+    "span_seconds": 120.149995,
+    "intervals_per_second": 21.972535246464222,
+    "intervals_ms": {
+      "samples": 2640,
+      "mean": 45.51136174242424,
+      "p50": 50.0,
+      "p95": 66.667,
+      "p99": 66.667,
+      "maximum": 100.0,
+      "minimum": 16.666
+    },
+    "clock_id": 1,
+    "flags": [
+      7
+    ],
+    "reported_refresh_interval_ns": 16666666,
+    "sync_outputs_per_sample": 1,
+    "discarded_counter_delta": 0,
+    "stream_revision_references": 0,
+    "scope": "Distinct successful presentation-feedback intervals in the compositor-provided clock. This is not measured pixel change, scanout FPS or a performance-target acceptance."
+  },
+  "successful_submission_cpu_profiles": {
+    "samples": 2643,
+    "total_ms": {
+      "samples": 2643,
+      "mean": 1.6173765527809307,
+      "p50": 1.496523,
+      "p95": 2.6313030000000004,
+      "p99": 3.771771,
+      "maximum": 15.344165,
+      "minimum": 0.456826
+    },
+    "renderer_ms": {
+      "samples": 2643,
+      "mean": 1.513454418085509,
+      "p50": 1.395822,
+      "p95": 2.470438,
+      "p99": 3.633502,
+      "maximum": 14.229344,
+      "minimum": 0.432379
+    },
+    "stages_ms": {
+      "acquire": {
+        "samples": 2643,
+        "mean": 0.25631973590616725,
+        "p50": 0.227141,
+        "p95": 0.413903,
+        "p99": 0.667323,
+        "maximum": 12.391513999999999,
+        "minimum": 0.083527
+      },
+      "bookkeeping": {
+        "samples": 2643,
+        "mean": 0.011856313280363224,
+        "p50": 0.009708999999999999,
+        "p95": 0.019316,
+        "p99": 0.052651,
+        "maximum": 0.466163,
+        "minimum": 0.002525
+      },
+      "configure": {
+        "samples": 2643,
+        "mean": 0.0005597060158910329,
+        "p50": 0.00048100000000000004,
+        "p95": 0.001062,
+        "p99": 0.001522,
+        "maximum": 0.037371,
+        "minimum": 2.9e-05
+      },
+      "encode": {
+        "samples": 2643,
+        "mean": 0.3334001309118426,
+        "p50": 0.30800299999999997,
+        "p95": 0.562675,
+        "p99": 0.757205,
+        "maximum": 2.179017,
+        "minimum": 0.080533
+      },
+      "input": {
+        "samples": 2643,
+        "mean": 0.032680948543321986,
+        "p50": 0.028163,
+        "p95": 0.059852999999999996,
+        "p99": 0.11142,
+        "maximum": 0.6611819999999999,
+        "minimum": 0.007784999999999999
+      },
+      "layout": {
+        "samples": 2643,
+        "mean": 0.04041284146802875,
+        "p50": 0.035486,
+        "p95": 0.070522,
+        "p99": 0.130137,
+        "maximum": 0.472014,
+        "minimum": 0.009758000000000001
+      },
+      "prepare": {
+        "samples": 2643,
+        "mean": 0.13964133938706016,
+        "p50": 0.126038,
+        "p95": 0.236157,
+        "p99": 0.36214500000000005,
+        "maximum": 3.285542,
+        "minimum": 0.036669
+      },
+      "present": {
+        "samples": 2643,
+        "mean": 0.2816294646235339,
+        "p50": 0.228833,
+        "p95": 0.553318,
+        "p99": 1.045629,
+        "maximum": 5.879263,
+        "minimum": 0.077918
+      },
+      "retire": {
+        "samples": 2643,
+        "mean": 0.0032641293984108965,
+        "p50": 0.0027949999999999997,
+        "p95": 0.00552,
+        "p99": 0.01098,
+        "maximum": 0.107724,
+        "minimum": 0.000701
+      },
+      "submit": {
+        "samples": 2643,
+        "mean": 0.4578270654559213,
+        "p50": 0.411619,
+        "p95": 0.793002,
+        "p99": 1.289943,
+        "maximum": 3.662836,
+        "minimum": 0.130186
+      },
+      "view": {
+        "samples": 2643,
+        "mean": 0.010951368520620506,
+        "p50": 0.008886,
+        "p95": 0.018375,
+        "p99": 0.038844000000000004,
+        "maximum": 0.9982190000000001,
+        "minimum": 0.0022749999999999997
+      }
+    },
+    "resource_counter_sums": {
+      "image_misses": 0,
+      "text_misses": 0,
+      "texture_upload_bytes": 0
+    },
+    "scope": "Successful submission CPU wall time including driver waits; not GPU execution, application updates, event-queue delay or full-loop time. These timers have different endpoints from the attempt trace and must not be added as independent disjoint stages."
+  },
+  "frame_window_joins": {
+    "feedback_and_cpu_and_presented_attempt": 2641,
+    "cpu_and_presented_attempt": 2643,
+    "terminal_cpu_and_attempt_rows_without_feedback_in_selected_window": 2,
+    "scope": "Presentation and CPU/closed-event windows have different endpoint filters. The two terminal rows lie beyond the selected feedback window and are not counted as dropped/error frames."
+  },
+  "recipe": {
+    "quantiles": "Nearest rank: sort N values and take ceil(N*p)-1 for p50/p95/p99; arithmetic means.",
+    "cadence": "Adjacent interval count divided by last minus first timestamp in that same clock.",
+    "event_contiguity": "Selected event IDs equal the exact first.events_total+1 through last.events_total; callback and completed-attempt counts equal counter deltas."
+  },
+  "static_visual_review": {
+    "separate_review_recorded": true,
+    "observation": "Opaque blue diagnostic background and cyan rounded rectangle are visible, partly obscured by existing shell widgets.",
+    "pixels_verified": false,
+    "motion_or_smoothness_verified": false,
+    "full_surface_fidelity_verified": false,
+    "raw_visibility_review_pending_retained": true,
+    "scope": "A separate human static image review; raw flags remain unchanged. No screenshot or private capture path is published."
+  },
+  "observations": [
+    "In this capture, most measured request-to-next-attempt time elapsed before callback-handler entry; handler entry to the next admitted attempt was short. This bounds a client-visible interval and does not identify compositor, transport, OS or event-dispatch cause.",
+    "Earlier video, shape-only and shape-CPU observations remain separate source/workload/profile captures. The lower cadence here cannot be attributed to tracing, host load or a product regression without a matched eligible comparison."
+  ],
+  "host_pressure_collected": false,
+  "process_cpu_usage_or_rss_collected": false,
+  "native_60fps_accepted": false,
+  "rss_300MiB_accepted": false,
+  "bottleneck_attributed": false,
+  "causal_improvement_or_regression_established": false,
+  "limits": [
+    "One virtual output and one partial static visual review; no physical-output, multi-output, animation smoothness or full-surface fidelity acceptance.",
+    "No host-pressure eligibility collector or matched before/after comparison; no performance target acceptance.",
+    "No queue-source wrapping or dispatch-cycle timing was added; request-to-handler combines several systems."
+  ],
+  "privacy": "Only sanitized aggregate measurements and source/evidence hashes are published; no native object IDs, process IDs, settings hashes, source media, private paths or raw captures.",
+  "logical_public_path": "reports/measurements/lucent-native-callback-timing.json"
+}

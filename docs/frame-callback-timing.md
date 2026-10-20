@@ -5,9 +5,13 @@ inspector section. It leaves the existing successful `frame_profiles` schema
 unchanged. The trace observes existing work: it requests no redraw, frame
 callback, timer, flush, roundtrip or polling worker, and changes no present mode.
 
-This source is a candidate implementation. Compilation, tests, a new diagnostic
-build and native execution still require their own recorded results. The older
-`35ed87ed` runtime and `85a5be63` shape binary do not contain this trace.
+The trace was built and exercised in the separate `91b964ae` diagnostic source.
+This integration starts from accepted main `15e87287` and brings over only the
+standalone example and observability code, without the unaccepted renderer/video
+candidate ancestors. This main-based source and its compilation, CI and delivery
+identities are separate from the `91b` native run; those checks do not extend its
+native scope. The managed `35ed87ed` desktop remains unchanged and does not
+contain this trace.
 
 ## Records and ownership
 
@@ -68,8 +72,9 @@ Core Wayland callback data uses milliseconds with an undefined base. Its raw
 clock ID. Do not subtract or align these clocks. Short same-lifetime wrapping
 callback-data deltas describe only that clock's spacing.
 
-`request_to_handler_ns` combines outbound queue/flush, compositor waiting,
-transport, OS scheduling and client event dispatch. It is not compositor-only
+`request_to_handler_ns` combines the remaining render/present call after the
+request, outbound queue/flush, compositor waiting, transport, OS scheduling and
+client event dispatch. It is not compositor-only
 latency. `callback_to_attempt_ns` measures the next admitted attempt after the
 handler, including any idle interval or preceding client work; it is not a
 standalone scheduler-delay measurement. This first slice does not instrument
@@ -77,8 +82,33 @@ the socket-read or queue-batch boundary, application updates, GPU execution,
 compositor emission time or physical scanout. Existing presentation feedback
 keeps its separate frame joins, timestamps and protocol flags.
 
-Source checks for this candidate are separate from native measurement. The
-meaningful focused commands are `cargo test --manifest-path lucent/Cargo.toml
--p lucent-wayland --lib pacing::tests` and the full runtime-library test suite;
-strict formatting and Clippy must also pass. Native captures must use a newly
-built, source-pinned diagnostic. No result or pacing improvement is assumed.
+## Source-specific native evidence
+
+The [callback timing report](../reports/measurements/lucent-native-callback-timing.json)
+records a separate `91b964ae` diagnostic build: formatting, strict Clippy, 66
+runtime-library tests and three example tests pass there. Four native execution
+and five restoration checks pass with the normal `35ed87ed` desktop preserved
+and all its profiling OFF. The diagnostic alone has frame and presentation
+profiling enabled. These checks do not execute this later main-based source.
+
+The selected window retains 5,286 contiguous events: 2,643 matched callbacks and
+2,643 presented attempts. Mean local request-to-handler time is 44.175852 ms,
+handler-to-next-attempt is 0.006112 ms and admitted attempt duration is
+1.603372 ms. Separately, 2,641 joined presentation feedbacks record 21.972535
+intervals/s in their own compositor clock. The clocks and window boundaries
+remain separate; neither count is inferred from the other.
+
+These observations locate measured intervals, not their cause. Request waiting
+still includes transport and client dispatch, and the small post-handler interval
+does not attribute the earlier wait to the compositor. No eligible resource or
+60 FPS target, causal improvement, GPU time or physical scanout is accepted.
+Earlier shape and CPU-shape results keep their original sources and scopes.
+
+For the clean integration, run the focused test command below, the full runtime
+library suite and strict formatting/Clippy. A later native capture must use its
+own newly built, source-pinned diagnostic. CI, merge and publication are separate
+from the earlier native result.
+
+```sh
+cargo test --manifest-path lucent/Cargo.toml -p lucent-wayland --lib pacing::tests
+```

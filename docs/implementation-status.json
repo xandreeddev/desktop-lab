@@ -1078,6 +1078,27 @@
         "Immediate"
       ],
       "presentation_mode_receipt_sha256": "c0c40b0eea52824067675be32f7b28dbcd9fa91854bfcb9af82f38a4935b3bb1"
+    },
+    "callback_observability": {
+      "integration_base_accepted_main_commit": "15e87287a79f4daca39bc42c1b5812a659e4e6cb",
+      "integration_base_pages_run": 39416696691,
+      "integration_base_public_desktop_and_library_verified": true,
+      "example_origin_commit": "85a5be6375fab66743301bfe0341c911aac0ad3b",
+      "native_diagnostic_source_commit": "91b964ae1a69ea4933554fb2bfdbde91311f18f8",
+      "integration_cherry_pick_commits": [
+        "b45dc379e09df1866d9c6d2a286c16212e29b23b",
+        "6d087068a8215013c9f190b2769e6995c6173846"
+      ],
+      "report": "reports/measurements/lucent-native-callback-timing.json",
+      "guide": "docs/frame-callback-timing.md",
+      "callback_serializer_sha256": "c07b92f8d51fed95906b1b0435a51f49fac6f837ba331bd4710b4d1959e77f2d",
+      "native_execution_checks_passed": 4,
+      "native_restoration_checks_passed": 5,
+      "unaccepted_performance_ancestor_commits_included": false,
+      "requested_gap_statuses_changed": false,
+      "scope": "Runtime-only bounded opt-in callback and attempt observations, copied with the standalone geometry diagnostic onto accepted main. The timing serializer and runtime hooks match the separately tested 91b source; the renderer stays at accepted main, without the unaccepted 35ed performance ancestors. Actual 91b passes 66 runtime-library and 3 example tests plus 4 native execution/5 restoration checks while the normal 35ed desktop is preserved and profiling OFF. This is not execution or full source validation of the later clean integration. Request-to-handler combines remaining render/present work, transport, compositor and client scheduling/dispatch; raw core callback milliseconds, local Instant nanoseconds and presentation clock IDs remain separate. No causal bottleneck, eligible 300MiB/60FPS target, GPU or scanout acceptance follows. All earlier reports, statuses and historical scope remain unchanged.",
+      "native_receipt_executes_clean_integration": false,
+      "source_and_delivery_checks_extend_91b_native_scope": false
     }
   },
   "requirements": [
