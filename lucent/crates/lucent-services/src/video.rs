@@ -461,22 +461,73 @@ fn decode_inner(
         return Err(failed());
     }
     valid_file(path)?;
+    let mut session = None;
     loop {
         if stop.cancelled() {
             return Ok(());
         }
+        if session.is_none() {
+            session = Some(DecoderSession::open(path, purpose, stop.clone())?);
+        }
+        let active = session.as_mut().ok_or_else(failed)?;
+        if !active.cycle(options, purpose, emit, stop.as_ref())?
+            || stop.cancelled()
+            || !options.looping
+        {
+            return Ok(());
+        }
+        if active.rewind(stop.as_ref()) {
+            continue;
+        }
+        // Other purposes/codecs and unsupported/failed seeks preserve the old
+        // reopen path. Retire this owner before allocating its replacement.
+        session = None;
+    }
+}
+
+/// One admitted local input and its codec/conversion allocations. Only live
+/// H.264 retains this owner across complete, drained playback cycles. Seeking
+/// keeps the originally opened file; it never resolves a new source pathname.
+struct DecoderSession {
+    input: ffmpeg::format::context::Input,
+    decoder: ffmpeg::decoder::Video,
+    converter: Option<FrameConverter>,
+    index: usize,
+    time_base: ffmpeg::Rational,
+    rate: f64,
+    origin: Instant,
+    deadline: Arc<AtomicU64>,
+    rewind_at: Option<i64>,
+}
+
+/// Input::seek uses global AV_TIME_BASE units and passes the range end as the
+/// inclusive native max_ts. Round up so sub-microsecond stream starts remain
+/// inside that bound, including negative starts. Invalid/unknown metadata keeps
+/// the existing reopen path rather than guessing a start of zero.
+fn rewind_timestamp(start: i64, time_base: ffmpeg::Rational) -> Option<i64> {
+    if start == ffmpeg::ffi::AV_NOPTS_VALUE || time_base.0 <= 0 || time_base.1 <= 0 {
+        return None;
+    }
+    let numerator = i128::from(start) * i128::from(time_base.0) * 1_000_000;
+    let denominator = i128::from(time_base.1);
+    let ticks =
+        numerator.div_euclid(denominator) + i128::from(numerator.rem_euclid(denominator) != 0);
+    i64::try_from(ticks).ok()
+}
+
+impl DecoderSession {
+    fn open(path: &Path, purpose: DecodePurpose, stop: Arc<dyn StopSignal>) -> Result<Self> {
         let origin = Instant::now();
         let deadline = Arc::new(AtomicU64::new(5000));
-        let interrupt_stop = stop.clone();
         let interrupt_deadline = deadline.clone();
         let mut dictionary = ffmpeg::Dictionary::new();
         dictionary.set("protocol_whitelist", "file");
         dictionary.set("probesize", "1048576");
         dictionary.set("analyzeduration", "2000000");
-        let mut input = ffmpeg::format::input_with_interrupt_and_dictionary(
+        let input = ffmpeg::format::input_with_interrupt_and_dictionary(
             path,
             move || {
-                interrupt_stop.cancelled()
+                stop.cancelled()
                     || origin.elapsed().as_millis() as u64
                         > interrupt_deadline.load(Ordering::Relaxed)
             },
@@ -491,22 +542,86 @@ fn decode_inner(
                 "Media container is not MP4, WebM or GIF".into(),
             ));
         }
-        let stream = input
-            .streams()
-            .best(ffmpeg::media::Type::Video)
-            .ok_or_else(failed)?;
-        let index = stream.index();
-        let time_base: f64 = stream.time_base().into();
-        let rate: f64 = stream.avg_frame_rate().into();
-        let mut context = ffmpeg::codec::context::Context::from_parameters(stream.parameters())
-            .map_err(|_| failed())?;
+        let (index, time_base, rate, rewind_at, mut context) = {
+            let stream = input
+                .streams()
+                .best(ffmpeg::media::Type::Video)
+                .ok_or_else(failed)?;
+            let context = ffmpeg::codec::context::Context::from_parameters(stream.parameters())
+                .map_err(|_| failed())?;
+            let reuse = matches!(purpose, DecodePurpose::LiveWallpaper)
+                && context.id() == ffmpeg::codec::Id::H264;
+            (
+                stream.index(),
+                stream.time_base(),
+                stream.avg_frame_rate().into(),
+                if reuse {
+                    rewind_timestamp(stream.start_time(), stream.time_base())
+                } else {
+                    None
+                },
+                context,
+            )
+        };
         context.set_threading(purpose.threading(context.id()));
-        let mut decoder = context.decoder().video().map_err(|_| failed())?;
+        let decoder = context.decoder().video().map_err(|_| failed())?;
         // Reject known oversized declarations before allocating decoded frames,
         // but permit unknown (zero) edges until the first frame establishes them.
         dimensions(decoder.width().max(1), decoder.height().max(1))?;
-        let mut converter = None;
-        let mut timeline = PresentationTimeline::new(time_base, rate);
+        Ok(Self {
+            input,
+            decoder,
+            converter: None,
+            index,
+            time_base,
+            rate,
+            origin,
+            deadline,
+            rewind_at,
+        })
+    }
+
+    fn rewind(&mut self, stop: &dyn StopSignal) -> bool {
+        let Some(target) = self.rewind_at else {
+            return false;
+        };
+        if stop.cancelled() {
+            return false;
+        }
+        self.deadline.store(
+            self.origin.elapsed().as_millis() as u64 + 5000,
+            Ordering::Relaxed,
+        );
+        // This is one bounded attempt after EOF drain/final hold. A failed seek
+        // discards the whole session; no partially repositioned decoder is used.
+        if self.input.seek(target, ..target).is_err() || stop.cancelled() {
+            return false;
+        }
+        self.decoder.flush();
+        true
+    }
+
+    /// Returns false only when delivery/cancellation retires the body. EOF is
+    /// fully drained and the final source hold completes before a loop rewind.
+    fn cycle(
+        &mut self,
+        options: PlaybackOptions,
+        purpose: DecodePurpose,
+        emit: &mut dyn FnMut(MediaFrame) -> bool,
+        stop: &dyn StopSignal,
+    ) -> Result<bool> {
+        let Self {
+            input,
+            decoder,
+            converter,
+            index,
+            time_base,
+            rate,
+            origin,
+            deadline,
+            ..
+        } = self;
+        let mut timeline = PresentationTimeline::new((*time_base).into(), *rate);
         let mut clock = FrameClock::new(options.fps);
         let started = Instant::now();
         let mut delivered = false;
@@ -526,7 +641,7 @@ fn decode_inner(
                     return Ok(false);
                 }
                 if converter.is_none() {
-                    converter = Some(match purpose {
+                    *converter = Some(match purpose {
                         DecodePurpose::Preview(preview) => {
                             FrameConverter::new_sized(&frame, None, Some(preview))?
                         }
@@ -558,14 +673,14 @@ fn decode_inner(
         };
         loop {
             if stop.cancelled() {
-                return Ok(());
+                return Ok(false);
             }
             deadline.store(
                 origin.elapsed().as_millis() as u64 + 5000,
                 Ordering::Relaxed,
             );
             let mut packet = ffmpeg::Packet::empty();
-            match packet.read(&mut input) {
+            match packet.read(input) {
                 Ok(()) => {}
                 Err(ffmpeg::Error::Eof) => break,
                 Err(_) => return Err(failed()),
@@ -575,25 +690,23 @@ fn decode_inner(
                     "Video packet exceeds the media envelope".into(),
                 ));
             }
-            if packet.stream() == index {
+            if packet.stream() == *index {
                 decoder.send_packet(&packet).map_err(|_| failed())?;
-                if !frames(&mut decoder)? {
-                    return Ok(());
+                if !frames(decoder)? {
+                    return Ok(false);
                 }
             }
         }
         decoder.send_eof().map_err(|_| failed())?;
-        if !frames(&mut decoder)? || stop.cancelled() {
-            return Ok(());
+        if !frames(decoder)? || stop.cancelled() {
+            return Ok(false);
         }
         drop(frames);
         if !delivered {
             return Err(failed());
         }
         stop.wait(end_time.saturating_sub(started.elapsed()));
-        if !options.looping {
-            return Ok(());
-        }
+        Ok(true)
     }
 }
 /// Normalize decoder timestamps without rounding the source rate to an integer.

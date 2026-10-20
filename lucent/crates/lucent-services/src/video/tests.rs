@@ -401,8 +401,11 @@ fn fixture(root: &Path, extension: &str) -> PathBuf {
 }
 
 fn h264_fixture(root: &Path) -> PathBuf {
+    h264_fixture_with_options(root, "h264-b-frames.mp4", &[])
+}
+fn h264_fixture_with_options(root: &Path, name: &str, extra: &[&str]) -> PathBuf {
     use std::process::Stdio;
-    let file = root.join("h264-b-frames.mp4");
+    let file = root.join(name);
     let mut child = Command::new("ffmpeg")
         .args([
             "-hide_banner",
@@ -430,6 +433,7 @@ fn h264_fixture(root: &Path) -> PathBuf {
             "-pix_fmt",
             "yuv420p",
         ])
+        .args(extra)
         .arg(&file)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -637,6 +641,350 @@ fn video_live_h264_callback_and_loop_cancellation_retire_without_storage_changes
     );
     assert_eq!(storage_snapshot(&adapter.state), stored);
     assert_eq!(storage_snapshot(&file), original);
+}
+
+#[test]
+fn video_live_rewind_target_preserves_signed_starts_and_rejects_unknown_or_overflow() {
+    use ffmpeg::Rational;
+    for (start, time_base, expected) in [
+        (0, Rational(1, 10), 0),
+        (20, Rational(1, 10), 2_000_000),
+        (-3, Rational(1, 10), -300_000),
+        (1, Rational(1, 90_000), 12),
+        (-1, Rational(1, 90_000), -11),
+    ] {
+        assert_eq!(rewind_timestamp(start, time_base), Some(expected));
+    }
+    for (start, time_base) in [
+        (ffmpeg::ffi::AV_NOPTS_VALUE, Rational(1, 10)),
+        (1, Rational(0, 10)),
+        (1, Rational(-1, 10)),
+        (1, Rational(1, 0)),
+        (1, Rational(1, -10)),
+        (i64::MAX, Rational(i32::MAX, 1)),
+        (i64::MIN + 1, Rational(i32::MAX, 1)),
+    ] {
+        assert_eq!(rewind_timestamp(start, time_base), None);
+    }
+}
+
+/// Observe allocations through binding-provided pointers without dereferencing
+/// them. The owned session stays live across every comparison.
+fn session_allocations(session: &DecoderSession) -> (usize, usize, usize, usize) {
+    let converter = session.converter.as_ref().unwrap();
+    // SAFETY: these methods expose addresses of the live owned FFmpeg handles;
+    // the test never dereferences them or passes them to a native function.
+    unsafe {
+        (
+            session.input.as_ptr() as usize,
+            session.decoder.as_ptr() as usize,
+            converter.scaler.as_ptr() as usize,
+            converter.rgba.data(0).as_ptr() as usize,
+        )
+    }
+}
+
+#[test]
+fn video_live_h264_reuses_actual_contexts_and_conversion_storage_after_eof() {
+    let root = Directory::new();
+    let file = h264_fixture(&root.0);
+    let original = storage_snapshot(&file);
+    ffmpeg::init().unwrap();
+    for target in [None, Some(WallpaperPixelTarget::new(32, 24).unwrap())] {
+        let options = PlaybackOptions {
+            fps: WallpaperFrameRate::Source,
+            looping: false,
+            target,
+        };
+        let mut reference = vec![];
+        decode(
+            &file,
+            options,
+            DecodePurpose::Poster,
+            &mut |frame| {
+                reference.push(frame_snapshot(frame));
+                true
+            },
+            Arc::new(Never),
+        )
+        .unwrap();
+        assert_eq!(
+            reference.len(),
+            8,
+            "reference must include reordered EOF frames"
+        );
+        let mut session =
+            DecoderSession::open(&file, DecodePurpose::LiveWallpaper, Arc::new(Never)).unwrap();
+        let mut allocations = None;
+        for cycle in 0..3 {
+            let mut actual = vec![];
+            assert!(
+                session
+                    .cycle(
+                        options,
+                        DecodePurpose::LiveWallpaper,
+                        &mut |frame| {
+                            actual.push(frame_snapshot(frame));
+                            true
+                        },
+                        &Never
+                    )
+                    .unwrap()
+            );
+            assert_eq!(actual, reference, "changed decoded output in cycle {cycle}");
+            let current = session_allocations(&session);
+            if let Some(first) = allocations {
+                assert_eq!(current, first, "EOF loop replaced a live native allocation");
+            } else {
+                allocations = Some(current);
+            }
+            assert!(session.rewind(&Never));
+            assert_eq!(session_allocations(&session), current);
+            assert_eq!(
+                session.decoder.threading().kind,
+                ffmpeg::codec::threading::Type::Frame
+            );
+            assert_eq!(session.decoder.threading().count, 2);
+        }
+        // Callback retirement also works on the newly rewound decoder before
+        // its remaining delayed frames have been emitted.
+        let mut delivered = 0;
+        assert!(
+            !session
+                .cycle(
+                    options,
+                    DecodePurpose::LiveWallpaper,
+                    &mut |_| {
+                        delivered += 1;
+                        false
+                    },
+                    &Never
+                )
+                .unwrap()
+        );
+        assert_eq!(delivered, 1);
+        let stopped = Stop(AtomicBool::new(true));
+        assert!(!session.rewind(&stopped));
+    }
+    assert_eq!(storage_snapshot(&file), original);
+}
+
+/// Check the source timestamp itself: negative DTS from B-frame reorder is not
+/// evidence of a negative presentation start.
+fn first_decoded_pts(path: &Path) -> i64 {
+    let mut input = ffmpeg::format::input(path).unwrap();
+    let stream = input.streams().best(ffmpeg::media::Type::Video).unwrap();
+    let index = stream.index();
+    let mut context =
+        ffmpeg::codec::context::Context::from_parameters(stream.parameters()).unwrap();
+    context.set_threading(DecodePurpose::Poster.threading(context.id()));
+    let mut decoder = context.decoder().video().unwrap();
+    loop {
+        let mut packet = ffmpeg::Packet::empty();
+        match packet.read(&mut input) {
+            Ok(()) if packet.stream() == index => decoder.send_packet(&packet).unwrap(),
+            Ok(()) => continue,
+            Err(ffmpeg::Error::Eof) => {
+                decoder.send_eof().unwrap();
+            }
+            Err(error) => panic!("could not read bounded timestamp fixture: {error}"),
+        }
+        let mut frame = ffmpeg::util::frame::video::Video::empty();
+        match decoder.receive_frame(&mut frame) {
+            Ok(()) => return frame.timestamp().expect("fixture first PTS must be known"),
+            Err(ffmpeg::Error::Other { errno }) if errno == libc::EAGAIN => {}
+            Err(error) => panic!("timestamp fixture ended without a decoded PTS: {error}"),
+        }
+    }
+}
+
+#[test]
+fn video_live_h264_signed_presentation_starts_preserve_complete_loop_output() {
+    let root = Directory::new();
+    ffmpeg::init().unwrap();
+    for (name, extra, sign) in [
+        ("positive.mp4", vec!["-output_ts_offset", "2"], 1),
+        (
+            "negative.mkv",
+            vec![
+                "-output_ts_offset",
+                "-0.3",
+                "-avoid_negative_ts",
+                "disabled",
+                "-f",
+                "matroska",
+            ],
+            -1,
+        ),
+    ] {
+        let file = h264_fixture_with_options(&root.0, name, &extra);
+        let original = storage_snapshot(&file);
+        let options = PlaybackOptions {
+            fps: WallpaperFrameRate::Source,
+            looping: false,
+            target: None,
+        };
+        let mut reference = vec![];
+        decode(
+            &file,
+            options,
+            DecodePurpose::Poster,
+            &mut |frame| {
+                reference.push(frame_snapshot(frame));
+                true
+            },
+            Arc::new(Never),
+        )
+        .unwrap();
+        assert_eq!(
+            reference.len(),
+            8,
+            "offset fixture must preserve all source frames"
+        );
+        let mut session =
+            DecoderSession::open(&file, DecodePurpose::LiveWallpaper, Arc::new(Never)).unwrap();
+        let start = session.input.stream(session.index).unwrap().start_time();
+        assert_eq!(
+            start.signum(),
+            sign,
+            "muxer normalized the requested presentation start"
+        );
+        assert_eq!(
+            first_decoded_pts(&file).signum(),
+            sign,
+            "fixture only shifted DTS, not presentation PTS"
+        );
+        assert!(session.rewind_at.is_some());
+        for cycle in 0..2 {
+            let mut actual = vec![];
+            assert!(
+                session
+                    .cycle(
+                        options,
+                        DecodePurpose::LiveWallpaper,
+                        &mut |frame| {
+                            actual.push(frame_snapshot(frame));
+                            true
+                        },
+                        &Never
+                    )
+                    .unwrap()
+            );
+            assert_eq!(
+                actual, reference,
+                "offset source changed during cycle {cycle}"
+            );
+            if cycle == 0 && !session.rewind(&Never) {
+                // Some demuxers do not support this signed start. Exercise the
+                // same one-attempt/drop-before-reopen fallback as the caller;
+                // the next cycle still has to match the complete source.
+                drop(session);
+                session =
+                    DecoderSession::open(&file, DecodePurpose::LiveWallpaper, Arc::new(Never))
+                        .unwrap();
+            }
+        }
+        // Exercise the real entry as well as the owned-session boundary. The
+        // first frame of cycle three proves both preceding EOFs fully drained
+        // and progressed through either supported seeks or bounded reopens.
+        let mut looped = vec![];
+        decode(
+            &file,
+            PlaybackOptions {
+                looping: true,
+                ..options
+            },
+            DecodePurpose::LiveWallpaper,
+            &mut |frame| {
+                looped.push(frame_snapshot(frame));
+                looped.len() < 17
+            },
+            Arc::new(Never),
+        )
+        .unwrap();
+        assert_eq!(looped.len(), 17);
+        assert_eq!(&looped[..8], reference.as_slice());
+        assert_eq!(&looped[8..16], reference.as_slice());
+        assert_eq!(looped[16], reference[0]);
+        assert_eq!(storage_snapshot(&file), original);
+    }
+}
+
+#[test]
+fn video_live_session_keeps_serial_purposes_and_other_codecs_on_reopen_path() {
+    let root = Directory::new();
+    let h264 = h264_fixture(&root.0);
+    let mpeg4 = fixture(&root.0, "mp4");
+    ffmpeg::init().unwrap();
+    for (path, purpose) in [
+        (&h264, DecodePurpose::Poster),
+        (
+            &h264,
+            DecodePurpose::Preview(WallpaperPreviewOptions::new(64, 48).unwrap()),
+        ),
+        (&mpeg4, DecodePurpose::LiveWallpaper),
+    ] {
+        let mut session = DecoderSession::open(path, purpose, Arc::new(Never)).unwrap();
+        assert!(session.rewind_at.is_none());
+        assert!(!session.rewind(&Never));
+        assert_eq!(
+            session.decoder.threading().kind,
+            ffmpeg::codec::threading::Type::None
+        );
+        assert_eq!(session.decoder.threading().count, 1);
+    }
+}
+
+#[test]
+fn video_live_h264_final_hold_occurs_after_delayed_eof_frames() {
+    struct HoldObserver {
+        delivered: std::sync::atomic::AtomicUsize,
+        waits: std::sync::Mutex<Vec<usize>>,
+    }
+    impl StopSignal for HoldObserver {
+        fn cancelled(&self) -> bool {
+            false
+        }
+        fn wait(&self, duration: Duration) {
+            self.waits
+                .lock()
+                .unwrap()
+                .push(self.delivered.load(Ordering::Relaxed));
+            std::thread::sleep(duration);
+        }
+    }
+    let root = Directory::new();
+    let file = h264_fixture(&root.0);
+    ffmpeg::init().unwrap();
+    let stop = Arc::new(HoldObserver {
+        delivered: std::sync::atomic::AtomicUsize::new(0),
+        waits: std::sync::Mutex::new(vec![]),
+    });
+    let mut session =
+        DecoderSession::open(&file, DecodePurpose::LiveWallpaper, stop.clone()).unwrap();
+    assert!(
+        session
+            .cycle(
+                PlaybackOptions {
+                    fps: WallpaperFrameRate::Source,
+                    looping: false,
+                    target: None
+                },
+                DecodePurpose::LiveWallpaper,
+                &mut |_| {
+                    stop.delivered.fetch_add(1, Ordering::Relaxed);
+                    true
+                },
+                stop.as_ref()
+            )
+            .unwrap()
+    );
+    assert_eq!(stop.delivered.load(Ordering::Relaxed), 8);
+    assert_eq!(
+        stop.waits.lock().unwrap().last(),
+        Some(&8),
+        "final hold was omitted or occurred before delayed EOF output"
+    );
 }
 
 #[derive(Debug, PartialEq, Eq)]
