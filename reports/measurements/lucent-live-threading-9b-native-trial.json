@@ -1,0 +1,296 @@
+{
+  "schema": 1,
+  "status": "measured-host-ineligible",
+  "source_commit": "9b5420b74c68bf9a9d4f3e47a8ecf17a0357bb45",
+  "production_candidate_is_accepted_main": false,
+  "scope": "Source-specific reversible live-H264 frame-threading trial. Native resources and compositor feedback were collected; host pressure prevents performance acceptance.",
+  "candidate_change": "Only live H264 decoding selects explicit two-frame threading. Poster extraction, source previews, other codecs, public ports, output, quality and pacing policies retain their previous behavior.",
+  "evidence_sha256": {
+    "release_manifest": "7cd5b96cb21c7df63679d26a318f4ad9917a82d4e8d4d786437f968d1a78119e",
+    "deployment": "6341c8ddf0a6ce82fceb88608a26be068d184dac9cf32c66237cd177cb94b928",
+    "binding": "97ec1ae6c60a046dc3ea2b7c2619cc6238f6116334c0a0103d4b6b85cc13cec4",
+    "normal_measurement": "9a6495984463a81194a452a4e8cc565feaf72d346820e816d7914568dd939cc2",
+    "presentation_measurement": "8db73e14976d6855198c2e4d18e3fba438e24f863224d5affe6a49469966dd4f",
+    "offline_presentation_analysis": "4404246178a1b5aeb996df8068ae51950c59e3fb5e8c7b7ce8ff92f5d67e4deb",
+    "profiling_enable": "3889c458e10d3a3503c599d8c96ad5fef5f5048991347043b624f153d94cb2ce",
+    "profiling_restore": "fac04322cbc05acdc33ab650c6012233ad4d528ccdf6b353de657019a021dada",
+    "fresh_profiling_off_facts": "399368e1973269b578aac92ef9bfead5cf0b022fd1665e668a594d53ffe2f2b8",
+    "normal_collector": "9cf0dec143ee408325c04981eefae902a7f2019b2505e22fda413b84401dd845",
+    "presentation_collector": "b4efa59e94ba52a06af485cd3ae97edd06a153b3cc2a4c2691cac9ab2e444d90",
+    "wrapper": "22d6c6ac6c63acd1be8eb7a74a0bf13494c44fcbc5867bc5c9e6adf43f7b5cc1",
+    "measurement_sources": "f5d97f4f4650b007fdea36a92c1d08db97c4e6daa51d5d522020e06c357277ce",
+    "offline_analysis_helper": "ea55a19d104a701fd30fce860fb3df6e2884e02965912d42e5a7000931017ca8"
+  },
+  "binary_sha256": {
+    "lucent-desktop": "a37b83dada6336d2678c512d6aab845c8b22514c28c1aa137ec1792d319b7ce0",
+    "lucent-cli": "4779a67d85f8c61e144a33e49030c5a63086de8ee5eb3c6fa8ce9de79ae46c28",
+    "lucent-menu": "adeea701843131edbbba1fa60c8b3dceb535cfa8301d66640be4f5cd61aeff97",
+    "lucent-lock": "4e3fb89dd0c1e86530bf327a047a69a83aae30f4147a0cf820f7c3f5412704ff",
+    "lucent-greeter": "6dcbc5fd9bed7840348101f08b47f013c5f8cd288c57e0c4e88914c3ab7c6c93",
+    "lucent-polkit": "7c77d7d25e57c2d73ecd48659ad52896592935bbe6b06a6edaebc5901b8efb93",
+    "international-text": "4e604bfe87abe7d29e5b9f22c8608adc24941b279a7b5ec4a8dbb0802beadae6",
+    "input-method-peer": "ae704abdc17de18c55a08620f3bc4b8f7c38d45293d4f8b043856486fa97186a",
+    "application-intent": "8dfa678d2e1c66b103948c1353108259aa0b74ac32446968106afdbd4c35cb00"
+  },
+  "workload": {
+    "codec": "h264",
+    "fps_setting": "source",
+    "height": 2160,
+    "media_sha256": "9bfaece1a34f02067005190a26c9dc5ba0e83e74875653c8336c022d133ebc35",
+    "nominal_source_rate": "60/1",
+    "output_height": 1080,
+    "output_refresh_hz": 60.0,
+    "output_scale": 1,
+    "output_width": 1920,
+    "width": 3840
+  },
+  "normal_uninstrumented": {
+    "eligible": false,
+    "ineligible_reasons": [
+      "host_swap_activity",
+      "host_full_stall_pressure"
+    ],
+    "normal_uninstrumented_rss_target_met": null,
+    "preservation_verified": true,
+    "resources": {
+      "seconds": 120.00068401099998,
+      "rss_mib_mean": 374.464111328125,
+      "rss_mib_max_interval": 398.65234375,
+      "rss_sample_count": 480,
+      "sample_period_seconds": 0.25,
+      "process_lifetime_high_water_mib": 398.65234375,
+      "cpu_percent_one_core": 174.232340193023,
+      "swap_mib_max": 0.0
+    },
+    "host_pressure": {
+      "cpu_busy_fraction": 0.3165601938913367,
+      "ineligible_reasons": [
+        "host_swap_activity",
+        "host_full_stall_pressure"
+      ],
+      "minimum_available_mib": 4445.8828125,
+      "psi_fraction": {
+        "cpu": {
+          "full": 0.0,
+          "some": 0.006449893688993398
+        },
+        "io": {
+          "full": 0.5017216761107341,
+          "some": 0.683795910601755
+        },
+        "memory": {
+          "full": 0.0007434572652293461,
+          "some": 0.0007506260830780933
+        }
+      },
+      "seconds": 121.91689319498255,
+      "swap_in_delta": 2498,
+      "swap_out_delta": 3679
+    }
+  },
+  "instrumented_presentation": {
+    "eligible": false,
+    "ineligible_reasons": [
+      "host_swap_activity",
+      "host_full_stall_pressure",
+      "resource_reference_ineligible",
+      "host_psi_not_matched_io_full",
+      "host_psi_not_matched_io_some"
+    ],
+    "normal_uninstrumented_rss_target_met": null,
+    "preservation_verified": true,
+    "resources": {
+      "seconds": 120.00073321799937,
+      "rss_mib_mean": 329.6584065755208,
+      "rss_mib_max_interval": 383.50390625,
+      "rss_sample_count": 480,
+      "sample_period_seconds": 0.25,
+      "process_lifetime_high_water_mib": 383.50390625,
+      "cpu_percent_one_core": 174.19893561837446,
+      "swap_mib_max": 0.0
+    },
+    "host_pressure": {
+      "cpu_busy_fraction": 0.3106864491139206,
+      "ineligible_reasons": [
+        "host_swap_activity",
+        "host_full_stall_pressure"
+      ],
+      "minimum_available_mib": 4244.28515625,
+      "psi_fraction": {
+        "cpu": {
+          "full": 0.0,
+          "some": 0.006128272308499418
+        },
+        "io": {
+          "full": 0.4488434626883988,
+          "some": 0.6627382385483692
+        },
+        "memory": {
+          "full": 1.3862131058222743e-05,
+          "some": 1.6585487779395706e-05
+        }
+      },
+      "seconds": 122.27557169101783,
+      "swap_in_delta": 694,
+      "swap_out_delta": 0
+    }
+  },
+  "presentation_feedback": {
+    "window": "Request lower bound through last retained successful compositor feedback; uses its own compositor timestamp span, not the resource clock.",
+    "requested_resource_seconds": 120,
+    "presentation_span_ns": 122116662000,
+    "feedback_samples": 3865,
+    "joined_source_samples": 3865,
+    "distinct_prepared_revisions_referenced": 3865,
+    "distinct_revision_advances": 3864,
+    "distinct_revision_advances_per_second": 31.64187373546126,
+    "adjacent_repeated_prepared_revisions": 0,
+    "presentation_clock_id": 1,
+    "presentation_interval": {
+      "count": 3864,
+      "max_ns": 83334000,
+      "mean_ns": 31603690.99378882,
+      "min_ns": 16666000,
+      "p50_ns": 33333000,
+      "p95_ns": 50000000,
+      "p99_ns": 50000000
+    },
+    "flags_histogram": {
+      "7": 3865
+    },
+    "refresh_ns_histogram": {
+      "16666666": 3865
+    },
+    "prepared_catalog_between_selected_endpoints": {
+      "observed_prepared_revisions_not_referenced_in_this_feedback_set": 3335,
+      "records": 7200,
+      "revision_positions": 7200,
+      "source_pts": {
+        "adjacent_repeated_revisions": 0,
+        "cycle_or_generation_crossings_excluded": 5,
+        "nominal_rate_unaligned_intervals": 0,
+        "nominal_source_rate": "60",
+        "nominal_source_slots_not_referenced_between_same_cycle_samples_estimate": 101,
+        "prepared_revision_step_histogram": {
+          "1": 7194
+        },
+        "pts_gap_ns_histogram": {
+          "133333334": 1,
+          "16666666": 2382,
+          "16666667": 4748,
+          "33333333": 22,
+          "33333334": 19,
+          "50000000": 16,
+          "66666667": 3,
+          "83333333": 2,
+          "83333334": 1
+        },
+        "same_cycle_positive_pts_intervals": {
+          "count": 7194,
+          "max_ns": 133333334,
+          "mean_ns": 16900657.9559355,
+          "min_ns": 16666666,
+          "p50_ns": 16666667,
+          "p95_ns": 16666667,
+          "p99_ns": 16666667
+        }
+      },
+      "unobserved_revision_positions": 0
+    },
+    "referenced_source_pts": {
+      "adjacent_repeated_revisions": 0,
+      "cycle_or_generation_crossings_excluded": 5,
+      "nominal_rate_unaligned_intervals": 0,
+      "nominal_source_rate": "60",
+      "nominal_source_slots_not_referenced_between_same_cycle_samples_estimate": 3436,
+      "prepared_revision_step_histogram": {
+        "1": 951,
+        "2": 2507,
+        "3": 376,
+        "4": 24,
+        "5": 1
+      },
+      "pts_gap_ns_histogram": {
+        "133333334": 1,
+        "16666666": 319,
+        "16666667": 595,
+        "33333333": 1656,
+        "33333334": 847,
+        "50000000": 402,
+        "66666666": 9,
+        "66666667": 25,
+        "83333333": 3,
+        "83333334": 2
+      },
+      "same_cycle_positive_pts_intervals": {
+        "count": 3859,
+        "max_ns": 133333334,
+        "mean_ns": 31506435.17362011,
+        "min_ns": 16666666,
+        "p50_ns": 33333333,
+        "p95_ns": 50000000,
+        "p99_ns": 66666666
+      }
+    },
+    "capture_limits": {
+      "all_prepared_source_records": 7463,
+      "all_surface_samples": 4095,
+      "decoder_drop_count_established": false,
+      "maximum_inspection_gap_seconds": 1.0566714869928546,
+      "performance_target_acceptance_established": false,
+      "physical_scanout_established": false,
+      "pixel_visibility_established": false,
+      "presentation_sampling_truncated": false,
+      "source_trace_sampling_truncated": false
+    },
+    "rate_formula": "(distinct revisions - 1) * 1e9 / (last presented_ns - first presented_ns)",
+    "pts_gap_estimate_formula": "sum(round(delta_ns * nominal_fps / 1e9)-1) for same-cycle positive deltas within1us of nominal grid; not decoder drops",
+    "quantile_rule": "sorted integer-nanosecond deltas at ceil(N*p)-1; no interpolation"
+  },
+  "restoration": {
+    "success": true,
+    "phase": "restored",
+    "recovery_incomplete": false,
+    "current_recovery": {
+      "status": "verified-restored",
+      "runtime_flags_off": true
+    },
+    "original_source_files_settings_and_security_preserved": true,
+    "original_preservation_fingerprint_matched": true,
+    "original_effective_unit_and_runtime_entries_restored": true,
+    "fresh_read_only_facts_confirmed": true,
+    "fresh_captured_sources_match_restored_files": true,
+    "runtime_profiling": {
+      "frames": false,
+      "presentation": false,
+      "source_pts": false
+    },
+    "same_pid_preservation_claimed": false,
+    "shared_runtime_parent_timestamps_claimed_restored": false
+  },
+  "acceptance": {
+    "performance_target_accepted": false,
+    "rss_budget_mib": 300,
+    "normal_uninstrumented_rss_target_met": null,
+    "normal_observed_rss_mean_and_sampled_max_exceed_budget": true,
+    "native_60fps_accepted": false,
+    "causal_speedup_established": false,
+    "visible_pixel_quality_established_by_this_trial": false,
+    "physical_scanout_established": false,
+    "decoder_frame_drop_count_established": false
+  },
+  "limits": [
+    "Both 120-second phases have host swap activity and excessive I/O full-stall pressure. Their pressure is also unmatched. Preserve the actual values; these intervals establish no eligible RSS or presentation target and no causal comparison with the earlier 8e trial.",
+    "Normal RSS is sampled every0.25seconds; its interval maximum can miss short peaks. VmHWM is a separate process-lifetime observation. Payload counters cannot be added to RSS or identify a leaking allocator.",
+    "Presentation metadata is opt-in instrumentation in a separate restarted lifetime. Its RSS and CPU do not establish the normal uninstrumented budget or profiling overhead.",
+    "3865 distinct joined resource revisions yield3864 advances over122.116662 compositor seconds. This is source-bound successful feedback, not submission-counter FPS, visible-pixel correctness or physical display scanout.",
+    "The7200-record prepared catalogue contains3335 revisions absent from this selected feedback set. Its101 estimated nominal60Hz PTS slots exclude five cycle/generation crossings. Neither value counts decoder drops.",
+    "Prepared PTS records follow scheduling, frame admission and conversion; this is not a complete decoder-frame census or proof of60FPS.",
+    "Restoration preserves the original effective unit, runtime entries, source files, settings, security and preservation fingerprint. Restarts create new process lifetimes; shared runtime-directory timestamps are explicitly not claimed restored.",
+    "The later persistent-decoder-session source candidate is separate and unmeasured here. No leak diagnosis, memory saving, animation smoothness or visual-quality improvement follows from this report."
+  ],
+  "privacy": {
+    "private_paths_tokens_profiles_media_filenames_or_user_content_published": false
+  },
+  "historical_reports_unchanged": true
+}
