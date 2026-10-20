@@ -57,6 +57,7 @@ mod ipc;
 mod keyboard;
 mod layer_commit;
 mod outputs;
+mod pacing;
 mod pointer_input;
 mod presentation;
 mod profiling;
@@ -85,6 +86,7 @@ struct Native<M> {
     interaction: Interaction<M>,
     regions: Vec<api::Clip>,
     history: handoff::SubmissionHistory,
+    pacing: Option<pacing::Trace>,
 }
 #[derive(Clone, Copy)]
 struct PresentationState {
@@ -142,6 +144,7 @@ struct State<A: Application> {
     modifiers: Modifiers,
     epoch: Instant,
     profile_frames: bool,
+    pacing: pacing::Capture,
     presentation: presentation::Capture,
     exit: bool,
     error: Option<String>,
@@ -163,6 +166,9 @@ impl<A: Application> Drop for State<A> {
         // destroy requests while the connection is still alive. A caller such
         // as a permission agent can outlive this individual runtime invocation.
         // Teardown never authorizes a secure-session unlock.
+        for native in self.surfaces.values_mut() {
+            self.pacing.retire(native.pacing.take());
+        }
         self.surfaces.clear();
         self.retiring.clear();
         self.fractional.take();
@@ -249,6 +255,8 @@ fn run_inner<A: Application>(
         &qh,
         app.activation_enabled() && authorize_unlock.is_none(),
     );
+    let profile_frames =
+        std::env::var_os("LUCENT_PROFILE_FRAMES").is_some_and(|value| value == "1");
     let mut state = State {
         surfaces: BTreeMap::new(),
         retiring: Default::default(),
@@ -278,7 +286,8 @@ fn run_inner<A: Application>(
         modifiers: Modifiers::default(),
         epoch: Instant::now(),
         presentation: presentation::Capture::bind(&globals, &qh, ipc && authorize_unlock.is_none()),
-        profile_frames: std::env::var_os("LUCENT_PROFILE_FRAMES").is_some_and(|value| value == "1"),
+        profile_frames,
+        pacing: pacing::Capture::new(profile_frames),
         exit: false,
         error: None,
         handle: handle.clone(),
@@ -418,6 +427,7 @@ impl<A: Application> State<A> {
                     interaction: Interaction::default(),
                     regions: vec![],
                     history: Default::default(),
+                    pacing: self.pacing.start_native(),
                 },
             );
         }
@@ -445,8 +455,9 @@ impl<A: Application> State<A> {
             "one_color_buffer_per_surface_bytes": self.surfaces.values().chain(self.retiring.iter().map(|(_, native)| native)).map(|s| s.renderer.single_surface_buffer_bytes()).sum::<u64>(),
             "scope":"Prepared image payloads referenced by current and retiring scenes only; app caches excluded. GPU buffer values are requested payloads, not driver allocations. Actual surface buffer counts and total GPU memory are unknown."
         }));
-        let surfaces = self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id.to_string(),"role":s.spec.id,"instance":s.spec.instance.as_ref().map(api::SurfaceInstance::as_str),"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"keyboard":match s.spec.keyboard { api::Keyboard::None=>"none", api::Keyboard::OnDemand=>"on-demand", api::Keyboard::Exclusive=>"exclusive" },"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"density":s.density().factor(),"buffer_scale":if s.fractional.is_some(){1}else{s.scale},"buffer_width":s.density().physical_size(s.width,s.height).ok().map(|size|size.0),"buffer_height":s.density().physical_size(s.width,s.height).ok().map(|size|size.1),"frames":s.history.frames,"native_frames":s.renderer.frames,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.history.frame_times,"frame_profiles":s.history.profiles.json(),"presentation":s.history.presentation.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>();
+        let surfaces = self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id.to_string(),"role":s.spec.id,"instance":s.spec.instance.as_ref().map(api::SurfaceInstance::as_str),"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"keyboard":match s.spec.keyboard { api::Keyboard::None=>"none", api::Keyboard::OnDemand=>"on-demand", api::Keyboard::Exclusive=>"exclusive" },"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"density":s.density().factor(),"buffer_scale":if s.fractional.is_some(){1}else{s.scale},"buffer_width":s.density().physical_size(s.width,s.height).ok().map(|size|size.0),"buffer_height":s.density().physical_size(s.width,s.height).ok().map(|size|size.1),"frames":s.history.frames,"native_frames":s.renderer.frames,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.history.frame_times,"frame_profiles":s.history.profiles.json(),"frame_pacing":s.pacing.as_ref().map(pacing::Trace::json),"presentation":s.history.presentation.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>();
         let mut result = serde_json::json!({"profile_memory":profile_memory,"presentation_feedback":self.presentation.json(),"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":surfaces,"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)});
+        result["frame_pacing"] = self.pacing.json();
         result["outputs"]=serde_json::json!(self.output_bindings.iter().map(|(info,_)|serde_json::json!({"global":info.global,"name":info.name.as_ref().map(api::OutputName::as_str),"logical_size":info.logical_size,"integer_scale":info.integer_scale})).collect::<Vec<_>>());
         result["retiring_native_surfaces"] = serde_json::json!(self.retiring.len());
         result["closed_named_surfaces"] = serde_json::json!(
@@ -789,6 +800,7 @@ impl<A: Application> State<A> {
                         interaction: Interaction::default(),
                         regions: vec![],
                         history: history.unwrap_or_default(),
+                        pacing: self.pacing.start_native(),
                     },
                 );
             }
@@ -804,7 +816,9 @@ impl<A: Application> State<A> {
             self.input_serial = None;
         }
         self.retiring.retire(id);
-        self.surfaces.remove(id)
+        let mut native = self.surfaces.remove(id)?;
+        self.pacing.retire(native.pacing.take());
+        Some(native)
     }
     fn begin_recreation(
         &mut self,
@@ -840,6 +854,7 @@ impl<A: Application> State<A> {
             // native replacement and logical-history transfer are incomplete.
         }
         let mut previous = self.surfaces.remove(id).expect("validated native surface");
+        self.pacing.retire(previous.pacing.take());
         let history = previous.history.continuation();
         let presented = previous.presented.is_some();
         self.retiring
@@ -933,6 +948,9 @@ impl<A: Application> State<A> {
             if !s.configured || !s.demand.begin() {
                 continue;
             }
+            if let Some(trace) = &mut s.pacing {
+                trace.begin_attempt(s.history.frames.saturating_add(1), pacing::now(self.epoch));
+            }
             let total = self.profile_frames.then(Instant::now);
             let started = self.profile_frames.then(Instant::now);
             let (width, height, tree) = current_tree(&self.app, s, now);
@@ -973,6 +991,12 @@ impl<A: Application> State<A> {
             let surface = s.role.wl_surface();
             if let Some(fractional) = &mut s.fractional {
                 if let Err(error) = fractional.destination(width, height) {
+                    if let Some(trace) = &mut s.pacing {
+                        trace.finish_attempt(
+                            pacing::now(self.epoch),
+                            pacing::Outcome::PreRenderAbort,
+                        );
+                    }
                     self.error = Some(error.to_string());
                     self.exit = true;
                     return;
@@ -1002,8 +1026,22 @@ impl<A: Application> State<A> {
                             self.epoch.elapsed().as_secs_f64() * 1000.,
                             streams.copied(),
                         );
+                        if let Some(trace) = &mut s.pacing {
+                            trace.request(
+                                s.history.frames.saturating_add(1),
+                                pacing::now(self.epoch),
+                            );
+                        }
                         surface.frame(qh, FrameCallbackData(surface.clone()));
                     });
+            if let Some(trace) = &mut s.pacing {
+                let observed = match &outcome {
+                    Ok(RenderOutcome::Presented) => pacing::Outcome::Presented,
+                    Ok(RenderOutcome::RetryAfter(delay)) => pacing::Outcome::RetryAfter(*delay),
+                    Err(_) => pacing::Outcome::Error,
+                };
+                trace.finish_attempt(pacing::now(self.epoch), observed);
+            }
             self.retiring.finish_submission(&s.spec.address(), &outcome);
             match outcome {
                 Ok(RenderOutcome::Presented) => {}
@@ -1408,12 +1446,18 @@ impl<A: Application> CompositorHandler for State<A> {
         _: &Connection,
         qh: &QueueHandle<Self>,
         surface: &wl_surface::WlSurface,
-        _: u32,
+        callback_data_ms: u32,
     ) {
+        let callback_at = self.profile_frames.then(|| pacing::now(self.epoch));
         if let Some(id) = self.id_for(surface)
             && let Some(s) = self.surfaces.get_mut(&id)
         {
+            if let (Some(trace), Some(at)) = (&mut s.pacing, callback_at) {
+                trace.callback(at, callback_data_ms);
+            }
             s.demand.ready();
+        } else {
+            self.pacing.retired_callback();
         }
         self.draw_all(qh);
     }
