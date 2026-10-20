@@ -171,10 +171,11 @@ pixels do not establish monitor scanout or animation performance.
 
 Host loss between successful Keep and capturing its new file identity
 can retain the original hard-link checkpoint for manual recovery; automatic
-file restoration is not claimed for that interval. Multiple outputs, physical
-modes/visibility, native enable/disable/rotation, output unplugging, suspend/resume,
-compositor restart during confirmation and fractional density require their own
-acceptance records. No new RSS or pacing improvement is claimed by this milestone.
+file restoration is not claimed for that interval. The later two-output result
+below adds a scoped transaction check. Physical modes/visibility, native
+enable/disable/rotation, cable hotplug, suspend/resume, compositor restart during
+confirmation, secure-output changes and input on a fractionally scaled Displays
+panel remain unverified. No new RSS or pacing improvement is claimed.
 
 This feature does not add custom modelines, HDR/color-management editing,
 mirroring, EDID overrides or a new compositor. It cannot recover hardware that
@@ -182,25 +183,60 @@ has disappeared or a killed guardian plus killed independent recovery process.
 Configuration reload and physical monitor visibility are distinct from a command
 acknowledgement and a submitted client frame.
 
-The separate `vm/test-multi-output-displays.py` maintainer harness prepares a
-two-output position/Revert, fractional-scale timeout and position/Keep check.
-It uses real panel input, preserves the original output and owns one temporary
-headless output. The source-pinned target is the archived `35ed87ed` trial;
-preparation and passing pure guard tests do not establish native acceptance.
-Its pure regressions run with `python3 -m unittest discover -s tests -p
-test_multi_output_displays_policy.py`.
+## Two-output native transaction evidence
+
+The separate `vm/test-multi-output-displays.py` maintainer harness at
+`86df4e5bcff5cea3ba85f17e400b88cacd70f4f4` passes four native flows on the
+unchanged archived `35ed87ed` desktop. The
+[two-output report](../reports/measurements/lucent-native-two-output-displays.json)
+keeps the harness source separate from the running release. The original output
+remains 1920×1080 at scale 1; one owned headless peer uses 1280×960 at scale 1
+and 1.25 during the preview.
+
+1. Editing the peer's position draft changes neither the native layout nor the
+   saved monitor configuration.
+2. Apply changes only the peer's position; explicit Revert restores the complete
+   captured layout.
+3. Apply changes the peer to scale 1.25; the independent 15-second deadline
+   restores its original scale and layout.
+4. Apply changes the peer's position; Keep saves the complete two-output tail
+   while preserving the preceding user rules.
+
+All clicks and field edits occur on the original scale-1 output. Changing the
+peer's scale does not establish input on a fractionally scaled Displays panel.
+Five positive owner-restoration checks cover the original monitor bytes/inode,
+removal of only the owned output, original workspace/cursor, unchanged
+cohort/settings/media/profiling, and preservation/supervision/security/source
+state. The separate ctime/link-count policy marker is not a sixth functional
+check: hard-link checkpoints and atomic restoration can advance monitor ctime,
+link count and parent entry timestamps. Those fields are not claimed unchanged.
+The original owner process and recursive cgroup are independently verified
+retired; fresh normal-state facts match the pre-run facts apart from advancing
+frame counters, with all profiling OFF.
+
+The initial `7ebd0e84` attempt failed before any feature check: its helper used
+`hyprctl eval` to construct a cursor dispatcher instead of executing
+`hyprctl dispatch`. Canonical cursor ownership rejected the unobserved movement
+and blocked cleanup. That original report remains failed. Its separately recorded
+guarded recovery succeeded without converting the test to a pass. The corrected
+helper dispatches the move and still
+requires its exact observed cursor postimage; it does not reset uncertain cursor
+authority. Thirteen focused pure guard tests pass at the corrected harness source.
 
 The operator supplies a reviewed private normal-OFF receipt and its SHA-256
 through `--fresh-off` and `--fresh-off-sha256`. Relative receipt paths use
 `--lab-root`, which also locates the private VM inventory and keys. Without
 `--run` the driver only qualifies local source and receipt bindings; without a
 receipt it refuses before VM access. Receipts and inventory stay outside Git.
-The receipt format and helper pins belong to this recorded cohort; another
-release or observer requires a fresh source review. The independent owner uses
-the canonical output lease and preserves exact saved monitor bytes/inode, while
-ctime, hard-link count and parent entry timestamps can advance. Host loss after
-Keep but before capturing its file identity retains the manual recovery limit
-described above. Actual execution and its restoration checks remain pending.
+Its focused guard tests run with `python3 -m unittest discover -s tests -p
+test_multi_output_displays_policy.py`.
+
+This result does not repeat the older UI-crash check or accept physical hardware,
+cable hotplug, secure-output changes, suspend/resume, native enable/disable or
+rotation, fractional-panel input, resources or presentation pacing. Host loss
+after Keep but before capturing its new file identity retains the manual recovery
+limit described above. Final site, exact-head CI and publication gates for this
+follow-up remain separate from its completed native flows.
 
 The supported module name follows [Omarchy’s user configuration](https://github.com/omacom/omarchy/blob/master/config/hypr/hyprland.lua).
 The adapter follows the current official [Hyprland monitor Lua API](https://wiki.hypr.land/configuring/core/monitors/)
