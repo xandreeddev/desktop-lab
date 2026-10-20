@@ -1,0 +1,160 @@
+{
+  "schema": 1,
+  "status": "source_checked_and_both_native_suites_passed",
+  "harness_source_commit": "842fbc9b56363ff3950b5af9ee314f42c0413ba4",
+  "managed_desktop_source_commit": "35ed87ed4c01cf62e3c8406b8abdcc0809cc155b",
+  "scope": "Test-harness storage change only. The managed 35ed runtime and its performance acceptance are unchanged; passing one owned application workflow does not accept every browser or GUI clipboard workflow.",
+  "implementation": {
+    "module": "vm/owned_fixture_scratch.py",
+    "module_sha256": "b6dcff7ff27156e95c1c4aaf720fd1098a4bd5c7743d688a566a208007ac9e80",
+    "fixed_guest_program_sha256": "71423a9cf1b0665eee95a4294875611c6f5f1aa6c986a385e9a5fccd01a80b22",
+    "consumers": [
+      "vm/test-application-intent.py",
+      "vm/test-gui-clipboard.py"
+    ],
+    "storage": "Fresh random 0700 child under the current user private cache acceptance directory; previous fixtures are never searched, reused or deleted by allocation.",
+    "filesystem_admission": "The Linux 64-bit guest program checks opened directory filesystem types and rejects tmpfs and ramfs. Existing canonical owned home/cache parents must not be group/world writable; the acceptance parent must be 0700. No symlink parent is followed.",
+    "minimum_available_bytes_at_admission": 1073741824,
+    "reserve_scope": "A one-GiB available-space admission reserve, not a retained-byte cap, quota, preallocation, continued free-space guarantee or automatic retention limit.",
+    "transport": "Fixed isolated Python program with one of two literal prefixes on bounded stdin and a validated bounded path reply; caller retains its existing transport."
+  },
+  "ownership_and_retention": {
+    "existing_lease_and_unit_helpers_unchanged": true,
+    "owned_unit_helper_sha256": "0082d9c4c87c36a7cc65f361304a2fbda174af83f30d6713720d709a9193d5b7",
+    "owned_chromium_lease_sha256": "393501ef04a9a9f6fab21ad154bcffe810ebe95774e47e7c759cf36cb180de4b",
+    "scope": "Existing captured-unit/PID-birth/profile-lease checks continue to authorize retirement. Successful runs remove only owned fixtures through their existing cleanup. Failed or uncertain fixtures can remain on disk for inspection; there is no automatic sweep or pruning."
+  },
+  "local_validation": {
+    "source_commit": "842fbc9b56363ff3950b5af9ee314f42c0413ba4",
+    "full_python_suite_passed": 531,
+    "owner_observed_full_suite_seconds": 3.646,
+    "allocator_tests_included": 8,
+    "independent_focused_allocator_tests_passed": 8,
+    "coverage": [
+      "fresh random owned private directory without old-fixture reuse/removal",
+      "unknown prefix rejected before creation/transport",
+      "symlink and foreign/unsafe parent refusal",
+      "tmpfs/ramfs and low-free-space refusal",
+      "bounded collisions retain existing files",
+      "fixed isolated program/stdin and bounded reply validation"
+    ],
+    "scope": "Local pure/mock and owned temporary-directory checks. Full suite result is the owner-executed 842fbc9 source run; eight focused allocator tests were independently rerun."
+  },
+  "singular_http_native": {
+    "passed": true,
+    "harness_source_commit": "842fbc9b56363ff3950b5af9ee314f42c0413ba4",
+    "production_source_commit": "35ed87ed4c01cf62e3c8406b8abdcc0809cc155b",
+    "private_report_sha256": "e78279a6e6f3d9642045c95da223453e15768bd56781b1d5f32b94c45e62d825",
+    "host_harness_sha256": "35fc2759957b2662f37a7fd77645d6fdd0e69643b83f5b1efabf0083e5a2507b",
+    "allocator_program_sha256": "71423a9cf1b0665eee95a4294875611c6f5f1aa6c986a385e9a5fccd01a80b22",
+    "checks": {
+      "owned_entry_uses_singular_uri_field_code": true,
+      "original_watchdog_owns_loopback_http_listener": true,
+      "fresh_token_delivered_to_first_owned_child": true,
+      "fresh_browser_focus_observed": true,
+      "fresh_token_child_delivery_and_fresh_browser_focus_observed": true,
+      "real_browser_opened_space_percent_unicode_and_shell_literal_filenames": true,
+      "physical_launch_open_and_declared_action_deliver_fresh_tokens_to_children": true,
+      "later_socket_request_created_single_fresh_http_document": true,
+      "each_open_action_socket_and_cli_created_exact_expected_documents": true,
+      "fresh_targets_retired_with_original_browser_control_preserved": true,
+      "desktop_cli_open_and_no_stale_token_reuse": true,
+      "physical_socket_and_cli_opened_single_fresh_owned_http_uri": true
+    },
+    "checks_passed": 12,
+    "restoration": {
+      "example_socket_retired": true,
+      "example_retired": true,
+      "browser_retired": true,
+      "desktop_entry_retired": true,
+      "http_server_retired": true,
+      "watchdog_retired": true,
+      "settings_and_wallpaper_preserved": true,
+      "output_workspace_and_cursor_preserved": true,
+      "owned_scratch_and_entry_removed": true
+    },
+    "restoration_checks_passed": 9,
+    "owner_observed_runtime_seconds": 92.672,
+    "scope": "One real owned Chromium profile on one virtual output. Native pointer/socket/CLI Open each loads exactly one fresh owned loopback HTTP document through %u; declared Action still opens two local documents. Existing focus/authority and exact cleanup checks pass with the new disk-backed allocator."
+  },
+  "gui_clipboard_native": {
+    "status": "scoped_real_application_keyboard_text_acceptance_passed",
+    "passed": true,
+    "harness_source_commit": "842fbc9b56363ff3950b5af9ee314f42c0413ba4",
+    "production_source_commit": "35ed87ed4c01cf62e3c8406b8abdcc0809cc155b",
+    "desktop_binary_sha256": "6ff4e06b73f1a1f68f27cb0504c67710b0a9e118b181ba8ee41eb78d6251ef78",
+    "private_report_sha256": "9cd02c6529b56285fdd655f4751e07d66457136c5007513a48a4bc25db450dbf",
+    "host_harness_sha256": "774b3739237758fe6b06e4c93dfdbaab6a149b38bfce4116b8b3505da19c7526",
+    "allocator_program_sha256": "71423a9cf1b0665eee95a4294875611c6f5f1aa6c986a385e9a5fccd01a80b22",
+    "support_sha256": {
+      "fixtures/gui-clipboard-peer.py": "935f61ca846b67587b1247313d64a6419a1a05424335562c301696c57d29c5ad",
+      "owned_application_units.py": "0082d9c4c87c36a7cc65f361304a2fbda174af83f30d6713720d709a9193d5b7",
+      "owned_chromium_lease.py": "393501ef04a9a9f6fab21ad154bcffe810ebe95774e47e7c759cf36cb180de4b",
+      "cdp_peer.py": "5cf65c35d89671741b6be9e8e63345206694b2a4b9ecfb465a9afb418745e907",
+      "application_intent_policy.py": "fd2ed71cfe4839b6c99bf10a6c97515ed20c19c09ece05b0c67a65921ea1bb94",
+      "test-multiline-notes.py": "de8fa611048aab008c9faceb38af79f448deef5faee9a1c81985c9796364b037",
+      "owned_fixture_scratch.py": "b6dcff7ff27156e95c1c4aaf720fd1098a4bd5c7743d688a566a208007ac9e80"
+    },
+    "checks": {
+      "original_clipboard_checkpoint_and_history_pause": true,
+      "real_owned_wayland_browser_and_unit": true,
+      "browser_copy_to_native_notes": true,
+      "multiline_combining_emoji_cjk_preserved": true,
+      "browser_offer_replaces_notes_selection": true,
+      "native_notes_copy_to_browser": true,
+      "native_offer_replaces_browser_selection": true,
+      "blank_lines_and_trailing_lf_preserved": true,
+      "transfers_use_actual_keyboard_not_cdp_clipboard": true
+    },
+    "checks_passed": 9,
+    "restoration": {
+      "owned_browser_retired": true,
+      "clipboard_history_and_service": true,
+      "exact_original_settings_stopped_service": true,
+      "normal_desktop_35s_stability": true,
+      "original_workspace": true,
+      "original_monitor": true,
+      "exact_wallpaper_source_exports_and_settings": true,
+      "clipboard_history_preserved_after_restart": true,
+      "original_idle_marker": true,
+      "owned_guest_checkpoint_removed": true,
+      "original_cursor": true,
+      "owned_private_profile_removed": true
+    },
+    "restoration_checks_passed": 12,
+    "owner_observed_runtime_seconds": 251.946,
+    "expected_desktop_restarts": 1,
+    "same_pid_preservation_claimed": false,
+    "scope": "One owned Chromium textarea and native Notes on one virtual output, with real keyboard clipboard transfer in both directions, Unicode/combining/emoji/CJK text, selection replacement, blank lines and trailing LF. Existing checkpoint, settings, wallpaper/source/exports, widget layout, clipboard history, monitor/workspace/cursor, idle marker and owned profile cleanup restore; the normal desktop is stable for 35 seconds after one expected guarded restart.",
+    "not_covered": [
+      "rich HTML/images",
+      "other applications",
+      "delayed-provider and focus-retirement races",
+      "physical hardware",
+      "IME/shaping pixel correctness",
+      "automatic Notes restore after host crash"
+    ]
+  },
+  "limits": [
+    "The implemented filesystem check rejects tmpfs and ramfs; it does not certify every possible RAM-backed block-device configuration.",
+    "The reserve is checked before allocation and is not a browser-profile size bound. Failed fixtures can still accumulate on disk and require separately authorized review/retirement.",
+    "The earlier retired-payload cleanup, shape diagnostic, video resource/presentation observations and older native clipboard results retain their own sources and scopes.",
+    "No new resource/performance, default-handler, external-navigation, direct activation-token-consumption, physical-device or arbitrary third-party application acceptance is claimed."
+  ],
+  "privacy": {
+    "raw_private_paths_profiles_tokens_credentials_process_identifiers_or_user_content_published": false
+  },
+  "native_duration_scope": "Owner-observed harness durations are bounded test execution times, not performance benchmarks.",
+  "normal_after_gui_read_only_verification": {
+    "success": true,
+    "private_receipt_sha256": "004d212c52d7e811b0845a762150a1eedc89b488719a8be58f1411cde8998139",
+    "source_commit": "35ed87ed4c01cf62e3c8406b8abdcc0809cc155b",
+    "desktop_binary_sha256": "6ff4e06b73f1a1f68f27cb0504c67710b0a9e118b181ba8ee41eb78d6251ef78",
+    "runtime_profiling": {
+      "frames": false,
+      "presentation": false,
+      "source_pts": false
+    },
+    "scope": "Fresh independent normal-state capture after the one expected guarded GUI restoration restart. No same-PID claim; private settings digests, paths and process identities are not published."
+  }
+}

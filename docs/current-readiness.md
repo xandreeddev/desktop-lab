@@ -24,7 +24,7 @@ leaves the tested `35ed` runtime unchanged; later heads have their own gates.
 published accepted `9129912b` successfully. Public desktop/library HTML returns
 HTTP 200, exactly matches the deployed artifact and pins source links to the
 workflow commit. Earlier `6b50bd5e`, `d01ff7db` and `8ca4e820` publications retain
-their own receipts. This later shape-readiness follow-up needs its own site/CI
+their own receipts. This later shape/storage follow-up needs its own site/CI
 and publication gates.
 
 The earlier three-second RADV liveness trial remains scoped to `a7f41ecc`.
@@ -260,6 +260,22 @@ unleased profiles remain; the disk archive is fully verified and retained.
 Independent checks preserve the normal source/settings/security/lifetime/output
 state and confirm profiling off; parent-directory timestamps advance. This is
 maintenance, not a before/after resource or pacing experiment.
+
+To prevent new browser acceptance fixtures from refilling RAM-backed temporary
+storage, test source `842fbc9b` gives the two browser suites a shared allocator
+under private disk-backed cache storage. It rejects tmpfs/ramfs and unsafe or
+symlinked parents, requires 1 GiB available at admission, and creates fresh
+`0700` directories. That reserve is not a profile-size cap; failed or uncertain
+fixtures remain on disk for review, with no automatic pruning. Existing lease
+and unit-retirement guards remain unchanged. The [storage report](../reports/measurements/lucent-disk-backed-browser-fixtures.json)
+records 531 local Python checks, including eight allocator tests. On unchanged
+`35ed`, a fresh singular HTTP run passes twelve feature and nine cleanup checks;
+the real Chromium/Notes keyboard clipboard run passes nine feature and twelve
+restoration checks. Original settings, clipboard history, wallpaper, layout and
+session state restore, with one expected guarded desktop restart and 35 seconds
+of stable supervision. A fresh independent normal-state capture confirms the
+same runtime source with all three profiling flags off. This does not claim the
+same PID, other applications, rich content or a resource/pacing improvement.
 
 The earlier [bf98 decoder-session report](../reports/measurements/lucent-live-decoder-session-native-trial.json)
 and [9b trial](../reports/measurements/lucent-live-threading-9b-native-trial.json)
