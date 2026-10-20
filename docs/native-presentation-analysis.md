@@ -130,3 +130,33 @@ opens no socket, launches no subprocess, and never changes the VM or runtime fla
 Tests cover repeated resources at 60 Hz, 24 Hz source advancement with 60 Hz callbacks,
 PTS resets, prepared skips, invalid joins, history trimming, clock identity,
 nanosecond quantiles, deterministic ordering and exclusion of private fields.
+
+
+## Later live-H264 threading trial: performance remains unaccepted
+
+The separate coherent `9b5420b7` candidate changes only live H264 to explicit
+two-frame decoding. A normal, uninstrumented 120-second run observed 374.464 MiB
+mean RSS, 398.652 MiB interval peak and 174.232% of one logical core. The guest
+process recorded no swap. These observed values exceed the 300 MiB memory budget.
+
+A separate metadata-enabled lifetime records 3,865 distinct joined background
+revisions: 3,864 advances over 122.116662 seconds of compositor timestamps, or
+31.6419 advances/s. The median presentation interval is 33.333 ms, p95/p99 50 ms
+and maximum 83.334 ms. Of the 7,200 consecutive prepared revisions between the
+selected endpoints, 3,335 do not appear in that selected successful-feedback set.
+That is not a decoder-drop count. Source PTS spacing describes the media timeline;
+it is not producer wall-clock throughput or visible-pixel FPS.
+
+Both intervals have host swap activity and substantial I/O stalls, with unmatched
+pressure between phases. Neither establishes an eligible performance target or a
+causal comparison with the earlier `8e` result. The candidate remains unmerged.
+Profiling was restored off and a fresh read-only capture confirms the normal
+configuration; source files, settings, media, security and output state remain
+preserved. Process lifetimes change during the deliberate restarts; shared runtime
+parent timestamps are not claimed restored.
+
+[The new source-specific report](../reports/measurements/lucent-live-threading-9b-native-trial.json)
+contains exact source/artifact/input hashes, metrics, protocol flags, restoration
+and limits. Older reports retain their original source and outcome. Persistent
+decoder-session work is a separate candidate, with no memory saving or smoothness
+claim until it is actually measured.

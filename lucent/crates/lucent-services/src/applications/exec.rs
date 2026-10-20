@@ -300,6 +300,28 @@ mod tests {
         );
     }
     #[test]
+    fn http_uri_fields_preserve_encoded_values_without_reexpansion() {
+        let uris = [
+            "http://127.0.0.1:12345/first%20%25U%E9%9B%AA?encoded=%2520&field=%25u#first",
+            "http://127.0.0.1:12345/second?literal=%24%28unused%29%3B#second",
+        ];
+        let request = ApplicationOpenRequest::new(
+            uris.iter()
+                .map(|uri| ApplicationOpenTarget::uri_value(*uri).unwrap())
+                .collect(),
+        )
+        .unwrap();
+        assert_eq!(
+            expand("app %u", "", "", "", Some(&request)).unwrap(),
+            uris.map(|uri| vec!["app".to_owned(), uri.to_owned()])
+        );
+        assert_eq!(
+            expand("app %U", "", "", "", Some(&request)).unwrap(),
+            vec![vec!["app", uris[0], uris[1]]]
+        );
+        assert!(expand("app %f", "", "", "", Some(&request)).is_err());
+    }
+    #[test]
     fn local_file_uris_decode_once_without_becoming_field_codes() {
         let request = ApplicationOpenRequest::new(vec![ApplicationOpenTarget::uri(
             ExternalUri::new("file:///tmp/a%20b%25f").unwrap(),

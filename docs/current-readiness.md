@@ -1,21 +1,22 @@
 # Current daily-use readiness
 
-Accepted main for this reconciliation is `8ca4e82015ad07d77fe873c0dc827b6b82cc8164`
-([PR89](https://github.com/xandreeddev/desktop-lab/pull/89)), merged normally at
-2026-10-19 23:32:44 UTC after all six required checks passed on exact
-`80c8502ae1ca7696f0590c0084a3f7ed9fabc33a` with CLEAN mergeability. It includes the
-independent `d1fff2d8` application consumer and the earlier PR87 Text/Application
-runtime. The coherent `8e6d074b` release remains deployed on RADV RENOIR; this
-merge does not replace its binaries. Merging, deployment and native acceptance
-remain separate facts. Newer documentation and harness changes do not rebuild
-or repeat runtime tests.
+Accepted main is `d01ff7dbe3a9ba4da029f78d87e87b0e8aa95a85`
+([PR91](https://github.com/xandreeddev/desktop-lab/pull/91)), merged normally at
+2026-10-20 00:30:40 UTC after all six required checks passed on exact
+`fdfa39c88a16a011f7204f7406b42f86ccc77ec7` with CLEAN mergeability. It includes
+PR89's independent `d1fff2d8` application consumer and the earlier PR87
+Text/Application runtime. The accepted runtime baseline remains `8e6d074b`.
+The VM currently runs the coherent, **unmerged and performance-unaccepted**
+`9b5420b7` trial. Its separate HTTP URI test passes eleven native checks and
+nine restoration checks; that result does not accept the trial's memory or FPS.
+Merging, deployment and native acceptance remain separate facts. Newer
+documentation and harness changes do not repeat earlier runtime tests.
 
-[Pages run 39342230790](https://github.com/xandreeddev/desktop-lab/actions/runs/39342230790)
-published accepted `8ca4e820` successfully; the public documentation returned HTTP
-200. Its current source links use the valid `main` reference. The workflow change
-in this reconciliation pins future published source links to the build's exact
-GitHub commit; the current publication remains valid. New site checks for this
-later documentation change are still required.
+[Pages run 39348072728](https://github.com/xandreeddev/desktop-lab/actions/runs/39348072728)
+published accepted `d01ff7db` successfully. The public desktop/library HTML
+returns HTTP 200 and exactly matches its deployed artifact; source links pin the
+exact workflow commit. The earlier `8ca4e820` publication retains its separately verified public
+HTML receipt. Checks for this later URI documentation follow-up remain separate.
 
 The earlier three-second RADV liveness trial remains scoped to `a7f41ecc`.
 A later 16-check native run on `8e6d074b` passes two-output density/input and
@@ -29,8 +30,8 @@ native interaction and four cleanup checks; a fresh outside-worker observation
 after normal test-package removal passes thirteen preservation checks, including
 all 964 original packages/reasons restored and the five test packages absent.
 Earlier failed runs and their
-separate guarded recovery retain their original results. The normal resource observation remains
-host-pressure-ineligible. A separate instrumented run records joined-source background
+separate guarded recovery retain their original results. The earlier `8e` normal resource observation remains
+host-pressure-ineligible. Its separate instrumented run records joined-source background
 callback intervals at 26.9992/s under pressure; eligible 60 FPS/RSS acceptance remains
 unproven. The seven requested gaps all remain in scope. Accessibility is separately deferred by the user.
 
@@ -62,11 +63,20 @@ ledger's requirement history remains useful for the broader backlog.
 | --- | --- | --- |
 | Saved Wi-Fi recovery | Merged native masked SecretAgent repair retains the saved profile UUID and storage policy. Fourteen native NetworkManager/GUI checks pass against owned simulated WPA2/hidden radios, including cancellation, repair, DHCP, saved reconnection and exact restoration. | Enterprise/WEP provisioning, agent-owned vaults and physical-radio acceptance remain separate gaps; they are not implied by the owned fixture. |
 | Safe display settings | Native whole-layout drafts, fresh ordered observations, Apply → Keep/Revert and independent 15-second/UI-crash EOF rollback. Seven actual one-output QEMU flows pass for mode, scale, position, persistence and recovery. File preservation is exact; the expected one-restart service transition is validated explicitly. | Physical/multiple outputs, native enable/disable/rotation, fractional display-settings input, hotplug, suspend/resume, compositor restart and secure-output acceptance remain open. The Keep-to-file-identity-capture host-loss interval retains manual recovery. |
-| Resources and animation | Event-driven redraw, bounded image/preview ownership and live-video physical-cover conversion are implemented. The deployed `8e6d074b` RADV cohort records normal RSS 217.28/221.92 MiB over 120 s. A separate instrumented run joins 3276 distinct background revisions at 26.9992 callback intervals/s, with median 33.333 ms and maximum 150 ms gaps; profiling restores off successfully. | Both resource phases are host-pressure-ineligible; the 300 MiB gate remains unaccepted and the 60 FPS target was not met in this diagnostic run. No pixel-visibility, physical-scanout or matched speedup claim. See [presentation analysis](native-presentation-analysis.md). Historical llvmpipe 384.82/403.88 MiB retains its different source/cohort. |
+| Resources and animation | Event-driven redraw and physical-cover conversion are implemented. The accepted-baseline `8e6d074b` run observed 217.28/221.92 MiB normal mean/peak RSS and 26.9992 distinct revision advances/s in a separate instrumented run. The current, unmerged `9b5420b7` trial observed **374.464/398.652 MiB** normal mean/peak RSS, **174.232% of one logical core**, and **31.642 distinct prepared-revision advances/s** in compositor feedback. Profiling restores off with fresh read-only verification. | Both cohorts remain host-pressure-ineligible; the current trial exceeds the observed 300 MiB budget and does not establish 60 FPS. No causal speedup, decoded-frame drop, pixel-visibility or physical-scanout claim. CPU-stage attribution and a quality-preserving improvement remain required. See [the source-specific 9b report](../reports/measurements/lucent-live-threading-9b-native-trial.json) and [presentation analysis](native-presentation-analysis.md). |
 | International text | Merged `8e6d074b` implements script shaping, hard-paragraph context across soft wraps, exact row-bound visual source/caret maps, tab separator projection, deterministic fallback and opt-in text-input-v3 composition. Five owned native feature checks pass: visible preedit/caret advance, CJK commit/delete/history, masked-focus retirement, multiline composition and RTL navigation. | The fresh owned native suite passes all five feature and five restoration checks; earlier cleanup failures retain their original results. Third-party IME, broader native pixel/scroll details, delayed clipboard/focus races, physical/cross-output text and broader GUI clipboard coverage remain pending. The later Chromium/Notes test passes both directions with nine interaction and twelve restoration checks on one virtual output. Exact merged `8e6d074b` passes six CI checks, full workspace, six controlled service-protocol filters and 832 Vulkan desktop cases; those checks retain their own scope. |
-| Application integration | Accepted main includes catalog, pins, ordinary activation, declared actions and Application `bb304907` through merged/deployed `8e6d074b`: fresh input-bound activation context, explicit file/URI Open and expanded XDG parsing/observation. A later real Chromium run passes all nine feature and eight restoration checks with independent consumer `d1fff2d8`, now merged through PR89, and harness `b6323e9`; deployed desktop/CLI remain unchanged. | First-launch focus is observed without forced compositor focus. Direct token consumption, other applications/remote URI handlers, physical hardware and broader client workflows remain unverified. See [the later report](../reports/measurements/lucent-native-application-intents-d1.json); [the earlier partial report](../reports/measurements/lucent-native-application-intents.json) remains unchanged. |
+| Application integration | Accepted main includes fresh input-bound context, explicit file/URI Open and expanded XDG parsing. The accepted-baseline `8e` local-file run passes nine feature/eight restoration checks with independent d1 consumer. A separate coherent `9b` trial passes eleven native HTTP URI/nine restoration checks: pointer, socket and CLI Open each create both fresh exact HTTP documents in real Chromium, with observed first-launch focus. | Direct token consumption, native `%u`, default handlers, external navigation, other applications, physical hardware and broader workflows remain unverified. The `9b` application result does not accept that trial’s performance. [Local-file report](../reports/measurements/lucent-native-application-intents-d1.json) and [HTTP URI report](../reports/measurements/lucent-native-http-uris-9b.json) retain separate scopes; earlier failures stay unchanged. |
 | Real-world validation | Several owned native workflows already pass. The coherent `8e6d074b` also passes 16 checks for two simultaneous compositor outputs, one headless, including real panel input at 1×/2×/1.25×, held-button retirement, same-name recreation and exact restoration. | Physical monitors/cable hotplug, suspend/resume, secure-output changes, physical Bluetooth/audio and other power/radio hardware, additional third-party tray applications/menus, other GUI clipboard applications, rich content and delayed-transfer/focus races need broader testing. One genuine wired-only NetworkManager Applet item/menu/information action passes five interaction, four cleanup and thirteen outside-worker preservation checks on unchanged `8e`. The owned real Chromium/Notes keyboard flow passes nine interaction and twelve restoration checks. The owned output test establishes no presentation FPS or multi-output Display settings transaction. |
 | Documentation accuracy | This reconciliation updates current summaries and repository skills against source-specific evidence. | Keep summaries and the ledger current when later PRs merge; site validation is required for this documentation change. Historical evidence must retain its original scope. |
+
+The later [native HTTP URI result](../reports/measurements/lucent-native-http-uris-9b.json)
+uses harness `7a92749e` and coherent `9b5420b7` desktop/CLI/consumer. Pointer,
+socket and CLI Open each create two fresh exact HTTP documents in a real owned
+Chromium profile; the declared Action retains local-file coverage. All eleven
+feature and nine restoration checks pass. The direct `%u`/`%U` parser regression
+also actually passes exact-source CI. Native `%u`, default handlers, external
+navigation, other applications and direct token consumption remain unverified.
+This newer result does not rerun or overwrite the earlier local-file report.
 
 The relevant contract guides are [network](native-network.md),
 [safe display settings](native-displays.md), [output profiles](monitor-layouts.md), [density](fractional-scaling.md),

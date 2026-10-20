@@ -1,11 +1,14 @@
 # Application catalog and dock preferences
 
-Source scope: catalog and declared-action foundations are in accepted main `d0001450`.
-Fresh intent tokens, explicit file/URI Open and the expanded XDG parser/observer belong
-to the implemented, unmerged application cohort
-`bb3049078768ac195af49b41cf3f6f8044dd5726`. The native application harness exists but
-has not run; these APIs and commands do not imply that the installed accepted-main
-release exposes them. See [current readiness](current-readiness.md).
+Source scope: accepted main `d01ff7db` includes the catalog, declared actions,
+fresh intent tokens, explicit file/URI Open and expanded XDG parser/observer.
+Application integration `bb304907` shipped in the coherent `8e6d074b` runtime.
+Its later scoped real-Chromium local-file run passes nine feature and eight
+restoration checks with the independent d1 consumer. A separate coherent
+`9b5420b7` trial also passes eleven HTTP URI and nine restoration checks using
+harness `7a92749e`; it remains an unmerged performance candidate, not an accepted
+replacement runtime. See [application activation](application-activation.md) and
+[current readiness](current-readiness.md) for sources and remaining boundaries.
 
 `ApplicationPort` exposes `discover`, `watch`, `watch_updates` and application
 launch/open commands. The production `XdgApplications` adapter captures its source
