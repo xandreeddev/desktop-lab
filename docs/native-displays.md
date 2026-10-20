@@ -182,6 +182,26 @@ has disappeared or a killed guardian plus killed independent recovery process.
 Configuration reload and physical monitor visibility are distinct from a command
 acknowledgement and a submitted client frame.
 
+The separate `vm/test-multi-output-displays.py` maintainer harness prepares a
+two-output position/Revert, fractional-scale timeout and position/Keep check.
+It uses real panel input, preserves the original output and owns one temporary
+headless output. The source-pinned target is the archived `35ed87ed` trial;
+preparation and passing pure guard tests do not establish native acceptance.
+Its pure regressions run with `python3 -m unittest discover -s tests -p
+test_multi_output_displays_policy.py`.
+
+The operator supplies a reviewed private normal-OFF receipt and its SHA-256
+through `--fresh-off` and `--fresh-off-sha256`. Relative receipt paths use
+`--lab-root`, which also locates the private VM inventory and keys. Without
+`--run` the driver only qualifies local source and receipt bindings; without a
+receipt it refuses before VM access. Receipts and inventory stay outside Git.
+The receipt format and helper pins belong to this recorded cohort; another
+release or observer requires a fresh source review. The independent owner uses
+the canonical output lease and preserves exact saved monitor bytes/inode, while
+ctime, hard-link count and parent entry timestamps can advance. Host loss after
+Keep but before capturing its file identity retains the manual recovery limit
+described above. Actual execution and its restoration checks remain pending.
+
 The supported module name follows [Omarchy’s user configuration](https://github.com/omacom/omarchy/blob/master/config/hypr/hyprland.lua).
 The adapter follows the current official [Hyprland monitor Lua API](https://wiki.hypr.land/configuring/core/monitors/)
 and queries active and inactive outputs with `monitors all`; native command
