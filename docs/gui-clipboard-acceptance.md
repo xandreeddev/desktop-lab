@@ -1,11 +1,17 @@
 # Real application clipboard acceptance
 
 `vm/test-gui-clipboard.py` extends the existing native Notes tests with a real
-Chromium Wayland window. The first native `d28fbe6b` run failed before transfers
-at `original_browser_wrapper_receipt_available`; only clipboard checkpoint/history
-pause passed. Its original failed/restoration flags remain unchanged. Corrected
-tooling still requires a fresh native run. Transport tests establish bounded
-protocol handling, not clipboard success.
+Chromium Wayland window. The frozen `2044e54f` harness passes all nine interaction
+and twelve restoration checks on the unchanged deployed `8e6d074b` desktop. The
+[sanitized native report](../reports/measurements/lucent-native-gui-clipboard-2044.json)
+records that result.
+
+The first native `d28fbe6b` run failed before transfers at
+`original_browser_wrapper_receipt_available`; only clipboard checkpoint/history
+pause passed. Its original failed/restoration flags remain unchanged. Transport
+tests alone establish bounded protocol handling, not clipboard success.
+Historical attempt notes below retain their capture-time pending status; the
+later pass supersedes only this scoped acceptance gap.
 
 The two transfers use actual VM `Ctrl+C`/`Ctrl+V` keyboard delivery:
 
@@ -23,6 +29,17 @@ offers; it is not the source of either test transfer. The existing restoration
 helper may use `wl-copy` afterward to restore the original clipboard payload.
 
 ## Execution
+
+The complete `2044e54f` run exercises both directions between an owned real
+Chromium Wayland textarea and native Notes, on one virtual output. It preserves
+multiline UTF-8, combining marks, emoji/CJK, blank lines and a trailing newline,
+and replaces the selected destination text. Actual native keyboard delivery
+performs both transfers; CDP only prepares and reads the owned textarea.
+All nine interaction checks and twelve automatic restoration checks pass,
+including exact original settings, wallpaper/media/exports, clipboard/history,
+output/workspace/cursor and idle state, owned browser/checkpoint/profile
+retirement, and the normal desktop's 35-second stability check. This result
+changes acceptance evidence, not production code or its deployed binaries.
 
 The frozen `41826937` native run passed browser-to-Notes transfer, exact
 multiline/combining/emoji/CJK preservation and replacement of the Notes

@@ -1,0 +1,92 @@
+{
+  "schema": 1,
+  "status": "scoped_real_application_native_tray_acceptance_passed",
+  "overall_passed": true,
+  "production_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+  "production_modified": false,
+  "desktop_sha256": "ecb557a094b583b45cfa07aeb9eb4284dc0bb2b86fdad3b1dbd5f4afc7b6b4ff",
+  "tooling_sha256": {
+    "test-third-party-tray.py": "afaf56c482fad2e5c7505e8a73e734bf9be91774e3e611fc3153bf2262ac54e3",
+    "third_party_tray_guest.py": "6cb4dd5736f249def878de261bade83ba03ead1507617358a7981206e01574a0",
+    "third_party_tray_policy.py": "8ae76160cf5614f5eb8a0fb86028717128e8b5e1b2ee32691289fbb34e8b4d8b",
+    "owned_application_units.py": "0082d9c4c87c36a7cc65f361304a2fbda174af83f30d6713720d709a9193d5b7"
+  },
+  "tooling_files_verified_against_commit": "2044e54fe80b41491e8cb0221e249e084d6d9164",
+  "private_native_report_sha256": "b84dfa28fec24e489911ce698956be46ce74bd1f376828f2771ba493c519b919",
+  "private_outside_worker_preservation_report_sha256": "4e21e6a6063e2fea64fc47cfcc7d21a1662c200a3b58678188c2db024dd85008",
+  "feature_checks_passed": 5,
+  "cleanup_checks_passed": 4,
+  "outside_worker_preservation_checks_passed": 13,
+  "checks": {
+    "wired_only_idle_identified_release": true,
+    "real_applet_exact_pid_cgroup_bus_owner": true,
+    "real_item_native_bar_control": true,
+    "genuine_menu_visible_and_exact_safe_leaf": true,
+    "native_real_application_information_action": true
+  },
+  "cleanup": {
+    "owned_applet_quiescent": true,
+    "state_preserved": true,
+    "cursor_restored": true,
+    "physical_button_released": true
+  },
+  "outside_worker_preservation_checks": {
+    "fresh_observation_successful": true,
+    "native_five_steps_passed": true,
+    "native_four_cleanup_passed": true,
+    "removal_terminal_and_worker_retired": true,
+    "original_964_packages_and_reasons_restored": true,
+    "five_test_packages_absent": true,
+    "network_exact": true,
+    "user_files_clipboard_settings_media_exact": true,
+    "runtime_and_security_exact": true,
+    "autostart_files_and_directory_authority_restored": true,
+    "no_pending_jobs": true,
+    "package_lock_absent": true,
+    "keyring_and_sync_databases_exact": true
+  },
+  "application": {
+    "name": "NetworkManager Applet",
+    "package_version": "1.36.0-2",
+    "mode": [
+      "--indicator",
+      "--no-agent"
+    ],
+    "connection_information_action_observed": true
+  },
+  "temporary_packages": {
+    "signed_fixed_archives": true,
+    "manifest_sha256": "a57254e690344e52eee4eb1e4491d67b39d5f3e8118ce1a52294e7ed7f9af82f",
+    "names": [
+      "libappindicator",
+      "libnma-common",
+      "libnma",
+      "nm-connection-editor",
+      "network-manager-applet"
+    ],
+    "normal_install_and_remove_terminal_passed": true,
+    "removal_worker_retired": true,
+    "original_package_count_restored": 964,
+    "original_versions_and_explicit_reasons_restored": true,
+    "all_five_test_packages_absent_afterward": true,
+    "staged_recovery_files_retained": true
+  },
+  "directory_timestamp_policy": "Owned transient-unit and package-directory timestamps may advance; directory device/inode/mode/uid/gid and every non-directory record retained exactly.",
+  "owner_observed_runtime_seconds": 25.558,
+  "runtime_observation_scope": "Owner-observed outer native-test service runtime, not an interaction latency or performance benchmark.",
+  "scope": "One genuine nm-applet SNI item on unchanged Lucent 8e, one wired-only virtual output. The real item appears in Lucent’s native bar, actual pointer input opens Lucent’s DBusMenu presentation, and its exact Connection Information leaf opens the real applet-owned Wayland window. The harness does not invoke menu actions directly or create a substitute SNI producer. Five interaction and four cleanup checks pass. A separate fresh outside-worker observation passes all thirteen preservation checks after normal removal of the exact five signed test packages.",
+  "not_covered": [
+    "Other tray applications or XEmbed",
+    "Wi-Fi scans, secret-agent or pairing workflows",
+    "Physical wireless, Bluetooth, audio or other hardware",
+    "Nested menus or application-owned popup placement beyond this information action",
+    "Icon pixel quality, presentation FPS, GPU acceleration or resource-target acceptance"
+  ],
+  "privacy": {
+    "connection_information_contents_published": false,
+    "profile_names_ip_addresses_or_clipboard_content_published": false,
+    "private_paths_tags_or_process_identities_published": false
+  },
+  "historical_failures_unchanged": true,
+  "delivery_note": "Native acceptance and package restoration belong to the unchanged deployed 8e runtime. This report does not establish a new production build, deployment, merge or Pages publication."
+}
