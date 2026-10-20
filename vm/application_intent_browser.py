@@ -23,12 +23,12 @@ def pages(values):
 
 
 def fresh_documents(before, current, files, control):
-    """Return two newly created exact documents, or None while they are pending.
+    """Return the exact supplied one/two fresh documents, or None while pending.
 
     A preexisting matching URL/title is never evidence for this request. The
     original blank target must survive unchanged; no unexpected pages qualify.
     """
-    require(len(files) == 2 and len({item['uri'] for item in files}) == 2)
+    require(1 <= len(files) <= 2 and len({item['uri'] for item in files}) == len(files))
     require(control['url'] == 'about:blank' and control in before)
     require(len({item['id'] for item in before}) == len(before)
             and len({item['id'] for item in current}) == len(current))
@@ -36,7 +36,7 @@ def fresh_documents(before, current, files, control):
         return None
     old = {item['id'] for item in before}
     new = [item for item in current if item['id'] not in old]
-    if len(new) != 2 or len(current) != len(before) + 2:
+    if len(new) != len(files) or len(current) != len(before) + len(files):
         return None
     if not all(item in current for item in before):
         return None

@@ -29,7 +29,7 @@ sys.dont_write_bytecode = True
 from owned_application_units import (assert_unit_origin, capture_unit_origin,
                                      owned_argv, process_snapshot, retire_original_unit, retire_unit,
                                      unit_snapshot, _retirement_drained as retirement_drained)
-from application_intent_policy import owned_layers, socket_peer, unbound_pointer
+from application_intent_policy import http_open_count, owned_layers, socket_peer, unbound_pointer
 from application_intent_browser import fresh_documents, pages
 import owned_chromium_lease as chromium
 
@@ -173,7 +173,8 @@ def original_receipt(directory, name, value=None):
     return original
 
 
-def initialize(directory, run_id, example_sha256, http_mode=False):
+def initialize(directory, run_id, example_sha256, http_mode=False, field_code='%U'):
+    http_open_count(http_mode, field_code)
     directory, _ = context(directory, run_id, False)
     require(re.fullmatch('[a-f0-9]{64}', example_sha256) is not None)
     require(Path('/usr/bin/chromium').is_file() and os.access('/usr/bin/chromium', os.X_OK))
@@ -196,7 +197,7 @@ def initialize(directory, run_id, example_sha256, http_mode=False):
         '/usr/bin/python3', str(directory / 'fixture.py'), 'execute', str(directory), run_id))
     entry = ('[Desktop Entry]\nType=Application\nName=Lucent intent ' + run_id.lower()
              + '\nIcon=web-browser\nTerminal=false\nNoDisplay=false\n'
-             + 'StartupWMClass=LucentIntent' + run_id + '\nExec=' + command + ' open %U\n'
+             + 'StartupWMClass=LucentIntent' + run_id + '\nExec=' + command + ' open ' + field_code + '\n'
              + 'Actions=Probe;\n\n[Desktop Action Probe]\nName=Open owned documents\nExec='
              + command + ' action ' + ' '.join(encoded(item['uri']) for item in files) + '\n').encode()
     manifest = {'run_id': run_id, 'example_sha256': example_sha256,
@@ -213,6 +214,8 @@ def initialize(directory, run_id, example_sha256, http_mode=False):
                           for item in files]}
     if http_mode:
         manifest['http_mode'] = True
+    if field_code != '%U':
+        manifest['http_field_code'] = field_code
     manifest['browser_startup'] = chromium.startup(browser_argv(directory, manifest, []))
     private(directory / 'manifest.json', json.dumps(manifest).encode())
     private(directory / 'events.json', b'[]\n')
@@ -222,25 +225,30 @@ def initialize(directory, run_id, example_sha256, http_mode=False):
     created = private(entry_path, entry)
     original_receipt(directory, 'entry-origin.json',
                      {'path': str(entry_path), 'identity': created, 'sha256': digest(entry)})
-    print(json.dumps({key: manifest[key] for key in ('app_id', 'name', 'class', 'files')}))
+    response = {key: manifest[key] for key in ('app_id', 'name', 'class', 'files')}
+    if field_code != '%U':
+        response['http_field_code'] = field_code
+    print(json.dumps(response))
 
 
 def http_enabled(manifest):
     enabled = manifest.get('http_mode', False)
     require(type(enabled) is bool)
+    http_open_count(enabled, manifest.get('http_field_code', '%U'))
     return enabled
 
 
 def http_documents(manifest, port):
-    """Two explicit URI targets; no provider, default-handler or arbitrary URL."""
+    """Fixed explicit URI targets; no provider, default-handler or arbitrary URL."""
     run_id = manifest['run_id']
     require(re.fullmatch('[A-Za-z0-9]{6,32}', run_id)
             and type(port) is int and 1024 <= port <= 65535
             and len(manifest['files']) == 2)
     routes = ('first%20%25U%E9%9B%AA?encoded=%2520&field=%25u#first',
               'second%20document?literal=%24%28unused%29%3B#second')
+    count = http_open_count(http_enabled(manifest), manifest.get('http_field_code', '%U'))
     return [{'uri': f'http://127.0.0.1:{port}/{run_id}/{route}', 'title': item['title']}
-            for route, item in zip(routes, manifest['files'])]
+            for route, item in zip(routes[:count], manifest['files'][:count])]
 
 
 def http_socket_identity(value):
@@ -304,7 +312,9 @@ def request_documents(directory, run_id, manifest, operation):
     require(operation in ('open', 'action'))
     if http_enabled(manifest) and operation == 'open':
         return http_authority(directory, run_id)['targets']
-    return manifest['files']
+    documents = manifest['files']
+    require(type(documents) is list and len(documents) == 2)
+    return documents
 
 
 def http_response(request, routes, port):
@@ -926,9 +936,10 @@ def main():
     parser.add_argument('arguments', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     signal.alarm(55)
-    if args.operation == 'initialize' and len(args.arguments) in (1, 2):
+    if args.operation == 'initialize' and len(args.arguments) in (1, 2, 3):
         require(len(args.arguments) == 1 or args.arguments[1] == 'http')
-        initialize(args.directory, args.run_id, args.arguments[0], len(args.arguments) == 2)
+        initialize(args.directory, args.run_id, args.arguments[0], len(args.arguments) >= 2,
+                   args.arguments[2] if len(args.arguments) == 3 else '%U')
     elif args.operation == 'initial-absence' and not args.arguments:
         initial_absence(args.directory, args.run_id)
     elif args.operation == 'start-example' and not args.arguments:

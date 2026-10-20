@@ -23,7 +23,8 @@ import sys
 import time
 
 from native_surfaces import find_surface
-from application_intent_policy import CursorOwnership, compositor_move, same_target, target as native_target
+from application_intent_policy import (CursorOwnership, compositor_move, http_open_count,
+                                      same_target, target as native_target)
 from application_intent_browser import fresh_documents
 
 
@@ -34,6 +35,22 @@ class FixtureFailure(ValueError):
     def __init__(self, details):
         super().__init__('owned_fixture_operation_failed')
         self.details = details
+
+
+def expected_documents(entry, http_identity, operation, http_mode=False, field_code='%U'):
+    """HTTP Open cardinality is independent of the two literal Action files."""
+    count = http_open_count(http_mode, field_code)
+    if operation not in ('open', 'action'):
+        raise ValueError('owned_open_or_action_required')
+    if http_mode and operation == 'open':
+        documents = http_identity.get('targets') if type(http_identity) is dict else None
+        if type(documents) is not list or len(documents) != count:
+            raise ValueError('exact_owned_http_target_count_required')
+        return documents
+    documents = entry.get('files')
+    if type(documents) is not list or len(documents) != 2:
+        raise ValueError('two_owned_local_document_targets_required')
+    return documents
 
 
 def failure_details(error, phase):
@@ -247,6 +264,8 @@ def checked_binary(manifest, name, supplied=None):
 
 
 def suite(args, results):
+    field_code = getattr(args, 'http_field_code', '%U')
+    http_open_count(args.http_uris, field_code)
     manifest = json.loads(Path(args.release_manifest).read_text())
     require(re.fullmatch('[a-f0-9]{40}', manifest['source_commit']), 'identified_release_source')
     example = checked_binary(manifest, 'application-intent', args.example_binary)
@@ -362,18 +381,22 @@ def suite(args, results):
     def observe_http_server():
         value = json.loads(call('http-info'))
         require(value.get('ready') is True, 'owned_loopback_http_server_ready')
+        expected_documents(entry, value['identity'], 'open', True, field_code)
         require(http_identity is None or value['identity'] == http_identity,
                 'frozen_original_loopback_http_server_and_targets')
         return value['identity']
 
     def verify_documents_and_retire(before_pages, operation='open'):
-        documents = (http_identity['targets'] if args.http_uris and operation == 'open' else entry['files'])
+        documents = expected_documents(entry, http_identity, operation, args.http_uris, field_code)
         selected = None
         def loaded_fresh():
             nonlocal selected
             selected = fresh_documents(before_pages, browser_snapshot(), documents, browser_identity['control'])
             return selected is not None
-        eventually(loaded_fresh, 'request_created_both_new_literal_document_targets')
+        label = ('request_created_single_new_http_document_target'
+                 if field_code == '%u' and operation == 'open'
+                 else 'request_created_both_new_literal_document_targets')
+        eventually(loaded_fresh, label)
         closing = {'identity': browser_identity, 'before': before_pages, 'targets': selected}
         if args.http_uris:
             closing['operation'] = operation
@@ -484,7 +507,12 @@ def suite(args, results):
         initialization = [manifest['binaries']['application-intent']['sha256']]
         if args.http_uris:
             initialization.append('http')
+            if field_code != '%U':
+                initialization.append(field_code)
         entry = json.loads(call('initialize', *initialization))
+        require(entry.get('http_field_code', '%U') == field_code, 'owned_entry_uses_requested_uri_field_code')
+        if field_code == '%u':
+            results['checks']['owned_entry_uses_singular_uri_field_code'] = True
         require(json.loads(call('initial-absence'))['absent'], 'owned_units_initially_absent')
         baseline = observe_native(False)['baseline']
         h['run'](lab.ssh_args('lucent') + ['umask 077; cat > ' + shlex.quote(binary)],
@@ -570,7 +598,9 @@ def suite(args, results):
         require(not events()[-1]['fresh_token_present'] and not events()[-1]['legacy_startup_present']
                 and not example_state()['client']['fresh_token'], 'later_socket_request_cannot_reuse_physical_authority')
         verify_documents_and_retire(before_pages)
-        results['checks']['later_socket_request_created_both_fresh_documents'] = True
+        socket_check = ('later_socket_request_created_single_fresh_http_document' if field_code == '%u'
+                        else 'later_socket_request_created_both_fresh_documents')
+        results['checks'][socket_check] = True
         phase = 'desktop_cli_open'
         interaction_guard()
         before_pages = before_request()
@@ -581,13 +611,17 @@ def suite(args, results):
         require(not events()[-1]['fresh_token_present'] and not events()[-1]['legacy_startup_present'],
                 'desktop_cli_has_no_physical_authority')
         verify_documents_and_retire(before_pages)
-        results['checks']['each_open_action_socket_and_cli_created_both_fresh_documents'] = True
+        documents_check = ('each_open_action_socket_and_cli_created_exact_expected_documents' if field_code == '%u'
+                           else 'each_open_action_socket_and_cli_created_both_fresh_documents')
+        results['checks'][documents_check] = True
         results['checks']['fresh_targets_retired_with_original_browser_control_preserved'] = True
         interaction_guard()
         results['checks']['desktop_cli_open_and_no_stale_token_reuse'] = True
         if args.http_uris:
             observe_http_server()
-            results['checks']['physical_socket_and_cli_opened_both_fresh_owned_http_uris'] = True
+            http_check = ('physical_socket_and_cli_opened_single_fresh_owned_http_uri' if field_code == '%u'
+                          else 'physical_socket_and_cli_opened_both_fresh_owned_http_uris')
+            results['checks'][http_check] = True
         phase = 'first_launch_focus_acceptance'
         require_first_launch_focus(results['checks'])
         completed_success = True
@@ -664,9 +698,15 @@ def main():
     parser.add_argument('--release-manifest', required=True)
     parser.add_argument('--example-binary')
     parser.add_argument('--http-uris', action='store_true',
-                        help='Open only two owned loopback HTTP fixtures; default remains literal local files')
+                        help='Open owned loopback HTTP fixtures; default remains literal local files')
+    parser.add_argument('--http-field-code', choices=('%u', '%U'), default='%U',
+                        help='HTTP entry field code: %%U opens two fixtures; %%u opens one (requires --http-uris)')
     parser.add_argument('--report')
     args = parser.parse_args()
+    try:
+        http_open_count(args.http_uris, args.http_field_code)
+    except ValueError as error:
+        parser.error(str(error))
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     load_helpers()
     path = Path(args.report or lab.ROOT / 'reports/local/application-intent-native.json')
@@ -676,7 +716,9 @@ def main():
     result = {'passed': False, 'checks': {},
               'scope': 'Fresh token delivery to owned children and observed browser focus; no Chromium protocol-consumption claim'}
     if args.http_uris:
-        result['uri_scope'] = 'Two fixed loopback HTTP targets through %U; no default-handler, external navigation or %u native claim'
+        result['uri_scope'] = ('One fixed loopback HTTP target through %u; declared Action separately uses two local documents; no default-handler or external navigation claim'
+                               if args.http_field_code == '%u' else
+                               'Two fixed loopback HTTP targets through %U; no default-handler, external navigation or %u native claim')
     try:
         measure = runpy.run_path(str(ROOT / 'vm/measure-framework.py'))
         with measure['stay_awake'](remote):
