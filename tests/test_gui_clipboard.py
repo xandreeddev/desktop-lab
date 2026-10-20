@@ -76,10 +76,14 @@ class InputAdmissionTests(unittest.TestCase):
 
     def test_timeout_cannot_be_extended_by_successful_previous_checks(self):
         h = self.harness()
-        h.input_deadline = 0
-        with self.assertRaisesRegex(driver.CheckFailure, 'bounded_native_input_window'):
+        h.input_deadline = 100 + driver.INPUT_WINDOW_SECONDS
+        with patch.object(driver.time, 'monotonic', return_value=399.99):
             h.input_guard()
-        self.assertEqual(self.peer_calls, [])
+        admitted_calls = list(self.peer_calls)
+        with patch.object(driver.time, 'monotonic', return_value=400), \
+             self.assertRaisesRegex(driver.CheckFailure, 'bounded_native_input_window'):
+            h.input_guard()
+        self.assertEqual(self.peer_calls, admitted_calls)
 
     def test_same_class_replacement_window_cannot_inherit_input_authority(self):
         h = self.harness()
@@ -545,8 +549,6 @@ class RestorationAdmissionTests(unittest.TestCase):
         self.assertFalse(report['restoration']['guarded_notes_restoration'])
 
 
-if __name__ == '__main__':
-    unittest.main()
 
 
 class BrowserCopyFailureDiagnostics(unittest.TestCase):
@@ -596,3 +598,74 @@ class BrowserCopyFailureDiagnostics(unittest.TestCase):
         h.wait_browser_copy_offer(result)
         self.assertEqual(result, {})
         h.input_guard.assert_not_called();h.call_peer.assert_not_called();h.key.assert_not_called()
+
+
+class GuiFixtureClipboardAdmission(unittest.TestCase):
+    def harness(self):
+        h = driver.Harness.__new__(driver.Harness)
+        h.fixture_clipboard_enabled = True
+        h.browser_retired = False
+        h.browser_started = h.start_acknowledged = True
+        h.browser_identity = {'original': True}
+        h.call_peer = Mock(return_value={'fixture': 'source', 'sha256': driver.sha(driver.SOURCE_TEXT),
+                                        'empty': False, 'mime': 'text/plain;charset=utf-8'})
+        return h
+
+    def test_before_first_copy_and_original_preservation_operations_keep_the_strict_helper(self):
+        h = self.harness()
+        with patch.object(driver.notes.Harness, 'clip', return_value={'strict': True}) as strict:
+            h.fixture_clipboard_enabled = False
+            for operation in ('read', 'owned', 'create', 'restore', 'verify', 'set'):
+                self.assertEqual(h.clip(operation, b'unchanged'), {'strict': True})
+            h.fixture_clipboard_enabled = True
+            for operation in ('create', 'restore', 'verify', 'set'):
+                self.assertEqual(h.clip(operation, b'unchanged'), {'strict': True})
+            h.browser_retired = True
+            self.assertEqual(h.clip('read'), {'strict': True})
+            self.assertEqual(h.clip('owned', b'unchanged'), {'strict': True})
+        self.assertEqual(strict.call_count, 12)
+        h.call_peer.assert_not_called()
+
+    def test_after_trusted_copy_read_and_chord_guards_accept_only_the_compiled_fixture(self):
+        h = self.harness()
+        self.assertEqual(h.clip('read')['sha256'], driver.sha(driver.SOURCE_TEXT))
+        self.assertEqual(h.clip('owned', json.dumps([driver.sha(driver.SOURCE_TEXT)]).encode()),
+                         {'owned_fixture_selection_current': True})
+        self.assertEqual(h.call_peer.call_args_list, [unittest.mock.call('fixture-clipboard')] * 2)
+        with self.assertRaisesRegex(driver.CheckFailure, 'allowed_compiled_clipboard_fixture_required'):
+            h.clip('owned', json.dumps([driver.sha('another clipboard')]).encode())
+
+    def test_unknown_fixture_or_inconsistent_proof_is_refused_without_accepting_arbitrary_expected_text(self):
+        for change in ({'fixture': 'private incoming'}, {'sha256': driver.sha('private incoming')},
+                       {'empty': True}, {'mime': 'STRING'}, {'mime': 'text/html'}):
+            h = self.harness();h.call_peer.return_value.update(change)
+            with self.subTest(change=change), self.assertRaisesRegex(driver.CheckFailure, 'exact_compiled_clipboard_fixture_required'):
+                h.clip('read')
+        for field, value in (('browser_started', False), ('start_acknowledged', False), ('browser_identity', None)):
+            h = self.harness();setattr(h, field, value)
+            with self.subTest(field=field), self.assertRaisesRegex(driver.CheckFailure, 'live_admitted_browser_required'):
+                h.clip('read')
+            h.call_peer.assert_not_called()
+
+    def test_first_trusted_physical_browser_copy_arms_only_after_unchanged_selected_fixture(self):
+        h = self.harness();h.fixture_clipboard_enabled = False;h.target = 'browser'
+        h.input_guard = Mock()
+        document = {'focused': True, 'selection_complete': True, 'sha256': driver.sha(driver.SOURCE_TEXT),
+                    'events': {'trusted_copy': 1, 'ctrl_c_down': 1, 'ctrl_c_up': 1, 'untrusted_copy': 0}}
+        h.call_peer.return_value = document
+        h.eventually = lambda predicate, _label, **_kwargs: self.assertTrue(predicate())
+        h.arm_fixture_clipboard()
+        self.assertTrue(h.fixture_clipboard_enabled)
+        for change in ({'focused': False}, {'selection_complete': False}, {'sha256': driver.sha('other')},
+                       {'events': dict(document['events'], trusted_copy=0)},
+                       {'events': dict(document['events'], untrusted_copy=1)},
+                       {'events': dict(document['events'], ctrl_c_up=0)}):
+            h.fixture_clipboard_enabled = False
+            h.call_peer.return_value = dict(document, **change)
+            with self.subTest(change=change), self.assertRaises(AssertionError):
+                h.arm_fixture_clipboard()
+            self.assertFalse(h.fixture_clipboard_enabled)
+
+
+if __name__ == '__main__':
+    unittest.main()

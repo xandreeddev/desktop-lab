@@ -2,10 +2,14 @@
 
 `vm/test-third-party-tray.py` prepares a reproducible acceptance run with the
 installed **NetworkManager Applet**, rather than Lucent's owned protocol fixture.
-This document describes test tooling. **No genuine application or VM run has
-been accepted for this new harness yet.** The existing controlled SNI results
-remain valid within their original scope; they do not establish compatibility
-with a third-party application.
+A source-specific native run now passes all five interaction and four cleanup
+checks on unchanged deployed `8e6d074b`, with a genuine wired-only `nm-applet`
+item, Lucent bar/menu input and the applet's Connection Information action. A
+separate fresh observation after normal removal of the five signed test packages
+passes all thirteen outside-worker preservation checks. The
+[sanitized report](../reports/measurements/lucent-native-third-party-tray-8e.json)
+records the exact source/tooling hashes and limits. The earlier controlled SNI
+results retain their own scope; this later pass establishes one real application.
 
 The harness changes no domain, adapter, framework, renderer or desktop code.
 Lucent's existing `TrayPort` adapter owns the watcher, item discovery and
@@ -14,10 +18,18 @@ DBusMenu calls. Its client owns the themed bar icon and menu. The external
 action. Our Python helper is an observer and test owner; it does not implement
 an SNI producer, register another watcher or invoke menu actions directly.
 
-## What an accepted run would establish
+## What this accepted run establishes
 
-The source-specific private receipt must contain every step and successful
-cleanup before it can be called a pass:
+The source-specific private receipt records every step below and successful
+cleanup. Independent post-removal checks restore all 964 original package
+versions and explicit reasons, with the five test packages absent; network,
+preserved user files/clipboard/settings/media, runtime/security, keyring/sync
+databases and non-directory autostart records remain exact. Directory
+device/inode/mode/owner/group remain exact; controlled transient-unit/package
+directory sizes and timestamps may advance. Private recovery files are retained.
+This does not claim that every directory timestamp is unchanged.
+
+The native workflow is:
 
 1. The installed and running Lucent binary match the supplied build digest.
    Its process, active supervisor, native compositor socket and sole output
@@ -192,6 +204,6 @@ python3 -m py_compile vm/third_party_tray_policy.py \
 ```
 
 Those tests do not launch an applet or connect to a guest, compositor or D-Bus.
-They are not native acceptance. A future source-specific VM receipt must
-report whether the package/indicator/input preconditions were actually met,
-and must retain blocked/unsupported evidence rather than changing this scope.
+They are not native acceptance. The later source-specific native receipt above
+separately passes the actual package/indicator/input preconditions and workflow.
+Blocked or unsupported earlier evidence remains unchanged.
