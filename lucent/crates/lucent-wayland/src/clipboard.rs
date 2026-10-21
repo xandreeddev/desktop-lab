@@ -1,5 +1,5 @@
 //! Core Wayland text selection. No desktop identities, shell commands or history.
-use crate::State;
+use crate::{InputRefresh, State};
 use calloop::{
     Mode, PostAction, RegistrationToken,
     generic::Generic,
