@@ -73,6 +73,7 @@ jobs:
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-desktop compact_dock_pixels -- --ignored --nocapture
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-desktop background_coverage_optimization -- --ignored --nocapture
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-desktop bounded_widget_pixels -- --ignored --nocapture
+          cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-desktop --bin lucent-desktop bar_handoff_carriers_keep_identical_pixels -- --ignored --nocapture --test-threads=1
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-desktop visual_regressions -- --ignored --nocapture
       - uses: actions/upload-artifact@v4
         if: always()
