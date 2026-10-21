@@ -1,6 +1,18 @@
 # Current daily-use readiness
 
 The current integration base is accepted main
+`63aae5cb291ea1ed9dec17f3aafd80ea8ff494f0`
+([PR97](https://github.com/xandreeddev/desktop-lab/pull/97)). It merged normally
+at 2026-10-21 11:12:54 UTC after all six required checks succeeded on exact
+`cf317df392c7f626c2006db3f33b00bbd5d596de` with CLEAN mergeability. It includes
+the batched draw loop and synchronous current input layout.
+[Pages run 39590283245](https://github.com/xandreeddev/desktop-lab/actions/runs/39590283245)
+publishes that exact merge; public desktop/library HTML matches the artifact and
+pins its source links. Merging and publication do not extend native or
+performance acceptance. The later bar-presentation handoff has its own source
+and verification scope.
+
+The preceding delivery snapshot records accepted main
 `15e87287a79f4daca39bc42c1b5812a659e4e6cb`
 ([PR95](https://github.com/xandreeddev/desktop-lab/pull/95)).
 [Pages run 39416696691](https://github.com/xandreeddev/desktop-lab/actions/runs/39416696691)
@@ -73,6 +85,19 @@ standalone example and timing code on accepted main `15e87287`, without the
 unaccepted performance branch's renderer/video ancestors. Its final clean-source
 checks, native execution and delivery are separate from the `91b` evidence; no
 requested-gap status changes follow from the instrumentation alone.
+
+A separate [temporary allocator-policy trial](../reports/measurements/lucent-allocator-policy-trial.json)
+on unchanged `35ed87ed` and glibc 2.44 compared two fresh restarts, each with
+30 seconds of warmup and 300 seconds of observation. Mean/maximum sampled RSS
+was 247.794/248.359 MiB in the baseline and 211.335/219.051 MiB with the policy;
+process CPU was 154.197% and 184.340% of one logical core. **The policy was not
+adopted.** Both host-pressure intervals were ineligible; fixed phase ordering
+and this single run establish no causal gain, overnight stability, accepted
+300 MiB budget or presentation FPS. The owned runtime override was removed,
+normal service readiness with the three variables absent was verified, and
+the report’s scoped preservation checks passed.
+Earlier failed attempts remain separately recorded; the aged process is not a
+matched baseline for either fresh phase.
 
 ## What the status words mean
 

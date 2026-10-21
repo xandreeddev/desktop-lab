@@ -4,12 +4,12 @@
   "status": "in_progress",
   "completion_rule": "An item is verified only when its behavior, boundary checks, documentation and applicable native integration checks have evidence. Implemented without verification remains incomplete.",
   "current_rollup": {
-    "snapshot_source_commit": "2b3c6db4d2482cd8b8f0c4ee9fd0ed9c2640ce57",
-    "snapshot_date": "2026-10-20",
+    "snapshot_source_commit": "63aae5cb291ea1ed9dec17f3aafd80ea8ff494f0",
+    "snapshot_date": "2026-10-21",
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted main 2b3c6db4 includes normally merged PR94 at 2026-10-20T10:22:42Z after all six checks on exact 105a1150 passed with CLEAN mergeability. Its source-pinned disk-cache browser suites pass their separate native checks on unchanged 35ed; Pages 39407507695 publishes exact main 2b desktop/library HTML. Earlier accepted main 9129912b includes normally merged PR93 at 2026-10-20T09:23:12Z after all six checks on exact 880ce6cd passed with CLEAN mergeability. Earlier accepted main 6b50bd5e includes normally merged PR92 at 2026-10-20T07:22:01Z after all six checks on exact fb4f65a8 passed with CLEAN mergeability; earlier PR91 merged normally at d01ff7db. Earlier accepted main 8ca4e820 includes PR89, merged normally at 2026-10-19T23:32:44Z after all six required checks passed on exact 80c8502a with CLEAN mergeability, and the earlier PR87 runtime. Text and Application integration are merged and their coherent 8e release was deployed as the accepted baseline: six user clients and root greeter match the archive with original user/security state preserved. Exact 8e passes six CI checks and 832 visual cases. A 120-second RADV resource interval records 217.28/221.92 MiB mean/peak RSS but is host-pressure-ineligible; joined-source presentation records 26.9992 callback intervals/s under host pressure; eligible 60FPS/RSS acceptance remains unproven. A source-specific 16-check native run passes two-output density/input/retirement/recreation with one owned headless output and exact restoration, not physical or secure cross-output acceptance. The fresh owned IME run passes all five feature and five restoration checks, including preedit ink/caret evidence and exact unit/transport retirement. Earlier failed reports and their independent recoveries retain their original scope; third-party IME, physical and cross-output text remain pending. A later scoped real-Chromium run with the independent d1 consumer, now merged through PR89, and b6323e9 harness passes all nine feature checks, including observed first-launch focus, and all eight cleanup checks on unchanged 8e desktop/CLI. No compositor forced focus, direct token-consumption, other-application or remote-URI acceptance is claimed; earlier failed reports remain unchanged. A later 2044e54f native harness passes all nine real Chromium/Notes keyboard clipboard checks and twelve restoration checks on unchanged 8e, one virtual output. Other apps, rich content, delayed transfer/focus races and physical/cross-output clipboard remain unverified. A genuine wired-only NetworkManager Applet run on unchanged 8e passes five native bar/menu/information-action checks and four cleanup checks; a fresh outside-worker post-removal observation passes thirteen preservation checks, restoring all 964 original packages/reasons with five signed test packages absent. Other apps/menus, wireless/secret-agent, physical hardware, pixel quality and performance remain unverified. The earlier coherent, unmerged 9b5420b7 trial retains its performance and application observations at that source. Its 7a92749e harness passes eleven native HTTP URI and nine restoration checks in real owned Chromium; this does not accept 9b memory, CPU or presentation performance. Later harness 4c passes 12 singular HTTP %u feature and 9 restoration checks on coherent 35ed. Default handlers, external navigation, other applications and direct token consumption remain unverified. The latest recorded native trial is coherent unmerged 35ed: its normal interval observes 250.580664/252.394531 MiB mean/peak RSS and 154.032796% one-core CPU; separate instrumented feedback observes 32.224499 joined distinct revision advances/s, while RPC wall bounds observe 59.733251–60.129012 post-conversion prepared callbacks/s. Both intervals are host-pressure-ineligible; no 300 MiB/60 FPS acceptance or causal gain is established. Profiling restores OFF with fresh independent verification. Earlier bf98/9b/8e reports remain unchanged. This rollup records receipts rather than monitoring a live VM. A separate archived 85a5 shape-only client on the shared 35ed framework records 37.050043 compositor feedback intervals/s, with four native and five restoration checks passed. Root reviews partial static visibility only. Host pressure and resources were not sampled for that diagnostic; no 60 FPS target or bottleneck attribution is established. Subsequent owned retired-fixture cleanup preserves normal source/settings/security/runtime state and is not a performance comparison. A test-only 842fbc9 allocator moves the two browser acceptance suites to private checked disk-cache scratch with a one-GiB admission reserve, without replacing their lease/retirement guards. A fresh singular HTTP run passes 12 feature/9 cleanup checks on unchanged 35ed; the GUI keyboard clipboard run also passes nine feature/twelve restoration checks, with one expected guarded desktop restart and 35 seconds of stability. No same-PID restoration claim is made. No automatic prune or resource/performance acceptance is implied. A later isolated 85a5 CPU-profiled shape run records 48.370556 feedback intervals/s and 0.658506 ms mean/2.480036 ms maximum successful draw CPU wall time, with 5849 joined feedbacks and 5851 CPU rows. Four execution and five restoration checks pass; fresh normal-state facts confirm the same 35ed process and all profiling OFF. These short successful stages do not attribute the remaining cadence gaps or establish improvement, GPU/whole-loop time, eligible 300 MiB or 60 FPS acceptance. A later harness 86df4e5b on unchanged runtime 35ed passes four owned two-output Display flows: draft-only position, Apply/explicit Revert, peer scale-1.25 deadline and position Keep. The original 1920x1080 scale 1 output remains unchanged; the owned peer is 1280x960. Five positive owner-restoration checks and independent owner retirement/fresh normal-OFF facts verify original monitor bytes/inode, preferences, supervision, output/workspace/cursor restoration. Monitor ctime/link count and parent entry timestamps are not claimed unchanged. All panel input stays on the original 1x output; physical/secure/hotplug/suspend, enable-disable/rotation, fractionally scaled Displays-panel input and pacing remain unverified. Initial 7ebd failed before any feature checks due to eval instead of dispatch; the failed report and separate guarded recovery remain historical. Final site/exact-head CI/publication gates for this follow-up remain pending.",
+    "scope": "Accepted main 63aae5cb includes PR97, merged normally after six successful required checks on exact cf317df3 with CLEAN mergeability. Pages 39590283245 publishes that exact source and its desktop/library artifact. Delivery does not establish native activation, animation smoothness, bar-handoff behavior or performance acceptance. A separate temporary allocator-policy trial on unchanged 35ed and glibc 2.44 completed two fresh-restart phases, each with 30s warmup and 300s observation. Lower sampled RSS accompanies higher observed CPU; substantial host swap and I/O pressure, fixed phase ordering and one run prevent causal or long-term acceptance. The policy was not adopted; its owned runtime override was removed and normal readiness/scoped preservation passed. The approved report records exact sources, evidence hashes and limits. All seven requested-gap statuses, earlier native scopes and historical requirements remain unchanged. Earlier snapshot metadata and the full prior scope are preserved separately. This rollup records source-specific receipts rather than monitoring a live VM.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -790,13 +790,13 @@
       "native_feature_acceptance_complete": false
     },
     "accepted_main_merge": {
-      "pull_request": 94,
-      "merge_commit": "2b3c6db4d2482cd8b8f0c4ee9fd0ed9c2640ce57",
-      "exact_reviewed_head": "105a1150eadd42298ff532f71c613476e54289d5",
+      "pull_request": 97,
+      "merge_commit": "63aae5cb291ea1ed9dec17f3aafd80ea8ff494f0",
+      "exact_reviewed_head": "cf317df392c7f626c2006db3f33b00bbd5d596de",
       "required_checks_passed": 6,
       "mergeability": "CLEAN",
       "normal_merge": true,
-      "merged_at": "2026-10-20T10:22:42Z"
+      "merged_at": "2026-10-21T11:12:54Z"
     },
     "implemented_unmerged_cohorts": [
       {
@@ -866,20 +866,17 @@
       }
     ],
     "documentation_delivery": {
-      "accepted_main_commit": "2b3c6db4d2482cd8b8f0c4ee9fd0ed9c2640ce57",
-      "published_workflow_run": 39407507695,
+      "accepted_main_commit": "63aae5cb291ea1ed9dec17f3aafd80ea8ff494f0",
+      "published_workflow_run": 39590283245,
       "published_workflow_status": "SUCCESS",
       "public_http_status": 200,
-      "current_published_source_links": "2b3c6db4d2482cd8b8f0c4ee9fd0ed9c2640ce57",
+      "current_published_source_links": "63aae5cb291ea1ed9dec17f3aafd80ea8ff494f0",
       "current_publication_valid": true,
       "public_artifact_bytes_match": true,
-      "delivery_receipt_sha256": "548cea51229a0c436ab06a1df7833b90a8cfaf498c1b161dca6561dbbd6d2b08",
-      "current_reconciliation_site_build_executed": false,
-      "current_reconciliation_exact_head_ci_passed": false,
-      "current_reconciliation_published": false,
-      "scope": "Recorded PR94/main 2b desktop/library publication matches the deployed artifact exactly and source links pin that merge. The later CPU-shape/two-output follow-up has its own pending site, exact-head CI and publication gates; publication does not establish native performance. Four later owned two-output Display flows have their own native report, independent of the pending publication gates."
+      "delivery_receipt_sha256": "d366d0efbf705ab85167aa31158c923803210bd5ae0b99f85c7e2557d4f38933",
+      "scope": "Recorded PR97 / main 63aae5cb desktop/library publication matches the deployed artifact and pins source links to that exact merge. This is source delivery, not native execution or performance acceptance of batched rendering or the later bar-presentation handoff."
     },
-    "accepted_main_commit": "2b3c6db4d2482cd8b8f0c4ee9fd0ed9c2640ce57",
+    "accepted_main_commit": "63aae5cb291ea1ed9dec17f3aafd80ea8ff494f0",
     "current_vm_trial_source_commit": "35ed87ed4c01cf62e3c8406b8abdcc0809cc155b",
     "current_vm_trial_performance_accepted": false,
     "historical_documentation_delivery_8ca": {
@@ -1099,7 +1096,69 @@
       "scope": "Runtime-only bounded opt-in callback and attempt observations, copied with the standalone geometry diagnostic onto accepted main. The timing serializer and runtime hooks match the separately tested 91b source; the renderer stays at accepted main, without the unaccepted 35ed performance ancestors. Actual 91b passes 66 runtime-library and 3 example tests plus 4 native execution/5 restoration checks while the normal 35ed desktop is preserved and profiling OFF. This is not execution or full source validation of the later clean integration. Request-to-handler combines remaining render/present work, transport, compositor and client scheduling/dispatch; raw core callback milliseconds, local Instant nanoseconds and presentation clock IDs remain separate. No causal bottleneck, eligible 300MiB/60FPS target, GPU or scanout acceptance follows. All earlier reports, statuses and historical scope remain unchanged.",
       "native_receipt_executes_clean_integration": false,
       "source_and_delivery_checks_extend_91b_native_scope": false
-    }
+    },
+    "historical_accepted_main_merge_pr94": {
+      "pull_request": 94,
+      "merge_commit": "2b3c6db4d2482cd8b8f0c4ee9fd0ed9c2640ce57",
+      "exact_reviewed_head": "105a1150eadd42298ff532f71c613476e54289d5",
+      "required_checks_passed": 6,
+      "mergeability": "CLEAN",
+      "normal_merge": true,
+      "merged_at": "2026-10-20T10:22:42Z"
+    },
+    "historical_documentation_delivery_2b": {
+      "accepted_main_commit": "2b3c6db4d2482cd8b8f0c4ee9fd0ed9c2640ce57",
+      "published_workflow_run": 39407507695,
+      "published_workflow_status": "SUCCESS",
+      "public_http_status": 200,
+      "current_published_source_links": "2b3c6db4d2482cd8b8f0c4ee9fd0ed9c2640ce57",
+      "current_publication_valid": true,
+      "public_artifact_bytes_match": true,
+      "delivery_receipt_sha256": "548cea51229a0c436ab06a1df7833b90a8cfaf498c1b161dca6561dbbd6d2b08",
+      "current_reconciliation_site_build_executed": false,
+      "current_reconciliation_exact_head_ci_passed": false,
+      "current_reconciliation_published": false,
+      "scope": "Recorded PR94/main 2b desktop/library publication matches the deployed artifact exactly and source links pin that merge. The later CPU-shape/two-output follow-up has its own pending site, exact-head CI and publication gates; publication does not establish native performance. Four later owned two-output Display flows have their own native report, independent of the pending publication gates."
+    },
+    "batched_rendering_delivery": {
+      "source_commit": "cf317df392c7f626c2006db3f33b00bbd5d596de",
+      "accepted_main_commit": "63aae5cb291ea1ed9dec17f3aafd80ea8ff494f0",
+      "pull_request": 97,
+      "merged_at": "2026-10-21T11:12:54Z",
+      "required_checks_passed": 6,
+      "mergeability": "CLEAN",
+      "normal_merge": true,
+      "pages_run": 39590283245,
+      "pages_source_and_artifact_verified": true,
+      "guide": "docs/event-batches.md",
+      "native_performance_acceptance_extended": false,
+      "scope": "GPU drawing occurs after each available event batch; synchronous CPU input layout and exact native authority remain separate. Merge and Pages receipts establish delivery of this source, not current VM activation, animation smoothness, an accepted memory budget or bar-handoff native behavior."
+    },
+    "allocator_policy_trial": {
+      "runtime_source_commit": "35ed87ed4c01cf62e3c8406b8abdcc0809cc155b",
+      "runtime_binary_sha256": "6ff4e06b73f1a1f68f27cb0504c67710b0a9e118b181ba8ee41eb78d6251ef78",
+      "report": "reports/measurements/lucent-allocator-policy-trial.json",
+      "report_sha256": "5f894f4c2503a773e1985ca6be4a10190b1d852611d3572286f146086815e061",
+      "glibc_version": "2.44",
+      "warmup_seconds_per_phase": 30,
+      "requested_observation_seconds_per_phase": 300,
+      "baseline_sample_mean_rss_mib": 247.7941512542517,
+      "baseline_sample_max_rss_mib": 248.359375,
+      "policy_sample_mean_rss_mib": 211.33450255102042,
+      "policy_sample_max_rss_mib": 219.05078125,
+      "baseline_cpu_percent_one_logical_core": 154.19661942929503,
+      "policy_cpu_percent_one_logical_core": 184.33995986400402,
+      "decision": "not_adopted",
+      "performance_accepted": false,
+      "policy_shipped_or_retained": false,
+      "restoration_checks_passed": 3,
+      "scope": "Two sequential fresh-restart five-minute observations with profiling OFF. Lower observed RSS accompanies higher observed CPU under substantial host swap/I/O pressure; neither phase is performance-eligible. No causal improvement, 22-hour retention, accepted 300 MiB budget or 60 FPS/scanout claim. Owned runtime override removed, normal environment/readiness and within-trial preservation verified. Earlier failures and separate aged-process observation retain their own scope."
+    },
+    "historical_rollup_snapshot_pr94": {
+      "snapshot_source_commit": "2b3c6db4d2482cd8b8f0c4ee9fd0ed9c2640ce57",
+      "snapshot_date": "2026-10-20"
+    },
+    "historical_previous_rollup_scope": "Accepted main 2b3c6db4 includes normally merged PR94 at 2026-10-20T10:22:42Z after all six checks on exact 105a1150 passed with CLEAN mergeability. Its source-pinned disk-cache browser suites pass their separate native checks on unchanged 35ed; Pages 39407507695 publishes exact main 2b desktop/library HTML. Earlier accepted main 9129912b includes normally merged PR93 at 2026-10-20T09:23:12Z after all six checks on exact 880ce6cd passed with CLEAN mergeability. Earlier accepted main 6b50bd5e includes normally merged PR92 at 2026-10-20T07:22:01Z after all six checks on exact fb4f65a8 passed with CLEAN mergeability; earlier PR91 merged normally at d01ff7db. Earlier accepted main 8ca4e820 includes PR89, merged normally at 2026-10-19T23:32:44Z after all six required checks passed on exact 80c8502a with CLEAN mergeability, and the earlier PR87 runtime. Text and Application integration are merged and their coherent 8e release was deployed as the accepted baseline: six user clients and root greeter match the archive with original user/security state preserved. Exact 8e passes six CI checks and 832 visual cases. A 120-second RADV resource interval records 217.28/221.92 MiB mean/peak RSS but is host-pressure-ineligible; joined-source presentation records 26.9992 callback intervals/s under host pressure; eligible 60FPS/RSS acceptance remains unproven. A source-specific 16-check native run passes two-output density/input/retirement/recreation with one owned headless output and exact restoration, not physical or secure cross-output acceptance. The fresh owned IME run passes all five feature and five restoration checks, including preedit ink/caret evidence and exact unit/transport retirement. Earlier failed reports and their independent recoveries retain their original scope; third-party IME, physical and cross-output text remain pending. A later scoped real-Chromium run with the independent d1 consumer, now merged through PR89, and b6323e9 harness passes all nine feature checks, including observed first-launch focus, and all eight cleanup checks on unchanged 8e desktop/CLI. No compositor forced focus, direct token-consumption, other-application or remote-URI acceptance is claimed; earlier failed reports remain unchanged. A later 2044e54f native harness passes all nine real Chromium/Notes keyboard clipboard checks and twelve restoration checks on unchanged 8e, one virtual output. Other apps, rich content, delayed transfer/focus races and physical/cross-output clipboard remain unverified. A genuine wired-only NetworkManager Applet run on unchanged 8e passes five native bar/menu/information-action checks and four cleanup checks; a fresh outside-worker post-removal observation passes thirteen preservation checks, restoring all 964 original packages/reasons with five signed test packages absent. Other apps/menus, wireless/secret-agent, physical hardware, pixel quality and performance remain unverified. The earlier coherent, unmerged 9b5420b7 trial retains its performance and application observations at that source. Its 7a92749e harness passes eleven native HTTP URI and nine restoration checks in real owned Chromium; this does not accept 9b memory, CPU or presentation performance. Later harness 4c passes 12 singular HTTP %u feature and 9 restoration checks on coherent 35ed. Default handlers, external navigation, other applications and direct token consumption remain unverified. The latest recorded native trial is coherent unmerged 35ed: its normal interval observes 250.580664/252.394531 MiB mean/peak RSS and 154.032796% one-core CPU; separate instrumented feedback observes 32.224499 joined distinct revision advances/s, while RPC wall bounds observe 59.733251–60.129012 post-conversion prepared callbacks/s. Both intervals are host-pressure-ineligible; no 300 MiB/60 FPS acceptance or causal gain is established. Profiling restores OFF with fresh independent verification. Earlier bf98/9b/8e reports remain unchanged. This rollup records receipts rather than monitoring a live VM. A separate archived 85a5 shape-only client on the shared 35ed framework records 37.050043 compositor feedback intervals/s, with four native and five restoration checks passed. Root reviews partial static visibility only. Host pressure and resources were not sampled for that diagnostic; no 60 FPS target or bottleneck attribution is established. Subsequent owned retired-fixture cleanup preserves normal source/settings/security/runtime state and is not a performance comparison. A test-only 842fbc9 allocator moves the two browser acceptance suites to private checked disk-cache scratch with a one-GiB admission reserve, without replacing their lease/retirement guards. A fresh singular HTTP run passes 12 feature/9 cleanup checks on unchanged 35ed; the GUI keyboard clipboard run also passes nine feature/twelve restoration checks, with one expected guarded desktop restart and 35 seconds of stability. No same-PID restoration claim is made. No automatic prune or resource/performance acceptance is implied. A later isolated 85a5 CPU-profiled shape run records 48.370556 feedback intervals/s and 0.658506 ms mean/2.480036 ms maximum successful draw CPU wall time, with 5849 joined feedbacks and 5851 CPU rows. Four execution and five restoration checks pass; fresh normal-state facts confirm the same 35ed process and all profiling OFF. These short successful stages do not attribute the remaining cadence gaps or establish improvement, GPU/whole-loop time, eligible 300 MiB or 60 FPS acceptance. A later harness 86df4e5b on unchanged runtime 35ed passes four owned two-output Display flows: draft-only position, Apply/explicit Revert, peer scale-1.25 deadline and position Keep. The original 1920x1080 scale 1 output remains unchanged; the owned peer is 1280x960. Five positive owner-restoration checks and independent owner retirement/fresh normal-OFF facts verify original monitor bytes/inode, preferences, supervision, output/workspace/cursor restoration. Monitor ctime/link count and parent entry timestamps are not claimed unchanged. All panel input stays on the original 1x output; physical/secure/hotplug/suspend, enable-disable/rotation, fractionally scaled Displays-panel input and pacing remain unverified. Initial 7ebd failed before any feature checks due to eval instead of dispatch; the failed report and separate guarded recovery remain historical. Final site/exact-head CI/publication gates for this follow-up remain pending."
   },
   "requirements": [
     {

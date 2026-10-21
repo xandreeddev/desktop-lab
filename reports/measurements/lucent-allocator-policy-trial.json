@@ -1,0 +1,307 @@
+{
+  "schema": 1,
+  "status": "bounded_native_allocator_observation_complete_policy_not_adopted",
+  "overall_execution_and_restoration_passed": true,
+  "performance_accepted": false,
+  "policy_shipped_or_retained": false,
+  "scope": "Two fresh-restart allocator phases on the same desktop binary:30s warmup plus300s observation each, with nested first120s. This is a five-minute-per-phase CPU/RSS observation, not long-duration stability or a controlled causal improvement.",
+  "sources": {
+    "managed_desktop_source_commit": "35ed87ed4c01cf62e3c8406b8abdcc0809cc155b",
+    "managed_desktop_binary_sha256": "6ff4e06b73f1a1f68f27cb0504c67710b0a9e118b181ba8ee41eb78d6251ef78",
+    "host_helper_sha256": "f077d0639f9f575aa46e5bee92d1a55d15202b22e458a9e51fa57feb7975b619",
+    "guest_helper_sha256": "f000af5c64cd1e8454b8206eae18e07e269ec47a71d9efa1b41a42696fde8890",
+    "source_scope": "Exact desktop binary pinned. Other protected files were fingerprinted freshly for within-trial preservation, not reattested to an older full cohort."
+  },
+  "evidence_sha256": {
+    "actual_native_report": "08df7e0c914cf54c36bb3f0f96995d2a4214a792804373ffd93132b30f574ede",
+    "earlier_pre_unit_failed_attempt": "1dfa741b0017e72aee59f1ad5446cc0fa669c7e03d77236549dc4b4863075f84"
+  },
+  "allocator_policy": {
+    "baseline": {
+      "MALLOC_ARENA_MAX": null,
+      "MALLOC_MMAP_THRESHOLD_": null,
+      "MALLOC_TRIM_THRESHOLD_": null
+    },
+    "temporary_policy": {
+      "MALLOC_ARENA_MAX": "2",
+      "MALLOC_MMAP_THRESHOLD_": "131072",
+      "MALLOC_TRIM_THRESHOLD_": "131072"
+    },
+    "delivery": "Owned runtime-only service drop-in; no user-manager/global environment changes. Normal service restarted afterward with all three variables absent.",
+    "inheritance_scope": "Service environment can affect the Python supervisor and native libraries/child applications it starts; this is not a Rust-only allocator switch. No apps were launched during the guarded trial.",
+    "guest_libc": {
+      "implementation": "glibc",
+      "version": "2.44",
+      "provenance": "Separate actual guest observation supplied by the operator; version is not encoded in resource sample rows."
+    }
+  },
+  "workload": {
+    "warmup_seconds_per_phase": 30,
+    "requested_measurement_seconds_per_phase": 300,
+    "nested_window_requested_seconds": 120,
+    "one_output": true,
+    "one_live_wallpaper_producer": true,
+    "panels_and_launcher_closed": true,
+    "ordinary_application_clients_absent": true,
+    "runtime_profiling_off": {
+      "frames": true,
+      "presentation": true,
+      "source_pts": true
+    },
+    "memory_cap_added": false,
+    "quality_resolution_or_animation_changes": false,
+    "current_binary_security_media_and_settings_bytes_preserved": true
+  },
+  "phases": {
+    "baseline": {
+      "full_300_second_window": {
+        "elapsed_seconds": 300.00657712999964,
+        "sample_count": 294,
+        "arithmetic_sample_mean_kib": {
+          "VmRSS": 253741.21088435373,
+          "RssAnon": 179173.21088435373,
+          "VmSwap": 0.0,
+          "AnonHugePages": 157389.49659863947
+        },
+        "sample_peak_kib": {
+          "VmRSS": 254320,
+          "RssAnon": 179752,
+          "VmSwap": 0,
+          "AnonHugePages": 161792
+        },
+        "arithmetic_sample_mean_mib": {
+          "VmRSS": 247.7941512542517,
+          "RssAnon": 174.9738387542517,
+          "VmSwap": 0.0,
+          "AnonHugePages": 153.70068027210885
+        },
+        "sample_peak_mib": {
+          "VmRSS": 248.359375,
+          "RssAnon": 175.5390625,
+          "VmSwap": 0.0,
+          "AnonHugePages": 158.0
+        },
+        "cpu_percent_one_logical_core": 154.19661942929503
+      },
+      "first_120_second_window": {
+        "elapsed_seconds": 120.50486662401818,
+        "sample_count": 119,
+        "arithmetic_sample_mean_kib": {
+          "VmRSS": 253196.53781512604,
+          "RssAnon": 178628.53781512604,
+          "VmSwap": 0.0,
+          "AnonHugePages": 151861.78151260506
+        },
+        "sample_peak_kib": {
+          "VmRSS": 253716,
+          "RssAnon": 179148,
+          "VmSwap": 0,
+          "AnonHugePages": 159744
+        },
+        "arithmetic_sample_mean_mib": {
+          "VmRSS": 247.26224396008402,
+          "RssAnon": 174.44193146008402,
+          "VmSwap": 0.0,
+          "AnonHugePages": 148.30252100840337
+        },
+        "sample_peak_mib": {
+          "VmRSS": 247.76953125,
+          "RssAnon": 174.94921875,
+          "VmSwap": 0.0,
+          "AnonHugePages": 156.0
+        },
+        "cpu_percent_one_logical_core": 149.58731962454357
+      },
+      "process_lifetime_stable_within_phase": true,
+      "submission_count_deltas_by_role": {
+        "background": 5463,
+        "bar": 5,
+        "calendar": 5,
+        "clock": 5,
+        "dock": 0,
+        "system": 65
+      },
+      "scope": "One fresh restarted desktop process per phase; first120 ends at first sample at-or-after120s. Arithmetic sample means are not time-weighted means. Submission counts establish neither pixel changes nor FPS."
+    },
+    "policy": {
+      "full_300_second_window": {
+        "elapsed_seconds": 300.01091483799974,
+        "sample_count": 294,
+        "arithmetic_sample_mean_kib": {
+          "VmRSS": 216406.5306122449,
+          "RssAnon": 141650.5306122449,
+          "VmSwap": 0.0,
+          "AnonHugePages": 91825.63265306123
+        },
+        "sample_peak_kib": {
+          "VmRSS": 224308,
+          "RssAnon": 149552,
+          "VmSwap": 0,
+          "AnonHugePages": 106496
+        },
+        "arithmetic_sample_mean_mib": {
+          "VmRSS": 211.33450255102042,
+          "RssAnon": 138.33059630102042,
+          "VmSwap": 0.0,
+          "AnonHugePages": 89.6734693877551
+        },
+        "sample_peak_mib": {
+          "VmRSS": 219.05078125,
+          "RssAnon": 146.046875,
+          "VmSwap": 0.0,
+          "AnonHugePages": 104.0
+        },
+        "cpu_percent_one_logical_core": 184.33995986400402
+      },
+      "first_120_second_window": {
+        "elapsed_seconds": 120.86058711798978,
+        "sample_count": 119,
+        "arithmetic_sample_mean_kib": {
+          "VmRSS": 216490.52100840336,
+          "RssAnon": 141734.52100840336,
+          "VmSwap": 0.0,
+          "AnonHugePages": 87513.27731092437
+        },
+        "sample_peak_kib": {
+          "VmRSS": 223900,
+          "RssAnon": 149144,
+          "VmSwap": 0,
+          "AnonHugePages": 106496
+        },
+        "arithmetic_sample_mean_mib": {
+          "VmRSS": 211.4165244222689,
+          "RssAnon": 138.4126181722689,
+          "VmSwap": 0.0,
+          "AnonHugePages": 85.46218487394958
+        },
+        "sample_peak_mib": {
+          "VmRSS": 218.65234375,
+          "RssAnon": 145.6484375,
+          "VmSwap": 0.0,
+          "AnonHugePages": 104.0
+        },
+        "cpu_percent_one_logical_core": 183.2276387866709
+      },
+      "process_lifetime_stable_within_phase": true,
+      "submission_count_deltas_by_role": {
+        "background": 5936,
+        "bar": 5,
+        "calendar": 5,
+        "clock": 5,
+        "dock": 0,
+        "system": 65
+      },
+      "scope": "One fresh restarted desktop process per phase; first120 ends at first sample at-or-after120s. Arithmetic sample means are not time-weighted means. Submission counts establish neither pixel changes nor FPS."
+    }
+  },
+  "observed_phase_differences": {
+    "policy_mean_rss_lower_mib": 36.45964870323127,
+    "policy_mean_rss_lower_percent": 14.713684128008929,
+    "policy_cpu_higher_percentage_points_of_one_logical_core": 30.14334043470899,
+    "policy_cpu_higher_relative_percent": 19.54863896904746,
+    "scope": "Numerical differences between these two recorded phases. Host pressure, fixed phase ordering and absence of an eligible replicated comparison prevent general causal or net-performance acceptance."
+  },
+  "host_pressure": {
+    "phase_interiors": {
+      "baseline": {
+        "phase_rpc_observations": 57,
+        "first_rpc_width_seconds": 0.33995399400009774,
+        "last_rpc_width_seconds": 0.30709144301363267,
+        "conservative_host_interior_seconds": 297.3591730490152,
+        "host_samples_in_interior": 280,
+        "minimum_host_available_mib": 1568.1015625,
+        "raw_pswpin_counter_delta": 248028,
+        "raw_pswpout_counter_delta": 10966,
+        "aggregate_cpu_busy_fraction": 0.4010287217324432,
+        "psi_stall_time_fractions": {
+          "cpu": {
+            "some": 0.04189398252713918,
+            "full": 0.0
+          },
+          "memory": {
+            "some": 0.006300582493519296,
+            "full": 0.00621449132055326
+          },
+          "io": {
+            "some": 0.7470089646885896,
+            "full": 0.4942376873498193
+          }
+        },
+        "performance_eligibility_established": false
+      },
+      "policy": {
+        "phase_rpc_observations": 56,
+        "first_rpc_width_seconds": 0.32024770698626526,
+        "last_rpc_width_seconds": 0.3558695380052086,
+        "conservative_host_interior_seconds": 291.6252012850018,
+        "host_samples_in_interior": 275,
+        "minimum_host_available_mib": 3094.71875,
+        "raw_pswpin_counter_delta": 9449,
+        "raw_pswpout_counter_delta": 28572,
+        "aggregate_cpu_busy_fraction": 0.34522018541331956,
+        "psi_stall_time_fractions": {
+          "cpu": {
+            "some": 0.006387613250816135,
+            "full": 0.0
+          },
+          "memory": {
+            "some": 0.00644655534472386,
+            "full": 0.006418313615395567
+          },
+          "io": {
+            "some": 0.7517621832200517,
+            "full": 0.5590512626536325
+          }
+        },
+        "performance_eligibility_established": false
+      }
+    },
+    "recipe": "For each monotonic phase label, use host samples at-or-after the end of its first explicit polling RPC and at-or-before the beginning of its last polling RPC. These conservative interiors exclude uncertain boundary brackets. Host and guest clocks are not aligned or subtracted.",
+    "scope": "Host pressure intervals are shorter than guest300s windows and differ in length. Both contain substantial swap and I/O stalls; they establish neither matched eligible conditions nor a clean A/B causal result.",
+    "complete_if_controller_lost": false
+  },
+  "decision": {
+    "adopt_policy": false,
+    "reason": "Do not ship this three-variable policy: lower observed RSS accompanies higher observed CPU use in the policy phase, and the comparison is not performance-eligible. The normal environment is restored.",
+    "accepted_rss_budget": false,
+    "accepted_60fps_or_animation_smoothness": false,
+    "causal_memory_saving_or_regression_established": false,
+    "overnight_or_22_hour_stability_established": false
+  },
+  "restoration_checks": {
+    "owned_runtime_override_removed": true,
+    "normal_service_ready_after_restart_with_all_three_variables_absent": true,
+    "protected_sources_security_media_and_settings_bytes_preserved": true
+  },
+  "restoration_checks_passed": 3,
+  "owned_trial_unit_retired": {
+    "inactive": true,
+    "main_and_control_pids_zero": true,
+    "result_success": true
+  },
+  "restoration_scope": "Independent ExecStopPost owned cleanup, normal restart and35s stable readiness. Settings bytes/owner/mode are preserved; an ordinary identical-byte save may replace its inode. No user preferences were overwritten to force restoration.",
+  "earlier_attempts": [
+    {
+      "status": "failed_locally_before_ssh",
+      "failure": "fixed_protected_paths",
+      "service_or_allocator_change": false,
+      "raw_completed_report_produced": false,
+      "provenance": "Operator-confirmed local admission failure, retained separately from the completed trial."
+    },
+    {
+      "status": "failed_before_owned_unit_creation",
+      "failure": "bounded_guest_command_failed",
+      "service_or_allocator_change": false,
+      "provenance": "Failed raw report retained unchanged. Operator separately verified unit absent and owned stage empty; canonical missing runtime user-unit parent was then prepared before the successful attempt."
+    }
+  ],
+  "earlier_aged_process_observation": {
+    "approximate_age_hours": 22,
+    "rss_kib": 581544,
+    "anonymous_rss_kib": 506848,
+    "anonymous_huge_pages_kib": 487424,
+    "provenance": "Separate operator observation before restarting the service; not a sampled matched baseline.",
+    "scope": "Do not compare this aged process directly to either fresh300s phase, infer a leak fixed, or claim22-hour policy retention."
+  },
+  "privacy": "Sanitized aggregate counters and source/evidence hashes only. No settings contents/digests, private paths, process IDs/births, native object/output identities or media filenames."
+}
