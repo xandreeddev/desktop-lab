@@ -12,6 +12,11 @@ pins its source links. Merging and publication do not extend native or
 performance acceptance. The later bar-presentation handoff has its own source
 and verification scope.
 
+[PR98](https://github.com/xandreeddev/desktop-lab/pull/98) records the later
+bar-handoff build, driver comparisons and deployment checks. Its VM cohort and
+accepted-main source remain separate; the earlier measurements below retain
+their original binaries and workloads.
+
 The preceding delivery snapshot records accepted main
 `15e87287a79f4daca39bc42c1b5812a659e4e6cb`
 ([PR95](https://github.com/xandreeddev/desktop-lab/pull/95)).
