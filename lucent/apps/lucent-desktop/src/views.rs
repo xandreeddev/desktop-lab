@@ -65,6 +65,7 @@ impl Desktop {
         .map(Message::Launcher)
     }
     pub fn dock(&self, cx: &ViewContext) -> Element<Message> {
+        let viewport = self.dock_viewport();
         let width = self
             .launcher
             .panel_width()
@@ -77,13 +78,13 @@ impl Desktop {
             .max(component::dock::MINIMUM_HEIGHT);
         let reveal = self.launcher.reveal().value(cx.now).clamp(0., 1.);
         let (x, mut y) =
-            shell_layout::dock_origin(self.viewport, (cx.width, cx.height), (width, height));
+            shell_layout::dock_origin(viewport, (cx.width, cx.height), (width, height));
         let visibility = if self.launcher.expanded() {
             1.
         } else {
             self.dock.progress(cx.now)
         };
-        y += (1. - visibility) * crate::shell_layout::dock_slide_distance(self.viewport.1);
+        y += (1. - visibility) * crate::shell_layout::dock_slide_distance(viewport.1);
         let mut children = vec![];
         if reveal < 0.999 {
             children.push(self.dock_row().opacity((1. - reveal * 2.).max(0.)).at(
