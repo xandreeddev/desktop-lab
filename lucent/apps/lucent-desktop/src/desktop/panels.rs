@@ -704,6 +704,7 @@ mod tests {
         );
         let layout = Layout::new(Arc::clone(&fonts));
         let mut canvas = lucent_render::Canvas::new(lucent_render::Gpu::headless(fonts).unwrap());
+        let mut failures = Vec::new();
         for light in [false, true] {
             for width in [390_u32, 960] {
                 let mut app = Desktop::new(crate::test_adapters::adapters());
@@ -743,26 +744,92 @@ mod tests {
                     1.,
                 );
                 for scale in [1, 2] {
-                    let expected = canvas
+                    let native_expected = canvas
                         .snapshot(width, bar_cx.height as u32, scale, &baseline.paint)
+                        .unwrap();
+                    let same_extent_expected = canvas
+                        .snapshot(width, panel_cx.height as u32, scale, &baseline.paint)
                         .unwrap();
                     let bar_bytes = width as usize
                         * scale as usize
                         * lucent_design::component::panel::BAR_HEIGHT as usize
                         * scale as usize
                         * 4;
-                    for scene in [&incoming, &retained] {
+                    for (carrier, scene) in [("incoming", &incoming), ("retained", &retained)] {
                         let actual = canvas
                             .snapshot(width, panel_cx.height as u32, scale, &scene.paint)
                             .unwrap();
-                        assert!(
-                            actual[..bar_bytes] == expected[..bar_bytes],
-                            "bar pixels differ: light={light} width={width} scale={scale}"
-                        );
+                        // The same viewport must preserve the exact recipe.
+                        // Different native extents use the existing compact-dock
+                        // contract: at most one 8-bit projection quantization step.
+                        for (comparison, expected, allowed) in [
+                            ("same-extent", &same_extent_expected, 0),
+                            ("native-extent", &native_expected, 1),
+                        ] {
+                            let expected = &expected[..bar_bytes];
+                            let actual = &actual[..bar_bytes];
+                            let max_error = expected
+                                .iter()
+                                .zip(actual)
+                                .map(|(a, b)| a.abs_diff(*b))
+                                .max()
+                                .unwrap();
+                            let changed_channels =
+                                expected.iter().zip(actual).filter(|(a, b)| a != b).count();
+                            let mut changed_pixels = 0;
+                            let mut bounds = None::<(usize, usize, usize, usize)>;
+                            for (index, (a, b)) in expected
+                                .chunks_exact(4)
+                                .zip(actual.chunks_exact(4))
+                                .enumerate()
+                            {
+                                if a != b {
+                                    changed_pixels += 1;
+                                    let (x, y) = (
+                                        index % (width * scale) as usize,
+                                        index / (width * scale) as usize,
+                                    );
+                                    bounds = Some(bounds.map_or((x, y, x + 1, y + 1), |b| {
+                                        (b.0.min(x), b.1.min(y), b.2.max(x + 1), b.3.max(y + 1))
+                                    }));
+                                }
+                            }
+                            let label =
+                                format!("{comparison}-{carrier}-light{light}-{width}x{scale}");
+                            eprintln!(
+                                "bar pixels {label}: max_error={max_error} changed_channels={changed_channels} changed_pixels={changed_pixels} bounds_xyxy={bounds:?}"
+                            );
+                            if max_error > allowed {
+                                let root = std::env::var_os("LUCENT_WORKSPACE")
+                                    .map(std::path::PathBuf::from)
+                                    .unwrap_or_else(|| {
+                                        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                                            .join("../../..")
+                                    });
+                                let report =
+                                    root.join("reports/local/visual-tests/bar-handoff-carriers");
+                                std::fs::create_dir_all(&report).unwrap();
+                                for (name, pixels) in [("expected", expected), ("actual", actual)] {
+                                    image::save_buffer(
+                                        report.join(format!("{label}-{name}.png")),
+                                        pixels,
+                                        width * scale,
+                                        lucent_design::component::panel::BAR_HEIGHT as u32 * scale,
+                                        image::ColorType::Rgba8,
+                                    )
+                                    .unwrap();
+                                }
+                                failures.push(format!("{label}: max_error={max_error}"));
+                            }
+                        }
                     }
                 }
             }
         }
+        assert!(
+            failures.is_empty(),
+            "bar pixel comparisons failed: {failures:?}"
+        );
     }
     #[test]
     fn weather_controls_and_widget_have_distinct_routes_with_or_without_named_outputs() {

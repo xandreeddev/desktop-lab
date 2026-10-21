@@ -128,10 +128,12 @@ remain separate actions and clients.
 Tests cover every ordered pair of the eleven panels, repeated updates, pending tray work,
 notification dismissal, host ownership, shared hit geometry/messages and bar/grid
 geometry. Additional handoff fixtures cover close/reopen, superseded receipts,
-retired outputs and staged retargeting. The exact-pixel Vulkan comparison checks
-standalone, incoming and retained bar recipes at 1×/2× in both palettes
-individually. It does not simulate overlap edge compositing or establish native
-acceptance. Dedicated panel-host fixtures complement the isolated component
+retired outputs and staged retargeting. The Vulkan comparison requires exact
+standalone, incoming and retained bar pixels at the same framebuffer extent,
+at 1×/2× in both palettes. Comparing different native extents uses the existing
+compact-dock limit of one byte per channel for projection quantization; failures
+record carrier-specific differences and PNG strips. It does not simulate overlap
+edge compositing or establish native acceptance. Dedicated panel-host fixtures complement the isolated component
 references; screenshot tolerances remain unchanged.
 
 The global-dismissal regressions additionally cover all-panel input release,
