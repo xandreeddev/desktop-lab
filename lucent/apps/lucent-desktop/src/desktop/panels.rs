@@ -1,5 +1,6 @@
 //! Desktop foreground policy. Child components own their state/cancellation;
 //! the composition root coordinates which ordinary panel has the foreground.
+use super::bar_presentation::Carrier;
 use super::{Desktop, Message};
 use lucent_api::{Component, Effects, Element, ViewContext};
 
@@ -149,17 +150,89 @@ impl Desktop {
             .map(Panel::surface)
     }
 
-    pub(super) fn standalone_bar(&self, cx: &ViewContext) -> Element<Message> {
+    pub(super) fn reconcile_bar_presentation(&mut self, now: f64) -> bool {
+        let displays = if self.monitors.legacy() {
+            vec![Carrier {
+                role: "bar",
+                generation: 0,
+                instance: None,
+                output: None,
+            }]
+        } else {
+            self.monitors
+                .connected
+                .values()
+                .map(|monitor| Carrier {
+                    role: "bar",
+                    generation: monitor.generation,
+                    instance: Some(monitor.instance.clone()),
+                    output: Some(monitor.target.clone()),
+                })
+                .collect()
+        };
         let active = self
             .monitors
             .current()
-            .map(|(_, monitor)| &monitor.instance);
-        if self.bar_visible && self.panel_surface().is_some() && cx.instance.as_ref() == active {
-            // Retain the native reservation, while its presentation belongs to
-            // the active panel. Other monitors keep their normal bar contents.
-            Element::empty()
-        } else {
+            .map(|(_, monitor)| monitor.instance.clone());
+        let panel = self.panel_surface();
+        self.bar_presentation
+            .reconcile(displays, active.as_ref(), panel, self.bar_visible, now)
+    }
+
+    pub(crate) fn dock_viewport(&self) -> (f32, f32) {
+        self.bar_presentation
+            .retained("dock")
+            .and_then(|carrier| carrier.instance.as_ref())
+            .and_then(|instance| {
+                self.monitors
+                    .connected
+                    .values()
+                    .find(|monitor| &monitor.instance == instance)
+            })
+            .map_or(self.viewport, |monitor| monitor.viewport)
+    }
+
+    pub(super) fn standalone_bar(&self, cx: &ViewContext) -> Element<Message> {
+        if self.bar_visible && self.bar_presentation.standalone(cx.instance.as_ref()) {
             self.bar(cx)
+        } else {
+            // Keep exactly the same reserving native surface throughout handoff.
+            Element::empty()
+        }
+    }
+
+    pub(super) fn carrier_bar(&self, cx: &ViewContext, carrier: &Carrier) -> Element<Message> {
+        let bar_context = ViewContext {
+            surface: "bar",
+            instance: carrier.instance.clone(),
+            width: cx.width,
+            height: lucent_design::component::panel::BAR_HEIGHT,
+            now: cx.now,
+            density: cx.density,
+        };
+        self.bar(&bar_context)
+            .size(cx.width, bar_context.height)
+            .at(0., 0.)
+    }
+
+    pub(super) fn retain_bar_carriers(&self, surfaces: &mut [lucent_api::SurfaceSpec]) {
+        use lucent_api::{Anchor, Keyboard, Layer, PointerInput};
+        for surface in surfaces {
+            if let Some(carrier) = self.bar_presentation.retained(surface.id) {
+                // The child may already be unmounted. Keep only its last bar's
+                // native carrier until the next owner submits; never retain its
+                // controls, keyboard ownership or child operations.
+                surface.output = carrier.output.clone();
+                surface.visible = true;
+                surface.layer = Layer::Overlay;
+                surface.anchor = Anchor::Fill;
+                surface.width = 0;
+                surface.height = 0;
+                surface.keyboard = Keyboard::None;
+                surface.pointer_input = PointerInput::None;
+                surface.exclusive_zone = -1;
+                surface.redraw_group = Some("bar");
+            }
         }
     }
 
@@ -168,30 +241,31 @@ impl Desktop {
         cx: &ViewContext,
         content: Element<Message>,
     ) -> Element<Message> {
-        if !self.bar_visible || self.panel_surface() != Some(cx.surface) {
-            return content;
+        if let Some(carrier) = self.bar_presentation.retained(cx.surface) {
+            // Closed children keep their exit paint. On output retarget, the
+            // still-open child belongs to the incoming output, so only its old
+            // bar remains on this carrier. Neither case retains action authority.
+            let content = if self.panel_surface() == Some(cx.surface) {
+                Element::empty()
+            } else {
+                content
+            };
+            return Element::stack(vec![content, self.carrier_bar(cx, carrier)])
+                .fill()
+                .map(|_| Message::Ignore);
         }
-        // An exclusive layer can own pointer input outside its input region on
-        // Hyprland. Compose related controls inside that native focus scope,
-        // using the same bar component and SDK layout/hit testing everywhere.
-        let bar_context = ViewContext {
-            surface: "bar",
-            instance: self
-                .monitors
-                .current()
-                .map(|(_, monitor)| monitor.instance.clone()),
-            width: cx.width,
-            height: lucent_design::component::panel::BAR_HEIGHT,
-            now: cx.now,
-            density: cx.density,
+        let Some(carrier) = self
+            .bar_presentation
+            .incoming(cx.surface)
+            .filter(|_| self.bar_visible)
+        else {
+            return content;
         };
-        Element::stack(vec![
-            content,
-            self.bar(&bar_context)
-                .size(cx.width, bar_context.height)
-                .at(0., 0.),
-        ])
-        .fill()
+        // The exclusive panel still owns the real controls on Hyprland. Keep
+        // the previous pixel owner until this complete incoming buffer submits.
+        // Semantic capsule surfaces are opaque; overlap is finite admission
+        // state, not an opacity animation or a cross-surface atomicity claim.
+        Element::stack(vec![content, self.carrier_bar(cx, carrier)]).fill()
     }
 }
 
@@ -222,6 +296,38 @@ mod tests {
     fn contains(tree: &Element<Message>, id: &str) -> bool {
         tree.id == id || tree.children.iter().any(|child| contains(child, id))
     }
+    fn submitted(
+        app: &mut Desktop,
+        surface: &'static str,
+        instance: Option<lucent_api::SurfaceInstance>,
+    ) {
+        submitted_at(app, surface, instance, 2.);
+    }
+    fn submitted_at(
+        app: &mut Desktop,
+        surface: &'static str,
+        instance: Option<lucent_api::SurfaceInstance>,
+        now: f64,
+    ) -> Effects<Message> {
+        let event = Event::FrameSubmitted {
+            surface,
+            width: 1920.,
+            height: 1080.,
+            now,
+        };
+        let event = instance.map_or(event.clone(), |instance| Event::Scoped {
+            instance,
+            event: Box::new(event),
+        });
+        let mut effects = Effects {
+            now,
+            ..Default::default()
+        };
+        if let Some(message) = app.event(event) {
+            app.update(message, &mut effects);
+        }
+        effects
+    }
     fn context(surface: &'static str) -> ViewContext {
         ViewContext {
             surface,
@@ -235,6 +341,485 @@ mod tests {
             now: 1.,
             density: lucent_api::Density::ONE,
         }
+    }
+    #[test]
+    fn opening_and_switching_keep_pixels_but_retire_old_panel_controls() {
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        let preferences = serde_json::to_value(&app.settings).unwrap();
+        app.update(open(Panel::Audio), &mut Effects::default());
+        assert!(contains(&app.view(&context("bar")), "bar-audio"));
+        assert!(contains(&app.view(&context("audio")), "audio-panel"));
+        submitted(&mut app, "audio", None);
+        assert!(!contains(&app.view(&context("bar")), "bar-audio"));
+
+        app.update(open(Panel::Network), &mut Effects::default());
+        let outgoing = app
+            .surfaces()
+            .into_iter()
+            .find(|s| s.id == "audio")
+            .unwrap();
+        assert!(outgoing.visible);
+        assert_eq!(outgoing.keyboard, Keyboard::None);
+        assert_eq!(outgoing.pointer_input, PointerInput::None);
+        let retained = app.view(&context("audio"));
+        assert!(contains(&retained, "bar-audio"));
+        assert!(contains(&retained, "audio-panel"));
+        assert!(
+            app.event(Event::Key {
+                surface: "audio",
+                key: lucent_api::Key::Escape
+            })
+            .is_none()
+        );
+        assert!(
+            app.event(Event::Resize {
+                surface: "audio",
+                width: 400.,
+                height: 300.,
+                scale: 1,
+                density: lucent_api::Density::ONE
+            })
+            .is_none()
+        );
+        assert!(contains(&app.view(&context("network")), "network-panel"));
+        submitted(&mut app, "network", None);
+        assert!(app.bar_presentation.retained("audio").is_none());
+        app.update(
+            Message::Network(crate::network::Message::Close),
+            &mut Effects::default(),
+        );
+        assert!(contains(&app.view(&context("bar")), "bar-audio"));
+        assert!(contains(&app.view(&context("network")), "bar-audio"));
+        submitted(&mut app, "bar", None);
+        assert!(app.bar_presentation.retained("network").is_none());
+        assert_eq!(serde_json::to_value(&app.settings).unwrap(), preferences);
+        assert!(app.surfaces().iter().any(|s| s.id == "bar"
+            && s.visible
+            && s.exclusive_zone == lucent_design::component::panel::BAR_HEIGHT as i32));
+    }
+
+    #[test]
+    fn retargeted_panel_stays_passive_on_old_output_until_its_bar_submits() {
+        use lucent_api::{DisplayOutput, OutputName};
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        app.update(
+            Message::Outputs(
+                ["LEFT", "RIGHT"]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, name)| DisplayOutput {
+                        global: index as u32 + 1,
+                        name: Some(OutputName::new(name).unwrap()),
+                        logical_size: Some((1920, 1080)),
+                        integer_scale: 1,
+                    })
+                    .collect(),
+            ),
+            &mut Effects::default(),
+        );
+        app.update(open(Panel::Audio), &mut Effects::default());
+        submitted(&mut app, "audio", None);
+        let left = app
+            .monitors
+            .connected
+            .values()
+            .find(|m| m.target.as_str() == "LEFT")
+            .unwrap()
+            .instance
+            .clone();
+        app.update(
+            Message::SelectMonitor(lucent_domain::MonitorId::new("RIGHT").unwrap()),
+            &mut Effects::default(),
+        );
+        let pending = app
+            .surfaces()
+            .into_iter()
+            .find(|s| s.id == "audio")
+            .unwrap();
+        assert_eq!(pending.output.as_ref().unwrap().as_str(), "LEFT");
+        assert_eq!(pending.keyboard, Keyboard::None);
+        assert_eq!(pending.pointer_input, PointerInput::None);
+        assert!(!contains(&app.view(&context("audio")), "audio-panel"));
+        submitted(&mut app, "bar", Some(left));
+        let incoming = app
+            .surfaces()
+            .into_iter()
+            .find(|s| s.id == "audio")
+            .unwrap();
+        assert_eq!(incoming.output.as_ref().unwrap().as_str(), "RIGHT");
+        assert_eq!(incoming.keyboard, Keyboard::Exclusive);
+        assert_eq!(incoming.pointer_input, PointerInput::All);
+        assert!(contains(&app.view(&context("audio")), "audio-panel"));
+    }
+
+    #[test]
+    fn closing_paint_continues_unchanged_across_bar_acknowledgement() {
+        fn panel(tree: &Element<Message>) -> Option<&Element<Message>> {
+            if tree.id == "audio-panel" {
+                Some(tree)
+            } else {
+                tree.children.iter().find_map(panel)
+            }
+        }
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        app.update(open(Panel::Audio), &mut Effects::default());
+        submitted_at(&mut app, "audio", None, 2.);
+        app.update(
+            Message::Audio(crate::audio::Message::Close),
+            &mut Effects {
+                now: 3.,
+                ..Default::default()
+            },
+        );
+        let mut cx = context("audio");
+        cx.now = 3.05;
+        let before = app.view(&cx);
+        let before = panel(&before).unwrap();
+        assert!(before.style.opacity > 0. && before.style.opacity < 1.);
+        let expected = (before.style.opacity, before.style.position);
+        submitted_at(&mut app, "bar", None, 3.05);
+        let after = app.view(&cx);
+        let after = panel(&after).unwrap();
+        assert_eq!((after.style.opacity, after.style.position), expected);
+        assert_eq!(
+            app.surfaces()
+                .iter()
+                .find(|s| s.id == "audio")
+                .unwrap()
+                .pointer_input,
+            PointerInput::None
+        );
+    }
+
+    #[test]
+    fn compacted_launcher_keeps_fullscreen_passive_carrier_until_bar_submits() {
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        app.viewport = (1920., 1080.);
+        app.update(open(Panel::Launcher), &mut Effects::default());
+        submitted_at(&mut app, "dock", None, 1.);
+        app.update(
+            Message::Launcher(crate::launcher::Message::Close),
+            &mut Effects {
+                now: 2.,
+                ..Default::default()
+            },
+        );
+        let compacted = submitted_at(&mut app, "dock", None, 10.);
+        assert!(
+            compacted
+                .recreate_surfaces
+                .contains(&lucent_api::SurfaceAddress::new("dock")),
+            "child recreation retains the last good fullscreen carrier through the SDK"
+        );
+        assert!(
+            !app.launcher.expanded(),
+            "child's real closing-frame bookkeeping was delivered"
+        );
+        let retained = app.surfaces().into_iter().find(|s| s.id == "dock").unwrap();
+        assert_eq!(retained.anchor, lucent_api::Anchor::Fill);
+        assert_eq!((retained.width, retained.height), (0, 0));
+        assert_eq!(retained.pointer_input, PointerInput::None);
+        assert_eq!(retained.keyboard, Keyboard::None);
+        assert!(contains(&app.view(&context("dock")), "bar-audio"));
+        let released = submitted_at(&mut app, "bar", None, 11.);
+        assert!(
+            released
+                .recreate_surfaces
+                .contains(&lucent_api::SurfaceAddress::new("dock")),
+            "release must renew the actual compact origin"
+        );
+        let compact = app.surfaces().into_iter().find(|s| s.id == "dock").unwrap();
+        assert_eq!(compact.anchor, lucent_api::Anchor::Bottom);
+        assert_eq!(
+            compact.height,
+            crate::shell_layout::dock_surface_height(1080.)
+        );
+    }
+
+    #[test]
+    fn scoped_background_submission_keeps_its_explicit_native_instance() {
+        use lucent_api::{DisplayOutput, OutputName};
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        app.update(
+            Message::Outputs(vec![DisplayOutput {
+                global: 1,
+                name: Some(OutputName::new("LEFT").unwrap()),
+                logical_size: Some((1920, 1080)),
+                integer_scale: 1,
+            }]),
+            &mut Effects::default(),
+        );
+        let instance = app
+            .monitors
+            .connected
+            .values()
+            .next()
+            .unwrap()
+            .instance
+            .clone();
+        let message = app
+            .event(Event::Scoped {
+                instance: instance.clone(),
+                event: Box::new(Event::FrameSubmitted {
+                    surface: "background",
+                    width: 1920.,
+                    height: 1080.,
+                    now: 1.,
+                }),
+            })
+            .unwrap();
+        assert!(
+            matches!(message, Message::BackgroundPresented(Some(ref actual), at) if actual == &instance && at == 1.)
+        );
+        app.update(
+            message,
+            &mut Effects {
+                now: 1.,
+                ..Default::default()
+            },
+        );
+        assert!(app.backgrounds.contains_key(&Some(instance)));
+    }
+
+    #[test]
+    fn same_name_new_output_generation_starts_with_fresh_bar_and_rejects_receipt() {
+        use lucent_api::{DisplayOutput, OutputName};
+        let catalog = |global| {
+            Message::Outputs(vec![DisplayOutput {
+                global,
+                name: Some(OutputName::new("LEFT").unwrap()),
+                logical_size: Some((1920, 1080)),
+                integer_scale: 1,
+            }])
+        };
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        app.update(catalog(1), &mut Effects::default());
+        let old_generation = app.monitors.connected.values().next().unwrap().generation;
+        let instance = app
+            .monitors
+            .connected
+            .values()
+            .next()
+            .unwrap()
+            .instance
+            .clone();
+        app.update(open(Panel::Audio), &mut Effects::default());
+        submitted_at(&mut app, "audio", None, 1.);
+        app.update(
+            open(Panel::Network),
+            &mut Effects {
+                now: 2.,
+                ..Default::default()
+            },
+        );
+        let stale = app
+            .bar_presentation
+            .receipt(&Event::FrameSubmitted {
+                surface: "network",
+                width: 1920.,
+                height: 1080.,
+                now: 3.,
+            })
+            .unwrap();
+        app.update(
+            catalog(2),
+            &mut Effects {
+                now: 4.,
+                ..Default::default()
+            },
+        );
+        assert_ne!(
+            app.monitors.connected.values().next().unwrap().generation,
+            old_generation
+        );
+        assert!(!app.bar_presentation.submitted(stale));
+        assert!(app.bar_presentation.retained("audio").is_none());
+        let mut cx = context("bar");
+        cx.instance = Some(instance);
+        assert!(contains(&app.view(&cx), "bar-audio"));
+        assert!(app.network.open());
+        submitted_at(&mut app, "network", None, 5.);
+        assert!(!contains(&app.view(&cx), "bar-audio"));
+    }
+
+    #[test]
+    fn stale_bar_receipt_does_not_discard_independent_child_frame_bookkeeping() {
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        app.update(open(Panel::Weather), &mut Effects::default());
+        submitted_at(&mut app, "weather-controls", None, 1.);
+        app.update(
+            Message::Weather(crate::weather::Message::Close),
+            &mut Effects {
+                now: 2.,
+                ..Default::default()
+            },
+        );
+        let receipt = app
+            .bar_presentation
+            .receipt(&Event::FrameSubmitted {
+                surface: "bar",
+                width: 1920.,
+                height: 1080.,
+                now: 3.,
+            })
+            .unwrap();
+        app.update(
+            open(Panel::Audio),
+            &mut Effects {
+                now: 4.,
+                ..Default::default()
+            },
+        );
+        assert!(app.weather.mounted);
+        app.update(
+            Message::BarPresented(
+                receipt,
+                Some(Box::new(Message::Weather(crate::weather::Message::Frame(
+                    10.,
+                )))),
+            ),
+            &mut Effects {
+                now: 10.,
+                ..Default::default()
+            },
+        );
+        assert!(!app.weather.mounted);
+        assert!(
+            app.bar_presentation.retained("weather-controls").is_some(),
+            "child unmount does not remove old pixels before incoming submission"
+        );
+    }
+
+    #[test]
+    #[ignore = "requires Vulkan; run explicitly with --ignored"]
+    fn bar_handoff_carriers_keep_identical_pixels() {
+        use lucent_ui::{Interaction, Layout};
+        use std::sync::Arc;
+        let app = Desktop::new(crate::test_adapters::adapters());
+        let fonts = Arc::new(
+            app.fonts()
+                .into_iter()
+                .map(|bytes| lucent_ui::text::Font::from_bytes(bytes, Default::default()).unwrap())
+                .collect(),
+        );
+        let layout = Layout::new(Arc::clone(&fonts));
+        let mut canvas = lucent_render::Canvas::new(lucent_render::Gpu::headless(fonts).unwrap());
+        let mut failures = Vec::new();
+        for light in [false, true] {
+            for width in [390_u32, 960] {
+                let mut app = Desktop::new(crate::test_adapters::adapters());
+                app.settings.light = light;
+                let mut bar_cx = context("bar");
+                bar_cx.width = width as f32;
+                bar_cx.height = lucent_design::component::panel::BAR_HEIGHT
+                    + lucent_design::component::tooltip::SURFACE_ROOM;
+                let baseline = layout.build(
+                    &app.view(&bar_cx),
+                    bar_cx.width,
+                    bar_cx.height,
+                    &Interaction::default(),
+                    1.,
+                );
+                app.update(open(Panel::Audio), &mut Effects::default());
+                let mut panel_cx = context("audio");
+                panel_cx.width = width as f32;
+                panel_cx.height = 580.;
+                let incoming = app
+                    .theme()
+                    .apply(app.compose_panel_bar(&panel_cx, Element::empty()));
+                let incoming = layout.build(
+                    &incoming,
+                    panel_cx.width,
+                    panel_cx.height,
+                    &Interaction::default(),
+                    1.,
+                );
+                submitted(&mut app, "audio", None);
+                app.update(open(Panel::Network), &mut Effects::default());
+                let retained = layout.build(
+                    &app.view(&panel_cx),
+                    panel_cx.width,
+                    panel_cx.height,
+                    &Interaction::default(),
+                    1.,
+                );
+                for scale in [1, 2] {
+                    let native_expected = canvas
+                        .snapshot(width, bar_cx.height as u32, scale, &baseline.paint)
+                        .unwrap();
+                    let same_extent_expected = canvas
+                        .snapshot(width, panel_cx.height as u32, scale, &baseline.paint)
+                        .unwrap();
+                    let bar_bytes = width as usize
+                        * scale as usize
+                        * lucent_design::component::panel::BAR_HEIGHT as usize
+                        * scale as usize
+                        * 4;
+                    for (carrier, scene) in [("incoming", &incoming), ("retained", &retained)] {
+                        let actual = canvas
+                            .snapshot(width, panel_cx.height as u32, scale, &scene.paint)
+                            .unwrap();
+                        // The same viewport must preserve the exact recipe.
+                        // Different native extents use the existing compact-dock
+                        // contract: at most one 8-bit projection quantization step.
+                        for (comparison, expected, allowed) in [
+                            ("same-extent", &same_extent_expected, 0),
+                            ("native-extent", &native_expected, 1),
+                        ] {
+                            let expected = &expected[..bar_bytes];
+                            let actual = &actual[..bar_bytes];
+                            let max_error = expected
+                                .iter()
+                                .zip(actual)
+                                .map(|(a, b)| a.abs_diff(*b))
+                                .max()
+                                .unwrap();
+                            let changed_channels =
+                                expected.iter().zip(actual).filter(|(a, b)| a != b).count();
+                            let mut changed_pixels = 0;
+                            let mut bounds = None::<(usize, usize, usize, usize)>;
+                            for (index, (a, b)) in expected
+                                .as_chunks::<4>()
+                                .0
+                                .iter()
+                                .zip(actual.as_chunks::<4>().0)
+                                .enumerate()
+                            {
+                                if a != b {
+                                    changed_pixels += 1;
+                                    let (x, y) = (
+                                        index % (width * scale) as usize,
+                                        index / (width * scale) as usize,
+                                    );
+                                    bounds = Some(bounds.map_or((x, y, x + 1, y + 1), |b| {
+                                        (b.0.min(x), b.1.min(y), b.2.max(x + 1), b.3.max(y + 1))
+                                    }));
+                                }
+                            }
+                            let label =
+                                format!("{comparison}-{carrier}-light{light}-{width}x{scale}");
+                            eprintln!(
+                                "bar pixels {label}: max_error={max_error} changed_channels={changed_channels} changed_pixels={changed_pixels} bounds_xyxy={bounds:?}"
+                            );
+                            if max_error > allowed {
+                                crate::visual_tests::save_bar_handoff_comparison(
+                                    &label,
+                                    width * scale,
+                                    lucent_design::component::panel::BAR_HEIGHT as u32 * scale,
+                                    expected,
+                                    actual,
+                                );
+                                failures.push(format!("{label}: max_error={max_error}"));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "bar pixel comparisons failed: {failures:?}"
+        );
     }
     #[test]
     fn weather_controls_and_widget_have_distinct_routes_with_or_without_named_outputs() {
@@ -341,6 +926,7 @@ mod tests {
             .rect;
         for panel in PANELS {
             app.update(open(panel), &mut Effects::default());
+            submitted(&mut app, panel.surface(), None);
             assert!(!contains(&app.view(&context("bar")), "bar-audio"));
             let cx = context(panel.surface());
             let scene = layout.build(
@@ -369,6 +955,7 @@ mod tests {
             Message::Notifications(crate::notifications::Message::Hide),
             &mut Effects::default(),
         );
+        submitted(&mut app, "bar", None);
         assert!(contains(&app.view(&context("bar")), "bar-audio"));
         assert!(app.surfaces().iter().any(|s| s.id == "bar"
             && s.visible
@@ -402,6 +989,7 @@ mod tests {
             &mut Effects::default(),
         );
         app.update(open(Panel::Launcher), &mut Effects::default());
+        submitted(&mut app, "dock", None);
         for (id, monitor) in &app.monitors.connected {
             let mut cx = context("bar");
             cx.instance = Some(monitor.instance.clone());
@@ -411,6 +999,17 @@ mod tests {
         let mut effects = Effects::default();
         app.update(Message::SelectMonitor(selected.clone()), &mut effects);
         assert!(effects.redraw.contains("bar"));
+        let old_instance = app
+            .monitors
+            .connected
+            .iter()
+            .find(|(id, _)| **id != selected)
+            .unwrap()
+            .1
+            .instance
+            .clone();
+        submitted(&mut app, "bar", Some(old_instance));
+        submitted(&mut app, "dock", None);
         for (id, monitor) in &app.monitors.connected {
             let mut cx = context("bar");
             cx.instance = Some(monitor.instance.clone());

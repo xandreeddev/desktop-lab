@@ -11,6 +11,30 @@ use lucent_domain::{AppId, Application as App, ClockSnapshot, Date, LaunchComman
 use lucent_ui::{Interaction, Layout, Paint, Scene};
 use std::{path::PathBuf, sync::Arc};
 
+pub(crate) fn save_bar_handoff_comparison(
+    label: &str,
+    width: u32,
+    height: u32,
+    expected: &[u8],
+    actual: &[u8],
+) {
+    let root = std::env::var_os("LUCENT_WORKSPACE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.."));
+    let report = root.join("reports/local/visual-tests/bar-handoff-carriers");
+    std::fs::create_dir_all(&report).unwrap();
+    for (name, pixels) in [("expected", expected), ("actual", actual)] {
+        image::save_buffer(
+            report.join(format!("{label}-{name}.png")),
+            pixels,
+            width,
+            height,
+            image::ColorType::Rgba8,
+        )
+        .unwrap();
+    }
+}
+
 fn fixture(count: usize, light: bool) -> Desktop {
     let mut app = Desktop::new(crate::test_adapters::adapters());
     app.settings.light = light;
@@ -301,6 +325,42 @@ fn open_live_fixture(app: &mut Desktop) {
         })
         .expect("live selector handles its first submitted frame");
     app.update(message, &mut effects);
+}
+/// Offscreen references settle the normal close and acknowledge both the
+/// incoming standalone bar and the closing dock; they do not reset child state.
+fn close_launcher_fixture(app: &mut Desktop) {
+    let submitted = |app: &mut Desktop, surface: &'static str, now: f64| {
+        if let Some(message) = app.event(Event::FrameSubmitted {
+            surface,
+            width: app.viewport.0,
+            height: if surface == "bar" {
+                lucent_design::component::panel::BAR_HEIGHT
+                    + lucent_design::component::tooltip::SURFACE_ROOM
+            } else {
+                app.viewport.1
+            },
+            now,
+        }) {
+            app.update(
+                message,
+                &mut Effects {
+                    now,
+                    ..Default::default()
+                },
+            );
+        }
+    };
+    submitted(app, "dock", 0.);
+    app.update(
+        Message::Launcher(launcher::Message::Close),
+        &mut Effects::default(),
+    );
+    if app.bar_visible {
+        submitted(app, "bar", 1.);
+    }
+    submitted(app, "dock", 1.);
+    assert!(!app.launcher.open());
+    assert!(!app.launcher.expanded());
 }
 /// The offscreen canvas is immediately available at the requested full size.
 /// Native tests separately exercise the asynchronous configure/submission path.
@@ -2186,7 +2246,10 @@ fn visual_regressions() {
             let mut app = fixture(count, light);
             // Component references isolate their content; dedicated panel-host
             // fixtures cover the composed native bar/panel presentation.
-            app.bar_visible = name.starts_with("panel-host-");
+            let standalone_bar = name.starts_with("bar")
+                || name.starts_with("tray-bar-")
+                || name.starts_with("monitor-bar-");
+            app.bar_visible = name.starts_with("panel-host-") || standalone_bar;
             let preference = match name {
                 "launcher-size-small" => crate::shell_layout::LAUNCHER_PRESETS[0].1,
                 "launcher-size-large" => crate::shell_layout::LAUNCHER_PRESETS[2].1,
@@ -2246,6 +2309,9 @@ fn visual_regressions() {
             }
             if name == "palette-ocean" {
                 app.settings.palette = Some(lucent_design::palettes()[2].clone());
+            }
+            if standalone_bar || name == "dock" || name.starts_with("dock-") {
+                close_launcher_fixture(&mut app);
             }
             let scene = if name.starts_with("tooltip-") || name.starts_with("popover-controls") {
                 overlays::fixture(name, &mut app, &layout, now, width, height)
@@ -2718,21 +2784,6 @@ fn visual_regressions() {
                         );
                     }
                 } else {
-                    if app.launcher.open() {
-                        app.update(Message::Launcher(launcher::Message::Close), &mut effects);
-                        if let Some(message) = app.event(Event::FrameSubmitted {
-                            surface: "dock",
-                            width,
-                            height,
-                            now: 10.,
-                        }) {
-                            let mut settled = Effects {
-                                now: 10.,
-                                ..Default::default()
-                            };
-                            app.update(message, &mut settled);
-                        }
-                    }
                     if name == "dock-hidden" {
                         app.settings.dock.auto_hide = true;
                         app.dock.fixture_hidden();
@@ -3754,12 +3805,6 @@ fn visual_regressions() {
                 };
                 layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
             } else {
-                if name == "dock" {
-                    app.update(
-                        Message::Launcher(launcher::Message::Close),
-                        &mut Effects::default(),
-                    );
-                }
                 scene(&app, &layout, &mut Interaction::default(), now)
             };
             let assert_visible = |id: &str| {
@@ -5275,8 +5320,7 @@ fn launcher_pins_are_native_actions_and_hidden_dock_keeps_only_its_hotspot() {
             .all(|t| t.queue != crate::work::CONTROLS)
     );
     assert!(app.launcher.open());
-    let mut hidden_app = fixture(6, false);
-    hidden_app.launcher = Default::default();
+    let mut hidden_app = Desktop::new(crate::test_adapters::adapters());
     hidden_app.settings.dock.auto_hide = true;
     hidden_app.dock.fixture_hidden();
     let tree = hidden_app.view(&ViewContext {
