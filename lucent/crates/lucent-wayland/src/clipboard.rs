@@ -1,5 +1,5 @@
 //! Core Wayland text selection. No desktop identities, shell commands or history.
-use crate::State;
+use crate::{InputRefresh, State};
 use calloop::{
     Mode, PostAction, RegistrationToken,
     generic::Generic,
@@ -244,7 +244,9 @@ impl<A: Application> State<A> {
                 if let Some(guard) = &pending.guard {
                     let address = guard.target.address();
                     if state.id_for(&guard.surface).as_ref() == Some(&address) {
-                        for message in state.refresh_input_scene(&address, false, true) {
+                        for message in
+                            state.refresh_input_scene(&address, false, InputRefresh::Current)
+                        {
                             if state.id_for(&guard.surface).as_ref() != Some(&address) {
                                 break;
                             }

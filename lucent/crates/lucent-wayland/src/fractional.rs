@@ -118,10 +118,8 @@ impl<A: Application> Dispatch<WpFractionalScaleV1, wl_surface::WlSurface> for St
             });
             if let Some(message) = state.app.event(event) {
                 state.message(message, qh);
-                return;
             }
         }
-        state.draw_all(qh);
     }
 }
 wayland_client::delegate_noop!(@<A:Application> State<A>:WpFractionalScaleManagerV1);

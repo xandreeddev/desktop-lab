@@ -17,6 +17,16 @@ fn action<M: Clone>(hit: &Hit<M>, button: MouseButton) -> Option<M> {
     }
 }
 
+fn plain_primary_action<M>(hit: &Hit<M>) -> bool {
+    hit.click.is_some()
+        && hit.drag.is_none()
+        && hit.slider.is_none()
+        && hit.scroll.is_none()
+        && hit.input.is_none()
+        && hit.edit.is_none()
+        && hit.text_edit.is_none()
+}
+
 impl<M: Clone> Interaction<M> {
     pub fn press_button(
         &mut self,
@@ -76,6 +86,31 @@ impl<M: Clone> Interaction<M> {
     }
 
     pub(super) fn synchronize_buttons(&mut self, scene: &Scene<M>) {
+        // A plain primary action must not retain a removed control or an old
+        // callback across synchronous client updates before the next paint.
+        // Text selection, dragging and value controls keep their own capture
+        // policies in Interaction::synchronize. An unchanged ID/geometry cannot
+        // convert a plain press into a different gesture role; that requires a
+        // new press. This adds no native input authority.
+        if let Some(press) = self.press.as_mut().filter(|press| {
+            plain_primary_action(&press.hit)
+                && press.text_anchor.is_none()
+                && press.scroll_grab.is_none()
+        }) {
+            let current = scene.hits.iter().find(|hit| {
+                hit.id == press.hit.id
+                    && hit.rect == press.hit.rect
+                    && hit.clip == press.hit.clip
+                    && hit.radius == press.hit.radius
+                    && hit.parts == press.hit.parts
+                    && plain_primary_action(hit)
+            });
+            if let Some(hit) = current {
+                press.hit = hit.clone();
+            } else {
+                self.press = None;
+            }
+        }
         let Some(press) = &mut self.alternate_press else {
             return;
         };
@@ -229,6 +264,58 @@ mod tests {
             }
             assert_eq!(input.release_button(30., 30., MouseButton::Secondary), None);
         }
+    }
+    #[test]
+    fn held_plain_primary_does_not_become_a_new_drag_capture() {
+        let mut input = Interaction::default();
+        let previous = scene(control(), &input);
+        press(&mut input, &previous, 30., 30., MouseButton::Primary);
+        let current = scene(control().on_drag(|_| Message::Covered), &input);
+        input.synchronize(&current);
+        assert!(input.motion(&current, 50., 30., 0.).is_empty());
+        assert_eq!(input.release_button(50., 30., MouseButton::Primary), None);
+
+        // Changing role retires only the old press, not the new control.
+        press(&mut input, &current, 30., 30., MouseButton::Primary);
+        assert_eq!(input.motion(&current, 50., 30., 0.), vec![Message::Covered]);
+        assert_eq!(
+            input.release_button(50., 30., MouseButton::Primary),
+            Some(Message::Covered)
+        );
+    }
+    #[test]
+    fn held_plain_primary_does_not_become_a_new_slider_capture() {
+        let mut input = Interaction::default();
+        let previous = scene(control(), &input);
+        press(&mut input, &previous, 30., 30., MouseButton::Primary);
+        let current = scene(
+            Element::slider(lucent_api::SliderSpec::new(0.25, 0.01).unwrap(), |_| {
+                Message::Covered
+            })
+            .size(80., 60.)
+            .radius(16.)
+            .id("control")
+            .on_click(Message::Primary),
+            &input,
+        );
+        input.synchronize(&current);
+        assert!(input.motion(&current, 60., 30., 0.).is_empty());
+        assert_eq!(input.release_button(60., 30., MouseButton::Primary), None);
+
+        assert_eq!(
+            input.press_button(
+                &current,
+                30.,
+                30.,
+                MouseButton::Primary,
+                KeyModifiers::default(),
+            ),
+            Some(Message::Covered)
+        );
+        assert_eq!(
+            input.release_button(30., 30., MouseButton::Primary),
+            Some(Message::Covered)
+        );
     }
     #[test]
     fn focused_context_key_uses_secondary_handler_without_changing_primary_enter() {
