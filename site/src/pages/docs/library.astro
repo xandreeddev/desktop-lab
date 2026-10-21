@@ -92,14 +92,16 @@ const sections: [string, string][] = [['scope','01 · Library boundary'],['contr
   connect to Wayland; create shared GPU and layout resources
   register event sources with calloop
   call init; reconcile surfaces and subscriptions
-  wait for events
+  wait for events; dispatch the available batch
 
-message → update → effects → invalidate surface
+inside dispatch: message → update → effects → invalidate surface
+after dispatch, once per drawable dirty surface:
 configured + dirty + no pending frame
   → view → layout → paint and hit regions
   → wgpu/Vulkan commands → present buffer
 Wayland frame callback → allow the next dirty frame`} label="Simplified implementation; not copyable Rust" />
     <p>Pointer and keyboard events arrive through Wayland. An optional local command socket translates external strings into application messages. Effects run on named ordered queues; independent queues and subscription workers can run concurrently. All return messages to the event loop, which owns the application state.</p>
+    <p>GPU painting happens once after the available event batch, using the resulting state. Input layout remains synchronous, so another click or key uses current controls while a compositor callback is pending. A successful submission can request one coalesced wake for newly drawable followup work; idle or callback-blocked surfaces do not poll. Read <a href={sourceUrl('docs/event-batches.md')}>the event-batching guide</a> for input capture, submission handoffs and frame admission.</p>
     <p><code>Effects::task_on_with_failure(queue, run, on_failure)</code> attaches a small message constructor to the specific operation. Rejection or panic returns its own typed result even when several features share a queue; <code>Effects::delegate</code> lifts both success and failure. The mapper must not block because rejected work is handled directly on the UI thread. Cancellation skips it. Without a mapper, or if the mapper panics, <code>Application::runtime_failure</code> handles the safe failure. The desktop declares eight lanes in <code>work.rs</code>; pairing answers share the short controls lane while native methods use their own lane.</p>
     <p>Background delivery holds at most 64 waiting messages. A full queue pauses its producer; it never blocks the UI thread to enqueue. Subscription cancellation releases that wait and invalidates already queued events from the old lifetime. The runtime admits at most 64 live subscription bodies, including streams still stopping. Do not hold a lock needed by the UI while emitting. Payload sizes and service reconnection remain application/adapter responsibilities.</p>
     <p><code>Subscription::map(ParentMessage::Child)</code> lifts an injected child's stream into its parent without creating another worker. Its identity, cancellation and bounded emitter remain the same lifetime. For an operation that must cancel and report admission failure, use <code>Effects::task_cancellable_on_with_failure</code>. Lucent's media import uses this contract so closing retires pending delivery and queue rejection clears the specific import ticket.</p>
