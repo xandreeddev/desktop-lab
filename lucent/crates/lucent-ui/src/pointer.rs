@@ -76,6 +76,31 @@ impl<M: Clone> Interaction<M> {
     }
 
     pub(super) fn synchronize_buttons(&mut self, scene: &Scene<M>) {
+        // A plain primary action must not retain a removed control or an old
+        // callback across synchronous client updates before the next paint.
+        // Text selection, dragging and value controls keep their own capture
+        // policies in Interaction::synchronize.
+        if let Some(press) = self.press.as_mut().filter(|press| {
+            press.hit.click.is_some()
+                && press.hit.drag.is_none()
+                && press.text_anchor.is_none()
+                && press.hit.slider.is_none()
+                && press.scroll_grab.is_none()
+        }) {
+            let current = scene.hits.iter().find(|hit| {
+                hit.id == press.hit.id
+                    && hit.rect == press.hit.rect
+                    && hit.clip == press.hit.clip
+                    && hit.radius == press.hit.radius
+                    && hit.parts == press.hit.parts
+                    && hit.click.is_some()
+            });
+            if let Some(hit) = current {
+                press.hit = hit.clone();
+            } else {
+                self.press = None;
+            }
+        }
         let Some(press) = &mut self.alternate_press else {
             return;
         };
