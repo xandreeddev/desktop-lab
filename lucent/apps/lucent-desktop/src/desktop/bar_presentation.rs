@@ -79,7 +79,7 @@ impl Presentation {
                 .displays
                 .entry(display.instance.clone())
                 .or_insert_with(|| {
-                    changed = true;
+                    changed |= target != display;
                     Transfer {
                         owner: display.clone(),
                         target: target.clone(),
@@ -209,6 +209,18 @@ mod tests {
         sync(&mut p, Some("audio"), 1.);
         submit(&mut p, "audio", None, 2.);
         p
+    }
+    #[test]
+    fn first_standalone_registration_is_metadata_only_until_ownership_changes() {
+        let mut p = Presentation::default();
+        assert!(!p.reconcile(vec![display(None)], None, None, true, 1.));
+        assert!(p.standalone(None));
+        assert!(!p.reconcile(vec![display(None)], None, None, true, 2.));
+        assert!(p.receipt(&frame("bar", None, 2.)).is_none());
+        assert!(p.reconcile(vec![display(None)], None, Some("audio"), true, 3.));
+        assert!(p.standalone(None));
+        submit(&mut p, "audio", None, 4.);
+        assert!(!p.standalone(None));
     }
     #[test]
     fn opening_keeps_reserving_bar_until_incoming_submission() {

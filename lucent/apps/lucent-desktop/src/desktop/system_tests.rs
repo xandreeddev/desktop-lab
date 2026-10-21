@@ -121,6 +121,18 @@ fn drag(app: &mut Desktop, monitor: Option<&str>, widget: &str) {
 }
 
 #[test]
+fn system_first_and_repeated_unchanged_samples_do_not_redraw_the_standalone_bar() {
+    let mut app = desktop();
+    app.settings.layout = separated();
+    let initial = app.system.clone();
+    for _ in 0..2 {
+        let effects = dispatch(&mut app, Ok(initial.clone()));
+        assert_redraw(&app, &effects, &[]);
+        assert!(app.bar_presentation.standalone(None));
+    }
+}
+
+#[test]
 fn system_unchanged_samples_do_not_redraw_but_fractional_and_memory_changes_do() {
     let mut app = desktop();
     app.settings.layout = separated();
