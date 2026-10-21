@@ -2,6 +2,7 @@ use crate::actions::Action;
 use crate::adapters::{DesktopAdapters, WatchStop};
 use crate::launcher::Mode;
 use crate::launcher::{self, Launcher};
+mod bar_presentation;
 mod panels;
 #[cfg(test)]
 mod system_tests;
@@ -17,6 +18,7 @@ pub enum Message {
     Ignore,
     DismissPanels,
     BackgroundPresented(Option<SurfaceInstance>, f64),
+    BarPresented(bar_presentation::Receipt, Option<Box<Message>>),
     Outputs(Vec<DisplayOutput>),
     OnMonitor(crate::monitors::Route, Box<Message>),
     SelectMonitor(MonitorId),
@@ -133,6 +135,7 @@ pub struct Desktop {
     pub notifications: crate::notifications::Center,
     pub osd: crate::osd::Osd,
     pub bar_visible: bool,
+    bar_presentation: bar_presentation::Presentation,
     pub theme_error: String,
     pub widgets: widgets::Host,
     pub monitors: crate::monitors::Monitors,
@@ -185,6 +188,7 @@ impl Desktop {
             wallpaper_context: WallpaperPlaybackContext::default(),
             osd: Default::default(),
             bar_visible: true,
+            bar_presentation: Default::default(),
             theme_error: String::new(),
             notifications: crate::notifications::Center::new(
                 adapters.notifications.clone(),
@@ -758,6 +762,53 @@ impl Desktop {
             self.update(message, effects);
         }
     }
+    fn submitted_event(&self, event: Event) -> Option<Message> {
+        match event {
+            Event::FrameSubmitted {
+                surface: "weather-controls",
+                now,
+                ..
+            } if !self.weather.open() => {
+                Some(Message::Weather(crate::weather::Message::Frame(now)))
+            }
+            Event::FrameSubmitted {
+                surface: "background",
+                now,
+                ..
+            } => Some(Message::BackgroundPresented(None, now)),
+            Event::FrameSubmitted {
+                surface: "live-wallpaper",
+                now,
+                ..
+            } => Some(Message::LiveWallpaper(
+                crate::live_wallpaper::Message::Frame(now),
+            )),
+            Event::FrameSubmitted {
+                surface: "notifications",
+                now,
+                ..
+            } if self.notifications.settled(now) => Some(Message::Notifications(
+                crate::notifications::Message::Settled,
+            )),
+            Event::Scoped { instance, event } => {
+                let route = self.monitors.route(&instance)?;
+                match *event {
+                    Event::FrameSubmitted {
+                        surface: "background",
+                        now,
+                        ..
+                    } => Some(Message::BackgroundPresented(Some(instance), now)),
+                    event => self
+                        .submitted_event(event)
+                        .map(|message| Message::OnMonitor(route, Box::new(message))),
+                }
+            }
+            event => self
+                .launcher
+                .event(event, self.browser.source.is_some())
+                .map(Message::Launcher),
+        }
+    }
     pub fn active_widgets(&self) -> &widgets::Host {
         self.monitors
             .current()
@@ -1245,8 +1296,17 @@ impl Component for Desktop {
     fn update(&mut self, message: Message, effects: &mut Effects<Message>) {
         let now = effects.now;
         let bar_host = self.panel_surface();
+        let retained_dock = self.bar_presentation.retained("dock").is_some();
         match message {
             Message::Ignore => {}
+            Message::BarPresented(receipt, next) => {
+                if self.bar_presentation.submitted(receipt) {
+                    effects.redraw("bar");
+                }
+                if let Some(next) = next {
+                    self.update(*next, effects);
+                }
+            }
             Message::BackgroundPresented(instance, now) => {
                 if self
                     .backgrounds
@@ -1959,8 +2019,17 @@ impl Component for Desktop {
             }
             Message::Quit => effects.quit(),
         }
-        if bar_host != self.panel_surface() {
+        if self.reconcile_bar_presentation(now) || bar_host != self.panel_surface() {
             effects.redraw("bar");
+        }
+        if retained_dock
+            && self.bar_presentation.retained("dock").is_none()
+            && !self.launcher.expanded()
+        {
+            // Compacted may already have renewed a retained fullscreen carrier.
+            // Releasing it now changes the actual native origin to the short
+            // bottom dock, which needs its own fresh surface-local coordinates.
+            effects.recreate_surface(SurfaceAddress::new("dock"));
         }
         self.reconcile_live_wallpapers();
         self.reconcile_backgrounds(effects);
@@ -2408,6 +2477,7 @@ impl api::Application for Desktop {
                 surface.redraw_group = Some("bar");
             }
         }
+        self.retain_bar_carriers(&mut surfaces);
         if !self.monitors.legacy() {
             if self.monitors.connected.is_empty() {
                 return vec![];
@@ -2423,7 +2493,10 @@ impl api::Application for Desktop {
                 .current()
                 .map(|(_, monitor)| monitor.target.clone());
             for spec in &mut surfaces {
-                spec.output = active.clone();
+                spec.output = self
+                    .bar_presentation
+                    .retained(spec.id)
+                    .map_or_else(|| active.clone(), |carrier| carrier.output.clone());
             }
             for (id, monitor) in &self.monitors.connected {
                 for template in &repeated {
@@ -2655,14 +2728,34 @@ impl api::Application for Desktop {
         s
     }
     fn event(&self, event: Event) -> Option<Message> {
+        let native_event = match &event {
+            Event::Scoped { event, .. } => event.as_ref(),
+            event => event,
+        };
+        let role = match native_event {
+            Event::PointerInside { surface, .. }
+            | Event::PointerButton { surface, .. }
+            | Event::FrameSubmitted { surface, .. }
+            | Event::Resize { surface, .. }
+            | Event::Key { surface, .. }
+            | Event::Scroll { surface, .. }
+            | Event::Outside { surface, .. } => Some(*surface),
+            _ => None,
+        };
+        if !matches!(native_event, Event::FrameSubmitted { .. })
+            && role.is_some_and(|role| self.bar_presentation.retained(role).is_some())
+        {
+            return None;
+        }
+        if matches!(native_event, Event::FrameSubmitted { .. }) {
+            let receipt = self.bar_presentation.receipt(&event);
+            let child = self.submitted_event(event);
+            return match receipt {
+                Some(receipt) => Some(Message::BarPresented(receipt, child.map(Box::new))),
+                None => child,
+            };
+        }
         match event {
-            Event::FrameSubmitted {
-                surface: "weather-controls",
-                now,
-                ..
-            } if !self.weather.open() => {
-                Some(Message::Weather(crate::weather::Message::Frame(now)))
-            }
             Event::Key {
                 surface: "weather-controls",
                 key: Key::Escape,
@@ -2677,18 +2770,6 @@ impl api::Application for Desktop {
             | Event::Outside {
                 surface: "media-controls",
             } => Some(Message::Media(crate::media::Message::Close)),
-            Event::FrameSubmitted {
-                surface: "background",
-                now,
-                ..
-            } => Some(Message::BackgroundPresented(None, now)),
-            Event::FrameSubmitted {
-                surface: "live-wallpaper",
-                now,
-                ..
-            } => Some(Message::LiveWallpaper(
-                crate::live_wallpaper::Message::Frame(now),
-            )),
             Event::Key {
                 surface: "live-wallpaper",
                 key: Key::Escape,
@@ -2732,13 +2813,6 @@ impl api::Application for Desktop {
                 }?;
                 Some(Message::OnMonitor(route, Box::new(message)))
             }
-            Event::FrameSubmitted {
-                surface: "notifications",
-                now,
-                ..
-            } if self.notifications.settled(now) => Some(Message::Notifications(
-                crate::notifications::Message::Settled,
-            )),
             Event::Outside {
                 surface: "notifications",
             } if self.notifications.history_open() => {

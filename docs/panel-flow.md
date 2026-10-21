@@ -16,9 +16,12 @@ and authentication clients have separate protocol authority.
    Close/Hide messages to other panels. Each child owns cancellation and exit motion.
 5. The audio surface now presents the same bar component and owns keyboard focus.
    The standalone bar surface retains its exclusive zone, so tiled windows keep
-   their position. Its contents on the active monitor stay empty during the panel.
-6. When the last panel closes, the standalone bar presents the controls again.
-   Bars on other monitors remain independent.
+   their position. It clears its pixels only after the incoming panel submits
+   its first complete buffer.
+6. When the last panel closes, the standalone bar draws again before the old
+   carrier is released. The old carrier keeps the closing paint and bar,
+   with no native input or keyboard ownership. Bars on other monitors remain
+   independent.
 
 This is ordinary declarative composition: `compose_panel_bar` builds a stack of
 panel content and `bar(&bar_context)`. Both use the same `Element` layout, design
@@ -32,6 +35,30 @@ media, weather, network, Bluetooth, power, Displays, tray, live-wallpaper settin
 and notification history.
 Each child owns its open state; the root derives the current host from those
 states, without keeping another active-panel state variable.
+
+## Keep the previous bar until the next buffer submits
+
+`desktop/bar_presentation.rs` tracks the last submitted carrier and requested
+carrier for each connected output. Opening, closing and switching panels retain
+the previous bar until a matching `FrameSubmitted` newer than the request. A
+late receipt cannot acknowledge a superseding request or a retired output.
+The previous child keeps its normal exit paint; after it unmounts, its retained
+native surface presents only the shared bar. All outgoing callbacks map to
+Ignore, with no native input or keyboard ownership. Native input and resize
+events are suppressed there, while submitted-frame bookkeeping still reaches
+the child so its normal closing lifecycle can finish.
+
+Moving one panel to another output first restores the old output's reserving
+bar, then moves the single panel native address. Hiding the bar retires all
+presentation transfers immediately. None of this changes preferences, adapter
+operations, design colors, motion durations or the 48-pixel reservation.
+
+A submission acknowledges a prepared buffer, not GPU completion or compositor
+presentation. Wayland commits for separate surfaces are not atomic. This policy
+removes the deliberate empty-bar interval and uses a temporary overlap of opaque
+semantic capsule surfaces; edge, hover and native pacing behavior still need
+source-specific visual acceptance. It is not a permanent duplicated bar or a
+claim of synchronized scanout.
 
 ## Why the controls share a native surface
 
@@ -100,7 +127,11 @@ remain separate actions and clients.
 
 Tests cover every ordered pair of the eleven panels, repeated updates, pending tray work,
 notification dismissal, host ownership, shared hit geometry/messages and bar/grid
-geometry. Dedicated Vulkan panel-host fixtures complement the isolated component
+geometry. Additional handoff fixtures cover close/reopen, superseded receipts,
+retired outputs and staged retargeting. The exact-pixel Vulkan comparison checks
+standalone, incoming and retained bar recipes at 1×/2× in both palettes
+individually. It does not simulate overlap edge compositing or establish native
+acceptance. Dedicated panel-host fixtures complement the isolated component
 references; screenshot tolerances remain unchanged.
 
 The global-dismissal regressions additionally cover all-panel input release,
