@@ -1343,8 +1343,13 @@ impl FrameDemand {
     pub fn retry_ready(&mut self) {
         self.deferred = false;
     }
+    /// Whether a draw can start without waiting for a callback or retry deadline.
+    /// Inspecting demand never consumes its invalidation.
+    pub fn can_begin(&self) -> bool {
+        self.dirty && !self.pending && !self.deferred
+    }
     pub fn begin(&mut self) -> bool {
-        if !self.dirty || self.pending || self.deferred {
+        if !self.can_begin() {
             return false;
         }
         self.dirty = false;

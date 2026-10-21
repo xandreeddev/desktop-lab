@@ -47,6 +47,7 @@ use wgpu_handle::HasDisplayHandle;
 // Use the exact raw-window-handle version used by the renderer.
 use lucent_render::display_handle as wgpu_handle;
 mod activation;
+mod batching;
 mod clipboard;
 mod delivery;
 mod effects;
@@ -153,6 +154,7 @@ struct State<A: Application> {
     tasks: effects::Executor<A::Message>,
     subscriptions: subscriptions::Workers,
     interaction_timer: Option<(f64, RegistrationToken)>,
+    draw_wakeup: calloop::ping::Ping,
     connection: Connection,
 }
 impl<A: Application> Drop for State<A> {
@@ -234,6 +236,11 @@ fn run_inner<A: Application>(
     let gpu = Gpu::new(conn.backend(), fonts.clone())?;
     let mut event_loop: EventLoop<State<A>> = EventLoop::try_new()?;
     let handle = event_loop.handle();
+    // A post-submission effect can dirty another configured surface after the
+    // draw pass visited it. Wake the next dispatch once, without polling idle
+    // clients or bypassing any surface's compositor callback admission.
+    let (draw_wakeup, draw_events) = calloop::ping::make_ping()?;
+    handle.insert_source(draw_events, |(), _, _| {})?;
     let (sender, events, _delivery_lifetime) = delivery::Delivery::channel();
     let completion = sender.clone();
     let tasks = effects::Executor::new(move |result| {
@@ -295,6 +302,7 @@ fn run_inner<A: Application>(
         tasks,
         subscriptions: subscriptions::Workers::default(),
         interaction_timer: None,
+        draw_wakeup,
         connection: conn.clone(),
     };
     let runtime =
@@ -356,7 +364,9 @@ fn run_inner<A: Application>(
     state.reconcile(&qh)?;
     while !state.exit {
         event_loop.dispatch(None, &mut state)?;
-        state.draw_all(&qh);
+        if !state.exit {
+            state.draw_all(&qh);
+        }
     }
     eprintln!("{} stopped cleanly", state.app.name());
     if let Some(error) = state.error.take() {
@@ -637,9 +647,13 @@ impl<A: Application> State<A> {
             if self.id_for(&origin).as_ref() != Some(&address) {
                 continue;
             }
-            let force_clipboard = clipboard_targets.contains(&address);
+            let refresh = if clipboard_targets.contains(&address) {
+                InputRefresh::Current
+            } else {
+                InputRefresh::Affected
+            };
             input_messages.extend(
-                self.refresh_input_scene(&address, true, force_clipboard)
+                self.refresh_input_scene(&address, true, refresh)
                     .into_iter()
                     .map(|message| (origin.clone(), message)),
             );
@@ -666,7 +680,6 @@ impl<A: Application> State<A> {
         for request in effects.clipboard {
             self.clipboard_request(request, qh);
         }
-        self.draw_all(qh);
     }
     fn reconcile(&mut self, qh: &QueueHandle<Self>) -> Result<(), Error> {
         self.reconcile_with_recreation(qh, &Default::default())
@@ -901,7 +914,6 @@ impl<A: Application> State<A> {
                 self.message(message, qh);
             }
         }
-        self.draw_all(qh);
     }
     /// One fresh CPU scene handles text geometry and declarative scope
     /// admission together. It never begins GPU demand or changes native regions.
@@ -909,7 +921,7 @@ impl<A: Application> State<A> {
         &mut self,
         address: &api::SurfaceAddress,
         reveal: bool,
-        force_clipboard: bool,
+        refresh: InputRefresh,
     ) -> Vec<A::Message> {
         let Some(native) = self
             .surfaces
@@ -919,25 +931,15 @@ impl<A: Application> State<A> {
             return vec![];
         };
         let now = self.epoch.elapsed().as_secs_f64();
-        let Some((_, _, scene)) =
-            current_scene(&self.app, &self.layout, native, now, force_clipboard)
+        let Some((_, _, scene)) = current_scene(&self.app, &self.layout, native, now, refresh)
         else {
             return vec![];
         };
-        let focus = native.interaction.focus.clone();
-        native.interaction.synchronize(&scene);
-        let mut messages = if reveal {
-            native.interaction.text_caret_reveal(&native.scene, &scene)
-        } else {
-            vec![]
-        };
-        while let Some(message) = native.interaction.take_overlay_dismissal() {
-            messages.push(message);
-        }
-        if focus != native.interaction.focus {
+        let (messages, focus_changed) =
+            update_input_scene(&mut native.interaction, &mut native.scene, scene, reveal);
+        if focus_changed {
             native.demand.invalidate();
         }
-        native.scene = scene;
         messages
     }
     fn draw_all(&mut self, qh: &QueueHandle<Self>) {
@@ -1128,6 +1130,15 @@ impl<A: Application> State<A> {
             }
         }
         self.schedule_interaction_wakeup();
+        if !self.exit
+            && batching::needs_wake(
+                self.surfaces
+                    .values()
+                    .map(|native| (native.configured, &native.demand)),
+            )
+        {
+            self.draw_wakeup.ping();
+        }
     }
     /// Dwell is a single cancellable event-loop deadline across live surfaces.
     /// It creates neither a polling subscription nor frames while waiting.
@@ -1204,7 +1215,7 @@ impl<A: Application> State<A> {
         else {
             return;
         };
-        for message in self.refresh_input_scene(&id, false, false) {
+        for message in self.refresh_input_scene(&id, false, InputRefresh::Current) {
             if self.id_for(&origin).as_ref() != Some(&id) {
                 return;
             }
@@ -1243,7 +1254,6 @@ impl<A: Application> State<A> {
                 }
                 self.message(message, qh);
             }
-            self.draw_all(qh);
             return;
         }
         if let Some(message) = self.surface_event(
@@ -1270,12 +1280,38 @@ impl<A: Application> State<A> {
                 }
                 self.message(message, qh);
             }
-            self.draw_all(qh);
         }
     }
 }
 // The CPU scene path is shared by presentation and input refresh. It never
 // begins frame demand, touches a renderer/native region, or emits FrameSubmitted.
+#[derive(Clone, Copy)]
+enum InputRefresh {
+    /// State changed: refresh native interactive surfaces and existing editors.
+    Affected,
+    /// Native input or a delayed transfer must resolve the current tree now.
+    Current,
+}
+fn update_input_scene<M: Clone>(
+    interaction: &mut Interaction<M>,
+    current: &mut Scene<M>,
+    next: Scene<M>,
+    reveal: bool,
+) -> (Vec<M>, bool) {
+    let focus = interaction.focus.clone();
+    interaction.synchronize(&next);
+    let mut messages = if reveal {
+        interaction.text_caret_reveal(current, &next)
+    } else {
+        vec![]
+    };
+    while let Some(message) = interaction.take_overlay_dismissal() {
+        messages.push(message);
+    }
+    let changed = focus != interaction.focus;
+    *current = next;
+    (messages, changed)
+}
 fn current_tree<A: Application>(
     app: &A,
     native: &Native<A::Message>,
@@ -1301,21 +1337,17 @@ fn current_scene<A: Application>(
     layout: &Layout,
     native: &Native<A::Message>,
     now: f64,
-    force_clipboard: bool,
+    refresh: InputRefresh,
 ) -> Option<(u32, u32, Scene<A::Message>)> {
-    fn requests_input<M>(tree: &api::Element<M>) -> bool {
-        !tree.popovers.is_empty()
-            || matches!(tree.kind, api::Kind::TextArea { .. })
-            || tree.children.iter().any(requests_input)
-    }
-    let (width, height, tree) = current_tree(app, native, now);
-    if !force_clipboard
+    if matches!(refresh, InputRefresh::Affected)
+        && matches!(native.spec.pointer_input, api::PointerInput::None)
+        && matches!(native.spec.keyboard, api::Keyboard::None)
         && !Interaction::has_text_area(&native.scene)
         && !native.scene.overlays.has_popover()
-        && !requests_input(&tree)
     {
         return None;
     }
+    let (width, height, tree) = current_tree(app, native, now);
     let scene = layout.build(&tree, width as f32, height as f32, &native.interaction, now);
     Some((width, height, scene))
 }
@@ -1344,6 +1376,109 @@ fn pointer_regions<M>(
 #[cfg(test)]
 mod surface_tests {
     use super::*;
+
+    fn input_layout() -> Layout {
+        Layout::new(Arc::new(vec![
+            lucent_ui::text::Font::from_bytes(
+                include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
+                fontdue::FontSettings::default(),
+            )
+            .unwrap(),
+        ]))
+    }
+
+    #[test]
+    fn queued_controls_use_current_actions_and_retire_removed_primary_capture() {
+        let layout = input_layout();
+        let button = |id, action| {
+            api::Element::empty()
+                .size(100., 40.)
+                .id(id)
+                .on_click(action)
+                .autofocus()
+        };
+        let mut interaction = Interaction::<u32>::default();
+        let mut scene = layout.build(&button("action", 1), 240., 120., &interaction, 0.);
+        interaction.synchronize(&scene);
+        assert!(interaction.press(&scene, 20., 20.).is_none());
+        let latest = layout.build(&button("action", 2), 240., 120., &interaction, 0.);
+        update_input_scene(&mut interaction, &mut scene, latest, false);
+        assert_eq!(interaction.release(20., 20.), Some(2));
+
+        assert!(interaction.press(&scene, 20., 20.).is_none());
+        let replacement = layout.build(&button("replacement", 3), 240., 120., &interaction, 0.);
+        let (_, changed) = update_input_scene(&mut interaction, &mut scene, replacement, false);
+        assert!(changed);
+        assert_eq!(interaction.focus.as_deref(), Some("replacement"));
+        assert_eq!(interaction.release(20., 20.), None);
+        assert_eq!(interaction.key(&scene, &api::Key::Enter), vec![3]);
+    }
+
+    #[test]
+    fn ordinary_input_value_is_current_for_the_next_key_without_painting() {
+        let layout = input_layout();
+        let field = |value| {
+            api::Element::input(value, "", std::convert::identity)
+                .size(200., 48.)
+                .id("field")
+                .autofocus()
+        };
+        let mut interaction = Interaction::<String>::default();
+        let mut scene = layout.build(&field("a"), 240., 120., &interaction, 0.);
+        interaction.synchronize(&scene);
+        let latest = layout.build(&field("server"), 240., 120., &interaction, 0.);
+        update_input_scene(&mut interaction, &mut scene, latest, false);
+        assert_eq!(
+            interaction.key(&scene, &api::Key::Text("!".into())),
+            vec!["server!"]
+        );
+    }
+
+    #[test]
+    fn moved_primary_target_and_new_popover_retire_queued_release() {
+        let layout = input_layout();
+        let button = |x| {
+            api::Element::stack(vec![
+                api::Element::empty()
+                    .size(60., 40.)
+                    .at(x, 0.)
+                    .id("action")
+                    .on_click(1_u32)
+                    .autofocus(),
+            ])
+        };
+        let mut interaction = Interaction::default();
+        let mut scene = layout.build(&button(0.), 240., 160., &interaction, 0.);
+        interaction.synchronize(&scene);
+        assert!(interaction.press(&scene, 20., 20.).is_none());
+        let moved = layout.build(&button(80.), 240., 160., &interaction, 0.);
+        update_input_scene(&mut interaction, &mut scene, moved, false);
+        assert_eq!(interaction.release(20., 20.), None);
+
+        assert!(interaction.press(&scene, 100., 20.).is_none());
+        let popover = button(80.).popover(api::Popover {
+            id: "menu".into(),
+            anchor: "action".into(),
+            placement: api::AnchoredSpec {
+                side: api::OverlaySide::Below,
+                align: api::OverlayAlign::Start,
+                gap: 0.,
+                inset: 0.,
+            },
+            dismiss: 0,
+            content: Box::new(
+                api::Element::empty()
+                    .size(80., 40.)
+                    .id("menu-action")
+                    .on_click(2),
+            ),
+        });
+        let scoped = layout.build(&popover, 240., 160., &interaction, 0.);
+        update_input_scene(&mut interaction, &mut scene, scoped, false);
+        assert_eq!(interaction.release(100., 20.), None);
+        assert_eq!(interaction.focus.as_deref(), Some("menu-action"));
+    }
+
     #[test]
     fn pointer_policy_overrides_tree_coverage_independently_of_paint() {
         let scene: Scene<()> = Scene {
@@ -1431,7 +1566,6 @@ impl<A: Application> CompositorHandler for State<A> {
                 }
             }
         }
-        self.draw_all(qh);
     }
     fn transform_changed(
         &mut self,
@@ -1444,7 +1578,7 @@ impl<A: Application> CompositorHandler for State<A> {
     fn frame(
         &mut self,
         _: &Connection,
-        qh: &QueueHandle<Self>,
+        _: &QueueHandle<Self>,
         surface: &wl_surface::WlSurface,
         callback_data_ms: u32,
     ) {
@@ -1459,7 +1593,6 @@ impl<A: Application> CompositorHandler for State<A> {
         } else {
             self.pacing.retired_callback();
         }
-        self.draw_all(qh);
     }
     fn surface_enter(
         &mut self,
@@ -1531,7 +1664,6 @@ impl<A: Application> LayerShellHandler for State<A> {
             effects.redraw_surface(id);
             self.messages_with_effects(self.app.event(event), effects, qh);
         }
-        self.draw_all(qh);
     }
 }
 impl<A: Application> OutputHandler for State<A> {
@@ -1635,7 +1767,6 @@ impl<A: Application> SeatHandler for State<A> {
             self.keyboard_seat = None;
             self.clipboard_cancel(qh, true);
             self.clipboard_drop();
-            self.draw_all(qh);
         }
     }
     fn remove_seat(&mut self, conn: &Connection, qh: &QueueHandle<Self>, seat: wl_seat::WlSeat) {
@@ -1663,7 +1794,7 @@ impl<A: Application> PointerHandler for State<A> {
             if matches!(event.kind, PointerEventKind::Press { .. }) {
                 self.input_method_cancel_preedit(qh);
             }
-            for message in self.refresh_input_scene(&id, false, false) {
+            for message in self.refresh_input_scene(&id, false, InputRefresh::Current) {
                 if self.id_for(&event.surface).as_ref() != Some(&id) {
                     break;
                 }
@@ -1818,7 +1949,6 @@ impl<A: Application> PointerHandler for State<A> {
         }
         self.input_serial = None;
         self.activation.input = None;
-        self.draw_all(qh);
     }
 }
 impl<A: Application> KeyboardHandler for State<A> {
@@ -1939,7 +2069,7 @@ impl<A: Application> SessionLockHandler for State<A> {
     fn configure(
         &mut self,
         _: &Connection,
-        qh: &QueueHandle<Self>,
+        _: &QueueHandle<Self>,
         surface: SessionLockSurface,
         config: SessionLockSurfaceConfigure,
         _: u32,
@@ -1951,6 +2081,5 @@ impl<A: Application> SessionLockHandler for State<A> {
             s.configured = true;
             s.demand.invalidate();
         }
-        self.draw_all(qh);
     }
 }

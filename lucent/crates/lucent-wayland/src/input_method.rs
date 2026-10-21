@@ -188,7 +188,7 @@ impl<A: Application> State<A> {
         // Rebuild CPU hit/caret geometry even while a previous GPU submission
         // waits for its frame callback. A recreated seat cannot see ghost preedit.
         if let Some(address) = retired {
-            for message in self.refresh_input_scene(&address, false, true) {
+            for message in self.refresh_input_scene(&address, false, InputRefresh::Current) {
                 self.message(message, qh);
             }
         }
@@ -340,7 +340,7 @@ impl<A: Application> State<A> {
         self.input_method.deferred = false;
         self.input_method.external_reset = true;
         self.input_method.force = true;
-        for message in self.refresh_input_scene(&target.address, false, true) {
+        for message in self.refresh_input_scene(&target.address, false, InputRefresh::Current) {
             self.message(message, qh);
         }
         self.input_method_observe();
@@ -357,7 +357,7 @@ impl<A: Application> State<A> {
             return;
         };
         // Resolve current CPU geometry before accepting a delayed native batch.
-        for message in self.refresh_input_scene(&target.address, false, true) {
+        for message in self.refresh_input_scene(&target.address, false, InputRefresh::Current) {
             self.message(message, qh);
         }
         if !self.input_method_target().as_ref().is_some_and(|current| {
@@ -402,7 +402,7 @@ impl<A: Application> State<A> {
             self.message(message, qh);
         }
         // Updating the client can close/recreate/refocus the field. Preedit never crosses it.
-        for message in self.refresh_input_scene(&target.address, false, true) {
+        for message in self.refresh_input_scene(&target.address, false, InputRefresh::Current) {
             self.message(message, qh);
         }
         self.input_method.force = true;
@@ -420,7 +420,6 @@ impl<A: Application> State<A> {
         {
             native.demand.invalidate();
         }
-        self.draw_all(qh);
     }
 }
 impl<A: Application> Dispatch<ZwpTextInputV3, ()> for State<A> {
@@ -445,7 +444,6 @@ impl<A: Application> Dispatch<ZwpTextInputV3, ()> for State<A> {
                     state.input_method.entered = None;
                     state.input_method.deferred = false;
                     state.input_method_observe();
-                    state.draw_all(qh);
                 }
             }
             protocol::Event::PreeditString {
