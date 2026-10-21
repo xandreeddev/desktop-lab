@@ -5275,8 +5275,7 @@ fn launcher_pins_are_native_actions_and_hidden_dock_keeps_only_its_hotspot() {
             .all(|t| t.queue != crate::work::CONTROLS)
     );
     assert!(app.launcher.open());
-    let mut hidden_app = fixture(6, false);
-    hidden_app.launcher = Default::default();
+    let mut hidden_app = Desktop::new(crate::test_adapters::adapters());
     hidden_app.settings.dock.auto_hide = true;
     hidden_app.dock.fixture_hidden();
     let tree = hidden_app.view(&ViewContext {
