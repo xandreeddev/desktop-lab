@@ -779,8 +779,10 @@ mod tests {
                             let mut changed_pixels = 0;
                             let mut bounds = None::<(usize, usize, usize, usize)>;
                             for (index, (a, b)) in expected
-                                .chunks_exact(4)
-                                .zip(actual.chunks_exact(4))
+                                .as_chunks::<4>()
+                                .0
+                                .iter()
+                                .zip(actual.as_chunks::<4>().0)
                                 .enumerate()
                             {
                                 if a != b {
@@ -800,25 +802,13 @@ mod tests {
                                 "bar pixels {label}: max_error={max_error} changed_channels={changed_channels} changed_pixels={changed_pixels} bounds_xyxy={bounds:?}"
                             );
                             if max_error > allowed {
-                                let root = std::env::var_os("LUCENT_WORKSPACE")
-                                    .map(std::path::PathBuf::from)
-                                    .unwrap_or_else(|| {
-                                        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                                            .join("../../..")
-                                    });
-                                let report =
-                                    root.join("reports/local/visual-tests/bar-handoff-carriers");
-                                std::fs::create_dir_all(&report).unwrap();
-                                for (name, pixels) in [("expected", expected), ("actual", actual)] {
-                                    image::save_buffer(
-                                        report.join(format!("{label}-{name}.png")),
-                                        pixels,
-                                        width * scale,
-                                        lucent_design::component::panel::BAR_HEIGHT as u32 * scale,
-                                        image::ColorType::Rgba8,
-                                    )
-                                    .unwrap();
-                                }
+                                crate::visual_tests::save_bar_handoff_comparison(
+                                    &label,
+                                    width * scale,
+                                    lucent_design::component::panel::BAR_HEIGHT as u32 * scale,
+                                    expected,
+                                    actual,
+                                );
                                 failures.push(format!("{label}: max_error={max_error}"));
                             }
                         }

@@ -11,6 +11,30 @@ use lucent_domain::{AppId, Application as App, ClockSnapshot, Date, LaunchComman
 use lucent_ui::{Interaction, Layout, Paint, Scene};
 use std::{path::PathBuf, sync::Arc};
 
+pub(crate) fn save_bar_handoff_comparison(
+    label: &str,
+    width: u32,
+    height: u32,
+    expected: &[u8],
+    actual: &[u8],
+) {
+    let root = std::env::var_os("LUCENT_WORKSPACE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.."));
+    let report = root.join("reports/local/visual-tests/bar-handoff-carriers");
+    std::fs::create_dir_all(&report).unwrap();
+    for (name, pixels) in [("expected", expected), ("actual", actual)] {
+        image::save_buffer(
+            report.join(format!("{label}-{name}.png")),
+            pixels,
+            width,
+            height,
+            image::ColorType::Rgba8,
+        )
+        .unwrap();
+    }
+}
+
 fn fixture(count: usize, light: bool) -> Desktop {
     let mut app = Desktop::new(crate::test_adapters::adapters());
     app.settings.light = light;
