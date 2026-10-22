@@ -24,6 +24,7 @@ from lucent_readiness import desktop_rendered
 
 LIMIT = 512 * 1024 * 1024
 SERVICE = 'lucent.service'
+CGROUP_ROOT = Path('/sys/fs/cgroup')
 
 
 class DeployError(RuntimeError):
@@ -341,15 +342,20 @@ class _Session:
     def drained(self, group):
         require(group.startswith('/') and group.endswith('/' + SERVICE)
                 and '..' not in Path(group).parts, 'Invalid captured Lucent cgroup')
-        events = Path('/sys/fs/cgroup') / group.lstrip('/') / 'cgroup.events'
+        events = CGROUP_ROOT / group.lstrip('/') / 'cgroup.events'
         return not events.exists() or 'populated 0' in events.read_text().splitlines()
 
-    def stop(self, expected):
+    def stop(self, expected, *, drain_group=None):
+        # systemd can clear ControlGroup while an owned restart is pending.
+        # The captured live invocation's group remains the drain authority.
+        group = expected['ControlGroup'] if drain_group is None else drain_group
+        require(group.startswith('/') and group.endswith('/' + SERVICE)
+                and '..' not in Path(group).parts, 'A nonempty captured Lucent cgroup is required before stopping')
         require(self.service() == expected, 'Lucent service changed before stop; refusing to stop a new invocation')
         try:
             self.command('systemctl', '--user', 'stop', SERVICE, timeout=25)
         finally:
-            self.quiescent(expected['ControlGroup'])
+            self.quiescent(group)
 
     def start(self):
         self.command('systemctl', '--user', 'start', SERVICE, timeout=20)
@@ -512,9 +518,12 @@ def _apply(bundle, manifest, session, ready_timeout):
             for number in (signal.SIGINT, signal.SIGTERM):
                 signal.signal(number, signal.SIG_IGN)
             journal['error'] = type(error).__name__
+            journal['error_message'] = str(error)[:2048]
+            journal['failure_phase'] = journal['phase']
             journal['phase'] = 'rolling-back'
             recovery_record()
             try:
+                journal['rollback_step'] = 'inspect-service'
                 current = session.service()
                 if stop_attempted and not stopped and current['ActiveState'] in ('inactive', 'failed'):
                     require(current['InvocationID'] in ('', '0' * 32, before['service']['InvocationID'])
@@ -524,12 +533,16 @@ def _apply(bundle, manifest, session, ready_timeout):
                     stopped = True
                 if stopped and current['ActiveState'] not in ('inactive', 'failed'):
                     candidate_authority(current)
-                    session.stop(current)
+                    journal['rollback_step'] = 'stop-candidate'
+                    session.stop(current, drain_group=before['service']['ControlGroup'])
                 elif stop_attempted and not stopped:
                     require(current == before['service'], 'Stop completion is uncertain; inspect the recovery journal')
                 if stopped:
+                    journal['rollback_step'] = 'prove-stopped'
                     session.quiescent(before['service']['ControlGroup'])
                 for item in reversed(journal['files']):
+                    journal['rollback_step'] = 'restore-files'
+                    journal['rollback_target'] = item['target']
                     target = Path(item['target'])
                     if item['installed'] is None:
                         require(_file(target) == item['original'], 'Uncertain replacement; keep the journal for manual recovery')
@@ -544,6 +557,7 @@ def _apply(bundle, manifest, session, ready_timeout):
                         item['restored'], old_candidate = _publish(restore, target, item['installed'], _file(restore))
                         recovery_record()
                         _remove_owned(restore, old_candidate)
+                journal['rollback_step'] = 'verify-restored-cohort'
                 for item in journal['files']:
                     require(_file(Path(item['target'])) == item.get('restored', item['original']),
                             'Restored cohort changed; old shell will not be started')
@@ -551,17 +565,22 @@ def _apply(bundle, manifest, session, ready_timeout):
                     if item['staged'] is not None and temporary.exists():
                         _remove_owned(temporary, item.get('displaced', item['staged']))
                 if stopped:
+                    journal['rollback_step'] = 'start-original'
                     session.preserved(protected)
                     session.start()
                     started = time.monotonic()
+                    journal['rollback_step'] = 'original-readiness'
                     session.ready(before['peer']['sha256'], started, ready_timeout)
                 if stop_attempted:
+                    journal['rollback_step'] = 'verify-protected'
                     session.preserved(protected)
                 journal['rollback_complete'] = True
+                journal['rollback_step'] = 'complete'
                 journal['phase'] = 'rolled-back'
             except BaseException as recovery:
                 journal['phase'] = 'recovery-required'
                 journal['rollback_error'] = type(recovery).__name__
+                journal['rollback_error_message'] = str(recovery)[:2048]
             recovery_record()
             if isinstance(error, Interrupted):
                 error.journal = str(transaction / 'journal.json')

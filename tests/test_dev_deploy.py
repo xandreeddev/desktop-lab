@@ -63,8 +63,9 @@ class Supervised:
         for name, value in before.items():
             deploy.require(current[name]['sha256'] == value['sha256'], 'Protected settings changed')
 
-    def stop(self, expected):
+    def stop(self, expected, *, drain_group=None):
         deploy.require(self.service() == expected, 'foreign invocation')
+        deploy.require((drain_group or expected['ControlGroup']) == '/owned/lucent.service', 'wrong drain group')
         self.events.append('stop')
         self.service_state.update(ActiveState='inactive', SubState='dead', MainPID='0')
         if self.stop_reply_lost:
@@ -72,12 +73,13 @@ class Supervised:
             raise deploy.DeployError('lost stop reply')
 
     def quiescent(self, group):
-        deploy.require(group == self.service_state['ControlGroup']
+        deploy.require(group == '/owned/lucent.service'
                        and self.service_state['ActiveState'] == 'inactive', 'not stopped')
 
     def start(self):
         self.events.append('start')
         self.service_state.update(ActiveState='active', SubState='running', MainPID='20', InvocationID='b' * 32,
+                                  ControlGroup='/owned/lucent.service',
                                   ExecMainStartTimestampMonotonic=str(time.monotonic_ns() // 1000))
         if self.fast_bad_candidate:
             self.fast_bad_candidate = False
@@ -207,6 +209,19 @@ class ReloadTransaction(unittest.TestCase):
         self.unchanged()
         self.assertEqual(self.session.events, ['stop', 'start', 'ready', 'stop', 'start', 'ready'])
 
+    def test_empty_pending_group_uses_original_captured_group_for_rollback(self):
+        def pending():
+            self.session.service_state.update(ActiveState='activating', SubState='auto-restart',
+                                              MainPID='0', ControlGroup='')
+            raise deploy.DeployError('candidate watchdog ended')
+        self.session.readiness_hook = pending
+        with self.assertRaisesRegex(deploy.DeployError, 'rolled-back'):
+            self.apply()
+        self.unchanged()
+        self.assertEqual(self.journal()['error_message'], 'candidate watchdog ended')
+        self.assertEqual(self.journal()['failure_phase'], 'starting')
+        self.assertEqual(self.journal()['rollback_step'], 'complete')
+
     def test_unrelated_activating_substate_is_not_authority_for_rollback_stop(self):
         def unrelated():
             self.session.service_state.update(ActiveState='activating', SubState='start-pre', MainPID='0')
@@ -237,6 +252,8 @@ class ReloadTransaction(unittest.TestCase):
         self.assertEqual(self.targets[0].read_bytes(), executable('independent change'))
         self.assertEqual(self.session.events, ['stop', 'start', 'ready'])
         self.assertFalse(self.journal()['rollback_complete'])
+        self.assertIn('Independent file edit', self.journal()['rollback_error_message'])
+        self.assertEqual(self.journal()['rollback_step'], 'inspect-service')
 
     def test_real_target_rename_in_check_exchange_gap_is_preserved(self):
         exchange = deploy._rename_exchange
@@ -409,6 +426,40 @@ class Readiness(unittest.TestCase):
              patch.object(deploy.time, 'sleep', side_effect=self.sleep):
             with self.assertRaisesRegex(deploy.DeployError, 'startup deadline'):
                 self.session.ready('b' * 64, 0., 45)
+
+
+class CapturedCgroup(unittest.TestCase):
+    def test_real_stop_uses_captured_group_when_pending_unit_group_is_empty(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            put(root / 'cgroup.events', b'populated 1\n')
+            put(root / 'owned/lucent.service/cgroup.events', b'populated 0\n')
+            session = object.__new__(deploy._Session)
+            state = {'ActiveState': 'activating', 'SubState': 'auto-restart', 'MainPID': '0',
+                     'ControlPID': '0', 'ControlGroup': '', 'InvocationID': 'b' * 32}
+            original = dict(state)
+            def command(*argv, **_):
+                self.assertEqual(argv, ('systemctl', '--user', 'stop', 'lucent.service'))
+                state.update(ActiveState='inactive', SubState='dead')
+                return ''
+            with patch.object(deploy, 'CGROUP_ROOT', root), \
+                 patch.object(session, 'service', side_effect=lambda: dict(state)), \
+                 patch.object(session, 'command', side_effect=command) as called:
+                session.stop(original, drain_group='/owned/lucent.service')
+            self.assertEqual(called.call_count, 1)
+
+    def test_empty_or_root_group_is_rejected_before_any_stop_command(self):
+        session = object.__new__(deploy._Session)
+        with patch.object(session, 'command') as called:
+            for group in ('', '/'):
+                with self.assertRaisesRegex(deploy.DeployError, 'nonempty captured'):
+                    session.stop({'ControlGroup': group})
+            called.assert_not_called()
+        with patch.object(session, 'service', return_value={'ActiveState': 'inactive', 'MainPID': '0', 'ControlPID': '0'}):
+            for group in ('', '/'):
+                with self.assertRaisesRegex(deploy.DeployError, 'Invalid captured'):
+                    session.quiescent(group)
+
 
 
 if __name__ == '__main__':
