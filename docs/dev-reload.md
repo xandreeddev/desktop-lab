@@ -173,7 +173,25 @@ and builds belong to the developer tool; installation and recovery belong to
 its deployment adapter. The desktop's domain, ports, components and rendering
 loop do not depend on this development tool.
 
-The source workflow and its tests are prepared in this change. Native watcher,
-apply, readiness and rollback acceptance still require an actual installed
-session run. A prepared command, mocked transaction or successful build is not
-that native result. Record the source and bundle hashes when reporting one.
+Validation covers 596 repository Python checks, including real Linux file
+notifications and checked file exchanges, a bounded release build of all three
+ordinary clients, and an installed VM apply/rollback trial. The VM trial kept a
+real terminal window open through a successful reload, rejected a damaged
+manifest without restarting, then installed a deliberately failing executable
+and verified automatic restoration and startup survival. Saved preferences,
+media exports, security integration, monitors, pointer and compositor were
+preserved; the owned test terminal was removed afterwards.
+
+The first failing-executable trial exposed a rollback bug when systemd cleared
+the pending service's cgroup. That failed result was retained, the original
+files were recovered separately, and the corrected implementation passed a
+fresh trial. The regression now tests the actual stop/drain code against a
+populated root cgroup and the captured, drained Lucent group.
+
+The host build and VM apply ran separately to limit memory use. A continuous
+save → Rust build → reload watcher run on an installed physical desktop remains
+to be tested, as do physical-device startup and performance. The tested bundle
+uses the VM's existing Rust revision; this developer-tool change does not claim
+acceptance of that revision's separate rendering/performance work. See the
+[source-pinned validation record](../reports/measurements/lucent-dev-reload.json)
+for the tool and bundle identities and exact scope.
