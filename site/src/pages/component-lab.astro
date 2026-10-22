@@ -1,0 +1,79 @@
+---
+import Base from '../layouts/Base.astro';
+import CodeBlock from '../components/CodeBlock.astro';
+import { withBase } from '../data/urls';
+import { sourceUrl } from '../data/source';
+import manifestSource from '../../public/component-lab/manifest.json';
+import type { LabManifest } from '../scripts/component-lab';
+import '../styles/component-lab.css';
+import launcher from '../../../lucent/tests/visual/baselines/apps-last-dark-2x.png';
+import audio from '../../../lucent/tests/visual/baselines/audio-outputs-dark-2x.png';
+import bluetooth from '../../../lucent/tests/visual/baselines/bluetooth-devices-dark-2x.png';
+import power from '../../../lucent/tests/visual/baselines/power-controls-dark-2x.png';
+import tray from '../../../lucent/tests/visual/baselines/tray-menu-dark-2x.png';
+
+const manifest = manifestSource as LabManifest;
+const captureSourceRoot = /^[a-f0-9]{40}$/.test(manifest.renderer.source_commit)
+  ? sourceUrl('').replace(/\/blob\/[^/]+\//, `/blob/${manifest.renderer.source_commit}/`)
+  : sourceUrl('');
+const families = [...new Set(manifest.stories.map(story => story.family))];
+const first = manifest.stories[0];
+const initial = first?.variants[0];
+const captures = manifest.stories.reduce((count, story) => count + story.variants.length, 0);
+const references = [
+  { title: 'Launcher', image: launcher, description: 'Last selected application and a focused search field.' },
+  { title: 'Audio', image: audio, description: 'Output devices, volume and menu navigation.' },
+  { title: 'Bluetooth', image: bluetooth, description: 'Device cards and application-owned menu composition.' },
+  { title: 'Power', image: power, description: 'Brightness, profiles and session controls.' },
+  { title: 'Tray', image: tray, description: 'Application-provided menu content in the native shell.' },
+];
+const manifestJson = JSON.stringify(manifest).replace(/</g, '\\u003c');
+---
+<Base title="Component lab — Lucent native UI" description="Explore real Lucent renderer captures by component, palette, state, viewport and pixel density. Open the same stories in the native Rust lab.">
+  <section class="lab-intro wrap">
+    <div class="lab-intro-heading"><h1>Component <span class="mint-text">lab.</span></h1><a class="text-link" href={withBase('/design-system/')}>Design system ↗</a></div>
+    <p>Real Rust components. Compare their native pixels, then follow the recipe and tokens.</p>
+    <div class="lab-intro-meta"><span>{manifest.stories.length} stories</span><span>{captures} native captures</span><a href="#develop">Run the native lab ↗</a></div>
+  </section>
+
+  <section class="lab-layout wrap" data-component-lab data-asset-root={withBase('/component-lab/')} data-source-root={captureSourceRoot} aria-label="Native component explorer">
+    <script type="application/json" is:inline data-lab-manifest set:html={manifestJson}></script>
+    <aside class="lab-sidebar" aria-label="Choose a story">
+      <label class="lab-field" for="lab-search">Find a component<input id="lab-search" type="search" placeholder="Button, field, selection…" autocomplete="off" data-lab-search /></label>
+      <label class="lab-field" for="lab-family">Family<select id="lab-family" data-lab-family><option value="all">All components</option>{families.map(family => <option value={family}>{family}</option>)}</select></label>
+      <p class="lab-supporting" data-lab-story-count aria-live="polite">{manifest.stories.length} stories</p>
+      <nav class="lab-story-list" aria-label="Component stories" data-lab-story-list>
+        {manifest.stories.map((story, index) => <button type="button" data-lab-story={story.id} aria-pressed={index === 0 ? 'true' : 'false'} tabindex={index === 0 ? 0 : -1}><span>{story.family}</span><strong>{story.title}</strong></button>)}
+      </nav>
+      <div data-lab-empty hidden><p>No stories match these filters.</p><button type="button" class="lab-button" data-lab-reset>Clear filters</button></div>
+      <p class="lab-supporting">Use ↑ / ↓ to browse stories. Press <kbd>/</kbd> to search.</p>
+    </aside>
+
+    <div class="lab-workbench">
+      <header class="lab-story-heading"><div><span class="eyebrow" data-lab-story-family>{first?.family ?? 'COMPONENT'}</span><h2 data-lab-title>{first?.title ?? 'No captures available'}</h2><p data-lab-description>{first?.description ?? 'Generate the native capture manifest to explore components.'}</p></div><span class="lab-badge">Native renderer capture</span></header>
+      <div class="lab-controls" aria-label="Capture variants">
+        <label class="lab-field" for="lab-palette">Palette<select id="lab-palette" data-lab-dimension="palette" disabled></select></label>
+        <label class="lab-field" for="lab-state">State<select id="lab-state" data-lab-dimension="state" disabled></select></label>
+        <label class="lab-field" for="lab-scale">Pixel density<select id="lab-scale" data-lab-dimension="scale" disabled></select></label>
+        <label class="lab-field" for="lab-viewport">Viewport<select id="lab-viewport" data-lab-dimension="viewport" disabled></select></label>
+      </div>
+      <div class="lab-stage-toolbar"><p class="lab-supporting" data-lab-dimensions>{initial ? `${initial.viewport.width} × ${initial.viewport.height} logical pixels` : ''}</p><label class="lab-zoom" for="lab-zoom">View zoom<select id="lab-zoom" data-lab-zoom><option value="fit">Fit</option><option value="1">100% logical</option><option value="2">200% logical</option><option value="pixels">Actual pixels</option></select></label></div>
+      <div class="lab-stage" data-lab-stage role="region" aria-label="Native component preview; scroll to inspect enlarged captures" tabindex="0">
+        <div class="lab-canvas" data-lab-canvas>
+          {initial && <img data-lab-image src={withBase(`/component-lab/${initial.image.path}`)} width={initial.image.width} height={initial.image.height} alt={`${first.title}, ${initial.state}; native renderer capture`} decoding="async" />}
+        </div>
+        <p class="lab-stage-notice" data-lab-image-status role="status" hidden>Loading capture…</p>
+      </div>
+      <p class="lab-feedback" data-lab-status role="status" aria-live="polite">Choose a state to compare native pixels. The image itself does not accept desktop input.</p>
+      <div class="lab-actions"><button type="button" class="lab-button" data-lab-share disabled>Copy story link</button><a class="lab-button" data-lab-download href={initial ? withBase(`/component-lab/${initial.image.path}`) : '#'} download>Download PNG ↗</a><a class="lab-button" href={withBase('/design-system/#catalog')}>Explore design tokens ↗</a></div>
+      <details class="lab-details" open><summary>Recipe, tokens and source</summary><div class="lab-detail-grid"><div><h3>Rust recipe</h3><pre class="lab-recipe" tabindex="0"><code data-lab-recipe>{first?.recipe ?? ''}</code></pre><a class="text-link" data-lab-source href={captureSourceRoot + (first?.source.path ?? 'lucent/apps/lucent-lab')}>{first?.source.symbol ?? 'Story source'} ↗</a></div><div><h3>Design tokens</h3><ul class="lab-token-list" data-lab-tokens>{first?.tokens.map(token => <li><code>{token}</code></li>)}</ul><h3>Capture provenance</h3><p class="lab-supporting" data-lab-provenance>Generated by the native Rust exporter.</p></div></div></details>
+      <p class="lab-supporting">Changing palette or state selects another Rust-rendered image. Density changes captured pixel detail; zoom only changes its viewing size. These captures do not establish compositor input, animation smoothness or performance.</p>
+      <noscript><p class="lab-feedback">JavaScript enables story and variant selection. The first native capture is shown above. Run the native lab below to interact with the Rust controls.</p></noscript>
+    </div>
+  </section>
+
+  <section class="lab-section wrap" id="shell-references"><span class="eyebrow">IN CONTEXT / PRODUCTION REGRESSION REFERENCES</span><h2>The pieces become a shell.</h2><p>These existing visual-test baselines show production compositions built with the framework. They are separate from the lab stories and do not represent interactive lab or native system-service coverage.</p><div class="lab-reference-grid">{references.map(reference => <details class="lab-reference"><summary>{reference.title}<span>Regression reference · 2×</span></summary><img src={reference.image.src} width={reference.image.width} height={reference.image.height} loading="lazy" alt={`${reference.title} production visual-test fixture`} /><p>{reference.description}</p></details>)}</div><a class="text-link" href={withBase('/docs/#quality')}>How production visual checks work ↗</a></section>
+
+  <section class="lab-section wrap" id="develop"><span class="eyebrow">DEVELOP / THE SAME RUST STORIES</span><h2>Inspect it here.<br />Feel it in Wayland.</h2><p>The native lab runs as an independent layer-shell client. Its controls change local fixture state; it does not replace your desktop or call the shell’s audio, network or power services.</p><CodeBlock code="cargo run --manifest-path lucent/Cargo.toml --locked -p lucent-lab" label="In a Wayland session with layer-shell and Vulkan" /><p>Regenerate the browser captures through the same native renderer, then serve the Astro site. See <a class="text-link" href={sourceUrl('docs/component-lab.md')}>the component lab guide</a> for the export command, story structure and validation boundaries.</p></section>
+  <script src="../scripts/component-lab.ts"></script>
+</Base>

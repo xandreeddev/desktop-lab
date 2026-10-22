@@ -133,6 +133,14 @@ class Boundaries(unittest.TestCase):
                 modules.add(node.module)
         self.assertLessEqual(modules, {'json', 're'})
 
+    def test_component_lab_consumes_production_ui_without_os_adapters(self):
+        self.assert_no_platform_operations(sources(ROOT / 'lucent/apps/lucent-lab/src',
+            ('main.rs', 'render.rs')), ('lucent_services', 'lucent_auth'))
+        dependencies = reachable(self.graph, 'lucent-lab')
+        self.assertIn('lucent-design', dependencies)
+        self.assertIn('lucent-menu', dependencies)
+        self.assertTrue({'lucent-services', 'lucent-auth', 'lucent-desktop'}.isdisjoint(dependencies))
+
     def test_launcher_does_not_import_the_root_component_or_adapter_bundle(self):
         root = ROOT / 'lucent/apps/lucent-desktop/src'
         paths = sources(root / 'launcher') + [root / 'artwork.rs', root / 'actions.rs', root / 'widgets/catalog.rs']
