@@ -4,7 +4,7 @@ import RuntimeStatus from '../../components/RuntimeStatus.astro';
 import CodeBlock from '../../components/CodeBlock.astro';
 import { withBase } from '../../data/urls';
 import { sourceUrl } from '../../data/source';
-const sections: [string, string][] = [['launcher','01 · Launcher size'],['controls','02 · Keyboard and windows'],['appearance','03 · Appearance and widgets'],['files','04 · Saved preferences'],['services','05 · System services'],['recovery','06 · Restart and rollback']];
+const sections: [string, string][] = [['launcher','01 · Launcher size'],['controls','02 · Keyboard and windows'],['appearance','03 · Appearance and widgets'],['files','04 · Saved preferences'],['services','05 · System services'],['recovery','06 · Restart and rollback'],['development','07 · Develop with reload']];
 const settingsExample = JSON.stringify({launcher:{width:800,max_height:720}}, null, 2);
 ---
 <DocGuide chapter="desktop" title="Use and configure Lucent" heading="Your desktop." accent="Your preferences." description="Change launcher size, appearance, widgets and shortcuts. Understand which settings belong to Lucent and which belong to Omarchy or Hyprland." sections={sections} audience="Desktop user guide">
@@ -97,4 +97,10 @@ const settingsExample = JSON.stringify({launcher:{width:800,max_height:720}}, nu
     <p>Login-manager rollback is separate: use <code>scripts/lucent-login.py</code> and its documented rollback action only when that integration was installed. Read <a href={sourceUrl('docs/install-and-rollback.md')}>installation and rollback</a> before changing session setup. Development and VM testing instructions are in the <a href={sourceUrl('.agents/skills/lucent-desktop/SKILL.md')}>lucent-desktop repository skill</a>.</p>
   </section>
 
+  <section id="development"><span class="eyebrow">07 / DEVELOP WITH RELOAD</span><h2>Edit, rebuild,<br />restart Lucent.</h2>
+    <p>Preferences already apply live through the UI and <code>lucent-cli</code>. For Rust, artwork or design-token changes, the opt-in developer command builds <code>lucent-desktop</code>, <code>lucent-cli</code> and <code>lucent-menu</code>, validates their bundle with seven theme support files and restarts the installed Lucent service. Run it as your desktop user on the machine running Lucent:</p>
+    <CodeBlock code="python3 scripts/lucent-dev.py doctor\npython3 scripts/lucent-dev.py once\npython3 scripts/lucent-dev.py watch" label="From the repository root on the machine running Lucent" />
+    <p>Hyprland and your applications keep running. Open shell panels, launcher queries and other transient UI state start fresh; saved preferences reload. Compile errors leave the current desktop running. A build can finish while locked; the watcher retains its pending bundle and waits for a safe session before applying. Apply checks readiness and can restore its original files after failure. Ctrl+C stops the watcher; normal login does not start it.</p>
+    <p>The reload excludes secure clients, login/PAM, the session supervisor and integration rules. Those changes still use a reviewed manual install. Read <a href={sourceUrl('docs/dev-reload.md')}>the development reload guide</a> for separate build/apply commands, token generation, bounded builds and rollback. A real bounded build and VM reload/failed-start recovery passed separately; a combined source-save/build/reload watcher run on a physical installed desktop remains to be tested. The <a href={sourceUrl('reports/measurements/lucent-dev-reload.json')}>validation record</a> identifies the tested tool and bundle revisions.</p>
+  </section>
 </DocGuide>

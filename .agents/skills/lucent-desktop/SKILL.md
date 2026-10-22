@@ -36,6 +36,17 @@ Work from the repository root and inspect the existing state before edits. Read 
 
 For validation, use `cargo test --manifest-path lucent/Cargo.toml -p lucent-desktop` and the related domain/adapter tests. Run the ignored `visual_regressions` test explicitly on a Vulkan-capable system. It writes `reports/local/visual-tests/index.html`; review actual/diff images at 1×/2× and narrow sizes. Update goldens with `LUCENT_UPDATE_GOLDENS=1` only after reviewing intentional changes, then rerun without that flag. Keep unrelated golden changes out of the commit.
 
+For an explicitly requested development loop on an existing installed session,
+use `python3 scripts/lucent-dev.py doctor`, then `once` or `watch`; see
+[the development reload guide](../../../docs/dev-reload.md). Keep the watcher
+opt-in and its build/deployment lease exclusive. Reload covers three ordinary
+clients and their seven theme support files; secure clients, supervisor, units and integration rules still
+need a reviewed coherent installation. Preserve token generation, bounded builds,
+stale-source rejection, owned-service readiness and guarded rollback; Ctrl+C
+must stop development work while leaving the normal desktop running. Deferred
+session guards retain a successful pending bundle for safe retry. A mocked
+or compiled path is separate from an actual installed-session acceptance run.
+
 For a requested VM test/deployment:
 
 1. `python3 vm/lab.py status`; use the existing Lucent guest and keep other profiles untouched. Check host memory before boot/build. The guest can be killed by host OOM independently of Lucent correctness.

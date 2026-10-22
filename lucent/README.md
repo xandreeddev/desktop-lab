@@ -47,6 +47,24 @@ identifies current native features, retained backends and unsupported stock plug
 
 ## Build and install
 
+For edits to an already installed desktop, use the opt-in
+[development reload workflow](../docs/dev-reload.md):
+
+```sh
+python3 scripts/lucent-dev.py doctor
+python3 scripts/lucent-dev.py watch
+```
+
+It rebuilds `lucent-desktop`, `lucent-cli` and `lucent-menu`, applies a checked
+bundle with generated theme support files and restarts only Lucent. Hyprland and
+application windows keep running;
+transient shell UI starts fresh and saved preferences reload. Ctrl+C stops the
+watcher. Secure clients, session integration and generated compositor rules
+still use the manual installation path below. The watcher can build while locked
+and waits for a safe session before applying. A bounded build and native VM
+apply/failed-start rollback passed separately; see the guide for source
+identities and the remaining combined watcher acceptance.
+
 Arch dependencies: `rust clang pam polkit pkgconf wayland libxkbcommon fontconfig vulkan-icd-loader swayidle hyprlock wl-clipboard wtype`
 and a Vulkan driver. Desktop adapters use `playerctl`, `wireplumber`,
 `networkmanager` and `curl`; missing services show their unavailable state.

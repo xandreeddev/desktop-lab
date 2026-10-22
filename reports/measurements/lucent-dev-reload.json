@@ -1,0 +1,100 @@
+{
+  "schema": 1,
+  "milestone": "opt-in-development-reload",
+  "status": "bounded-build-and-native-vm-apply-rollback-verified-separately",
+  "implementation_source_commit": "445e4ef76a47e663d72d38f1ef606b01d8c6f720",
+  "build_tool_source_commit": "ecf6423ef0926cb956cfb6a8762f504e25614166",
+  "bundle_source_commit": "8a3cd7d8c681700cb8d3477c747e2550c2c14b09",
+  "bundle_manifest_sha256": "df37b7a728514dd00b4f55cf10cccbdfed8aed9f8db1db493c9922eaa4f236bd",
+  "scope": "Host file-notification/control tests, real bounded host Cargo build, and real VM apply/readiness/rollback. No combined source-save/build/reload watcher or physical-desktop/performance acceptance.",
+  "architecture": {
+    "developer_tool": "External Python standard-library inotify/build coordinator; desktop domain, ports, components and renderer have no dependency on it.",
+    "build": "One coalesced build at a time; source freshness checked at publication and pre-apply; newest pending success waits while session guards are active.",
+    "deployment_adapter": "Owned Lucent service, checked atomic exchanges, durable backups/journal, native readiness and startup survival, guarded restoration on failure.",
+    "scope": "Three ordinary clients and seven generated theme support files; secure clients, authentication, supervisor, unit and compositor integration require their normal installation workflow."
+  },
+  "local_checks": {
+    "python_passed": 596,
+    "new_development_checks": 52,
+    "design_tokens_verified": 582,
+    "app_icons_verified": 58,
+    "file_notifications": "Real Linux inotify temporary-tree tests; build/watch coordination uses controlled fakes.",
+    "rollback_cgroup": "Real stop/drain implementation exercised with a populated root and drained captured Lucent cgroup."
+  },
+  "release_build": {
+    "exit_code": 0,
+    "seconds": 378.659,
+    "log_sha256": "6ee56befa57100ca79c1a0f28cc6586d9da37820d87830fb7897691b4374b2b7",
+    "profile": "release",
+    "source_dirty": false,
+    "ordinary_binaries": {
+      "lucent-desktop": {
+        "sha256": "c6790983d1953fa5c6c81f9c450194252213dbba983153ef8f85498519e5976f",
+        "bytes": 37216616
+      },
+      "lucent-cli": {
+        "sha256": "9f205a59ad39dfcb445dabb67fe9fb35ee3ad53c8bc2bd2059e17855cead943e",
+        "bytes": 409112
+      },
+      "lucent-menu": {
+        "sha256": "f7e945c0246666176b23dfddd362ba9ffae6e5097b5e8b16d735ac908939284e",
+        "bytes": 24272024
+      }
+    },
+    "support_files": 7,
+    "cargo_jobs": 1,
+    "cpu_quota_percent": 100,
+    "memory_high_mib": 900,
+    "memory_max_mib": 1400,
+    "tasks_max": 256,
+    "runtime_limit_minutes": 30,
+    "original_release_archive_preserved": true,
+    "build_unit_drained_and_control_directory_removed": true
+  },
+  "native_trial": {
+    "passed": true,
+    "virtual_machine": "QEMU/KVM, 4 vCPU, 3072 MiB; Hyprland; native RADV RENOIR/Mesa 26.2.2",
+    "display": "1280x800 at 60 Hz, scale 1",
+    "checks": {
+      "successful_reload_and_existing_app_survives": true,
+      "good_apply_preserves_preferences_media_security": true,
+      "invalid_bundle_leaves_existing_shell_and_app_running": true,
+      "failed_candidate_rolls_back_and_app_survives": true,
+      "rollback_preserves_preferences_media_security_outputs_compositor_pointer": true
+    },
+    "ordinary_terminal_window_and_unit_survived": true,
+    "deliberate_failure": "Valid ELF /usr/bin/false with matching manifest; all ten files published and candidate start attempted; journal ended rolled-back with rollback_complete true.",
+    "readiness_survival_seconds_minimum": 35,
+    "owned_test_application_removed": true,
+    "private_test_stages_removed": true,
+    "durable_transaction_journals_retained": true,
+    "logs": {
+      "good_apply": {
+        "exit_code": 0,
+        "log_sha256": "e71c286770b05a06332dfdf8b7e6a30612b206a47b423df604876530d9a77cf1"
+      },
+      "invalid_apply": {
+        "exit_code": 1,
+        "log_sha256": "9fd991693e294142a44f33b09151a86b81f14fc22bc309dc988d6a47a99b10a0"
+      },
+      "bad_apply": {
+        "exit_code": 1,
+        "log_sha256": "71b0ab7bc78cf1ea3d61244f52fe2ab11674d7b506a2556447f21643038e089a"
+      }
+    }
+  },
+  "earlier_failed_trial": {
+    "tool_source_commit": "ecf6423ef0926cb956cfb6a8762f504e25614166",
+    "status": "failed-result-retained",
+    "failure": "Fast failed startup cleared the pending service ControlGroup. Recovery stopped the candidate, then incorrectly inspected the populated root cgroup before restoring files.",
+    "separate_guarded_recovery": "Verified all ten original files restored, protected state preserved and desktop survival; original failed receipt unchanged.",
+    "fix": "Rollback passes the original captured Lucent cgroup into stop/drain; empty/root cgroups are rejected before stop. Three regression tests added before the fresh passing trial."
+  },
+  "not_claimed": [
+    "Continuous source-save to Cargo to installed-session reload watcher acceptance",
+    "Physical installed desktop startup, suspend/resume and multi-monitor acceptance",
+    "Animation smoothness, 60 FPS, or RSS/performance target acceptance",
+    "Acceptance or merge of the VM bundle source separate rendering/performance work",
+    "In-process Rust hot module replacement or preservation of transient shell UI"
+  ]
+}
