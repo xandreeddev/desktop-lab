@@ -20,16 +20,10 @@ fn button(
     theme: Theme,
 ) -> Element<Message> {
     theme
-        .button(label, if enabled { message } else { Message::Ignore })
+        .button_enabled(label, message, enabled)
         .id(id)
         .width(Length::Fill)
-        .tab_stop(enabled)
         .wrap(token::TITLE_LINES as usize)
-        .opacity(if enabled {
-            1.
-        } else {
-            lucent_design::opacity::MUTED
-        })
 }
 fn card(children: Vec<Element<Message>>, theme: Theme) -> Element<Message> {
     Element::column(children)

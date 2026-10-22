@@ -1,0 +1,17 @@
+[package]
+name = "lucent-lab"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+lucent-api = { path = "../../crates/lucent-api" }
+lucent-design = { path = "../../crates/lucent-design" }
+lucent-domain = { path = "../../crates/lucent-domain" }
+lucent-menu = { path = "../lucent-menu" }
+lucent-ui = { path = "../../crates/lucent-ui" }
+lucent-render = { path = "../../crates/lucent-render" }
+lucent-wayland = { path = "../../crates/lucent-wayland" }
+serde_json = "1"
+image = { version = "0.25", default-features = false, features = ["png"] }
+sha2 = "0.10"
