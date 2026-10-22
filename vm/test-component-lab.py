@@ -25,6 +25,13 @@ from owned_application_units import UNIT_IDENTITY
 
 ROOT = Path(__file__).resolve().parents[1]
 STORIES = ('buttons', 'input', 'input-group', 'toggle', 'slider', 'scroll', 'popover', 'menu', 'motion')
+# HyprCtl reports these current-composition diagnostics alongside monitor
+# identity/configuration. An Overlay layer may change their eligibility. The
+# diagnostic native attempt confirmed directScanoutBlockedBy alone changed; retain
+# every raw snapshot, but compare all other monitor fields exactly (including
+# mode, scale, refresh, workspace, reservation, DPMS and color configuration).
+MONITOR_RENDER_HINTS = frozenset(('solitary', 'solitaryBlockedBy', 'activelyTearing', 'tearingBlockedBy',
+                                 'directScanoutTo', 'directScanoutBlockedBy', 'hardwareCursorsInUse'))
 ENTRY = r'''import hashlib,os,stat,sys
 path=sys.argv[1];fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
 with os.fdopen(fd,'rb') as stream:
@@ -49,6 +56,11 @@ def identity(value):
             value.st_size, value.st_mtime_ns, value.st_ctime_ns)
 
 
+def normal_signature(value):
+    return {**value, 'monitors': [{key: item for key, item in monitor.items() if key not in MONITOR_RENDER_HINTS}
+                                 for monitor in value['monitors']]}
+
+
 def private(path, value):
     with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), 'w') as out:
         json.dump(value, out, indent=2)
@@ -71,7 +83,7 @@ def visible_point(hit, origin):
 # Its origin receipt binds the Python wrapper before exec and the actual Lab
 # PID/birth/cgroup afterward; retirement checks the whole original unit.
 GUEST = 'if not __debug__: raise SystemExit("assertions_required")\n' + UNIT_IDENTITY + r'''
-import socket,struct,sys
+import errno,fcntl,socket,struct,sys
 stage=Path(sys.argv[2]);unit=sys.argv[3];expected=sys.argv[4]
 assert stage.parent==Path.home()/'.cache' and re.fullmatch('lucent-component-lab-[0-9a-f]{24}',stage.name)
 assert stage.resolve()==stage and stat.S_ISDIR(stage.lstat().st_mode) and stage.stat().st_uid==os.getuid()
@@ -97,6 +109,54 @@ def file(path):
    assert identity(os.fstat(stream.fileno()))==facts
  assert identity(path.lstat())==facts
  return {'identity':facts,**value}
+def ipc_identity(value):
+ return [value.st_dev,value.st_ino,value.st_mode,value.st_uid,value.st_gid,value.st_size,value.st_mtime_ns,value.st_ctime_ns]
+def ipc_paths():
+ runtime=Path(os.environ['XDG_RUNTIME_DIR']);info=runtime.lstat()
+ assert runtime.is_absolute() and runtime.resolve(strict=True)==runtime and stat.S_ISDIR(info.st_mode) and info.st_uid==os.getuid()
+ return runtime/'lucent-lab.sock',runtime/'lucent-lab.lock'
+def present(path):
+ try:path.lstat();return True
+ except FileNotFoundError:return False
+def no_lab_process():
+ for path in Path('/proc').iterdir():
+  if not path.name.isdigit():continue
+  try:comm=(path/'comm').read_text().strip()
+  except (FileNotFoundError,ProcessLookupError):continue
+  assert comm!='lucent-lab','another_lab_process'
+def existing_ipc_lock(path):
+ fd=os.open(path,os.O_RDWR|os.O_NONBLOCK|os.O_NOFOLLOW)
+ try:
+  value=os.fstat(fd)
+  assert stat.S_ISREG(value.st_mode) and value.st_uid==os.getuid() and value.st_size==0 and value.st_nlink==1
+  assert not (stat.S_IMODE(value.st_mode)&0o022)
+  fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+  assert ipc_identity(path.lstat())==ipc_identity(os.fstat(fd))==ipc_identity(value)
+  return fd,ipc_identity(value)
+ except BaseException:os.close(fd);raise
+def dead_socket(path,expected=None):
+ value=path.lstat()
+ assert stat.S_ISSOCK(value.st_mode) and value.st_uid==os.getuid() and value.st_nlink==1
+ facts=ipc_identity(value)
+ if expected is not None:assert facts==expected,'socket_identity_changed'
+ with socket.socket(socket.AF_UNIX) as connection:
+  connection.settimeout(1)
+  assert connection.connect_ex(str(path))==errno.ECONNREFUSED,'socket_not_proven_dead'
+ assert ipc_identity(path.lstat())==facts
+ return facts
+def ipc_before():
+ sock,lock=ipc_paths();no_lab_process()
+ if not present(lock):assert not present(sock);return
+ fd,_=existing_ipc_lock(lock)
+ try:
+  no_lab_process()
+  if present(sock):dead_socket(sock)
+ finally:os.close(fd)
+def ipc_facts(sock):
+ path,lock=ipc_paths();info=lock.lstat()
+ assert stat.S_ISREG(info.st_mode) and info.st_uid==os.getuid() and info.st_size==0 and info.st_nlink==1
+ assert ipc_identity(path.lstat())==sock
+ return {'socket':sock,'lock':ipc_identity(info)}
 def peer(name):
  path=Path(os.environ['XDG_RUNTIME_DIR'])/(name+'.sock');info=path.lstat()
  assert stat.S_ISSOCK(info.st_mode) and info.st_uid==os.getuid()
@@ -111,7 +171,9 @@ def peer(name):
    if not chunk:break
    data.extend(chunk);assert len(data)<=8*1024*1024
  assert path.lstat()==info
- return process,json.loads(data)
+ value=json.loads(data)
+ if name=='lucent-lab':return process,value,ipc_facts(ipc_identity(info))
+ return process,value
 def layers():
  result=[]
  def visit(value):
@@ -159,9 +221,7 @@ if op=='serve':
  with os.fdopen(fd,'w') as stream:json.dump(origin,stream)
  os.execv(stage/'lucent-lab',[str(stage/'lucent-lab')])
 elif op=='before':
- runtime=Path(os.environ['XDG_RUNTIME_DIR'])
- assert not (runtime/'lucent-lab.sock').exists()
- assert not any((p/'comm').read_text().strip()=='lucent-lab' for p in Path('/proc').iterdir() if p.name.isdigit() and (p/'comm').exists())
+ ipc_before()
  assert unit_snapshot(unit)['load']=='not-found'
  print(json.dumps(baseline()))
 elif op=='guard':
@@ -171,13 +231,34 @@ elif op=='probe':
  own=[entry for entry in native if entry['namespace']=='lucent-lab-lab'];assert len(own)==1 and own[0]['pid']==process['pid']
  desktop,_=peer('lucent')
  assert all(entry in own or (entry['namespace'].startswith('lucent-') and entry['pid']==desktop['pid']) for entry in native)
- peer_process,scene=peer('lucent-lab');assert peer_process==process
+ peer_process,scene,ipc=peer('lucent-lab');assert peer_process==process
  assert len(scene['surfaces'])==1 and scene['surfaces'][0]['id']=='lab' and scene['surfaces'][0]['frames']>0
- print(json.dumps({'process':process,'unit':origin['unit'],'scene':scene,'layer':own[0]}))
+ print(json.dumps({'process':process,'unit':origin['unit'],'scene':scene,'layer':own[0],'ipc':ipc}))
 elif op=='retire':
  origin=json.loads((stage/'origin.json').read_text())
  retire_original_unit(unit,argv,origin);assert _retirement_drained(origin)
  print(json.dumps({'retired':True}))
+elif op=='ipc-clean':
+ expected_ipc=json.load(sys.stdin);origin=json.loads((stage/'origin.json').read_text())
+ assert _retirement_drained(origin)
+ current=unit_snapshot(unit)
+ if current['load']!='not-found':
+  assert_unit_origin(current,unit,argv,origin)
+  assert current['active'] in ('inactive','failed')
+ sock,lock=ipc_paths();fd,lock_facts=existing_ipc_lock(lock)
+ try:
+  assert lock_facts==expected_ipc['lock'],'lock_identity_changed'
+  no_lab_process()
+  if present(sock):
+   dead_socket(sock,expected_ipc['socket'])
+   assert ipc_identity(lock.lstat())==lock_facts
+   assert ipc_identity(sock.lstat())==expected_ipc['socket'];sock.unlink()
+  assert ipc_identity(lock.lstat())==lock_facts==ipc_identity(os.fstat(fd))
+  assert not present(sock)
+  # Keep the runtime's lock inode in place. Unlinking a held lock would allow
+  # another client to create/lock a new inode before this lease is released.
+ finally:os.close(fd)
+ print('true')
 elif op=='files':
  print(json.dumps({p.name:file(p) for p in stage.iterdir()}))
 elif op=='clean':
@@ -206,14 +287,30 @@ class Trial:
         self.ssh = [value.replace('StrictHostKeyChecking=accept-new', 'StrictHostKeyChecking=yes')
                     for value in lab.ssh_args('lucent')]
         self.stage, self.base, self.pointer, self.last = None, None, None, None
-        self.down, self.keys, self.started = False, (), False
+        self.down, self.keys, self.started, self.ipc = False, (), False, None
+        self.diagnostics, self.mismatches = 0, set()
         need(self.virsh('domuuid', self.name) == args.vm_uuid and
              self.virsh('domstate', self.name) == 'running', 'exact_running_vm_required')
 
     def command(self, argv, data=None, timeout=25):
-        result = subprocess.run(argv, input=data, capture_output=True, timeout=timeout)
-        need(result.returncode == 0 and len(result.stdout) <= 8 * 1024 * 1024, 'bounded_native_command_failed')
+        try:
+            result = subprocess.run(argv, input=data, capture_output=True, timeout=timeout)
+        except subprocess.TimeoutExpired as error:
+            self.command_failure(argv, None, error.stdout, error.stderr)
+            raise Failure('bounded_native_command_timeout') from None
+        if result.returncode != 0 or len(result.stdout) > 8 * 1024 * 1024:
+            self.command_failure(argv, result.returncode, result.stdout, result.stderr)
+            raise Failure('bounded_native_command_failed')
         return result.stdout.decode().strip()
+
+    def command_failure(self, argv, returncode, stdout, stderr):
+        if self.diagnostics >= 8:
+            return
+        self.diagnostics += 1
+        text = lambda value: (value or b'')[:65536].decode(errors='replace')
+        private(self.directory / f'command-failure-{self.diagnostics:02d}.json', {
+            'argv': [str(value)[:4096] for value in argv], 'returncode': returncode,
+            'stdout': text(stdout), 'stderr': text(stderr), 'streams_truncated_at_bytes': 65536})
 
     def virsh(self, *args):
         return self.command(['virsh', '-c', 'qemu:///session', *args], timeout=8)
@@ -230,11 +327,25 @@ class Trial:
         return json.loads(self.session('hyprctl', '-j', 'cursorpos'))
 
     def guard(self):
-        need(self.guest('guard') == self.base, 'normal_desktop_or_settings_changed')
+        current = self.guest('guard')
+        if current != self.base:
+            digest = hashlib.sha256(json.dumps(current, sort_keys=True).encode()).hexdigest()
+            if digest not in self.mismatches and len(self.mismatches) < 8:
+                self.mismatches.add(digest)
+                private(self.directory / f'normal-state-mismatch-{len(self.mismatches):02d}.json', {
+                    'expected': self.base, 'observed': current,
+                    'stable_state_equal': normal_signature(current) == normal_signature(self.base),
+                    'excluded_monitor_render_hints': sorted(MONITOR_RENDER_HINTS)})
+        need(normal_signature(current) == normal_signature(self.base), 'normal_desktop_or_settings_changed')
         need(self.cursor() == self.last, 'independent_pointer_motion')
 
     def probe(self):
-        return self.guest('probe')
+        state = self.guest('probe')
+        if self.ipc is None:
+            self.ipc = state['ipc']
+            private(self.directory / 'owned-ipc.json', self.ipc)
+        need(state['ipc'] == self.ipc, 'owned_ipc_identity_changed')
+        return state
 
     def wait(self, predicate, label, timeout=15, startup=False):
         deadline = time.monotonic() + timeout
@@ -431,6 +542,9 @@ def main():
                 report['success'] = False
             try:
                 need(not trial.started or report['restoration'].get('owned_unit_drained'), 'owned_unit_not_proven_drained')
+                if trial.started:
+                    need(trial.ipc is not None, 'owned_ipc_not_captured_stage_retained')
+                    report['restoration']['owned_dead_socket_removed_or_absent_lock_retained'] = trial.guest('ipc-clean', data=json.dumps(trial.ipc).encode())
                 if trial.base is not None:
                     trial.guard()
                     point = trial.pointer
