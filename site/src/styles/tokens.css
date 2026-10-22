@@ -509,6 +509,14 @@
   --component-displays-slide-distance: var(--component-bluetooth-slide-distance);
   --component-displays-title-lines: var(--component-bluetooth-title-lines);
   --component-displays-status-lines: var(--component-bluetooth-status-lines);
+  --component-lab-width: 1120px;
+  --component-lab-height: 688px;
+  --component-lab-nav-width: 224px;
+  --component-lab-toolbar-height: 80px;
+  --component-lab-status-height: 48px;
+  --component-lab-stage-width: 800px;
+  --component-lab-stage-height: 512px;
+  --component-lab-narrow-width: 352px;
   --icon-tiny: 16px;
   --icon-small: 17px;
   --icon-compact: 18px;

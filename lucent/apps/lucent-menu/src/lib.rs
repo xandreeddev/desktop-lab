@@ -219,6 +219,7 @@ impl Component for Menu {
                         .id(format!("menu-row-{index}"))
                         .on_hover(Message::Select(index))
                         .on_click(Message::Choose(index))
+                        .hover_feedback(!entry.disabled)
                         .tab_stop(false)
                 })
                 .collect();
@@ -276,7 +277,8 @@ impl Component for Menu {
             .id("menu-panel")
             .on_click(Message::Noop)
             .tab_stop(false)
-            .focus_outline(false);
+            .focus_outline(false)
+            .hover_feedback(false);
         t.apply(Element::stack(vec![panel]).fill())
     }
     fn update(&mut self, message: Message, effects: &mut Effects<Message>) {
@@ -585,6 +587,124 @@ mod tests {
         menu.update(Message::Query("Unavailable fixture".into()), &mut effects);
         menu.update(Message::Accept, &mut effects);
         assert!(!effects.exit);
+    }
+    #[test]
+    fn unavailable_menu_row_keeps_its_paint_and_selection_when_hovered() {
+        let mut r = request();
+        r.entries[0].disabled = true;
+        let (mut menu, completion) = Menu::new(r);
+        menu.init(&mut Effects::default());
+        let fonts = menu
+            .fonts()
+            .into_iter()
+            .map(|bytes| lucent_ui::text::Font::from_bytes(bytes, Default::default()).unwrap())
+            .collect();
+        let layout = Layout::new(Arc::new(fonts));
+        let cx = ViewContext {
+            surface: "menu",
+            instance: None,
+            width: 640.,
+            height: 580.,
+            now: 1.,
+            density: Density::ONE,
+        };
+        menu.update(
+            Message::Resize(cx.width, cx.height),
+            &mut Effects::default(),
+        );
+        let mut input = Interaction::default();
+        let scene = layout.build(&menu.view(&cx), cx.width, cx.height, &input, cx.now);
+        let row = scene
+            .hits
+            .iter()
+            .find(|hit| hit.id == "menu-row-0")
+            .unwrap();
+        let selected = menu.selection.selected;
+        let mut effects = Effects::default();
+        for message in input.motion(
+            &scene,
+            row.rect.x + row.rect.w / 2.,
+            row.rect.y + row.rect.h / 2.,
+            0.,
+        ) {
+            menu.update(message, &mut effects);
+        }
+        let hovered = layout.build(&menu.view(&cx), cx.width, cx.height, &input, cx.now);
+        assert_eq!(format!("{:?}", scene.paint), format!("{:?}", hovered.paint));
+        assert_eq!(menu.selection.selected, selected);
+        assert!(!effects.exit);
+        assert!(completion.outcome().is_none());
+    }
+    #[test]
+    fn passive_menu_padding_does_not_tint_the_panel_but_enabled_rows_still_hover() {
+        for light in [false, true] {
+            let mut request = request();
+            request.light = light;
+            let (mut menu, completion) = Menu::new(request);
+            menu.init(&mut Effects::default());
+            let fonts = menu
+                .fonts()
+                .into_iter()
+                .map(|bytes| lucent_ui::text::Font::from_bytes(bytes, Default::default()).unwrap())
+                .collect();
+            let layout = Layout::new(Arc::new(fonts));
+            let cx = ViewContext {
+                surface: "menu",
+                instance: None,
+                width: 640.,
+                height: 580.,
+                now: 1.,
+                density: Density::ONE,
+            };
+            menu.update(
+                Message::Resize(cx.width, cx.height),
+                &mut Effects::default(),
+            );
+            let mut input = Interaction::default();
+            let scene = layout.build(&menu.view(&cx), cx.width, cx.height, &input, cx.now);
+            let panel = scene
+                .hits
+                .iter()
+                .find(|hit| hit.id == "menu-panel")
+                .unwrap();
+            assert!(
+                input
+                    .motion(
+                        &scene,
+                        panel.rect.x + token::PADDING / 2.,
+                        panel.rect.y + panel.rect.h / 2.,
+                        0.,
+                    )
+                    .is_empty()
+            );
+            assert_eq!(input.hovered.as_deref(), Some("menu-panel"));
+            let hovered = layout.build(&menu.view(&cx), cx.width, cx.height, &input, cx.now);
+            assert_eq!(format!("{:?}", scene.paint), format!("{:?}", hovered.paint));
+
+            let row = scene
+                .hits
+                .iter()
+                .find(|hit| hit.id == "menu-row-1")
+                .unwrap();
+            let mut effects = Effects::default();
+            for message in input.motion(
+                &scene,
+                row.rect.x + row.rect.w / 2.,
+                row.rect.y + row.rect.h / 2.,
+                0.,
+            ) {
+                menu.update(message, &mut effects);
+            }
+            let hovered_row = layout.build(&menu.view(&cx), cx.width, cx.height, &input, cx.now);
+            assert_eq!(input.hovered.as_deref(), Some("menu-row-1"));
+            assert_eq!(menu.selection.selected, 1);
+            assert_ne!(
+                format!("{:?}", scene.paint),
+                format!("{:?}", hovered_row.paint)
+            );
+            assert!(!effects.exit);
+            assert!(completion.outcome().is_none());
+        }
     }
     #[test]
     fn escape_in_a_submenu_returns_to_parent_without_executing_a_value() {

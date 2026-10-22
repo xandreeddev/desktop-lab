@@ -4,7 +4,7 @@ use lucent_api::*;
 use lucent_design::{
     Theme,
     component::{bluetooth as token, input, scroll},
-    font, opacity, radius, space,
+    font, radius, space,
 };
 use lucent_domain::*;
 
@@ -23,12 +23,10 @@ fn button(
     theme: Theme,
 ) -> Element<Message> {
     theme
-        .button(label, if enabled { message } else { Message::Ignore })
+        .button_enabled(label, message, enabled)
         .id(id)
         .width(Length::Fill)
         .wrap(token::TITLE_LINES as usize)
-        .tab_stop(enabled)
-        .opacity(if enabled { 1. } else { opacity::MUTED })
 }
 fn card(children: Vec<Element<Message>>, theme: Theme) -> Element<Message> {
     Element::column(children)

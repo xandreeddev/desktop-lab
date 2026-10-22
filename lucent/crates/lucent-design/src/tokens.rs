@@ -641,6 +641,16 @@ pub mod component {
         pub const TITLE_LINES: f32 = 2.0;
         pub const STATUS_LINES: f32 = 3.0;
     }
+    pub mod lab {
+        pub const WIDTH: f32 = 1120.0;
+        pub const HEIGHT: f32 = 688.0;
+        pub const NAV_WIDTH: f32 = 224.0;
+        pub const TOOLBAR_HEIGHT: f32 = 80.0;
+        pub const STATUS_HEIGHT: f32 = 48.0;
+        pub const STAGE_WIDTH: f32 = 800.0;
+        pub const STAGE_HEIGHT: f32 = 512.0;
+        pub const NARROW_WIDTH: f32 = 352.0;
+    }
 }
 pub mod icon {
     pub const TINY: f32 = 16.0;

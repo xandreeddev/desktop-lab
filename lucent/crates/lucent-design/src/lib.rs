@@ -309,6 +309,25 @@ impl Theme {
             .color(self.on_surface)
             .background(self.surface_container)
     }
+    /// A plain button with explicit action availability. Disabled controls keep
+    /// their visual geometry, but have no pointer, keyboard or hover authority.
+    pub fn button_enabled<M>(
+        self,
+        label: impl Into<String>,
+        message: M,
+        enabled: bool,
+    ) -> Element<M> {
+        let mut button = self.button(label, message);
+        if !enabled {
+            button.click = None;
+            button = button
+                .opacity(opacity::MUTED)
+                .tab_stop(false)
+                .focus_outline(false)
+                .hover_feedback(false);
+        }
+        button
+    }
     /// A controlled choice with the same geometry as an ordinary button.
     /// The client owns selection and supplies the action for this choice.
     pub fn choice_button<M>(
@@ -442,6 +461,81 @@ impl Theme {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn disabled_buttons_keep_geometry_without_hits_hover_or_keyboard_authority() {
+        use lucent_api::Key;
+        use lucent_ui::{Interaction, Layout, Paint};
+        use std::sync::Arc;
+        let layout = Layout::new(Arc::new(vec![
+            lucent_ui::text::Font::from_bytes(
+                include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf") as &[u8],
+                Default::default(),
+            )
+            .unwrap(),
+        ]));
+        for theme in [Theme::new(false), Theme::new(true)] {
+            for width in [232., 640.] {
+                let tree = theme.apply(
+                    Element::column(vec![
+                        theme.button_enabled("Apply", 1, true).id("enabled"),
+                        theme.button_enabled("Apply", 2, false).id("disabled"),
+                        theme.button("After", 3).id("after"),
+                    ])
+                    .gap(space::MD),
+                );
+                let mut input = Interaction::default();
+                let scene = layout.build(&tree, width, 200., &input, 1.);
+                assert!(scene.hits.iter().all(|hit| hit.id != "disabled"));
+                let backgrounds: Vec<_> = scene
+                    .paint
+                    .iter()
+                    .filter_map(|paint| match paint {
+                        Paint::Shape { rect, .. } => Some(*rect),
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(backgrounds.len(), 3);
+                assert_eq!(backgrounds[0].w, backgrounds[1].w);
+                assert_eq!(backgrounds[0].h, backgrounds[1].h);
+                let disabled = backgrounds[1];
+                let point = (disabled.x + disabled.w / 2., disabled.y + disabled.h / 2.);
+                assert!(input.motion(&scene, point.0, point.1, 0.).is_empty());
+                assert!(input.press(&scene, point.0, point.1).is_none());
+                assert!(input.release(point.0, point.1).is_none());
+                let hovered = layout.build(&tree, width, 200., &input, 1.);
+                assert_eq!(format!("{:?}", scene.paint), format!("{:?}", hovered.paint));
+                input.focus = Some("disabled".into());
+                input.synchronize(&scene);
+                assert!(input.focus.is_none());
+                assert!(input.key(&scene, &Key::Tab).is_empty());
+                assert_eq!(input.focus.as_deref(), Some("enabled"));
+                assert_eq!(input.key(&scene, &Key::Enter), vec![1]);
+                input.key(&scene, &Key::Tab);
+                assert_eq!(input.focus.as_deref(), Some("after"));
+
+                let ordinary = theme.apply(theme.button("Apply", 1).id("enabled"));
+                let explicit_tree =
+                    theme.apply(theme.button_enabled("Apply", 1, true).id("enabled"));
+                let ordinary = layout.build(&ordinary, width, 80., &Interaction::default(), 1.);
+                let explicit =
+                    layout.build(&explicit_tree, width, 80., &Interaction::default(), 1.);
+                assert_eq!(
+                    format!("{:?}", ordinary.paint),
+                    format!("{:?}", explicit.paint)
+                );
+                assert_eq!(ordinary.hits[0].rect, explicit.hits[0].rect);
+                assert_eq!(ordinary.hits[0].click, explicit.hits[0].click);
+                let hit = explicit.hits[0].rect;
+                let mut pointer = Interaction::default();
+                pointer.motion(&explicit, hit.x + hit.w / 2., hit.y + hit.h / 2., 0.);
+                let enabled_hover = layout.build(&explicit_tree, width, 80., &pointer, 1.);
+                assert_ne!(
+                    format!("{:?}", explicit.paint),
+                    format!("{:?}", enabled_hover.paint)
+                );
+            }
+        }
+    }
     #[test]
     fn field_recipes_and_composed_controls_take_placeholder_opacity_from_tokens() {
         use lucent_api::{ScrollSpec, TextSelection};

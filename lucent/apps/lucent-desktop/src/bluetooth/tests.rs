@@ -559,15 +559,23 @@ fn pending_connection_cancel_is_reachable_while_ordinary_controls_are_disabled()
             cancel.rect.x + cancel.rect.w / 2.,
             cancel.rect.y + cancel.rect.h / 2.
         ));
-        let power = scene
-            .hits
-            .iter()
-            .find(|h| h.id == "bluetooth-power")
-            .unwrap();
-        assert!(matches!(power.click, Some(Message::Ignore)));
         assert!(
-            !power.tab_stop,
-            "Busy ordinary controls must not capture keyboard focus"
+            scene.hits.iter().all(|hit| hit.id != "bluetooth-power"),
+            "Busy ordinary controls retain their paint but no input target"
+        );
+        let painted_text = scene
+            .paint
+            .iter()
+            .filter_map(|paint| match paint {
+                lucent_ui::Paint::Text { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .flat_map(str::split_whitespace)
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            painted_text.contains("Power off"),
+            "Disabled ordinary controls remain visible across wrapped lines: {painted_text}"
         );
         assert!(client.ordinary_busy());
     }
