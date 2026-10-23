@@ -1,108 +1,50 @@
 # Current daily-use readiness
 
 The current integration base is accepted main
-`63aae5cb291ea1ed9dec17f3aafd80ea8ff494f0`
-([PR97](https://github.com/xandreeddev/desktop-lab/pull/97)). It merged normally
-at 2026-10-21 11:12:54 UTC after all six required checks succeeded on exact
-`cf317df392c7f626c2006db3f33b00bbd5d596de` with CLEAN mergeability. It includes
-the batched draw loop and synchronous current input layout.
-[Pages run 39590283245](https://github.com/xandreeddev/desktop-lab/actions/runs/39590283245)
-publishes that exact merge; public desktop/library HTML matches the artifact and
-pins its source links. Merging and publication do not extend native or
-performance acceptance. The later bar-presentation handoff has its own source
-and verification scope.
+`124b206938ebc3b41f5720838d01b8edf49a438d`
+([PR100](https://github.com/xandreeddev/desktop-lab/pull/100)). It merged normally
+at 2026-10-22 16:24:21 UTC after all six required checks passed on exact
+`efeaf6d177161a2825cbb283f14b721d27afac8a` with CLEAN mergeability.
+[Pages run 39813782003](https://github.com/xandreeddev/desktop-lab/actions/runs/39813782003)
+publishes that merge. Public desktop, library and component-lab HTML, the native
+capture manifest and a representative PNG match the deployed artifact. All 114
+capture-producing inputs also match the recorded source and merged tree.
 
-[PR98](https://github.com/xandreeddev/desktop-lab/pull/98) records the later
-bar-handoff build, driver comparisons and deployment checks. Its VM cohort and
-accepted-main source remain separate; the earlier measurements below retain
-their original binaries and workloads.
+The core Wi-Fi repair, safe display editing, international text and explicit
+application-opening paths are implemented with scoped native evidence. The
+seven-gap goal is **not complete**: eligible ≤300 MiB and source-rate presentation
+measurements, physical devices and broader application interoperability remain
+open. Delivery and a green test suite do not establish those results.
 
-The preceding delivery snapshot records accepted main
-`15e87287a79f4daca39bc42c1b5812a659e4e6cb`
-([PR95](https://github.com/xandreeddev/desktop-lab/pull/95)).
-[Pages run 39416696691](https://github.com/xandreeddev/desktop-lab/actions/runs/39416696691)
-publishes that exact merge; public desktop/library HTML returns HTTP 200 and
-matches the artifact and source links. The callback-observability follow-up keeps
-its own source, CI, merge and publication identities.
+The recent changes add:
 
-The earlier delivery snapshot records accepted main
-`2b3c6db4d2482cd8b8f0c4ee9fd0ed9c2640ce57`
-([PR94](https://github.com/xandreeddev/desktop-lab/pull/94)), merged normally at
-2026-10-20 10:22:42 UTC after all six required checks passed on exact
-`105a1150eadd42298ff532f71c613476e54289d5` with CLEAN mergeability. It includes
-the private disk-cache browser fixture allocator and its separate native results,
-alongside the earlier PR93/PR92/PR91 documentation and PR87 Text/Application runtime.
-The accepted runtime baseline remains `8e6d074b`.
-As of this recorded reconciliation, the latest deployed trial is coherent
-**unmerged and performance-unaccepted** `35ed87ed`. Its normal video interval
-observes 250.581/252.395 MiB mean/peak RSS; separate metadata records 32.2245
-joined prepared-revision advances/s and wall-time bounds of 59.7333–60.1290
-post-conversion prepared callbacks/s. Host pressure prevents resource and
-presentation acceptance. A separate `4c9a4739` harness passes twelve singular
-HTTP `%u` feature checks and nine restoration checks on that release. Earlier
-`8e`, `9b` and `bf98` results retain their sources. Merging, deployment and native
-acceptance remain separate facts; this guide records receipts rather than
-monitoring a live VM. [PR90](https://github.com/xandreeddev/desktop-lab/pull/90)
-remains a draft. The recorded CI-only `692dfcb1` child passed all six checks and
-leaves the tested `35ed` runtime unchanged; later heads have their own gates.
+- [PR98](https://github.com/xandreeddev/desktop-lab/pull/98): bar handoff and panel
+  lifecycle changes on main `726776de`. A separate `8a3cd7d8` candidate passes
+  nine native panel/input/reservation checks and strict headless Vulkan pixel
+  comparisons. Those observations do not prove transient no-flash behavior or
+  animation pacing, and do not accept the candidate's renderer/performance work.
+- [PR99](https://github.com/xandreeddev/desktop-lab/pull/99): the opt-in
+  [development reload tool](dev-reload.md), on main `6ee86830`. Its VM trial
+  applies a valid bundle, preserves an open terminal, rejects a damaged manifest
+  without restarting, and rolls back a deliberately failing candidate. The
+  tested bundle belongs to `8a3cd7d8`; combined save/build/watch operation on an
+  installed physical desktop remains separate acceptance.
+- [PR100](https://github.com/xandreeddev/desktop-lab/pull/100): the
+  [component lab](component-lab.md), with nine stories and 480 actual Vulkan
+  captures from `b9de7ba4`. Eight native interaction and four restoration checks
+  pass on the independent Lab client. They cover story selection, hover/focus,
+  edit events, slider/toggle events, popover opener/Escape focus, Menu keyboard
+  ownership and animation submissions settling. They establish neither generic
+  outside-click/focus-trap behavior nor clipboard/IME interoperability, numeric
+  fixture values, FPS or the entire desktop's performance.
 
-[Pages run 39407507695](https://github.com/xandreeddev/desktop-lab/actions/runs/39407507695)
-published accepted `2b3c6db4` successfully. Public desktop/library HTML returns
-HTTP 200, exactly matches the deployed artifact and pins source links to the
-workflow commit. Earlier `9129912b`, `6b50bd5e`, `d01ff7db` and `8ca4e820`
-publications retain their own receipts. At that snapshot, the subsequent
-CPU-shape/two-output follow-up's site, exact-head CI and publication gates were
-pending; its completed PR95 delivery is recorded above. The corrected
-`86df4e5b` harness passes four owned two-output Display flows on unchanged
-`35ed`; this documentation edit does not rerun them.
-
-The earlier three-second RADV liveness trial remains scoped to `a7f41ecc`.
-A later 16-check native run on `8e6d074b` passes two-output density/input and
-lifetime retirement with one owned headless output and full restoration. The fresh
-owned IME suite passes five feature and five restoration checks, including visible
-preedit/caret evidence and exact fixture retirement. A later `2044e54f` harness also
-passes all nine real Chromium/Notes clipboard checks and twelve restoration checks
-on unchanged `8e`; this covers keyboard text transfer in both directions on one
-virtual output. A genuine wired-only NetworkManager Applet run also passes five
-native interaction and four cleanup checks; a fresh outside-worker observation
-after normal test-package removal passes thirteen preservation checks, including
-all 964 original packages/reasons restored and the five test packages absent.
-Earlier failed runs and their
-separate guarded recovery retain their original results. The earlier `8e` normal resource observation remains
-host-pressure-ineligible. Its separate instrumented run records joined-source background
-callback intervals at 26.9992/s under pressure; eligible 60 FPS/RSS acceptance remains
-unproven. The seven requested gaps all remain in scope. Accessibility is separately deferred by the user.
-
-The shell's launcher, dock, widgets, notifications, lock/login and service panels
-are implemented. Several daily-use cases and their real-world acceptance remain
-unfinished. This guide corrects older “native testing pending” summaries where
-later evidence exists; it does not declare the entire desktop ready.
-
-A separate [callback-observability diagnostic](../reports/measurements/lucent-native-callback-timing.json)
-at `91b964ae` passes four execution and five restoration checks while preserving
-the normal `35ed87ed` desktop. Its 5,286 selected events have mean request-to-handler
-44.175852 ms, handler-to-next-attempt 0.006112 ms and attempt duration 1.603372 ms;
-2,641 feedbacks separately record 21.972535 intervals/s. These mixed wait and
-CPU wall-time measurements establish no causal bottleneck, eligible performance
-target or scanout claim. The [trace guide](frame-callback-timing.md) explains the
-bounded native ownership and separate clocks. This follow-up integrates only the
-standalone example and timing code on accepted main `15e87287`, without the
-unaccepted performance branch's renderer/video ancestors. Its final clean-source
-checks, native execution and delivery are separate from the `91b` evidence; no
-requested-gap status changes follow from the instrumentation alone.
-
-A separate [temporary allocator-policy trial](../reports/measurements/lucent-allocator-policy-trial.json)
-on unchanged `35ed87ed` and glibc 2.44 compared two fresh restarts, each with
-30 seconds of warmup and 300 seconds of observation. Mean/maximum sampled RSS
-was 247.794/248.359 MiB in the baseline and 211.335/219.051 MiB with the policy;
-process CPU was 154.197% and 184.340% of one logical core. **The policy was not
-adopted.** Both host-pressure intervals were ineligible; fixed phase ordering
-and this single run establish no causal gain, overnight stability, accepted
-300 MiB budget or presentation FPS. The owned runtime override was removed,
-normal service readiness with the three variables absent was verified, and
-the report’s scoped preservation checks passed.
-Earlier failed attempts remain separately recorded; the aged process is not a
-matched baseline for either fresh phase.
+These are recorded source-specific observations, not a live VM status. The
+accepted `8e6d074b` runtime evidence, later unmerged `35ed87ed` resource trial and
+`8a3cd7d8` candidate workflows retain separate identities. No candidate is
+promoted to accepted main by a documentation edit. Earlier delivery receipts,
+failed attempts and their independent recoveries remain in
+[the ledger](implementation-status.json) and the source-specific reports below.
+Accessibility remains user-deferred.
 
 ## What the status words mean
 
@@ -127,11 +69,11 @@ ledger's requirement history remains useful for the broader backlog.
 | --- | --- | --- |
 | Saved Wi-Fi recovery | Merged native masked SecretAgent repair retains the saved profile UUID and storage policy. Fourteen native NetworkManager/GUI checks pass against owned simulated WPA2/hidden radios, including cancellation, repair, DHCP, saved reconnection and exact restoration. | Enterprise/WEP provisioning, agent-owned vaults and physical-radio acceptance remain separate gaps; they are not implied by the owned fixture. |
 | Safe display settings | Native whole-layout drafts, fresh ordered observations, Apply → Keep/Revert and independent 15-second/UI-crash EOF rollback. Seven earlier one-output flows pass. The later `86df4e5b` harness on unchanged `35ed` passes four two-output flows: draft-only position, Apply/explicit Revert, peer scale-1.25 timeout and position Keep. The original 1920×1080 scale-1 output stays unchanged; the owned peer is 1280×960. Original monitor bytes/inode, preferences, supervision, outputs, workspace and cursor restore, with five positive owner checks and independent normal-OFF verification. Monitor ctime/link count are not claimed unchanged. | Physical displays, native enable/disable/rotation, input on a fractionally scaled Displays panel, cable hotplug, suspend/resume, compositor restart, secure-output changes and pacing remain open. All new panel input was on the original 1× output. The initial wrong-dispatch attempt failed before any checks and required separate guarded recovery; it remains failed evidence. The Keep-to-file-identity-capture host-loss interval retains manual recovery. |
-| Resources and animation | The latest recorded, unmerged `35ed87ed` trial observes **250.581/252.395 MiB** normal mean/peak RSS and **154.033% of one logical core**. Its separate metadata interval records **32.2245 distinct prepared-revision advances/s** in compositor feedback, while RPC wall-time bounds record **59.7333–60.1290 prepared callbacks/s** before mailbox publication. Profiling restores off with fresh independent verification. | Both phases are host-pressure-ineligible; observed RSS below 300 MiB is not accepted budget evidence, and 60 FPS presentation is not established. No causal gain, bottleneck attribution, decoder-drop, pixel-visibility or physical-scanout claim. Separate geometry-only runs record 37.0500 and later 48.3706 feedback intervals/s; the latter has 0.6585 ms mean successful draw CPU wall time. Neither has a host-pressure sample or attributes the unmeasured gaps. The short successful draw stages exclude GPU, full-loop, callback/dispatch and failed-retry timing. Eligible matched normal/animated and cold/warm evidence remains required. See [the source-specific upload trial](../reports/measurements/lucent-live-upload-35ed-native-trial.json), [shape diagnostic](../reports/measurements/lucent-native-shape-diagnostic.json), [later CPU diagnostic](../reports/measurements/lucent-native-shape-cpu-diagnostic.json) and [presentation analysis](native-presentation-analysis.md). |
+| Resources and animation | The recorded resource interval on unmerged `35ed87ed` observes **250.581/252.395 MiB** normal mean/peak RSS and **154.033% of one logical core**. Its separate metadata interval records **32.2245 distinct prepared-revision advances/s** in compositor feedback, while RPC wall-time bounds record **59.7333–60.1290 prepared callbacks/s** before mailbox publication. Profiling restores off with fresh independent verification. | Both phases are host-pressure-ineligible; observed RSS below 300 MiB is not accepted budget evidence, and 60 FPS presentation is not established. No causal gain, bottleneck attribution, decoder-drop, pixel-visibility or physical-scanout claim. Separate geometry-only runs record 37.0500 and later 48.3706 feedback intervals/s; the latter has 0.6585 ms mean successful draw CPU wall time. Neither has a host-pressure sample or attributes the unmeasured gaps. The short successful draw stages exclude GPU, full-loop, callback/dispatch and failed-retry timing. Eligible matched normal/animated and cold/warm evidence remains required. See [the source-specific upload trial](../reports/measurements/lucent-live-upload-35ed-native-trial.json), [shape diagnostic](../reports/measurements/lucent-native-shape-diagnostic.json), [later CPU diagnostic](../reports/measurements/lucent-native-shape-cpu-diagnostic.json) and [presentation analysis](native-presentation-analysis.md). |
 | International text | Merged `8e6d074b` implements script shaping, hard-paragraph context across soft wraps, exact row-bound visual source/caret maps, tab separator projection, deterministic fallback and opt-in text-input-v3 composition. Five owned native feature checks pass: visible preedit/caret advance, CJK commit/delete/history, masked-focus retirement, multiline composition and RTL navigation. | The fresh owned native suite passes all five feature and five restoration checks; earlier cleanup failures retain their original results. Third-party IME, broader native pixel/scroll details, delayed clipboard/focus races, physical/cross-output text and broader GUI clipboard coverage remain pending. The later Chromium/Notes test passes both directions with nine interaction and twelve restoration checks on one virtual output. Exact merged `8e6d074b` passes six CI checks, full workspace, six controlled service-protocol filters and 832 Vulkan desktop cases; those checks retain their own scope. |
-| Application integration | Accepted main includes fresh input-bound context, explicit file/URI Open and expanded XDG parsing. Earlier local-file `8e` and HTTP `%U` `9b` results keep their original scope. The `4c9a4739` harness on coherent `35ed` passes **twelve singular HTTP `%u` feature and nine restoration checks**: pointer, socket and CLI Open each create exactly one fresh owned HTTP document; the declared Action still creates two local documents. | Direct token consumption, default handlers, external navigation, other applications, physical hardware and broader workflows remain unverified. Application acceptance does not accept the trial’s performance. [Singular HTTP report](../reports/measurements/lucent-native-http-singular-uri-35ed.json), [local-file report](../reports/measurements/lucent-native-application-intents-d1.json) and [plural HTTP report](../reports/measurements/lucent-native-http-uris-9b.json) retain separate scopes; earlier failures stay unchanged. |
+| Application integration | Accepted main includes fresh input-bound context, explicit file/URI Open and expanded XDG parsing. Earlier local-file `8e` and HTTP `%U` `9b` results keep their original scope. The `4c9a4739` harness on coherent `35ed` passes **twelve singular HTTP `%u` feature and nine restoration checks**: pointer, socket and CLI Open each create exactly one fresh owned HTTP document; the declared Action still creates two local documents. | At this integration base, notification links use contextless `UriPort::open`; `XdgUri` starts the default handler without a fresh activation token. This is a remaining implementation gap, distinct from the tested explicit-application Open path. Default handlers, direct token consumption, external navigation, other applications and broader workflows also need native evidence. Application acceptance does not accept the trial’s performance. [Singular HTTP report](../reports/measurements/lucent-native-http-singular-uri-35ed.json), [local-file report](../reports/measurements/lucent-native-application-intents-d1.json) and [plural HTTP report](../reports/measurements/lucent-native-http-uris-9b.json) retain separate scopes; earlier failures stay unchanged. |
 | Real-world validation | Several owned native workflows already pass. The coherent `8e6d074b` also passes 16 checks for two simultaneous compositor outputs, one headless, including real panel input at 1×/2×/1.25×, held-button retirement, same-name recreation and exact restoration. | Physical monitors/cable hotplug, suspend/resume, secure-output changes, physical Bluetooth/audio and other power/radio hardware, additional third-party tray applications/menus, other GUI clipboard applications, rich content and delayed-transfer/focus races need broader testing. One genuine wired-only NetworkManager Applet item/menu/information action passes five interaction, four cleanup and thirteen outside-worker preservation checks on unchanged `8e`. The owned real Chromium/Notes keyboard flow passes nine interaction and twelve restoration checks. The earlier output test establishes no Display transaction or presentation FPS. The later four-flow [two-output Displays run](../reports/measurements/lucent-native-two-output-displays.json) separately covers draft/Apply/Revert/timeout/Keep with an owned headless peer; it does not establish physical or secure-output behavior or pacing. |
-| Documentation accuracy | This reconciliation updates current summaries and repository skills against source-specific evidence. | Keep summaries and the ledger current when later PRs merge; site validation is required for this documentation change. Historical evidence must retain its original scope. |
+| Documentation accuracy | Accepted PR100/main delivery and source-specific PR98–100 results are recorded above. Current summaries distinguish those results from historical pending checkpoints. | Each documentation change must pass its own source/site and delivery gates. Keep later summaries source-specific; historical reports retain their original outcomes and limits. |
 
 The later [native HTTP URI result](../reports/measurements/lucent-native-http-uris-9b.json)
 uses harness `7a92749e` and coherent `9b5420b7` desktop/CLI/consumer. Pointer,
@@ -159,7 +101,7 @@ their stated source; delivery and acceptance must be identified separately.
 | --- | --- | --- |
 | Text `8e6d074b` | Shared glyph/source geometry, script/fallback shaping and ordinary IME, plus hard-paragraph levels across wraps, exact row-bound resolved context, line-local L1/L2, tab separator projection and a stale-context cache guard. | Merged through PR87, source-reviewed and deployed. Focused formatting/Clippy, six wrapped UI, one upstream reference, six panel and two 1×/2× Vulkan checks pass. Final full workspace/protocol/832-case CI and the coherent release build also pass at `8e6d074b`; five owned native feature checks and all five restoration checks pass in the fresh controlled suite. Third-party IME and wider text acceptance remain pending. Earlier evidence retains its own source scope. The [text guide](text-shaping.md) and [typography review](text-baseline-review.md) preserve those sources. |
 | Application `bb304907` | Domain open/context values, XDG adapter dispatch/revalidation and generic opt-in Wayland activation effects; standalone intent consumer and owned native harness. | Merged through PR87 and included in deployed `8e6d074b`. With the independent `d1fff2d8` consumer, now merged through PR89, a later scoped Chromium run passes nine feature and eight restoration checks, including observed focus, fresh local documents and launch-context isolation. [Activation](application-activation.md) identifies the separate consumer source and remaining application/token-consumption boundary. |
-| Documentation/native-harness base `cd883719` | Includes guarded tools for real applications, GUI clipboard, third-party tray, simultaneous outputs and suspend/recovery, plus the reviewed IME lifetime/input guards from `6282122f`. Runtime compilation remains `8e6d074b`. | Tool existence alone is not native acceptance. The later `f16cb591` simultaneous-output harness passes its scoped 16-check native run on production `8e6d074b`. The `2044e54f` clipboard harness also passes nine real Chromium/Notes keyboard-text and twelve restoration checks on unchanged `8e`, one virtual output. The genuine wired-only tray run separately passes five interaction, four cleanup and thirteen post-removal preservation checks on unchanged `8e`. Other workflows, broader tray/clipboard apps/content/races, physical devices and hardware pacing remain pending. |
+| Documentation/native-harness base `cd883719` | Includes guarded tools for real applications, GUI clipboard, third-party tray, simultaneous outputs and suspend/recovery, plus the reviewed IME lifetime/input guards from `6282122f`. That snapshot compiled runtime `8e6d074b`. | Tool existence alone is not native acceptance. The later `f16cb591` simultaneous-output harness passes its scoped 16-check native run on production `8e6d074b`. The `2044e54f` clipboard harness also passes nine real Chromium/Notes keyboard-text and twelve restoration checks on unchanged `8e`, one virtual output. The genuine wired-only tray run separately passes five interaction, four cleanup and thirteen post-removal preservation checks on unchanged `8e`. Other workflows, broader tray/clipboard apps/content/races, physical devices and hardware pacing remain pending. |
 
 Exact `8e6d074bfcb30a0bcc0b371afddcd50c08993af0` passes both
 [push CI](https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281) and
@@ -251,7 +193,7 @@ table as a replacement for every acceptance record.
 
 ## Reading resource and animation claims
 
-The latest recorded native trial is `35ed87ed`, which combines decoder-session
+The recorded resource trial at `35ed87ed` combines decoder-session
 reuse and the bounded generic stream-upload pool. Its coherent nine-binary build
 and guarded deployment verify all six managed user clients and the root greeter,
 supervision beyond startup and preserved user/security state. Settings/theme are
@@ -295,7 +237,7 @@ component API: `view` reads `ViewContext.now` to move a rounded rectangle, while
 `Application::animating` requests another compositor-available frame. The shared
 [FrameDemand API](../lucent/crates/lucent-api/src/lib.rs) retains dirty work while
 a native callback is pending. There is no media producer, source clock, image or
-stream upload. The managed desktop stays on `35ed`; its video is paused and
+stream upload. During that diagnostic the managed desktop stayed on `35ed`; its video was paused and
 resumed through ordinary commands for this bounded diagnostic.
 
 The [shape report](../reports/measurements/lucent-native-shape-diagnostic.json)
@@ -311,7 +253,7 @@ archived example is also distinct from later accepted main `2b3c6db4`; neither
 diagnostic is a new full-shell deployment.
 
 A later [CPU-profiled shape run](../reports/measurements/lucent-native-shape-cpu-diagnostic.json)
-reuses the same archived `85a5` binary while managed `35ed` stays normal with its
+reuses the same archived `85a5` binary while keeping managed `35ed` normal with its
 profiling off. After 30 seconds of warmup, **5849 feedbacks / 5848 intervals over
 120.899995 compositor seconds = 48.370556 intervals/s** are recorded. All feedbacks
 join CPU rows; two additional terminal CPU rows are outside the saved feedback

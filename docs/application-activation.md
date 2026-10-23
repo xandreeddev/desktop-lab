@@ -1,18 +1,21 @@
 # Standard application activation
 
-Source scope: accepted main `d01ff7db` includes PR89's independent d1 consumer
-and the earlier PR87 runtime. Application integration `bb304907`, fresh intent
-tokens, explicit file/URI Open and expanded XDG parsing shipped in the coherent
-`8e6d074b` release. Its later real-Chromium local-file run passes nine feature
-and eight restoration checks. The VM now runs a coherent, unmerged `9b5420b7`
-performance trial; its separate HTTP URI run passes eleven native checks and
-nine restoration checks. Both observe first-launch focus without forcing it.
-Neither result establishes another application, default URI handler, external
-navigation or Chromium's consumption of a particular token. The `9b` application
-result does not accept its performance. Earlier failed and successful reports
-retain their exact sources and results; see [current readiness](current-readiness.md),
+Source scope: accepted main `124b206938ebc3b41f5720838d01b8edf49a438d`
+includes PR89's independent d1 consumer and the earlier PR87 runtime.
+Application integration `bb304907`, fresh input-bound intent, explicit file/URI
+Open and expanded XDG parsing shipped in the coherent `8e6d074b` release. Its
+later real-Chromium local-file run passes nine feature and eight restoration
+checks. Separate unmerged `9b5420b7` and `35ed87ed` trials supply plural and
+singular HTTP-URI evidence. Those application results accept neither candidate's
+performance and do not describe a currently running VM.
+
+Observed focus and token delivery do not prove Chromium consumed a particular
+activation token. Other applications, default handlers and external navigation
+still need native evidence; notification links also have the context gap below.
+Earlier failed and successful reports retain their exact sources and outcomes.
+See [current readiness](current-readiness.md),
 [local-file evidence](../reports/measurements/lucent-native-application-intents-d1.json)
-and [HTTP URI evidence](../reports/measurements/lucent-native-http-uris-9b.json).
+and [singular HTTP evidence](../reports/measurements/lucent-native-http-singular-uri-35ed.json).
 
 An application can now declare a command or standard desktop-service activation.
 `ApplicationLaunch::Command` carries its parsed argument vector.
@@ -23,6 +26,23 @@ There is no invented executable sentinel.
 `ApplicationPort` remains the domain contract. `XdgApplications` is its supplied
 adapter; the launcher and dock consume that port. Existing pure window-class
 matching and prefer-running focus behavior remain unchanged.
+
+## Remaining default-handler activation gap
+
+At this integration base, notification links take a different path:
+[the notification client](../lucent/apps/lucent-desktop/src/notifications.rs)
+revalidates its exact notification version and link, then calls
+[`UriPort::open`](../lucent/crates/lucent-domain/src/uri.rs).
+That contract has no launch context. Its
+[`XdgUri` adapter](../lucent/crates/lucent-services/src/applications.rs)
+starts `xdg-open` through the shared application-unit policy with an empty
+context. The child receives no fresh activation token; stale inherited tokens
+are deliberately removed.
+
+Passing the explicit-application Open tests does not fix or validate this
+contextless default-handler path. It needs fresh user-intent propagation across
+the existing port/adapter boundary and real default-handler acceptance. Views
+must continue emitting messages rather than performing process or URI IO.
 
 ## Native behavior
 
@@ -416,8 +436,9 @@ this local-document workload. Earlier failed reports remain unchanged.
 
 The unchanged deployed `8e6d074b` desktop and CLI pass a later scoped native run
 with harness `b6323e95` and the separately rebuilt `d1fff2d8` independent SDK
-consumer. The consumer is **not merged into accepted main**. Its binary is
-identified by the separate build and manifest hashes in
+consumer. At capture time the consumer was unmerged; it was later included in
+accepted main through PR89. The immutable report keeps its capture-time flag.
+Its binary is identified by the separate build and manifest hashes in
 [the sanitized report](../reports/measurements/lucent-native-application-intents-d1.json);
 the original coherent production archive remains unchanged.
 

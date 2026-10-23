@@ -157,14 +157,20 @@ visible-scene frame progression, so it does not establish dwell/fade duration,
 animation smoothness or scanout. The configured 0.5-second dwell and 0.16-second
 enter transition remain source values rather than measured timings.
 
-Native generic-popover focus, keyboard, dismissal and clipboard acceptance remain
-pending. Actual bar hint-band click-through is also pending because the inspector
-does not expose native input regions. Current RSS/CPU, sustained pacing, hardware,
-fractional/multi-output behavior and shaping/bidi/fallback/IME remain separate
-work; accessibility stays deferred. Astro checks at `d3f9b539` pass with zero
+A later independent [component lab](component-lab.md) run at `b9de7ba4`
+passes native popover focus on opening, Escape dismissal and restoration of the
+opener on one prepared output. That is a scoped addition to the earlier report,
+not a rerun of its tooltip workload. Native outside-click dismissal, keyboard
+focus trapping, popover clipboard interoperability and timing remain unverified.
+Actual bar hint-band click-through also remains unverified by that report.
+Current RSS/CPU, sustained pacing and physical/multiple-output behavior need
+separate evidence. Text shaping, bidi, fallback and owned-peer IME now have their
+own [source-specific results](text-shaping.md); accessibility stays deferred.
+
+The earlier Astro checks at `d3f9b539` pass with zero
 diagnostics; both root and GitHub Pages builds pass 13 pages and 489 links/assets.
 PR #77 merged normally as `f57d709c` after all six final-head checks passed at
 `d239eb77` with a clean merge state. GitHub Pages run `39222213152` succeeds at
-that merge; the public library page returns HTTP 200. The current main docs also
-serve through the existing LAN preview service on port 4321. These delivery
-receipts do not extend the native, timing or resource acceptance above.
+that merge; public library HTTP and the LAN preview were verified at that
+checkpoint. [Current readiness](current-readiness.md) records later delivery.
+Publication does not extend the native, timing or resource acceptance above.
