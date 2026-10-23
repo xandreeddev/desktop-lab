@@ -2,6 +2,9 @@ name: checks
 on: [push, pull_request]
 permissions:
   contents: read
+concurrency:
+  group: checks-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   site:
     runs-on: ubuntu-latest
@@ -39,7 +42,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev pkg-config mesa-vulkan-drivers libpam0g-dev libpolkit-agent-1-dev libclang-dev dbus libpulse-dev libavcodec-dev libavformat-dev libavutil-dev libswscale-dev ffmpeg pipewire pipewire-pulse pipewire-bin pulseaudio-utils
+      - name: Install native build dependencies
+        timeout-minutes: 10
+        run: |
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=3 -o DPkg::Lock::Timeout=60 update &&
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=3 -o DPkg::Lock::Timeout=60 install -y libwayland-dev libxkbcommon-dev pkg-config mesa-vulkan-drivers libpam0g-dev libpolkit-agent-1-dev libclang-dev dbus libpulse-dev libavcodec-dev libavformat-dev libavutil-dev libswscale-dev ffmpeg pipewire pipewire-pulse pipewire-bin pulseaudio-utils
       - run: rustup update stable && rustup component add rustfmt clippy
       - run: cargo fmt --manifest-path lucent/Cargo.toml --all --check
       - run: cargo clippy --manifest-path lucent/Cargo.toml --locked --workspace --all-targets -- -D warnings
