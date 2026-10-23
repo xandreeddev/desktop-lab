@@ -32,8 +32,8 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = '26d03adf476af44c97fb7dcdbfb75cbdc2112770'
-MANIFEST_SHA = '5b228fa1bbdc71c50a245edcb70e726ef4d5826f476ba261e53042023d322aec'
+SOURCE = '9eb41939d47ced5be2012bff41a1f2f5768d6ee7'
+MANIFEST_SHA = 'c669b9d53879d504f0a4efa5e131c93f57cc77bc8c26c18dacef54565fe2703f'
 KEY_CDP_SHA = '5cf65c35d89671741b6be9e8e63345206694b2a4b9ecfb465a9afb418745e907'
 
 
