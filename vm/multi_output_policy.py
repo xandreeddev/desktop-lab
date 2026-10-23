@@ -150,6 +150,72 @@ def require_owned_display_control(identifier, selected, name):
             'native_input_must_target_only_owned_display_draft')
 
 
+class DisplayDisableCursor:
+    """One declared compositor relocation, with no authority before retirement.
+
+    Reviewed efb50993780079460b0cbed1363e2166a2de1d9f source:
+    src/config/shared/monitor/MonitorRuleManager.cpp:186-187 calls onDisconnect
+    after applying a disabled rule. src/output/Monitor.cpp:478-480 force-warps
+    to the sole backup's transformed physical center. Our backup is 1x/even.
+    This does not authorize any unobserved path, re-enable warp or other point.
+    """
+    SOURCES = {
+        'MonitorRuleManager.cpp': '17d46685c2623657f52e71b22a033c0a798cf3903f7bbeb64ceebce87527f016',
+        'Monitor.cpp': '9cf88e154eb5dae676c79d37b5b055ca6134838857cecdbb89a3b747a6821927',
+        'PointerController.cpp': '4aef766cf4205222ef143b1432d2598c7beab1527aee5e19aa58f17a1890d899',
+    }
+
+    def __init__(self, cursor, baseline, identity, peer_host, peer_surfaces,
+                 original_host, original_global, transaction, now):
+        require(not cursor.lost and cursor.pending is None, 'owned_cursor_before_disable_required')
+        require(len(baseline) == 1, 'sole_backup_for_disable_required')
+        backup = monitor_signature(baseline[0])
+        require(backup['scale'] == 1 and all(type(backup[k]) is int for k in ('x', 'y', 'width', 'height'))
+                and backup['width'] % 2 == backup['height'] % 2 == 0,
+                'exact_even_1x_backup_center_required')
+        owned_name(identity['name'])
+        require(type(transaction) is int and transaction > 0 and bool(peer_surfaces),
+                'captured_pre_disable_transaction_and_surfaces_required')
+        self.preimage = cursor.expected
+        self.destination = (backup['x'] + backup['width'] // 2, backup['y'] + backup['height'] // 2)
+        require(self.preimage != self.destination, 'distinct_declared_disable_postimage_required')
+        self.identity = dict(identity)
+        self.peer_instance, self.peer_surfaces = peer_host['instance'], set(peer_surfaces)
+        self.original_host, self.original_global = dict(original_host), original_global
+        self.transaction = transaction
+        self.started = finite(now)
+        self.deadline = self.started + 5
+        self.consumed = False
+
+    def confirm(self, cursor, current, state, peer, now):
+        require(not self.consumed and self.started <= finite(now) <= self.deadline,
+                'declared_disable_cursor_window_expired_or_consumed')
+        require(not cursor.lost and cursor.pending is None and cursor.expected == self.preimage,
+                'pre_disable_cursor_authority_changed')
+        require(type(current) is dict and all(type(current.get(k)) is int for k in ('x', 'y'))
+                and (current['x'], current['y']) == self.destination,
+                'cursor_does_not_match_declared_disable_postimage')
+        require(peer == {**self.identity, 'disabled': True}, 'actual_owned_native_disable_required')
+        original = host(state, self.original_host['id'])
+        require(all(original[key] == value for key, value in self.original_host.items())
+                and output(state, self.original_host['id'])['global'] == self.original_global,
+                'original_backup_lifetime_changed')
+        child = state['client']['displays'];transaction = child.get('transaction') or {}
+        require(child['open'] is True and child['visible'] is True
+                and child['selected'] == self.identity['name'], 'disable_transaction_must_target_owned_peer')
+        if transaction.get('id') == self.transaction:
+            require(child['busy'] is True, 'new_owned_disable_transaction_required')
+            return False  # Native reply can precede the client's transaction event.
+        require(type(transaction.get('id')) is int and transaction['id'] > self.transaction
+                and transaction.get('phase') in ('preparing', 'confirmation', 'kept'),
+                'new_owned_disable_transaction_required')
+        if not retired(state, self.identity['name'], self.peer_instance, self.peer_surfaces):
+            return False
+        cursor.expected = self.destination
+        self.consumed = True
+        return True
+
+
 def case_layout(name, baseline, scale):
     owned_name(name)
     require(type(scale) in (float, int) and scale in (1, 2, 1.25), 'unowned_scale_request')

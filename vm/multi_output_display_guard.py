@@ -153,6 +153,7 @@ class Owner(base.Native):
         self.owned=None;self.allowed=[];self.peer_identity=None
         self.peer_global=None;self.peer_disabled=False;self.peer_retired=False;self.peer_ready=False
         self.peer_host=None;self.peer_surfaces=None;self.lifecycle=None;self.lifecycle_transaction=None
+        self.disable_cursor=None
         self.panel_target='Virtual-1'
 
     def all_monitors(self):
@@ -243,7 +244,8 @@ class Owner(base.Native):
         self.files=expected
         if kept: self.kept=actual
 
-    def checked(self):
+    def resource_state(self):
+        """Observe preserved resources without granting any cursor/input authority."""
         self.preserve()
         self.security_sources()
         state=base.inspect()
@@ -252,6 +254,10 @@ class Owner(base.Native):
                 'normal_profiling_must_remain_off')
         require(all(p.host(state,'Virtual-1')[key]==value for key,value in self.original_host.items())
                 and p.output(state,'Virtual-1')['global']==self.original_global,'original_host_lifetime_changed')
+        return state
+
+    def checked(self):
+        state=self.resource_state()
         if self.owned is not None:
             self.peer_state(state)
         else: p.unchanged_layout(self.monitors(),self.baseline,self.lease.name,None)
@@ -261,8 +267,38 @@ class Owner(base.Native):
         keyboard_bindings(json.loads(base.hypr('-j','binds')))
         return state
 
-    def status(self):
-        state=self.checked();child=state['client']['displays']
+    def input_preflight(self):
+        p.require_unbound_input(json.loads(base.hypr('-j','binds')))
+        current=json.loads(base.hypr('-j','cursorpos'))
+        declaration=self.disable_cursor
+        if (declaration is not None and not self.cursor.lost
+                and (current.get('x'),current.get('y'))!=self.cursor.expected):
+            # No input is admitted while the native disable and SDK retirement
+            # settle. The declared point alone never grants cursor authority.
+            try:
+                while True:
+                    state=self.checked();self.panel_observation(state)
+                    peer=self.peer_state(state)
+                    # Source/panel/peer probes can take time. Only this fresh
+                    # native sample may commit the declared cursor postimage.
+                    current=json.loads(base.hypr('-j','cursorpos'))
+                    if declaration.confirm(self.cursor,current,state,peer,time.monotonic()):
+                        base.private_json(self.directory/'cursor-disable-confirmed.json',{
+                            'point':list(declaration.destination),
+                            'transaction':state['client']['displays']['transaction'],
+                            'old_host_fully_retired':True})
+                        self.disable_cursor=None
+                        return state
+                    time.sleep(.05)
+                    current=json.loads(base.hypr('-j','cursorpos'))
+            except BaseException:
+                self.cursor.lost=True;self.disable_cursor=None
+                raise
+        self.cursor.check(current)
+        return None
+
+    def panel_observation(self,state):
+        child=state['client']['displays']
         require(not any(state['client'].get(name,{}).get(key) for name in
             ('audio','media','network','bluetooth','power','tray','weather','live_wallpaper','settings','application_actions')
             for key in ('open','visible','busy')),'no_foreign_panel_required')
@@ -284,14 +320,35 @@ class Owner(base.Native):
                         (math.ceil(panel['width']*panel['density']),math.ceil(panel['height']*panel['density'])),
                     'panel_actual_viewport_density_and_buffer_required')
             layer=p.layer_for(json.loads(base.hypr('-j','layers')),self.panel_target,panel,self.pid)
-        self.input_preflight()
         target=p.host(state,self.panel_target)
         return {'state':child,'panel':panel,'layer':layer,'monitors':self.monitors(),
                 'host':{key:target[key] for key in ('id','instance','generation')},
                 'global':p.output(state,self.panel_target)['global'],
                 'active_monitor':state['client']['active_monitor'],'panel_target':self.panel_target,
-                'peer':self.peer_state(state) if self.owned is not None else None,
-                'peer_ready':self.peer_ready,'cursor':json.loads(base.hypr('-j','cursorpos'))}
+                'cursor':json.loads(base.hypr('-j','cursorpos'))}
+
+    def status(self):
+        state=self.checked()
+        settled=self.input_preflight()
+        if settled is not None:state=settled
+        value=self.panel_observation(state)
+        value.update(peer=self.peer_state(state) if self.owned is not None else None,peer_ready=self.peer_ready)
+        return value
+
+    def cleanup_state(self):
+        state=self.resource_state()
+        neutral=copy.deepcopy(state['client']);neutral['displays']={}
+        base.idle(neutral)
+        if self.owned is None:
+            require([p.monitor_signature(row) for row in self.all_monitors()]==self.baseline,
+                    'only_original_native_output_expected')
+        else:
+            peer=p.display_layout(self.all_monitors(),self.baseline,self.peer_identity)
+            require(peer in self.allowed,'cleanup_must_only_remove_admitted_owned_peer')
+            if peer['disabled']:
+                require(self.peer_disabled or self.lifecycle=='disable',
+                        'cleanup_cannot_adopt_unadmitted_disabled_peer')
+        return state
 
     def operation(self,request):
         operation=request['operation']
@@ -368,41 +425,86 @@ class Owner(base.Native):
             self.cursor.begin(value['cursor'],point)
             require(base.hypr('dispatch',f'hl.dsp.cursor.move({{x={point[0]},y={point[1]}}})')=='ok','panel_warp_rejected')
             self.cursor.confirm(json.loads(base.hypr('-j','cursorpos')))
+            if request['identifier']=='display-apply' and self.lifecycle=='disable':
+                require(self.disable_cursor is None,'one_bounded_disable_cursor_declaration_required')
+                base.require_reviewed_hyprland(self.hyprland_version)
+                self.disable_cursor=p.DisplayDisableCursor(self.cursor,self.baseline,self.peer_identity,
+                    self.peer_host,self.peer_surfaces,self.original_host,self.original_global,
+                    (value['state'].get('transaction') or {}).get('id'),time.monotonic())
+                base.private_json(self.directory/'cursor-disable-intent.json',{
+                    'preimage':list(self.disable_cursor.preimage),'postimage':list(self.disable_cursor.destination),
+                    'deadline_monotonic':self.disable_cursor.deadline,'before_transaction':self.disable_cursor.transaction,
+                    'hyprland_commit':base.REVIEWED_HYPRLAND_COMMIT,'source_sha256':p.DisplayDisableCursor.SOURCES})
+            else:self.disable_cursor=None
             return {'point':point,'surface':value['panel']['id']}
         require(operation=='finish','known_display_test_operation_required')
         return {'finishing':True}
 
     def cleanup(self):
-        # Close only our initially-absent panel; another foreground panel blocks
-        # restoration. No physical input, lock/auth operation or settings write.
-        if base.inspect()['client']['displays']['open']:
-            self.status();base.command(base.CLI,'displays','close')
+        # Owned-resource cleanup must not call status/input_preflight. Cursor
+        # loss never grants new input, and cannot strand our config/output.
+        state=self.cleanup_state();child=state['client']['displays']
+        if child['open']:
+            self.panel_observation(state)
+            require(not (child['busy'] or (child.get('transaction') or {}).get('phase')
+                         in ('preparing','confirmation')) or child['selected']==self.lease.name,
+                    'cleanup_cannot_close_foreign_display_transaction')
+            base.command(base.CLI,'displays','close')
         deadline=time.monotonic()+20
-        while base.inspect()['client']['displays']['visible']:
-            require(time.monotonic()<deadline,'display_close_deadline');time.sleep(.1)
-        # Closing the UI can precede late Apply admission or the guardian's
-        # rollback. Never race either owner with our configuration restoration.
         while True:
-            child=base.inspect()['client']['displays']
+            state=self.cleanup_state();child=state['client']['displays']
             phase=(child.get('transaction') or {}).get('phase')
-            if not child['busy'] and phase not in ('preparing','confirmation'):
+            if not child['open'] and not child['visible'] and not child['busy'] and phase not in ('preparing','confirmation'):
                 break
             require(time.monotonic()<deadline,'display_transaction_retirement_deadline');time.sleep(.1)
         exchange_restore(self.config,self.directory/'monitors.original',self.original,self.kept,self.directory)
         self.admit_file(False)
-        self.checked()
+        state=self.cleanup_state()
         if self.owned is not None:
-            self.configure(p.case_layout(self.lease.name,self.baseline,1))
-            self.wait_case(self.lease.name,p.case_layout(self.lease.name,self.baseline,1))
-            current=p.unique(self.all_monitors(),lambda row:row['name']==self.lease.name,'owned_restore_monitor_missing')
-            require(p.display_peer_signature(current,self.peer_identity)==self.owned,'owned_restore_layout_changed')
-            self.lease.global_id=self.wait_global(self.lease.name)
-            self.lease.expected=self.owned
-            self.lease.remove();self.owned=None
-        self.preserve(full=True);self.restore_focus()
-        self.checked()
+            # Retire only this owned native identity. A guardian rollback may
+            # have renewed its SDK host; that grants removal, never test input.
+            hosts=[row for row in state['client']['monitor_hosts'] if row['id']==self.lease.name]
+            require(len(hosts)<=1,'ambiguous_cleanup_peer_host')
+            captured=(hosts[0]['instance'],p.host_surface_ids(state,self.lease.name,hosts[0]['instance'])) if hosts else None
+            base.Native.remove(self,self.lease.name)
+            deadline=time.monotonic()+15
+            while True:
+                state=self.resource_state()
+                rows=self.all_monitors()
+                absent=not any(row['name']==self.lease.name for row in rows)
+                if absent:
+                    require([p.monitor_signature(row) for row in rows]==self.baseline,'foreign_layout_changed_during_cleanup')
+                    retired=(p.retired(state,self.lease.name,*captured) if captured else
+                        not any(row['name']==self.lease.name for row in state['outputs'])
+                        and not any(row['id']==self.lease.name for row in state['client']['monitor_hosts'])
+                        and not any(row.get('output')==self.lease.name for row in state['surfaces'])
+                        and state.get('retiring_native_surfaces')==0)
+                    if retired:break
+                else:
+                    require(p.display_layout(rows,self.baseline,self.peer_identity) in self.allowed,
+                            'owned_identity_changed_during_cleanup')
+                require(time.monotonic()<deadline,'owned_cleanup_retirement_deadline');time.sleep(.1)
+            self.owned=None;self.lease.expected=None;self.lease.global_id=None
+        self.preserve(full=True);self.security_sources(True);self.cleanup_state()
+        cursor={'restored':False,'authority_retained':False,'at_original_position':False}
+        try:
+            cursor['authority_retained']=self.cursor.owns(json.loads(base.hypr('-j','cursorpos')))
+            if cursor['authority_retained']:
+                self.restore_focus();cursor['restored']=True
+            else:cursor['reason']='cursor_authority_lost_no_input_or_restore'
+        except BaseException as error:
+            cursor['reason']=str(error) if isinstance(error,p.Blocked) else type(error).__name__
+        final_cursor=json.loads(base.hypr('-j','cursorpos'))
+        cursor['at_original_position']=final_cursor==self.pointer
+        cursor['authority_retained']=self.cursor.owns(final_cursor)
+        cursor['restored'] &= cursor['authority_retained'] and cursor['at_original_position']
+        if not cursor['restored']:cursor.setdefault('reason','final_cursor_restoration_not_proven')
+        self.cleanup_cursor=cursor
+        current=self.monitors()
+        workspace=(len(current)==1 and current[0]['activeWorkspace']['id']==self.workspace)
+        self.cleanup_state()
         return {'original_monitor_bytes_inode':original_file(self.original,read(self.config)),
-                'only_owned_output_removed':True,'original_workspace_cursor':True,
+                'only_owned_output_removed':True,'original_workspace_preserved':workspace,
                 'same_cohort_settings_media_and_profiling':True,
                 'monitor_ctime_link_count_not_claimed_unchanged':True}
 
@@ -451,12 +553,17 @@ def serve(directory,header):
         if owner is not None:
             try:
                 result['restoration']=owner.cleanup()
+                result['cursor_restoration']=owner.cleanup_cursor
                 owner.security_sources(True)
                 after={'preservation':preservation.fingerprint(base.command),
                        'supervision':supervision.identity(base.command)}
                 base.private_json(directory/'after-facts.json',after)
                 require(before==after,'final_supervision_settings_or_preservation_changed')
                 result['restoration']['preservation_supervision_security_sources_and_profiles']=True
+                result['resource_cleanup_completed']=True
+                if not owner.cleanup_cursor['restored']:
+                    result['success']=False
+                    result['cleanup_blocked']=owner.cleanup_cursor.get('reason','cursor_restoration_not_proven')
             except BaseException as error:
                 result['success']=False
                 result['cleanup_blocked']=str(error) if isinstance(error,p.Blocked) else type(error).__name__

@@ -21,8 +21,8 @@ PINS={
  'owned_application_units':('vm/owned_application_units.py','0082d9c4c87c36a7cc65f361304a2fbda174af83f30d6713720d709a9193d5b7'),
  'native':('vm/test-native-multi-output.py','c1fc9b0aecd910cc9e7e46247bb883f86bc3cb675c44216943f5f03f12fe0829'),
  'multi_output_guard':('vm/multi_output_guard.py','05cc165f9b823becd28e8a631920e120ceb75afd73e026a3b91a64404729d765'),
- 'multi_output_policy':('vm/multi_output_policy.py','ce74729e5fe844379734fb729cf569be40717600881d9fc108cbc34da5b7e93c')}
-GUEST_SHA='3eb7bc11738b69fddf862ac6fca3a7211c5aabf38a4c5d9b7f629ac49356aff2'
+ 'multi_output_policy':('vm/multi_output_policy.py','dd61130d7ec00e175c69e496f830fa482167d201c5fc3481b545b20660c4f2a0')}
+GUEST_SHA='2e1510e3f246b598c4f125f484c5793f327e77529d8e7b6b92dc82be707bb8f5'
 
 def require(value,label):
     if not value: raise ValueError(label)
@@ -279,7 +279,8 @@ def run(lab_root,fresh_off=FRESH_OFF,vm_uuid=None,normal_off=NORMAL_OFF_IDENTITY
                     except BaseException: pass  # A terminal owner may have closed its socket already.
                     done=wait(finished,'independent_cleanup_receipt',75)
                 report['owner']=done
-                require(done['success'] is True and all(done['restoration'].values()),'guarded_restoration_required')
+                require(done['success'] is True and all(done['restoration'].values())
+                        and done['cursor_restoration']['restored'] is True,'guarded_restoration_required')
             except BaseException as error:
                 report['success']=False;report['cleanup_pending']=type(error).__name__
         path=ROOT/'reports/local'/('native-two-output-displays-'+tag+'.json')
