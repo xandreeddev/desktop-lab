@@ -42,6 +42,7 @@ pub enum Message {
 }
 struct LinkOpening {
     request: u64,
+    history_session: Option<u64>,
     target: NotificationTarget,
     selected: ExternalUri,
     waiting_for_token: bool,
@@ -58,6 +59,8 @@ pub struct Center {
     pub snapshot: NotificationSnapshot,
     pub ready: bool,
     history_open: bool,
+    history_session: Option<u64>,
+    next_history_session: u64,
     reveal: Motion,
     closing: bool,
     page: usize,
@@ -83,6 +86,8 @@ impl Center {
             snapshot: NotificationSnapshot::default(),
             ready: false,
             history_open: false,
+            history_session: None,
+            next_history_session: 0,
             reveal: Motion::fixed(0.),
             closing: false,
             page: 0,
@@ -115,6 +120,13 @@ impl Center {
         self.closing && !self.reveal.active(now)
     }
     fn set_open(&mut self, open: bool, now: f64) {
+        // Explicit presentation never reuses a lifetime that queued link work
+        // could close. Exhaustion leaves history usable without auto-close.
+        self.history_session = None;
+        if open && let Some(session) = self.next_history_session.checked_add(1) {
+            self.next_history_session = session;
+            self.history_session = Some(session);
+        }
         self.history_open = open;
         self.closing = !open && self.reveal.value(now) > 0.;
         self.reveal.target(
@@ -354,6 +366,11 @@ impl Component for Center {
                         self.next_link_request = request;
                         self.link_opening = Some(LinkOpening {
                             request,
+                            history_session: if self.history_open {
+                                self.history_session
+                            } else {
+                                None
+                            },
                             target,
                             selected,
                             waiting_for_token: true,
@@ -411,8 +428,15 @@ impl Component for Center {
                     .as_ref()
                     .is_some_and(|opening| opening.request == request && !opening.waiting_for_token)
                 {
-                    self.link_opening = None;
+                    let opening = self.link_opening.take().unwrap();
                     self.error = result.is_err();
+                    if result.is_ok()
+                        && self.history_open
+                        && opening.history_session.is_some()
+                        && opening.history_session == self.history_session
+                    {
+                        self.set_open(false, e.now);
+                    }
                 }
             }
             Message::Dnd => {
