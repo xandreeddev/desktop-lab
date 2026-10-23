@@ -72,14 +72,21 @@ literal text without external authority. Unsupported tags have no behavior.
 `notifications::Center` prepares these values when receiving snapshots, retains
 them by exact `NotificationTarget` and supplies a declarative view. That view
 selects genuine bold/italic static faces and semantic link colors. Plain bodies
-keep the existing text control and layout. The client validates a link against
-the retained content revision before queuing an effect.
+keep the existing text control and layout. A link captures the current content
+revision, requests fresh user activation, then validates that version and URI
+again before queuing an opening. Replacement, clear and a newer intent retire
+pending tokens and cancel an opening still waiting on the controls queue.
 
 `ExternalUri` is a validated domain value for http, https, mailto and local file
-targets. `UriPort::open` is the domain contract; `applications::XdgUri` is the
-production adapter. It sends a literal target to `xdg-open` in an independent
-systemd application unit. No shell evaluates notification text. A saved link
-opens its content; it never invokes the retired sender's notification action.
+targets. `UriPort::open(target, context)` is the domain contract;
+`applications::XdgUri` is the production adapter. It sends a literal target to
+`xdg-open` in an independent systemd application unit with the explicit launch
+context. An unknown default handler requests an SDK token without a target app
+ID; it does not pretend that `xdg-open` is the destination application. No shell
+evaluates notification text, and absent authority never reuses inherited tokens.
+A saved link opens its content; it never invokes the retired sender's notification
+action. [Default URI activation](default-uri-activation.md) follows this path and
+its validation boundaries.
 
 Images use separate parsed blocks and the presentation asset port. The
 [image guide](notification-images.md) follows preparation, bounds, scrolling and

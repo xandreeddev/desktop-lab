@@ -154,7 +154,7 @@ pub fn with(fake: Arc<Fake>) -> DesktopAdapters {
     }
 }
 impl UriPort for Fake {
-    fn open(&self, _: &ExternalUri) -> Result<()> {
+    fn open(&self, _: &ExternalUri, _: ApplicationLaunchContext) -> Result<()> {
         self.calls.lock().unwrap().push("uri");
         Ok(())
     }

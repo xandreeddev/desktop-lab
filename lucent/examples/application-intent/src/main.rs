@@ -89,8 +89,9 @@ impl Component for IntentExample {
                     .as_str()
                     .strip_suffix(".desktop")
                     .unwrap_or(self.application.id.as_str());
-                effects
-                    .activation_token(app_id, move |outcome| Message::Prepared(operation, outcome));
+                effects.activation_token(Some(app_id.to_owned()), move |outcome| {
+                    Message::Prepared(operation, outcome)
+                });
             }
             Message::Prepared(operation, outcome) if self.busy => {
                 let context = match outcome {
@@ -404,7 +405,10 @@ mod tests {
             assert_eq!(surface.pointer_input, PointerInput::Content);
             assert!(app.busy);
             assert_eq!(effects.activation.len(), 1);
-            assert_eq!(effects.activation[0].app_id, "org.lucent.Intent");
+            assert_eq!(
+                effects.activation[0].app_id.as_deref(),
+                Some("org.lucent.Intent")
+            );
             assert!(effects.tasks.is_empty());
             assert!(effects.redraw.contains("intent"));
             assert!(adapter.calls.lock().unwrap().is_empty());

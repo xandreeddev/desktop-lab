@@ -1,5 +1,5 @@
 //! Explicit user-selected URI targets. No opening or transport policy here.
-use crate::{DomainError, Result};
+use crate::{ApplicationLaunchContext, DomainError, Result};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExternalUri(String);
@@ -30,7 +30,10 @@ impl ExternalUri {
 }
 /// Opening requires an explicit client action; a renderer never interprets URIs.
 pub trait UriPort: Send + Sync {
-    fn open(&self, target: &ExternalUri) -> Result<()>;
+    /// The supplied context belongs to this one explicit opening intent. An
+    /// empty context must not inherit activation authority from the process or
+    /// session manager; resolving the default handler remains adapter policy.
+    fn open(&self, target: &ExternalUri, context: ApplicationLaunchContext) -> Result<()>;
 }
 
 #[cfg(test)]

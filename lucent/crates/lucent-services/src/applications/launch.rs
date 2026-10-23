@@ -113,14 +113,6 @@ pub(super) fn executable_before(
     command_with_context(launch, terminal, context, remaining)
 }
 
-pub(super) fn command(command: &LaunchCommand, terminal: Option<&str>) -> Result<()> {
-    command_with_context(
-        command,
-        terminal,
-        &Default::default(),
-        std::time::Duration::from_secs(5),
-    )
-}
 fn command_with_context(
     command: &LaunchCommand,
     terminal: Option<&str>,
@@ -306,11 +298,41 @@ mod tests {
             directory: None,
             terminal: false,
         };
-        let args = arguments(&command, None, std::iter::empty()).unwrap();
-        let at = args.iter().position(|value| value == "--").unwrap();
-        assert_eq!(&args[at + 1..], ["xdg-open", target]);
-        assert!(args.iter().any(|value| value == "--expand-environment=no"));
-        assert!(args.iter().any(|value| value == "--slice=app.slice"));
+        for fresh in [false, true] {
+            let args = arguments_with_activation(
+                &command,
+                None,
+                ["XDG_ACTIVATION_TOKEN", "DESKTOP_STARTUP_ID"]
+                    .map(str::to_owned)
+                    .into_iter(),
+                fresh,
+            )
+            .unwrap();
+            let at = args.iter().position(|value| value == "--").unwrap();
+            assert_eq!(&args[at + 1..], ["xdg-open", target]);
+            assert!(args.iter().any(|value| value == "--expand-environment=no"));
+            assert!(args.iter().any(|value| value == "--slice=app.slice"));
+            assert_eq!(
+                args.iter()
+                    .any(|value| value == "--setenv=XDG_ACTIVATION_TOKEN"),
+                fresh
+            );
+            assert!(
+                !args
+                    .iter()
+                    .any(|value| value == "--setenv=DESKTOP_STARTUP_ID")
+            );
+            assert!(
+                args.contains(
+                    &if fresh {
+                        "--property=UnsetEnvironment=DESKTOP_STARTUP_ID"
+                    } else {
+                        "--property=UnsetEnvironment=XDG_ACTIVATION_TOKEN DESKTOP_STARTUP_ID"
+                    }
+                    .into()
+                )
+            );
+        }
     }
 
     #[test]
