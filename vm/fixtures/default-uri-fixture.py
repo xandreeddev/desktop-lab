@@ -94,8 +94,9 @@ def prepare(run, run_id):
     app_id = 'org.lucent.DefaultUri' + run_id + '.desktop'
     target = apps / app_id
     p.require(not os.path.lexists(target), 'new_owned_default_uri_entry_required')
-    command = ' '.join(base.encoded(value) for value in (
-        '/usr/bin/python3', '-I', str(run / 'default-uri.py'), 'open', str(run), run_id))
+    # xdg-mime's executable lookup does not unquote the first Exec word.
+    command = '/usr/bin/python3 ' + ' '.join(base.encoded(value) for value in (
+        '-I', str(run / 'default-uri.py'), 'open', str(run), run_id))
     entry = ('[Desktop Entry]\nType=Application\nName=Lucent owned default URI\n'
              'NoDisplay=true\nTerminal=false\nStartupNotify=false\n'
              'MimeType=x-scheme-handler/http;\nExec=' + command + ' %u\n').encode()

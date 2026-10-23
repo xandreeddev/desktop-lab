@@ -1,11 +1,13 @@
 """Pure policy and owned temporary files only; no VM, compositor, bus or browser."""
 import contextlib
 import ast
+import hashlib
 import importlib.util
 import io
 import json
 import os
 from pathlib import Path
+import shutil
 import socket
 import stat
 import subprocess
@@ -185,6 +187,77 @@ class ConfigurationLease(unittest.TestCase):
                 p.restore(value)
             self.assertEqual(p.snapshot(config), before_target)
             self.assertEqual(p.snapshot(slot), before_slot)
+
+
+class FixturePreparation(unittest.TestCase):
+    def prepare(self, root):
+        run = root / 'owned run % $ ` " literal'
+        config, data = root / 'config', root / 'data'
+        for path in (run, config, data):
+            path.mkdir(mode=0o700)
+        apps = data / 'applications'
+        apps.mkdir(mode=0o700)
+        canonical = module('canonical_entry_encoding', ROOT / 'vm/fixtures/application-intent-fixture.py')
+        encode = Mock(wraps=canonical.encoded)
+        base = types.SimpleNamespace(encoded=encode, http_authority=Mock(return_value={
+            'targets': [{'uri': 'http://127.0.0.1:1234/owned'}]}))
+        environment = {'XDG_CURRENT_DESKTOP': 'Hyprland', 'BROWSER': '',
+                       'XDG_CONFIG_HOME': str(config), 'XDG_DATA_HOME': str(data)}
+        with patch.object(driver, 'context', return_value=(run, {}, base)), \
+             patch.dict(os.environ, environment), \
+             patch.object(subprocess, 'run', side_effect=AssertionError('preparation must not run applications')):
+            prepared = driver.prepare(run, 'abcdef123456')
+        return run, config, apps, prepared, canonical.encoded, encode
+
+    def test_fixed_interpreter_is_literal_and_every_remaining_argument_keeps_canonical_encoding(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run, config, apps, prepared, encoded, encode = self.prepare(Path(temporary))
+            tail = ['-I', str(run / 'default-uri.py'), 'open', str(run), 'abcdef123456']
+            entry = p.read(run / 'default-entry.payload').decode()
+            command = next(line for line in entry.splitlines() if line.startswith('Exec='))
+            self.assertEqual(command, 'Exec=/usr/bin/python3 ' + ' '.join(encoded(value) for value in tail) + ' %u')
+            self.assertEqual(encode.call_args_list, [unittest.mock.call(value) for value in tail])
+            self.assertIn('MimeType=x-scheme-handler/http;', entry)
+            self.assertIn(prepared['app_id'].encode(), p.read(run / 'default-mime.payload'))
+            self.assertFalse((apps / prepared['app_id']).exists())
+            self.assertFalse((config / 'hyprland-mimeapps.list').exists())
+
+    def test_installed_xdg_mime_prefers_prepared_entry_over_an_isolated_generic_fallback(self):
+        tool = shutil.which('xdg-mime')
+        if tool is None:
+            self.skipTest('xdg-mime is not installed; isolated default-query regression unavailable')
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run, config, apps, prepared, _, _ = self.prepare(root)
+            fallback = 'org.lucent.IsolatedFallback.desktop'
+            (apps / fallback).write_text('[Desktop Entry]\nType=Application\nName=Isolated fallback\n'
+                                         'MimeType=x-scheme-handler/http;\nExec=/usr/bin/python3\n')
+            (config / 'mimeapps.list').write_text('[Default Applications]\nx-scheme-handler/http=' + fallback + ';\n')
+            (config / 'hyprland-mimeapps.list').write_bytes(p.read(run / 'default-mime.payload'))
+            config_dirs, data_dirs = root / 'empty-config-dirs', root / 'empty-data-dirs'
+            config_dirs.mkdir(mode=0o700)
+            data_dirs.mkdir(mode=0o700)
+            environment = {**os.environ, 'DE': 'generic', 'XDG_CURRENT_DESKTOP': 'Hyprland',
+                           'XDG_CONFIG_HOME': str(config), 'XDG_CONFIG_DIRS': str(config_dirs),
+                           'XDG_DATA_HOME': str(apps.parent), 'XDG_DATA_DIRS': str(data_dirs),
+                           'XDG_MENU_PREFIX': ''}
+            self.assertEqual(environment.get('HOME'), os.environ.get('HOME'))
+            candidate = p.read(run / 'default-entry.payload')
+            self.assertEqual(candidate.count(b'Exec=/usr/bin/python3 '), 1)
+            entry = apps / prepared['app_id']
+            def query(content):
+                entry.write_bytes(content)
+                result = subprocess.run([tool, 'query', 'default', 'x-scheme-handler/http'],
+                                        env=environment, stdin=subprocess.DEVNULL,
+                                        capture_output=True, text=True, timeout=5)
+                self.assertEqual(result.returncode, 0)
+                self.assertEqual(result.stderr, '')
+                return result.stdout.strip()
+            prior = query(candidate.replace(b'Exec=/usr/bin/python3 ', b'Exec="/usr/bin/python3" ', 1))
+            self.assertIn(prior, (fallback, prepared['app_id']))
+            if hashlib.sha256(Path(tool).read_bytes()).hexdigest() == 'a587107ff995a5f907ab1b731316a169348c6b0383caf8fd151ff21f89615f3f':
+                self.assertEqual(prior, fallback)
+            self.assertEqual(query(candidate), prepared['app_id'])
 
 
 class FixtureCliDispatch(unittest.TestCase):
