@@ -79,10 +79,10 @@ def qualify(args):
     return manifest
 
 
-def target(snapshot, layers, note, uri, desktop_pid):
+def notification_surface(snapshot, layers, desktop_pid):
     # Only one short, unwrapped owned link is used. Never infer a native origin
     # from a toolkit layout or confuse its logical pixels with physical buffers.
-    from multi_output_policy import layer_for, hit_center
+    from multi_output_policy import layer_for
     found = [row for row in snapshot['surfaces'] if row.get('role', row['id']) == 'notifications']
     require(len(found) == 1, 'one_native_notification_surface')
     surface = found[0]
@@ -91,15 +91,34 @@ def target(snapshot, layers, note, uri, desktop_pid):
             and surface['output'] == 'Virtual-1' and surface['density'] == 1
             and (surface['width'], surface['height'], surface['buffer_width'], surface['buffer_height'])
             == (1920, 1080, 1920, 1080), 'actual_native_notification_history_geometry')
-    hits = [hit for hit in surface['hits'] if re.fullmatch(
-        'notification-body-' + str(note) + r'-[0-9]+-0/link/' + re.escape(uri), hit['id'])]
-    require(len(hits) == 1, 'one_current_selected_notification_link')
-    hit = hits[0]
-    layer = layer_for(layers, 'Virtual-1', surface, desktop_pid)
+    return surface, layer_for(layers, 'Virtual-1', surface, desktop_pid)
+
+
+def notification_hit(surface, layer, hit):
+    from multi_output_policy import hit_center
     monitor = {'x': 0, 'y': 0, 'width': 1920, 'height': 1080, 'scale': 1}
     point = hit_center(monitor, surface, layer, hit['id'])
     return {'surface': surface['id'], 'instance': surface['instance'], 'output': surface['output'],
             'hit': hit, 'layer': layer, 'point': point, 'focus': surface.get('focus')}
+
+
+def target(snapshot, layers, note, uri, desktop_pid):
+    surface, layer = notification_surface(snapshot, layers, desktop_pid)
+    hits = [hit for hit in surface['hits'] if re.fullmatch(
+        'notification-body-' + str(note) + r'-[0-9]+-0/link/' + re.escape(uri), hit['id'])]
+    require(len(hits) == 1, 'one_current_selected_notification_link')
+    hit = hits[0]
+    return notification_hit(surface, layer, hit)
+
+
+def group_target(snapshot, layers, run_id, desktop_pid):
+    require(type(run_id) is str and re.fullmatch('[a-f0-9]{12}', run_id) is not None,
+            'owned_notification_group_run_required')
+    surface, layer = notification_surface(snapshot, layers, desktop_pid)
+    identifier = 'notification-group-name:Lucent owned URI ' + run_id
+    hits = [hit for hit in surface['hits'] if hit['id'] == identifier]
+    require(len(hits) == 1, 'one_current_owned_notification_group')
+    return notification_hit(surface, layer, hits[0])
 
 
 def keyboard_preflight(bindings):
@@ -191,6 +210,151 @@ POST_WARM_PHASES = ('warm_state', 'warm_authority_assert', 'publication', 'publi
                     'published_authority_assert', 'security_snapshot', 'http_identity',
                     'http_identity_assert', 'default_selected_assert')
 
+# Fixed labels from this controller and its pinned pure native policies.
+# Never infer a diagnostic reason from a regex match on exception payloads.
+FAILURE_REASONS = (
+    'actual_keyboard_focus_on_owned_link', 'actual_native_notification_history_geometry',
+    'all_owned_browser_windows_retired', 'ambiguous_captured_host_surface_ids',
+    'ambiguous_output_names', 'application_cursor_authority_lost',
+    'application_cursor_transition_not_confirmed', 'bounded_actual_pointer_bindings',
+    'bounded_exact_pointer_destination', 'bounded_native_bindings_required',
+    'bounded_native_input_window', 'bounded_native_keyboard_window',
+    'bounded_native_layer_tree', 'bounded_subprocess_failed',
+    'bounded_warm_readiness_observations', 'bounded_warm_readiness_phase_history',
+    'bridge_result_object_required', 'button_state_must_be_boolean',
+    'canonical_acceptance_source_changed', 'canonical_browser_and_entry_retirement',
+    'canonical_private_inventory_transport_changed', 'canonical_release_manifest_required',
+    'captured_desktop_layer_owner_required', 'captured_host_retirement_authority_required',
+    'captured_host_surfaces_required', 'captured_monitor_host_instance_required',
+    'changed_notification_revision_is_not_adopted', 'complete_actual_pointer_binding',
+    'complete_guardian_restoration', 'complete_native_binding_required',
+    'concrete_native_layer_namespace', 'concrete_owned_example_native_layer',
+    'current_owned_intent_hit_and_layer_lifetime', 'current_owned_native_intent_geometry',
+    'declared_cursor_transition_required', 'escape_or_plain_pointer_binding_intercepts_native_test',
+    'exact_built_runtime_source_required', 'exact_current_native_rich_link_before_press',
+    'exact_current_owned_group_before_press', 'exact_desktop_native_layer_pid',
+    'exact_guardian_cursor_destination_required', 'exact_initial_application_cursor',
+    'exact_initial_native_cursor_required', 'exact_owned_document_retired',
+    'exact_owned_example_native_layer_pid', 'exact_owned_example_socket_peer',
+    'exact_reviewed_release_manifest_required', 'exact_vm_uuid_changed',
+    'exact_vm_uuid_required', 'finite_owned_intent_geometry',
+    'fixed_native_phase_required', 'fixed_post_warm_phase_required',
+    'fixed_secure_clients_and_login_configuration_preserved', 'foreign_layout_changed',
+    'foreign_native_layer_owner_or_authorization', 'foreign_notification_must_not_be_hidden_between_cases',
+    'foreign_or_uncertain_cursor_movement_blocks_warp', 'fractional_original_edge',
+    'framework_native_geometry_not_settled', 'fresh_exact_running_desktop',
+    'fully_visible_owned_intent_control', 'group',
+    'hit_not_safely_visible', 'hit_outside_target_output',
+    'identified_desktop_layer_owner', 'idle_native_notification_baseline',
+    'incomplete_native_monitor_identity', 'independent_config_guardian_ready',
+    'independent_default_config_restore_receipt', 'invalid_owned_output_name',
+    'known_default_uri_bridge_operation', 'known_http_uri_field_code_required',
+    'known_native_case_required', 'known_native_pointer_control_required',
+    'known_original_vm_transport', 'named_native_hosts_required',
+    'native_default_handler_and_browser_wrapper_receive_fresh_authority', 'native_layer_monitor_missing',
+    'native_layer_owner_changed', 'native_pointer_focus_on_owned_group',
+    'native_pointer_focus_on_owned_link', 'no_competing_native_control',
+    'no_foreign_native_clients', 'nonfinite_geometry',
+    'normal_off_instrumentation_required', 'notification_absence_after_bounded_expiry',
+    'one_bridge_error_packet_required', 'one_current_host_surface_required',
+    'one_current_monitor_host_required', 'one_current_owned_intent_hit',
+    'one_current_owned_notification_group', 'one_current_selected_notification_link',
+    'one_current_wayland_global_required', 'one_declared_application_cursor_transition',
+    'one_exact_owned_example_layer', 'one_fresh_selected_real_browser_document',
+    'one_live_hit_required', 'one_native_layer_on_exact_output_required',
+    'one_native_notification_surface', 'one_original_output_required',
+    'only_original_blank_control', 'only_original_owned_browser_clients',
+    'original_configuration_guardian_retired', 'original_desktop_supervisor_compositor_lifetimes',
+    'original_http_guardian_retired', 'original_http_watchdog_ready',
+    'original_native_authority_before_cursor_restore', 'original_native_outputs_and_workspaces',
+    'original_native_outputs_before_cursor_restore', 'original_notification_state_restored',
+    'owned_history_closed_between_cases', 'owned_intent_point_on_prepared_output',
+    'owned_notification_group_native_history_ready', 'owned_notification_group_run_required',
+    'owned_output_layout_changed', 'owned_output_lifetime_changed',
+    'owned_release_manifest_required', 'owned_rich_link_native_history_ready',
+    'owned_rich_link_not_reached_by_actual_tab', 'plain_native_notification_keys_must_be_unbound',
+    'plain_pointer_binding_intercepts_owned_input', 'pointer_input_disabled',
+    'prepared_single_native_output', 'reviewed_manifest_and_fresh_desktop_pid_required',
+    'same_authority_after_warm_browser_setup', 'selected_default_handler_received_native_uri',
+    'settings_media_clipboard_and_supervision_preserved', 'silent_bridge_success_required',
+    'singular_field_code_requires_http_mode', 'submitted_owned_intent_surface_required',
+    'unowned_scale_request', 'unsupported_monitor_layout',
+    'warm_original_browser_recorded', 'warm_readonly_startup_not_proven',
+    'warm_readonly_startup_not_ready', 'warm_setup_has_no_input_authority',
+)
+
+NATIVE_CASES = ('pointer', 'keyboard')
+NATIVE_PHASES = (
+    'case_preflight', 'notification_create', 'notification_history_show',
+    'group_target_wait', 'group_target_capture', 'group_cursor_begin', 'group_cursor_dispatch',
+    'group_cursor_confirm', 'group_target_revalidate', 'group_target_assert', 'group_deadline_assert',
+    'group_button_down', 'group_focus_wait', 'group_button_up', 'notification_link_wait',
+    'notification_revision_capture', 'notification_target_validate',
+    'pointer_target_capture', 'pointer_cursor_begin', 'pointer_cursor_dispatch', 'pointer_cursor_confirm',
+    'pointer_target_revalidate', 'pointer_target_assert', 'pointer_deadline_assert',
+    'pointer_button_down', 'pointer_focus_wait', 'pointer_button_up',
+    'keyboard_target_capture', 'keyboard_deadline_assert', 'keyboard_tab_dispatch',
+    'keyboard_focus_assert', 'keyboard_enter_dispatch', 'default_handler_delivery_wait',
+    'default_handler_state_read', 'default_handler_authority_assert', 'browser_document_wait',
+    'browser_guard', 'browser_focus_read', 'browser_targets_retire', 'notification_expiry_wait',
+    'notification_post_expiry_guard', 'notification_absence_assert', 'notification_history_hide',
+    'notification_history_closed_wait', 'case_complete',
+)
+
+
+def begin_native_case(report, case):
+    require(type(case) is str and case in NATIVE_CASES, 'known_native_case_required')
+    report['native_flow'] = {'current_case': case, 'phase': 'case_preflight',
+                             'group_dispatch_attempted': False, 'group_dispatch_returned': False,
+                             'pointer_dispatch_attempted': False, 'pointer_dispatch_returned': False}
+
+
+def native_step(report, phase, action):
+    require(phase in NATIVE_PHASES, 'fixed_native_phase_required')
+    flow = report.get('native_flow', {})
+    case = flow.get('current_case')
+    require(type(case) is str and case in NATIVE_CASES
+            and (not phase.startswith('pointer_') or case == 'pointer')
+            and (not phase.startswith('keyboard_') or case == 'keyboard'), 'known_native_case_required')
+    flow['phase'] = phase
+    dispatch = {'group_button_down': 'group', 'pointer_button_down': 'pointer'}.get(phase)
+    if dispatch:
+        flow[dispatch + '_dispatch_attempted'] = True
+    try:
+        value = action()
+    except BaseException as error:
+        record_failure(report, error, phase)
+        raise
+    if dispatch:
+        flow[dispatch + '_dispatch_returned'] = True
+    return value
+
+
+def native_pointer_control(report, kind, observe, cursor, read_cursor, move_cursor, button, wait,
+                           deadline, set_button_held):
+    require(kind in ('group', 'pointer') and (kind != 'pointer'
+            or report.get('native_flow', {}).get('current_case') == 'pointer'),
+            'known_native_pointer_control_required')
+    def step(suffix, action):
+        return native_step(report, kind + '_' + suffix, action)
+    initial = step('target_capture', observe)
+    step('cursor_begin', lambda: cursor.begin(read_cursor(), initial['point']))
+    step('cursor_dispatch', lambda: move_cursor(initial['point']))
+    step('cursor_confirm', lambda: cursor.finish(read_cursor()))
+    after = step('target_revalidate', observe)
+    step('target_assert', lambda: require(
+        all(after[key] == initial[key] for key in ('surface', 'instance', 'output', 'hit', 'layer', 'point')),
+        'exact_current_owned_group_before_press' if kind == 'group' else 'exact_current_native_rich_link_before_press'))
+    step('deadline_assert', lambda: require(time.monotonic() < deadline, 'bounded_native_input_window'))
+    set_button_held(True)
+    try:
+        step('button_down', lambda: button(True))
+        step('focus_wait', lambda: wait(lambda: observe()['focus'] == initial['hit']['id'],
+            'native_pointer_focus_on_owned_group' if kind == 'group' else 'native_pointer_focus_on_owned_link', 3))
+    finally:
+        step('button_up', lambda: button(False))
+        set_button_held(False)
+
 
 def post_warm_step(diagnostic, phase, action):
     require(phase in POST_WARM_PHASES, 'fixed_post_warm_phase_required')
@@ -205,15 +369,21 @@ def record_failure(report, error, phase):
     if 'failure' in report:
         return
     import default_uri_policy as p
-    classes = p.BRIDGE_ERROR_CLASSES + ('BridgeFailure', 'CheckFailure', 'FixtureFailure', 'KeyboardInterrupt')
+    classes = p.BRIDGE_ERROR_CLASSES + ('BridgeFailure', 'CheckFailure', 'FixtureFailure', 'KeyboardInterrupt', 'Blocked')
     value = {'error_class': type(error).__name__ if type(error).__name__ in classes else 'OtherError',
              'scope': 'native_default_uri_acceptance',
-             'phase': phase if phase in (*POST_WARM_PHASES, 'setup', 'native_acceptance', 'cleanup') else 'setup'}
+             'phase': phase if phase in (*POST_WARM_PHASES, *NATIVE_PHASES, 'setup', 'native_acceptance', 'cleanup') else 'setup'}
+    flow = report.get('native_flow', {})
+    if flow.get('current_case') in NATIVE_CASES:
+        value['current_case'] = flow['current_case']
+        for key in ('group_dispatch_attempted', 'group_dispatch_returned',
+                    'pointer_dispatch_attempted', 'pointer_dispatch_returned'):
+            value[key] = flow.get(key) is True
     if isinstance(error, BridgeFailure):
         value['bridge'] = dict(error.details)
-    elif len(error.args) == 1 and type(error.args[0]) is str and error.args[0] in (
-            'bounded_subprocess_failed', 'warm_setup_has_no_input_authority',
-            'same_authority_after_warm_browser_setup'):
+    elif len(error.args) == 1 and type(error.args[0]) is str and (
+            error.args[0] in FAILURE_REASONS
+            or error.args[0] in tuple('warm_readonly_' + item + '_refused' for item in p.WARM_PHASES)):
         value['fixed_reason'] = error.args[0]
     report['failure'] = value
 
@@ -369,10 +539,33 @@ def run(args, manifest):
         report['checks']['temporary_real_mime_default_selected'] = post_warm_step(
             post, 'default_selected_assert', lambda: prepared['app_id'].endswith('.desktop'))
         post['phase'] = 'complete'
+        def set_button_held(value):
+            nonlocal held
+            held = value
         for sequence in ('pointer', 'keyboard'):
-            native_guard()
-            note = call('notify', sequence)['id']
-            cli('notifications', 'show')  # Presentation setup; activation below is real native input.
+            begin_native_case(report, sequence)
+            native_step(report, 'case_preflight', native_guard)
+            note = native_step(report, 'notification_create', lambda: call('notify', sequence)['id'])
+            native_step(report, 'notification_history_show', lambda: cli('notifications', 'show'))
+            def selected_group():
+                current, _ = native_guard()
+                return group_target(current, json.loads(session('hyprctl', '-j', 'layers')),
+                                    run_id, args.expected_desktop_pid)
+            def group_ready():
+                try:
+                    return selected_group()
+                except ValueError as error:
+                    if str(error) in ('one_native_notification_surface', 'one_current_owned_notification_group',
+                                      'actual_native_notification_history_geometry'):
+                        return False
+                    raise
+            native_step(report, 'group_target_wait', lambda: wait(group_ready, 'owned_notification_group_native_history_ready'))
+            # Expanding a group is presentation setup. It must use the actual
+            # owned group button; URI link delivery below stays independent.
+            native_pointer_control(report, 'group', selected_group, cursor,
+                lambda: json.loads(session('hyprctl', '-j', 'cursorpos')),
+                lambda point: session('hyprctl', 'dispatch', compositor_move(point)),
+                lambda down: old.a['pointer'](name, down), wait, deadline, set_button_held)
             observed_revision = None
             def selected():
                 current, _ = native_guard()
@@ -392,74 +585,73 @@ def run(args, manifest):
                                       'actual_native_notification_history_geometry'):
                         return False
                     raise
-            wait(link_ready, 'owned_rich_link_native_history_ready')
-            observed_revision = call('observe-note', sequence)['revision']
-            selected()
+            native_step(report, 'notification_link_wait', lambda: wait(link_ready, 'owned_rich_link_native_history_ready'))
+            report.setdefault('history_setup', {})[sequence] = {'group_native_pointer_focus': True}
+            observed_revision = native_step(report, 'notification_revision_capture', lambda: call('observe-note', sequence)['revision'])
+            native_step(report, 'notification_target_validate', selected)
             if sequence == 'pointer':
-                initial_target = selected()
-                cursor.begin(json.loads(session('hyprctl', '-j', 'cursorpos')), initial_target['point'])
-                session('hyprctl', 'dispatch', compositor_move(initial_target['point']))
-                cursor.finish(json.loads(session('hyprctl', '-j', 'cursorpos')))
-                after = selected()
-                require(all(after[key] == initial_target[key] for key in ('surface', 'instance', 'output', 'hit', 'layer', 'point')),
-                        'exact_current_native_rich_link_before_press')
-                require(time.monotonic() < deadline, 'bounded_native_input_window')
-                held = True
-                try:
-                    old.a['pointer'](name, True)
-                    wait(lambda: selected()['focus'] == initial_target['hit']['id'],
-                         'native_pointer_focus_on_owned_link', 3)
-                finally:
-                    old.a['pointer'](name, False)
-                    held = False
+                native_pointer_control(report, 'pointer', selected, cursor,
+                    lambda: json.loads(session('hyprctl', '-j', 'cursorpos')),
+                    lambda point: session('hyprctl', 'dispatch', compositor_move(point)),
+                    lambda down: old.a['pointer'](name, down), wait, deadline, set_button_held)
                 report['native_input']['pointer_link_focus'] = True
             else:
                 tab_presses = 0
                 for _ in range(128):
-                    value = selected()
+                    value = native_step(report, 'keyboard_target_capture', selected)
                     if tab_presses > 0 and value['focus'] == value['hit']['id']:
                         break
-                    require(time.monotonic() < deadline, 'bounded_native_keyboard_window')
-                    lab.virsh('send-key', name, '--codeset', 'linux', '--holdtime', '50', '15', capture=True)
+                    native_step(report, 'keyboard_deadline_assert', lambda: require(
+                        time.monotonic() < deadline, 'bounded_native_keyboard_window'))
+                    native_step(report, 'keyboard_tab_dispatch', lambda: lab.virsh(
+                        'send-key', name, '--codeset', 'linux', '--holdtime', '50', '15', capture=True))
                     tab_presses += 1
                     time.sleep(.08)
                 else:
-                    raise ValueError('owned_rich_link_not_reached_by_actual_tab')
-                require(selected()['focus'] == selected()['hit']['id'], 'actual_keyboard_focus_on_owned_link')
-                lab.virsh('send-key', name, '--codeset', 'linux', '--holdtime', '50', '28', capture=True)
+                    native_step(report, 'keyboard_focus_assert', lambda: require(False, 'owned_rich_link_not_reached_by_actual_tab'))
+                native_step(report, 'keyboard_focus_assert', lambda: require(
+                    selected()['focus'] == selected()['hit']['id'], 'actual_keyboard_focus_on_owned_link'))
+                native_step(report, 'keyboard_enter_dispatch', lambda: lab.virsh(
+                    'send-key', name, '--codeset', 'linux', '--holdtime', '50', '28', capture=True))
                 report['native_input']['tab_enter_link_focus'] = True
                 report['native_input']['tab_events_sent'] = tab_presses
             count = 1 if sequence == 'pointer' else 2
-            wait(lambda: len(call('state')['bridge']) == count and len(call('state')['events']) == count + 1,
-                 'selected_default_handler_received_native_uri')
-            state = call('state')
+            native_step(report, 'default_handler_delivery_wait', lambda: wait(
+                lambda: len(call('state')['bridge']) == count and len(call('state')['events']) == count + 1,
+                'selected_default_handler_received_native_uri'))
+            state = native_step(report, 'default_handler_state_read', lambda: call('state'))
             bridge, event = state['bridge'][-1], state['events'][-1]
-            require(bridge == {'selected_uri_matches': True, 'fresh_token_present': True, 'legacy_startup_present': False}
+            native_step(report, 'default_handler_authority_assert', lambda: require(
+                    bridge == {'selected_uri_matches': True, 'fresh_token_present': True, 'legacy_startup_present': False}
                     and event['uris'] == [uri] and event['fresh_token_present'] and not event['legacy_startup_present'],
-                    'native_default_handler_and_browser_wrapper_receive_fresh_authority')
+                    'native_default_handler_and_browser_wrapper_receive_fresh_authority'))
             fresh = None
             def document_ready():
                 nonlocal fresh
                 fresh = fresh_documents([browser['control']], browser_state()['pages'], http['targets'], browser['control'])
                 return fresh is not None
-            wait(document_ready, 'one_fresh_selected_real_browser_document')
-            _, clients = native_guard()
-            focus = json.loads(session('hyprctl', '-j', 'activewindow'))
+            native_step(report, 'browser_document_wait', lambda: wait(document_ready, 'one_fresh_selected_real_browser_document'))
+            _, clients = native_step(report, 'browser_guard', native_guard)
+            focus = native_step(report, 'browser_focus_read', lambda: json.loads(session('hyprctl', '-j', 'activewindow')))
             report['browser_focus'][sequence] = bool(focus) and focus.get('class') == entry['class'] and any(
                 row.get('pid') == focus.get('pid') and row.get('address') == focus.get('address') for row in clients)
-            require(call('browser-close', json.dumps({'identity': browser, 'before': [browser['control']],
-                    'targets': fresh}), canonical=True)['fresh_owned_targets_retired'], 'exact_owned_document_retired')
-            require(call('wait-expiry')['absent_after_expiry_window'], 'notification_absence_after_bounded_expiry')
-            current, _ = native_guard()
-            require(current['client']['notification_count'] == 0,
-                    'foreign_notification_must_not_be_hidden_between_cases')
-            cli('notifications', 'hide')
-            wait(lambda: not inspect()['client']['notification_history_open'], 'owned_history_closed_between_cases')
+            native_step(report, 'browser_targets_retire', lambda: require(call('browser-close', json.dumps({
+                'identity': browser, 'before': [browser['control']], 'targets': fresh}), canonical=True)
+                ['fresh_owned_targets_retired'], 'exact_owned_document_retired'))
+            native_step(report, 'notification_expiry_wait', lambda: require(
+                call('wait-expiry')['absent_after_expiry_window'], 'notification_absence_after_bounded_expiry'))
+            current, _ = native_step(report, 'notification_post_expiry_guard', native_guard)
+            native_step(report, 'notification_absence_assert', lambda: require(
+                current['client']['notification_count'] == 0, 'foreign_notification_must_not_be_hidden_between_cases'))
+            native_step(report, 'notification_history_hide', lambda: cli('notifications', 'hide'))
+            native_step(report, 'notification_history_closed_wait', lambda: wait(
+                lambda: not inspect()['client']['notification_history_open'], 'owned_history_closed_between_cases'))
             report['checks'][sequence + '_fresh_token_default_route_exact_document'] = True
             report['checks'][sequence + '_notification_absent_after_expiry_window'] = True
+            native_step(report, 'case_complete', lambda: None)
         report['success'] = True
     except BaseException as error:
-        phase = report.get('post_warm', {}).get('phase', 'setup')
+        phase = report.get('native_flow', {}).get('phase', report.get('post_warm', {}).get('phase', 'setup'))
         record_failure(report, error, 'native_acceptance' if phase == 'complete' else phase)
     finally:
         if held:
