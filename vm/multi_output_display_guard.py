@@ -646,6 +646,38 @@ def serve(directory,header):
                 result['cleanup_blocked']=str(error) if isinstance(error,p.Blocked) else type(error).__name__
         base.private_json(directory/'finished.json',result)
 
+def display_request_packet(operation,monitor=None,identifier=None,generation=None,global_id=None):
+    require(operation in ('create','status','capture-keep','expect-disable','expect-enable',
+                          'bar-warp','arm-keep','warp','finish'),'known_display_request_operation_required')
+    value={'operation':operation}
+    if operation=='warp':
+        value.update(monitor=monitor,identifier=identifier,generation=generation,**{'global':global_id})
+    elif operation=='bar-warp':
+        value.update(monitor=monitor,generation=generation,**{'global':global_id})
+    return value
+
+
+def display_request(directory,operation,monitor=None,identifier=None,generation=None,global_id=None):
+    # The canonical serializer is pinned to the runtime source and only knows
+    # panel warp metadata. Keep Display's extra bar request local to this test,
+    # retaining the same bounded socket protocol for every existing operation.
+    value=display_request_packet(operation,monitor,identifier,generation,global_id)
+    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as client:
+        deadline=time.monotonic()+35
+        client.settimeout(35)
+        client.connect(str(directory/'control.sock'))
+        client.sendall((json.dumps(value)+'\n').encode())
+        result=bytearray()
+        while b'\n' not in result and len(result)<=65536:
+            remaining=deadline-time.monotonic()
+            require(remaining>0,'absolute_guard_response_deadline_expired')
+            client.settimeout(remaining)
+            block=client.recv(65536);require(bool(block),'truncated_guard_response')
+            result.extend(block)
+        require(len(result)<=65536,'oversized_guard_response')
+        print(result.decode().strip())
+
+
 def main():
     require(__debug__,'python_assertions_required')
     parser=argparse.ArgumentParser();parser.add_argument('mode',choices=('serve','request'))
@@ -657,7 +689,7 @@ def main():
             and directory.name.startswith('native-two-output-displays-') and stat.S_ISDIR(meta.st_mode)
             and stat.S_IMODE(meta.st_mode)==0o700 and meta.st_uid==os.getuid(),'private_test_directory_required')
     if args.mode=='request':
-        base.request(directory,args.operation,None,args.monitor,args.identifier,args.generation,args.global_id)
+        display_request(directory,args.operation,args.monitor,args.identifier,args.generation,args.global_id)
     else:
         signal.signal(signal.SIGTERM,lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
         header=json.loads((directory/'header.json').read_bytes())

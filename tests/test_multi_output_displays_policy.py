@@ -589,6 +589,112 @@ class DeclaredDisableCursor(unittest.TestCase):
                 owner.input_preflight()
 
 
+class DisplayRequestWire(unittest.TestCase):
+    def client(self,chunks=(b'{"ok":true,"value":{}}\n',)):
+        client=Mock();client.__enter__=Mock(return_value=client);client.__exit__=Mock(return_value=False)
+        client.recv.side_effect=list(chunks)
+        return client
+
+    def main_request(self,directory,operation,client,extra=()):
+        with patch.object(sys,'argv',['guest.py','request',str(directory),operation,*extra]),\
+             patch.object(g.socket,'socket',return_value=client),contextlib.redirect_stdout(io.StringIO()) as output:
+            g.main()
+        return output.getvalue()
+
+    def test_existing_cli_frames_remain_byte_equivalent_to_canonical_serializer(self):
+        operations=('create','status','capture-keep','expect-disable','expect-enable','arm-keep','warp','finish')
+        with tempfile.TemporaryDirectory(prefix='native-two-output-displays-') as temporary:
+            directory=Path(temporary)
+            for operation in operations:
+                with self.subTest(operation=operation):
+                    original=self.client()
+                    with patch.object(g.base.socket,'socket',return_value=original),contextlib.redirect_stdout(io.StringIO()):
+                        g.base.request(directory,operation,None,'Virtual-1','display-reset',5,19)
+                    current=self.client()
+                    self.main_request(directory,operation,current,('--monitor','Virtual-1','--identifier','display-reset',
+                                      '--generation','5','--global-id','19'))
+                    self.assertEqual(current.sendall.call_args,original.sendall.call_args)
+                    current.connect.assert_called_once_with(str(directory/'control.sock'))
+                    self.assertEqual(current.settimeout.call_args_list[0].args,(35,))
+
+    def bar_owner(self):
+        name='LUCENT-TEST-'+'a'*24
+        owner=g.Owner.__new__(g.Owner);owner.lease=types.SimpleNamespace(name=name)
+        owner.pid=123;owner.peer_ready=True;owner.peer_disabled=False;owner.panel_target='Virtual-1'
+        current={'x':10,'y':20};owner.cursor=g.p.CursorOwnership((10,20))
+        owner.status=Mock(return_value={'state':{'visible':False},'cursor':dict(current)})
+        owner.monitors=Mock(return_value=[{'name':name,'width':1280,'height':960,'x':1968,'y':0,'scale':1.25,'transform':0}])
+        source={'id':'bar-peer','output':name,'role':'bar','instance':'peer-instance','width':1024,'height':48,
+                'density':1.25,'pointer_input':'all','hits':[{'id':'bar-audio','x':20,'y':4,'width':24,'height':24,
+                                                          'clip':{'x':0,'y':0,'width':1024,'height':48}}]}
+        state={'client':{'named_monitor_hosts':True,'monitor_hosts':[{'id':name,'instance':'peer-instance','generation':5}]},
+               'outputs':[{'name':name,'global':19}],'surfaces':[source]}
+        layers={name:{'levels':{'2':[{'namespace':'lucent-bar-peer','pid':123,'address':'0xabc',
+                                    'x':1968,'y':0,'w':1024,'h':48}]}}}
+        def hypr(*args):
+            if args==('-j','layers'):return json.dumps(layers)
+            if args==('dispatch','hl.dsp.cursor.move({x=2000,y=16})'):
+                current.update(x=2000,y=16);return 'ok'
+            if args==('-j','cursorpos'):return json.dumps(current)
+            self.fail('unexpected_native_operation')
+        return owner,state,hypr
+
+    def test_actual_bar_request_cli_passes_complete_wire_capture_into_owner(self):
+        owner,state,hypr=self.bar_owner();client=self.client();seen=[];reply=[]
+        def deliver(raw):
+            frame=json.loads(raw);seen.append(frame)
+            reply.append((json.dumps({'ok':True,'value':owner.operation(frame)})+'\n').encode())
+        client.sendall.side_effect=deliver;client.recv.side_effect=lambda _:reply.pop(0)
+        with tempfile.TemporaryDirectory(prefix='native-two-output-displays-') as temporary:
+            with patch.object(g.base,'inspect',return_value=state),patch.object(g.base,'hypr',side_effect=hypr):
+                output=self.main_request(Path(temporary),'bar-warp',client,('--monitor',owner.lease.name,
+                                         '--generation','5','--global-id','19'))
+        self.assertEqual(seen,[{'operation':'bar-warp','monitor':owner.lease.name,'generation':5,'global':19}])
+        self.assertEqual(json.loads(output)['value'],{'point':[2000,16],'surface':'bar-peer','generation':5,'global':19})
+        self.assertEqual(owner.panel_target,owner.lease.name)
+        self.assertEqual(owner.cursor.expected,(2000,16));self.assertFalse(owner.cursor.lost)
+
+    def test_carried_bar_lifetime_values_do_not_bypass_owner_admission(self):
+        for key,value in (('generation',4),('global',18)):
+            with self.subTest(key=key):
+                owner,state,_=self.bar_owner()
+                frame=g.display_request_packet('bar-warp',owner.lease.name,None,5,19);frame[key]=value
+                with patch.object(g.base,'inspect',return_value=state),patch.object(g.base,'hypr') as native:
+                    with self.assertRaisesRegex(g.p.Blocked,'exact_bar_host_lifetime_required'):
+                        owner.operation(frame)
+                native.assert_not_called();self.assertEqual(owner.cursor.expected,(10,20))
+
+    def test_socket_frames_keep_newline_size_and_absolute_response_deadline_guards(self):
+        prefix,suffix=b'{"value":"',b'"}\n'
+        boundary=prefix+b'x'*(65536-len(prefix)-len(suffix))+suffix
+        client=self.client((boundary[:100],boundary[100:]))
+        with patch.object(g.socket,'socket',return_value=client),contextlib.redirect_stdout(io.StringIO()) as output:
+            g.display_request(Path('/unused-stage'),'status')
+        self.assertEqual(len(boundary),65536);self.assertIn('value',json.loads(output.getvalue()))
+        for chunks,label in (((b'x'*65537+b'\n',),'oversized_guard_response'),
+                             ((b'partial',b''),'truncated_guard_response')):
+            client=self.client(chunks)
+            with self.subTest(label=label),patch.object(g.socket,'socket',return_value=client),\
+                 contextlib.redirect_stdout(io.StringIO()) as output:
+                with self.assertRaisesRegex(g.p.Blocked,label):g.display_request(Path('/unused-stage'),'status')
+            self.assertEqual(output.getvalue(),'');client.__exit__.assert_called_once()
+        client=self.client()
+        with patch.object(g.socket,'socket',return_value=client),patch.object(g.time,'monotonic',side_effect=[0,36]):
+            with self.assertRaisesRegex(g.p.Blocked,'absolute_guard_response_deadline_expired'):
+                g.display_request(Path('/unused-stage'),'status')
+        client.recv.assert_not_called();client.__exit__.assert_called_once()
+
+    def test_unknown_operations_and_socket_timeout_never_claim_a_response(self):
+        with patch.object(g.socket,'socket') as native:
+            with self.assertRaisesRegex(g.p.Blocked,'known_display_request_operation_required'):
+                g.display_request(Path('/unused-stage'),'unknown')
+        native.assert_not_called()
+        client=self.client();client.recv.side_effect=TimeoutError('injected_socket_timeout')
+        with patch.object(g.socket,'socket',return_value=client),contextlib.redirect_stdout(io.StringIO()) as output:
+            with self.assertRaises(TimeoutError):g.display_request(Path('/unused-stage'),'status')
+        self.assertEqual(output.getvalue(),'');client.__exit__.assert_called_once()
+
+
 class DisplayObservationTiming(unittest.TestCase):
     def no_alarm(self):
         return patch.object(g,'phase_deadline',side_effect=lambda _:contextlib.nullcontext())

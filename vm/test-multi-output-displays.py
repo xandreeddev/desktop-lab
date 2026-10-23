@@ -24,7 +24,7 @@ PINS={
  'multi_output_policy':('vm/multi_output_policy.py','25c0e45f87c25363220cffdfd901774856c8792f7e4298946fc9011dbb2ebb58'),
  'multi_output_display_policy':('vm/multi_output_display_policy.py','e2fa025f521c30f71d0992c12d1a4d6ef98af79abc96a53ad86d616734e5f66f'),
  'multi_output_display_timing':('vm/multi_output_display_timing.py','7e0e4d9fc57825ae1d68921a377da6a0b5a1e7a2b51b8622be9fa46587784004')}
-GUEST_SHA='33c76b0b5b3c653252db541573bdddc1af92a4c250f47bca45deba9e3d972780'
+GUEST_SHA='97333e23de22de1105156eecf0d8a071c84361654b137ab0e81bf655d20b13c9'
 
 
 class OwnerStartupFailed(ValueError):
