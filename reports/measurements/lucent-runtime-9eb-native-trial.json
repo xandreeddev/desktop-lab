@@ -322,5 +322,41 @@
     "whole_seven_gap_goal_complete": false,
     "accessibility": "user-deferred"
   },
-  "historical_evidence_policy": "All earlier reports, including26d route-only acceptance, failed attempts and recoveries, resource eligibility flags and archived UNMERGED flags remain unchanged. New source-specific acceptance does not rewrite them."
+  "historical_evidence_policy": "All earlier reports, including26d route-only acceptance, failed attempts and recoveries, resource eligibility flags and archived UNMERGED flags remain unchanged. New source-specific acceptance does not rewrite them.",
+  "accepted_main_followup": {
+    "recorded_on": "2026-10-23",
+    "pull_request": 106,
+    "exact_reviewed_head": "8d102d64d3be2e3f4fa2f909b71baec1162b33e1",
+    "merge_commit": "bdffd42438990ef546ad13f302556913339acce0",
+    "merged_at": "2026-10-23T21:24:25Z",
+    "normal_merge": true,
+    "mergeability_before_merge": "CLEAN",
+    "required_checks_passed": 6,
+    "private_premerge_receipt_sha256": "2f6a3f21150dfad21b1e9bfb811065d3945b1d2078fe2d7950d786b8babee16d",
+    "private_merge_receipt_sha256": "218b439af31f3a3991ecdde54174e73a7c190a9d0393c5be434707fb559ac641",
+    "build_source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
+    "accepted_main_contains_runtime_code": true,
+    "identical_git_subtrees": {
+      "lucent": "d46ea5522a3a83002154741c8cb33f07210c2720",
+      "design": "8ac7a305599a8e91a524dea9ebc31e0b35317d85",
+      "configs": "a53cd7f4e268a50889335e53fca9a1b6a97f00fa",
+      "scripts": "3b3f936cc9535ee00a9a14039559af3fcbc5e6e6"
+    },
+    "rebuilt_at_merge_commit": false,
+    "archived_build_deployment_and_native_capture_flags_changed": false,
+    "native_scope_or_performance_acceptance_expanded_by_merge": false,
+    "last_verified_pages_source_commit": "6322f76308b82f7c2b668f0b952d6d87c5884273",
+    "last_verified_pages_run": 40019250788,
+    "pr106_pages_verified": false,
+    "new_evidence_docs_built_or_published": false,
+    "latest_4k_measurement_preflight": {
+      "host_memory_admission": "refused_before_vm_contact",
+      "minimum_available_mib_required": 4500,
+      "handoff_acquisition_binding_or_lease_created": false,
+      "native_4k_measurement_executed": false,
+      "scope": "Latest new 9eb FHD/4K attempt only. Historical 26d output setup/restoration runs retain their separate outcomes."
+    },
+    "host_io_diagnostic": "Started separately; no terminal result at this checkpoint.",
+    "scope": "Later accepted-main source equality, not a rebuild or native rerun. Original UNMERGED/accepted_main=false capture-time fields above remain unchanged. Five route checks, two trusted document-key cases and nine named cleanup checks retain their recorded warm controlled-browser scope; no all-user-files/history-byte restoration, arbitrary-handler, cold-browser, physical-hardware or performance claim."
+  }
 }
