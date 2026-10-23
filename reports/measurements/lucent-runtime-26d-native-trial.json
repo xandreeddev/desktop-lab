@@ -14,7 +14,9 @@
     "normal_measurement": "8dc50b699010d9b0fc39e4d783d39dc740b900756a7b3f3301ad5d07eca8132c",
     "normal_collector": "183f75fa3f465db79d1def3ff4adc0a327551c23715e7ad71ad25af8621ec5c0",
     "release_manifest": "5b228fa1bbdc71c50a245edcb70e726ef4d5826f476ba261e53042023d322aec",
-    "display_failed_attempt": "0988114eabd8d4e86295a0f1e3f96faff0b20a2980d2e4013ab963a9186adf6c"
+    "display_failed_attempt": "0988114eabd8d4e86295a0f1e3f96faff0b20a2980d2e4013ab963a9186adf6c",
+    "display_guarded_recovery": "ffebd898430c8e821f3a784a101d7acd7308d8df80a3fc2f5f623dcbf06c96a1",
+    "post_recovery_normal_off": "5f924565120aaf490a3bd656b8dfd30b84429328ad3135c5154f1afbc018acad"
   },
   "binaries": {
     "lucent-desktop": {
@@ -240,5 +242,45 @@
     "physical_or_secure_output_acceptance": false,
     "presentation_or_performance_acceptance": false,
     "scope": "Five reported observations precede an overall failed attempt. Original panel input stays on the 1x output while the owned headless peer changes. No successful full trial, completed restoration, native enable/disable, fractionally scaled Displays-panel input or physical rotation acceptance is claimed. A later recovery, if executed, needs separate evidence and cannot relabel this failed attempt."
+  },
+  "display_guarded_recovery": {
+    "separate_from_failed_attempt": true,
+    "helper_sha256": "b14cef15f2b51f05145a89ab2e8e04c4ff55900b501509eeee60a7419586f88a",
+    "exit_code": 0,
+    "stderr_bytes": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "observed": {
+      "success": true,
+      "failed_trial_preserved": true,
+      "no_input_or_cursor_authority": true,
+      "stage": "complete",
+      "original_monitor_bytes_inode": true,
+      "only_owned_output_removed": true,
+      "original_cursor_and_workspace_asserted": true,
+      "original_sources_security_settings_media_preserved": true,
+      "original_monitor_ctime_and_parent_timestamps_not_claimed_unchanged": true
+    },
+    "scope": "Separate guarded recovery after the failed Display trial. Original monitor bytes/inode and only-owned-output removal are verified; original cursor/workspace are asserted without input, warps or adopting cursor authority. Original sources, security, settings and media are preserved. Monitor ctime and parent timestamps are explicitly excluded. This is not a new Display feature-flow run, physical-output test or performance acceptance. Original failed-trial flags remain unchanged."
+  },
+  "post_recovery_normal_off": {
+    "success": true,
+    "read_only": true,
+    "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+    "capture_helper_sha256": "e4914a16e126fd58bb655861e452293e210c12a83681ae1d38e31ff6f93756f9",
+    "binding_sha256": "d620edc12f9a8fc4c2c440bda85cf4b8b0ae0dcb09eb09d958f84f33309f1c5b",
+    "desktop_sha256": "7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08",
+    "output": {
+      "width": 1920,
+      "height": 1080,
+      "scale": 1,
+      "transform": 0,
+      "refreshRate": 60.0
+    },
+    "runtime_profiling": {
+      "frames": false,
+      "presentation": false,
+      "source_pts": false
+    },
+    "scope": "Independent source-bound read-only facts capture after recovery; complete original facts schema checks sources/security/settings/effective unit, runtime drop-ins and process environment. This observation is not a rerun of the failed Display attempt, another resource interval or FPS evidence."
   }
 }

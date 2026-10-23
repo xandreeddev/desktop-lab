@@ -82,6 +82,18 @@ no successful full trial, completed restoration, native enable/disable or input
 on a fractionally scaled Displays panel. Any later recovery requires separate
 evidence; it cannot change this failed report's outcome.
 
+A subsequent, separate guarded recovery completes with exit 0 and empty stderr.
+It verifies the original monitor bytes/inode, removes only the owned output,
+asserts the original cursor/workspace and preserves the original sources,
+security, settings and media. It grants no input or cursor-warp authority;
+monitor ctime and parent timestamps are outside its preservation claim. The
+[candidate report](../reports/measurements/lucent-runtime-26d-native-trial.json)
+also records an independent read-only observation afterward: the same candidate
+source and desktop digest, one restored 1080p/scale-1 output and all three
+profiling paths off. This recovery supplies no new Display feature-flow pass,
+presentation or resource acceptance. The original failed attempt retains its
+`success=false` and `restoration=null` flags.
+
 These candidate receipts supplement the historical snapshots above. They do not
 promote PR102 to accepted main, close the performance or hardware gaps, or mark
 the seven-gap goal complete.

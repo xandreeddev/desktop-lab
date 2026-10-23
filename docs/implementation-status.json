@@ -1359,6 +1359,25 @@
         "restoration": null,
         "cleanup_blocked": "foreign_or_uncertain_cursor_movement_blocks_warp",
         "scope": "Five observations before failure do not establish full-trial success or completed restoration. No native enable/disable or fractionally scaled Displays-panel input acceptance. Any later recovery is separate evidence."
+      },
+      "display_guarded_recovery": {
+        "report": "reports/measurements/lucent-runtime-26d-native-trial.json",
+        "recovery_evidence_sha256": "ffebd898430c8e821f3a784a101d7acd7308d8df80a3fc2f5f623dcbf06c96a1",
+        "post_recovery_normal_off_evidence_sha256": "5f924565120aaf490a3bd656b8dfd30b84429328ad3135c5154f1afbc018acad",
+        "success": true,
+        "exit_code": 0,
+        "stderr_bytes": 0,
+        "original_failed_trial_preserved": true,
+        "original_monitor_bytes_inode_verified": true,
+        "only_owned_output_removed": true,
+        "original_cursor_workspace_asserted_without_input_or_warp": true,
+        "post_recovery_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+        "post_recovery_runtime_profiling": {
+          "frames": false,
+          "presentation": false,
+          "source_pts": false
+        },
+        "scope": "Separate recovery and fresh read-only all-OFF observation; failed Display attempt keeps overall_passed=false/owner_success=false/restoration=null. No new feature-flow, physical-output or performance acceptance."
       }
     }
   },
