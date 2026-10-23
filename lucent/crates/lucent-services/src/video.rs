@@ -16,6 +16,7 @@ use std::{
 const SOURCE_BYTES: u64 = 512 * 1024 * 1024;
 const LIBRARY_RESULTS: usize = 32;
 const LIBRARY_ENTRIES: usize = 1024;
+mod pixels;
 mod preview;
 mod store;
 static NEXT: AtomicU64 = AtomicU64::new(1);
@@ -284,8 +285,17 @@ fn conversion_dimensions(
     target: Option<WallpaperPixelTarget>,
 ) -> Result<(u32, u32)> {
     dimensions(width, height)?;
+    if opaque_format(format)?
+        && let Some(target) = target
+    {
+        target.cover_size(width, height)
+    } else {
+        Ok((width, height))
+    }
+}
+fn opaque_format(format: ffmpeg::format::Pixel) -> Result<bool> {
     let descriptor = format.descriptor().ok_or_else(failed)?;
-    let opaque = {
+    Ok({
         // SAFETY: Pixel::descriptor returns a non-null pointer obtained from
         // av_pix_fmt_desc_get. FFmpeg owns this immutable format descriptor for
         // the process lifetime; this reads only its public flags field.
@@ -297,12 +307,7 @@ fn conversion_dimensions(
         let alpha_flags =
             (ffmpeg::ffi::AV_PIX_FMT_FLAG_ALPHA | ffmpeg::ffi::AV_PIX_FMT_FLAG_PAL) as u64;
         flags & alpha_flags == 0
-    };
-    if opaque && let Some(target) = target {
-        target.cover_size(width, height)
-    } else {
-        Ok((width, height))
-    }
+    })
 }
 
 /// The first decoded frame, not the codec's initial metadata, establishes the
@@ -313,6 +318,7 @@ struct FrameConverter {
     source: ffmpeg::software::scaling::context::Definition,
     scaler: ffmpeg::software::scaling::context::Context,
     rgba: ffmpeg::util::frame::video::Video,
+    pixels: Option<pixels::Pool>,
 }
 impl FrameConverter {
     fn new(
@@ -320,6 +326,16 @@ impl FrameConverter {
         target: Option<WallpaperPixelTarget>,
     ) -> Result<Self> {
         Self::new_sized(frame, target, None)
+    }
+    fn new_live(
+        frame: &ffmpeg::util::frame::video::Video,
+        target: Option<WallpaperPixelTarget>,
+    ) -> Result<Self> {
+        let mut converter = Self::new(frame, target)?;
+        if opaque_format(frame.format())? {
+            converter.pixels = Some(pixels::Pool::default());
+        }
+        Ok(converter)
     }
     fn new_sized(
         frame: &ffmpeg::util::frame::video::Video,
@@ -356,6 +372,7 @@ impl FrameConverter {
             // FFmpeg owns the aligned, padded conversion allocation. Published
             // frames own separate immutable bytes and may outlive this worker.
             rgba: ffmpeg::util::frame::video::Video::empty(),
+            pixels: None,
         })
     }
 
@@ -387,12 +404,19 @@ impl FrameConverter {
         let row = width as usize * 4;
         let stride = self.rgba.stride(0);
         let plane = self.rgba.data(0);
-        let mut bytes = Vec::with_capacity(row * height as usize);
-        for y in 0..height as usize {
-            let start = y.checked_mul(stride).ok_or_else(failed)?;
-            bytes.extend_from_slice(plane.get(start..start + row).ok_or_else(failed)?);
-        }
-        MediaFrame::rgba_with_aspect(
+        let pack = |bytes: &mut Vec<u8>| {
+            for y in 0..height as usize {
+                let start = y.checked_mul(stride).ok_or_else(failed)?;
+                bytes.extend_from_slice(plane.get(start..start + row).ok_or_else(failed)?);
+            }
+            Ok(())
+        };
+        let length = row * height as usize;
+        let bytes = match &mut self.pixels {
+            Some(pool) => pool.frame(length, pack)?,
+            None => pixels::packed(length, pack)?,
+        };
+        MediaFrame::rgba_shared_with_aspect(
             width,
             height,
             bytes,
@@ -652,8 +676,9 @@ impl DecoderSession {
                         DecodePurpose::Preview(preview) => {
                             FrameConverter::new_sized(&frame, None, Some(preview))?
                         }
-                        DecodePurpose::Poster | DecodePurpose::LiveWallpaper => {
-                            FrameConverter::new(&frame, options.target)?
+                        DecodePurpose::Poster => FrameConverter::new(&frame, options.target)?,
+                        DecodePurpose::LiveWallpaper => {
+                            FrameConverter::new_live(&frame, options.target)?
                         }
                     });
                 }

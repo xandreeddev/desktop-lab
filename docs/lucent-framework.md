@@ -308,6 +308,17 @@ uploads prepared levels on a miss; it no longer clones, premultiplies or downsam
 image pixels during paint. `pixels()` returns premultiplied RGBA, which adapters
 must account for when extracting colors.
 
+`ImageLevel.pixels` now stores `Arc<Vec<u8>>`. Migrate struct literals with
+`pixels: pixels.into()`; existing `Vec<u8>` image constructors remain available.
+`ImageStream::frame_rgba_shared_with_aspect` accepts shared straight-alpha RGBA,
+validates its dimensions and alpha, and shares the exact allocation only when
+every pixel is opaque. Unique alpha pixels are unwrapped and premultiplied in
+place; shared alpha pixels are explicitly copied first, preserving other owners.
+The ordinary vector path keeps its existing one-pass premultiplication.
+Image lifetimes observe prepared levels; retaining producer storage does not
+extend that lifetime. Active GPU draw references remain separate. Static mip
+downsampling still copies its retained levels.
+
 Each Canvas retains the textures for its current scene. A redraw on another
 surface cannot evict those active resources. The cache removes unused resources
 in least-recently-used order above 1024 entries or 64 MiB of texture payload.
