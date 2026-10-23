@@ -1,11 +1,12 @@
 """Private bounded owner; canonical native-output observers remain unchanged."""
-import argparse,copy,ctypes,hashlib,json,math,os,signal,socket,stat,struct,sys,time
+import argparse,contextlib,copy,ctypes,hashlib,json,math,os,signal,socket,stat,struct,subprocess,sys,time
 from pathlib import Path
 sys.dont_write_bytecode=True
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 import multi_output_guard as base
 import multi_output_policy as p
 import multi_output_display_policy as d
+import multi_output_display_timing as timing
 import preservation_fingerprint as preservation
 import display_supervision as supervision
 import owned_application_units as units
@@ -13,6 +14,70 @@ import owned_application_units as units
 require=p.require
 BEGIN=b'-- BEGIN LUCENT DISPLAY CONFIGURATION\n'
 END=b'-- END LUCENT DISPLAY CONFIGURATION\n'
+
+
+class PhaseDeadline(TimeoutError):
+    """A fixed test-owner phase exhausted its own finite observation budget."""
+
+
+@contextlib.contextmanager
+def phase_deadline(seconds):
+    previous=signal.getsignal(signal.SIGALRM)
+    require(signal.getitimer(signal.ITIMER_REAL)==(0.0,0.0),'no_preexisting_display_phase_timer')
+    def expired(*_):
+        raise PhaseDeadline('bounded_display_phase_expired')
+    try:
+        signal.signal(signal.SIGALRM,expired)
+        # An existing cleanup catch may handle one exception while recording
+        # lost cursor authority. A short repeat keeps the phase bound active.
+        signal.setitimer(signal.ITIMER_REAL,seconds,.1)
+        yield
+    finally:
+        try:
+            signal.setitimer(signal.ITIMER_REAL,0)
+        finally:
+            signal.signal(signal.SIGALRM,previous)
+
+
+def run_phase(directory,diagnostics,phase,action):
+    require(phase in timing.PHASE_SECONDS,'known_display_observation_phase_required')
+    budget=timing.PHASE_SECONDS[phase];started=time.monotonic()
+    record={'phase':phase,'status':'started','budget_seconds':budget,'elapsed_seconds':0.0}
+    try:
+        with phase_deadline(budget):
+            base.private_json(directory/(phase+'-started.json'),record)
+            value=action()
+            if time.monotonic()-started>=budget:
+                raise PhaseDeadline('bounded_display_phase_expired')
+    except BaseException as error:
+        known=('TimeoutExpired','PhaseDeadline','Blocked','ValueError','OSError','PermissionError',
+               'FileNotFoundError','FileExistsError','KeyboardInterrupt','JSONDecodeError')
+        record={**record,'status':'failed','elapsed_seconds':max(0.0,time.monotonic()-started),
+                'error_class':type(error).__name__ if type(error).__name__ in known else 'OtherError'}
+        diagnostics.append(record)
+        # Never expose raw argv, script text, stdout/stderr or exception payloads.
+        try:base.private_json(directory/(phase+'-result.json'),record)
+        except BaseException:pass
+        raise
+    record={**record,'status':'passed','elapsed_seconds':max(0.0,time.monotonic()-started)}
+    diagnostics.append(record)
+    base.private_json(directory/(phase+'-result.json'),record)
+    return value
+
+
+def snapshot(directory,diagnostics,phase):
+    require(phase in ('before_preservation','after_preservation','before_supervision','after_supervision'),
+            'fixed_read_only_snapshot_phase_required')
+    preserved=phase.endswith('_preservation')
+    expected=('python3','-c',preservation.SCRIPT) if preserved else ('python3','-c',supervision.SCRIPT,'identity')
+    def observed(*argv):
+        require(argv==expected,'fixed_read_only_snapshot_command_required')
+        result=subprocess.run(argv,capture_output=True,text=True,timeout=timing.PHASE_SECONDS[phase],check=False)
+        require(result.returncode==0 and len(result.stdout)<=8*1024*1024,'bounded_read_only_snapshot_failed')
+        return result.stdout.strip()
+    action=(lambda:preservation.fingerprint(observed)) if preserved else (lambda:supervision.identity(observed))
+    return run_phase(directory,diagnostics,phase,action)
+
 
 def stamp(path,hashed=True,depth=0):
     path=Path(path)
@@ -510,23 +575,28 @@ class Owner(base.Native):
                 'monitor_ctime_link_count_not_claimed_unchanged':True}
 
 def serve(directory,header):
-    owner=None;result={'success':False,'restoration':None}
+    owner=None;diagnostics=[];result={'success':False,'restoration':None,'phases':diagnostics}
     server=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
     try:
-        before={'preservation':preservation.fingerprint(base.command),
-                'supervision':supervision.identity(base.command)}
-        base.private_json(directory/'before-facts.json',before)
+        before={'preservation':snapshot(directory,diagnostics,'before_preservation'),
+                'supervision':snapshot(directory,diagnostics,'before_supervision')}
         owner_argv=['/usr/bin/python3','-I',str(directory/'guest.py'),'serve',str(directory)]
-        origin=units.capture_unit_origin(header['unit'],owner_argv)
-        require(origin['process']['pid']==os.getpid(),'same_owner_unit_lifetime_required')
-        owner=Owner(directory,header)
-        base.private_json(directory/'checkpoint.json',{'files':owner.files,'baseline':owner.baseline,
-            'workspace':owner.workspace,'pointer':owner.pointer,'original_global':owner.original_global,
-            'desktop_pid':owner.pid,'monitor_identity':owner.original[1],'owner_origin':origin})
-        server.bind(str(directory/'control.sock'));os.chmod(directory/'control.sock',0o600)
-        server.listen(1);server.settimeout(.5)
-        base.private_json(directory/'ready.json',{'ready':True,'desktop_pid':owner.pid})
-        deadline=time.monotonic()+480;finished=False
+        def authority():
+            base.private_json(directory/'before-facts.json',before)
+            value=units.capture_unit_origin(header['unit'],owner_argv)
+            require(value['process']['pid']==os.getpid(),'same_owner_unit_lifetime_required')
+            return value
+        origin=run_phase(directory,diagnostics,'startup_authority',authority)
+        owner=run_phase(directory,diagnostics,'owner_initialization',lambda:Owner(directory,header))
+        def publish_ready():
+            base.private_json(directory/'checkpoint.json',{'files':owner.files,'baseline':owner.baseline,
+                'workspace':owner.workspace,'pointer':owner.pointer,'original_global':owner.original_global,
+                'desktop_pid':owner.pid,'monitor_identity':owner.original[1],'owner_origin':origin})
+            server.bind(str(directory/'control.sock'));os.chmod(directory/'control.sock',0o600)
+            server.listen(1);server.settimeout(.5)
+            base.private_json(directory/'ready.json',{'ready':True,'desktop_pid':owner.pid})
+        run_phase(directory,diagnostics,'publish_ready',publish_ready)
+        deadline=time.monotonic()+timing.OWNER_LEASE_SECONDS;finished=False
         while not finished and time.monotonic()<deadline:
             try: client,_=server.accept()
             except TimeoutError: continue
@@ -553,18 +623,24 @@ def serve(directory,header):
         server.close()
         if owner is not None:
             try:
-                result['restoration']=owner.cleanup()
+                def resource_cleanup():
+                    restored=owner.cleanup()
+                    owner.security_sources(True)
+                    return restored
+                result['restoration']=run_phase(directory,diagnostics,'resource_cleanup',resource_cleanup)
                 result['cursor_restoration']=owner.cleanup_cursor
-                owner.security_sources(True)
-                after={'preservation':preservation.fingerprint(base.command),
-                       'supervision':supervision.identity(base.command)}
-                base.private_json(directory/'after-facts.json',after)
-                require(before==after,'final_supervision_settings_or_preservation_changed')
-                result['restoration']['preservation_supervision_security_sources_and_profiles']=True
-                result['resource_cleanup_completed']=True
-                if not owner.cleanup_cursor['restored']:
-                    result['success']=False
-                    result['cleanup_blocked']=owner.cleanup_cursor.get('reason','cursor_restoration_not_proven')
+                # Retain the independent final inventory and supervision checks.
+                after={'preservation':snapshot(directory,diagnostics,'after_preservation'),
+                       'supervision':snapshot(directory,diagnostics,'after_supervision')}
+                def final_validation():
+                    base.private_json(directory/'after-facts.json',after)
+                    require(before==after,'final_supervision_settings_or_preservation_changed')
+                    result['restoration']['preservation_supervision_security_sources_and_profiles']=True
+                    result['resource_cleanup_completed']=True
+                    if not owner.cleanup_cursor['restored']:
+                        result['success']=False
+                        result['cleanup_blocked']=owner.cleanup_cursor.get('reason','cursor_restoration_not_proven')
+                run_phase(directory,diagnostics,'finish_validation',final_validation)
             except BaseException as error:
                 result['success']=False
                 result['cleanup_blocked']=str(error) if isinstance(error,p.Blocked) else type(error).__name__
@@ -586,7 +662,7 @@ def main():
         signal.signal(signal.SIGTERM,lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
         header=json.loads((directory/'header.json').read_bytes())
         require(set(header['source_sha256'])=={'guest.py','multi_output_guard.py','multi_output_policy.py',
-                'multi_output_display_policy.py','preservation_fingerprint.py','display_supervision.py',
+                'multi_output_display_policy.py','multi_output_display_timing.py','preservation_fingerprint.py','display_supervision.py',
                 'owned_application_units.py'},'complete_display_staged_source_set_required')
         for name,expected in header['source_sha256'].items():
             value=directory/name;meta=value.lstat()

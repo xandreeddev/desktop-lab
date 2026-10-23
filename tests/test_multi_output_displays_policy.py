@@ -1,5 +1,5 @@
 """Pure/owned tempfile tests only. Never connect to VM, bus or native display."""
-import ast,copy,hashlib,importlib.util,io,json,os,stat,sys,tempfile,types,unittest
+import ast,contextlib,copy,hashlib,importlib.util,io,json,os,stat,struct,subprocess,sys,tempfile,types,unittest
 from pathlib import Path
 from unittest.mock import Mock,patch
 ROOT=Path(__file__).resolve().parents[1];HERE=ROOT/'vm'
@@ -22,11 +22,12 @@ class Boundaries(unittest.TestCase):
         self.assertIs(g.d.host,g.p.host);self.assertIs(g.d.require,g.p.require)
         self.assertIs(g.d.retired,g.p.retired)
 
-    def test_staged_header_binds_both_policies_and_all_seven_guest_sources(self):
+    def test_staged_header_binds_both_policies_and_all_eight_guest_sources(self):
         raw={name:(ROOT/pin[0]).read_bytes() for name,pin in c.PINS.items()}
         guest=(HERE/'multi_output_display_guard.py').read_bytes();header={'output':'unit-only'}
         files=c.stage_files(raw,guest,header)
         expected={'guest.py','multi_output_guard.py','multi_output_policy.py','multi_output_display_policy.py',
+                  'multi_output_display_timing.py',
                   'preservation_fingerprint.py','display_supervision.py','owned_application_units.py'}
         self.assertEqual(set(files),expected|{'header.json'})
         self.assertEqual(set(header['source_sha256']),expected)
@@ -586,6 +587,251 @@ class DeclaredDisableCursor(unittest.TestCase):
         with patch.object(g.base,'hypr',side_effect=['[]','{"x":1200,"y":900}']):
             with self.assertRaisesRegex(g.p.Blocked,'foreign_or_uncertain_cursor_movement_blocks_warp'):
                 owner.input_preflight()
+
+
+class DisplayObservationTiming(unittest.TestCase):
+    def no_alarm(self):
+        return patch.object(g,'phase_deadline',side_effect=lambda _:contextlib.nullcontext())
+
+    def test_complete_timing_contract_covers_startup_cleanup_and_unit_without_relaxing_input(self):
+        t=g.timing
+        self.assertEqual((t.PHASE_SECONDS['before_preservation'],t.PHASE_SECONDS['after_preservation']),(45,45))
+        self.assertEqual((t.PHASE_SECONDS['before_supervision'],t.PHASE_SECONDS['after_supervision']),(15,15))
+        self.assertEqual(t.STARTUP_PHASE_SECONDS,175)
+        self.assertEqual(t.CLEANUP_PHASE_SECONDS,190)
+        self.assertLess(t.STARTUP_PHASE_SECONDS+t.STATE_OBSERVATION_SECONDS,t.STARTUP_READY_SECONDS)
+        self.assertLess(t.CLEANUP_PHASE_SECONDS+t.STATE_OBSERVATION_SECONDS,t.CLEANUP_RECEIPT_SECONDS)
+        self.assertLess(t.STARTUP_PHASE_SECONDS+t.OWNER_LEASE_SECONDS+t.CLEANUP_PHASE_SECONDS+t.UNIT_STOP_SECONDS,
+                        t.UNIT_RUNTIME_SECONDS)
+        self.assertEqual((t.INTERACTION_SECONDS,t.OWNER_LEASE_SECONDS),(420,480))
+        expected={'multi_output_guard':'05cc165f9b823becd28e8a631920e120ceb75afd73e026a3b91a64404729d765',
+                  'multi_output_policy':'25c0e45f87c25363220cffdfd901774856c8792f7e4298946fc9011dbb2ebb58',
+                  'preservation_fingerprint':'ecd796f7bce24e4ea153633089595c7ba4d5604959ca5f0131367832b173e2a3',
+                  'display_supervision':'1399eebb03af1ae2408124c0b46706f109ed99cc49f8cd00165021d935cab0be',
+                  'owned_application_units':'0082d9c4c87c36a7cc65f361304a2fbda174af83f30d6713720d709a9193d5b7'}
+        for name,digest in expected.items():
+            self.assertEqual(hashlib.sha256((HERE/(name+'.py')).read_bytes()).hexdigest(),digest)
+        tree=ast.parse((HERE/'multi_output_guard.py').read_text())
+        command=next(node for node in tree.body if isinstance(node,ast.FunctionDef) and node.name=='command')
+        call=next(node for node in ast.walk(command) if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute)
+                  and node.func.attr=='run')
+        self.assertEqual(next(ast.literal_eval(kw.value) for kw in call.keywords if kw.arg=='timeout'),6)
+
+    def test_fixed_complete_snapshot_commands_have_separate_before_and_after_budgets(self):
+        for phase in ('before_preservation','after_preservation','before_supervision','after_supervision'):
+            with tempfile.TemporaryDirectory() as temporary:
+                directory=Path(temporary);diagnostics=[]
+                preserved=phase.endswith('_preservation')
+                stdout='{"inventory":"complete"}' if preserved else '{"identity":{"unit":"original"}}'
+                with self.no_alarm(),patch.object(g.subprocess,'run',return_value=types.SimpleNamespace(returncode=0,stdout=stdout)) as run,\
+                     patch.object(g.base,'command',side_effect=AssertionError('canonical input runner not used')):
+                    result=g.snapshot(directory,diagnostics,phase)
+                expected=('python3','-c',g.preservation.SCRIPT) if preserved else ('python3','-c',g.supervision.SCRIPT,'identity')
+                self.assertEqual(run.call_args.args[0],expected)
+                self.assertEqual(run.call_args.kwargs['timeout'],45 if preserved else 15)
+                self.assertEqual(result,{'inventory':'complete'} if preserved else {'unit':'original'})
+                self.assertEqual(diagnostics[0]['status'],'passed')
+                self.assertEqual(stat.S_IMODE((directory/(phase+'-result.json')).stat().st_mode),0o600)
+
+    def test_readonly_callback_cannot_run_an_arbitrary_command_with_the_long_budget(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            with self.no_alarm(),patch.object(g.preservation,'fingerprint',side_effect=lambda callback:callback('sh','-c','private command')),\
+                 patch.object(g.subprocess,'run') as run:
+                with self.assertRaisesRegex(g.p.Blocked,'fixed_read_only_snapshot_command_required'):
+                    g.snapshot(Path(temporary),[],'before_preservation')
+            run.assert_not_called()
+
+    def test_snapshot_timeout_records_only_fixed_phase_class_budget_and_elapsed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory=Path(temporary);diagnostics=[]
+            error=subprocess.TimeoutExpired(['PRIVATE_ARGV_SENTINEL'],45,output='PRIVATE_STDOUT_SENTINEL',stderr='PRIVATE_STDERR_SENTINEL')
+            with self.no_alarm(),patch.object(g.subprocess,'run',side_effect=error):
+                with self.assertRaises(subprocess.TimeoutExpired):
+                    g.snapshot(directory,diagnostics,'before_preservation')
+            record=json.loads((directory/'before_preservation-result.json').read_text())
+            self.assertEqual(set(record),{'phase','status','budget_seconds','elapsed_seconds','error_class'})
+            self.assertEqual((record['phase'],record['budget_seconds'],record['error_class'],record['status']),
+                             ('before_preservation',45,'TimeoutExpired','failed'))
+            self.assertGreaterEqual(record['elapsed_seconds'],0)
+            self.assertEqual(diagnostics,[record])
+            self.assertNotIn('PRIVATE_', ''.join(path.read_text() for path in directory.iterdir()))
+
+    def test_expired_phase_cannot_be_reported_successful_if_action_catches_its_timer(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            diagnostics=[]
+            with self.no_alarm(),patch.object(g.time,'monotonic',side_effect=[0,91,91.5]):
+                with self.assertRaises(g.PhaseDeadline):
+                    g.run_phase(Path(temporary),diagnostics,'owner_initialization',lambda:'late result')
+            self.assertEqual(diagnostics[0]['error_class'],'PhaseDeadline')
+            self.assertEqual(diagnostics[0]['status'],'failed')
+
+    def test_phase_timer_restores_handler_and_never_takes_over_an_existing_timer(self):
+        previous=object()
+        with patch.object(g.signal,'getsignal',return_value=previous),\
+             patch.object(g.signal,'getitimer',return_value=(0.0,0.0)),\
+             patch.object(g.signal,'signal') as handler,patch.object(g.signal,'setitimer') as timer:
+            with self.assertRaises(g.PhaseDeadline):
+                with g.phase_deadline(90):raise g.PhaseDeadline('injected')
+        self.assertEqual(timer.call_args_list[0].args,(g.signal.ITIMER_REAL,90,.1))
+        self.assertEqual(timer.call_args_list[-1].args,(g.signal.ITIMER_REAL,0))
+        self.assertEqual(handler.call_args_list[-1].args,(g.signal.SIGALRM,previous))
+        with patch.object(g.signal,'getitimer',return_value=(1.0,0.0)),patch.object(g.signal,'setitimer') as timer:
+            with self.assertRaisesRegex(g.p.Blocked,'no_preexisting_display_phase_timer'):
+                with g.phase_deadline(90):self.fail('must not enter')
+            timer.assert_not_called()
+
+    def test_arming_failure_still_cancels_and_restores_previous_handler(self):
+        previous=object()
+        with patch.object(g.signal,'getsignal',return_value=previous),\
+             patch.object(g.signal,'getitimer',return_value=(0.0,0.0)),\
+             patch.object(g.signal,'signal') as handler,\
+             patch.object(g.signal,'setitimer',side_effect=[OSError('injected arming failure'),None]) as timer:
+            with self.assertRaisesRegex(OSError,'injected arming failure'):
+                with g.phase_deadline(90):self.fail('must not enter after failed arm')
+        self.assertEqual(timer.call_args_list[-1].args,(g.signal.ITIMER_REAL,0))
+        self.assertEqual(handler.call_args_list[-1].args,(g.signal.SIGALRM,previous))
+
+    def test_alarm_during_arm_cannot_skip_timer_and_handler_cleanup(self):
+        previous=object();current=[previous]
+        def install(_signum,handler):current[0]=handler
+        def arm(_timer,seconds,*_):
+            if seconds:current[0](g.signal.SIGALRM,None)
+        with patch.object(g.signal,'getsignal',return_value=previous),\
+             patch.object(g.signal,'getitimer',return_value=(0.0,0.0)),\
+             patch.object(g.signal,'signal',side_effect=install) as handler,\
+             patch.object(g.signal,'setitimer',side_effect=arm) as timer:
+            with self.assertRaises(g.PhaseDeadline):
+                with g.phase_deadline(90):self.fail('must not enter after alarm at arm')
+        self.assertIs(current[0],previous)
+        self.assertEqual(timer.call_args_list[-1].args,(g.signal.ITIMER_REAL,0))
+        self.assertEqual(handler.call_args_list[-1].args,(g.signal.SIGALRM,previous))
+
+    def test_alarm_immediately_after_handler_install_is_inside_cleanup_scope(self):
+        previous=object();current=[previous]
+        def install(_signum,handler):
+            current[0]=handler
+            if handler is not previous:handler(g.signal.SIGALRM,None)
+        with patch.object(g.signal,'getsignal',return_value=previous),\
+             patch.object(g.signal,'getitimer',return_value=(0.0,0.0)),\
+             patch.object(g.signal,'signal',side_effect=install),patch.object(g.signal,'setitimer') as timer:
+            with self.assertRaises(g.PhaseDeadline):
+                with g.phase_deadline(90):self.fail('must not enter after immediate alarm')
+        self.assertIs(current[0],previous)
+        timer.assert_called_once_with(g.signal.ITIMER_REAL,0)
+
+    def test_cancel_failure_still_restores_previous_handler(self):
+        previous=object()
+        with patch.object(g.signal,'getsignal',return_value=previous),\
+             patch.object(g.signal,'getitimer',return_value=(0.0,0.0)),\
+             patch.object(g.signal,'signal') as handler,\
+             patch.object(g.signal,'setitimer',side_effect=[None,OSError('injected cancel failure')]):
+            with self.assertRaisesRegex(OSError,'injected cancel failure'):
+                with g.phase_deadline(90):pass
+        self.assertEqual(handler.call_args_list[-1].args,(g.signal.SIGALRM,previous))
+
+    def test_terminal_failure_beats_stale_ready_and_stops_without_any_input(self):
+        finished={'success':False,'restoration':None,'phases':[{'phase':'before_preservation','error_class':'TimeoutExpired'}]}
+        observe=Mock(return_value={'ready':True,'finished':finished});pause=Mock()
+        with self.assertRaises(c.OwnerStartupFailed) as caught:
+            c.wait_owner_state(observe,g.timing,True,clock=lambda:0,pause=pause)
+        self.assertEqual(caught.exception.result,finished)
+        observe.assert_called_once_with(g.timing.STATE_OBSERVATION_SECONDS);pause.assert_not_called()
+
+    def test_cleanup_observation_has_one_absolute_deadline_and_no_ready_shortcut(self):
+        class Clock:
+            value=0
+            def __call__(self):return self.value
+            def sleep(self,seconds):self.value+=seconds
+        clock=Clock();observe=Mock(return_value={'ready':True,'finished':None})
+        with self.assertRaisesRegex(ValueError,'independent_cleanup_receipt_deadline'):
+            c.wait_owner_state(observe,g.timing,False,clock=clock,pause=clock.sleep)
+        self.assertEqual(clock.value,g.timing.CLEANUP_RECEIPT_SECONDS)
+        self.assertTrue(all(0<call.args[0]<=g.timing.STATE_OBSERVATION_SECONDS for call in observe.call_args_list))
+        done={'success':False,'restoration':None}
+        self.assertIs(c.wait_owner_state(lambda _: {'ready':False,'finished':done},g.timing,False,
+                                        clock=lambda:0,pause=self.fail),done)
+
+    def test_late_ready_or_cleanup_reply_cannot_be_accepted_after_its_deadline(self):
+        for ready in (True,False):
+            now=[0]
+            budget=g.timing.STARTUP_READY_SECONDS if ready else g.timing.CLEANUP_RECEIPT_SECONDS
+            def late(_):
+                now[0]=budget+1
+                return {'ready':ready,'finished':None if ready else {'success':True}}
+            with self.assertRaisesRegex(ValueError,'independent_owner_ready_deadline' if ready else 'independent_cleanup_receipt_deadline'):
+                c.wait_owner_state(late,g.timing,ready,clock=lambda:now[0],pause=self.fail)
+
+    def test_single_readonly_observation_requires_publish_phase_and_reports_terminal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory=Path(temporary)
+            def observe():
+                with patch.object(sys,'argv',['owner-state',str(directory)]),patch('sys.stdout',new=io.StringIO()) as out:
+                    exec(compile(c.OWNER_STATE,'owner-state','exec'),{})
+                return json.loads(out.getvalue())
+            (directory/'ready.json').write_text('{"ready":true,"desktop_pid":123}')
+            self.assertEqual(observe(),{'ready':False,'finished':None})
+            (directory/'publish_ready-result.json').write_text('{"phase":"publish_ready","status":"passed"}')
+            self.assertTrue(observe()['ready'])
+            (directory/'finished.json').write_text('{"success":false,"restoration":null}')
+            value=observe();self.assertEqual(value['finished'],{'success':False,'restoration':None})
+            with self.assertRaises(c.OwnerStartupFailed):
+                c.wait_owner_state(lambda _:value,g.timing,True,clock=lambda:0,pause=self.fail)
+
+    def test_startup_snapshot_failure_never_constructs_owner_or_publishes_ready(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory=Path(temporary)
+            with self.no_alarm(),patch.object(g.socket,'socket',return_value=Mock()),\
+                 patch.object(g.subprocess,'run',side_effect=subprocess.TimeoutExpired(['PRIVATE_ARGV_SENTINEL'],45)),\
+                 patch.object(g,'Owner',side_effect=AssertionError('owner must not exist')) as owner:
+                g.serve(directory,{'unit':'unit-only'})
+            owner.assert_not_called()
+            result=json.loads((directory/'finished.json').read_text())
+            self.assertFalse(result['success']);self.assertIsNone(result['restoration'])
+            self.assertEqual(result['failure'],'TimeoutExpired')
+            self.assertEqual(result['phases'][0]['phase'],'before_preservation')
+            self.assertFalse((directory/'ready.json').exists());self.assertFalse((directory/'before-facts.json').exists())
+            self.assertNotIn('PRIVATE_',json.dumps(result))
+
+    def serve_fixture(self,directory,cleanup_error=None):
+        owner=types.SimpleNamespace(files={},baseline=[],workspace=1,pointer={},original_global=1,
+            pid=123,original=(b'',[]),cleanup_cursor={'restored':True},
+            cleanup=Mock(return_value={'owned':True}),security_sources=Mock())
+        if cleanup_error is not None:owner.cleanup.side_effect=cleanup_error
+        client=Mock();client.__enter__=Mock(return_value=client);client.__exit__=Mock(return_value=False)
+        client.getsockopt.return_value=struct.pack('3i',123,os.getuid(),os.getgid())
+        client.recv.return_value=b'{"operation":"finish"}\n'
+        server=Mock();server.accept.return_value=(client,None)
+        owner.operation=Mock(return_value={'finishing':True})
+        def command(argv,**kwargs):
+            payload='{"identity":{"unit":"original"}}' if argv[-1]=='identity' else '{"inventory":"complete"}'
+            return types.SimpleNamespace(returncode=0,stdout=payload)
+        with self.no_alarm(),patch.object(g.socket,'socket',return_value=server),\
+             patch.object(g.os,'chmod'),patch.object(g.subprocess,'run',side_effect=command) as run,\
+             patch.object(g.units,'capture_unit_origin',return_value={'process':{'pid':os.getpid()}}),\
+             patch.object(g,'Owner',return_value=owner):
+            g.serve(directory,{'unit':'unit-only'})
+        return owner,run,json.loads((directory/'finished.json').read_text())
+
+    def test_before_after_snapshots_and_security_comparison_keep_exact_contract(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory=Path(temporary);owner,run,result=self.serve_fixture(directory)
+            self.assertTrue(result['success']);self.assertTrue(result['resource_cleanup_completed'])
+            self.assertEqual([call.kwargs['timeout'] for call in run.call_args_list],[45,15,45,15])
+            self.assertEqual([row['phase'] for row in result['phases']],list(g.timing.STARTUP_PHASES+g.timing.CLEANUP_PHASES))
+            self.assertTrue(all(row['status']=='passed' for row in result['phases']))
+            self.assertEqual(json.loads((directory/'before-facts.json').read_text()),json.loads((directory/'after-facts.json').read_text()))
+            owner.security_sources.assert_called_once_with(True)
+
+    def test_cleanup_timeout_is_retained_and_cannot_mark_resource_restoration_complete(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _,_,result=self.serve_fixture(Path(temporary),subprocess.TimeoutExpired(['PRIVATE_ARGV_SENTINEL'],120))
+            self.assertFalse(result['success']);self.assertIsNone(result['restoration'])
+            self.assertEqual(result['cleanup_blocked'],'TimeoutExpired')
+            self.assertNotIn('resource_cleanup_completed',result)
+            phase=result['phases'][-1]
+            self.assertEqual((phase['phase'],phase['budget_seconds'],phase['status'],phase['error_class']),
+                             ('resource_cleanup',120,'failed','TimeoutExpired'))
+            self.assertNotIn('PRIVATE_',json.dumps(result))
 
 
 if __name__=='__main__':unittest.main()

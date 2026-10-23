@@ -22,8 +22,66 @@ PINS={
  'native':('vm/test-native-multi-output.py','c1fc9b0aecd910cc9e7e46247bb883f86bc3cb675c44216943f5f03f12fe0829'),
  'multi_output_guard':('vm/multi_output_guard.py','05cc165f9b823becd28e8a631920e120ceb75afd73e026a3b91a64404729d765'),
  'multi_output_policy':('vm/multi_output_policy.py','25c0e45f87c25363220cffdfd901774856c8792f7e4298946fc9011dbb2ebb58'),
- 'multi_output_display_policy':('vm/multi_output_display_policy.py','e2fa025f521c30f71d0992c12d1a4d6ef98af79abc96a53ad86d616734e5f66f')}
-GUEST_SHA='b4b8623f40e6c2b2b8cc759a92bae66ad464a64547db05b5896a4cccc844dd4f'
+ 'multi_output_display_policy':('vm/multi_output_display_policy.py','e2fa025f521c30f71d0992c12d1a4d6ef98af79abc96a53ad86d616734e5f66f'),
+ 'multi_output_display_timing':('vm/multi_output_display_timing.py','7e0e4d9fc57825ae1d68921a377da6a0b5a1e7a2b51b8622be9fa46587784004')}
+GUEST_SHA='33c76b0b5b3c653252db541573bdddc1af92a4c250f47bca45deba9e3d972780'
+
+
+class OwnerStartupFailed(ValueError):
+    def __init__(self,result):
+        super().__init__('owned_display_terminated_before_ready')
+        self.result=result
+
+
+OWNER_STATE=r'''
+import json,os,stat,sys
+from pathlib import Path
+directory=Path(sys.argv[1]);meta=directory.lstat()
+assert directory.is_absolute() and directory.resolve(strict=True)==directory
+assert stat.S_ISDIR(meta.st_mode) and meta.st_uid==os.getuid() and stat.S_IMODE(meta.st_mode)==0o700
+def read(name):
+    path=directory/name
+    try:fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+    except FileNotFoundError:return None
+    with os.fdopen(fd,'rb') as stream:
+        value=os.fstat(stream.fileno())
+        identity=lambda m:(m.st_dev,m.st_ino,m.st_mode,m.st_uid,m.st_size,m.st_mtime_ns,m.st_ctime_ns)
+        assert stat.S_ISREG(value.st_mode) and value.st_uid==os.getuid() and value.st_size<=65536
+        raw=stream.read(65537)
+        assert len(raw)==value.st_size and identity(value)==identity(os.fstat(stream.fileno()))==identity(path.lstat())
+    return json.loads(raw)
+ready=read('ready.json');published=read('publish_ready-result.json');finished=read('finished.json')
+assert ready is None or type(ready) is dict
+assert published is None or type(published) is dict
+assert finished is None or type(finished) is dict
+print(json.dumps({'ready':bool(ready and ready.get('ready') is True and published
+                               and published.get('phase')=='publish_ready' and published.get('status')=='passed'),
+                  'finished':finished}))
+'''
+
+
+def wait_owner_state(observe,timing,ready,clock=None,pause=None):
+    clock=time.monotonic if clock is None else clock
+    pause=time.sleep if pause is None else pause
+    budget=timing.STARTUP_READY_SECONDS if ready else timing.CLEANUP_RECEIPT_SECONDS
+    deadline=clock()+budget
+    while True:
+        remaining=deadline-clock()
+        require(remaining>0,'independent_owner_ready_deadline' if ready else 'independent_cleanup_receipt_deadline')
+        packet=observe(min(timing.STATE_OBSERVATION_SECONDS,remaining))
+        require(type(packet) is dict and set(packet)=={'ready','finished'} and type(packet['ready']) is bool
+                and (packet['finished'] is None or type(packet['finished']) is dict),'bounded_owner_state_required')
+        if packet['finished'] is not None:
+            if ready:raise OwnerStartupFailed(packet['finished'])
+            require(clock()<=deadline,'independent_cleanup_receipt_deadline')
+            return packet['finished']
+        if ready and packet['ready']:
+            require(clock()<=deadline,'independent_owner_ready_deadline')
+            return packet
+        remaining=deadline-clock()
+        require(remaining>0,'independent_owner_ready_deadline' if ready else 'independent_cleanup_receipt_deadline')
+        pause(min(.25,remaining))
+
 
 def require(value,label):
     if not value: raise ValueError(label)
@@ -78,7 +136,7 @@ assert cache.resolve(strict=True)==cache and cache.stat().st_uid==os.getuid() an
 path=cache/('native-two-output-displays-'+packet['tag']);os.mkdir(path,0o700)
 assert path.resolve(strict=True)==path and stat.S_IMODE(path.stat().st_mode)==0o700
 for name,data in packet['files'].items():
- assert name in ('guest.py','multi_output_guard.py','multi_output_policy.py','multi_output_display_policy.py','preservation_fingerprint.py',
+ assert name in ('guest.py','multi_output_guard.py','multi_output_policy.py','multi_output_display_policy.py','multi_output_display_timing.py','preservation_fingerprint.py',
                  'display_supervision.py','owned_application_units.py','header.json')
  raw=base64.b64decode(data,validate=True)
  with os.fdopen(os.open(path/name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600),'wb') as stream:stream.write(raw)
@@ -86,7 +144,7 @@ print(path)
 '''
 
 def stage_files(raw,guest,header):
-    files={name+'.py':raw[name] for name in ('multi_output_guard','multi_output_policy','multi_output_display_policy',
+    files={name+'.py':raw[name] for name in ('multi_output_guard','multi_output_policy','multi_output_display_policy','multi_output_display_timing',
                                             'preservation_fingerprint','display_supervision','owned_application_units')}
     header['source_sha256']={name:digest(data) for name,data in {**files,'guest.py':guest}.items()}
     files.update({'guest.py':guest,'header.json':json.dumps(header).encode()})
@@ -104,6 +162,7 @@ def run(lab_root,fresh_off=FRESH_OFF,vm_uuid=None,normal_off=NORMAL_OFF_IDENTITY
             and digest(read(Path(p.__file__)))==PINS['multi_output_policy'][1],
             'exact_shared_policy_module_required')
     d=module('two_output_display_policy',raw['multi_output_display_policy'],ROOT/PINS['multi_output_display_policy'][0])
+    timing=module('two_output_display_timing',raw['multi_output_display_timing'],ROOT/PINS['multi_output_display_timing'][0])
     vm=native.VM(lab_root)
     require(vm.virsh('domuuid',vm.name).strip()==vm_uuid,'exact_vm_uuid_changed')
     tag=secrets.token_hex(12)
@@ -125,12 +184,14 @@ def run(lab_root,fresh_off=FRESH_OFF,vm_uuid=None,normal_off=NORMAL_OFF_IDENTITY
     def request(operation,**options):
         args=['/usr/bin/python3','-I',directory+'/guest.py','request',directory,operation]
         for key,value in options.items(): args+=['--'+key.replace('_','-'),str(value)]
-        reply=json.loads(vm.session(*args))
+        reply=json.loads(vm.session(*args,**({'timeout':timing.FINISH_REQUEST_SECONDS} if operation=='finish' else {})))
         require(reply['ok'] is True,'guard_admission_refused')
         return reply['value']
     def status(): return request('status')
     def phase(): return (vm.inspect()['client']['displays'].get('transaction') or {}).get('phase')
     def wait(predicate,label,timeout=15): return native.eventually(predicate,label,timeout)
+    def owner_state(timeout):
+        return json.loads(vm.remote('/usr/bin/python3','-I','-c',OWNER_STATE,directory,timeout=timeout))
     def click(identifier):
         nonlocal held
         for _ in range(45):
@@ -205,12 +266,12 @@ def run(lab_root,fresh_off=FRESH_OFF,vm_uuid=None,normal_off=NORMAL_OFF_IDENTITY
     try:
         started=True
         vm.session('systemd-run','--user','--quiet','--collect','--unit='+unit,
-            '--property=Type=exec','--property=RuntimeMaxSec=600','--property=TimeoutStopSec=20',
+            '--property=Type=exec','--property=RuntimeMaxSec='+str(timing.UNIT_RUNTIME_SECONDS),
+            '--property=TimeoutStopSec='+str(timing.UNIT_STOP_SECONDS),
             '--property=KillMode=control-group','--property=Restart=no','--property=MemoryMax=192M','--property=TasksMax=32',
             '--property=UMask=0077','/usr/bin/python3','-I',directory+'/guest.py','serve',directory)
-        wait(lambda:vm.remote('/usr/bin/python3','-I','-c',
-            'import os,sys; print(os.path.isfile(sys.argv[1]))',directory+'/ready.json')=='True','independent_owner_ready',35)
-        input_deadline=time.monotonic()+420
+        wait_owner_state(owner_state,timing,True)
+        input_deadline=time.monotonic()+timing.INTERACTION_SECONDS
         owned=request('create')['owned'];baseline=observed()
         open_panel();enter(0,str(owned['x']+16))
         require(observed()==baseline,'draft_must_not_change_native_layout')
@@ -273,20 +334,18 @@ def run(lab_root,fresh_off=FRESH_OFF,vm_uuid=None,normal_off=NORMAL_OFF_IDENTITY
         report['success']=True
     except BaseException as error:
         report['failure']=str(error) if isinstance(error,(ValueError,native.Blocked)) else type(error).__name__
+        if isinstance(error,OwnerStartupFailed):report['startup_owner_result']=error.result
     finally:
         if held:
             try: vm.button(False)
             except BaseException: report['release_pending']=True
         if started:
             try:
-                def finished(): return json.loads(vm.remote('/usr/bin/python3','-I','-c',
-                    'from pathlib import Path; import sys; p=Path(sys.argv[1]); print(p.read_text() if p.is_file() else "null")',
-                    directory+'/finished.json'))
-                done=finished()
+                done=owner_state(timing.STATE_OBSERVATION_SECONDS)['finished']
                 if done is None:
                     try: request('finish')
                     except BaseException: pass  # A terminal owner may have closed its socket already.
-                    done=wait(finished,'independent_cleanup_receipt',75)
+                    done=wait_owner_state(owner_state,timing,False)
                 report['owner']=done
                 require(done['success'] is True and all(done['restoration'].values())
                         and done['cursor_restoration']['restored'] is True,'guarded_restoration_required')
