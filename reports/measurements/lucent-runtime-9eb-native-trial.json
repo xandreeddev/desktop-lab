@@ -1,0 +1,408 @@
+{
+  "schema": 1,
+  "recorded_on": "2026-10-23",
+  "source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
+  "release_manifest_sha256": "c669b9d53879d504f0a4efa5e131c93f57cc77bc8c26c18dacef54565fe2703f",
+  "desktop_sha256": "eb1980a5c81a60512218eb69fcee80fd1124a1112c317f7dbb66ef95e311a1a5",
+  "scope": "Recorded coherent UI/4K candidate deployment, owned warm-browser notification-link keyboard delivery and one normal FHD resource interval. No live VM state or expanded hardware/presentation acceptance.",
+  "source_acceptance_at_reconciliation": {
+    "accepted_main_base_commit": "6322f76308b82f7c2b668f0b952d6d87c5884273",
+    "notification_handoff_source_commit": "194c0c57f12a70b0f68a84c16e4d695a9923152c",
+    "notification_handoff_merged_pull_request": 105,
+    "notification_handoff_merge_commit": "6322f76308b82f7c2b668f0b952d6d87c5884273",
+    "renderer_32_mib_pull_request": 106,
+    "renderer_pull_request_head": "8d102d64d3be2e3f4fa2f909b71baec1162b33e1",
+    "renderer_pull_request_checks": "pending at reconciliation checkpoint",
+    "renderer_rust_tree_equals_built_candidate": true,
+    "whole_candidate_accepted_main": false,
+    "scope": "The notification client is accepted through PR105; the complete 9eb candidate still includes the separately unmerged 32 MiB renderer change. Build/deployment archived flags remain unchanged."
+  },
+  "build": {
+    "passed": true,
+    "build_record_sha256": "a7ec5578e974a3c1664922c969671a0658d47b2af4b6a0682da107ab095716b0",
+    "stages_passed": 15,
+    "targeted_tests_passed": 761,
+    "test_groups": {
+      "lucent-domain-tests": {
+        "passed": 31,
+        "failed": 0,
+        "ignored": 0
+      },
+      "lucent-api-tests": {
+        "passed": 77,
+        "failed": 0,
+        "ignored": 0
+      },
+      "lucent-ui-tests": {
+        "passed": 110,
+        "failed": 0,
+        "ignored": 2
+      },
+      "lucent-wayland-tests": {
+        "passed": 76,
+        "failed": 0,
+        "ignored": 0
+      },
+      "desktop-tests": {
+        "passed": 372,
+        "failed": 0,
+        "ignored": 6
+      },
+      "video-tests": {
+        "passed": 39,
+        "failed": 0,
+        "ignored": 0
+      },
+      "application-adapter-tests": {
+        "passed": 46,
+        "failed": 0,
+        "ignored": 1
+      },
+      "upload-pure-tests": {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 7
+      },
+      "upload-vulkan-tests": {
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0
+      },
+      "desktop-bar-pixels-tests": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    "format_and_strict_workspace_release_clippy_passed": true,
+    "managed_executables": [
+      "lucent-desktop",
+      "lucent-cli",
+      "lucent-menu",
+      "lucent-lock",
+      "lucent-greeter",
+      "lucent-polkit"
+    ],
+    "acceptance_executables": [
+      "international-text",
+      "input-method-peer",
+      "application-intent"
+    ],
+    "archive_binary_count": 9,
+    "support_files": 29,
+    "example_sources": 5,
+    "fresh_local_release_verified": true,
+    "archived_review_status": "UNMERGED reviewed candidate; accepted-main delivery is separate.",
+    "archived_accepted_main": false,
+    "archived_native_activated": false,
+    "scope": "Targeted source gates and actual host offscreen Vulkan correctness checks; ignored counts retain their per-invocation meaning. Not a full native desktop/performance or all-workspace test claim."
+  },
+  "deployment": {
+    "success": true,
+    "coherent_six_and_root_verified": true,
+    "supervised_beyond_initial_deadline": true,
+    "user_state_preserved": true,
+    "secure_configuration_preserved": true,
+    "acceptance_executables_staged": true,
+    "greetd_restarted": false,
+    "settings_or_theme_written": false,
+    "rollback_required": false,
+    "native_fps_or_memory_acceptance": false,
+    "changed_support": [],
+    "private_receipt_sha256": "51da93024a07476ac8e1b138dfb9589d8d8236ec60b797977cea29aee3d84538",
+    "acceptance_executables_staged_count": 3,
+    "scope": "Six managed executables and root greeter verified; user/security preserved, no greetd restart or settings/theme write. Successful installation does not prove a rollback was exercised or authentication independently retested."
+  },
+  "notification_keyboard_handoff": {
+    "success": true,
+    "private_receipt_sha256": "6395d5fad93cfe4d04afe2ebec265ed3f2abda62f95a58977ede78f60a2989de",
+    "harness_source_commit": "04432a738ebac10960141450eb8cd513d98bc2b1",
+    "host_harness_sha256": "1b64f1bcdcdfcb0b46fd35cd1293d9c8a8f152ee23801edff3a5def1c269cc97",
+    "helper_sources_sha256": {
+      "fixture.py": "25e7332ef60c67797f0823104d5a617f9178bc59df900d49479cbcb0ebd566a7",
+      "default-uri.py": "695ae5732b949191df7b0f85705cafd146853746c14e33308823bfd7101a4f9b",
+      "default_uri_policy.py": "fe6cb104eb522bf6d380170e04caa90622c6f7b27d8f5deaa28fb4ef617f6f45",
+      "owned_application_units.py": "0082d9c4c87c36a7cc65f361304a2fbda174af83f30d6713720d709a9193d5b7",
+      "application_intent_policy.py": "fd2ed71cfe4839b6c99bf10a6c97515ed20c19c09ece05b0c67a65921ea1bb94",
+      "application_intent_browser.py": "b63bbc572d5fb274339f8098934ab08685b854d4e14b4faa9b7c62051a1fd8d2",
+      "owned_chromium_lease.py": "393501ef04a9a9f6fab21ad154bcffe810ebe95774e47e7c759cf36cb180de4b",
+      "cdp_peer.py": "5cf65c35d89671741b6be9e8e63345206694b2a4b9ecfb465a9afb418745e907"
+    },
+    "full_python_checks_passed": 774,
+    "focused_default_uri_cases_passed": 87,
+    "checks": {
+      "temporary_real_mime_default_selected": true,
+      "pointer_fresh_token_default_route_exact_document": true,
+      "pointer_notification_absent_after_expiry_window": true,
+      "keyboard_fresh_token_default_route_exact_document": true,
+      "keyboard_notification_absent_after_expiry_window": true
+    },
+    "checks_passed": 5,
+    "native_input": {
+      "pointer_link_focus": true,
+      "tab_enter_link_focus": true,
+      "tab_events_sent": 2
+    },
+    "browser_active_window_matches": {
+      "pointer": true,
+      "keyboard": true
+    },
+    "browser_key_handoff": {
+      "pointer": {
+        "accepted": true,
+        "key_dispatch_attempted": true,
+        "key_dispatch_returned": true,
+        "armed": {
+          "armed": true,
+          "count": 0
+        },
+        "release_observation": {
+          "history_closed": true,
+          "inspected_modal_input_released": true,
+          "native_frames_advanced": true,
+          "surface_absent": false,
+          "notification_policy": "normal-toast"
+        },
+        "pre_dispatch_release": {
+          "history_closed": true,
+          "inspected_modal_input_released": true,
+          "native_frames_advanced": true,
+          "surface_absent": false,
+          "notification_policy": "normal-toast"
+        },
+        "event": {
+          "count": 1,
+          "event": {
+            "trusted": true,
+            "key": "a",
+            "code": "KeyA",
+            "ctrl": false,
+            "alt": false,
+            "meta": false,
+            "shift": false,
+            "repeat": false
+          }
+        },
+        "post_event_release": {
+          "history_closed": true,
+          "inspected_modal_input_released": true,
+          "native_frames_advanced": true,
+          "surface_absent": false,
+          "notification_policy": "normal-toast"
+        }
+      },
+      "keyboard": {
+        "accepted": true,
+        "key_dispatch_attempted": true,
+        "key_dispatch_returned": true,
+        "armed": {
+          "armed": true,
+          "count": 0
+        },
+        "release_observation": {
+          "history_closed": true,
+          "inspected_modal_input_released": true,
+          "native_frames_advanced": true,
+          "surface_absent": false,
+          "notification_policy": "normal-toast"
+        },
+        "pre_dispatch_release": {
+          "history_closed": true,
+          "inspected_modal_input_released": true,
+          "native_frames_advanced": true,
+          "surface_absent": false,
+          "notification_policy": "normal-toast"
+        },
+        "event": {
+          "count": 1,
+          "event": {
+            "trusted": true,
+            "key": "a",
+            "code": "KeyA",
+            "ctrl": false,
+            "alt": false,
+            "meta": false,
+            "shift": false,
+            "repeat": false
+          }
+        },
+        "post_event_release": {
+          "history_closed": true,
+          "inspected_modal_input_released": true,
+          "native_frames_advanced": true,
+          "surface_absent": false,
+          "notification_policy": "normal-toast"
+        }
+      }
+    },
+    "browser_key_cases_passed": 2,
+    "cleanup": {
+      "browser_and_original_entry_retired": true,
+      "notifications_absent_after_expiry_window": true,
+      "default_mime_restored": true,
+      "default_entry_restored": true,
+      "notification_history_closed": true,
+      "configuration_guardian_retired": true,
+      "canonical_browser_and_entry_retired": true,
+      "original_http_watchdog_retired": true,
+      "caller_state_and_cursor_preserved": true
+    },
+    "cleanup_checks_passed": 9,
+    "no_focus_intervention_before_key_proof": true,
+    "scope": "Native pointer and Tab/Enter notification links each deliver fresh context through the controlled temporary default handler to one exact fresh document in an already warm owned Chromium profile. Each document then receives exactly one trusted unmodified nonrepeat a/KeyA guest event. Natural history close and normal-toast policy are checked in the last pre-key and final post-event guards; no forced focus/hide or key retry substitutes for that receipt. CDP only arms/reads the exact controlled document observer. This exceeds an activewindow-only observation but does not prove cold-browser focus or direct Chromium token consumption."
+  },
+  "normal_fhd_resource_interval": {
+    "private_receipt_sha256": "8a56b404bfeb31aeb999eb0f5978762c9cab0fd143317339983e9892cffcf249",
+    "binding_sha256": "55a90d78a09540c367a31b7a77cb4e5d5dd2183fd24aa02bbc23d0a1c20997bd",
+    "cohort_key_sha256": "d8eb33544aacc568986af1b225417a7a984a1c673e533286290fa51f4c05aa89",
+    "seconds": 120.00048358899949,
+    "rss_samples": 480,
+    "sample_period_seconds": 0.25,
+    "rss_mib_mean": 230.06319173177084,
+    "rss_mib_sampled_peak": 230.12890625,
+    "process_lifetime_high_water_mib": 239.67578125,
+    "cpu_percent_one_logical_core": 147.55773868917316,
+    "process_swap_mib_max": 0.0,
+    "output": {
+      "height": 1080,
+      "name": "Virtual-1",
+      "refreshRate": 60.0,
+      "scale": 1,
+      "transform": 0,
+      "width": 1920,
+      "x": 0,
+      "y": 0
+    },
+    "adapter": "RADV RENOIR / Vulkan",
+    "source_video": {
+      "width": 3840,
+      "height": 2160,
+      "codec": "h264",
+      "frames_per_second": 60,
+      "fps_setting": "source"
+    },
+    "preservation_verified": true,
+    "runtime_profiling_before": {
+      "frames": false,
+      "presentation": false,
+      "source_pts": false
+    },
+    "runtime_profiling_after": {
+      "frames": false,
+      "presentation": false,
+      "source_pts": false
+    },
+    "source_pts_samples": 0,
+    "presentation_samples": 0,
+    "eligible": false,
+    "ineligible_reasons": [
+      "host_swap_activity",
+      "host_full_stall_pressure"
+    ],
+    "host_pressure": {
+      "swap_in_pages": 15,
+      "swap_out_pages": 0,
+      "minimum_available_mib": 5641.91015625,
+      "io_full_stall_fraction": 0.4500945518567776
+    },
+    "normal_uninstrumented_rss_target_met": null,
+    "rss_target_mib": 300,
+    "scope": "One FHD output with a 4K source, not a 4K-output interval. Host swap/full-stall pressure makes the interval ineligible despite observed RSS below 300 MiB. HWM is process-lifetime, not sampled phase peak. All profiling remains off; no presentation/source-PTS/FPS result, causal gain over earlier 238 MiB intervals or attribution for the one-off 605 MiB diagnostic follows."
+  },
+  "pending": {
+    "new_4k_resource_sampler_prepared": true,
+    "new_4k_resource_interval_executed": false,
+    "host_memory_diagnostic_completed": false,
+    "eligible_resource_target_accepted": false,
+    "presentation_or_animation_fps_accepted": false,
+    "physical_hardware_accepted": false,
+    "fresh_browser_initial_focus_accepted": false,
+    "arbitrary_handlers_or_external_navigation_accepted": false,
+    "direct_chromium_token_consumption_accepted": false,
+    "whole_seven_gap_goal_complete": false,
+    "accessibility": "user-deferred"
+  },
+  "historical_evidence_policy": "All earlier reports, including26d route-only acceptance, failed attempts and recoveries, resource eligibility flags and archived UNMERGED flags remain unchanged. New source-specific acceptance does not rewrite them.",
+  "accepted_main_followup": {
+    "recorded_on": "2026-10-23",
+    "pull_request": 106,
+    "exact_reviewed_head": "8d102d64d3be2e3f4fa2f909b71baec1162b33e1",
+    "merge_commit": "bdffd42438990ef546ad13f302556913339acce0",
+    "merged_at": "2026-10-23T21:24:25Z",
+    "normal_merge": true,
+    "mergeability_before_merge": "CLEAN",
+    "required_checks_passed": 6,
+    "private_premerge_receipt_sha256": "2f6a3f21150dfad21b1e9bfb811065d3945b1d2078fe2d7950d786b8babee16d",
+    "private_merge_receipt_sha256": "218b439af31f3a3991ecdde54174e73a7c190a9d0393c5be434707fb559ac641",
+    "build_source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
+    "accepted_main_contains_runtime_code": true,
+    "identical_git_subtrees": {
+      "lucent": "d46ea5522a3a83002154741c8cb33f07210c2720",
+      "design": "8ac7a305599a8e91a524dea9ebc31e0b35317d85",
+      "configs": "a53cd7f4e268a50889335e53fca9a1b6a97f00fa",
+      "scripts": "3b3f936cc9535ee00a9a14039559af3fcbc5e6e6"
+    },
+    "rebuilt_at_merge_commit": false,
+    "archived_build_deployment_and_native_capture_flags_changed": false,
+    "native_scope_or_performance_acceptance_expanded_by_merge": false,
+    "last_verified_pages_source_commit": "6322f76308b82f7c2b668f0b952d6d87c5884273",
+    "last_verified_pages_run": 40019250788,
+    "pr106_pages_verified": false,
+    "new_evidence_docs_built_or_published": false,
+    "latest_4k_measurement_preflight": {
+      "host_memory_admission": "refused_before_vm_contact",
+      "minimum_available_mib_required": 4500,
+      "handoff_acquisition_binding_or_lease_created": false,
+      "native_4k_measurement_executed": false,
+      "scope": "Latest new 9eb FHD/4K attempt only. Historical 26d output setup/restoration runs retain their separate outcomes."
+    },
+    "host_io_diagnostic": "Started separately; no terminal result at this checkpoint.",
+    "scope": "Later accepted-main source equality, not a rebuild or native rerun. Original UNMERGED/accepted_main=false capture-time fields above remain unchanged. Five route checks, two trusted document-key cases and nine named cleanup checks retain their recorded warm controlled-browser scope; no all-user-files/history-byte restoration, arbitrary-handler, cold-browser, physical-hardware or performance claim."
+  },
+  "latest_followup_2026_10_24": {
+    "recorded_on": "2026-10-24",
+    "scope": "Later publication and separate host-diagnostic checkpoint only. All prior report fields, including accepted_main_followup and capture-time pending flags, retain their original values. No code, native feature, resource-target or pacing result is changed.",
+    "documentation_delivery": {
+      "source_commit": "bdffd42438990ef546ad13f302556913339acce0",
+      "pages_run": 40026533176,
+      "workflow_status": "SUCCESS",
+      "private_receipt_sha256": "dedcc9c7778c959a5b420976fcadbebe585e428a38915bc1c8c011d36efd3f74",
+      "artifact_archive_sha256": "060e34bbf7ad10d0d458b5ca44d932bd34c81f39e9212d59cbc4fbd00134125d",
+      "public_html_pages_exact_artifact_matches": 3,
+      "native_manifest_sha256": "d5384a6b63a668ea1a1fcff29726b666a8533b5ced69fd68c10a6ebddf0f5e12",
+      "representative_png_exact_artifact_match": true,
+      "capture_source_commit": "950f4d199c16202b18ddb41b66e724c5da2a3c07",
+      "rendering_inputs_verified": 116,
+      "native_captures_verified": 480,
+      "last_verified_lan_source_commit": "8b20b78a819db7b88d2fbdaedb219fbd18576413",
+      "new_evidence_docs_local_Node_build_executed": false,
+      "new_evidence_docs_published": false,
+      "scope": "Verified accepted PR106/main Pages content; it predates this newer evidence/documentation follow-up."
+    },
+    "focused_host_io_diagnostic": {
+      "completed": true,
+      "seconds": 30.00010556200141,
+      "private_summary_sha256": "5c19fe3c9ca65ba5e287b39b469f5480f7df19adc8fd4fa46479d1b42f0f641c",
+      "global_io_full_stall_fraction": 0.07129923436698471,
+      "global_cpu_busy_fraction_excluding_idle_iowait": 0.8784863310943417,
+      "global_swap_in_pages": 169,
+      "sustained_nvme_saturation_established": false,
+      "cause_identified": false,
+      "code_change_made": false,
+      "performance_accepted": false,
+      "eligibility_gates_changed": false,
+      "headroom_recovery_established": false,
+      "scope": "Separate 30-second read-only host diagnostic. It observes host activity without sustained NVMe saturation evidence or bottleneck attribution. It is not a guest Lucent resource interval, VM-exclusive cgroup total, eligible comparison, memory-headroom recovery proof or FPS measurement."
+    },
+    "latest_source_checks": {
+      "python_checks_passed": 774,
+      "python_seconds": 6.87,
+      "catalogue_stories": 9,
+      "catalogue_captures": 480,
+      "catalogue_rendering_inputs": 116,
+      "scope": "Recorded integrated source-check checkpoint; these checks do not substitute for a local Node/site build or publication of the newer documentation."
+    },
+    "new_4k_resource_interval_executed": false,
+    "whole_seven_gap_goal_complete": false
+  }
+}

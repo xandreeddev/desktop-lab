@@ -11,9 +11,9 @@ from multi_output_policy import Blocked, monitor_signature, require, unique
 
 LEASE_SECONDS = 900
 CLEANUP_RESERVE = 120
-SOURCE = '26d03adf476af44c97fb7dcdbfb75cbdc2112770'
-RELEASE_SHA = '5b228fa1bbdc71c50a245edcb70e726ef4d5826f476ba261e53042023d322aec'
-DESKTOP_SHA = '7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08'
+SOURCE = '9eb41939d47ced5be2012bff41a1f2f5768d6ee7'
+RELEASE_SHA = 'c669b9d53879d504f0a4efa5e131c93f57cc77bc8c26c18dacef54565fe2703f'
+DESKTOP_SHA = 'eb1980a5c81a60512218eb69fcee80fd1124a1112c317f7dbb66ef95e311a1a5'
 MEDIA_SHA = '9bfaece1a34f02067005190a26c9dc5ba0e83e74875653c8336c022d133ebc35'
 PROFILE = dict(name='Virtual-1', width=3840, height=2160, x=0, y=0,
                scale=1.5, transform=0, refreshRate=60.0)

@@ -12,6 +12,9 @@ Every browser window in the new private test profile is closed by canonical
 teardown. All content there, including user-added content, is disposable and
 unprotected; private evidence may remain. Existing personal profiles, browser
 processes and successors are never adopted.
+Optional --assert-browser-key-handoff additionally requires one actual trusted
+KeyA in the exact fresh owned document, without focus intervention. CDP only
+arms/reads a bounded key observer; inspected input release is not native key proof.
 Notification IDs are observation data only; fixtures use bounded automatic
 expiry. A changed or remaining foreign notification is never dismissed.
 """
@@ -29,8 +32,9 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = '26d03adf476af44c97fb7dcdbfb75cbdc2112770'
-MANIFEST_SHA = '5b228fa1bbdc71c50a245edcb70e726ef4d5826f476ba261e53042023d322aec'
+SOURCE = '9eb41939d47ced5be2012bff41a1f2f5768d6ee7'
+MANIFEST_SHA = 'c669b9d53879d504f0a4efa5e131c93f57cc77bc8c26c18dacef54565fe2703f'
+KEY_CDP_SHA = '5cf65c35d89671741b6be9e8e63345206694b2a4b9ecfb465a9afb418745e907'
 
 
 def require(value, reason):
@@ -43,6 +47,12 @@ def module(name, path):
     value = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(value)
     return value
+
+
+def key_transport():
+    raw = (ROOT / 'vm/cdp_peer.py').read_bytes()
+    require(hashlib.sha256(raw).hexdigest() == KEY_CDP_SHA, 'reviewed_browser_key_transport_required')
+    return raw
 
 
 def qualify(args):
@@ -76,6 +86,8 @@ def qualify(args):
     canonical_transport = Path(common).parent / 'vm/lab.py'
     require(canonical_transport.read_bytes() == (ROOT / 'vm/lab.py').read_bytes(),
             'canonical_private_inventory_transport_changed')
+    if getattr(args, 'assert_browser_key_handoff', False):
+        key_transport()
     return manifest
 
 
@@ -121,7 +133,7 @@ def group_target(snapshot, layers, run_id, desktop_pid):
     return notification_hit(surface, layer, hits[0])
 
 
-def keyboard_preflight(bindings):
+def keyboard_preflight(bindings, browser_key=False):
     from application_intent_policy import unbound_pointer
     unbound_pointer(bindings)
     for row in bindings:
@@ -131,6 +143,9 @@ def keyboard_preflight(bindings):
                 ('tab', 'return', 'enter', 'escape', 'esc', 'code:15', 'code:23', 'code:28',
                  'code:36', 'code:1', 'code:9') and row.get('keycode', 0) not in (1, 9, 15, 23, 28, 36),
                 'plain_native_notification_keys_must_be_unbound')
+        if browser_key:
+            require(str(row.get('key', '')).lower() not in ('a', 'code:30', 'code:38')
+                    and row.get('keycode', 0) not in (30, 38), 'plain_browser_key_a_must_be_unbound')
 
 
 def normal_off(snapshot):
@@ -213,6 +228,15 @@ POST_WARM_PHASES = ('warm_state', 'warm_authority_assert', 'publication', 'publi
 # Fixed labels from this controller and its pinned pure native policies.
 # Never infer a diagnostic reason from a regex match on exception payloads.
 FAILURE_REASONS = (
+    'plain_browser_key_a_must_be_unbound', 'original_notification_surface_before_key_required',
+    'bounded_browser_key_result_required', 'trusted_unmodified_key_a_required',
+    'notification_handoff_surface_identity_changed', 'notification_native_frame_advance_required',
+    'natural_notification_input_release_required', 'no_key_before_owned_native_dispatch',
+    'browser_key_handoff_case_required', 'browser_key_native_deadline_required',
+    'owned_browser_received_native_key_a',
+    'reviewed_browser_key_transport_required',
+    'plain_us_main_keyboard_with_caps_off', 'typed_query_keys_have_no_compositor_bindings',
+    'action_keys_and_buttons_have_no_compositor_bindings',
     'finite_notification_case_budget_required', 'notification_case_budget_exhausted',
     'actual_keyboard_focus_on_owned_link', 'actual_native_notification_history_geometry',
     'all_owned_browser_windows_retired', 'ambiguous_captured_host_surface_ids',
@@ -298,6 +322,10 @@ NATIVE_PHASES = (
     'keyboard_focus_assert', 'keyboard_enter_dispatch', 'default_handler_delivery_wait',
     'default_handler_state_read', 'default_handler_authority_assert', 'browser_document_wait',
     'browser_guard', 'browser_focus_read', 'browser_targets_retire', 'notification_expiry_wait',
+    'browser_key_frame_capture', 'browser_key_arm', 'browser_key_release_wait', 'browser_key_before_guard',
+    'browser_key_empty_assert', 'browser_key_input_preflight', 'browser_key_before_release_assert',
+    'browser_key_deadline_assert', 'browser_key_dispatch', 'browser_key_delivery_wait',
+    'browser_key_after_guard', 'browser_key_after_release_assert',
     'notification_post_expiry_guard', 'notification_absence_assert', 'notification_history_hide',
     'notification_history_closed_wait', 'case_complete',
 )
@@ -357,6 +385,72 @@ def native_pointer_control(report, kind, observe, cursor, read_cursor, move_curs
         set_button_held(False)
 
 
+def handoff_frame(snapshot):
+    surfaces = [row for row in snapshot['surfaces'] if row.get('role', row['id']) == 'notifications']
+    require(len(surfaces) == 1 and type(surfaces[0]['native_frames']) is int
+            and surfaces[0]['native_frames'] > 0, 'original_notification_surface_before_key_required')
+    return {key: surfaces[0][key] for key in ('id', 'instance', 'native_frames')}
+
+
+def notification_handoff(snapshot, before):
+    if snapshot['client']['notification_history_open']:
+        return None
+    surfaces = [row for row in snapshot['surfaces'] if row.get('role', row['id']) == 'notifications']
+    require(len(surfaces) <= 1, 'notification_handoff_surface_identity_changed')
+    if not surfaces:
+        return {'history_closed': True, 'inspected_modal_input_released': True,
+                'native_frames_advanced': None, 'surface_absent': True, 'notification_policy': 'absent'}
+    surface = surfaces[0]
+    require(all(surface[key] == before[key] for key in ('id', 'instance')),
+            'notification_handoff_surface_identity_changed')
+    policy = (surface['keyboard'], surface['pointer_input'])
+    if policy not in (('none', 'none'), ('on-demand', 'content')):
+        return None
+    require(type(surface['native_frames']) is int, 'notification_native_frame_advance_required')
+    if surface['native_frames'] <= before['native_frames']:
+        return None
+    return {'history_closed': True, 'inspected_modal_input_released': True,
+            'native_frames_advanced': True, 'surface_absent': False,
+            'notification_policy': 'exit-paint' if policy == ('none', 'none') else 'normal-toast'}
+
+
+def assert_browser_key_handoff(report, request, before, call, guard, wait, input_preflight, send_key, deadline):
+    from default_uri_policy import browser_key_observation, received_browser_key
+    case = report.get('native_flow', {}).get('current_case')
+    require(case in NATIVE_CASES and request['case'] == case, 'browser_key_handoff_case_required')
+    evidence = {'accepted': False, 'key_dispatch_attempted': False, 'key_dispatch_returned': False}
+    report.setdefault('browser_key_handoff', {})[case] = evidence
+    packet = json.dumps(request)
+    def required_release(current):
+        observed = notification_handoff(current, before)
+        require(observed is not None, 'natural_notification_input_release_required')
+        return observed
+    evidence['armed'] = native_step(report, 'browser_key_arm', lambda: browser_key_observation(
+        call('browser-key-arm', packet), armed=True))
+    evidence['release_observation'] = native_step(report, 'browser_key_release_wait', lambda: wait(
+        lambda: notification_handoff(guard()[0], before), 'natural_notification_input_release_required'))
+    native_step(report, 'browser_key_empty_assert', lambda: require(
+        browser_key_observation(call('browser-key-read', packet)) == {'count': 0, 'event': None},
+        'no_key_before_owned_native_dispatch'))
+    native_step(report, 'browser_key_input_preflight', input_preflight)
+    current = native_step(report, 'browser_key_before_guard', guard)[0]
+    evidence['pre_dispatch_release'] = native_step(report, 'browser_key_before_release_assert',
+                                                  lambda: required_release(current))
+    native_step(report, 'browser_key_deadline_assert', lambda: require(
+        time.monotonic() < deadline, 'browser_key_native_deadline_required'))
+    def dispatch():
+        evidence['key_dispatch_attempted'] = True
+        send_key()
+        evidence['key_dispatch_returned'] = True
+    native_step(report, 'browser_key_dispatch', dispatch)
+    evidence['event'] = native_step(report, 'browser_key_delivery_wait', lambda: wait(
+        lambda: received_browser_key(call('browser-key-read', packet)), 'owned_browser_received_native_key_a'))
+    current = native_step(report, 'browser_key_after_guard', guard)[0]
+    evidence['post_event_release'] = native_step(report, 'browser_key_after_release_assert',
+                                                lambda: required_release(current))
+    evidence['accepted'] = True
+
+
 def post_warm_step(diagnostic, phase, action):
     require(phase in POST_WARM_PHASES, 'fixed_post_warm_phase_required')
     diagnostic['phase'] = phase
@@ -405,7 +499,8 @@ def run(args, manifest):
         return ['StrictHostKeyChecking=yes' if value == 'StrictHostKeyChecking=accept-new' else value for value in argv]
     lab.ssh_args = strict_ssh
     old.a['keyboard_preflight']()
-    keyboard_preflight(json.loads(session('hyprctl', '-j', 'binds')))
+    keyboard_preflight(json.loads(session('hyprctl', '-j', 'binds')),
+                       getattr(args, 'assert_browser_key_handoff', False))
     expected = manifest['binaries']['lucent-desktop']['sha256']
     actual = json.loads(remote('python3', '-c',
         'import hashlib,json,subprocess;from pathlib import Path;'
@@ -444,6 +539,10 @@ def run(args, manifest):
         ('owned_chromium_lease.py', ROOT / 'vm/owned_chromium_lease.py'))}
     header = {'desktop_pid': args.expected_desktop_pid, 'desktop_sha256': expected,
               'sources': {key: hashlib.sha256(raw).hexdigest() for key, raw in sources.items()}}
+    if getattr(args, 'assert_browser_key_handoff', False):
+        sources['cdp_peer.py'] = key_transport()
+        header['sources']['cdp_peer.py'] = hashlib.sha256(sources['cdp_peer.py']).hexdigest()
+        header['assert_browser_key_handoff'] = True
     sources['default-header.json'] = json.dumps(header).encode()
     for filename, raw in sources.items():
         scratch_remote('/usr/bin/python3', '-I', '-c',
@@ -475,6 +574,8 @@ def run(args, manifest):
               'scope': 'Owned warm-browser default-handler transport; no fresh-browser focus, direct Chromium token-consumption, physical-hardware or performance acceptance.',
               'native_input': {}, 'browser_focus': {}, 'cleanup': {}, 'vm_uuid': args.vm_uuid,
               'helper_sources_sha256': header['sources'], 'guest_directory': scratch}
+    if getattr(args, 'assert_browser_key_handoff', False):
+        report['browser_key_handoff_requested'] = True
     report['host_harness_sha256'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     baseline = security = browser = None
     initialized_attempted = False
@@ -598,6 +699,8 @@ def run(args, manifest):
             report.setdefault('history_setup', {})[sequence] = {'group_native_pointer_focus': True}
             observed_revision = native_step(report, 'notification_revision_capture', lambda: call('observe-note', sequence)['revision'])
             native_step(report, 'notification_target_validate', selected)
+            if getattr(args, 'assert_browser_key_handoff', False):
+                key_before = native_step(report, 'browser_key_frame_capture', lambda: handoff_frame(native_guard()[0]))
             if sequence == 'pointer':
                 native_pointer_control(report, 'pointer', selected, cursor,
                     lambda: json.loads(session('hyprctl', '-j', 'cursorpos')),
@@ -644,6 +747,13 @@ def run(args, manifest):
             focus = native_step(report, 'browser_focus_read', lambda: json.loads(session('hyprctl', '-j', 'activewindow')))
             report['browser_focus'][sequence] = bool(focus) and focus.get('class') == entry['class'] and any(
                 row.get('pid') == focus.get('pid') and row.get('address') == focus.get('address') for row in clients)
+            if getattr(args, 'assert_browser_key_handoff', False):
+                assert_browser_key_handoff(report, {'identity': browser, 'before': [browser['control']],
+                    'targets': fresh, 'case': sequence}, key_before, call, native_guard, wait,
+                    lambda: (old.a['keyboard_preflight'](),
+                             keyboard_preflight(json.loads(session('hyprctl', '-j', 'binds')), browser_key=True)),
+                    lambda: lab.virsh('send-key', name, '--codeset', 'linux', '--holdtime', '50', '30', capture=True),
+                    deadline)
             native_step(report, 'browser_targets_retire', lambda: require(call('browser-close', json.dumps({
                 'identity': browser, 'before': [browser['control']], 'targets': fresh}), canonical=True)
                 ['fresh_owned_targets_retired'], 'exact_owned_document_retired'))
@@ -729,9 +839,12 @@ def main():
     parser.add_argument('--manifest-sha')
     parser.add_argument('--expected-desktop-pid', type=int)
     parser.add_argument('--vm-uuid')
+    parser.add_argument('--assert-browser-key-handoff', action='store_true',
+                        help='Require one trusted native KeyA in each exact owned document before any focus intervention.')
     args = parser.parse_args()
     if not args.run:
         print(json.dumps({'source_only_acceptance_plan': True, 'guest_actions': False,
+                          'assert_browser_key_handoff': args.assert_browser_key_handoff,
                           'native_or_performance_accepted': False,
                           'test_profile_policy': 'All windows in the new private profile are closed; content there is disposable and not protected. Private evidence may remain. Existing personal browsers and successors are never adopted.',
                           'notification_policy': 'Bounded automatic expiry only; changed or foreign notifications remain untouched.'}))
