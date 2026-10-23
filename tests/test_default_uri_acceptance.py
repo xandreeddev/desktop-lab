@@ -187,6 +187,55 @@ class ConfigurationLease(unittest.TestCase):
             self.assertEqual(p.snapshot(slot), before_slot)
 
 
+class FixtureCliDispatch(unittest.TestCase):
+    def mapped_operation(self, operation, expected_handler):
+        requested = Path('/unused-requested-run')
+        canonical = Path('/unused-canonical-run')
+        run_id = 'abcdef123456'
+        result = {'operation': operation, 'dispatched': True}
+        callbacks = {name: Mock(return_value=result) for name in ('prepare', 'publish', 'admitted')}
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(patch.object(sys, 'argv', ['default-uri.py', operation, str(requested), run_id]))
+            context = stack.enter_context(patch.object(driver, 'context', return_value=(canonical, {}, Mock())))
+            stack.enter_context(patch.object(driver.signal, 'signal'))
+            stack.enter_context(patch.object(subprocess, 'run', side_effect=AssertionError('native operations forbidden')))
+            for name, callback in callbacks.items():
+                stack.enter_context(patch.object(driver, name, callback))
+            output = stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+            driver.main()
+        context.assert_called_once_with(requested, run_id)
+        for name, callback in callbacks.items():
+            if name == expected_handler:
+                callback.assert_called_once_with(canonical, run_id)
+            else:
+                callback.assert_not_called()
+        self.assertEqual(json.loads(output.getvalue()), result)
+
+    def test_prepare_cli_dispatches_prepare_with_admitted_context(self):
+        self.mapped_operation('prepare', 'prepare')
+
+    def test_publish_cli_dispatches_publish_with_admitted_context(self):
+        self.mapped_operation('publish', 'publish')
+
+    def test_admission_cli_dispatches_admitted_with_admitted_context(self):
+        self.mapped_operation('admission', 'admitted')
+
+    def test_warm_ready_cli_keeps_readonly_dispatch_before_general_context(self):
+        requested = Path('/unused-requested-run')
+        run_id = 'abcdef123456'
+        result = {'ready': False, 'blocked': False, 'phase': 'mapped_client'}
+        with patch.object(sys, 'argv', ['default-uri.py', 'warm-ready', str(requested), run_id]), \
+             patch.object(driver.signal, 'signal'), \
+             patch.object(driver, 'context', side_effect=AssertionError('readonly probe owns its own admission')) as context, \
+             patch.object(driver, 'warm_ready', return_value=result) as readonly, \
+             patch.object(subprocess, 'run', side_effect=AssertionError('native operations forbidden')), \
+             contextlib.redirect_stdout(io.StringIO()) as output:
+            driver.main()
+        context.assert_not_called()
+        readonly.assert_called_once_with(requested, run_id)
+        self.assertEqual(json.loads(output.getvalue()), result)
+
+
 class AdmissionAndBridge(unittest.TestCase):
     def test_imports_and_default_controller_do_not_access_transport_or_native_desktop(self):
         with patch.object(subprocess, 'run', side_effect=AssertionError('transport forbidden')), \

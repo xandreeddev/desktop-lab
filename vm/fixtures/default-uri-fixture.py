@@ -482,8 +482,9 @@ def main():
         print(json.dumps(warm_ready(args.directory, args.run_id)))
         return
     run, _, base = context(args.directory, args.run_id)
-    if args.operation in ('prepare', 'publish', 'admission'):
-        result = globals()[args.operation](run, args.run_id)
+    handlers = {'prepare': prepare, 'publish': publish, 'admission': admitted}
+    if args.operation in handlers:
+        result = handlers[args.operation](run, args.run_id)
     elif args.operation in ('warm', 'open'):
         p.require((args.operation == 'warm') == (args.value is None), 'known_default_uri_request_shape')
         result = launch(run, args.run_id, args.value)
