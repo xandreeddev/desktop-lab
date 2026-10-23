@@ -29,16 +29,19 @@ pub enum ActivationOutcome {
     Invalid,
 }
 pub struct ActivationRequest<M> {
-    pub app_id: String,
+    /// The intended application's desktop identity, when it is known. `None`
+    /// requests authority for an explicit user action whose handler is resolved
+    /// later; it never substitutes the launcher executable as the target.
+    pub app_id: Option<String>,
     complete: Box<dyn FnOnce(ActivationOutcome) -> M + Send>,
 }
 impl<M: 'static> ActivationRequest<M> {
     pub fn new(
-        app_id: impl Into<String>,
+        app_id: Option<String>,
         complete: impl FnOnce(ActivationOutcome) -> M + Send + 'static,
     ) -> Self {
         Self {
-            app_id: app_id.into(),
+            app_id,
             complete: Box::new(complete),
         }
     }
@@ -59,9 +62,11 @@ impl<M: 'static> Effects<M> {
     /// Request a fresh token for the current physical input dispatch. An absent
     /// protocol or input returns an explicit outcome; it never borrows old input.
     /// Delivery does not imply the compositor will focus the target application.
+    /// Pass `None` when an OS adapter will resolve the target, such as opening a
+    /// URI with the current default handler. A known target remains `Some(id)`.
     pub fn activation_token(
         &mut self,
-        app_id: impl Into<String>,
+        app_id: Option<String>,
         complete: impl FnOnce(ActivationOutcome) -> M + Send + 'static,
     ) {
         self.activation
@@ -76,11 +81,11 @@ mod tests {
     fn delegated_request_maps_one_completion_without_exposing_the_token() {
         let mut parent = Effects::<(u8, ActivationOutcome)>::default();
         parent.delegate(
-            |child| child.activation_token("org.example.App", std::convert::identity),
+            |child| child.activation_token(Some("org.example.App".into()), std::convert::identity),
             |outcome| (7, outcome),
         );
         let request = parent.activation.pop().unwrap();
-        assert_eq!(request.app_id, "org.example.App");
+        assert_eq!(request.app_id.as_deref(), Some("org.example.App"));
         let token = ActivationToken::new("owned-test-token".into()).unwrap();
         assert_eq!(format!("{token:?}"), "ActivationToken(..)");
         assert_eq!(
@@ -97,5 +102,21 @@ mod tests {
         for value in [String::new(), "\0".into(), "x".repeat(4097)] {
             assert!(ActivationToken::new(value).is_none());
         }
+    }
+
+    #[test]
+    fn untargeted_request_stays_untargeted_through_child_delegation() {
+        let mut parent = Effects::<(u8, ActivationOutcome)>::default();
+        parent.delegate(
+            |child| child.activation_token(None, std::convert::identity),
+            |outcome| (9, outcome),
+        );
+        let request = parent.activation.pop().unwrap();
+        assert!(request.app_id.is_none());
+        assert_eq!(
+            request.finish(ActivationOutcome::NoUserInput),
+            (9, ActivationOutcome::NoUserInput)
+        );
+        assert!(parent.activation.is_empty());
     }
 }

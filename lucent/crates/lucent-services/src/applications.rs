@@ -152,15 +152,16 @@ impl ApplicationPort for XdgApplications {
 /// URI selection starts the desktop handler in an independent application unit.
 pub struct XdgUri;
 impl UriPort for XdgUri {
-    fn open(&self, target: &ExternalUri) -> Result<()> {
-        launch::command(
+    fn open(&self, target: &ExternalUri, context: ApplicationLaunchContext) -> Result<()> {
+        launch::executable_before(
             &LaunchCommand {
                 program: "xdg-open".into(),
                 args: vec![target.value().into()],
                 directory: None,
                 terminal: false,
             },
-            None,
+            &context,
+            std::time::Instant::now() + std::time::Duration::from_secs(5),
         )
     }
 }

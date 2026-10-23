@@ -5,10 +5,19 @@ use std::sync::Mutex;
 struct Adapter {
     calls: Mutex<Vec<NotificationTarget>>,
     links: Mutex<Vec<String>>,
+    link_contexts: Mutex<Vec<Option<String>>>,
 }
 impl lucent_domain::UriPort for Adapter {
-    fn open(&self, target: &lucent_domain::ExternalUri) -> Result<()> {
+    fn open(
+        &self,
+        target: &lucent_domain::ExternalUri,
+        context: lucent_domain::ApplicationLaunchContext,
+    ) -> Result<()> {
         self.links.lock().unwrap().push(target.value().into());
+        self.link_contexts
+            .lock()
+            .unwrap()
+            .push(context.activation_token().map(str::to_owned));
         Ok(())
     }
 }
@@ -246,16 +255,33 @@ fn rich_links_use_current_content_and_history_never_invokes_the_sender() {
         &mut effects,
     );
     assert!(effects.tasks.is_empty());
+    assert!(effects.activation.is_empty());
     center.update(
         Message::OpenLink(target, "https://example.test/details".into()),
         &mut effects,
     );
     assert!(adapter.links.lock().unwrap().is_empty());
+    assert!(effects.tasks.is_empty());
+    let request = effects.activation.pop().unwrap();
+    assert!(
+        request.app_id.is_none(),
+        "the default handler is not known yet"
+    );
+    center.update(
+        request.finish(ActivationOutcome::Token(
+            ActivationToken::new("fresh-link-intent".into()).unwrap(),
+        )),
+        &mut effects,
+    );
     let result = effects.tasks.pop().unwrap().run();
     center.update(result, &mut effects);
     assert_eq!(
         *adapter.links.lock().unwrap(),
         ["https://example.test/details"]
+    );
+    assert_eq!(
+        *adapter.link_contexts.lock().unwrap(),
+        [Some("fresh-link-intent".into())]
     );
     center.update(
         Message::Snapshot(Ok(NotificationSnapshot {
@@ -268,6 +294,12 @@ fn rich_links_use_current_content_and_history_never_invokes_the_sender() {
         Message::OpenLink(target, "https://example.test/details".into()),
         &mut effects,
     );
+    let completion = effects
+        .activation
+        .pop()
+        .unwrap()
+        .finish(ActivationOutcome::NoUserInput);
+    center.update(completion, &mut effects);
     let result = effects.tasks.pop().unwrap().run();
     center.update(result, &mut effects);
     assert!(adapter.calls.lock().unwrap().is_empty());
@@ -280,6 +312,179 @@ fn rich_links_use_current_content_and_history_never_invokes_the_sender() {
         &mut effects,
     );
     assert!(effects.tasks.is_empty());
+    assert!(effects.activation.is_empty());
+    assert_eq!(
+        *adapter.link_contexts.lock().unwrap(),
+        [Some("fresh-link-intent".into()), None]
+    );
+}
+
+fn link_note() -> Notification {
+    let mut value = note(1, 5, "Fixture");
+    value.body = "<a href='https://example.test/first'>First</a> <a href='https://example.test/second'>Second</a>".into();
+    value
+}
+fn token() -> ActivationOutcome {
+    ActivationOutcome::Token(ActivationToken::new("fresh-controlled-intent".into()).unwrap())
+}
+
+#[test]
+fn pending_link_tokens_are_retired_by_replacement_and_explicit_clear() {
+    for retirement in 0..3 {
+        let (mut center, adapter) = center();
+        let mut effects = Effects::default();
+        let value = link_note();
+        let target = value.target().unwrap();
+        center.update(
+            Message::Snapshot(Ok(NotificationSnapshot {
+                active: vec![value.clone()],
+                ..Default::default()
+            })),
+            &mut effects,
+        );
+        center.update(
+            Message::OpenLink(target, "https://example.test/first".into()),
+            &mut effects,
+        );
+        let pending = effects.activation.pop().unwrap();
+        if retirement == 0 {
+            center.update(Message::Clear, &mut effects);
+        } else {
+            let mut replacement = value;
+            if retirement == 1 {
+                replacement.revision += 1;
+            } else {
+                // Even an adapter reusing its revision cannot grant authority
+                // through a stale prepared body cache.
+                replacement.body = "The link was removed".into();
+            }
+            center.update(
+                Message::Snapshot(Ok(NotificationSnapshot {
+                    active: vec![replacement],
+                    ..Default::default()
+                })),
+                &mut effects,
+            );
+        }
+        let task_count = effects.tasks.len();
+        center.update(pending.finish(token()), &mut effects);
+        assert_eq!(effects.tasks.len(), task_count);
+        assert!(center.link_opening.is_none());
+        assert!(adapter.links.lock().unwrap().is_empty());
+    }
+}
+
+#[test]
+fn newer_link_intent_rejects_old_tokens_and_completion_replay() {
+    let (mut center, adapter) = center();
+    let mut effects = Effects::default();
+    let value = link_note();
+    let target = value.target().unwrap();
+    center.update(
+        Message::Snapshot(Ok(NotificationSnapshot {
+            history: vec![value],
+            ..Default::default()
+        })),
+        &mut effects,
+    );
+    center.update(
+        Message::OpenLink(target, "https://example.test/first".into()),
+        &mut effects,
+    );
+    let old_id = center.link_opening.as_ref().unwrap().request;
+    let old = effects.activation.pop().unwrap();
+    center.update(
+        Message::OpenLink(target, "https://example.test/second".into()),
+        &mut effects,
+    );
+    let current_id = center.link_opening.as_ref().unwrap().request;
+    assert_ne!(old_id, current_id);
+    center.update(old.finish(token()), &mut effects);
+    assert!(effects.tasks.is_empty());
+    let prepared = effects.activation.pop().unwrap().finish(token());
+    center.update(prepared.clone(), &mut effects);
+    center.update(prepared.clone(), &mut effects);
+    assert_eq!(
+        effects.tasks.len(),
+        1,
+        "one result cannot schedule a second opening"
+    );
+    center.error = false;
+    center.update(
+        Message::LinkDone(
+            old_id,
+            Err(lucent_domain::DomainError::Failed("old".into())),
+        ),
+        &mut effects,
+    );
+    assert!(!center.error);
+    assert_eq!(center.link_opening.as_ref().unwrap().request, current_id);
+    let task = effects.tasks.pop().unwrap();
+    assert_eq!(task.queue, crate::work::CONTROLS);
+    center.update(task.run(), &mut effects);
+    center.update(prepared, &mut effects);
+    assert!(effects.tasks.is_empty());
+    assert!(center.link_opening.is_none());
+    assert_eq!(
+        *adapter.links.lock().unwrap(),
+        ["https://example.test/second"]
+    );
+    assert_eq!(
+        *adapter.link_contexts.lock().unwrap(),
+        [Some("fresh-controlled-intent".into())]
+    );
+    assert!(adapter.calls.lock().unwrap().is_empty());
+}
+
+#[test]
+fn retiring_a_link_cancels_an_opening_still_waiting_on_the_controls_queue() {
+    for retirement in 0..3 {
+        let (mut center, adapter) = center();
+        let mut effects = Effects::default();
+        let value = link_note();
+        let target = value.target().unwrap();
+        center.update(
+            Message::Snapshot(Ok(NotificationSnapshot {
+                history: vec![value],
+                ..Default::default()
+            })),
+            &mut effects,
+        );
+        center.update(
+            Message::OpenLink(target, "https://example.test/first".into()),
+            &mut effects,
+        );
+        let prepared = effects.activation.pop().unwrap().finish(token());
+        center.update(prepared, &mut effects);
+        let task = effects.tasks.pop().unwrap();
+        assert!(!task.cancellation.cancelled());
+        if retirement == 0 {
+            center.update(Message::Clear, &mut effects);
+        } else if retirement == 1 {
+            center.update(
+                Message::Snapshot(Ok(NotificationSnapshot::default())),
+                &mut effects,
+            );
+        } else {
+            center.update(
+                Message::OpenLink(target, "https://example.test/second".into()),
+                &mut effects,
+            );
+        }
+        assert!(
+            task.cancellation.cancelled(),
+            "the executor must skip retired queued work"
+        );
+        assert!(adapter.links.lock().unwrap().is_empty());
+        if retirement == 2 {
+            let opening = center.link_opening.as_ref().unwrap();
+            assert!(opening.waiting_for_token);
+            assert_eq!(opening.selected.value(), "https://example.test/second");
+            assert_eq!(effects.activation.len(), 1);
+        } else {
+            assert!(center.link_opening.is_none());
+        }
+    }
 }
 
 #[test]

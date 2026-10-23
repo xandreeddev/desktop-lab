@@ -6,7 +6,9 @@ mod tests;
 mod view;
 use lucent_api::*;
 use lucent_design::{Theme, motion};
-use lucent_domain::{Notification, NotificationPort, NotificationSnapshot, NotificationTarget};
+use lucent_domain::{
+    ExternalUri, Notification, NotificationPort, NotificationSnapshot, NotificationTarget,
+};
 use lucent_usecases::notifications::body::{BodyBlock, NotificationBody, notification_body};
 use std::sync::Arc;
 #[derive(Clone)]
@@ -24,6 +26,8 @@ pub enum Message {
     DismissId(u32),
     Invoke(NotificationTarget, String),
     OpenLink(NotificationTarget, String),
+    LinkPrepared(u64, ActivationOutcome),
+    LinkDone(u64, lucent_domain::Result<()>),
     Artwork(u64, crate::ports::Images),
     RetryArtwork,
     Dnd,
@@ -35,6 +39,20 @@ pub enum Message {
     Scroll(ScrollEvent),
     ToastScroll(NotificationTarget, ScrollEvent),
     Done(lucent_domain::Result<()>),
+}
+struct LinkOpening {
+    request: u64,
+    target: NotificationTarget,
+    selected: ExternalUri,
+    waiting_for_token: bool,
+    cancellation: Cancellation,
+}
+impl Drop for LinkOpening {
+    fn drop(&mut self) {
+        // Retirement can skip work still waiting on the controls queue. An
+        // already-running external application operation cannot be undone.
+        self.cancellation.cancel();
+    }
 }
 pub struct Center {
     pub snapshot: NotificationSnapshot,
@@ -52,6 +70,8 @@ pub struct Center {
     bodies: std::collections::BTreeMap<NotificationTarget, NotificationBody>,
     artwork: artwork::Artwork,
     toast_scroll: std::collections::BTreeMap<NotificationTarget, f32>,
+    link_opening: Option<LinkOpening>,
+    next_link_request: u64,
 }
 impl Center {
     pub fn new(
@@ -75,6 +95,8 @@ impl Center {
             bodies: Default::default(),
             artwork: artwork::Artwork::new(assets),
             toast_scroll: Default::default(),
+            link_opening: None,
+            next_link_request: 0,
         }
     }
     pub fn history_open(&self) -> bool {
@@ -115,6 +137,27 @@ impl Center {
                 .iter()
                 .any(|n| !self.snapshot.do_not_disturb || n.critical)
     }
+    fn selected_link(&self, target: NotificationTarget, key: &str) -> Option<ExternalUri> {
+        let note = self
+            .snapshot
+            .active
+            .iter()
+            .chain(&self.snapshot.history)
+            .find(|note| note.target() == Some(target))?;
+        // The prepared view cache is not opening authority. Validate against
+        // the current content again at the input and asynchronous completion.
+        notification_body(&note.body)
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                BodyBlock::Text(spans) => spans
+                    .iter()
+                    .filter_map(|span| span.style.link.as_ref())
+                    .find(|link| link.value() == key)
+                    .cloned(),
+                BodyBlock::Image { .. } => None,
+            })
+    }
 }
 impl Component for Center {
     type Message = Message;
@@ -151,6 +194,13 @@ impl Component for Center {
                 self.action_pages
                     .retain(|target, _| value.active.iter().any(|n| n.target() == Some(*target)));
                 self.snapshot = value;
+                if self.link_opening.as_ref().is_some_and(|opening| {
+                    self.selected_link(opening.target, opening.selected.value())
+                        .as_ref()
+                        != Some(&opening.selected)
+                }) {
+                    self.link_opening = None;
+                }
                 if self
                     .selected_group
                     .as_ref()
@@ -296,31 +346,73 @@ impl Component for Center {
                 }
             }
             Message::OpenLink(target, key) => {
-                let selected = self.bodies.get(&target).and_then(|body| {
-                    body.blocks.iter().find_map(|block| match block {
-                        BodyBlock::Text(spans) => spans
-                            .iter()
-                            .filter_map(|span| span.style.link.as_ref())
-                            .find(|link| link.value() == key)
-                            .cloned(),
-                        BodyBlock::Image { .. } => None,
-                    })
-                });
                 // A history link opens its content URI; it never invokes the old
-                // sender. A replacement or clear retires that exact version.
-                if let Some(selected) = selected {
-                    let uri = self.uri.clone();
-                    e.task_on_with_failure(
-                        crate::work::CONTROLS,
-                        move || Message::Done(uri.open(&selected)),
-                        |_| {
-                            Message::Done(Err(lucent_domain::DomainError::Failed(
-                                "Link could not be opened".into(),
-                            )))
-                        },
-                    );
+                // sender. Capture this exact version before asynchronous token
+                // delivery; the target default application is not known here.
+                if let Some(selected) = self.selected_link(target, &key) {
+                    if let Some(request) = self.next_link_request.checked_add(1) {
+                        self.next_link_request = request;
+                        self.link_opening = Some(LinkOpening {
+                            request,
+                            target,
+                            selected,
+                            waiting_for_token: true,
+                            cancellation: Cancellation::default(),
+                        });
+                        e.activation_token(None, move |outcome| {
+                            Message::LinkPrepared(request, outcome)
+                        });
+                    } else {
+                        self.link_opening = None;
+                        self.error = true;
+                    }
                 } else {
                     self.error = true;
+                }
+            }
+            Message::LinkPrepared(request, outcome) => {
+                let current = self
+                    .link_opening
+                    .as_mut()
+                    .filter(|opening| opening.request == request && opening.waiting_for_token)
+                    .map(|opening| {
+                        opening.waiting_for_token = false;
+                        (
+                            opening.target,
+                            opening.selected.clone(),
+                            opening.cancellation.clone(),
+                        )
+                    });
+                if let Some((target, selected, cancellation)) = current {
+                    if self.selected_link(target, selected.value()).as_ref() == Some(&selected) {
+                        let uri = self.uri.clone();
+                        let context = crate::application_requests::launch_context(outcome);
+                        e.task_cancellable_on_with_failure(
+                            crate::work::CONTROLS,
+                            cancellation,
+                            move || Message::LinkDone(request, uri.open(&selected, context)),
+                            move |_| {
+                                Message::LinkDone(
+                                    request,
+                                    Err(lucent_domain::DomainError::Failed(
+                                        "Link could not be opened".into(),
+                                    )),
+                                )
+                            },
+                        );
+                    } else {
+                        self.link_opening = None;
+                    }
+                }
+            }
+            Message::LinkDone(request, result) => {
+                if self
+                    .link_opening
+                    .as_ref()
+                    .is_some_and(|opening| opening.request == request && !opening.waiting_for_token)
+                {
+                    self.link_opening = None;
+                    self.error = result.is_err();
                 }
             }
             Message::Dnd => {
@@ -344,15 +436,18 @@ impl Component for Center {
                     )))
                 },
             ),
-            Message::Clear => e.task_on_with_failure(
-                crate::work::CONTROLS,
-                move || Message::Done(adapter.clear_history()),
-                |_| {
-                    Message::Done(Err(lucent_domain::DomainError::Failed(
-                        "History clear failed".into(),
-                    )))
-                },
-            ),
+            Message::Clear => {
+                self.link_opening = None;
+                e.task_on_with_failure(
+                    crate::work::CONTROLS,
+                    move || Message::Done(adapter.clear_history()),
+                    |_| {
+                        Message::Done(Err(lucent_domain::DomainError::Failed(
+                            "History clear failed".into(),
+                        )))
+                    },
+                );
+            }
             Message::Done(result) => self.error = result.is_err(),
         }
         self.refresh_artwork(false, e);

@@ -18,6 +18,21 @@ struct Pending<M> {
     request: api::ActivationRequest<M>,
     timer: RegistrationToken,
 }
+fn valid_target_id(app_id: Option<&str>) -> bool {
+    app_id.is_none_or(|value| {
+        !value.is_empty() && value.len() <= 255 && !value.chars().any(char::is_control)
+    })
+}
+
+fn configure_token(proxy: &XdgActivationTokenV1, input: &Input, app_id: Option<&str>) {
+    proxy.set_serial(input.serial, &input.seat);
+    proxy.set_surface(&input.surface);
+    // xdg-activation-v1 makes the target app_id optional. Default-handler
+    // resolution belongs to the client adapter, not the Wayland runtime.
+    if let Some(app_id) = app_id {
+        proxy.set_app_id(app_id.to_owned());
+    }
+}
 pub(super) struct Activation<M> {
     manager: Option<XdgActivationV1>,
     pub input: Option<Input>,
@@ -55,10 +70,7 @@ impl<A: Application> State<A> {
         qh: &QueueHandle<Self>,
     ) {
         use api::ActivationOutcome as Outcome;
-        let invalid = request.app_id.is_empty()
-            || request.app_id.len() > 255
-            || request.app_id.chars().any(char::is_control);
-        let failure = if invalid {
+        let failure = if !valid_target_id(request.app_id.as_deref()) {
             Some(Outcome::Invalid)
         } else if self.authorize_unlock.is_some() || self.activation.manager.is_none() {
             Some(Outcome::Unavailable)
@@ -94,9 +106,7 @@ impl<A: Application> State<A> {
             .as_ref()
             .unwrap()
             .get_activation_token(qh, id);
-        proxy.set_serial(input.serial, &input.seat);
-        proxy.set_surface(&input.surface);
-        proxy.set_app_id(request.app_id.clone());
+        configure_token(&proxy, &input, request.app_id.as_deref());
         let timeout_qh = qh.clone();
         let timer = match self.handle.insert_source(
             Timer::from_duration(Duration::from_secs(2)),
@@ -173,6 +183,99 @@ impl<A: Application> Dispatch<XdgActivationTokenV1, u64> for State<A> {
                 .map(api::ActivationOutcome::Token)
                 .unwrap_or(api::ActivationOutcome::Invalid);
             state.activation_finish(*id, outcome, qh, false);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Read;
+
+    struct Peer;
+    wayland_client::delegate_noop!(Peer: ignore wayland_client::protocol::wl_registry::WlRegistry);
+    wayland_client::delegate_noop!(Peer: ignore wl_seat::WlSeat);
+    wayland_client::delegate_noop!(Peer: ignore wayland_client::protocol::wl_compositor::WlCompositor);
+    wayland_client::delegate_noop!(Peer: ignore wl_surface::WlSurface);
+    wayland_client::delegate_noop!(Peer: ignore XdgActivationV1);
+    wayland_client::delegate_noop!(Peer: ignore XdgActivationTokenV1);
+
+    #[test]
+    fn optional_target_keeps_existing_known_id_validation() {
+        assert!(valid_target_id(None));
+        assert!(valid_target_id(Some("org.example.App")));
+        assert!(valid_target_id(Some(&"x".repeat(255))));
+        for value in [String::new(), "a\nb".into(), "x".repeat(256)] {
+            assert!(!valid_target_id(Some(&value)));
+        }
+    }
+
+    #[test]
+    fn unknown_handler_omits_app_id_but_sends_the_actual_input_authority() {
+        // Inspect actual client wire requests on an owned socket pair. There is
+        // no compositor/GPU connection, live input serial or external desktop.
+        for target in [None, Some("org.example.App")] {
+            let (client, mut server) = std::os::unix::net::UnixStream::pair().unwrap();
+            server
+                .set_read_timeout(Some(Duration::from_secs(1)))
+                .unwrap();
+            let connection = Connection::from_socket(client).unwrap();
+            let queue = connection.new_event_queue::<Peer>();
+            let qh = queue.handle();
+            let registry = connection.display().get_registry(&qh, ());
+            let seat = registry.bind::<wl_seat::WlSeat, _, _>(1, 1, &qh, ());
+            let compositor = registry
+                .bind::<wayland_client::protocol::wl_compositor::WlCompositor, _, _>(2, 1, &qh, ());
+            let surface = compositor.create_surface(&qh, ());
+            let manager = registry.bind::<XdgActivationV1, _, _>(3, 1, &qh, ());
+            let token = manager.get_activation_token(&qh, ());
+            let input = Input {
+                surface: surface.clone(),
+                seat: seat.clone(),
+                serial: 73,
+            };
+            configure_token(&token, &input, target);
+            token.commit();
+            connection.flush().unwrap();
+
+            let mut requests = vec![];
+            for _ in 0..32 {
+                let mut header = [0u8; 8];
+                server.read_exact(&mut header).unwrap();
+                let object = u32::from_ne_bytes(header[..4].try_into().unwrap());
+                let word = u32::from_ne_bytes(header[4..].try_into().unwrap());
+                let size = (word >> 16) as usize;
+                let opcode = word as u16;
+                assert!((8..=4096).contains(&size));
+                let mut payload = vec![0; size - 8];
+                server.read_exact(&mut payload).unwrap();
+                if object == token.id().protocol_id() {
+                    requests.push((opcode, payload));
+                    if opcode == 3 {
+                        break;
+                    }
+                }
+            }
+            assert_eq!(
+                requests
+                    .iter()
+                    .map(|(opcode, _)| *opcode)
+                    .collect::<Vec<_>>(),
+                if target.is_some() {
+                    vec![0, 2, 1, 3]
+                } else {
+                    vec![0, 2, 3]
+                }
+            );
+            assert_eq!(&requests[0].1[..4], &73u32.to_ne_bytes());
+            assert_eq!(&requests[0].1[4..], &seat.id().protocol_id().to_ne_bytes());
+            assert_eq!(requests[1].1, surface.id().protocol_id().to_ne_bytes());
+            if let Some(target) = target {
+                let payload = &requests[2].1;
+                let len = u32::from_ne_bytes(payload[..4].try_into().unwrap()) as usize;
+                assert_eq!(&payload[4..4 + len - 1], target.as_bytes());
+                assert_eq!(payload[4 + len - 1], 0);
+            }
         }
     }
 }

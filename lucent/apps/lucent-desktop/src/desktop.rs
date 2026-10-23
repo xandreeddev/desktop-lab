@@ -1,5 +1,6 @@
 use crate::actions::Action;
 use crate::adapters::{DesktopAdapters, WatchStop};
+use crate::application_requests::launch_context;
 use crate::launcher::Mode;
 use crate::launcher::{self, Launcher};
 mod bar_presentation;
@@ -83,15 +84,6 @@ pub enum Message {
     Quit,
 }
 pub const SPATIAL: [f32; 4] = motion::SPATIAL;
-fn launch_context(outcome: api::ActivationOutcome) -> ApplicationLaunchContext {
-    match outcome {
-        api::ActivationOutcome::Token(token) => {
-            ApplicationLaunchContext::with_activation_token(token.into_value())
-                .expect("SDK validated activation token")
-        }
-        _ => ApplicationLaunchContext::default(),
-    }
-}
 fn widget_surface_specs(
     host: &widgets::Host,
     layout: &WidgetLayout,
@@ -1056,7 +1048,7 @@ impl Desktop {
             .strip_suffix(".desktop")
             .unwrap_or(app.id.as_str())
             .to_owned();
-        effects.activation_token(app_id, move |outcome| {
+        effects.activation_token(Some(app_id), move |outcome| {
             Message::LaunchPrepared(app, prefer_running, outcome)
         });
     }
@@ -1102,7 +1094,7 @@ impl Desktop {
             .strip_suffix(".desktop")
             .unwrap_or(app.id.as_str())
             .to_owned();
-        effects.activation_token(app_id, move |outcome| {
+        effects.activation_token(Some(app_id), move |outcome| {
             Message::LaunchActionPrepared(revision, app, action, outcome)
         });
     }
@@ -1765,7 +1757,7 @@ impl Component for Desktop {
                     .strip_suffix(".desktop")
                     .unwrap_or(app.id.as_str())
                     .to_owned();
-                effects.activation_token(app_id, move |outcome| {
+                effects.activation_token(Some(app_id), move |outcome| {
                     Message::OpenApplicationPrepared(app, request, outcome)
                 });
             }

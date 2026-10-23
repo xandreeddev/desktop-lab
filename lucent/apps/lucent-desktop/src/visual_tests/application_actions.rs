@@ -51,7 +51,7 @@ fn choose(app: &mut Desktop, effects: &mut Effects<Message>) {
         "native intent resolves before application IO starts"
     );
     let request = effects.activation.remove(0);
-    assert_eq!(request.app_id, "foot");
+    assert_eq!(request.app_id.as_deref(), Some("foot"));
     app.update(
         request.finish(lucent_api::ActivationOutcome::NoUserInput),
         effects,
@@ -70,7 +70,7 @@ fn activation_context_is_forwarded_once_and_catalog_retirement_prevents_late_dis
         app.update(message, &mut effects);
         assert!(effects.tasks.is_empty());
         let request = effects.activation.remove(0);
-        assert_eq!(request.app_id, "foot");
+        assert_eq!(request.app_id.as_deref(), Some("foot"));
         if retired {
             app.apps[0].actions[0].name = "Changed action authority".into();
         }
