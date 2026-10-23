@@ -1,0 +1,157 @@
+{
+  "acceptance_limits": {
+    "actual_notification_pointer_and_tab_enter_input": true,
+    "arbitrary_handlers_or_external_navigation_accepted": false,
+    "automatic_history_release_accepted": false,
+    "browser_keyboard_handoff_accepted": false,
+    "current_running_vm_state_claimed": false,
+    "direct_chromium_token_consumption_accepted": false,
+    "fresh_browser_initial_focus_accepted": false,
+    "fresh_context_and_selected_document_transport": true,
+    "owned_warm_default_handler_route": true,
+    "physical_hardware_accepted": false,
+    "resource_or_presentation_performance_accepted": false,
+    "whole_goal_complete": false
+  },
+  "active_window_observation": {
+    "keyboard_matches_owned_browser": true,
+    "pointer_matches_owned_browser": true,
+    "scope": "This is an active-toplevel observation, not seat keyboard-focus proof or evidence that the browser received a key.",
+    "source": "Hyprland activewindow identity matched the owned browser window."
+  },
+  "checks": {
+    "keyboard_fresh_token_default_route_exact_document": true,
+    "keyboard_notification_absent_after_expiry_window": true,
+    "pointer_fresh_token_default_route_exact_document": true,
+    "pointer_notification_absent_after_expiry_window": true,
+    "temporary_real_mime_default_selected": true
+  },
+  "checks_passed": 5,
+  "cleanup": {
+    "browser_and_original_entry_retired": true,
+    "caller_state_and_cursor_preserved": true,
+    "canonical_browser_and_entry_retired": true,
+    "configuration_guardian_retired": true,
+    "default_entry_restored": true,
+    "default_mime_restored": true,
+    "notification_history_closed": true,
+    "notifications_absent_after_expiry_window": true,
+    "original_http_watchdog_retired": true
+  },
+  "cleanup_checks_passed": 9,
+  "fixture_correction": {
+    "cause": "The installed generic xdg-open path retained quotes around the fixed -I argument, so Python treated it as a file name.",
+    "installed_xdg_open_sha256": "7d759d54f0d4ce1beeb34ee62c587985b5042374e8de237b0dcb8cd47aa698cf",
+    "r8_cleanup_checks_passed": 9,
+    "r8_failure_phase": "default_handler_delivery_wait",
+    "r8_fixed_reason": "selected_default_handler_received_native_uri",
+    "r8_native_input": {
+      "pointer_link_focus": true
+    },
+    "r8_pointer_link_dispatch_attempted": true,
+    "r8_private_receipt_sha256": "538a4d45ad06f6875b7abc58e0c65471e1517e8afc3e560568fef4d8fbbdac0a",
+    "r8_success": false,
+    "r9_scope": "Only strictly allowlisted fixed fixture arguments are emitted as bare literals. Unsupported paths fail before configuration planning; the URI remains the single %u field. The canonical general desktop-entry encoder is unchanged.",
+    "read_only_diagnosis_sha256": "972984680f7e5a8d50a18704cfa4e6f6a00e46bedb50fb79ec05bb687be3bede"
+  },
+  "historical_failed_attempts": {
+    "receipts": [
+      {
+        "receipt_sha256": "3c82c2a853bb17a0b217e5a682f7f1d8d9129d63dd16af003376f789b6e3e393",
+        "success": false
+      },
+      {
+        "receipt_sha256": "305661a9fdbd00dc3e69d186abf12bcd047f550931864854673bf7af515f9a16",
+        "success": false
+      },
+      {
+        "receipt_sha256": "ba325fa769cbcb94aee681905647e8145c074fefc8653412c48911dfa5d8bd1b",
+        "success": false
+      },
+      {
+        "receipt_sha256": "4ca87134a266a7e2bccaf4a313e5edd25ea63dad9bf7ec735a5cf0e49df7536a",
+        "success": false
+      },
+      {
+        "receipt_sha256": "6fb8b6fc6db337db55336ee0f0b2c4969921b4d80715967000d0a732cbf1b91d",
+        "success": false
+      },
+      {
+        "receipt_sha256": "538a4d45ad06f6875b7abc58e0c65471e1517e8afc3e560568fef4d8fbbdac0a",
+        "success": false
+      },
+      {
+        "receipt_sha256": "8261a61511623c9dbf7692e77d3411d0680d765e13abb22bf15aa74696f4277d",
+        "success": false
+      }
+    ],
+    "scope": "Earlier failures retain their original dispatch/input counts and cleanup outcomes; this later pass does not rewrite them.",
+    "unchanged": true
+  },
+  "independent_later_normal_off": {
+    "binding_sha256": "d620edc12f9a8fc4c2c440bda85cf4b8b0ae0dcb09eb09d958f84f33309f1c5b",
+    "desktop_sha256": "7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08",
+    "helper_sha256": "e4914a16e126fd58bb655861e452293e210c12a83681ae1d38e31ff6f93756f9",
+    "original_output": {
+      "height": 1080,
+      "name": "Virtual-1",
+      "refreshRate": 60.0,
+      "scale": 1,
+      "transform": 0,
+      "width": 1920,
+      "x": 0,
+      "y": 0
+    },
+    "performance_acceptance": false,
+    "read_only": true,
+    "receipt_sha256": "c1cf104ed158177ffc460f501ce1195b067f3f619cc7723fd29a6eaf065e7f16",
+    "runtime_profiling": {
+      "frames": false,
+      "presentation": false,
+      "source_pts": false
+    },
+    "same_desktop_lifetime_as_previous_independent_off": true,
+    "security_inventory_count": 43,
+    "source_and_security_inventories_match_previous_independent_off": true,
+    "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+    "source_inventory_count": 14,
+    "success": true
+  },
+  "native_input": {
+    "pointer_link_focus": true,
+    "tab_enter_link_focus": true,
+    "tab_events_sent": 2
+  },
+  "notification_lifecycle_scope": "Transient test notifications expire normally; wire IDs grant no explicit dismissal authority. The harness explicitly hides history between cases and during cleanup, so this run does not establish automatic history release after opening a link.",
+  "provenance": {
+    "desktop_sha256": "7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08",
+    "harness_source_commit": "563781a26db5db787fb788c11defaf7c28c3acc7",
+    "helper_sources_sha256": {
+      "application_intent_browser.py": "b63bbc572d5fb274339f8098934ab08685b854d4e14b4faa9b7c62051a1fd8d2",
+      "application_intent_policy.py": "fd2ed71cfe4839b6c99bf10a6c97515ed20c19c09ece05b0c67a65921ea1bb94",
+      "default-uri.py": "d59aa86a38c316016c063e7c16c74fe7b060689488869b3e106102ac72d39519",
+      "default_uri_policy.py": "05699ee77547d11196cc04e9c6925b619221a395dfe00eeda67a476c39530eef",
+      "fixture.py": "25e7332ef60c67797f0823104d5a617f9178bc59df900d49479cbcb0ebd566a7",
+      "owned_application_units.py": "0082d9c4c87c36a7cc65f361304a2fbda174af83f30d6713720d709a9193d5b7",
+      "owned_chromium_lease.py": "393501ef04a9a9f6fab21ad154bcffe810ebe95774e47e7c759cf36cb180de4b"
+    },
+    "host_harness_sha256": "0e620132109bcbb5398438cc6d21df32f2a849336bf8d148272d6553645d63c6",
+    "private_receipt_sha256": "bd06a90f4ccbebb0d221e22acb63bf936fb1185ae70a8389c92fe28e5bb0d707",
+    "release_manifest_sha256": "5b228fa1bbdc71c50a245edcb70e726ef4d5826f476ba261e53042023d322aec",
+    "runtime_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770"
+  },
+  "recorded_on": "2026-10-23",
+  "route_proof": {
+    "automatic_notification_expiry_checks_passed": 2,
+    "exactly_one_selected_owned_http_document_per_route": true,
+    "fresh_token_presence_at_bridge_and_browser_wrapper": true,
+    "legacy_startup_id_absent": true,
+    "native_link_routes_passed": 2,
+    "selected_temporary_real_mime_default": true,
+    "token_contents_logged": false
+  },
+  "schema": 1,
+  "scope": "One virtual output, a temporary controlled HTTP MIME default and an already warm real Chromium browser in a disposable test profile. Native notification pointer and Tab/Enter activation each open exactly one selected owned document with fresh input-bound context.",
+  "status": "scoped-owned-warm-default-route-native-passed",
+  "success": true
+}

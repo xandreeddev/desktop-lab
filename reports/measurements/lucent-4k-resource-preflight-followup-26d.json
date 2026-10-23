@@ -1,0 +1,229 @@
+{
+  "acceptance_limits": {
+    "causal_4k_memory_attribution": false,
+    "current_running_vm_state_claimed": false,
+    "physical_hardware_accepted": false,
+    "presentation_or_source_rate_accepted": false,
+    "rss_target_accepted": false,
+    "specific_allocator_decoder_renderer_or_gpu_cause_identified": false,
+    "standardized_4k_resource_interval_completed": false,
+    "virtual_4k_output_geometry_and_restoration": true,
+    "whole_goal_complete": false
+  },
+  "desktop_sha256": "7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08",
+  "historical_resource_evidence_unchanged": {
+    "report": "reports/measurements/lucent-runtime-26d-native-trial.json",
+    "report_sha256": "5b457bab5df01e9fce59e3509be66651978533c9d7e0c1301131cdc34c42dcb9",
+    "scope": "The earlier 237.983/238.035 MiB normal mean/peak remains its own host-pressure-ineligible interval; this diagnostic does not replace or relabel it."
+  },
+  "independent_later_normal_off": {
+    "original_output": {
+      "height": 1080,
+      "name": "Virtual-1",
+      "refreshRate": 60.0,
+      "scale": 1,
+      "transform": 0,
+      "width": 1920,
+      "x": 0,
+      "y": 0
+    },
+    "read_only": true,
+    "receipt_sha256": "f597f92d14759cce18062697c1c9c8257b9c33c043655aeffcbb6a1059191224",
+    "runtime_profiling": {
+      "frames": false,
+      "presentation": false,
+      "source_pts": false
+    },
+    "same_desktop_lifetime_as_diagnostic": true,
+    "scope": "Read-only restoration/source/security/profiling observation; no resource or presentation interval.",
+    "security_inventory_count": 43,
+    "source_inventory_count": 14,
+    "success": true
+  },
+  "one_off_memory_diagnostic": {
+    "anonymous_rss_kib": 552536,
+    "anonymous_rss_mib": 539.5859375,
+    "observation_count": 1,
+    "output_context": "Original 1920x1080 at 60 Hz and scale 1 after B restoration, not the temporary 4K profile.",
+    "private_receipt_sha256": "42f60816426e1a32c27a23a34755a68cdeaf84cef75e0f22758c2b271ec7701b",
+    "process_lifetime_hwm_kib": 696620,
+    "process_lifetime_hwm_mib": 680.29296875,
+    "process_swap_kib": 16632,
+    "process_swap_mib": 16.2421875,
+    "read_only": true,
+    "resident_mapping_categories_kib": {
+      "anonymous": 388192,
+      "gpu_device": 0,
+      "heap": 161972,
+      "libraries_or_executables": 68748,
+      "memfd": 0,
+      "other": 16,
+      "stack": 176
+    },
+    "rss_kib": 619104,
+    "rss_mib": 604.59375,
+    "sampled_performance": false,
+    "scope": "A one-off proc snapshot, not a warmup plus eligible 120-second interval. HWM is process-lifetime, not this phase peak. Anonymous residency and mapping categories do not identify an allocation owner or measure GPU allocations. This motivates bounded memory investigation; it proves no 4K causal change, leak, steady-state budget result or pacing.",
+    "target_acceptance": null,
+    "target_rss_mib": 300
+  },
+  "recorded_on": "2026-10-23",
+  "runs": [
+    {
+      "background_geometry": {
+        "buffer_height": 2160,
+        "buffer_width": 3840,
+        "density": 1.5,
+        "height": 1440,
+        "width": 2560
+      },
+      "cleanup_success": true,
+      "controller_sha256": "914a05bdd8e8f8979008e8d8323182bb317641f3dd8e1afc409e9a33ee147b31",
+      "helper_sources_sha256": {
+        "lab.py": "6cd1626c1541988184ffb562e9fef1aab738b3084616e0a9bd30ee4dc461742b",
+        "multi_output_guard.py": "05cc165f9b823becd28e8a631920e120ceb75afd73e026a3b91a64404729d765",
+        "multi_output_policy.py": "25c0e45f87c25363220cffdfd901774856c8792f7e4298946fc9011dbb2ebb58",
+        "owned_application_units.py": "0082d9c4c87c36a7cc65f361304a2fbda174af83f30d6713720d709a9193d5b7",
+        "preservation.py": "ecd796f7bce24e4ea153633089595c7ba4d5604959ca5f0131367832b173e2a3",
+        "readiness.py": "c0074ece3388723608430e98ffaec82811acea278c0160e9de014abfcef48baf",
+        "runtime_output_guard.py": "72d10a52404c41e4008eebcea6752856f57c82dbfc295d87bcb650e58fa13878",
+        "runtime_output_policy.py": "87a78b5e96bb15c782258b84a21c12c7b1d7852f9bdfa879fb9ec309c0885214",
+        "runtime_output_proof.py": "bb64de9a4282d45ff71be651b54ec98973e32a424cc513a7a805c57c40d97b2b",
+        "units.py": "9a088150a982a844b775f2078731482bd0064a1a5985217a193336adc8000df2",
+        "wrapper": "82aa55ac97c320ba41e1749e1482d0b8046cc083ef06a15cacbd584506617546"
+      },
+      "label": "A",
+      "output_profile": {
+        "height": 2160,
+        "refreshRate": 60.0,
+        "scale": 1.5,
+        "transform": 0,
+        "width": 3840,
+        "x": 0,
+        "y": 0
+      },
+      "owned_output_setup_and_geometry_verified": true,
+      "performance_accepted": false,
+      "producer_geometry": {
+        "frame_size": [
+          3840,
+          2160
+        ],
+        "source_aspect": [
+          3840,
+          2160
+        ],
+        "target": [
+          3840,
+          2160
+        ]
+      },
+      "receipts_sha256": {
+        "apply": "faaf7d3248bc94417ebbd8faf905f16fd6c258084bcb8794a9356610ad33c8bd",
+        "begin": "be03a199e1c064b835fe724e06021096261998aaaab2b612dc474ff001a81ed5",
+        "finish": "b2dda93b1bda76cd8f2eb3e5ebd79c5df182edff2fb0a98804ffcfa248e86a3f"
+      },
+      "resource_interval_completed": false,
+      "restoration": {
+        "configuration_security_runtime_preserved": true,
+        "cursor_unchanged": true,
+        "input_synthesized": false,
+        "output_restored": true,
+        "runtime_restarted": false,
+        "windows_closed": false,
+        "workspace_unchanged": true
+      },
+      "sampler_preflight": {
+        "facts_acquired_before_refusal": true,
+        "fixed_reason": "bounded_measurement_and_cleanup_budget",
+        "refused": true,
+        "resource_derivation_created": false,
+        "resource_measurement_binding_created": false,
+        "resource_sample_created": false,
+        "scope": "Recorded admission outcome; only output geometry and restoration ran. A refused below the unchanged 520-second measurement/cleanup budget; B refused host-memory admission before sampler facts/binding."
+      },
+      "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+      "timer_errors": []
+    },
+    {
+      "background_geometry": {
+        "buffer_height": 2160,
+        "buffer_width": 3840,
+        "density": 1.5,
+        "height": 1440,
+        "width": 2560
+      },
+      "cleanup_success": true,
+      "controller_sha256": "914a05bdd8e8f8979008e8d8323182bb317641f3dd8e1afc409e9a33ee147b31",
+      "helper_sources_sha256": {
+        "lab.py": "6cd1626c1541988184ffb562e9fef1aab738b3084616e0a9bd30ee4dc461742b",
+        "multi_output_guard.py": "05cc165f9b823becd28e8a631920e120ceb75afd73e026a3b91a64404729d765",
+        "multi_output_policy.py": "25c0e45f87c25363220cffdfd901774856c8792f7e4298946fc9011dbb2ebb58",
+        "owned_application_units.py": "0082d9c4c87c36a7cc65f361304a2fbda174af83f30d6713720d709a9193d5b7",
+        "preservation.py": "ecd796f7bce24e4ea153633089595c7ba4d5604959ca5f0131367832b173e2a3",
+        "readiness.py": "c0074ece3388723608430e98ffaec82811acea278c0160e9de014abfcef48baf",
+        "runtime_output_guard.py": "72d10a52404c41e4008eebcea6752856f57c82dbfc295d87bcb650e58fa13878",
+        "runtime_output_policy.py": "87a78b5e96bb15c782258b84a21c12c7b1d7852f9bdfa879fb9ec309c0885214",
+        "runtime_output_proof.py": "bb64de9a4282d45ff71be651b54ec98973e32a424cc513a7a805c57c40d97b2b",
+        "units.py": "9a088150a982a844b775f2078731482bd0064a1a5985217a193336adc8000df2",
+        "wrapper": "82aa55ac97c320ba41e1749e1482d0b8046cc083ef06a15cacbd584506617546"
+      },
+      "label": "B",
+      "output_profile": {
+        "height": 2160,
+        "refreshRate": 60.0,
+        "scale": 1.5,
+        "transform": 0,
+        "width": 3840,
+        "x": 0,
+        "y": 0
+      },
+      "owned_output_setup_and_geometry_verified": true,
+      "performance_accepted": false,
+      "producer_geometry": {
+        "frame_size": [
+          3840,
+          2160
+        ],
+        "source_aspect": [
+          3840,
+          2160
+        ],
+        "target": [
+          3840,
+          2160
+        ]
+      },
+      "receipts_sha256": {
+        "apply": "231e1f455727462e0bb66fca5528369780f76b4e8c2053bf93d6be2c17cb4cbc",
+        "begin": "84594f190178eabcf33277cd57927c8ea3900112d7bf64e89d2764b446b0c562",
+        "finish": "cf70ac21f867093d8aa7ab8b3df81745c90034d06d7e6cae57d83843249d7fe3"
+      },
+      "resource_interval_completed": false,
+      "restoration": {
+        "configuration_security_runtime_preserved": true,
+        "cursor_unchanged": true,
+        "input_synthesized": false,
+        "output_restored": true,
+        "runtime_restarted": false,
+        "windows_closed": false,
+        "workspace_unchanged": true
+      },
+      "sampler_preflight": {
+        "facts_acquired_before_refusal": false,
+        "fixed_reason": "host_memory_admission",
+        "refused": true,
+        "resource_derivation_created": false,
+        "resource_measurement_binding_created": false,
+        "resource_sample_created": false,
+        "scope": "Recorded admission outcome; only output geometry and restoration ran. A refused below the unchanged 520-second measurement/cleanup budget; B refused host-memory admission before sampler facts/binding."
+      },
+      "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+      "timer_errors": []
+    }
+  ],
+  "schema": 1,
+  "scope": "Two owned virtual output preflights verified 3840x2160 at 60 Hz and scale 1.5, then restored the original FHD output. Neither collected a standardized resource interval. A separate later one-off proc diagnostic was taken after restoration at FHD.",
+  "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+  "status": "virtual-4k-geometry-restored-no-resource-interval"
+}

@@ -9,7 +9,7 @@
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted main 6e471005 includes PR102 default-handler activation context, reusable decoder sessions and bounded uploads, after six exact 3560 checks and a CLEAN normal merge. Pages 39974027424 public desktop/library/component-lab HTML, manifest and representative PNG match the accepted artifact; all 116 capture producers and 480 catalogue images are verified. Archived 26d runtime/integration source trees equal the merge; only capture-manifest metadata differs. Recorded 26d deployment, owned IME, ineligible resource interval, failed Display attempt and separate recovery retain their identities and capture-time outcomes. This does not assert a current VM, native default-handler acceptance, an eligible 300 MiB/FPS result or completion of the seven-gap goal. Previous 124/PR100 delivery is a dated historical snapshot. A later source-bound 1774fa87 harness on unchanged runtime 26d passes nine virtual two-output Display control flows, six restoration fields including the timestamp/link-count policy marker, three cursor checks and independent later normal-OFF verification. It establishes no physical, resource or pacing acceptance.",
+    "scope": "Accepted main 6e471005 includes PR102 default-handler activation context, reusable decoder sessions and bounded uploads, after six exact 3560 checks and a CLEAN normal merge. Pages 39974027424 public desktop/library/component-lab HTML, manifest and representative PNG match the accepted artifact; all 116 capture producers and 480 catalogue images are verified. Archived 26d runtime/integration source trees equal the merge; only capture-manifest metadata differs. Recorded 26d deployment, owned IME, ineligible resource interval, failed Display attempt and separate recovery retain their identities and capture-time outcomes. This does not assert a current VM, natural browser keyboard handoff, fresh-browser initial focus, an eligible 300 MiB/FPS result or completion of the seven-gap goal. Previous 124/PR100 delivery is a dated historical snapshot. A later source-bound 1774fa87 harness on unchanged runtime 26d passes nine virtual two-output Display control flows, six restoration fields including the timestamp/link-count policy marker, three cursor checks and independent later normal-OFF verification. It establishes no physical, resource or pacing acceptance. Later R9 harness 563781a2 on runtime 26d passes five warm controlled default-handler checks through real notification pointer/Tab-Enter input, nine cleanup checks and independent later normal-OFF verification. Activewindow observations remain distinct from actual browser keyboard-focus or token-consumption proof. Subsequent 4K A/B preflights establish virtual geometry/restoration only, with no resource interval admitted. A separate one-off restored-FHD proc snapshot records 604.59375 MiB RSS and high anonymous residency; it motivates memory investigation, without a sampled-budget or 4K-causal claim.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -70,7 +70,7 @@
           "presentation_samples": 0,
           "scope": "Recorded normal interval on source 26d before merge. Observed RSS below 300 MiB remains ineligible; no target/FPS/pacing/causal-gain acceptance."
         },
-        "remaining": "The later 26d normal interval observes 237.983/238.035 MiB mean/peak RSS and 194.290% of one core, but host swap/full-stall pressure leaves the target null. It has no presentation/PTS samples. Eligible matched normal/animated and cold/warm evidence remains required, with density/effects/motion unchanged. The historical 35ed presentation interval remains the latest instrumented sample; it is separately ineligible, not a 26d FPS measurement. Earlier source-specific resource/shape observations retain their flags and do not establish improvement or bottleneck causality.",
+        "remaining": "The later 26d normal interval observes 237.983/238.035 MiB mean/peak RSS and 194.290% of one core, but host swap/full-stall pressure leaves the target null. It has no presentation/PTS samples. Eligible matched normal/animated and cold/warm evidence remains required, with density/effects/motion unchanged. The historical 35ed presentation interval remains the latest instrumented sample; it is separately ineligible, not a 26d FPS measurement. Earlier source-specific resource/shape observations retain their flags and do not establish improvement or bottleneck causality. Later 4K A/B output geometry and restoration pass, but neither completes a resource interval: A refuses the <520-second lease budget and B refuses host-memory admission before sampler facts/binding. A subsequent one-off proc observation after restoring FHD is 604.59375 MiB RSS, 539.5859375 MiB anonymous RSS, 16.2421875 MiB process swap and 680.29296875 MiB process-lifetime HWM. Investigate this high anonymous residency with bounded observations; it is not an eligible 120-second result, 4K causal attribution, a demonstrated leak or budget acceptance.",
         "historical_software_video_sample": {
           "source_commit": "a7f41eccdcd8eca51e8e5ee878d8f489d8d4bde5",
           "report": "reports/measurements/lucent-display-settings.json",
@@ -393,6 +393,30 @@
             "Immediate"
           ],
           "presentation_mode_receipt_sha256": "c0c40b0eea52824067675be32f7b28dbcd9fa91854bfcb9af82f38a4935b3bb1"
+        },
+        "later_4k_preflight_and_memory_diagnostic": {
+          "report": "reports/measurements/lucent-4k-resource-preflight-followup-26d.json",
+          "report_sha256": "5a56f3b5d6b358a91df0da24a20c1117cc57d85acf3454fb827f2542ffa75448",
+          "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+          "owned_output_setups_and_restorations_passed": 2,
+          "standardized_4k_resource_interval_completed": false,
+          "sampler_a_refusal": "bounded_measurement_and_cleanup_budget",
+          "sampler_b_refusal": "host_memory_admission",
+          "independent_later_normal_off_sha256": "f597f92d14759cce18062697c1c9c8257b9c33c043655aeffcbb6a1059191224",
+          "one_off_proc_diagnostic_sha256": "42f60816426e1a32c27a23a34755a68cdeaf84cef75e0f22758c2b271ec7701b",
+          "one_off_original_fhd_memory": {
+            "rss_kib": 619104,
+            "rss_mib": 604.59375,
+            "anonymous_rss_kib": 552536,
+            "anonymous_rss_mib": 539.5859375,
+            "process_swap_kib": 16632,
+            "process_swap_mib": 16.2421875,
+            "process_lifetime_hwm_kib": 696620,
+            "process_lifetime_hwm_mib": 680.29296875
+          },
+          "rss_target_acceptance": null,
+          "performance_accepted": false,
+          "scope": "Geometry, owned restoration and one post-restoration FHD proc snapshot only. Earlier sampled intervals and eligibility flags remain unchanged; no 4K causality, allocator/GPU attribution, leak, source-rate or physical-hardware acceptance."
         }
       },
       {
@@ -530,8 +554,8 @@
       {
         "id": "application-integration",
         "status": "merged_scoped_real_application_native_verified",
-        "implemented": "Accepted main 6b50bd5e includes catalog/pins, ordinary activation, declared actions and Application bb304907 shipped in merged 8e: fresh input-bound context, explicit file/URI Open and expanded XDG parsing/observation. A later real Chromium run with the independent d1 consumer, now merged through PR89, and b6323e9 harness passes all nine feature checks, including observed first-launch focus, and all eight restoration checks; deployed desktop/CLI remain unchanged. The separate coherent 9b trial passes eleven native HTTP URI and nine restoration checks; pointer, socket and CLI Open each load two fresh exact HTTP targets while the declared Action retains local files. A later 4c harness on coherent 35ed passes 12 singular HTTP %u native feature and 9 restoration checks; pointer/socket/CLI Open each load exactly one fresh owned HTTP document, and the declared Action still loads two local documents. PR102/current 6e471005 now includes canonical UriPort.open(target, ApplicationLaunchContext), optional SDK app ID, revision-bound notification-link completion and shared-policy XdgUri forwarding.",
-        "remaining": "Native default-handler link pointer/keyboard activation and token delivery remain pending, alongside direct token-consumption proof, external navigation, other applications and broader workflows. The initial cea7b8e6 preparation recorded 27 focused pure cases and 631 integration passes. The later de276755 V7 native attempt selected the temporary MIME default, completed all nine post-warm steps and focused the notification group, but failed selected-link revalidation before link dispatch as its controlled 25-second notification lifetime expired during audit guards. All nine cleanup checks and an independent later normal-OFF observation pass; no default-handler link acceptance follows. R8 is native-unrun here. Earlier failures and explicit-application results retain their sources/outcomes and do not validate this route or performance.",
+        "implemented": "Accepted main 6b50bd5e includes catalog/pins, ordinary activation, declared actions and Application bb304907 shipped in merged 8e: fresh input-bound context, explicit file/URI Open and expanded XDG parsing/observation. A later real Chromium run with the independent d1 consumer, now merged through PR89, and b6323e9 harness passes all nine feature checks, including observed first-launch focus, and all eight restoration checks; deployed desktop/CLI remain unchanged. The separate coherent 9b trial passes eleven native HTTP URI and nine restoration checks; pointer, socket and CLI Open each load two fresh exact HTTP targets while the declared Action retains local files. A later 4c harness on coherent 35ed passes 12 singular HTTP %u native feature and 9 restoration checks; pointer/socket/CLI Open each load exactly one fresh owned HTTP document, and the declared Action still loads two local documents. PR102/current 6e471005 now includes canonical UriPort.open(target, ApplicationLaunchContext), optional SDK app ID, revision-bound notification-link completion and shared-policy XdgUri forwarding. R9 harness 563781a2 on runtime 26d passes five scoped warm-browser default-route checks and all nine cleanup checks: temporary MIME selection, native pointer and Tab/Enter input with fresh context, exact one-document delivery and bounded notification expiry. Independent later normal-OFF facts verify the same desktop lifetime and unchanged 14 source/43 security entries.",
+        "remaining": "Separate client fix 194c0c57 implements current-session-only history release and passes 372 desktop tests (six ignored) plus strict release Clippy. Deployment and native automatic-release/browser-key-delivery checks remain pending; Hyprland activewindow matches do not establish a browser receiving input. Fresh-browser initial focus, direct Chromium token consumption, external navigation, other handlers/applications and broader workflows retain separate acceptance. The initial cea7b8e6 preparation counts and earlier failed attempts, including V7 before-link expiry and R8 after-pointer delivery failure, remain historical outcomes. Native route transport does not establish performance or hardware acceptance.",
         "guides": [
           "docs/application-activation.md",
           "docs/application-catalog.md",
@@ -605,14 +629,14 @@
           "source_finding": "UriPort.open has no context argument. Notification OpenLink dispatches it directly; XdgUri calls launch.command, which uses a default ApplicationLaunchContext and removes inherited activation tokens. No runtime failure is inferred from source alone."
         },
         "default_handler_context_implementation": {
-          "status": "implemented_merged_native_acceptance_pending",
+          "status": "implemented_merged_scoped_warm_default_route_native_verified",
           "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
           "accepted_main_merge_commit": "6e471005948cbefab218a6c79b87f3f94a241c2d",
           "port": "lucent/crates/lucent-domain/src/uri.rs",
           "adapter": "lucent/crates/lucent-services/src/applications.rs",
           "client": "lucent/apps/lucent-desktop/src/notifications.rs",
           "source_finding": "UriPort.open carries ApplicationLaunchContext; SDK activation requests allow an unknown app ID without inventing one. Notifications revalidate the captured link around asynchronous token delivery and use a cancellable adapter command. XdgUri preserves context through the shared application-unit policy.",
-          "native_default_handler_acceptance_passed": false,
+          "native_default_handler_acceptance_passed": true,
           "acceptance_harness_source_commit": "cea7b8e6291e8ba62dffbc9f0d12bfe392c22d07",
           "focused_pure_cases_passed": 27,
           "integration_cases_passed": 631,
@@ -636,7 +660,7 @@
             "restoration_established_by_this_attempt": false,
             "scope": "Warm-browser setup failed before MIME publication or rich-link feature actions. This is not a default-handler feature pass; the failed receipt is retained. Later recovery, if any, needs a separate record."
           },
-          "preparation_checkpoint_scope": "The 27 focused and 631 integration passes belong to the initial cea7b8e6 source-preparation checkpoint. Later de276755 V7 executed natively and failed before link dispatch with all nine cleanup checks passing; the preserved earlier warm-setup failure remains failed evidence. R8 native acceptance is unrun here.",
+          "preparation_checkpoint_scope": "The 27 focused and 631 integration passes belong to the initial cea7b8e6 preparation checkpoint. Later V7 and R8 native attempts failed and retain their original input/cleanup counts. R9 subsequently passes the scoped warm default route; earlier failures and their source flags stay unchanged.",
           "subsequent_native_attempt_v7": {
             "harness_source_commit": "de276755d263d257cfeef7e42b94d1b470798548",
             "private_report_sha256": "ba325fa769cbcb94aee681905647e8145c074fefc8653412c48911dfa5d8bd1b",
@@ -704,7 +728,59 @@
             },
             "next_r8_native_run_executed": false,
             "scope": "Owned warm-browser setup and group focus only; no link press, keyboard link activation, token transport, fresh-browser focus, direct Chromium token consumption, hardware or performance acceptance."
+          },
+          "native_default_handler_acceptance_scope": "R9 controlled temporary HTTP default, already warm real Chromium profile, native notification pointer and Tab/Enter route transport only. No automatic history release, actual browser keyboard handoff, fresh-browser focus or direct Chromium token consumption.",
+          "latest_native_attempt_recording_scope": "The existing latest_native_attempt object is the preserved initial warm-setup failure, not the later R9 route result. Initial focused/integration counts retain their original cea7b8e6 preparation source; current acceptance is recorded separately below.",
+          "subsequent_native_attempt_r8": {
+            "overall_passed": false,
+            "private_report_sha256": "538a4d45ad06f6875b7abc58e0c65471e1517e8afc3e560568fef4d8fbbdac0a",
+            "production_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+            "native_input": {
+              "pointer_link_focus": true
+            },
+            "pointer_link_dispatch_attempted": true,
+            "pointer_link_dispatch_returned": true,
+            "failure_phase": "default_handler_delivery_wait",
+            "fixed_reason": "selected_default_handler_received_native_uri",
+            "cleanup_checks_passed": 9,
+            "read_only_diagnosis_sha256": "972984680f7e5a8d50a18704cfa4e6f6a00e46bedb50fb79ec05bb687be3bede",
+            "cause": "The installed generic xdg-open path retained quotes around the fixed -I argument, so Python treated it as a file name.",
+            "scope": "An actual native pointer link press occurred, but default-handler delivery failed. This is retained failed evidence, not R9 acceptance."
+          },
+          "current_scoped_native_route_acceptance": {
+            "report": "reports/measurements/lucent-default-uri-native-26d.json",
+            "report_sha256": "2415048c77333d89753333d6bfeb3513ff5e6dad74868eec059b9c46ac3b9c51",
+            "native_harness_source_commit": "563781a26db5db787fb788c11defaf7c28c3acc7",
+            "private_report_sha256": "bd06a90f4ccbebb0d221e22acb63bf936fb1185ae70a8389c92fe28e5bb0d707",
+            "overall_passed": true,
+            "checks_passed": 5,
+            "native_input": {
+              "pointer_link_focus": true,
+              "tab_enter_link_focus": true,
+              "tab_events_sent": 2
+            },
+            "cleanup_checks_passed": 9,
+            "browser_keyboard_handoff_accepted": false,
+            "scope": "Warm controlled default route only; see the report and scoped_native_evidence for exact authority, cleanup, activewindow and independent OFF observations."
           }
+        },
+        "notification_history_handoff_source_progress": {
+          "source_commit": "194c0c57f12a70b0f68a84c16e4d695a9923152c",
+          "status": "source_validated_not_deployed",
+          "validation_receipt_sha256": "066916002447d373f447321cc3d6e8a3936e16b566dd043daec40b16aa36f966",
+          "files_sha256": {
+            "lucent/apps/lucent-desktop/src/notifications.rs": "404017532cc0d60ad8581c1687be0bc3ff45bbbc20fd2cda103bd5560efd0f2f",
+            "lucent/apps/lucent-desktop/src/notifications/tests.rs": "e781ddbc9f975d8ffb58d84b736b99248061865cdc023665b6390e1a646d041e",
+            "lucent/apps/lucent-desktop/src/desktop/panels.rs": "999ab97758473a92f06e7bf10c1ed1a4de50c23bd1f376ff3e8918fe0adaee79"
+          },
+          "desktop_tests_passed": 372,
+          "desktop_tests_ignored": 6,
+          "new_handoff_tests_passed": 10,
+          "strict_release_clippy_passed": true,
+          "deployed_to_recorded_26d_runtime": false,
+          "native_automatic_history_release_accepted": false,
+          "native_browser_key_delivery_accepted": false,
+          "scope": "Separate client source validation only. The recorded R9 route result used runtime26d and does not validate this later fix; the prior routes, failures, activewindow observations and cleanup scopes remain unchanged."
         }
       },
       {
@@ -717,7 +793,7 @@
         "id": "documentation-accuracy",
         "status": "accepted_main_delivery_verified_summary_reconciled",
         "implemented": "PR102/main 6e471005 and its exact six successful checks/CLEAN normal merge are reconciled with successful Pages 39974027424. Three public pages, native manifest and PNG match artifact bytes; all 116 producer inputs and 480 captures verify. Archived 26d runtime source equals the merge. Previous 124/PR100 delivery remains a dated snapshot; native reports retain at-time-unmerged, failed-trial and recovery outcomes. The default-handler context implementation is distinguished from pending native acceptance.",
-        "remaining": "This later documentation reconciliation needs its own source/site and delivery gates. Preserve historical outcomes and eligibility limits; PR102 publication does not close native default-handler, performance, hardware or interoperability work."
+        "remaining": "This later documentation reconciliation needs its own source/site and delivery gates. Preserve historical outcomes and eligibility limits; Publication does not close automatic history release/browser keyboard handoff, performance, hardware or broader interoperability work."
       }
     ],
     "scoped_native_evidence": [
@@ -937,6 +1013,113 @@
         "presentation_or_performance_acceptance": false,
         "whole_goal_complete": false,
         "not_established": "Physical monitor/cable hotplug, suspend/resume, compositor restart, secure-output changes, resource targets or presentation pacing. Keep-to-file-identity-capture host-loss manual recovery remains a limitation. The result does not rewrite earlier failed Display trials or the separate recovery outcomes, and says nothing about the current running VM."
+      },
+      {
+        "feature": "notification-default-uri-warm-route",
+        "production_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+        "native_harness_source_commit": "563781a26db5db787fb788c11defaf7c28c3acc7",
+        "report": "reports/measurements/lucent-default-uri-native-26d.json",
+        "report_sha256": "2415048c77333d89753333d6bfeb3513ff5e6dad74868eec059b9c46ac3b9c51",
+        "private_report_sha256": "bd06a90f4ccbebb0d221e22acb63bf936fb1185ae70a8389c92fe28e5bb0d707",
+        "host_harness_sha256": "0e620132109bcbb5398438cc6d21df32f2a849336bf8d148272d6553645d63c6",
+        "guest_fixture_sha256": "d59aa86a38c316016c063e7c16c74fe7b060689488869b3e106102ac72d39519",
+        "release_manifest_sha256": "5b228fa1bbdc71c50a245edcb70e726ef4d5826f476ba261e53042023d322aec",
+        "overall_passed": true,
+        "checks_passed": 5,
+        "native_input": {
+          "pointer_link_focus": true,
+          "tab_enter_link_focus": true,
+          "tab_events_sent": 2
+        },
+        "cleanup_checks_passed": 9,
+        "cleanup": {
+          "browser_and_original_entry_retired": true,
+          "caller_state_and_cursor_preserved": true,
+          "canonical_browser_and_entry_retired": true,
+          "configuration_guardian_retired": true,
+          "default_entry_restored": true,
+          "default_mime_restored": true,
+          "notification_history_closed": true,
+          "notifications_absent_after_expiry_window": true,
+          "original_http_watchdog_retired": true
+        },
+        "active_window_observation": {
+          "keyboard_matches_owned_browser": true,
+          "pointer_matches_owned_browser": true,
+          "scope": "This is an active-toplevel observation, not seat keyboard-focus proof or evidence that the browser received a key.",
+          "source": "Hyprland activewindow identity matched the owned browser window."
+        },
+        "independent_later_normal_off": {
+          "binding_sha256": "d620edc12f9a8fc4c2c440bda85cf4b8b0ae0dcb09eb09d958f84f33309f1c5b",
+          "desktop_sha256": "7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08",
+          "helper_sha256": "e4914a16e126fd58bb655861e452293e210c12a83681ae1d38e31ff6f93756f9",
+          "original_output": {
+            "height": 1080,
+            "name": "Virtual-1",
+            "refreshRate": 60.0,
+            "scale": 1,
+            "transform": 0,
+            "width": 1920,
+            "x": 0,
+            "y": 0
+          },
+          "performance_acceptance": false,
+          "read_only": true,
+          "receipt_sha256": "c1cf104ed158177ffc460f501ce1195b067f3f619cc7723fd29a6eaf065e7f16",
+          "runtime_profiling": {
+            "frames": false,
+            "presentation": false,
+            "source_pts": false
+          },
+          "same_desktop_lifetime_as_previous_independent_off": true,
+          "security_inventory_count": 43,
+          "source_and_security_inventories_match_previous_independent_off": true,
+          "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+          "source_inventory_count": 14,
+          "success": true
+        },
+        "scope": "One virtual output, a temporary controlled HTTP MIME default and an already warm real Chromium browser in a disposable test profile. Native notification pointer and Tab/Enter activation each open exactly one selected owned document with fresh input-bound context.",
+        "acceptance_limits": {
+          "actual_notification_pointer_and_tab_enter_input": true,
+          "arbitrary_handlers_or_external_navigation_accepted": false,
+          "automatic_history_release_accepted": false,
+          "browser_keyboard_handoff_accepted": false,
+          "current_running_vm_state_claimed": false,
+          "direct_chromium_token_consumption_accepted": false,
+          "fresh_browser_initial_focus_accepted": false,
+          "fresh_context_and_selected_document_transport": true,
+          "owned_warm_default_handler_route": true,
+          "physical_hardware_accepted": false,
+          "resource_or_presentation_performance_accepted": false,
+          "whole_goal_complete": false
+        },
+        "not_established": "Automatic notification-history release, natural browser keyboard handoff or a real browser receiving a key, fresh-browser initial focus, direct Chromium protocol-token consumption, arbitrary/default external handlers, hardware or performance. The harness explicitly hides history between cases and during cleanup."
+      },
+      {
+        "feature": "virtual-4k-preflight-and-post-restoration-memory-diagnostic",
+        "report": "reports/measurements/lucent-4k-resource-preflight-followup-26d.json",
+        "report_sha256": "5a56f3b5d6b358a91df0da24a20c1117cc57d85acf3454fb827f2542ffa75448",
+        "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+        "owned_output_setups_and_restorations_passed": 2,
+        "standardized_4k_resource_interval_completed": false,
+        "sampler_a_refusal": "bounded_measurement_and_cleanup_budget",
+        "sampler_b_refusal": "host_memory_admission",
+        "independent_later_normal_off_sha256": "f597f92d14759cce18062697c1c9c8257b9c33c043655aeffcbb6a1059191224",
+        "one_off_proc_diagnostic_sha256": "42f60816426e1a32c27a23a34755a68cdeaf84cef75e0f22758c2b271ec7701b",
+        "one_off_original_fhd_memory": {
+          "rss_kib": 619104,
+          "rss_mib": 604.59375,
+          "anonymous_rss_kib": 552536,
+          "anonymous_rss_mib": 539.5859375,
+          "process_swap_kib": 16632,
+          "process_swap_mib": 16.2421875,
+          "process_lifetime_hwm_kib": 696620,
+          "process_lifetime_hwm_mib": 680.29296875
+        },
+        "rss_target_acceptance": null,
+        "performance_accepted": false,
+        "scope": "Geometry, owned restoration and one post-restoration FHD proc snapshot only. Earlier sampled intervals and eligibility flags remain unchanged; no 4K causality, allocator/GPU attribution, leak, source-rate or physical-hardware acceptance.",
+        "whole_goal_complete": false
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
