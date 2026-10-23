@@ -266,7 +266,7 @@ def warm_diagnostic(value):
     return dict(value)
 
 
-BRIDGE_OPERATIONS = ('prepare', 'publish', 'admission', 'warm', 'open', 'warm-ready',
+BRIDGE_OPERATIONS = ('prepare', 'publish', 'admission', 'warm', 'open', 'warm-ready', 'browser-key-arm', 'browser-key-read',
                      'notify', 'observe-note', 'wait-expiry', 'watchdog', 'finish', 'state',
                      'security', 'retire-guardian')
 BRIDGE_PHASES = ('arguments', 'context', 'dispatch', 'handler')
@@ -282,7 +282,65 @@ BRIDGE_REASONS = ('unclassified_fixture_failure', 'owned_default_uri_run',
                   'exact_owned_configuration_lease', 'actual_owned_default_handler_selected',
                   'original_owned_http_listener', 'fresh_exact_desktop_pid',
                   'bounded_fixed_security_file', 'fixed_security_file_changed',
-                  'owned_chromium_lease_refused')
+                  'owned_chromium_lease_refused', 'optional_browser_key_probe_required',
+                  'exact_browser_key_request_required', 'one_original_fresh_key_document_required',
+                  'original_key_capture_required', 'new_key_capture_required',
+                  'exact_owned_key_target_endpoint_required', 'known_browser_key_case_required',
+                  'fixed_browser_key_operation_required', 'bounded_browser_key_result_required',
+                  'trusted_unmodified_key_a_required')
+
+
+def browser_key_expression(operation, target, run_id, case):
+    require(operation in ('arm', 'read'), 'fixed_browser_key_operation_required')
+    require(type(run_id) is str and re.fullmatch('[a-f0-9]{12}', run_id) is not None
+            and case in NOTIFICATION_CASES, 'known_browser_key_case_required')
+    name = '__lucentOwnedKey_' + run_id + '_' + case
+    guard = ('if(location.href!==' + json.dumps(target['url']) + '||document.title!=='
+             + json.dumps(target['title']) + ')throw 1;const name=' + json.dumps(name) + ';')
+    if operation == 'arm':
+        body = ('if(Object.prototype.hasOwnProperty.call(globalThis,name))throw 1;'
+                'const state=Object.seal({count:0,event:null});'
+                'Object.defineProperty(globalThis,name,{value:state});'
+                'window.addEventListener("keydown",event=>{if(event.code!=="KeyA")return;'
+                'state.count=Math.min(2,state.count+1);if(state.count===1)state.event=Object.freeze({'
+                'trusted:event.isTrusted,key:event.key==="a"?"a":"other",code:"KeyA",'
+                'ctrl:event.ctrlKey,alt:event.altKey,meta:event.metaKey,shift:event.shiftKey,repeat:event.repeat});},true);'
+                'return {armed:true,count:0};')
+    else:
+        body = ('const state=globalThis[name];if(!state)throw 1;'
+                'return {count:state.count,event:state.event};')
+    return '(()=>{' + guard + body + '})()'
+
+
+def browser_key_observation(value, armed=False):
+    if armed:
+        require(type(value) is dict and set(value) == {'armed', 'count'}
+                and value['armed'] is True and type(value['count']) is int and value['count'] == 0,
+                'bounded_browser_key_result_required')
+        return dict(value)
+    require(type(value) is dict and set(value) == {'count', 'event'}
+            and type(value['count']) is int and 0 <= value['count'] <= 2,
+            'bounded_browser_key_result_required')
+    event = value['event']
+    if value['count'] == 0:
+        require(event is None, 'bounded_browser_key_result_required')
+        return {'count': 0, 'event': None}
+    require(type(event) is dict and set(event) == {'trusted', 'key', 'code', 'ctrl', 'alt', 'meta', 'shift', 'repeat'}
+            and event['key'] in ('a', 'other') and event['code'] == 'KeyA'
+            and all(type(event[name]) is bool for name in ('trusted', 'ctrl', 'alt', 'meta', 'shift', 'repeat')),
+            'bounded_browser_key_result_required')
+    return {'count': value['count'], 'event': dict(event)}
+
+
+def received_browser_key(value):
+    value = browser_key_observation(value)
+    if value['count'] == 0:
+        return None
+    event = value['event']
+    require(value['count'] == 1 and event['trusted'] and event['key'] == 'a'
+            and not any(event[key] for key in ('ctrl', 'alt', 'meta', 'shift', 'repeat')),
+            'trusted_unmodified_key_a_required')
+    return value
 
 
 def bridge_timeout(operation):

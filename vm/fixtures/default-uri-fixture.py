@@ -474,6 +474,48 @@ def watchdog(run, run_id):
             p.private(run / 'default-finished.json', json.dumps(result).encode())
 
 
+def browser_key(run, run_id, request, arm):
+    run, header, base = context(run, run_id)
+    p.require(header.get('assert_browser_key_handoff') is True, 'optional_browser_key_probe_required')
+    admitted(run, run_id)
+    p.require(type(request) is dict and set(request) == {'identity', 'before', 'targets', 'case'}
+              and request['case'] in p.NOTIFICATION_CASES, 'exact_browser_key_request_required')
+    captured = base.browser_authority(run, run_id, request['identity'])
+    _, manifest = base.context(run, run_id)
+    current = base.browser_pages(run)
+    fresh = base.fresh_documents([captured['control']], current,
+                                base.request_documents(run, run_id, manifest, 'open'), captured['control'])
+    p.require(request['before'] == [captured['control']] and fresh is not None
+              and len(fresh) == 1 and request['targets'] == fresh, 'one_original_fresh_key_document_required')
+    target = fresh[0]
+    receipt = run / ('browser-key-' + request['case'] + '.json')
+    if arm:
+        p.require(not os.path.lexists(receipt), 'new_key_capture_required')
+    else:
+        p.require(json.loads(p.read(receipt)) == request, 'original_key_capture_required')
+    endpoint = base.browser_endpoint(run)
+    values = json.loads(base.browser_http(run, '/json/list'))
+    selected = [row for row in values if row.get('type') == 'page' and row.get('id') == target['id']]
+    p.require(endpoint == captured['endpoint'] and base.pages(values) == current and len(selected) == 1
+              and all(selected[0].get(key) == value for key, value in target.items()),
+              'exact_owned_key_target_endpoint_required')
+    from cdp_peer import Peer
+    peer = Peer.connect(selected[0]['webSocketDebuggerUrl'], endpoint['port'], target['id'])
+    try:
+        result = peer.call('Runtime.evaluate', {
+            'expression': p.browser_key_expression('arm' if arm else 'read', target, run_id, request['case']),
+            'returnByValue': True, 'userGesture': False})
+    finally:
+        peer.close()
+    value = p.browser_key_observation(result.get('result', {}).get('value'), armed=arm)
+    p.require(base.browser_authority(run, run_id, captured) == captured
+              and base.browser_endpoint(run) == endpoint and base.browser_pages(run) == current,
+              'exact_owned_key_target_endpoint_required')
+    if arm:
+        p.private(receipt, json.dumps(request).encode())
+    return value
+
+
 def dispatch(diagnostic):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('operation', choices=p.BRIDGE_OPERATIONS)
@@ -510,6 +552,10 @@ def dispatch(diagnostic):
         result = {'bridge': json.loads(p.read(run / 'default-events.json')), 'events': base.events(run)}
     elif args.operation == 'security':
         result = security()
+    elif args.operation in ('browser-key-arm', 'browser-key-read'):
+        p.require(type(args.value) is str and len(args.value.encode()) <= 16384,
+                  'exact_browser_key_request_required')
+        result = browser_key(run, args.run_id, json.loads(args.value), args.operation == 'browser-key-arm')
     elif args.operation == 'retire-guardian':
         result = retire_guardian(run, args.run_id)
     else:
