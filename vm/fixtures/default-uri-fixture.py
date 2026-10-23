@@ -81,6 +81,19 @@ def retire_guardian(run, run_id):
     return {'retired': True}
 
 
+def fixed_desktop_command(run, run_id):
+    # The installed xdg-open generic handler splits Exec words without removing
+    # quotes. Only this fixture's fixed argv may use bare literal words: reject
+    # unsupported paths instead of weakening the canonical general encoder.
+    arguments = ('/usr/bin/python3', '-I', str(run / 'default-uri.py'), 'open', str(run), run_id)
+    p.require(run.is_absolute() and run.name == 'lucent-application-intent.' + run_id
+              and re.fullmatch('[a-f0-9]{12}', run_id) is not None
+              and '..' not in run.parts
+              and all(re.fullmatch('[A-Za-z0-9_./-]+', value) is not None for value in arguments),
+              'fixed_default_uri_exec_literals')
+    return ' '.join(arguments)
+
+
 def prepare(run, run_id):
     run, _, base = context(run, run_id)
     p.require(os.environ.get('XDG_CURRENT_DESKTOP', '').lower() == 'hyprland'
@@ -91,9 +104,7 @@ def prepare(run, run_id):
     app_id = 'org.lucent.DefaultUri' + run_id + '.desktop'
     target = apps / app_id
     p.require(not os.path.lexists(target), 'new_owned_default_uri_entry_required')
-    # xdg-mime's executable lookup does not unquote the first Exec word.
-    command = '/usr/bin/python3 ' + ' '.join(base.encoded(value) for value in (
-        '-I', str(run / 'default-uri.py'), 'open', str(run), run_id))
+    command = fixed_desktop_command(run, run_id)
     entry = ('[Desktop Entry]\nType=Application\nName=Lucent owned default URI\n'
              'NoDisplay=true\nTerminal=false\nStartupNotify=false\n'
              'MimeType=x-scheme-handler/http;\nExec=' + command + ' %u\n').encode()
