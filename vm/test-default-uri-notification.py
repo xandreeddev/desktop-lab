@@ -180,7 +180,7 @@ def bridge_command(argv, operation):
         raise BridgeFailure({'operation': operation, 'phase': 'transport',
                              'error_class': error_class, 'fixed_reason': reason}) from None
     try:
-        result = subprocess.run(argv, capture_output=True, timeout=30)
+        result = subprocess.run(argv, capture_output=True, timeout=p.bridge_timeout(operation))
     except (OSError, subprocess.TimeoutExpired) as error:
         name = type(error).__name__
         refused('bounded_bridge_transport_failed', name if name in p.BRIDGE_ERROR_CLASSES else 'OtherError')
@@ -213,6 +213,7 @@ POST_WARM_PHASES = ('warm_state', 'warm_authority_assert', 'publication', 'publi
 # Fixed labels from this controller and its pinned pure native policies.
 # Never infer a diagnostic reason from a regex match on exception payloads.
 FAILURE_REASONS = (
+    'finite_notification_case_budget_required', 'notification_case_budget_exhausted',
     'actual_keyboard_focus_on_owned_link', 'actual_native_notification_history_geometry',
     'all_owned_browser_windows_retired', 'ambiguous_captured_host_surface_ids',
     'ambiguous_output_names', 'application_cursor_authority_lost',
@@ -285,7 +286,7 @@ FAILURE_REASONS = (
 
 NATIVE_CASES = ('pointer', 'keyboard')
 NATIVE_PHASES = (
-    'case_preflight', 'notification_create', 'notification_history_show',
+    'case_preflight', 'notification_budget_admission', 'notification_create', 'notification_history_show',
     'group_target_wait', 'group_target_capture', 'group_cursor_begin', 'group_cursor_dispatch',
     'group_cursor_confirm', 'group_target_revalidate', 'group_target_assert', 'group_deadline_assert',
     'group_button_down', 'group_focus_wait', 'group_button_up', 'notification_link_wait',
@@ -390,6 +391,7 @@ def record_failure(report, error, phase):
 
 def run(args, manifest):
     sys.path.insert(0, str(ROOT / 'vm'))
+    import default_uri_policy as policy
     old = module('canonical_application_intent_acceptance', ROOT / 'vm/test-application-intent.py')
     old.load_helpers()
     lab, session, remote, cli, inspect = old.lab, old.session, old.remote, old.cli, old.inspect
@@ -478,7 +480,8 @@ def run(args, manifest):
     initialized_attempted = False
     guard_started = old_guard_started = False
     held = False
-    deadline = time.monotonic() + 125
+    deadline = time.monotonic() + policy.NATIVE_INPUT_SECONDS
+    http_deadline = None
     def native_guard():
         admitted = call('admission')
         require(admitted['baseline'] == baseline, 'original_desktop_supervisor_compositor_lifetimes')
@@ -507,6 +510,9 @@ def run(args, manifest):
         call('initial-absence', canonical=True)
         old_guard = 'lucent-application-intent-watchdog-' + run_id + '.service'
         old_guard_started = True
+        # This lower bound precedes even unit launch; it never guesses when
+        # the canonical 210-second listener actually became ready.
+        http_deadline = time.monotonic() + policy.CANONICAL_HTTP_SECONDS
         session('systemd-run', '--user', '--collect', '--unit=' + old_guard,
             '--property=RuntimeMaxSec=300', '--property=MemoryMax=64M', '--property=UMask=0077',
             '/usr/bin/python3', scratch + '/fixture.py', 'watchdog', scratch, run_id)
@@ -515,7 +521,8 @@ def run(args, manifest):
         unit = 'lucent-default-uri-' + run_id + '.service'
         guard_started = True
         session('systemd-run', '--user', '--collect', '--unit=' + unit,
-            '--property=RuntimeMaxSec=240', '--property=TimeoutStopSec=45', '--property=MemoryMax=96M',
+            '--property=RuntimeMaxSec=' + str(policy.GUARDIAN_UNIT_RUNTIME_SECONDS),
+            '--property=TimeoutStopSec=45', '--property=MemoryMax=96M',
             '--property=KillMode=control-group', '--property=UMask=0077', '/usr/bin/python3', '-I',
             scratch + '/default-uri.py', 'watchdog', scratch, run_id)
         wait(lambda: receipt('default-ready.json'), 'independent_config_guardian_ready')
@@ -542,9 +549,11 @@ def run(args, manifest):
         def set_button_held(value):
             nonlocal held
             held = value
-        for sequence in ('pointer', 'keyboard'):
+        for sequence in NATIVE_CASES:
             begin_native_case(report, sequence)
             native_step(report, 'case_preflight', native_guard)
+            native_step(report, 'notification_budget_admission', lambda: policy.admit_notification_case(
+                time.monotonic(), deadline, http_deadline))
             note = native_step(report, 'notification_create', lambda: call('notify', sequence)['id'])
             native_step(report, 'notification_history_show', lambda: cli('notifications', 'show'))
             def selected_group():
@@ -664,7 +673,8 @@ def run(args, manifest):
                 done = receipt('default-finished.json')
                 if done is None:
                     call('finish')
-                    done = wait(lambda: receipt('default-finished.json'), 'independent_default_config_restore_receipt', 60)
+                    done = wait(lambda: receipt('default-finished.json'), 'independent_default_config_restore_receipt',
+                                policy.FINISH_RECEIPT_SECONDS)
                 require(done['success'] is True and all(done['restoration'].values()), 'complete_guardian_restoration')
                 report['cleanup'].update(done['restoration'])
                 require(call('retire-guardian')['retired'], 'original_configuration_guardian_retired')

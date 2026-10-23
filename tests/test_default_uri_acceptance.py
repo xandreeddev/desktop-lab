@@ -641,6 +641,7 @@ class AdmissionAndBridge(unittest.TestCase):
                 driver.launch(run, 'abcdef123456', 'http://127.0.0.1:1234/owned')
             argv = execute.call_args.args[0]
             self.assertIn('--setenv=XDG_ACTIVATION_TOKEN', argv)
+            self.assertIn('--property=RuntimeMaxSec=' + str(p.BROWSER_RUNTIME_SECONDS), argv)
             self.assertIn('--property=UnsetEnvironment=DESKTOP_STARTUP_ID', argv)
             self.assertFalse(any('opaque-test-authority' in value or 'untrusted-legacy' in value for value in argv))
             self.assertNotIn('DESKTOP_STARTUP_ID', execute.call_args.kwargs['env'])
@@ -707,6 +708,106 @@ class AdmissionAndBridge(unittest.TestCase):
             controller.target({'surfaces': [surface]}, layers, 7, uri, 456)
 
 
+class ControlledTestTiming(unittest.TestCase):
+    def test_finite_budgets_fit_canonical_http_browser_and_guardian_lifetimes(self):
+        self.assertEqual((p.NOTIFICATION_TTL_MS, p.NOTIFICATION_EXPIRY_SECONDS, p.BRIDGE_EXPIRY_SECONDS), (60000, 65, 70))
+        self.assertEqual((p.NATIVE_INPUT_SECONDS, p.CANONICAL_HTTP_SECONDS, p.BROWSER_RUNTIME_SECONDS), (180, 210, 240))
+        self.assertEqual((p.GUARDIAN_OPEN_SECONDS, p.GUARDIAN_CLEANUP_RESERVE_SECONDS,
+                          p.GUARDIAN_UNIT_RUNTIME_SECONDS, p.FINISH_RECEIPT_SECONDS), (210, 120, 345, 90))
+        seconds = (p.NOTIFICATION_EXPIRY_SECONDS, p.NOTIFICATION_POST_EXPIRY_SECONDS,
+                   p.BRIDGE_COMMAND_SECONDS, p.BRIDGE_EXPIRY_SECONDS, p.NATIVE_INPUT_SECONDS,
+                   p.CANONICAL_HTTP_SECONDS, p.HTTP_DELIVERY_MARGIN_SECONDS, p.BROWSER_RUNTIME_SECONDS,
+                   p.GUARDIAN_OPEN_SECONDS, p.GUARDIAN_CLEANUP_RESERVE_SECONDS,
+                   p.GUARDIAN_STARTUP_MARGIN_SECONDS, p.GUARDIAN_UNIT_RUNTIME_SECONDS, p.FINISH_RECEIPT_SECONDS)
+        self.assertTrue(all(type(value) is int and 0 < value <= 345 for value in seconds))
+        self.assertLess(p.NOTIFICATION_TTL_MS / 1000, p.NOTIFICATION_EXPIRY_SECONDS)
+        self.assertLess(p.NOTIFICATION_EXPIRY_SECONDS, p.BRIDGE_EXPIRY_SECONDS)
+        self.assertLessEqual(p.NATIVE_INPUT_SECONDS + p.HTTP_DELIVERY_MARGIN_SECONDS, p.CANONICAL_HTTP_SECONDS)
+        self.assertGreaterEqual(p.BROWSER_RUNTIME_SECONDS, p.NATIVE_INPUT_SECONDS + p.HTTP_DELIVERY_MARGIN_SECONDS)
+        self.assertGreaterEqual(p.GUARDIAN_OPEN_SECONDS, p.NATIVE_INPUT_SECONDS)
+        self.assertGreaterEqual(p.GUARDIAN_UNIT_RUNTIME_SECONDS, p.GUARDIAN_OPEN_SECONDS
+                                + p.GUARDIAN_CLEANUP_RESERVE_SECONDS + p.GUARDIAN_STARTUP_MARGIN_SECONDS)
+        self.assertLessEqual(p.BRIDGE_COMMAND_SECONDS + p.FINISH_RECEIPT_SECONDS, p.GUARDIAN_CLEANUP_RESERVE_SECONDS)
+        canonical = ROOT / 'vm/fixtures/application-intent-fixture.py'
+        self.assertEqual(hashlib.sha256(canonical.read_bytes()).hexdigest(),
+                         '25e7332ef60c67797f0823104d5a617f9178bc59df900d49479cbcb0ebd566a7')
+        wait = next(node for node in ast.parse(canonical.read_text()).body
+                    if isinstance(node, ast.FunctionDef) and node.name == 'http_wait')
+        self.assertEqual(ast.literal_eval(wait.args.defaults[-1]), p.CANONICAL_HTTP_SECONDS)
+
+    def test_only_readonly_expiry_operation_gets_the_longer_bridge_timeout(self):
+        response = types.SimpleNamespace(returncode=0, stdout=b'{}', stderr=b'')
+        for operation in p.BRIDGE_OPERATIONS:
+            with self.subTest(operation=operation), patch.object(controller.subprocess, 'run', return_value=response) as execute:
+                controller.bridge_command(['owned-transport'], operation)
+            self.assertEqual(execute.call_args.kwargs['timeout'],
+                             p.BRIDGE_EXPIRY_SECONDS if operation == 'wait-expiry' else 30)
+        with patch.object(controller.subprocess, 'run') as execute:
+            with self.assertRaisesRegex(ValueError, 'known_default_uri_bridge_operation'):
+                controller.bridge_command(['unused'], 'unknown')
+        execute.assert_not_called()
+
+    def test_both_cases_fit_with_a_modeled_setup_and_complete_expiry_postchecks(self):
+        self.assertEqual(controller.NATIVE_CASES, p.NOTIFICATION_CASES)
+        self.assertEqual(controller.NATIVE_CASES, ('pointer', 'keyboard'))
+        now = 25  # Model elapsed setup; this is not a measured startup result.
+        for _case in controller.NATIVE_CASES:
+            self.assertTrue(p.admit_notification_case(now, p.NATIVE_INPUT_SECONDS, p.CANONICAL_HTTP_SECONDS))
+            now += p.NOTIFICATION_TTL_MS / 1000 + p.NOTIFICATION_POST_EXPIRY_SECONDS
+        self.assertLess(now, p.NATIVE_INPUT_SECONDS)
+
+    def test_late_case_fails_actual_controller_admission_before_any_notify(self):
+        tree = ast.parse((ROOT / 'vm/test-default-uri-notification.py').read_text())
+        run = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'run')
+        loop = next(node for node in ast.walk(run) if isinstance(node, ast.For)
+                    and isinstance(node.target, ast.Name) and node.target.id == 'sequence')
+        report = {};notify = Mock(side_effect=AssertionError('late case must not emit a notification'))
+        namespace = {'sequence': 'pointer', 'report': report, 'policy': p,
+                     'begin_native_case': controller.begin_native_case, 'native_step': controller.native_step,
+                     'native_guard': Mock(), 'call': notify, 'deadline': 180, 'http_deadline': 210,
+                     'time': types.SimpleNamespace(monotonic=lambda: 106)}
+        with self.assertRaisesRegex(ValueError, 'notification_case_budget_exhausted'):
+            exec(compile(ast.Module(body=loop.body[:4], type_ignores=[]), 'actual_case_admission', 'exec'), namespace)
+        notify.assert_not_called()
+        self.assertEqual(report['failure']['phase'], 'notification_budget_admission')
+        self.assertEqual(report['failure']['fixed_reason'], 'notification_case_budget_exhausted')
+        with self.assertRaisesRegex(ValueError, 'notification_case_budget_exhausted'):
+            p.admit_notification_case(16, 180, 90)
+        for value in (None, float('inf'), float('nan'), True):
+            with self.assertRaisesRegex(ValueError, 'finite_notification_case_budget_required'):
+                p.admit_notification_case(value, 180, 210)
+
+    def test_real_notify_arguments_and_private_expiry_receipt_use_shared_sixty_second_ttl(self):
+        proxy = Mock();proxy.Notify.side_effect = [7, 8]
+        bus = Mock()
+        fake = types.SimpleNamespace(SessionBus=lambda **kwargs: bus, Interface=lambda *_: proxy,
+                                     Array=lambda value, **_: value, Dictionary=lambda value, **_: value, Boolean=bool)
+        with tempfile.TemporaryDirectory() as temporary:
+            run = Path(temporary)
+            (run / 'default-plan.json').write_text(json.dumps({'http': {'targets': [{'uri': 'http://127.0.0.1:1234/owned'}]}}))
+            with patch.dict(sys.modules, {'dbus': fake}), \
+                 patch.object(driver, 'context', return_value=(run, {'desktop_pid': 123}, Mock())), \
+                 patch.object(driver, 'admitted'), patch.object(driver, 'notification_owner', return_value=':1.8'), \
+                 patch.object(driver.time, 'monotonic', return_value=100):
+                for case in controller.NATIVE_CASES:
+                    driver.notify(run, 'abcdef123456', case)
+                    record = json.loads((run / ('notification-' + case + '.json')).read_text())
+                    self.assertEqual(record['expires_after'], 160)
+            self.assertEqual([call.args[7] for call in proxy.Notify.call_args_list], [60000, 60000])
+            self.assertEqual(bus.close.call_count, 2)
+
+    def test_expiry_cleanup_admission_keeps_canonical_desktop_authority_without_live_http(self):
+        base = types.SimpleNamespace(admission=Mock(), http_authority=Mock(side_effect=AssertionError('HTTP may be retired')))
+        header = {'desktop_pid': 123, 'desktop_sha256': 'a' * 64}
+        admitted = {'baseline': {'desktop': {'pid': 123}}}
+        with patch.object(driver, 'context', return_value=(Path('/unused-run'), header, base)), \
+             patch.object(driver, 'guardian'), patch.object(driver, 'capture_print', return_value=admitted) as capture:
+            self.assertEqual(driver.admitted(Path('/unused-run'), 'abcdef123456', config=False), admitted)
+        base.http_authority.assert_not_called()
+        capture.assert_called_once_with(base.admission, Path('/unused-run'), 'abcdef123456',
+                                        {'desktop_sha256': header['desktop_sha256'], 'example_sha256': None})
+
+
 class NotificationExpiry(unittest.TestCase):
     def fixture(self, revision=2, identifier=7, count=1):
         records = [{'id': 7, 'owner': ':1.8', 'desktop_pid': 123,
@@ -768,16 +869,21 @@ class NotificationExpiry(unittest.TestCase):
 
     def test_absence_before_expiry_window_does_not_claim_the_window_elapsed(self):
         records, absent = self.fixture(count=0)
-        records[0]['expires_after'] = 25
-        self.assertEqual(self.run_wait(records, [absent, absent], [0, 1, 25]),
+        records[0]['expires_after'] = p.NOTIFICATION_TTL_MS / 1000
+        self.assertEqual(self.run_wait(records, [absent, absent], [0, 1, p.NOTIFICATION_TTL_MS / 1000]),
                          {'absent_after_expiry_window': True})
 
     def test_unidentified_remaining_notice_times_out_without_removing_it(self):
         records, hidden = self.fixture()
         hidden['surfaces'] = []
         with self.assertRaisesRegex(ValueError, 'remaining_notification_preserved_after_expiry_window'):
-            self.run_wait(records, [hidden], [0, 31])
+            self.run_wait(records, [hidden], [0, p.NOTIFICATION_EXPIRY_SECONDS + 1])
         self.assertEqual(hidden['client']['notification_count'], 1)
+
+    def test_absence_arriving_after_the_readonly_budget_is_not_accepted_late(self):
+        records, absent = self.fixture(count=0)
+        with self.assertRaisesRegex(ValueError, 'remaining_notification_preserved_after_expiry_window'):
+            self.run_wait(records, [absent], [0, p.NOTIFICATION_EXPIRY_SECONDS + 1])
 
     def test_daemon_successor_is_never_considered_the_original_expiry_source(self):
         records, absent = self.fixture(count=0)
@@ -1000,7 +1106,7 @@ class GuardianRecovery(unittest.TestCase):
                  patch.object(driver, 'capture_unit_origin', return_value={'origin': 'owned'}), \
                  patch.object(driver, 'wait_expiry'), patch.object(driver, 'close_history'), \
                  patch.dict(os.environ, {'XDG_RUNTIME_DIR': str(runtime)}), \
-                 patch.object(driver.time, 'monotonic', side_effect=[0, 151]):
+                 patch.object(driver.time, 'monotonic', side_effect=[0, p.GUARDIAN_OPEN_SECONDS + 1]):
                 driver.watchdog(run, 'abcdef123456')
             self.assertEqual(p.snapshot(mime), values[0]['original'])
             self.assertFalse(entry.exists())
@@ -1029,7 +1135,7 @@ class GuardianRecovery(unittest.TestCase):
                  patch.object(driver, 'capture_unit_origin', return_value={'origin': 'owned'}), \
                  patch.object(driver, 'wait_expiry'), patch.object(driver, 'close_history'), \
                  patch.dict(os.environ, {'XDG_RUNTIME_DIR': str(runtime)}), \
-                 patch.object(driver.time, 'monotonic', side_effect=[0, 151]):
+                 patch.object(driver.time, 'monotonic', side_effect=[0, p.GUARDIAN_OPEN_SECONDS + 1]):
                 driver.watchdog(run, 'abcdef123456')
             self.assertEqual(p.snapshot(mime), foreign)
             self.assertEqual(p.snapshot(entry), values[1]['candidate'])
@@ -1056,7 +1162,7 @@ class GuardianRecovery(unittest.TestCase):
                  patch.object(driver, 'wait_expiry', side_effect=ValueError('replaced_notification_revision_preserved')), \
                  patch.object(driver, 'close_history') as hide, \
                  patch.dict(os.environ, {'XDG_RUNTIME_DIR': str(runtime)}), \
-                 patch.object(driver.time, 'monotonic', side_effect=[0, 151]):
+                 patch.object(driver.time, 'monotonic', side_effect=[0, p.GUARDIAN_OPEN_SECONDS + 1]):
                 driver.watchdog(run, 'abcdef123456')
             hide.assert_not_called()
             self.assertEqual(p.snapshot(mime), values[0]['original'])
