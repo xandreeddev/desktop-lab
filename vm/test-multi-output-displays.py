@@ -8,9 +8,13 @@ from pathlib import Path
 
 HERE=Path(__file__).resolve().parent
 ROOT=HERE.parent if HERE.name=='vm' else HERE.parents[1]
-SOURCE='35ed87ed4c01cf62e3c8406b8abdcc0809cc155b'
-DESKTOP='6ff4e06b73f1a1f68f27cb0504c67710b0a9e118b181ba8ee41eb78d6251ef78'
+SOURCE='26d03adf476af44c97fb7dcdbfb75cbdc2112770'
+DESKTOP='7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08'
+RELEASE_MANIFEST_SHA='5b228fa1bbdc71c50a245edcb70e726ef4d5826f476ba261e53042023d322aec'
+VM_UUID='a4691892-fa44-41d9-98cf-8f0dc4131ee3'
 FRESH_OFF=('UNBOUND','UNBOUND')
+NORMAL_OFF_IDENTITY=('UNBOUND','UNBOUND')
+RELEASE_MANIFEST='UNBOUND'
 PINS={
  'preservation_fingerprint':('vm/preservation_fingerprint.py','ecd796f7bce24e4ea153633089595c7ba4d5604959ca5f0131367832b173e2a3'),
  'display_supervision':('vm/display_supervision.py','1399eebb03af1ae2408124c0b46706f109ed99cc49f8cd00165021d935cab0be'),
@@ -42,18 +46,26 @@ def module(name,raw,path):
     value=types.ModuleType(name);value.__file__=str(path)
     exec(compile(raw,str(path),'exec'),value.__dict__);return value
 
-def qualify(fresh_off=FRESH_OFF):
+def qualify(fresh_off=FRESH_OFF,normal_off=NORMAL_OFF_IDENTITY,release_manifest=RELEASE_MANIFEST):
     require(__debug__,'python_assertions_required')
     require(re.fullmatch('[a-f0-9]{64}',fresh_off[1]) and fresh_off[0]!='UNBOUND'
-            and re.fullmatch('[a-f0-9]{64}',GUEST_SHA),'reviewed_execution_bindings_UNBOUND')
+            and all(re.fullmatch('[a-f0-9]{64}',value) for value in normal_off)
+            and release_manifest!='UNBOUND' and re.fullmatch('[a-f0-9]{64}',GUEST_SHA),
+            'reviewed_execution_bindings_UNBOUND')
     raw={name:pinned(pin) for name,pin in PINS.items()}
+    release=json.loads(pinned((release_manifest,RELEASE_MANIFEST_SHA)))
+    require(release['source_commit']==SOURCE and release['passed'] is True
+            and release['source_working_tree_changed'] is False
+            and release['native_activated'] is False
+            and release['binaries']['lucent-desktop']['sha256']==DESKTOP,
+            'exact_archived_build_manifest_required')
     fresh=json.loads(pinned(fresh_off))
     require(fresh['success'] is True and fresh['read_only'] is True and fresh['source_commit']==SOURCE
-            and fresh['binding_sha256']=='6fed4bf66f418b2159924c23553db911946e17de400eae12415e855946095218'
-            and fresh['helper_sha256']=='2bec9527e244c06be96b7f246631f8a39c67e25540c19f244f57eca13d9d6a89'
+            and fresh['binding_sha256']==normal_off[0]
+            and fresh['helper_sha256']==normal_off[1]
             and fresh['facts']['runtime_profiling']=={'frames':False,'presentation':False,'source_pts':False},
             'exact_normal_off_receipt_required')
-    require(fresh['facts']['authority']['desktop']['sha256']==DESKTOP,'exact_35ed_release_required')
+    require(fresh['facts']['authority']['desktop']['sha256']==DESKTOP,'exact_archived_desktop_required')
     guest=read(HERE/'multi_output_display_guard.py');require(digest(guest)==GUEST_SHA,'reviewed_guest_changed')
     return raw,fresh['facts'],guest
 
@@ -72,10 +84,9 @@ for name,data in packet['files'].items():
 print(path)
 '''
 
-def run(lab_root,fresh_off=FRESH_OFF,vm_uuid=None):
-    require(isinstance(vm_uuid,str) and re.fullmatch('[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}',vm_uuid),
-            'exact_vm_uuid_required')
-    raw,fresh,guest=qualify(fresh_off)
+def run(lab_root,fresh_off=FRESH_OFF,vm_uuid=None,normal_off=NORMAL_OFF_IDENTITY,release_manifest=RELEASE_MANIFEST):
+    require(vm_uuid==VM_UUID,'exact_vm_uuid_required')
+    raw,fresh,guest=qualify(fresh_off,normal_off,release_manifest)
     (ROOT/'reports/local').mkdir(mode=0o700,exist_ok=True)
     # VM construction is deliberately after every local receipt/source gate.
     sys.path.insert(0,str(ROOT/'vm'))
@@ -87,7 +98,8 @@ def run(lab_root,fresh_off=FRESH_OFF,vm_uuid=None):
     output='LUCENT-TEST-'+tag
     report={'success':False,'runtime_source':SOURCE,'desktop_sha256':DESKTOP,'checks':[],
             'helper_sha256':digest(read(Path(__file__))), 'guest_sha256':GUEST_SHA,
-            'fresh_off_sha256':fresh_off[1],'vm_uuid':vm_uuid,
+            'fresh_off_sha256':fresh_off[1],'fresh_off_binding_sha256':normal_off[0],
+            'fresh_off_helper_sha256':normal_off[1],'release_manifest_sha256':RELEASE_MANIFEST_SHA,'vm_uuid':vm_uuid,
             'physical_or_secure_output_acceptance':False,'presentation_or_performance_acceptance':False}
     unit='lucent-native-display-test-'+tag+'.service'
     header={'desktop_sha256':DESKTOP,'output':output,'fresh_off_facts':fresh,'unit':unit}
@@ -281,7 +293,10 @@ def main():
     parser.add_argument('--lab-root',type=Path,default=ROOT)
     parser.add_argument('--fresh-off',type=Path,help='Private normal-OFF receipt; relative paths use --lab-root')
     parser.add_argument('--fresh-off-sha256',help='Reviewed SHA-256 of that private receipt')
-    parser.add_argument('--vm-uuid',help='Exact UUID of the already-running Lucent test guest; required with --run')
+    parser.add_argument('--fresh-off-binding-sha256',help='Reviewed collector binding SHA-256 for this actual fresh receipt')
+    parser.add_argument('--fresh-off-helper-sha256',help='Reviewed collector helper SHA-256 for this actual fresh receipt')
+    parser.add_argument('--release-manifest',type=Path,help='Exact archived 26d build manifest; relative paths use --lab-root')
+    parser.add_argument('--vm-uuid',help='Pinned UUID of the already-running Lucent test guest; required with --run')
     args=parser.parse_args()
     require(args.lab_root.is_absolute(),'absolute_lab_root_required')
     fresh_off=FRESH_OFF
@@ -289,12 +304,20 @@ def main():
         require(args.fresh_off is not None and args.fresh_off_sha256 is not None,'fresh_receipt_and_sha256_required_together')
         path=args.fresh_off if args.fresh_off.is_absolute() else args.lab_root/args.fresh_off
         fresh_off=(str(path),args.fresh_off_sha256)
+    normal_off=NORMAL_OFF_IDENTITY
+    if args.fresh_off_binding_sha256 is not None or args.fresh_off_helper_sha256 is not None:
+        require(args.fresh_off_binding_sha256 is not None and args.fresh_off_helper_sha256 is not None,
+                'fresh_collector_binding_and_helper_required_together')
+        normal_off=(args.fresh_off_binding_sha256,args.fresh_off_helper_sha256)
+    release_manifest=RELEASE_MANIFEST
+    if args.release_manifest is not None:
+        path=args.release_manifest if args.release_manifest.is_absolute() else args.lab_root/args.release_manifest
+        release_manifest=str(path)
     if not args.run:
-        qualify(fresh_off);print(json.dumps({'qualified':True,'guest_actions':False}));return 0
-    require(isinstance(args.vm_uuid,str) and re.fullmatch('[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}',args.vm_uuid),
-            'exact_vm_uuid_required')
+        qualify(fresh_off,normal_off,release_manifest);print(json.dumps({'qualified':True,'guest_actions':False}));return 0
+    require(args.vm_uuid==VM_UUID,'exact_vm_uuid_required')
     signal.signal(signal.SIGTERM,lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
-    return run(args.lab_root.resolve(strict=True),fresh_off,args.vm_uuid)
+    return run(args.lab_root.resolve(strict=True),fresh_off,args.vm_uuid,normal_off,release_manifest)
 
 if __name__=='__main__':
     try: result=main()

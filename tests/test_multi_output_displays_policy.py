@@ -18,17 +18,78 @@ class Boundaries(unittest.TestCase):
     def test_relative_private_receipt_resolves_against_lab_root_without_transport(self):
         with patch.object(sys,'argv',['test-multi-output-displays.py','--lab-root','/tmp/private-lab','--fresh-off','reports/local/proof.json','--fresh-off-sha256','a'*64]),patch.object(c,'qualify') as qualify,patch('sys.stdout',new=io.StringIO()):
             self.assertEqual(c.main(),0)
-        qualify.assert_called_once_with(('/tmp/private-lab/reports/local/proof.json','a'*64))
+        qualify.assert_called_once_with(('/tmp/private-lab/reports/local/proof.json','a'*64),
+                                        c.NORMAL_OFF_IDENTITY,c.RELEASE_MANIFEST)
+
+    def test_collector_binding_and_helper_require_a_pair_before_execution(self):
+        for args in (['--fresh-off-binding-sha256','a'*64],['--fresh-off-helper-sha256','b'*64]):
+            with patch.object(sys,'argv',['test-multi-output-displays.py','--run',*args]),patch.object(c,'run',side_effect=AssertionError('no_transport')):
+                with self.assertRaisesRegex(ValueError,'fresh_collector_binding_and_helper_required_together'):c.main()
+
+    def test_private_manifest_and_collector_identity_are_explicit_arguments(self):
+        argv=['test-multi-output-displays.py','--lab-root','/tmp/private-lab',
+              '--fresh-off','reports/local/proof.json','--fresh-off-sha256','a'*64,
+              '--fresh-off-binding-sha256','b'*64,'--fresh-off-helper-sha256','c'*64,
+              '--release-manifest','.cache/releases/manifest.json']
+        with patch.object(sys,'argv',argv),patch.object(c,'qualify') as qualify,patch('sys.stdout',new=io.StringIO()):
+            self.assertEqual(c.main(),0)
+        qualify.assert_called_once_with(('/tmp/private-lab/reports/local/proof.json','a'*64),
+                                        ('b'*64,'c'*64),'/tmp/private-lab/.cache/releases/manifest.json')
 
     def test_default_unbound_refuses_before_source_or_transport(self):
         with patch.object(c,'read',side_effect=AssertionError('no_io')):
             with self.assertRaisesRegex(ValueError,'reviewed_execution_bindings_UNBOUND'): c.qualify()
 
+    def test_missing_collector_or_release_binding_refuses_before_io(self):
+        for fresh,identity,manifest in ((('/tmp/unit-proof.json','a'*64),c.NORMAL_OFF_IDENTITY,'/tmp/unit-manifest.json'),
+                                        (('/tmp/unit-proof.json','a'*64),('b'*64,'c'*64),c.RELEASE_MANIFEST)):
+            with patch.object(c,'read',side_effect=AssertionError('no_io')):
+                with self.assertRaisesRegex(ValueError,'reviewed_execution_bindings_UNBOUND'):
+                    c.qualify(fresh,identity,manifest)
+
     def test_native_run_requires_an_exact_vm_uuid_before_transport(self):
-        for value in (None,'desktop-lab-lucent','a'*36,'../elsewhere'):
+        for value in (None,'desktop-lab-lucent','a'*36,'../elsewhere','00000000-0000-0000-0000-000000000000'):
             with patch.object(c,'qualify',side_effect=AssertionError('no_source_io')):
                 with self.assertRaisesRegex(ValueError,'exact_vm_uuid_required'):
                     c.run(Path('/tmp/private-lab'),vm_uuid=value)
+
+    def test_archived_source_and_actual_receipt_qualification_has_no_native_side_effects(self):
+        # Synthetic unit fixtures exercise the parser only; they are never native evidence.
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);guest=root/'multi_output_display_guard.py'
+            guest.write_bytes(b'unit-only guest fixture\n')
+            receipt=root/'unit-only-off.json';manifest=root/'unit-only-manifest.json'
+            release={'source_commit':c.SOURCE,'passed':True,'source_working_tree_changed':False,
+                     'native_activated':False,'binaries':{'lucent-desktop':{'sha256':c.DESKTOP}}}
+            fresh={'success':True,'read_only':True,'source_commit':c.SOURCE,
+                   'binding_sha256':'b'*64,'helper_sha256':'c'*64,
+                   'facts':{'runtime_profiling':{'frames':False,'presentation':False,'source_pts':False},
+                            'authority':{'desktop':{'sha256':c.DESKTOP}}}}
+            def bind(value,path):
+                path.write_text(json.dumps(value));return hashlib.sha256(path.read_bytes()).hexdigest()
+            manifest_sha=bind(release,manifest)
+            with patch.multiple(c,ROOT=root,HERE=root,PINS={},RELEASE_MANIFEST_SHA=manifest_sha,
+                                GUEST_SHA=hashlib.sha256(guest.read_bytes()).hexdigest()):
+                receipt_sha=bind(fresh,receipt)
+                raw,facts,actual=c.qualify((str(receipt),receipt_sha),('b'*64,'c'*64),str(manifest))
+                self.assertEqual(raw,{})
+                self.assertEqual(facts,fresh['facts']);self.assertEqual(actual,guest.read_bytes())
+                for key,value in (('source_commit','0'*40),('binding_sha256','d'*64),('helper_sha256','e'*64)):
+                    changed={**fresh,key:value};receipt_sha=bind(changed,receipt)
+                    with self.assertRaisesRegex(ValueError,'exact_normal_off_receipt_required'):
+                        c.qualify((str(receipt),receipt_sha),('b'*64,'c'*64),str(manifest))
+                changed=copy.deepcopy(fresh);changed['facts']['runtime_profiling']['frames']=True
+                receipt_sha=bind(changed,receipt)
+                with self.assertRaisesRegex(ValueError,'exact_normal_off_receipt_required'):
+                    c.qualify((str(receipt),receipt_sha),('b'*64,'c'*64),str(manifest))
+                receipt_sha=bind(fresh,receipt)
+                bind({**release,'source_commit':'0'*40},manifest)
+                with self.assertRaisesRegex(ValueError,'frozen_source_changed'):
+                    c.qualify((str(receipt),receipt_sha),('b'*64,'c'*64),str(manifest))
+                manifest_sha=bind({**release,'native_activated':True},manifest)
+                with patch.object(c,'RELEASE_MANIFEST_SHA',manifest_sha):
+                    with self.assertRaisesRegex(ValueError,'exact_archived_build_manifest_required'):
+                        c.qualify((str(receipt),receipt_sha),('b'*64,'c'*64),str(manifest))
 
     def test_configuration_restore_never_races_a_closed_but_pending_display_guardian(self):
         owner=g.Owner.__new__(g.Owner)
