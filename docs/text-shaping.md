@@ -1,15 +1,21 @@
 # International text and input methods
 
-Source scope: accepted main `d00014509f13125fe4ccab3ce2e1fa3961a40dd3` includes the
-verified Display milestone. The implemented, unmerged Text cohort is
-`8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, including the soft-wrap bidi correction.
-Focused checks and [final CI](https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281)
-pass at this source: full workspace, six controlled service-protocol filters and
-all 832 Vulkan desktop cases. The coherent six-client/three-example release is
-built and archived, but has not been deployed. Native IME and interoperability
-acceptance remain pending. Earlier results retain their own source scope. See
-[current readiness](current-readiness.md) for the separate runtime, documentation
-and native-harness snapshots and remaining acceptance boundaries.
+Source scope: accepted main `124b206938ebc3b41f5720838d01b8edf49a438d`
+includes Text `8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, merged through PR87,
+including the soft-wrap bidi correction. Exact-source
+[final CI](https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281)
+passes the full workspace, six controlled service-protocol filters and all 832
+Vulkan desktop cases. The coherent `8e` release was later deployed. Its fresh
+owned mapped-peer IME run passes five feature and five restoration checks,
+including visible preedit/caret evidence, CJK commit/delete/history, masked-focus
+retirement, multiline composition and RTL navigation. See the
+[native report](../reports/measurements/lucent-international-text.json).
+
+This is source-specific evidence, not a current VM observation. Genuine
+third-party IMEs, broader pixel/scroll details, physical/cross-output input and
+clipboard races remain separate acceptance. Earlier failed runs and independent
+recoveries retain their original outcomes. [Current readiness](current-readiness.md)
+separates implementation, deployment, native fixtures and the remaining checks.
 
 The component still owns its ordinary `String` and `TextFieldState`. It declares
 `Element::text_input` or `Element::text_area`; the framework emits relative
@@ -171,8 +177,9 @@ and [PR CI](https://github.com/xandreeddev/desktop-lab/actions/runs/39313659557)
 pass at exact `8e6d074b`: all six checks, full workspace and controlled protocols,
 the explicit wrapped/cache filters and all 832 Vulkan desktop cases. The earlier
 [passing `5d3501eb` run](https://github.com/xandreeddev/desktop-lab/actions/runs/39306754599)
-retains its historical scope. Native compositor IME acceptance remains pending;
-CI does not establish that interoperability.
+retains its historical scope. At that CI checkpoint, native compositor IME
+acceptance was pending; the later owned mapped-peer run above supplies its
+separate scoped evidence. CI alone does not establish that interoperability.
 
 ## Input-method ownership
 
