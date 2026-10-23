@@ -9,7 +9,7 @@
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted main 6e471005 includes PR102 default-handler activation context, reusable decoder sessions and bounded uploads, after six exact 3560 checks and a CLEAN normal merge. Pages 39974027424 public desktop/library/component-lab HTML, manifest and representative PNG match the accepted artifact; all 116 capture producers and 480 catalogue images are verified. Archived 26d runtime/integration source trees equal the merge; only capture-manifest metadata differs. Recorded 26d deployment, owned IME, ineligible resource interval, failed Display attempt and separate recovery retain their identities and capture-time outcomes. This does not assert a current VM, native default-handler acceptance, an eligible 300 MiB/FPS result or completion of the seven-gap goal. Previous 124/PR100 delivery is a dated historical snapshot.",
+    "scope": "Accepted main 6e471005 includes PR102 default-handler activation context, reusable decoder sessions and bounded uploads, after six exact 3560 checks and a CLEAN normal merge. Pages 39974027424 public desktop/library/component-lab HTML, manifest and representative PNG match the accepted artifact; all 116 capture producers and 480 catalogue images are verified. Archived 26d runtime/integration source trees equal the merge; only capture-manifest metadata differs. Recorded 26d deployment, owned IME, ineligible resource interval, failed Display attempt and separate recovery retain their identities and capture-time outcomes. This does not assert a current VM, native default-handler acceptance, an eligible 300 MiB/FPS result or completion of the seven-gap goal. Previous 124/PR100 delivery is a dated historical snapshot. A later source-bound 1774fa87 harness on unchanged runtime 26d passes nine virtual two-output Display control flows, six restoration fields including the timestamp/link-count policy marker, three cursor checks and independent later normal-OFF verification. It establishes no physical, resource or pacing acceptance.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -30,15 +30,16 @@
       {
         "id": "safe-display-configuration",
         "status": "merged_scoped_native_verified",
-        "implemented": "Native draft edits for advertised mode/refresh, position, scale, rotation and enabled state; ordered fresh read/watch snapshots; complete-layout validation and same-executable independent Apply/Keep/Revert/15-second/EOF guardian. Seven actual one-output QEMU input/recovery checks pass for mode, scale, position and persistence. Later harness 86df4e5b on unchanged 35ed passes four owned two-output flows: draft-only peer position, Apply/explicit Revert, scale 1.25 timeout and position Keep; original 1920x1080/scale 1 stays unchanged, peer 1280x960. Original monitor bytes/inode, settings, supervision, output/workspace/cursor restore with five positive owner checks and independent retirement/normal-OFF verification. Monitor ctime/link count are not claimed unchanged.",
-        "remaining": "Physical modes/visibility, native enable/disable/rotation, input on a fractionally scaled Displays panel, cable hotplug/suspend, compositor restart during confirmation, secure-output changes and pacing. New panel input stayed on the original 1x output; only the peer target changed to 1.25. HDR/VRR/mirroring/modelines are not editable. Keep-to-file-identity-capture host loss remains manual recovery. Initial 7ebd failed before any checks and its separate recovery does not turn that report into a pass.",
+        "implemented": "Native draft edits for advertised mode/refresh, position, scale, rotation and enabled state; ordered fresh read/watch snapshots; complete-layout validation and same-executable independent Apply/Keep/Revert/15-second/EOF guardian. Seven actual one-output QEMU input/recovery checks pass for mode, scale, position and persistence. Later harness 86df4e5b on unchanged 35ed passes four owned two-output flows: draft-only peer position, Apply/explicit Revert, scale 1.25 timeout and position Keep; original 1920x1080/scale 1 stays unchanged, peer 1280x960. Original monitor bytes/inode, settings, supervision, output/workspace/cursor restore with five positive owner checks and independent retirement/normal-OFF verification. Monitor ctime/link count are not claimed unchanged. A later 1774fa87 harness on runtime 26d passes nine virtual two-output flows, including actual control-based rotation, disable/re-enable and native pointer/keyboard Apply/Revert on a density-1.25 Displays panel. Five positive preservation checks plus one timestamp/link-count policy marker, three cursor checks and a separate later normal-OFF observation pass; the latter verifies the same desktop lifetime, original output and all 14 source/43 security entries.",
+        "remaining": "Physical monitor modes/visibility and cable hotplug/suspend, compositor restart during confirmation, secure-output changes and pacing remain unverified. HDR/VRR/mirroring/modelines are not editable. Keep-to-file-identity-capture host loss remains manual recovery. The nine-flow run closes only the scoped virtual-output enable/disable/rotation and fractional Displays-panel input gaps. Earlier failed attempts retain their original outcomes; separate recovery does not turn them into feature passes.",
         "guides": [
           "docs/native-displays.md",
           "docs/monitor-layouts.md",
           "docs/fractional-scaling.md"
         ],
         "report": "reports/measurements/lucent-display-settings.json",
-        "two_output_report": "reports/measurements/lucent-native-two-output-displays.json"
+        "two_output_report": "reports/measurements/lucent-native-two-output-displays.json",
+        "latest_two_output_report": "reports/measurements/lucent-native-two-output-displays-26d-nine.json"
       },
       {
         "id": "resources-and-animation",
@@ -530,7 +531,7 @@
         "id": "application-integration",
         "status": "merged_scoped_real_application_native_verified",
         "implemented": "Accepted main 6b50bd5e includes catalog/pins, ordinary activation, declared actions and Application bb304907 shipped in merged 8e: fresh input-bound context, explicit file/URI Open and expanded XDG parsing/observation. A later real Chromium run with the independent d1 consumer, now merged through PR89, and b6323e9 harness passes all nine feature checks, including observed first-launch focus, and all eight restoration checks; deployed desktop/CLI remain unchanged. The separate coherent 9b trial passes eleven native HTTP URI and nine restoration checks; pointer, socket and CLI Open each load two fresh exact HTTP targets while the declared Action retains local files. A later 4c harness on coherent 35ed passes 12 singular HTTP %u native feature and 9 restoration checks; pointer/socket/CLI Open each load exactly one fresh owned HTTP document, and the declared Action still loads two local documents. PR102/current 6e471005 now includes canonical UriPort.open(target, ApplicationLaunchContext), optional SDK app ID, revision-bound notification-link completion and shared-policy XdgUri forwarding.",
-        "remaining": "Native default-handler pointer/keyboard interaction and token delivery remain pending, alongside direct token-consumption proof, external navigation, other applications and broader workflows. The source-only preparation has 27 focused pure cases and 631 passing integration tests. A later native warm-browser setup attempt fails before rich-link input/feature checks and does not establish restoration; any later recovery requires separate evidence. Earlier explicit-application results keep their sources/outcomes and do not validate this route or performance.",
+        "remaining": "Native default-handler link pointer/keyboard activation and token delivery remain pending, alongside direct token-consumption proof, external navigation, other applications and broader workflows. The initial cea7b8e6 preparation recorded 27 focused pure cases and 631 integration passes. The later de276755 V7 native attempt selected the temporary MIME default, completed all nine post-warm steps and focused the notification group, but failed selected-link revalidation before link dispatch as its controlled 25-second notification lifetime expired during audit guards. All nine cleanup checks and an independent later normal-OFF observation pass; no default-handler link acceptance follows. R8 is native-unrun here. Earlier failures and explicit-application results retain their sources/outcomes and do not validate this route or performance.",
         "guides": [
           "docs/application-activation.md",
           "docs/application-catalog.md",
@@ -634,14 +635,83 @@
             },
             "restoration_established_by_this_attempt": false,
             "scope": "Warm-browser setup failed before MIME publication or rich-link feature actions. This is not a default-handler feature pass; the failed receipt is retained. Later recovery, if any, needs a separate record."
+          },
+          "preparation_checkpoint_scope": "The 27 focused and 631 integration passes belong to the initial cea7b8e6 source-preparation checkpoint. Later de276755 V7 executed natively and failed before link dispatch with all nine cleanup checks passing; the preserved earlier warm-setup failure remains failed evidence. R8 native acceptance is unrun here.",
+          "subsequent_native_attempt_v7": {
+            "harness_source_commit": "de276755d263d257cfeef7e42b94d1b470798548",
+            "private_report_sha256": "ba325fa769cbcb94aee681905647e8145c074fefc8653412c48911dfa5d8bd1b",
+            "production_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+            "release_manifest_sha256": "5b228fa1bbdc71c50a245edcb70e726ef4d5826f476ba261e53042023d322aec",
+            "host_harness_sha256": "45dd8f19d53e6ff27a15bbade1771f30b217566327e17accf355c2f4aac872a6",
+            "overall_passed": false,
+            "native_run_executed": true,
+            "native_default_handler_acceptance_passed": false,
+            "temporary_real_mime_default_selected": true,
+            "post_warm_steps_completed": 9,
+            "group_native_pointer_focus": true,
+            "pointer_link_dispatch_attempted": false,
+            "keyboard_link_case_reached": false,
+            "failure_phase": "pointer_target_revalidate",
+            "fixed_reason": "one_current_selected_notification_link",
+            "link_feature_checks_passed": 0,
+            "cleanup_checks_passed": 9,
+            "cleanup": {
+              "browser_and_original_entry_retired": true,
+              "notifications_absent_after_expiry_window": true,
+              "default_mime_restored": true,
+              "default_entry_restored": true,
+              "notification_history_closed": true,
+              "configuration_guardian_retired": true,
+              "canonical_browser_and_entry_retired": true,
+              "original_http_watchdog_retired": true,
+              "caller_state_and_cursor_preserved": true
+            },
+            "timing_diagnostic": {
+              "read_only": true,
+              "private_receipt_sha256": "a38e62c5d0ed98171ffd7a024ad20c11f9d9929173c889746d074863e05f1fab",
+              "observed_revision_seconds_after_note": 16.681331,
+              "expiry_seconds_after_note": 24.999189,
+              "finish_request_seconds_after_note": 27.064112,
+              "finish_request_after_expiry": true,
+              "scope": "The controlled 25-second notification lifetime expired during audit guards before link dispatch. This diagnostic does not establish link activation or production behavior under a longer fixture lifetime."
+            },
+            "independent_later_normal_off": {
+              "receipt_sha256": "31cef7178a40ca9b83d5f25cb14be623c123a5531003d250d174a7fc0f2e9e97",
+              "success": true,
+              "read_only": true,
+              "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+              "desktop_sha256": "7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08",
+              "same_desktop_lifetime_as_previous_display_off": true,
+              "source_and_security_inventories_match_previous_display_off": true,
+              "source_inventory_count": 14,
+              "security_inventory_count": 43,
+              "original_output": {
+                "name": "Virtual-1",
+                "width": 1920,
+                "height": 1080,
+                "scale": 1,
+                "transform": 0,
+                "x": 0,
+                "y": 0,
+                "refreshRate": 60.0
+              },
+              "runtime_profiling": {
+                "frames": false,
+                "presentation": false,
+                "source_pts": false
+              },
+              "performance_acceptance": false
+            },
+            "next_r8_native_run_executed": false,
+            "scope": "Owned warm-browser setup and group focus only; no link press, keyboard link activation, token transport, fresh-browser focus, direct Chromium token consumption, hardware or performance acceptance."
           }
         }
       },
       {
         "id": "real-world-validation",
         "status": "partial_owned_native_evidence",
-        "implemented": "Source-specific owned native Notes/clipboard, SNI/DBusMenu tray, single-output video density fit, live previews, System invalidation, virtual Bluetooth and other recorded workflows. Seven one-output native Display draft/Apply/Keep/Revert/deadline/EOF-recovery flows also pass with exact file preservation and explicit expected one-restart validation. Later a7f RADV hardware-path startup and three-second native frame advancement pass with anchored user/source/settings/media/critical-file and monitor preservation. The coherent 8e release is now deployed on retained RADV, and its normal 120-second resource interval passes preservation while failing host-pressure eligibility. A fresh 16-check coherent 8e run passes two simultaneous compositor outputs, one owned headless, at 1x/2x/1.25x with real panel clicks, held-button removal, same-name new native global/host generation and exact restoration; see reports/measurements/lucent-native-multi-output.json. A later 2044e54f native harness passes nine actual Chromium textarea/Notes keyboard clipboard checks and all twelve restoration checks on unchanged 8e, one virtual output; see reports/measurements/lucent-native-gui-clipboard-2044.json. A genuine wired-only NetworkManager Applet run on unchanged 8e passes five native bar/menu/information-action checks and four cleanup checks; a fresh outside-worker post-removal observation passes thirteen preservation checks, restoring all 964 original packages/reasons with five signed test packages absent. Other apps/menus, wireless/secret-agent, physical hardware, pixel quality and performance remain unverified. Later harness 86df4e5b on runtime 35ed passes four two-output Display draft/Apply/Revert/timeout/Keep flows with one owned headless peer, five positive owner-restoration checks and independent retirement/normal-OFF verification; see reports/measurements/lucent-native-two-output-displays.json. All new panel input remains on the unchanged original 1x output.",
-        "remaining": "Physical simultaneous monitors/cable hotplug, suspend/resume, secure-output changes, fractionally scaled Displays-panel input, native enable/disable/rotation, cross-output text/clipboard, physical Bluetooth/audio/power/radio hardware, additional third-party tray applications/menus and wireless/secret-agent workflows, other GUI clipboard applications, rich content and delayed-provider/focus-retirement races. The owned headless run establishes no blanket hardware, resource or 60 FPS claim."
+        "implemented": "Source-specific owned native Notes/clipboard, SNI/DBusMenu tray, single-output video density fit, live previews, System invalidation, virtual Bluetooth and other recorded workflows. Seven one-output native Display draft/Apply/Keep/Revert/deadline/EOF-recovery flows also pass with exact file preservation and explicit expected one-restart validation. Later a7f RADV hardware-path startup and three-second native frame advancement pass with anchored user/source/settings/media/critical-file and monitor preservation. The coherent 8e release is now deployed on retained RADV, and its normal 120-second resource interval passes preservation while failing host-pressure eligibility. A fresh 16-check coherent 8e run passes two simultaneous compositor outputs, one owned headless, at 1x/2x/1.25x with real panel clicks, held-button removal, same-name new native global/host generation and exact restoration; see reports/measurements/lucent-native-multi-output.json. A later 2044e54f native harness passes nine actual Chromium textarea/Notes keyboard clipboard checks and all twelve restoration checks on unchanged 8e, one virtual output; see reports/measurements/lucent-native-gui-clipboard-2044.json. A genuine wired-only NetworkManager Applet run on unchanged 8e passes five native bar/menu/information-action checks and four cleanup checks; a fresh outside-worker post-removal observation passes thirteen preservation checks, restoring all 964 original packages/reasons with five signed test packages absent. Other apps/menus, wireless/secret-agent, physical hardware, pixel quality and performance remain unverified. Later harness 86df4e5b on runtime 35ed passes four two-output Display draft/Apply/Revert/timeout/Keep flows with one owned headless peer, five positive owner-restoration checks and independent retirement/normal-OFF verification; see reports/measurements/lucent-native-two-output-displays.json. That historical four-flow run kept all panel input on the unchanged original 1x output. The later 1774fa87 harness on runtime 26d passes nine virtual Display workflows, including rotation, disable/re-enable and native pointer/keyboard interaction on the fractional peer panel, with guarded restoration and separate later normal-OFF verification; see reports/measurements/lucent-native-two-output-displays-26d-nine.json.",
+        "remaining": "Physical simultaneous monitors/cable hotplug, suspend/resume, secure-output changes, cross-output text/clipboard, physical Bluetooth/audio/power/radio hardware, additional third-party tray applications/menus and wireless/secret-agent workflows, other GUI clipboard applications, rich content and delayed-provider/focus-retirement races. The owned headless run establishes no blanket hardware, resource or 60 FPS claim."
       },
       {
         "id": "documentation-accuracy",
@@ -792,6 +862,81 @@
         "feature_checks_passed": 5,
         "restoration_checks_passed": 5,
         "scope": "One prepared native output; independent non-replacing input-method peer, no third-party IME/hardware claim"
+      },
+      {
+        "feature": "two-output-display-nine-native-controls",
+        "production_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+        "native_harness_source_commit": "1774fa875745aac24d0d9e5503616ac96b356789",
+        "report": "reports/measurements/lucent-native-two-output-displays-26d-nine.json",
+        "report_sha256": "6257775f511bb738efc48713e928af2986b7414f98f3a849c1f22e0e17c99350",
+        "private_report_sha256": "5530f24309ca870d0328073ea9d54a0e4f5ffb3369307a2ebb573a9a08fc2946",
+        "controller_sha256": "ae87d7231890affe297cb28d7eb80ff2ce887858a1065be6a032f287f544a96a",
+        "guest_sha256": "97333e23de22de1105156eecf0d8a071c84361654b137ab0e81bf655d20b13c9",
+        "desktop_sha256": "7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08",
+        "release_manifest_sha256": "5b228fa1bbdc71c50a245edcb70e726ef4d5826f476ba261e53042023d322aec",
+        "feature_checks_passed": 9,
+        "owner_restoration_fields_passed": 6,
+        "positive_owner_restoration_checks_passed": 5,
+        "restoration_policy_markers_passed": 1,
+        "cursor_restoration_checks_passed": 3,
+        "bounded_owner_phases_passed": 9,
+        "resource_cleanup_completed": true,
+        "checks": [
+          "two_output_draft_has_no_native_effect",
+          "two_output_apply_explicit_revert",
+          "two_output_fractional_scale_timeout_revert",
+          "two_output_native_keep_complete_monitor_tail",
+          "owned_peer_rotation_apply_and_revert",
+          "owned_peer_disable_and_keep",
+          "owned_peer_reenable_controls_apply_and_keep",
+          "owned_peer_fractional_scale_keep",
+          "fractional_owned_panel_real_pointer_keyboard_apply_revert"
+        ],
+        "fractional_panel": {
+          "buffer_height": 960,
+          "buffer_width": 1280,
+          "density": 1.25,
+          "height": 768,
+          "id": "displays",
+          "native_frames": 26,
+          "width": 1024
+        },
+        "independent_post_run_normal_off": {
+          "binding_sha256": "d620edc12f9a8fc4c2c440bda85cf4b8b0ae0dcb09eb09d958f84f33309f1c5b",
+          "desktop_sha256": "7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08",
+          "helper_sha256": "e4914a16e126fd58bb655861e452293e210c12a83681ae1d38e31ff6f93756f9",
+          "original_output": {
+            "height": 1080,
+            "name": "Virtual-1",
+            "refreshRate": 60.0,
+            "scale": 1,
+            "transform": 0,
+            "width": 1920,
+            "x": 0,
+            "y": 0
+          },
+          "read_only": true,
+          "receipt_sha256": "0370e7fb7266545ab417ef4aadfc34bc426d6457da428258379222c28ccd75aa",
+          "resource_or_presentation_measurement": false,
+          "runtime_profiling": {
+            "frames": false,
+            "presentation": false,
+            "source_pts": false
+          },
+          "same_desktop_lifetime_as_pre_run": true,
+          "scope": "Independent later read-only observation; the original nine-flow Display receipt remains unchanged.",
+          "security_inventory_count": 43,
+          "source_and_security_inventories_match_pre_run": true,
+          "source_inventory_count": 14,
+          "success": true
+        },
+        "scope": "Original 1920x1080/60Hz/scale1 virtual output unchanged plus one exclusively owned headless peer. All nine Display workflows use rendered controls and native VM input; the fractional panel is logical 1024x768, density1.25, buffer1280x960 with26 native submissions. Exact source/security/profile preservation, original monitor bytes/inode, workspace/cursor restoration and only-owned-output removal pass. Native submissions are not presentation FPS.",
+        "monitor_ctime_and_link_count_claimed_unchanged": false,
+        "earlier_failed_attempts_unchanged": true,
+        "physical_or_secure_output_acceptance": false,
+        "presentation_or_performance_acceptance": false,
+        "whole_goal_complete": false,
+        "not_established": "Physical monitor/cable hotplug, suspend/resume, compositor restart, secure-output changes, resource targets or presentation pacing. Keep-to-file-identity-capture host-loss manual recovery remains a limitation. The result does not rewrite earlier failed Display trials or the separate recovery outcomes, and says nothing about the current running VM."
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
