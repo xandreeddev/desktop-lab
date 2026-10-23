@@ -1,10 +1,12 @@
 """Private bounded owner; canonical native-output observers remain unchanged."""
-import argparse,copy,ctypes,hashlib,json,os,signal,socket,stat,struct,sys,time
+import argparse,contextlib,copy,ctypes,hashlib,json,math,os,signal,socket,stat,struct,subprocess,sys,time
 from pathlib import Path
 sys.dont_write_bytecode=True
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 import multi_output_guard as base
 import multi_output_policy as p
+import multi_output_display_policy as d
+import multi_output_display_timing as timing
 import preservation_fingerprint as preservation
 import display_supervision as supervision
 import owned_application_units as units
@@ -12,6 +14,70 @@ import owned_application_units as units
 require=p.require
 BEGIN=b'-- BEGIN LUCENT DISPLAY CONFIGURATION\n'
 END=b'-- END LUCENT DISPLAY CONFIGURATION\n'
+
+
+class PhaseDeadline(TimeoutError):
+    """A fixed test-owner phase exhausted its own finite observation budget."""
+
+
+@contextlib.contextmanager
+def phase_deadline(seconds):
+    previous=signal.getsignal(signal.SIGALRM)
+    require(signal.getitimer(signal.ITIMER_REAL)==(0.0,0.0),'no_preexisting_display_phase_timer')
+    def expired(*_):
+        raise PhaseDeadline('bounded_display_phase_expired')
+    try:
+        signal.signal(signal.SIGALRM,expired)
+        # An existing cleanup catch may handle one exception while recording
+        # lost cursor authority. A short repeat keeps the phase bound active.
+        signal.setitimer(signal.ITIMER_REAL,seconds,.1)
+        yield
+    finally:
+        try:
+            signal.setitimer(signal.ITIMER_REAL,0)
+        finally:
+            signal.signal(signal.SIGALRM,previous)
+
+
+def run_phase(directory,diagnostics,phase,action):
+    require(phase in timing.PHASE_SECONDS,'known_display_observation_phase_required')
+    budget=timing.PHASE_SECONDS[phase];started=time.monotonic()
+    record={'phase':phase,'status':'started','budget_seconds':budget,'elapsed_seconds':0.0}
+    try:
+        with phase_deadline(budget):
+            base.private_json(directory/(phase+'-started.json'),record)
+            value=action()
+            if time.monotonic()-started>=budget:
+                raise PhaseDeadline('bounded_display_phase_expired')
+    except BaseException as error:
+        known=('TimeoutExpired','PhaseDeadline','Blocked','ValueError','OSError','PermissionError',
+               'FileNotFoundError','FileExistsError','KeyboardInterrupt','JSONDecodeError')
+        record={**record,'status':'failed','elapsed_seconds':max(0.0,time.monotonic()-started),
+                'error_class':type(error).__name__ if type(error).__name__ in known else 'OtherError'}
+        diagnostics.append(record)
+        # Never expose raw argv, script text, stdout/stderr or exception payloads.
+        try:base.private_json(directory/(phase+'-result.json'),record)
+        except BaseException:pass
+        raise
+    record={**record,'status':'passed','elapsed_seconds':max(0.0,time.monotonic()-started)}
+    diagnostics.append(record)
+    base.private_json(directory/(phase+'-result.json'),record)
+    return value
+
+
+def snapshot(directory,diagnostics,phase):
+    require(phase in ('before_preservation','after_preservation','before_supervision','after_supervision'),
+            'fixed_read_only_snapshot_phase_required')
+    preserved=phase.endswith('_preservation')
+    expected=('python3','-c',preservation.SCRIPT) if preserved else ('python3','-c',supervision.SCRIPT,'identity')
+    def observed(*argv):
+        require(argv==expected,'fixed_read_only_snapshot_command_required')
+        result=subprocess.run(argv,capture_output=True,text=True,timeout=timing.PHASE_SECONDS[phase],check=False)
+        require(result.returncode==0 and len(result.stdout)<=8*1024*1024,'bounded_read_only_snapshot_failed')
+        return result.stdout.strip()
+    action=(lambda:preservation.fingerprint(observed)) if preserved else (lambda:supervision.identity(observed))
+    return run_phase(directory,diagnostics,phase,action)
+
 
 def stamp(path,hashed=True,depth=0):
     path=Path(path)
@@ -74,18 +140,25 @@ def original_file(expected,observed):
     # change ctime; bytes/inode/device/mode/owner/size/mtime remain authoritative.
     return expected[0]==observed[0] and expected[1][:6]==observed[1][:6]
 
-def keep_content(original,layout):
+def keep_content(original,layout,owned=None):
     require(original.count(BEGIN)<=1 and original.count(END)==original.count(BEGIN)
             and (BEGIN not in original or original.endswith(END)), 'unambiguous_monitor_tail_required')
     prefix=original.split(BEGIN,1)[0]
     if prefix and not prefix.endswith(b'\n'): prefix+=b'\n'
     rules=[]
     for m in sorted(layout,key=lambda row:row['name']):
-        require(m['disabled'] is False and m['transform']==0,'owned_enabled_layout_required')
+        editable=owned is not None and m['name']==p.owned_name(owned)
+        require(type(m.get('disabled')) is bool,'native_display_enabled_state_required')
+        if m['disabled']:
+            require(editable,'original_display_must_remain_enabled')
+            rules.append('hl.monitor({ output = '+json.dumps(m['name'])+', disabled = true })\n')
+            continue
+        require(m['transform']==0 or editable and m['transform'] in (1,2,3),
+                'original_display_rotation_must_remain_unchanged')
         rules.append('hl.monitor({ output = '+json.dumps(m['name'])+', disabled = false, mode = "'
             +str(m['width'])+'x'+str(m['height'])+'@'+format(round(m['refreshRate']*1000)/1000,'.3f')
             +'", position = "'+str(m['x'])+'x'+str(m['y'])+'", scale = '+format(m['scale'],'.3f')
-            +', transform = 0 })\n')
+            +', transform = '+str(m['transform'])+' })\n')
     return prefix+BEGIN+''.join(rules).encode()+END
 
 def exchange_restore(config,backup,original,kept,directory):
@@ -127,8 +200,11 @@ class Owner(base.Native):
         require(self.baseline[0]['name']=='Virtual-1' and self.baseline[0]['width']==1920
                 and self.baseline[0]['height']==1080 and self.baseline[0]['x']==self.baseline[0]['y']==0
                 and self.baseline[0]['scale']==1,'original_virtual_output_required')
+        require([p.monitor_signature(row) for row in self.all_monitors()]==self.baseline,
+                'no_preexisting_disabled_or_additional_output_required')
         self.config=Path.home()/'.config/hypr/monitors.lua'
         self.original=read(self.config);self.kept=None;self.armed=None
+        self.keep_index=0;self.captured_keeps=0
         self.parent=str(self.config.parent)
         observed_host=p.host(base.inspect(),'Virtual-1')
         self.original_host={key:observed_host[key] for key in ('id','instance','generation')}
@@ -140,7 +216,76 @@ class Owner(base.Native):
         finally: os.close(fd)
         self.admit_file(False)
         self.lease=base.Lease(self,header['output'],self.baseline)
-        self.owned=None;self.allowed=[]
+        self.owned=None;self.allowed=[];self.peer_identity=None
+        self.peer_global=None;self.peer_disabled=False;self.peer_retired=False;self.peer_ready=False
+        self.peer_host=None;self.peer_surfaces=None;self.lifecycle=None;self.lifecycle_transaction=None
+        self.disable_cursor=None
+        self.panel_target='Virtual-1'
+
+    def all_monitors(self):
+        return json.loads(base.hypr('-j','monitors','all'))
+
+    def peer_submitted(self,state,current):
+        """Wait for actual per-output geometry; submission is not presentation."""
+        width,height=d.display_logical_size(current)
+        layers=json.loads(base.hypr('-j','layers'))
+        try:
+            host=p.host(state,self.lease.name)
+            require(len(host['viewport'])==2
+                    and all(math.isclose(a,b,abs_tol=.01) for a,b in zip(host['viewport'],(width,height)))
+                    and math.isclose(host['density'],current['scale'],abs_tol=.001),
+                    'owned_host_viewport_or_density_not_current')
+            for role in ('background','bar'):
+                surface=p.surface(state,self.lease.name,role)
+                require(surface['native_frames']>0 and surface['frames']>0
+                        and math.isclose(surface['density'],current['scale'],abs_tol=.001)
+                        and math.isclose(surface['width'],width,abs_tol=1)
+                        and (math.isclose(surface['height'],height,abs_tol=1) if role=='background'
+                             else 0<surface['height']<height)
+                        and (surface['buffer_width'],surface['buffer_height'])==
+                            (math.ceil(surface['width']*surface['density']),math.ceil(surface['height']*surface['density'])),
+                        'owned_native_surface_geometry_not_submitted')
+                p.layer_for(layers,self.lease.name,surface,self.pid)
+        except p.Blocked:
+            return False
+        return True
+
+    def peer_state(self,state):
+        current=d.display_layout(self.all_monitors(),self.baseline,self.peer_identity)
+        require(current in self.allowed,'unadmitted_owned_display_layout')
+        globals=[row for row in state['outputs'] if row['name']==self.lease.name]
+        hosts=[row for row in state['client']['monitor_hosts'] if row['id']==self.lease.name]
+        require(len(globals)<=1 and len(hosts)<=1,'ambiguous_owned_display_lifetime')
+        transaction=state['client']['displays'].get('transaction') or {}
+        requested=(state['client']['displays']['busy'] or
+                   (transaction.get('id') is not None and transaction['id']!=self.lifecycle_transaction
+                    and transaction.get('phase') in ('preparing','confirmation','kept')))
+        if current['disabled']:
+            require(self.peer_disabled or (self.lifecycle=='disable' and requested),
+                    'owned_disable_without_admitted_native_transaction')
+            self.peer_disabled=True
+            require(not globals or globals[0]['global']==self.peer_global,
+                    'unexpected_global_while_disabling_owned_display')
+            self.peer_ready=(not globals and not hosts and
+                p.retired(state,self.lease.name,self.peer_host['instance'],self.peer_surfaces))
+            self.peer_retired|=self.peer_ready
+        elif self.peer_disabled:
+            require(self.lifecycle=='enable' and self.peer_retired and requested,
+                    'owned_reenable_without_retired_peer_and_new_transaction')
+            self.peer_ready=False
+            if globals and hosts:
+                require(globals[0]['global']!=self.peer_global
+                        and hosts[0]['generation']>self.peer_host['generation'],
+                        'reenabled_peer_requires_new_wayland_and_host_lifetimes')
+                if not self.peer_submitted(state,current):
+                    return current
+                self.peer_global=globals[0]['global'];self.lease.global_id=self.peer_global
+                self.peer_disabled=False;self.peer_retired=False;self.peer_ready=True;self.lifecycle=None
+        else:
+            require(len(globals)==1 and globals[0]['global']==self.peer_global,
+                    'owned_wayland_lifetime_changed_outside_disable_cycle')
+            self.peer_ready=self.peer_submitted(state,current)
+        return current
 
     def security_sources(self,hashed=False):
         require(len(self.expected_sources)<=128,'bounded_source_security_inventory')
@@ -165,7 +310,8 @@ class Owner(base.Native):
         self.files=expected
         if kept: self.kept=actual
 
-    def checked(self):
+    def resource_state(self):
+        """Observe preserved resources without granting any cursor/input authority."""
         self.preserve()
         self.security_sources()
         state=base.inspect()
@@ -174,11 +320,12 @@ class Owner(base.Native):
                 'normal_profiling_must_remain_off')
         require(all(p.host(state,'Virtual-1')[key]==value for key,value in self.original_host.items())
                 and p.output(state,'Virtual-1')['global']==self.original_global,'original_host_lifetime_changed')
+        return state
+
+    def checked(self):
+        state=self.resource_state()
         if self.owned is not None:
-            current=p.unique(self.monitors(),lambda row:row['name']==self.lease.name,'owned_output_missing')
-            p.unchanged_layout(self.monitors(),self.baseline,self.lease.name,p.monitor_signature(current))
-            require(p.monitor_signature(current) in self.allowed and self.global_id(self.lease.name)==self.lease.global_id,
-                    'owned_output_lifetime_or_unadmitted_layout')
+            self.peer_state(state)
         else: p.unchanged_layout(self.monitors(),self.baseline,self.lease.name,None)
         keyboards=[row for row in json.loads(base.hypr('-j','devices'))['keyboards'] if row.get('main')]
         require(len(keyboards)==1 and keyboards[0].get('layout')=='us'
@@ -186,8 +333,38 @@ class Owner(base.Native):
         keyboard_bindings(json.loads(base.hypr('-j','binds')))
         return state
 
-    def status(self):
-        state=self.checked();child=state['client']['displays']
+    def input_preflight(self):
+        p.require_unbound_input(json.loads(base.hypr('-j','binds')))
+        current=json.loads(base.hypr('-j','cursorpos'))
+        declaration=self.disable_cursor
+        if (declaration is not None and not self.cursor.lost
+                and (current.get('x'),current.get('y'))!=self.cursor.expected):
+            # No input is admitted while the native disable and SDK retirement
+            # settle. The declared point alone never grants cursor authority.
+            try:
+                while True:
+                    state=self.checked();self.panel_observation(state)
+                    peer=self.peer_state(state)
+                    # Source/panel/peer probes can take time. Only this fresh
+                    # native sample may commit the declared cursor postimage.
+                    current=json.loads(base.hypr('-j','cursorpos'))
+                    if declaration.confirm(self.cursor,current,state,peer,time.monotonic()):
+                        base.private_json(self.directory/'cursor-disable-confirmed.json',{
+                            'point':list(declaration.destination),
+                            'transaction':state['client']['displays']['transaction'],
+                            'old_host_fully_retired':True})
+                        self.disable_cursor=None
+                        return state
+                    time.sleep(.05)
+                    current=json.loads(base.hypr('-j','cursorpos'))
+            except BaseException:
+                self.cursor.lost=True;self.disable_cursor=None
+                raise
+        self.cursor.check(current)
+        return None
+
+    def panel_observation(self,state):
+        child=state['client']['displays']
         require(not any(state['client'].get(name,{}).get(key) for name in
             ('audio','media','network','bluetooth','power','tray','weather','live_wallpaper','settings','application_actions')
             for key in ('open','visible','busy')),'no_foreign_panel_required')
@@ -195,92 +372,231 @@ class Owner(base.Native):
         panel=panels[0] if len(panels)==1 else None
         layer=None
         if child['open']:
-            require(panel is not None and panel['output']=='Virtual-1' and panel['pointer_input']=='all'
+            require(panel is not None and panel['output']==self.panel_target and panel['pointer_input']=='all'
                     and panel['keyboard']=='exclusive' and panel['frames']>0 and panel['native_frames']>0,
                     'owned_submitted_display_panel_required')
             require([row['id'] for row in state['surfaces'] if row['keyboard']=='exclusive']==[panel['id']],
                     'one_exclusive_display_target_required')
-            layer=p.layer_for(json.loads(base.hypr('-j','layers')),'Virtual-1',panel,self.pid)
-        self.input_preflight()
+            monitor=p.unique(self.monitors(),lambda row:row['name']==self.panel_target,'panel_native_output_missing')
+            width,height=d.display_logical_size(monitor)
+            require(math.isclose(panel['density'],monitor['scale'],abs_tol=.001)
+                    and math.isclose(panel['width'],width,abs_tol=1)
+                    and math.isclose(panel['height'],height,abs_tol=1)
+                    and (panel['buffer_width'],panel['buffer_height'])==
+                        (math.ceil(panel['width']*panel['density']),math.ceil(panel['height']*panel['density'])),
+                    'panel_actual_viewport_density_and_buffer_required')
+            layer=p.layer_for(json.loads(base.hypr('-j','layers')),self.panel_target,panel,self.pid)
+        target=p.host(state,self.panel_target)
         return {'state':child,'panel':panel,'layer':layer,'monitors':self.monitors(),
-                'host':self.original_host,'global':self.original_global,'cursor':json.loads(base.hypr('-j','cursorpos'))}
+                'host':{key:target[key] for key in ('id','instance','generation')},
+                'global':p.output(state,self.panel_target)['global'],
+                'active_monitor':state['client']['active_monitor'],'panel_target':self.panel_target,
+                'cursor':json.loads(base.hypr('-j','cursorpos'))}
+
+    def status(self):
+        state=self.checked()
+        settled=self.input_preflight()
+        if settled is not None:state=settled
+        value=self.panel_observation(state)
+        value.update(peer=self.peer_state(state) if self.owned is not None else None,peer_ready=self.peer_ready)
+        return value
+
+    def cleanup_state(self):
+        state=self.resource_state()
+        neutral=copy.deepcopy(state['client']);neutral['displays']={}
+        base.idle(neutral)
+        if self.owned is None:
+            require([p.monitor_signature(row) for row in self.all_monitors()]==self.baseline,
+                    'only_original_native_output_expected')
+        else:
+            peer=d.display_layout(self.all_monitors(),self.baseline,self.peer_identity)
+            require(peer in self.allowed,'cleanup_must_only_remove_admitted_owned_peer')
+            if peer['disabled']:
+                require(self.peer_disabled or self.lifecycle=='disable',
+                        'cleanup_cannot_adopt_unadmitted_disabled_peer')
+        return state
 
     def operation(self,request):
         operation=request['operation']
         if operation=='create':
             require(self.owned is None,'new_output_only')
             value=self.lease.create();self.owned=copy.deepcopy(self.lease.expected)
-            self.allowed=[self.owned,{**self.owned,'x':self.owned['x']+16},{**self.owned,'scale':1.25}]
+            self.peer_identity={key:self.owned[key] for key in ('id','name','description')}
+            self.peer_global=self.lease.global_id;self.peer_ready=True
+            self.allowed=[self.owned,{**self.owned,'x':self.owned['x']+16},{**self.owned,'scale':1.25},
+                {**self.owned,'x':self.owned['x']+16,'transform':1},
+                {**self.peer_identity,'disabled':True},
+                {**self.owned,'x':self.owned['x']+16,'scale':1.25},
+                {**self.owned,'x':self.owned['x']+32,'scale':1.25}]
             return {'owned':self.owned,'allowed':self.allowed}
         if operation=='capture-keep':
             state=base.inspect()['client']['displays']
-            require(self.armed is not None and state['transaction']['phase']=='kept','explicit_keep_ack_required')
+            require(self.armed is not None and state['transaction']['phase']=='kept'
+                    and self.keep_index>self.captured_keeps,'explicit_fresh_keep_ack_required')
             self.admit_file(True)
-            base.private_json(self.directory/'kept.json',{'sha256':hashlib.sha256(self.kept[0]).hexdigest(),
-                                                         'identity':self.kept[1]})
+            base.private_json(self.directory/f'kept-{self.keep_index:02d}.json',{
+                'sha256':hashlib.sha256(self.kept[0]).hexdigest(),'identity':self.kept[1],
+                'transaction':state['transaction']})
+            self.captured_keeps=self.keep_index
             return {'captured':True}
         value=self.status()
         if operation=='status': return value
+        if operation in ('expect-disable','expect-enable'):
+            require(self.owned is not None and value['state']['open'] and value['state']['dirty']
+                    and not value['state']['busy'] and value['state']['selected']==self.lease.name
+                    and self.panel_target=='Virtual-1' and value['peer_ready'],
+                    'owned_peer_draft_on_original_panel_required')
+            disabling=operation=='expect-disable'
+            require(value['peer']['disabled'] is not disabling,'peer_enable_transition_must_change_state')
+            if disabling:
+                state=base.inspect();self.peer_host=copy.deepcopy(p.host(state,self.lease.name))
+                self.peer_surfaces=p.host_surface_ids(state,self.lease.name,self.peer_host['instance'])
+            else:require(self.peer_retired,'disabled_peer_host_must_be_fully_retired')
+            self.lifecycle='disable' if disabling else 'enable'
+            self.lifecycle_transaction=(value['state'].get('transaction') or {}).get('id')
+            return {'admitted':self.lifecycle,'peer':value['peer']}
+        if operation=='bar-warp':
+            name=request['monitor']
+            require(not value['state']['visible'] and name in ('Virtual-1',self.lease.name)
+                    and (name=='Virtual-1' or self.peer_ready and not self.peer_disabled),
+                    'closed_panel_and_enabled_owned_target_required')
+            state=base.inspect();target=p.host(state,name);global_id=p.output(state,name)['global']
+            require(target['generation']==request['generation'] and global_id==request['global'],
+                    'exact_bar_host_lifetime_required')
+            source=p.surface(state,name,'bar')
+            layer=p.layer_for(json.loads(base.hypr('-j','layers')),name,source,self.pid)
+            monitor=p.unique(self.monitors(),lambda row:row['name']==name,'bar_native_output_missing')
+            require(monitor['transform']==0,'panel_input_on_unrotated_target_only')
+            point=p.hit_center(monitor,source,layer,'bar-audio')
+            self.cursor.begin(value['cursor'],point)
+            require(base.hypr('dispatch',f'hl.dsp.cursor.move({{x={point[0]},y={point[1]}}})')=='ok','bar_warp_rejected')
+            self.cursor.confirm(json.loads(base.hypr('-j','cursorpos')));self.panel_target=name
+            return {'point':point,'surface':source['id'],'generation':target['generation'],'global':global_id}
         if operation=='arm-keep':
             require(value['state']['transaction']['phase']=='confirmation'
-                    and p.monitor_signature(p.unique(self.monitors(),lambda row:row['name']==self.lease.name,'owned'))==self.allowed[1],
-                    'owned_position_preview_required')
-            self.armed=keep_content(self.original[0],self.monitors())
-            base.private_json(self.directory/'keep-intent.json',{'expected_sha256':hashlib.sha256(self.armed).hexdigest()})
+                    and value['peer'] in self.allowed and value['peer_ready']
+                    and self.keep_index==self.captured_keeps,'owned_preview_required')
+            self.armed=keep_content(self.original[0],self.all_monitors(),self.lease.name)
+            self.keep_index+=1
+            base.private_json(self.directory/f'keep-intent-{self.keep_index:02d}.json',{
+                'expected_sha256':hashlib.sha256(self.armed).hexdigest(),'transaction':value['state']['transaction']})
             return {'armed':True}
         if operation=='warp':
-            require(value['panel'] is not None and request['monitor']=='Virtual-1'
-                    and request['generation']==self.original_host['generation']
-                    and request['global']==self.original_global,'exact_panel_host_required')
-            point=p.hit_center(self.baseline[0],value['panel'],value['layer'],request['identifier'])
+            d.require_owned_display_control(request['identifier'],value['state']['selected'],self.lease.name)
+            require(value['panel'] is not None and request['monitor']==self.panel_target
+                    and request['generation']==value['host']['generation']
+                    and request['global']==value['global'],'exact_panel_host_required')
+            monitor=p.unique(value['monitors'],lambda row:row['name']==self.panel_target,'panel_native_output_missing')
+            point=p.hit_center(monitor,value['panel'],value['layer'],request['identifier'])
             self.cursor.begin(value['cursor'],point)
             require(base.hypr('dispatch',f'hl.dsp.cursor.move({{x={point[0]},y={point[1]}}})')=='ok','panel_warp_rejected')
             self.cursor.confirm(json.loads(base.hypr('-j','cursorpos')))
+            if request['identifier']=='display-apply' and self.lifecycle=='disable':
+                require(self.disable_cursor is None,'one_bounded_disable_cursor_declaration_required')
+                base.require_reviewed_hyprland(self.hyprland_version)
+                self.disable_cursor=d.DisplayDisableCursor(self.cursor,self.baseline,self.peer_identity,
+                    self.peer_host,self.peer_surfaces,self.original_host,self.original_global,
+                    (value['state'].get('transaction') or {}).get('id'),time.monotonic())
+                base.private_json(self.directory/'cursor-disable-intent.json',{
+                    'preimage':list(self.disable_cursor.preimage),'postimage':list(self.disable_cursor.destination),
+                    'deadline_monotonic':self.disable_cursor.deadline,'before_transaction':self.disable_cursor.transaction,
+                    'hyprland_commit':base.REVIEWED_HYPRLAND_COMMIT,'source_sha256':d.DisplayDisableCursor.SOURCES})
+            else:self.disable_cursor=None
             return {'point':point,'surface':value['panel']['id']}
         require(operation=='finish','known_display_test_operation_required')
         return {'finishing':True}
 
     def cleanup(self):
-        # Close only our initially-absent panel; another foreground panel blocks
-        # restoration. No physical input, lock/auth operation or settings write.
-        if base.inspect()['client']['displays']['open']:
-            self.status();base.command(base.CLI,'displays','close')
+        # Owned-resource cleanup must not call status/input_preflight. Cursor
+        # loss never grants new input, and cannot strand our config/output.
+        state=self.cleanup_state();child=state['client']['displays']
+        if child['open']:
+            self.panel_observation(state)
+            require(not (child['busy'] or (child.get('transaction') or {}).get('phase')
+                         in ('preparing','confirmation')) or child['selected']==self.lease.name,
+                    'cleanup_cannot_close_foreign_display_transaction')
+            base.command(base.CLI,'displays','close')
         deadline=time.monotonic()+20
-        while base.inspect()['client']['displays']['visible']:
-            require(time.monotonic()<deadline,'display_close_deadline');time.sleep(.1)
+        while True:
+            state=self.cleanup_state();child=state['client']['displays']
+            phase=(child.get('transaction') or {}).get('phase')
+            if not child['open'] and not child['visible'] and not child['busy'] and phase not in ('preparing','confirmation'):
+                break
+            require(time.monotonic()<deadline,'display_transaction_retirement_deadline');time.sleep(.1)
         exchange_restore(self.config,self.directory/'monitors.original',self.original,self.kept,self.directory)
         self.admit_file(False)
-        self.checked()
+        state=self.cleanup_state()
         if self.owned is not None:
-            self.configure(p.case_layout(self.lease.name,self.baseline,1))
-            self.wait_case(self.lease.name,p.case_layout(self.lease.name,self.baseline,1))
-            self.lease.expected=self.owned
-            self.lease.remove();self.owned=None
-        self.preserve(full=True);self.restore_focus()
-        self.checked()
+            # Retire only this owned native identity. A guardian rollback may
+            # have renewed its SDK host; that grants removal, never test input.
+            hosts=[row for row in state['client']['monitor_hosts'] if row['id']==self.lease.name]
+            require(len(hosts)<=1,'ambiguous_cleanup_peer_host')
+            captured=(hosts[0]['instance'],p.host_surface_ids(state,self.lease.name,hosts[0]['instance'])) if hosts else None
+            base.Native.remove(self,self.lease.name)
+            deadline=time.monotonic()+15
+            while True:
+                state=self.resource_state()
+                rows=self.all_monitors()
+                absent=not any(row['name']==self.lease.name for row in rows)
+                if absent:
+                    require([p.monitor_signature(row) for row in rows]==self.baseline,'foreign_layout_changed_during_cleanup')
+                    retired=(p.retired(state,self.lease.name,*captured) if captured else
+                        not any(row['name']==self.lease.name for row in state['outputs'])
+                        and not any(row['id']==self.lease.name for row in state['client']['monitor_hosts'])
+                        and not any(row.get('output')==self.lease.name for row in state['surfaces'])
+                        and state.get('retiring_native_surfaces')==0)
+                    if retired:break
+                else:
+                    require(d.display_layout(rows,self.baseline,self.peer_identity) in self.allowed,
+                            'owned_identity_changed_during_cleanup')
+                require(time.monotonic()<deadline,'owned_cleanup_retirement_deadline');time.sleep(.1)
+            self.owned=None;self.lease.expected=None;self.lease.global_id=None
+        self.preserve(full=True);self.security_sources(True);self.cleanup_state()
+        cursor={'restored':False,'authority_retained':False,'at_original_position':False}
+        try:
+            cursor['authority_retained']=self.cursor.owns(json.loads(base.hypr('-j','cursorpos')))
+            if cursor['authority_retained']:
+                self.restore_focus();cursor['restored']=True
+            else:cursor['reason']='cursor_authority_lost_no_input_or_restore'
+        except BaseException as error:
+            cursor['reason']=str(error) if isinstance(error,p.Blocked) else type(error).__name__
+        final_cursor=json.loads(base.hypr('-j','cursorpos'))
+        cursor['at_original_position']=final_cursor==self.pointer
+        cursor['authority_retained']=self.cursor.owns(final_cursor)
+        cursor['restored'] &= cursor['authority_retained'] and cursor['at_original_position']
+        if not cursor['restored']:cursor.setdefault('reason','final_cursor_restoration_not_proven')
+        self.cleanup_cursor=cursor
+        current=self.monitors()
+        workspace=(len(current)==1 and current[0]['activeWorkspace']['id']==self.workspace)
+        self.cleanup_state()
         return {'original_monitor_bytes_inode':original_file(self.original,read(self.config)),
-                'only_owned_output_removed':True,'original_workspace_cursor':True,
+                'only_owned_output_removed':True,'original_workspace_preserved':workspace,
                 'same_cohort_settings_media_and_profiling':True,
                 'monitor_ctime_link_count_not_claimed_unchanged':True}
 
 def serve(directory,header):
-    owner=None;result={'success':False,'restoration':None}
+    owner=None;diagnostics=[];result={'success':False,'restoration':None,'phases':diagnostics}
     server=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
     try:
-        before={'preservation':preservation.fingerprint(base.command),
-                'supervision':supervision.identity(base.command)}
-        base.private_json(directory/'before-facts.json',before)
+        before={'preservation':snapshot(directory,diagnostics,'before_preservation'),
+                'supervision':snapshot(directory,diagnostics,'before_supervision')}
         owner_argv=['/usr/bin/python3','-I',str(directory/'guest.py'),'serve',str(directory)]
-        origin=units.capture_unit_origin(header['unit'],owner_argv)
-        require(origin['process']['pid']==os.getpid(),'same_owner_unit_lifetime_required')
-        owner=Owner(directory,header)
-        base.private_json(directory/'checkpoint.json',{'files':owner.files,'baseline':owner.baseline,
-            'workspace':owner.workspace,'pointer':owner.pointer,'original_global':owner.original_global,
-            'desktop_pid':owner.pid,'monitor_identity':owner.original[1],'owner_origin':origin})
-        server.bind(str(directory/'control.sock'));os.chmod(directory/'control.sock',0o600)
-        server.listen(1);server.settimeout(.5)
-        base.private_json(directory/'ready.json',{'ready':True,'desktop_pid':owner.pid})
-        deadline=time.monotonic()+200;finished=False
+        def authority():
+            base.private_json(directory/'before-facts.json',before)
+            value=units.capture_unit_origin(header['unit'],owner_argv)
+            require(value['process']['pid']==os.getpid(),'same_owner_unit_lifetime_required')
+            return value
+        origin=run_phase(directory,diagnostics,'startup_authority',authority)
+        owner=run_phase(directory,diagnostics,'owner_initialization',lambda:Owner(directory,header))
+        def publish_ready():
+            base.private_json(directory/'checkpoint.json',{'files':owner.files,'baseline':owner.baseline,
+                'workspace':owner.workspace,'pointer':owner.pointer,'original_global':owner.original_global,
+                'desktop_pid':owner.pid,'monitor_identity':owner.original[1],'owner_origin':origin})
+            server.bind(str(directory/'control.sock'));os.chmod(directory/'control.sock',0o600)
+            server.listen(1);server.settimeout(.5)
+            base.private_json(directory/'ready.json',{'ready':True,'desktop_pid':owner.pid})
+        run_phase(directory,diagnostics,'publish_ready',publish_ready)
+        deadline=time.monotonic()+timing.OWNER_LEASE_SECONDS;finished=False
         while not finished and time.monotonic()<deadline:
             try: client,_=server.accept()
             except TimeoutError: continue
@@ -307,32 +623,79 @@ def serve(directory,header):
         server.close()
         if owner is not None:
             try:
-                result['restoration']=owner.cleanup()
-                owner.security_sources(True)
-                after={'preservation':preservation.fingerprint(base.command),
-                       'supervision':supervision.identity(base.command)}
-                base.private_json(directory/'after-facts.json',after)
-                require(before==after,'final_supervision_settings_or_preservation_changed')
-                result['restoration']['preservation_supervision_security_sources_and_profiles']=True
+                def resource_cleanup():
+                    restored=owner.cleanup()
+                    owner.security_sources(True)
+                    return restored
+                result['restoration']=run_phase(directory,diagnostics,'resource_cleanup',resource_cleanup)
+                result['cursor_restoration']=owner.cleanup_cursor
+                # Retain the independent final inventory and supervision checks.
+                after={'preservation':snapshot(directory,diagnostics,'after_preservation'),
+                       'supervision':snapshot(directory,diagnostics,'after_supervision')}
+                def final_validation():
+                    base.private_json(directory/'after-facts.json',after)
+                    require(before==after,'final_supervision_settings_or_preservation_changed')
+                    result['restoration']['preservation_supervision_security_sources_and_profiles']=True
+                    result['resource_cleanup_completed']=True
+                    if not owner.cleanup_cursor['restored']:
+                        result['success']=False
+                        result['cleanup_blocked']=owner.cleanup_cursor.get('reason','cursor_restoration_not_proven')
+                run_phase(directory,diagnostics,'finish_validation',final_validation)
             except BaseException as error:
                 result['success']=False
                 result['cleanup_blocked']=str(error) if isinstance(error,p.Blocked) else type(error).__name__
         base.private_json(directory/'finished.json',result)
+
+def display_request_packet(operation,monitor=None,identifier=None,generation=None,global_id=None):
+    require(operation in ('create','status','capture-keep','expect-disable','expect-enable',
+                          'bar-warp','arm-keep','warp','finish'),'known_display_request_operation_required')
+    value={'operation':operation}
+    if operation=='warp':
+        value.update(monitor=monitor,identifier=identifier,generation=generation,**{'global':global_id})
+    elif operation=='bar-warp':
+        value.update(monitor=monitor,generation=generation,**{'global':global_id})
+    return value
+
+
+def display_request(directory,operation,monitor=None,identifier=None,generation=None,global_id=None):
+    # The canonical serializer is pinned to the runtime source and only knows
+    # panel warp metadata. Keep Display's extra bar request local to this test,
+    # retaining the same bounded socket protocol for every existing operation.
+    value=display_request_packet(operation,monitor,identifier,generation,global_id)
+    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as client:
+        deadline=time.monotonic()+35
+        client.settimeout(35)
+        client.connect(str(directory/'control.sock'))
+        client.sendall((json.dumps(value)+'\n').encode())
+        result=bytearray()
+        while b'\n' not in result and len(result)<=65536:
+            remaining=deadline-time.monotonic()
+            require(remaining>0,'absolute_guard_response_deadline_expired')
+            client.settimeout(remaining)
+            block=client.recv(65536);require(bool(block),'truncated_guard_response')
+            result.extend(block)
+        require(len(result)<=65536,'oversized_guard_response')
+        print(result.decode().strip())
+
 
 def main():
     require(__debug__,'python_assertions_required')
     parser=argparse.ArgumentParser();parser.add_argument('mode',choices=('serve','request'))
     parser.add_argument('directory',type=Path);parser.add_argument('operation',nargs='?')
     parser.add_argument('--identifier');parser.add_argument('--generation',type=int);parser.add_argument('--global-id',type=int)
+    parser.add_argument('--monitor',default='Virtual-1')
     args=parser.parse_args();directory=args.directory;meta=directory.lstat()
     require(directory.is_absolute() and directory.resolve(strict=True)==directory
             and directory.name.startswith('native-two-output-displays-') and stat.S_ISDIR(meta.st_mode)
             and stat.S_IMODE(meta.st_mode)==0o700 and meta.st_uid==os.getuid(),'private_test_directory_required')
     if args.mode=='request':
-        base.request(directory,args.operation,None,'Virtual-1',args.identifier,args.generation,args.global_id)
+        display_request(directory,args.operation,args.monitor,args.identifier,args.generation,args.global_id)
     else:
         signal.signal(signal.SIGTERM,lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
         header=json.loads((directory/'header.json').read_bytes())
+        require(set(header['source_sha256'])=={'guest.py','multi_output_guard.py','multi_output_policy.py',
+                'multi_output_display_policy.py','multi_output_display_timing.py','preservation_fingerprint.py','display_supervision.py',
+                'owned_application_units.py'},'complete_display_staged_source_set_required')
         for name,expected in header['source_sha256'].items():
             value=directory/name;meta=value.lstat()
             require(value.name==name and not value.is_symlink() and stat.S_ISREG(meta.st_mode)
