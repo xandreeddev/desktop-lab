@@ -191,7 +191,7 @@ class ConfigurationLease(unittest.TestCase):
 
 class FixturePreparation(unittest.TestCase):
     def prepare(self, root):
-        run = root / 'owned run % $ ` " literal'
+        run = root / 'lucent-application-intent.abcdef123456'
         config, data = root / 'config', root / 'data'
         for path in (run, config, data):
             path.mkdir(mode=0o700)
@@ -209,18 +209,40 @@ class FixturePreparation(unittest.TestCase):
             prepared = driver.prepare(run, 'abcdef123456')
         return run, config, apps, prepared, canonical.encoded, encode
 
-    def test_fixed_interpreter_is_literal_and_every_remaining_argument_keeps_canonical_encoding(self):
+    def test_only_reviewed_fixed_arguments_are_bare_literals_and_uri_remains_a_field_code(self):
         with tempfile.TemporaryDirectory() as temporary:
             run, config, apps, prepared, encoded, encode = self.prepare(Path(temporary))
             tail = ['-I', str(run / 'default-uri.py'), 'open', str(run), 'abcdef123456']
             entry = p.read(run / 'default-entry.payload').decode()
             command = next(line for line in entry.splitlines() if line.startswith('Exec='))
-            self.assertEqual(command, 'Exec=/usr/bin/python3 ' + ' '.join(encoded(value) for value in tail) + ' %u')
-            self.assertEqual(encode.call_args_list, [unittest.mock.call(value) for value in tail])
+            self.assertEqual(command, 'Exec=/usr/bin/python3 ' + ' '.join(tail) + ' %u')
+            encode.assert_not_called()
             self.assertIn('MimeType=x-scheme-handler/http;', entry)
             self.assertIn(prepared['app_id'].encode(), p.read(run / 'default-mime.payload'))
             self.assertFalse((apps / prepared['app_id']).exists())
             self.assertFalse((config / 'hyprland-mimeapps.list').exists())
+
+    def test_unsupported_literal_paths_refuse_before_any_configuration_plan(self):
+        for character in (' ', '\t', '\n', '"', "'", '\\', '$', '`', '%', ';', '&', '|',
+                          '<', '>', '*', '?', '[', ']', '(', ')', '{', '}', ':', '雪'):
+            with self.subTest(character=repr(character)), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary) / ('unsupported' + character + 'path')
+                root.mkdir(mode=0o700)
+                with self.assertRaisesRegex(ValueError, '^fixed_default_uri_exec_literals$'):
+                    self.prepare(root)
+                self.assertEqual(list((root / 'lucent-application-intent.abcdef123456').iterdir()), [])
+                self.assertEqual(list((root / 'config').iterdir()), [])
+                self.assertEqual(list((root / 'data/applications').iterdir()), [])
+
+    def test_fixed_command_rejects_relative_parent_and_unpinned_run_identity(self):
+        for run, run_id in ((Path('lucent-application-intent.abcdef123456'), 'abcdef123456'),
+                            (Path('/tmp/../lucent-application-intent.abcdef123456'), 'abcdef123456'),
+                            (Path('/tmp/unrelated'), 'abcdef123456'),
+                            (Path('/tmp/lucent-application-intent.ABCDEF123456'), 'ABCDEF123456'),
+                            (Path('/tmp/lucent-application-intent.abcdef1234567'), 'abcdef1234567')):
+            with self.subTest(run=str(run), run_id=run_id):
+                with self.assertRaisesRegex(ValueError, '^fixed_default_uri_exec_literals$'):
+                    driver.fixed_desktop_command(run, run_id)
 
     def test_installed_xdg_mime_prefers_prepared_entry_over_an_isolated_generic_fallback(self):
         tool = shutil.which('xdg-mime')
@@ -258,6 +280,79 @@ class FixturePreparation(unittest.TestCase):
             if hashlib.sha256(Path(tool).read_bytes()).hexdigest() == 'a587107ff995a5f907ab1b731316a169348c6b0383caf8fd151ff21f89615f3f':
                 self.assertEqual(prior, fallback)
             self.assertEqual(query(candidate), prepared['app_id'])
+
+    def test_installed_xdg_open_generic_dispatches_exact_fixed_argv_and_uri_as_data(self):
+        tool, mime = shutil.which('xdg-open'), shutil.which('xdg-mime')
+        if tool is None or mime is None:
+            self.skipTest('xdg-open/xdg-mime not installed; isolated generic-dispatch regression unavailable')
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run, config, apps, prepared, encoded, _ = self.prepare(root)
+            output = run / 'recorded.json'
+            script = run / 'default-uri.py'
+            script.write_text('import json, sys\nfrom pathlib import Path\n'
+                              "Path(__file__).with_name('recorded.json').write_text(json.dumps(sys.argv))\n")
+            fallback_script = root / 'fallback.py'
+            fallback_output = root / 'fallback.json'
+            fallback_script.write_text('import json, sys\nfrom pathlib import Path\n'
+                                       "Path(__file__).with_name('fallback.json').write_text(json.dumps(sys.argv))\n")
+            fallback = 'org.lucent.IsolatedFallback.desktop'
+            (apps / fallback).write_text('[Desktop Entry]\nType=Application\nName=Isolated fallback\n'
+                                         'MimeType=x-scheme-handler/http;\nExec=/usr/bin/python3 -I '
+                                         + str(fallback_script) + ' %u\n')
+            (config / 'mimeapps.list').write_text('[Default Applications]\nx-scheme-handler/http=' + fallback + ';\n')
+            config_dirs, data_dirs = root / 'empty-config-dirs', root / 'empty-data-dirs'
+            config_dirs.mkdir(mode=0o700)
+            data_dirs.mkdir(mode=0o700)
+            # No real display/bus or browser fallback can be reached. The generic
+            # path only checks that a display variable is present; URI recording
+            # happens solely in these temporary, controlled Python executables.
+            environment = {'HOME': os.environ['HOME'], 'PATH': '/usr/bin:/bin', 'LC_ALL': 'C',
+                           'DE': 'generic', 'XDG_CURRENT_DESKTOP': 'Hyprland',
+                           'XDG_CONFIG_HOME': str(config), 'XDG_CONFIG_DIRS': str(config_dirs),
+                           'XDG_DATA_HOME': str(apps.parent), 'XDG_DATA_DIRS': str(data_dirs),
+                           'XDG_MENU_PREFIX': '', 'DISPLAY': '', 'WAYLAND_DISPLAY': 'owned-test-no-compositor',
+                           'DBUS_SESSION_BUS_ADDRESS': 'unix:path=' + str(root / 'absent-bus'),
+                           'BROWSER': '/usr/bin/false'}
+            self.assertEqual(environment['HOME'], os.environ['HOME'])
+            uri = 'http://127.0.0.1:1234/owned%20file?literal=$(unused);&home=$HOME&quote=%22%E9%9B%AA%22&percent=%25'
+            def query():
+                result = subprocess.run([mime, 'query', 'default', 'x-scheme-handler/http'],
+                                        env=environment, cwd=root, stdin=subprocess.DEVNULL,
+                                        capture_output=True, text=True, timeout=5)
+                self.assertEqual(result.returncode, 0)
+                return result.stdout.strip()
+            def dispatch():
+                return subprocess.run([tool, uri], env=environment, cwd=root,
+                                      stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=5)
+            self.assertEqual(query(), fallback)
+            self.assertEqual(dispatch().returncode, 0)
+            self.assertEqual(json.loads(fallback_output.read_text()), [str(fallback_script), uri])
+            fallback_output.unlink()
+            candidate = p.read(run / 'default-entry.payload')
+            entry = apps / prepared['app_id']
+            prior = '/usr/bin/python3 ' + ' '.join(encoded(value) for value in
+                ('-I', str(script), 'open', str(run), 'abcdef123456')) + ' %u'
+            entry.write_bytes(candidate.replace(driver.fixed_desktop_command(run, 'abcdef123456').encode() + b' %u',
+                                                prior.encode(), 1))
+            (config / 'hyprland-mimeapps.list').write_bytes(p.read(run / 'default-mime.payload'))
+            self.assertEqual(query(), prepared['app_id'])
+            previous = dispatch()
+            if hashlib.sha256(Path(tool).read_bytes()).hexdigest() == '7d759d54f0d4ce1beeb34ee62c587985b5042374e8de237b0dcb8cd47aa698cf':
+                self.assertFalse(output.exists())
+                self.assertIn('can\'t open file', previous.stderr)
+                self.assertIn('"-I"', previous.stderr)
+            elif output.exists():
+                self.assertEqual(json.loads(output.read_text()),
+                                 [str(script), 'open', str(run), 'abcdef123456', uri])
+                output.unlink()
+            self.assertFalse(fallback_output.exists())
+            entry.write_bytes(candidate)
+            self.assertEqual(query(), prepared['app_id'])
+            self.assertEqual(dispatch().returncode, 0)
+            self.assertEqual(json.loads(output.read_text()),
+                             [str(script), 'open', str(run), 'abcdef123456', uri])
+            self.assertFalse(fallback_output.exists())
 
 
 class FixtureCliDispatch(unittest.TestCase):
