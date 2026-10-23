@@ -6,6 +6,7 @@ struct Adapter {
     calls: Mutex<Vec<NotificationTarget>>,
     links: Mutex<Vec<String>>,
     link_contexts: Mutex<Vec<Option<String>>>,
+    fail_link: Mutex<bool>,
 }
 impl lucent_domain::UriPort for Adapter {
     fn open(
@@ -18,6 +19,11 @@ impl lucent_domain::UriPort for Adapter {
             .lock()
             .unwrap()
             .push(context.activation_token().map(str::to_owned));
+        if *self.fail_link.lock().unwrap() {
+            return Err(lucent_domain::DomainError::Failed(
+                "Controlled link failure".into(),
+            ));
+        }
         Ok(())
     }
 }
@@ -326,6 +332,225 @@ fn link_note() -> Notification {
 }
 fn token() -> ActivationOutcome {
     ActivationOutcome::Token(ActivationToken::new("fresh-controlled-intent".into()).unwrap())
+}
+
+fn show_link_history(center: &mut Center, effects: &mut Effects<Message>) -> NotificationTarget {
+    let value = link_note();
+    let target = value.target().unwrap();
+    center.update(
+        Message::Snapshot(Ok(NotificationSnapshot {
+            history: vec![value],
+            ..Default::default()
+        })),
+        effects,
+    );
+    center.update(Message::Show, effects);
+    center.update(Message::Group("name:Fixture".into()), effects);
+    target
+}
+
+fn prepared_link_task(
+    center: &mut Center,
+    effects: &mut Effects<Message>,
+    target: NotificationTarget,
+) -> lucent_api::ScheduledTask<Message> {
+    center.update(
+        Message::OpenLink(target, "https://example.test/first".into()),
+        effects,
+    );
+    let prepared = effects.activation.pop().unwrap().finish(token());
+    center.update(prepared, effects);
+    let task = effects.tasks.pop().unwrap();
+    assert_eq!(task.queue, crate::work::CONTROLS);
+    task
+}
+
+#[test]
+fn current_history_link_success_uses_normal_exit_paint_and_replay_cannot_close_new_history() {
+    let (mut center, adapter) = center();
+    let mut effects = Effects::default();
+    let target = show_link_history(&mut center, &mut effects);
+    let session = center.history_session.unwrap();
+    let task = prepared_link_task(&mut center, &mut effects, target);
+    assert_eq!(
+        center.link_opening.as_ref().unwrap().history_session,
+        Some(session)
+    );
+    assert!(adapter.links.lock().unwrap().is_empty());
+    let done = task.run();
+    effects.now = 1.;
+    center.update(done.clone(), &mut effects);
+    assert!(!center.history_open());
+    assert!(center.history_closing());
+    assert!(center.visible());
+    assert_eq!(center.history_session, None);
+    assert!(!center.error);
+    assert_eq!(
+        *adapter.links.lock().unwrap(),
+        ["https://example.test/first"]
+    );
+    effects.now = 3.;
+    center.update(Message::Settled, &mut effects);
+    assert!(!center.visible());
+    center.update(Message::Show, &mut effects);
+    let newer = center.history_session.unwrap();
+    assert_ne!(newer, session);
+    center.update(done, &mut effects);
+    assert!(center.history_open());
+    assert_eq!(center.history_session, Some(newer));
+}
+
+#[test]
+fn current_history_link_failure_retains_its_presentation_and_reports_error() {
+    let (mut center, adapter) = center();
+    *adapter.fail_link.lock().unwrap() = true;
+    let mut effects = Effects::default();
+    let target = show_link_history(&mut center, &mut effects);
+    let session = center.history_session;
+    let task = prepared_link_task(&mut center, &mut effects, target);
+    effects.now = 1.;
+    center.update(task.run(), &mut effects);
+    assert!(center.history_open());
+    assert!(!center.history_closing());
+    assert_eq!(center.history_session, session);
+    assert!(center.error);
+    assert!(center.link_opening.is_none());
+}
+
+#[test]
+fn explicit_show_or_hide_reopen_retires_old_history_completion_ownership() {
+    for hide_first in [false, true] {
+        let (mut center, _) = center();
+        let mut effects = Effects::default();
+        let target = show_link_history(&mut center, &mut effects);
+        let old = center.history_session.unwrap();
+        let done = prepared_link_task(&mut center, &mut effects, target).run();
+        if hide_first {
+            center.update(Message::Hide, &mut effects);
+        }
+        center.update(Message::Show, &mut effects);
+        let current = center.history_session.unwrap();
+        assert_ne!(current, old);
+        center.update(done, &mut effects);
+        assert!(center.history_open());
+        assert_eq!(center.history_session, Some(current));
+        assert!(!center.history_closing());
+    }
+}
+
+#[test]
+fn toast_link_completion_has_no_ownership_of_history_opened_later() {
+    let (mut center, _) = center();
+    let mut effects = Effects::default();
+    let value = link_note();
+    let target = value.target().unwrap();
+    center.update(
+        Message::Snapshot(Ok(NotificationSnapshot {
+            active: vec![value],
+            ..Default::default()
+        })),
+        &mut effects,
+    );
+    let task = prepared_link_task(&mut center, &mut effects, target);
+    assert_eq!(center.link_opening.as_ref().unwrap().history_session, None);
+    center.update(Message::Show, &mut effects);
+    let current = center.history_session;
+    center.update(task.run(), &mut effects);
+    assert!(center.history_open());
+    assert_eq!(center.history_session, current);
+}
+
+#[test]
+fn retired_or_superseded_success_cannot_close_current_history() {
+    for retirement in 0..4 {
+        let (mut center, _) = center();
+        let mut effects = Effects::default();
+        let target = show_link_history(&mut center, &mut effects);
+        let done = prepared_link_task(&mut center, &mut effects, target).run();
+        let session = center.history_session;
+        match retirement {
+            0 => center.update(Message::Clear, &mut effects),
+            1 | 2 => {
+                let mut replacement = link_note();
+                if retirement == 1 {
+                    replacement.revision += 1;
+                } else {
+                    replacement.body = "The link was replaced".into();
+                }
+                center.update(
+                    Message::Snapshot(Ok(NotificationSnapshot {
+                        history: vec![replacement],
+                        ..Default::default()
+                    })),
+                    &mut effects,
+                );
+            }
+            _ => center.update(
+                Message::OpenLink(target, "https://example.test/second".into()),
+                &mut effects,
+            ),
+        }
+        let newer_request = center.link_opening.as_ref().map(|opening| opening.request);
+        center.update(done, &mut effects);
+        assert!(center.history_open());
+        assert_eq!(center.history_session, session);
+        assert_eq!(
+            center.link_opening.as_ref().map(|opening| opening.request),
+            newer_request
+        );
+    }
+}
+
+#[test]
+fn history_session_exhaustion_never_reuses_last_or_none_as_close_authority() {
+    for reopen_before_completion in [false, true] {
+        let (mut center, _) = center();
+        center.next_history_session = u64::MAX - 1;
+        let mut effects = Effects::default();
+        let target = show_link_history(&mut center, &mut effects);
+        assert_eq!(center.history_session, Some(u64::MAX));
+        let done = prepared_link_task(&mut center, &mut effects, target).run();
+        if reopen_before_completion {
+            center.update(Message::Hide, &mut effects);
+            center.update(Message::Show, &mut effects);
+            assert_eq!(center.history_session, None);
+        }
+        center.update(done, &mut effects);
+        assert_eq!(center.history_open(), reopen_before_completion);
+        center.update(Message::Show, &mut effects);
+        assert_eq!(center.next_history_session, u64::MAX);
+        assert_eq!(center.history_session, None);
+        let task = prepared_link_task(&mut center, &mut effects, target);
+        assert_eq!(center.link_opening.as_ref().unwrap().history_session, None);
+        center.update(task.run(), &mut effects);
+        assert!(center.history_open());
+        assert_eq!(center.history_session, None);
+    }
+}
+
+#[test]
+fn unprepared_or_exhausted_link_request_cannot_close_history() {
+    let (mut center, _) = center();
+    let mut effects = Effects::default();
+    let target = show_link_history(&mut center, &mut effects);
+    center.update(
+        Message::OpenLink(target, "https://example.test/first".into()),
+        &mut effects,
+    );
+    let request = center.link_opening.as_ref().unwrap().request;
+    center.update(Message::LinkDone(request, Ok(())), &mut effects);
+    assert!(center.history_open());
+    assert!(center.link_opening.as_ref().unwrap().waiting_for_token);
+    center.next_link_request = u64::MAX;
+    center.update(
+        Message::OpenLink(target, "https://example.test/second".into()),
+        &mut effects,
+    );
+    assert!(center.history_open());
+    assert!(center.link_opening.is_none());
+    assert_eq!(center.next_link_request, u64::MAX);
+    center.update(Message::LinkDone(request, Ok(())), &mut effects);
+    assert!(center.history_open());
 }
 
 #[test]
