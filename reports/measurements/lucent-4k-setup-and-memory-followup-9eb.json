@@ -1,0 +1,132 @@
+{
+  "schema": 1,
+  "recorded_on": "2026-10-24",
+  "source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
+  "desktop_sha256": "eb1980a5c81a60512218eb69fcee80fd1124a1112c317f7dbb66ef95e311a1a5",
+  "scope": "Actual owned virtual 4K output setup/restoration, refused resource sampler and separate restored-FHD one-off counters. No completed 4K or new FHD timing interval, eligible memory result or FPS acceptance.",
+  "provenance": {
+    "private_trial_summary_sha256": "86c4871dea4b27a107208ba31c9d53b50329178542ea3a415bd6140dd8ee8ddb",
+    "private_begin_receipt_sha256": "7a0c1fc37502b37c75f7e80a10246c9c82e69f30cf545e3c87a25e3cc2ed1662",
+    "private_apply_receipt_sha256": "9b2753d80732efae5eb1ff31586f9dca8074d57f5441766fedaa9db35bbf8767",
+    "private_finish_receipt_sha256": "20df9a07ead7e8815bff4745be717246e01f72b68fa7537ceae9ed32d2822094",
+    "controller_sha256": "6f65f16264f76d1662b13ce685d6aff850c7c1d5932b964d44e702dee8c152ab",
+    "guard_sha256": "72d10a52404c41e4008eebcea6752856f57c82dbfc295d87bcb650e58fa13878",
+    "policy_sha256": "7ce3bb2349668f8ae8afa5ab2e3677923f34036e2a2f9fb6bd7ec61e93ccda02"
+  },
+  "output_setup": {
+    "verified": true,
+    "width": 3840,
+    "height": 2160,
+    "refresh_hz": 60,
+    "scale": 1.5,
+    "background": {
+      "width": 2560,
+      "height": 1440,
+      "density": 1.5,
+      "buffer_width": 3840,
+      "buffer_height": 2160
+    },
+    "producer": {
+      "target": [
+        3840,
+        2160
+      ],
+      "frame_size": [
+        3840,
+        2160
+      ],
+      "source_aspect": [
+        3840,
+        2160
+      ]
+    }
+  },
+  "resource_sampler": {
+    "state": "TERMINAL_FAILED",
+    "failure": "host_memory_admission",
+    "facts_acquisition_started": false,
+    "resource_binding_created": false,
+    "timed_interval_collected": false,
+    "resource_target_accepted": false,
+    "fps_accepted": false
+  },
+  "restoration": {
+    "success": true,
+    "configuration_security_runtime_preserved": true,
+    "cursor_unchanged": true,
+    "workspace_unchanged": true,
+    "output_restored": true,
+    "runtime_restarted": false,
+    "input_synthesized": false,
+    "windows_closed": false,
+    "original_output": {
+      "name": "Virtual-1",
+      "width": 1920,
+      "height": 1080,
+      "refreshRate": 60.0,
+      "scale": 1,
+      "transform": 0,
+      "x": 0,
+      "y": 0
+    },
+    "scope": "The owned transaction verifies preservation and restores the original FHD output without runtime restart, synthetic input or window closing. No broader hardware-control or all-user-files claim follows."
+  },
+  "independent_post_restoration_observation": {
+    "success": true,
+    "read_only": true,
+    "private_receipt_sha256": "bdc6c7491b53f1a9f0828e595c41de7a626f0c15f92973f910675dea867b6547",
+    "desktop_sha256": "eb1980a5c81a60512218eb69fcee80fd1124a1112c317f7dbb66ef95e311a1a5",
+    "monitor": {
+      "name": "Virtual-1",
+      "width": 1920,
+      "height": 1080,
+      "scale": 1,
+      "transform": 0,
+      "refreshRate": 60.0
+    },
+    "profiling": {
+      "frames": false,
+      "presentation": false,
+      "source_pts": false
+    },
+    "measured_interval": false,
+    "rss_kib": 501940,
+    "rss_mib": 490.17578125,
+    "anonymous_rss_kib": 433064,
+    "anonymous_rss_mib": 422.9140625,
+    "process_lifetime_hwm_kib": 630792,
+    "process_lifetime_hwm_mib": 616.0078125,
+    "swap_kib": 0,
+    "scope": "One read-only proc observation after restoring FHD, with the admitted desktop binary and all profiling OFF. RSS is 490.176 MiB and warrants memory investigation. It is not a steady-state interval, 4K peak, causal comparison, allocation-owner diagnosis or target acceptance; HWM spans the process lifetime."
+  },
+  "separate_fhd_timing_attempt": {
+    "private_receipt_sha256": "436050580a83cfb4dbb2c5a42aaad1b0ed695b5008235b76453c64b03d267310",
+    "source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
+    "wrapper_sha256": "d09a692805a934d8c089595a62818b5dad0227f2de88688d5e0e0690c7c9aae5",
+    "sources_sha256": "cf49e956e891ec1b8694c2f429962634af547f2502e4dc613f50417189b9ac3a",
+    "state": "failed",
+    "mode": "resources",
+    "failure": "inspection_gap_prevents_interval_coverage",
+    "resources_present": false,
+    "completed_120_second_interval": false,
+    "profiling_enabled_by_this_attempt": false,
+    "scope": "The resource-only V1 attempt failed inspection-gap coverage. Its failure remains unchanged; no completed interval or proven native failure cause is inferred."
+  },
+  "v2_timing_preparation": {
+    "review_sha256": "c4f47c22c5414d37758963416a83c7c7b70d85625b3e17b1cb7d851b7533956d",
+    "source_ordering_fix_and_pure_checks_only": true,
+    "native_run_executed": false,
+    "coverage_gap_limit_seconds": 1.5,
+    "scope": "Preparatory queries move before the first coverage inspection. Deterministic pure reproduction is not proof of the actual V1 native failure cause or a replacement native interval."
+  },
+  "acceptance_limits": {
+    "owned_virtual4k_setup_and_restoration_verified": true,
+    "completed4k_resource_interval": false,
+    "eligible_memory_target_accepted": false,
+    "FPS_or_source_rate_presentation_accepted": false,
+    "causal_memory_improvement_or_leak_proven": false,
+    "physical_hardware_accepted": false,
+    "whole_seven_gap_goal_complete": false
+  },
+  "history_policy": "Earlier 9eb reports retain their capture-time unrun/false flags. The host-observer report, older 26d trials, failed timing receipt and all prior measurements remain unchanged; this is an additional source-specific follow-up."
+}

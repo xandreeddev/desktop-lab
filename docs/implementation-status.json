@@ -9,7 +9,7 @@
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted PR107/main f5b6db0b contains the source-equivalent archived 9eb runtime and recorded native/performance evidence. Four separate source 6f9 host consumers pass actual fifteen-second read-only audio/Bluetooth/power/compositor observation and owned-unit completion. They issue no controls/input and do not establish audible audio, pairing/keyboard events, physical controls, state-change delivery, hotplug, suspend or full hardware acceptance. The earlier FHD resource interval remains ineligible; seven-gap completion is false. Exact f5b6db0b Pages 40035549254 and the same LAN artifact are verified checkpoints. Publication evidence is scoped to its named source, not an automatic assertion about future revisions.",
+    "scope": "Accepted PR107/main f5b6db0b contains the source-equivalent archived 9eb runtime and recorded native/performance evidence. Four separate source 6f9 host consumers pass actual fifteen-second read-only audio/Bluetooth/power/compositor observation and owned-unit completion. They issue no controls/input and do not establish audible audio, pairing/keyboard events, physical controls, state-change delivery, hotplug, suspend or full hardware acceptance. The earlier FHD resource interval remains ineligible; seven-gap completion is false. Exact f5b6db0b Pages 40035549254 and the same LAN artifact are verified checkpoints. Publication evidence is scoped to its named source, not an automatic assertion about future revisions. Later 9eb actual 4K setup/restoration succeeds, but no resource interval is collected; post-restored FHD one-off RSS 490.176 MiB remains a memory concern. A separate resource-only FHD timing V1 attempt fails coverage without profiling; V2 has only pure-source validation. Earlier capture-time unrun flags remain historical, and no new eligible memory/FPS result is claimed.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -74,7 +74,7 @@
           "scope": "One FHD output/fixed 4K H.264 60 FPS source, all profiling OFF. Ineligible despite below 300 MiB observation; no 4K-output or causal improvement/FPS claim. PR106 later accepts the identical runtime code; original accepted_main_runtime/accepted_main_at_capture=false remain capture-time flags, not a new measurement.",
           "accepted_main_merge_commit": "bdffd42438990ef546ad13f302556913339acce0"
         },
-        "remaining": "Latest 9eb normal FHD interval records 230.063/230.129 MiB mean/peak and 147.558% of one core with zero process swap; host 15 swap-in pages and 0.450095 I/O full stalls make it ineligible and leave target null. The new 4K sampler is prepared but unrun: latest host-memory admission refuses before VM contact, with no new handoff/acquisition/binding/lease. The separate 30-second host I/O diagnostic completes: global I/O full 7.13%, CPU busy 87.85%, 169 swap-in pages. No sustained NVMe saturation is established; cause remains unresolved, with no code/performance-acceptance change. This is not a guest resource interval or proof of host-memory recovery. Eligible matched normal/animated and cold/warm evidence with unchanged effects/density is still required. Earlier 26d/35ed resource/presentation samples and the 604.594 MiB one-off post-restoration FHD diagnostic retain their outcomes; neither newer source nor this unmatched observation identifies causality, an allocation owner, a leak, visible FPS or scanout.",
+        "remaining": "Latest 9eb normal FHD interval records 230.063/230.129 MiB mean/peak and 147.558% of one core with zero process swap; host 15 swap-in pages and 0.450095 I/O full stalls make it ineligible and leave target null. The later 9eb 4K trial actually applies 3840×2160@60/1.5 with 2560×1440 logical background and 4K producer frames, then verifies full owned restoration. Its sampler refuses host-memory admission before facts/resource-binding/interval collection. The independent restored-FHD/all-OFF one-off is 490.176 MiB RSS / 422.914 MiB anonymous / 616.008 MiB process-lifetime HWM/zero swap: memory investigation remains open, without a steady-state budget result, 4K peak or causal attribution. Separate resource-only FHD timing V1 fails inspection-gap coverage with no completed interval or profiling enable. V2 ordering/pure checks do not establish native success or the actual V1 cause. The separate 30-second host I/O diagnostic completes: global I/O full 7.13%, CPU busy 87.85%, 169 swap-in pages. No sustained NVMe saturation is established; cause remains unresolved, with no code/performance-acceptance change. This is not a guest resource interval or proof of host-memory recovery. Eligible matched normal/animated and cold/warm evidence with unchanged effects/density is still required. Earlier 26d/35ed resource/presentation samples and the 604.594 MiB one-off post-restoration FHD diagnostic retain their outcomes; neither newer source nor this unmatched observation identifies causality, an allocation owner, a leak, visible FPS or scanout.",
         "historical_software_video_sample": {
           "source_commit": "a7f41eccdcd8eca51e8e5ee878d8f489d8d4bde5",
           "report": "reports/measurements/lucent-display-settings.json",
@@ -445,6 +445,26 @@
           "rss_target_acceptance": null,
           "performance_accepted": false,
           "scope": "Geometry, owned restoration and one post-restoration FHD proc snapshot only. Earlier sampled intervals and eligibility flags remain unchanged; no 4K causality, allocator/GPU attribution, leak, source-rate or physical-hardware acceptance."
+        },
+        "current_9eb_4k_followup": {
+          "source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
+          "report": "reports/measurements/lucent-4k-setup-and-memory-followup-9eb.json",
+          "report_sha256": "664b1954b06dbf409d13e60ef4416d279baecca0fe81a0d9593495577b845742",
+          "trial_summary_sha256": "86c4871dea4b27a107208ba31c9d53b50329178542ea3a415bd6140dd8ee8ddb",
+          "apply_receipt_sha256": "9b2753d80732efae5eb1ff31586f9dca8074d57f5441766fedaa9db35bbf8767",
+          "finish_receipt_sha256": "20df9a07ead7e8815bff4745be717246e01f72b68fa7537ceae9ed32d2822094",
+          "actual_4k_setup_and_restoration_verified": true,
+          "resource_sampler_state": "TERMINAL_FAILED",
+          "resource_sampler_failure": "host_memory_admission",
+          "resource_facts_or_binding_or_interval_created": false,
+          "post_restored_FHD_RSS_mib": 490.17578125,
+          "post_restored_FHD_anonymous_RSS_mib": 422.9140625,
+          "process_lifetime_HWM_mib": 616.0078125,
+          "post_restored_FHD_swap_kib": 0,
+          "post_restoration_off_receipt_sha256": "bdc6c7491b53f1a9f0828e595c41de7a626f0c15f92973f910675dea867b6547",
+          "memory_target_accepted": false,
+          "FPS_accepted": false,
+          "scope": "Actual owned virtual 4K output setup/restoration, refused resource sampler and separate restored-FHD one-off counters. No completed 4K or new FHD timing interval, eligible memory result or FPS acceptance."
         }
       },
       {
@@ -1241,10 +1261,31 @@
         "state_change_delivery_accepted": false,
         "performance_accepted": false,
         "scope": "Four separately built independent consumers observed the current host user services for fifteen seconds each. This is source/binary-identified read-only adapter observation and process completion, not desktop UI or physical-device control acceptance."
+      },
+      {
+        "feature": "9eb-virtual4k-setup-restoration-and-post-FHD-memory",
+        "source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
+        "report": "reports/measurements/lucent-4k-setup-and-memory-followup-9eb.json",
+        "report_sha256": "664b1954b06dbf409d13e60ef4416d279baecca0fe81a0d9593495577b845742",
+        "trial_summary_sha256": "86c4871dea4b27a107208ba31c9d53b50329178542ea3a415bd6140dd8ee8ddb",
+        "apply_receipt_sha256": "9b2753d80732efae5eb1ff31586f9dca8074d57f5441766fedaa9db35bbf8767",
+        "finish_receipt_sha256": "20df9a07ead7e8815bff4745be717246e01f72b68fa7537ceae9ed32d2822094",
+        "actual_4k_setup_and_restoration_verified": true,
+        "resource_sampler_state": "TERMINAL_FAILED",
+        "resource_sampler_failure": "host_memory_admission",
+        "resource_facts_or_binding_or_interval_created": false,
+        "post_restored_FHD_RSS_mib": 490.17578125,
+        "post_restored_FHD_anonymous_RSS_mib": 422.9140625,
+        "process_lifetime_HWM_mib": 616.0078125,
+        "post_restored_FHD_swap_kib": 0,
+        "post_restoration_off_receipt_sha256": "bdc6c7491b53f1a9f0828e595c41de7a626f0c15f92973f910675dea867b6547",
+        "memory_target_accepted": false,
+        "FPS_accepted": false,
+        "scope": "Actual owned virtual 4K output setup/restoration, refused resource sampler and separate restored-FHD one-off counters. No completed 4K or new FHD timing interval, eligible memory result or FPS acceptance."
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
-    "validation": "PR107 exact 5d8c116b passed six checks/CLEAN and merged normally as f5b6db0b at 2026-10-23T22:44:33Z. Pages 40035549254 and 20 LAN HTTP checks verify the exact artifact plus 116 producers/480 captures from 950f4d19. Earlier 774 Python/6.870s and catalogue 9/480/116 results belong to their recorded checkpoint; CI supplies subsequent site build/publication evidence. Standalone source 6f9 passes four audio-example tests, strict release Clippy and four binary builds; a later separate actual host run passes all four read-only observations. No new checks or native actions were performed by this documentation task.",
+    "validation": "PR107 exact 5d8c116b passed six checks/CLEAN and merged normally as f5b6db0b at 2026-10-23T22:44:33Z. Pages 40035549254 and 20 LAN HTTP checks verify the exact artifact plus 116 producers/480 captures from 950f4d19. Earlier 774 Python/6.870s and catalogue 9/480/116 results belong to their recorded checkpoint; CI supplies subsequent site build/publication evidence. Standalone source 6f9 passes four audio-example tests, strict release Clippy and four binary builds; a later separate actual host run passes all four read-only observations. No new checks or native actions were performed by this documentation task. Added source-specific 4K evidence from actual begin/apply/finish receipts and independent restored-FHD/all-OFF observation; the sampler admission refusal and separate V1 coverage failure are preserved as failures. The V2 ordering fixture does not prove native success or the native failure cause.",
     "accepted_main_base_commit": "f5b6db0b4cef726891ea154faa7f3ab14fac376a",
     "documentation_harness_base_commit": "c4eb922ca423dfbe255630e8717dc9cb2836a4c2",
     "runtime_compilation_source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
@@ -2623,6 +2664,48 @@
       "state_change_delivery_accepted": false,
       "performance_accepted": false,
       "scope": "Four separately built independent consumers observed the current host user services for fifteen seconds each. This is source/binary-identified read-only adapter observation and process completion, not desktop UI or physical-device control acceptance."
+    },
+    "runtime_9eb_4k_followup": {
+      "source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
+      "report": "reports/measurements/lucent-4k-setup-and-memory-followup-9eb.json",
+      "report_sha256": "664b1954b06dbf409d13e60ef4416d279baecca0fe81a0d9593495577b845742",
+      "trial_summary_sha256": "86c4871dea4b27a107208ba31c9d53b50329178542ea3a415bd6140dd8ee8ddb",
+      "apply_receipt_sha256": "9b2753d80732efae5eb1ff31586f9dca8074d57f5441766fedaa9db35bbf8767",
+      "finish_receipt_sha256": "20df9a07ead7e8815bff4745be717246e01f72b68fa7537ceae9ed32d2822094",
+      "actual_4k_setup_and_restoration_verified": true,
+      "resource_sampler_state": "TERMINAL_FAILED",
+      "resource_sampler_failure": "host_memory_admission",
+      "resource_facts_or_binding_or_interval_created": false,
+      "post_restored_FHD_RSS_mib": 490.17578125,
+      "post_restored_FHD_anonymous_RSS_mib": 422.9140625,
+      "process_lifetime_HWM_mib": 616.0078125,
+      "post_restored_FHD_swap_kib": 0,
+      "post_restoration_off_receipt_sha256": "bdc6c7491b53f1a9f0828e595c41de7a626f0c15f92973f910675dea867b6547",
+      "memory_target_accepted": false,
+      "FPS_accepted": false,
+      "scope": "Actual owned virtual 4K output setup/restoration, refused resource sampler and separate restored-FHD one-off counters. No completed 4K or new FHD timing interval, eligible memory result or FPS acceptance."
+    },
+    "latest_timing_v1_failed_attempt": {
+      "source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
+      "private_receipt_sha256": "436050580a83cfb4dbb2c5a42aaad1b0ed695b5008235b76453c64b03d267310",
+      "wrapper_sha256": "d09a692805a934d8c089595a62818b5dad0227f2de88688d5e0e0690c7c9aae5",
+      "sources_sha256": "cf49e956e891ec1b8694c2f429962634af547f2502e4dc613f50417189b9ac3a",
+      "state": "failed",
+      "mode": "resources",
+      "failure": "inspection_gap_prevents_interval_coverage",
+      "resources_present": false,
+      "completed_120_second_interval": false,
+      "profiling_enabled_by_this_attempt": false,
+      "scope": "The resource-only V1 attempt failed inspection-gap coverage. Its failure remains unchanged; no completed interval or proven native failure cause is inferred.",
+      "v2_preparation": {
+        "review_sha256": "c4f47c22c5414d37758963416a83c7c7b70d85625b3e17b1cb7d851b7533956d",
+        "source_ordering_fix_and_pure_checks_only": true,
+        "native_run_executed": false,
+        "coverage_gap_limit_seconds": 1.5,
+        "scope": "Preparatory queries move before the first coverage inspection. Deterministic pure reproduction is not proof of the actual V1 native failure cause or a replacement native interval."
+      },
+      "report": "reports/measurements/lucent-4k-setup-and-memory-followup-9eb.json",
+      "report_sha256": "664b1954b06dbf409d13e60ef4416d279baecca0fe81a0d9593495577b845742"
     }
   },
   "requirements": [
