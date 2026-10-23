@@ -358,5 +358,51 @@
     },
     "host_io_diagnostic": "Started separately; no terminal result at this checkpoint.",
     "scope": "Later accepted-main source equality, not a rebuild or native rerun. Original UNMERGED/accepted_main=false capture-time fields above remain unchanged. Five route checks, two trusted document-key cases and nine named cleanup checks retain their recorded warm controlled-browser scope; no all-user-files/history-byte restoration, arbitrary-handler, cold-browser, physical-hardware or performance claim."
+  },
+  "latest_followup_2026_10_24": {
+    "recorded_on": "2026-10-24",
+    "scope": "Later publication and separate host-diagnostic checkpoint only. All prior report fields, including accepted_main_followup and capture-time pending flags, retain their original values. No code, native feature, resource-target or pacing result is changed.",
+    "documentation_delivery": {
+      "source_commit": "bdffd42438990ef546ad13f302556913339acce0",
+      "pages_run": 40026533176,
+      "workflow_status": "SUCCESS",
+      "private_receipt_sha256": "dedcc9c7778c959a5b420976fcadbebe585e428a38915bc1c8c011d36efd3f74",
+      "artifact_archive_sha256": "060e34bbf7ad10d0d458b5ca44d932bd34c81f39e9212d59cbc4fbd00134125d",
+      "public_html_pages_exact_artifact_matches": 3,
+      "native_manifest_sha256": "d5384a6b63a668ea1a1fcff29726b666a8533b5ced69fd68c10a6ebddf0f5e12",
+      "representative_png_exact_artifact_match": true,
+      "capture_source_commit": "950f4d199c16202b18ddb41b66e724c5da2a3c07",
+      "rendering_inputs_verified": 116,
+      "native_captures_verified": 480,
+      "last_verified_lan_source_commit": "8b20b78a819db7b88d2fbdaedb219fbd18576413",
+      "new_evidence_docs_local_Node_build_executed": false,
+      "new_evidence_docs_published": false,
+      "scope": "Verified accepted PR106/main Pages content; it predates this newer evidence/documentation follow-up."
+    },
+    "focused_host_io_diagnostic": {
+      "completed": true,
+      "seconds": 30.00010556200141,
+      "private_summary_sha256": "5c19fe3c9ca65ba5e287b39b469f5480f7df19adc8fd4fa46479d1b42f0f641c",
+      "global_io_full_stall_fraction": 0.07129923436698471,
+      "global_cpu_busy_fraction_excluding_idle_iowait": 0.8784863310943417,
+      "global_swap_in_pages": 169,
+      "sustained_nvme_saturation_established": false,
+      "cause_identified": false,
+      "code_change_made": false,
+      "performance_accepted": false,
+      "eligibility_gates_changed": false,
+      "headroom_recovery_established": false,
+      "scope": "Separate 30-second read-only host diagnostic. It observes host activity without sustained NVMe saturation evidence or bottleneck attribution. It is not a guest Lucent resource interval, VM-exclusive cgroup total, eligible comparison, memory-headroom recovery proof or FPS measurement."
+    },
+    "latest_source_checks": {
+      "python_checks_passed": 774,
+      "python_seconds": 6.87,
+      "catalogue_stories": 9,
+      "catalogue_captures": 480,
+      "catalogue_rendering_inputs": 116,
+      "scope": "Recorded integrated source-check checkpoint; these checks do not substitute for a local Node/site build or publication of the newer documentation."
+    },
+    "new_4k_resource_interval_executed": false,
+    "whole_seven_gap_goal_complete": false
   }
 }

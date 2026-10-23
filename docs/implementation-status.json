@@ -9,7 +9,7 @@
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted PR106/main bdffd424 includes the PR105 history-release client and 32 MiB bounded upload pool. Rust/design/configs/scripts Git trees equal the archived 9eb runtime; original build/deployment/native capture flags remain historical. Recorded five route checks, two trusted document-key cases and nine named cleanup checks pass in the owned warm-browser flow; the 120-second FHD interval remains host-pressure-ineligible. Last verified Pages source is PR105/main 6322 (run 40019250788), LAN remains 8b20, and PR106/new evidence-docs publication is unverified. Latest 4K host-memory admission fails before VM contact or creating ownership state; host I/O diagnostic results are pending. No live VM state, general-handler/cold-browser focus, eligible 300 MiB/FPS, hardware or seven-goal completion claim.",
+    "scope": "Accepted PR106/main bdffd424 includes the PR105 history-release client and 32 MiB bounded upload pool. Rust/design/configs/scripts Git trees equal the archived 9eb runtime; original build/deployment/native capture flags remain historical. Recorded five route checks, two trusted document-key cases and nine named cleanup checks pass in the owned warm-browser flow; the 120-second FHD interval remains host-pressure-ineligible. Last verified Pages source is PR106/main bdffd424 (run 40026533176), LAN remains 8b20, and newer evidence-docs local Node/site build/publication remain unrun. Latest 4K host-memory admission fails before VM contact or creating ownership state; a separate 30-second host I/O diagnostic completes with cause unresolved and no code/performance-acceptance change. No live VM state, general-handler/cold-browser focus, eligible 300 MiB/FPS, hardware or seven-goal completion claim.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -74,7 +74,7 @@
           "scope": "One FHD output/fixed 4K H.264 60 FPS source, all profiling OFF. Ineligible despite below 300 MiB observation; no 4K-output or causal improvement/FPS claim. PR106 later accepts the identical runtime code; original accepted_main_runtime/accepted_main_at_capture=false remain capture-time flags, not a new measurement.",
           "accepted_main_merge_commit": "bdffd42438990ef546ad13f302556913339acce0"
         },
-        "remaining": "Latest 9eb normal FHD interval records 230.063/230.129 MiB mean/peak and 147.558% of one core with zero process swap; host 15 swap-in pages and 0.450095 I/O full stalls make it ineligible and leave target null. The new 4K sampler is prepared but unrun: latest host-memory admission refuses before VM contact, with no new handoff/acquisition/binding/lease. The separate read-only host I/O diagnostic has started; results remain pending. Eligible matched normal/animated and cold/warm evidence with unchanged effects/density is still required. Earlier 26d/35ed resource/presentation samples and the 604.594 MiB one-off post-restoration FHD diagnostic retain their outcomes; neither newer source nor this unmatched observation identifies causality, an allocation owner, a leak, visible FPS or scanout.",
+        "remaining": "Latest 9eb normal FHD interval records 230.063/230.129 MiB mean/peak and 147.558% of one core with zero process swap; host 15 swap-in pages and 0.450095 I/O full stalls make it ineligible and leave target null. The new 4K sampler is prepared but unrun: latest host-memory admission refuses before VM contact, with no new handoff/acquisition/binding/lease. The separate 30-second host I/O diagnostic completes: global I/O full 7.13%, CPU busy 87.85%, 169 swap-in pages. No sustained NVMe saturation is established; cause remains unresolved, with no code/performance-acceptance change. This is not a guest resource interval or proof of host-memory recovery. Eligible matched normal/animated and cold/warm evidence with unchanged effects/density is still required. Earlier 26d/35ed resource/presentation samples and the 604.594 MiB one-off post-restoration FHD diagnostic retain their outcomes; neither newer source nor this unmatched observation identifies causality, an allocation owner, a leak, visible FPS or scanout.",
         "historical_software_video_sample": {
           "source_commit": "a7f41eccdcd8eca51e8e5ee878d8f489d8d4bde5",
           "report": "reports/measurements/lucent-display-settings.json",
@@ -777,7 +777,7 @@
           },
           "current_scoped_native_route_acceptance": {
             "report": "reports/measurements/lucent-runtime-9eb-native-trial.json",
-            "report_sha256": "ea47544ab473882b196ab028ec52781fbabfc52b4da15969087f261b5860e3a9",
+            "report_sha256": "8f769b37b1989658e0587e1840f281408315f2f85e7752533bce30bd72f7a47f",
             "production_source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
             "native_harness_source_commit": "04432a738ebac10960141450eb8cd513d98bc2b1",
             "private_report_sha256": "6395d5fad93cfe4d04afe2ebec265ed3f2abda62f95a58977ede78f60a2989de",
@@ -831,7 +831,7 @@
           "accepted_pull_request": 105,
           "deployed_runtime_source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
           "native_report": "reports/measurements/lucent-runtime-9eb-native-trial.json",
-          "native_report_sha256": "ea47544ab473882b196ab028ec52781fbabfc52b4da15969087f261b5860e3a9",
+          "native_report_sha256": "8f769b37b1989658e0587e1840f281408315f2f85e7752533bce30bd72f7a47f",
           "native_harness_source_commit": "04432a738ebac10960141450eb8cd513d98bc2b1"
         },
         "historical_notification_handoff_source_only_checkpoint": {
@@ -862,8 +862,8 @@
       {
         "id": "documentation-accuracy",
         "status": "current_source_and_recorded_native_evidence_reconciled_delivery_pending",
-        "implemented": "Current accepted PR106/main bdffd424 (exact four-tree runtime equality with archived 9eb) and separate 9eb build/deployment/native keyboard evidence are reconciled with the ineligible FHD sample. Last verified publication is PR105/main 6322 (116 producers/480 captures), with LAN 8b20. Historical delivery snapshots, failed trials, archived flags and performance limits are preserved.",
-        "remaining": "This new six-file reconciliation needs its own source/site and delivery checks; the verified PR105 Pages receipt predates it and PR106 Pages remains unverified. Publication and controlled warm-browser keyboard acceptance do not close broader applications, physical hardware, eligible performance or the seven-gap goal."
+        "implemented": "Current accepted PR106/main bdffd424 (exact four-tree runtime equality with archived 9eb) and separate 9eb build/deployment/native keyboard evidence are reconciled with the ineligible FHD sample. Last verified publication is PR106/main bdffd424 (116 inputs/480 captures from 950f4d19), with LAN 8b20. Historical delivery snapshots, failed trials, archived flags and performance limits are preserved.",
+        "remaining": "This newer evidence/doc reconciliation still needs its own local Node/site build and publication; the verified PR106 Pages receipt predates it. Publication and controlled warm-browser keyboard acceptance do not close broader applications, physical hardware, eligible performance or the seven-gap goal."
       }
     ],
     "scoped_native_evidence": [
@@ -1195,7 +1195,7 @@
         "feature": "notification-natural-close-and-trusted-document-key",
         "production_source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
         "report": "reports/measurements/lucent-runtime-9eb-native-trial.json",
-        "report_sha256": "ea47544ab473882b196ab028ec52781fbabfc52b4da15969087f261b5860e3a9",
+        "report_sha256": "8f769b37b1989658e0587e1840f281408315f2f85e7752533bce30bd72f7a47f",
         "native_harness_source_commit": "04432a738ebac10960141450eb8cd513d98bc2b1",
         "checks_passed": 5,
         "cleanup_checks_passed": 9,
@@ -1209,7 +1209,7 @@
         "feature": "normal-fhd-resource-interval-9eb",
         "production_source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
         "report": "reports/measurements/lucent-runtime-9eb-native-trial.json",
-        "report_sha256": "ea47544ab473882b196ab028ec52781fbabfc52b4da15969087f261b5860e3a9",
+        "report_sha256": "8f769b37b1989658e0587e1840f281408315f2f85e7752533bce30bd72f7a47f",
         "seconds": 120.00048358899949,
         "rss_samples": 480,
         "mean_rss_mib": 230.06319173177084,
@@ -1223,7 +1223,7 @@
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
-    "validation": "PR106 exact 8d102 passed six required checks with CLEAN mergeability and merged normally as bdffd424 at 2026-10-23T21:24:25Z. Its four scoped Git trees equal archived 9eb (15 stages / 761 targeted tests); this is source equality, not a rebuild or repeated native run. Existing five route/nine cleanup/two key receipts and host-ineligible FHD metrics remain unchanged. Integration checks at the earlier f7ea source passed 756 Python cases; the integrated catalogue checks nine stories/480 captures/116 producers. This follow-up has not run Node/site or publication gates. PR105 Pages remains the last verified delivery.",
+    "validation": "PR106 exact 8d102 passed six required checks with CLEAN mergeability and merged normally as bdffd424 at 2026-10-23T21:24:25Z. Its four scoped Git trees equal archived 9eb (15 stages / 761 targeted tests); this is source equality, not a rebuild or repeated native run. Existing five route/nine cleanup/two key receipts and host-ineligible FHD metrics remain unchanged. Integration checks at the earlier f7ea source passed 756 Python cases; the integrated catalogue checks nine stories/480 captures/116 producers. This follow-up has not run Node/site or publication gates. PR106 Pages 40026533176 now verifies three public HTML pages, manifest/PNG and 116 inputs/480 captures from 950f4d19. The later integrated Python run passes 774 checks in 6.870 seconds; catalogue 9/480/116 passes. A separate 30-second host I/O diagnostic completes, with cause unresolved and no performance acceptance; this newer source still has no local Node/site build or publication.",
     "accepted_main_base_commit": "bdffd42438990ef546ad13f302556913339acce0",
     "documentation_harness_base_commit": "6330c11df36bcef7f9f8b46332ccecc40a13c844",
     "runtime_compilation_source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
@@ -1411,15 +1411,15 @@
       }
     ],
     "documentation_delivery": {
-      "accepted_main_commit": "6322f76308b82f7c2b668f0b952d6d87c5884273",
-      "published_workflow_run": 40019250788,
+      "accepted_main_commit": "bdffd42438990ef546ad13f302556913339acce0",
+      "published_workflow_run": 40026533176,
       "published_workflow_status": "SUCCESS",
       "public_http_status": 200,
-      "current_published_source_links": "6322f76308b82f7c2b668f0b952d6d87c5884273",
+      "current_published_source_links": "bdffd42438990ef546ad13f302556913339acce0",
       "current_publication_valid": true,
       "public_artifact_bytes_match": true,
-      "delivery_receipt_sha256": "bcba35a0994ff6bd138e005958c610df676854372b0d0fae9367854a2a21d032",
-      "archive_sha256": "6498ea168de757c51e0f693a00cce3ea5a07317b8d8f48c55d229deba07e0906",
+      "delivery_receipt_sha256": "dedcc9c7778c959a5b420976fcadbebe585e428a38915bc1c8c011d36efd3f74",
+      "archive_sha256": "060e34bbf7ad10d0d458b5ca44d932bd34c81f39e9212d59cbc4fbd00134125d",
       "verified_pages": [
         "docs/desktop/",
         "docs/library/",
@@ -1431,14 +1431,14 @@
       ],
       "rendering_producer_inputs_verified": 116,
       "native_catalogue_captures_verified": 480,
-      "capture_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+      "capture_source_commit": "950f4d199c16202b18ddb41b66e724c5da2a3c07",
       "latest_verified_lan_source_commit": "8b20b78a819db7b88d2fbdaedb219fbd18576413",
       "latest_verified_lan_http_checks_passed": 6,
       "latest_verified_lan_receipt_sha256": "9c5eabccefc5e680df578e034b8f2834366ae62ebe15bdbeeba1482d881a014c",
       "pr105_pages_verified": true,
       "current_reconciliation_published": false,
-      "scope": "Verified PR105/main 6322 publication: three public HTML pages, native manifest and representative PNG exactly match the artifact; 116 producer inputs and 480 captures verify at source 26d. LAN remains the separately verified 8b20 bundle. This six-file evidence/doc update is not yet built or published, and no live site monitor or broader native/performance acceptance follows. Later PR106/main bdffd424 Pages delivery remains unverified; it is separate from this recorded PR105 receipt.",
-      "pr106_pages_verified": false
+      "scope": "Verified PR106/main bdffd424 Pages content: three public HTML pages, manifest d5384a6b and representative PNG match the artifact; 116 inputs and 480 captures verify from 950f4d19. LAN remains 8b20. This newer evidence/doc follow-up has not been locally Node/site-built or published; no native/performance scope is expanded.",
+      "pr106_pages_verified": true
     },
     "accepted_main_commit": "bdffd42438990ef546ad13f302556913339acce0",
     "current_vm_trial_source_commit": null,
@@ -2235,7 +2235,7 @@
       "source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
       "release_manifest_sha256": "c669b9d53879d504f0a4efa5e131c93f57cc77bc8c26c18dacef54565fe2703f",
       "report": "reports/measurements/lucent-runtime-9eb-native-trial.json",
-      "report_sha256": "ea47544ab473882b196ab028ec52781fbabfc52b4da15969087f261b5860e3a9",
+      "report_sha256": "8f769b37b1989658e0587e1840f281408315f2f85e7752533bce30bd72f7a47f",
       "accepted_main": false,
       "notification_client_accepted_pull_request": 105,
       "renderer_candidate_pull_request": 106,
@@ -2426,6 +2426,82 @@
       },
       "host_io_diagnostic": "Started separately; no terminal result at this checkpoint.",
       "scope": "Later accepted-main source equality, not a rebuild or native rerun. Original UNMERGED/accepted_main=false capture-time fields above remain unchanged. Five route checks, two trusted document-key cases and nine named cleanup checks retain their recorded warm controlled-browser scope; no all-user-files/history-byte restoration, arbitrary-handler, cold-browser, physical-hardware or performance claim."
+    },
+    "historical_documentation_delivery_pr105": {
+      "accepted_main_commit": "6322f76308b82f7c2b668f0b952d6d87c5884273",
+      "published_workflow_run": 40019250788,
+      "published_workflow_status": "SUCCESS",
+      "public_http_status": 200,
+      "current_published_source_links": "6322f76308b82f7c2b668f0b952d6d87c5884273",
+      "current_publication_valid": true,
+      "public_artifact_bytes_match": true,
+      "delivery_receipt_sha256": "bcba35a0994ff6bd138e005958c610df676854372b0d0fae9367854a2a21d032",
+      "archive_sha256": "6498ea168de757c51e0f693a00cce3ea5a07317b8d8f48c55d229deba07e0906",
+      "verified_pages": [
+        "docs/desktop/",
+        "docs/library/",
+        "component-lab/"
+      ],
+      "verified_native_assets": [
+        "component-lab/manifest.json",
+        "component-lab/images/menu-ocean-populated-narrow-1x.png"
+      ],
+      "rendering_producer_inputs_verified": 116,
+      "native_catalogue_captures_verified": 480,
+      "capture_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+      "latest_verified_lan_source_commit": "8b20b78a819db7b88d2fbdaedb219fbd18576413",
+      "latest_verified_lan_http_checks_passed": 6,
+      "latest_verified_lan_receipt_sha256": "9c5eabccefc5e680df578e034b8f2834366ae62ebe15bdbeeba1482d881a014c",
+      "pr105_pages_verified": true,
+      "current_reconciliation_published": false,
+      "scope": "Verified PR105/main 6322 publication: three public HTML pages, native manifest and representative PNG exactly match the artifact; 116 producer inputs and 480 captures verify at source 26d. LAN remains the separately verified 8b20 bundle. This six-file evidence/doc update is not yet built or published, and no live site monitor or broader native/performance acceptance follows. Later PR106/main bdffd424 Pages delivery remains unverified; it is separate from this recorded PR105 receipt.",
+      "pr106_pages_verified": false
+    },
+    "latest_followup_2026_10_24": {
+      "recorded_on": "2026-10-24",
+      "scope": "Later publication and separate host-diagnostic checkpoint only. All prior report fields, including accepted_main_followup and capture-time pending flags, retain their original values. No code, native feature, resource-target or pacing result is changed.",
+      "documentation_delivery": {
+        "source_commit": "bdffd42438990ef546ad13f302556913339acce0",
+        "pages_run": 40026533176,
+        "workflow_status": "SUCCESS",
+        "private_receipt_sha256": "dedcc9c7778c959a5b420976fcadbebe585e428a38915bc1c8c011d36efd3f74",
+        "artifact_archive_sha256": "060e34bbf7ad10d0d458b5ca44d932bd34c81f39e9212d59cbc4fbd00134125d",
+        "public_html_pages_exact_artifact_matches": 3,
+        "native_manifest_sha256": "d5384a6b63a668ea1a1fcff29726b666a8533b5ced69fd68c10a6ebddf0f5e12",
+        "representative_png_exact_artifact_match": true,
+        "capture_source_commit": "950f4d199c16202b18ddb41b66e724c5da2a3c07",
+        "rendering_inputs_verified": 116,
+        "native_captures_verified": 480,
+        "last_verified_lan_source_commit": "8b20b78a819db7b88d2fbdaedb219fbd18576413",
+        "new_evidence_docs_local_Node_build_executed": false,
+        "new_evidence_docs_published": false,
+        "scope": "Verified accepted PR106/main Pages content; it predates this newer evidence/documentation follow-up."
+      },
+      "focused_host_io_diagnostic": {
+        "completed": true,
+        "seconds": 30.00010556200141,
+        "private_summary_sha256": "5c19fe3c9ca65ba5e287b39b469f5480f7df19adc8fd4fa46479d1b42f0f641c",
+        "global_io_full_stall_fraction": 0.07129923436698471,
+        "global_cpu_busy_fraction_excluding_idle_iowait": 0.8784863310943417,
+        "global_swap_in_pages": 169,
+        "sustained_nvme_saturation_established": false,
+        "cause_identified": false,
+        "code_change_made": false,
+        "performance_accepted": false,
+        "eligibility_gates_changed": false,
+        "headroom_recovery_established": false,
+        "scope": "Separate 30-second read-only host diagnostic. It observes host activity without sustained NVMe saturation evidence or bottleneck attribution. It is not a guest Lucent resource interval, VM-exclusive cgroup total, eligible comparison, memory-headroom recovery proof or FPS measurement."
+      },
+      "latest_source_checks": {
+        "python_checks_passed": 774,
+        "python_seconds": 6.87,
+        "catalogue_stories": 9,
+        "catalogue_captures": 480,
+        "catalogue_rendering_inputs": 116,
+        "scope": "Recorded integrated source-check checkpoint; these checks do not substitute for a local Node/site build or publication of the newer documentation."
+      },
+      "new_4k_resource_interval_executed": false,
+      "whole_seven_gap_goal_complete": false
     }
   },
   "requirements": [
