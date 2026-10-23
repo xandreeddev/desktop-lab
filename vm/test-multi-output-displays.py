@@ -21,8 +21,9 @@ PINS={
  'owned_application_units':('vm/owned_application_units.py','0082d9c4c87c36a7cc65f361304a2fbda174af83f30d6713720d709a9193d5b7'),
  'native':('vm/test-native-multi-output.py','c1fc9b0aecd910cc9e7e46247bb883f86bc3cb675c44216943f5f03f12fe0829'),
  'multi_output_guard':('vm/multi_output_guard.py','05cc165f9b823becd28e8a631920e120ceb75afd73e026a3b91a64404729d765'),
- 'multi_output_policy':('vm/multi_output_policy.py','dd61130d7ec00e175c69e496f830fa482167d201c5fc3481b545b20660c4f2a0')}
-GUEST_SHA='2e1510e3f246b598c4f125f484c5793f327e77529d8e7b6b92dc82be707bb8f5'
+ 'multi_output_policy':('vm/multi_output_policy.py','25c0e45f87c25363220cffdfd901774856c8792f7e4298946fc9011dbb2ebb58'),
+ 'multi_output_display_policy':('vm/multi_output_display_policy.py','e2fa025f521c30f71d0992c12d1a4d6ef98af79abc96a53ad86d616734e5f66f')}
+GUEST_SHA='b4b8623f40e6c2b2b8cc759a92bae66ad464a64547db05b5896a4cccc844dd4f'
 
 def require(value,label):
     if not value: raise ValueError(label)
@@ -77,12 +78,19 @@ assert cache.resolve(strict=True)==cache and cache.stat().st_uid==os.getuid() an
 path=cache/('native-two-output-displays-'+packet['tag']);os.mkdir(path,0o700)
 assert path.resolve(strict=True)==path and stat.S_IMODE(path.stat().st_mode)==0o700
 for name,data in packet['files'].items():
- assert name in ('guest.py','multi_output_guard.py','multi_output_policy.py','preservation_fingerprint.py',
+ assert name in ('guest.py','multi_output_guard.py','multi_output_policy.py','multi_output_display_policy.py','preservation_fingerprint.py',
                  'display_supervision.py','owned_application_units.py','header.json')
  raw=base64.b64decode(data,validate=True)
  with os.fdopen(os.open(path/name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600),'wb') as stream:stream.write(raw)
 print(path)
 '''
+
+def stage_files(raw,guest,header):
+    files={name+'.py':raw[name] for name in ('multi_output_guard','multi_output_policy','multi_output_display_policy',
+                                            'preservation_fingerprint','display_supervision','owned_application_units')}
+    header['source_sha256']={name:digest(data) for name,data in {**files,'guest.py':guest}.items()}
+    files.update({'guest.py':guest,'header.json':json.dumps(header).encode()})
+    return files
 
 def run(lab_root,fresh_off=FRESH_OFF,vm_uuid=None,normal_off=NORMAL_OFF_IDENTITY,release_manifest=RELEASE_MANIFEST):
     require(vm_uuid==VM_UUID,'exact_vm_uuid_required')
@@ -91,9 +99,13 @@ def run(lab_root,fresh_off=FRESH_OFF,vm_uuid=None,normal_off=NORMAL_OFF_IDENTITY
     # VM construction is deliberately after every local receipt/source gate.
     sys.path.insert(0,str(ROOT/'vm'))
     native=module('two_output_native',raw['native'],ROOT/PINS['native'][0])
+    p=sys.modules['multi_output_policy']
+    require(Path(p.__file__).resolve(strict=True)==ROOT/PINS['multi_output_policy'][0]
+            and digest(read(Path(p.__file__)))==PINS['multi_output_policy'][1],
+            'exact_shared_policy_module_required')
+    d=module('two_output_display_policy',raw['multi_output_display_policy'],ROOT/PINS['multi_output_display_policy'][0])
     vm=native.VM(lab_root)
     require(vm.virsh('domuuid',vm.name).strip()==vm_uuid,'exact_vm_uuid_changed')
-    policy=module('two_output_display_policy',raw['multi_output_policy'],ROOT/PINS['multi_output_policy'][0])
     tag=secrets.token_hex(12)
     output='LUCENT-TEST-'+tag
     report={'success':False,'runtime_source':SOURCE,'desktop_sha256':DESKTOP,'checks':[],
@@ -103,10 +115,7 @@ def run(lab_root,fresh_off=FRESH_OFF,vm_uuid=None,normal_off=NORMAL_OFF_IDENTITY
             'physical_or_secure_output_acceptance':False,'presentation_or_performance_acceptance':False}
     unit='lucent-native-display-test-'+tag+'.service'
     header={'desktop_sha256':DESKTOP,'output':output,'fresh_off_facts':fresh,'unit':unit}
-    files={name+'.py':raw[name] for name in ('multi_output_guard','multi_output_policy','preservation_fingerprint',
-                                           'display_supervision','owned_application_units')}
-    header['source_sha256']={name:digest(data) for name,data in {**files,'guest.py':guest}.items()}
-    files.update({'guest.py':guest,'header.json':json.dumps(header).encode()})
+    files=stage_files(raw,guest,header)
     payload=json.dumps({'tag':tag,'files':{name:base64.b64encode(data).decode() for name,data in files.items()}})
     require(len(payload)<=2*1024*1024,'bounded_stage_required')
     directory=vm.remote('/usr/bin/python3','-I','-c',STAGE,data=payload,timeout=20)
@@ -128,8 +137,8 @@ def run(lab_root,fresh_off=FRESH_OFF,vm_uuid=None,normal_off=NORMAL_OFF_IDENTITY
             current=status();panel=current['panel']
             try:
                 monitor=next(m for m in current['monitors'] if m['name']==panel['output'])
-                point=native.hit_center(monitor,panel,current['layer'],identifier)
-            except native.Blocked:
+                point=p.hit_center(monitor,panel,current['layer'],identifier)
+            except p.Blocked:
                 key(15);continue
             moved=request('warp',monitor=panel['output'],identifier=identifier,
                           generation=current['host']['generation'],global_id=current['global'])
@@ -138,7 +147,7 @@ def run(lab_root,fresh_off=FRESH_OFF,vm_uuid=None,normal_off=NORMAL_OFF_IDENTITY
                     and after['layer']==current['layer'] and after['panel']['hits']==panel['hits']
                     and tuple(moved['point'])==point and (after['cursor']['x'],after['cursor']['y'])==point,
                     'exact_current_hit_required')
-            policy.require_owned_display_control(identifier,after['state']['selected'],output)
+            d.require_owned_display_control(identifier,after['state']['selected'],output)
             require(input_deadline is not None and time.monotonic()<input_deadline,'bounded_native_input_window')
             held=True
             try:
@@ -169,7 +178,7 @@ def run(lab_root,fresh_off=FRESH_OFF,vm_uuid=None,normal_off=NORMAL_OFF_IDENTITY
         current=status()
         if current['panel_target']!=target:
             require(not current['state']['visible'],'close_panel_before_changing_native_host')
-            state=vm.inspect();host=native.host(state,target);global_id=native.output(state,target)['global']
+            state=vm.inspect();host=p.host(state,target);global_id=p.output(state,target)['global']
             moved=request('bar-warp',monitor=target,generation=host['generation'],global_id=global_id)
             wait(lambda:status()['active_monitor']==target,'real_bar_pointer_enter_selects_panel_host')
             require(status()['cursor']=={'x':moved['point'][0],'y':moved['point'][1]},'bar_cursor_postimage_required')
@@ -181,7 +190,7 @@ def run(lab_root,fresh_off=FRESH_OFF,vm_uuid=None,normal_off=NORMAL_OFF_IDENTITY
         require(status()['state']['selected']==output,'owned_output_selected')
     def observed():
         current=status()
-        return sorted([native.monitor_signature(row) for row in current['monitors'] if row['name']!=output]
+        return sorted([p.monitor_signature(row) for row in current['monitors'] if row['name']!=output]
                       +[current['peer']],key=lambda row:row['name'])
     def owned_postimage(expected):
         current=status()
@@ -191,7 +200,7 @@ def run(lab_root,fresh_off=FRESH_OFF,vm_uuid=None,normal_off=NORMAL_OFF_IDENTITY
         require(request('capture-keep')['captured'],'exact_saved_monitor_postimage')
     def select_mode(expected):
         monitor=next(row for row in json.loads(vm.hypr('-j','monitors','all')) if row['name']==output)
-        index=policy.display_mode_index(monitor,expected['width'],expected['height'],round(expected['refreshRate']*1000))
+        index=d.display_mode_index(monitor,expected['width'],expected['height'],round(expected['refreshRate']*1000))
         click('display-mode-'+str(index))
     try:
         started=True

@@ -5,6 +5,7 @@ sys.dont_write_bytecode=True
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 import multi_output_guard as base
 import multi_output_policy as p
+import multi_output_display_policy as d
 import preservation_fingerprint as preservation
 import display_supervision as supervision
 import owned_application_units as units
@@ -161,7 +162,7 @@ class Owner(base.Native):
 
     def peer_submitted(self,state,current):
         """Wait for actual per-output geometry; submission is not presentation."""
-        width,height=p.display_logical_size(current)
+        width,height=d.display_logical_size(current)
         layers=json.loads(base.hypr('-j','layers'))
         try:
             host=p.host(state,self.lease.name)
@@ -185,7 +186,7 @@ class Owner(base.Native):
         return True
 
     def peer_state(self,state):
-        current=p.display_layout(self.all_monitors(),self.baseline,self.peer_identity)
+        current=d.display_layout(self.all_monitors(),self.baseline,self.peer_identity)
         require(current in self.allowed,'unadmitted_owned_display_layout')
         globals=[row for row in state['outputs'] if row['name']==self.lease.name]
         hosts=[row for row in state['client']['monitor_hosts'] if row['id']==self.lease.name]
@@ -312,7 +313,7 @@ class Owner(base.Native):
             require([row['id'] for row in state['surfaces'] if row['keyboard']=='exclusive']==[panel['id']],
                     'one_exclusive_display_target_required')
             monitor=p.unique(self.monitors(),lambda row:row['name']==self.panel_target,'panel_native_output_missing')
-            width,height=p.display_logical_size(monitor)
+            width,height=d.display_logical_size(monitor)
             require(math.isclose(panel['density'],monitor['scale'],abs_tol=.001)
                     and math.isclose(panel['width'],width,abs_tol=1)
                     and math.isclose(panel['height'],height,abs_tol=1)
@@ -343,7 +344,7 @@ class Owner(base.Native):
             require([p.monitor_signature(row) for row in self.all_monitors()]==self.baseline,
                     'only_original_native_output_expected')
         else:
-            peer=p.display_layout(self.all_monitors(),self.baseline,self.peer_identity)
+            peer=d.display_layout(self.all_monitors(),self.baseline,self.peer_identity)
             require(peer in self.allowed,'cleanup_must_only_remove_admitted_owned_peer')
             if peer['disabled']:
                 require(self.peer_disabled or self.lifecycle=='disable',
@@ -416,7 +417,7 @@ class Owner(base.Native):
                 'expected_sha256':hashlib.sha256(self.armed).hexdigest(),'transaction':value['state']['transaction']})
             return {'armed':True}
         if operation=='warp':
-            p.require_owned_display_control(request['identifier'],value['state']['selected'],self.lease.name)
+            d.require_owned_display_control(request['identifier'],value['state']['selected'],self.lease.name)
             require(value['panel'] is not None and request['monitor']==self.panel_target
                     and request['generation']==value['host']['generation']
                     and request['global']==value['global'],'exact_panel_host_required')
@@ -428,13 +429,13 @@ class Owner(base.Native):
             if request['identifier']=='display-apply' and self.lifecycle=='disable':
                 require(self.disable_cursor is None,'one_bounded_disable_cursor_declaration_required')
                 base.require_reviewed_hyprland(self.hyprland_version)
-                self.disable_cursor=p.DisplayDisableCursor(self.cursor,self.baseline,self.peer_identity,
+                self.disable_cursor=d.DisplayDisableCursor(self.cursor,self.baseline,self.peer_identity,
                     self.peer_host,self.peer_surfaces,self.original_host,self.original_global,
                     (value['state'].get('transaction') or {}).get('id'),time.monotonic())
                 base.private_json(self.directory/'cursor-disable-intent.json',{
                     'preimage':list(self.disable_cursor.preimage),'postimage':list(self.disable_cursor.destination),
                     'deadline_monotonic':self.disable_cursor.deadline,'before_transaction':self.disable_cursor.transaction,
-                    'hyprland_commit':base.REVIEWED_HYPRLAND_COMMIT,'source_sha256':p.DisplayDisableCursor.SOURCES})
+                    'hyprland_commit':base.REVIEWED_HYPRLAND_COMMIT,'source_sha256':d.DisplayDisableCursor.SOURCES})
             else:self.disable_cursor=None
             return {'point':point,'surface':value['panel']['id']}
         require(operation=='finish','known_display_test_operation_required')
@@ -481,7 +482,7 @@ class Owner(base.Native):
                         and state.get('retiring_native_surfaces')==0)
                     if retired:break
                 else:
-                    require(p.display_layout(rows,self.baseline,self.peer_identity) in self.allowed,
+                    require(d.display_layout(rows,self.baseline,self.peer_identity) in self.allowed,
                             'owned_identity_changed_during_cleanup')
                 require(time.monotonic()<deadline,'owned_cleanup_retirement_deadline');time.sleep(.1)
             self.owned=None;self.lease.expected=None;self.lease.global_id=None
@@ -584,6 +585,9 @@ def main():
     else:
         signal.signal(signal.SIGTERM,lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
         header=json.loads((directory/'header.json').read_bytes())
+        require(set(header['source_sha256'])=={'guest.py','multi_output_guard.py','multi_output_policy.py',
+                'multi_output_display_policy.py','preservation_fingerprint.py','display_supervision.py',
+                'owned_application_units.py'},'complete_display_staged_source_set_required')
         for name,expected in header['source_sha256'].items():
             value=directory/name;meta=value.lstat()
             require(value.name==name and not value.is_symlink() and stat.S_ISREG(meta.st_mode)

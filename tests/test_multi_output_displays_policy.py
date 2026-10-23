@@ -10,6 +10,34 @@ def module(name):
 c,g=module('controller'),module('guest')
 
 class Boundaries(unittest.TestCase):
+    def test_shared_native_policy_keeps_the_reviewed_canonical_identity(self):
+        raw=(HERE/'multi_output_policy.py').read_bytes()
+        self.assertEqual(hashlib.sha256(raw).hexdigest(),
+                         '25c0e45f87c25363220cffdfd901774856c8792f7e4298946fc9011dbb2ebb58')
+        self.assertEqual(c.PINS['multi_output_policy'][1],hashlib.sha256(raw).hexdigest())
+        names={'display_peer_signature','display_layout','display_logical_size',
+               'display_mode_index','require_owned_display_control','DisplayDisableCursor'}
+        self.assertTrue(names.isdisjoint(vars(g.p)))
+        self.assertEqual(set(g.d.__all__),names)
+        self.assertIs(g.d.host,g.p.host);self.assertIs(g.d.require,g.p.require)
+        self.assertIs(g.d.retired,g.p.retired)
+
+    def test_staged_header_binds_both_policies_and_all_seven_guest_sources(self):
+        raw={name:(ROOT/pin[0]).read_bytes() for name,pin in c.PINS.items()}
+        guest=(HERE/'multi_output_display_guard.py').read_bytes();header={'output':'unit-only'}
+        files=c.stage_files(raw,guest,header)
+        expected={'guest.py','multi_output_guard.py','multi_output_policy.py','multi_output_display_policy.py',
+                  'preservation_fingerprint.py','display_supervision.py','owned_application_units.py'}
+        self.assertEqual(set(files),expected|{'header.json'})
+        self.assertEqual(set(header['source_sha256']),expected)
+        self.assertEqual(json.loads(files['header.json'])['source_sha256'],header['source_sha256'])
+        for name in expected:self.assertEqual(header['source_sha256'][name],hashlib.sha256(files[name]).hexdigest())
+        stage=ast.parse(c.STAGE)
+        allowed=next(node.comparators[0] for node in ast.walk(stage) if isinstance(node,ast.Compare)
+                     and isinstance(node.left,ast.Name) and node.left.id=='name'
+                     and len(node.ops)==1 and isinstance(node.ops[0],ast.In))
+        self.assertEqual(set(ast.literal_eval(allowed)),set(files))
+
     def test_private_receipt_arguments_require_a_pair_before_execution(self):
         for args in (['--fresh-off','/tmp/private-proof.json'],['--fresh-off-sha256','a'*64]):
             with patch.object(sys,'argv',['test-multi-output-displays.py','--run',*args]),patch.object(c,'run',side_effect=AssertionError('no_transport')):
@@ -307,34 +335,34 @@ class ExtendedDisplayCases(unittest.TestCase):
     def test_rotated_and_disabled_peer_do_not_weaken_the_original_native_policy(self):
         rotated={**self.peer,'transform':1}
         with self.assertRaises(g.p.Blocked):g.p.monitor_signature(rotated)
-        self.assertEqual(g.p.display_peer_signature(rotated,self.identity),rotated)
+        self.assertEqual(g.d.display_peer_signature(rotated,self.identity),rotated)
         native_disabled={**self.peer,'width':0,'height':0,'refreshRate':0,'disabled':True}
         with self.assertRaises(g.p.Blocked):g.p.monitor_signature(native_disabled)
-        self.assertEqual(g.p.display_layout([self.original,native_disabled],[self.original],self.identity),self.disabled)
+        self.assertEqual(g.d.display_layout([self.original,native_disabled],[self.original],self.identity),self.disabled)
         for mutation in ({'id':3},{'name':'Virtual-1'},{'description':'replacement'}):
             with self.assertRaisesRegex(g.p.Blocked,'owned_display_native_identity_changed'):
-                g.p.display_peer_signature({**native_disabled,**mutation},self.identity)
+                g.d.display_peer_signature({**native_disabled,**mutation},self.identity)
         for mutation in ({'transform':1},{'disabled':True},{'x':16}):
             with self.assertRaises(g.p.Blocked):
-                g.p.display_layout([{**self.original,**mutation},native_disabled],[self.original],self.identity)
+                g.d.display_layout([{**self.original,**mutation},native_disabled],[self.original],self.identity)
         with self.assertRaisesRegex(g.p.Blocked,'inventory_required'):
-            g.p.display_layout([self.original,native_disabled,dict(self.peer,name='foreign')],[self.original],self.identity)
+            g.d.display_layout([self.original,native_disabled,dict(self.peer,name='foreign')],[self.original],self.identity)
 
     def test_fractional_logical_viewport_is_separate_from_physical_buffer_and_rotation(self):
-        self.assertEqual(g.p.display_logical_size({**self.peer,'scale':1.25}),(1024,768))
-        self.assertEqual(g.p.display_logical_size({**self.peer,'scale':1.25,'transform':1}),(768,1024))
+        self.assertEqual(g.d.display_logical_size({**self.peer,'scale':1.25}),(1024,768))
+        self.assertEqual(g.d.display_logical_size({**self.peer,'scale':1.25,'transform':1}),(768,1024))
         for mutation in ({'disabled':True},{'scale':float('nan')},{'transform':7}):
-            with self.assertRaises(g.p.Blocked):g.p.display_logical_size({**self.peer,**mutation})
+            with self.assertRaises(g.p.Blocked):g.d.display_logical_size({**self.peer,**mutation})
 
     def test_real_mode_index_preserves_native_order_deduplication_and_disabled_fallback(self):
         native={**self.peer,'availableModes':['invalid','1280x960@60.000Hz','1280x960@60',
                                            '1920x1080@60Hz','1280x720@nanHz']}
-        self.assertEqual(g.p.display_mode_index(native,1280,960,60000),0)
-        self.assertEqual(g.p.display_mode_index({**native,'width':1024,'height':768},1280,960,60000),1)
+        self.assertEqual(g.d.display_mode_index(native,1280,960,60000),0)
+        self.assertEqual(g.d.display_mode_index({**native,'width':1024,'height':768},1280,960,60000),1)
         inactive={**native,'disabled':True,'width':0,'height':0,'refreshRate':0}
-        self.assertEqual(g.p.display_mode_index(inactive,1920,1080,60000),1)
+        self.assertEqual(g.d.display_mode_index(inactive,1920,1080,60000),1)
         with self.assertRaisesRegex(g.p.Blocked,'not_advertised'):
-            g.p.display_mode_index(inactive,800,600,60000)
+            g.d.display_mode_index(inactive,800,600,60000)
 
     def test_saved_disabled_rule_is_allowed_only_for_the_exact_owned_peer(self):
         inactive={**self.peer,'disabled':True,'width':0,'height':0,'refreshRate':0}
@@ -350,12 +378,12 @@ class ExtendedDisplayCases(unittest.TestCase):
         name=self.peer['name']
         for identifier in ('display-enabled','display-rotation','display-apply','display-mode-0','display-field-0-1'):
             with self.assertRaisesRegex(g.p.Blocked,'only_owned_display_draft'):
-                g.p.require_owned_display_control(identifier,'Virtual-1',name)
-            g.p.require_owned_display_control(identifier,name,name)
+                g.d.require_owned_display_control(identifier,'Virtual-1',name)
+            g.d.require_owned_display_control(identifier,name,name)
         for identifier in ('display-reset','display-select-'+name):
-            g.p.require_owned_display_control(identifier,'Virtual-1',name)
+            g.d.require_owned_display_control(identifier,'Virtual-1',name)
         with self.assertRaises(g.p.Blocked):
-            g.p.require_owned_display_control('display-select-Virtual-1',name,name)
+            g.d.require_owned_display_control('display-select-Virtual-1',name,name)
 
     def owner(self,disabled=False):
         owner=g.Owner.__new__(g.Owner)
@@ -444,7 +472,7 @@ class DeclaredDisableCursor(unittest.TestCase):
         original_host={'id':'Virtual-1','instance':'original-instance','generation':1}
         peer_host={'id':identity['name'],'instance':'peer-instance','generation':2}
         cursor=g.p.CursorOwnership((1200,900))
-        declaration=g.p.DisplayDisableCursor(cursor,[original],identity,peer_host,{'peer-bar'},
+        declaration=g.d.DisplayDisableCursor(cursor,[original],identity,peer_host,{'peer-bar'},
                                               original_host,71,4,10.)
         state={'client':{'named_monitor_hosts':True,'monitor_hosts':[original_host],
                          'displays':{'selected':identity['name'],'open':True,'visible':True,'busy':False,
