@@ -245,3 +245,46 @@ def warm_diagnostic(value):
             and (not value['blocked'] or value['error_class'] in WARM_ERROR_CLASSES),
             'bounded_warm_readiness_reply_required')
     return dict(value)
+
+
+BRIDGE_OPERATIONS = ('prepare', 'publish', 'admission', 'warm', 'open', 'warm-ready',
+                     'notify', 'observe-note', 'wait-expiry', 'watchdog', 'finish', 'state',
+                     'security', 'retire-guardian')
+BRIDGE_PHASES = ('arguments', 'context', 'dispatch', 'handler')
+BRIDGE_ERROR_CLASSES = WARM_ERROR_CLASSES + ('KeyError', 'NameError', 'TypeError', 'AttributeError',
+                                            'UnicodeDecodeError', 'DBusException')
+BRIDGE_REASONS = ('unclassified_fixture_failure', 'owned_default_uri_run',
+                  'frozen_default_uri_fixture_source', 'original_default_uri_guardian_required',
+                  'open_default_uri_fixture_required', 'configuration_publication_preimage_changed',
+                  'raced_configuration_publication_preserved', 'independent_configuration_change_preserved',
+                  'owned_configuration_directory', 'owned_configuration_file',
+                  'configuration_changed_during_read', 'configuration_file_required',
+                  'configuration_link_is_not_absence', 'configuration_read_changed',
+                  'exact_owned_configuration_lease', 'actual_owned_default_handler_selected',
+                  'original_owned_http_listener', 'fresh_exact_desktop_pid',
+                  'bounded_fixed_security_file', 'fixed_security_file_changed',
+                  'owned_chromium_lease_refused')
+
+
+def bridge_error(error, operation, phase):
+    """Fixed failure metadata only; exception text, argv and locals stay private."""
+    name = type(error).__name__
+    reason = error.args[0] if len(error.args) == 1 and type(error.args[0]) is str else None
+    return {'failure': 'owned_default_uri_fixture_refused',
+            'operation': operation if operation in BRIDGE_OPERATIONS else 'unknown',
+            'phase': phase if phase in BRIDGE_PHASES else 'arguments',
+            'error_class': name if name in BRIDGE_ERROR_CLASSES else 'OtherError',
+            'fixed_reason': reason if reason in BRIDGE_REASONS else 'unclassified_fixture_failure'}
+
+
+def bridge_error_packet(value, operation):
+    """Accept one exact, operation-bound packet containing only public labels."""
+    require(type(value) is dict and set(value) ==
+            {'failure', 'operation', 'phase', 'error_class', 'fixed_reason'}
+            and value['failure'] == 'owned_default_uri_fixture_refused'
+            and operation in BRIDGE_OPERATIONS and value['operation'] == operation
+            and value['phase'] in BRIDGE_PHASES and value['error_class'] in BRIDGE_ERROR_CLASSES
+            and value['fixed_reason'] in BRIDGE_REASONS
+            and re.fullmatch('[a-z][a-z0-9_]{0,95}', value['fixed_reason']) is not None,
+            'bounded_default_uri_error_packet_required')
+    return dict(value)

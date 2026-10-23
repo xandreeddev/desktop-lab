@@ -465,15 +465,14 @@ def watchdog(run, run_id):
             p.private(run / 'default-finished.json', json.dumps(result).encode())
 
 
-def main():
+def dispatch(diagnostic):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('prepare', 'publish', 'admission', 'warm', 'open',
-                                              'warm-ready', 'notify', 'observe-note', 'wait-expiry', 'watchdog', 'finish', 'state',
-                                              'security', 'retire-guardian'))
+    parser.add_argument('operation', choices=p.BRIDGE_OPERATIONS)
     parser.add_argument('directory', type=Path)
     parser.add_argument('run_id')
     parser.add_argument('value', nargs='?')
     args = parser.parse_args()
+    diagnostic.update(operation=args.operation, phase='handler')
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     if args.operation == 'watchdog':
         watchdog(args.directory, args.run_id)
@@ -481,8 +480,11 @@ def main():
     if args.operation == 'warm-ready':
         print(json.dumps(warm_ready(args.directory, args.run_id)))
         return
+    diagnostic['phase'] = 'context'
     run, _, base = context(args.directory, args.run_id)
+    diagnostic['phase'] = 'dispatch'
     handlers = {'prepare': prepare, 'publish': publish, 'admission': admitted}
+    diagnostic['phase'] = 'handler'
     if args.operation in handlers:
         result = handlers[args.operation](run, args.run_id)
     elif args.operation in ('warm', 'open'):
@@ -508,10 +510,15 @@ def main():
     print(json.dumps(result))
 
 
-if __name__ == '__main__':
+def main():
+    diagnostic = {'operation': 'unknown', 'phase': 'arguments'}
     try:
-        main()
+        dispatch(diagnostic)
     except Exception as error:
-        print(json.dumps({'failure': 'owned_default_uri_fixture_refused',
-                          'error_class': type(error).__name__}), file=sys.stderr)
-        raise SystemExit(1) from None
+        print(json.dumps(p.bridge_error(error, diagnostic['operation'], diagnostic['phase'])), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

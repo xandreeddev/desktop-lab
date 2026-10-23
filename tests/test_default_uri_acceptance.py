@@ -236,6 +236,128 @@ class FixtureCliDispatch(unittest.TestCase):
         self.assertEqual(json.loads(output.getvalue()), result)
 
 
+class BridgeDiagnostics(unittest.TestCase):
+    def packet(self, operation='admission'):
+        return p.bridge_error(ValueError('actual_owned_default_handler_selected'), operation, 'handler')
+
+    def entry_failure(self, error, context_error=False, missing_handler=False):
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(patch.object(sys, 'argv', ['default-uri.py', 'admission', '/unused-run', 'abcdef123456']))
+            stack.enter_context(patch.object(driver.signal, 'signal'))
+            stack.enter_context(patch.object(subprocess, 'run', side_effect=AssertionError('native operations forbidden')))
+            stack.enter_context(patch.object(driver, 'context', side_effect=error if context_error else None,
+                                             return_value=(Path('/unused-canonical-run'), {}, Mock())))
+            if missing_handler:
+                stack.enter_context(patch.dict(driver.__dict__))
+                del driver.__dict__['admitted']
+            else:
+                stack.enter_context(patch.object(driver, 'admitted', side_effect=error))
+            output = stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+            errors = stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
+            status = driver.main()
+        self.assertEqual(status, 1)
+        self.assertEqual(output.getvalue(), '')
+        return p.bridge_error_packet(json.loads(errors.getvalue()), 'admission')
+
+    def test_actual_entrypoint_failure_is_nonzero_and_contains_only_fixed_labels(self):
+        for error in (KeyError('private_lowercase_secret'), ValueError('private_lowercase_secret'),
+                      type('private_lowercase_secret', (ValueError,), {})('private argument')):
+            with self.subTest(error_class=type(error).__name__):
+                packet = self.entry_failure(error)
+                self.assertEqual(packet['phase'], 'handler')
+                self.assertEqual(packet['fixed_reason'], 'unclassified_fixture_failure')
+                self.assertNotIn('private', json.dumps(packet))
+        self.assertEqual(self.entry_failure(ValueError('actual_owned_default_handler_selected'))['fixed_reason'],
+                         'actual_owned_default_handler_selected')
+
+    def test_actual_entrypoint_reports_context_and_missing_dispatch_implementation(self):
+        self.assertEqual(self.entry_failure(ValueError('private_lowercase_secret'), context_error=True)['phase'], 'context')
+        packet = self.entry_failure(ValueError('unused'), missing_handler=True)
+        self.assertEqual(packet['phase'], 'dispatch')
+        self.assertEqual(packet['error_class'], 'NameError')
+        self.assertEqual(packet['fixed_reason'], 'unclassified_fixture_failure')
+
+    def test_host_success_uses_the_original_bounded_transport_contract(self):
+        result = types.SimpleNamespace(returncode=0, stdout=b'{"published":true}\n', stderr=b'')
+        argv = ['owned-private-transport', 'opaque argument']
+        with patch.object(controller.subprocess, 'run', return_value=result) as execute:
+            self.assertEqual(controller.bridge_command(argv, 'publish'), {'published': True})
+        execute.assert_called_once_with(argv, capture_output=True, timeout=30)
+
+    def test_exact_error_packet_is_fatal_even_with_an_incorrect_zero_exit_status(self):
+        packet = self.packet()
+        for status in (0, 1):
+            with self.subTest(status=status):
+                raw = json.dumps(packet).encode()
+                result = types.SimpleNamespace(returncode=status, stdout=raw if status == 0 else b'',
+                                               stderr=raw if status else b'')
+                with patch.object(controller.subprocess, 'run', return_value=result), \
+                     self.assertRaises(controller.BridgeFailure) as caught:
+                    controller.bridge_command(['unused'], 'admission')
+                self.assertEqual(caught.exception.details, packet)
+                self.assertEqual(str(caught.exception), 'owned_default_uri_bridge_failed')
+
+    def test_noise_malformed_unbounded_or_untrusted_packets_cannot_become_results_or_report_data(self):
+        packet = self.packet()
+        raw = json.dumps(packet).encode()
+        cases = [(1, b'', raw + b' private_lowercase_secret'),
+                 (1, b'', raw + b'\n' + raw), (1, b'', b'private_lowercase_secret'),
+                 (1, b'private_lowercase_secret', raw),
+                 (1, b'', b'x' * 2049), (1, b'', b'x' * 65537),
+                 (0, b'x' * (8 * 1024 * 1024 + 1), b''),
+                 (0, b'{"published":true}', b'private_lowercase_secret'),
+                 (0, b'private_lowercase_secret', b'')]
+        for key, value in (('operation', 'security'), ('phase', 'private_lowercase_secret'),
+                           ('error_class', 'private_lowercase_secret'), ('fixed_reason', 'private_lowercase_secret'),
+                           ('environment', 'private_lowercase_secret')):
+            cases.append((1, b'', json.dumps({**packet, key: value}).encode()))
+        for index, (status, output, errors) in enumerate(cases):
+            with self.subTest(case=index):
+                result = types.SimpleNamespace(returncode=status, stdout=output, stderr=errors)
+                with patch.object(controller.subprocess, 'run', return_value=result), \
+                     self.assertRaises(controller.BridgeFailure) as caught:
+                    controller.bridge_command(['unused'], 'admission')
+                diagnostic = caught.exception.details
+                self.assertEqual(diagnostic['phase'], 'transport')
+                self.assertNotIn('private', json.dumps(diagnostic))
+
+    def test_transport_deadlines_and_os_errors_never_relay_command_or_partial_output(self):
+        for error in (subprocess.TimeoutExpired(['private_lowercase_secret'], 30, stderr=b'private stderr'),
+                      OSError('private_lowercase_secret')):
+            with self.subTest(error_class=type(error).__name__):
+                with patch.object(controller.subprocess, 'run', side_effect=error), \
+                     self.assertRaises(controller.BridgeFailure) as caught:
+                    controller.bridge_command(['unused'], 'admission')
+                self.assertEqual(caught.exception.details['fixed_reason'], 'bounded_bridge_transport_failed')
+                self.assertNotIn('private', json.dumps(caught.exception.details))
+
+    def test_post_warm_phase_marks_failed_action_and_first_failure_survives_cleanup(self):
+        diagnostic = {}
+        self.assertEqual(controller.post_warm_step(diagnostic, 'publication', lambda: 'published'), 'published')
+        packet = p.bridge_error_packet(self.packet(), 'admission')
+        failure = controller.BridgeFailure(packet)
+        with self.assertRaises(controller.BridgeFailure):
+            controller.post_warm_step(diagnostic, 'published_admission', Mock(side_effect=failure))
+        self.assertEqual(diagnostic, {'phase': 'published_admission', 'completed': ['publication']})
+        report = {}
+        controller.record_failure(report, failure, diagnostic['phase'])
+        original = json.loads(json.dumps(report))
+        controller.record_failure(report, ValueError('private_lowercase_secret'), 'cleanup')
+        self.assertEqual(report, original)
+        self.assertEqual(report['failure']['phase'], 'published_admission')
+        self.assertEqual(report['failure']['bridge'], packet)
+
+    def test_unknown_host_labels_and_secret_looking_exception_reasons_are_not_recorded(self):
+        report = {}
+        controller.record_failure(report, ValueError('private_lowercase_secret'), 'private_lowercase_secret')
+        self.assertEqual(report['failure'], {'error_class': 'ValueError', 'scope': 'native_default_uri_acceptance',
+                                            'phase': 'setup'})
+        action = Mock()
+        with self.assertRaisesRegex(ValueError, 'fixed_post_warm_phase_required'):
+            controller.post_warm_step({}, 'private_lowercase_secret', action)
+        action.assert_not_called()
+
+
 class AdmissionAndBridge(unittest.TestCase):
     def test_imports_and_default_controller_do_not_access_transport_or_native_desktop(self):
         with patch.object(subprocess, 'run', side_effect=AssertionError('transport forbidden')), \

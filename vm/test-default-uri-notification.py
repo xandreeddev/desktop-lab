@@ -147,6 +147,77 @@ def admit_warm_browser(call, wait, diagnostics):
     return value
 
 
+class BridgeFailure(ValueError):
+    def __init__(self, details):
+        super().__init__('owned_default_uri_bridge_failed')
+        self.details = dict(details)
+
+
+def bridge_command(argv, operation):
+    """Keep nonzero bridge failures observable without relaying private stderr."""
+    import default_uri_policy as p
+    require(operation in p.BRIDGE_OPERATIONS, 'known_default_uri_bridge_operation')
+    def refused(reason, error_class='OtherError'):
+        raise BridgeFailure({'operation': operation, 'phase': 'transport',
+                             'error_class': error_class, 'fixed_reason': reason}) from None
+    try:
+        result = subprocess.run(argv, capture_output=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        name = type(error).__name__
+        refused('bounded_bridge_transport_failed', name if name in p.BRIDGE_ERROR_CLASSES else 'OtherError')
+    if len(result.stdout) > 8 * 1024 * 1024 or len(result.stderr) > 65536:
+        refused('bounded_bridge_output_required')
+    if result.returncode != 0:
+        try:
+            require(result.stdout == b'' and len(result.stderr) <= 2048, 'one_bridge_error_packet_required')
+            packet = p.bridge_error_packet(json.loads(result.stderr), operation)
+        except (ValueError, TypeError, UnicodeDecodeError):
+            refused('invalid_bridge_error_packet')
+        raise BridgeFailure(packet)
+    try:
+        require(result.stderr == b'', 'silent_bridge_success_required')
+        value = json.loads(result.stdout)
+        require(type(value) is dict, 'bridge_result_object_required')
+        if 'failure' in value:
+            raise BridgeFailure(p.bridge_error_packet(value, operation))
+    except (ValueError, TypeError, UnicodeDecodeError) as error:
+        if isinstance(error, BridgeFailure):
+            raise
+        refused('invalid_bridge_success_packet')
+    return value
+
+
+POST_WARM_PHASES = ('warm_state', 'warm_authority_assert', 'publication', 'published_admission',
+                    'published_authority_assert', 'security_snapshot', 'http_identity',
+                    'http_identity_assert', 'default_selected_assert')
+
+
+def post_warm_step(diagnostic, phase, action):
+    require(phase in POST_WARM_PHASES, 'fixed_post_warm_phase_required')
+    diagnostic['phase'] = phase
+    value = action()
+    diagnostic.setdefault('completed', []).append(phase)
+    return value
+
+
+def record_failure(report, error, phase):
+    """The first failure survives cleanup; all recorded labels are fixed."""
+    if 'failure' in report:
+        return
+    import default_uri_policy as p
+    classes = p.BRIDGE_ERROR_CLASSES + ('BridgeFailure', 'CheckFailure', 'FixtureFailure', 'KeyboardInterrupt')
+    value = {'error_class': type(error).__name__ if type(error).__name__ in classes else 'OtherError',
+             'scope': 'native_default_uri_acceptance',
+             'phase': phase if phase in (*POST_WARM_PHASES, 'setup', 'native_acceptance', 'cleanup') else 'setup'}
+    if isinstance(error, BridgeFailure):
+        value['bridge'] = dict(error.details)
+    elif len(error.args) == 1 and type(error.args[0]) is str and error.args[0] in (
+            'bounded_subprocess_failed', 'warm_setup_has_no_input_authority',
+            'same_authority_after_warm_browser_setup'):
+        value['fixed_reason'] = error.args[0]
+    report['failure'] = value
+
+
 def run(args, manifest):
     sys.path.insert(0, str(ROOT / 'vm'))
     old = module('canonical_application_intent_acceptance', ROOT / 'vm/test-application-intent.py')
@@ -210,8 +281,11 @@ def run(args, manifest):
             scratch + '/' + filename, data=raw, timeout=20)
     def call(operation, *values, canonical=False):
         program = scratch + ('/fixture.py' if canonical else '/default-uri.py')
-        return json.loads(session('/usr/bin/python3', *([] if canonical else ['-I']),
-                                  program, operation, scratch, run_id, *values))
+        argv = ['/usr/bin/python3', *([] if canonical else ['-I']), program, operation, scratch, run_id, *values]
+        if canonical:
+            return json.loads(session(*argv))
+        return bridge_command(lab.ssh_args('lucent') + [shlex.join(
+            ['python3', 'desktop-lab/scripts/in-session.py', *argv])], operation)
     def wait(predicate, label, timeout=15):
         limit = time.monotonic() + timeout
         while time.monotonic() < limit:
@@ -281,14 +355,20 @@ def run(args, manifest):
         wait(lambda: len(call('state', canonical=True)['events']) == 1, 'warm_original_browser_recorded')
         report['warm_readiness'] = {}
         browser = admit_warm_browser(call, wait, report['warm_readiness'])['identity']
-        warm = call('state', canonical=True)['events'][0]
-        require(not warm['fresh_token_present'] and not warm['legacy_startup_present'], 'warm_setup_has_no_input_authority')
-        call('publish')
-        require(call('admission')['baseline'] == baseline, 'same_authority_after_warm_browser_setup')
-        security = call('security')
-        http = call('http-info', canonical=True)['identity']
-        uri = http['targets'][0]['uri']
-        report['checks']['temporary_real_mime_default_selected'] = prepared['app_id'].endswith('.desktop')
+        post = report['post_warm'] = {}
+        warm = post_warm_step(post, 'warm_state', lambda: call('state', canonical=True)['events'][0])
+        post_warm_step(post, 'warm_authority_assert', lambda: require(
+            not warm['fresh_token_present'] and not warm['legacy_startup_present'], 'warm_setup_has_no_input_authority'))
+        post_warm_step(post, 'publication', lambda: call('publish'))
+        admitted = post_warm_step(post, 'published_admission', lambda: call('admission'))
+        post_warm_step(post, 'published_authority_assert', lambda: require(
+            admitted['baseline'] == baseline, 'same_authority_after_warm_browser_setup'))
+        security = post_warm_step(post, 'security_snapshot', lambda: call('security'))
+        http = post_warm_step(post, 'http_identity', lambda: call('http-info', canonical=True)['identity'])
+        uri = post_warm_step(post, 'http_identity_assert', lambda: http['targets'][0]['uri'])
+        report['checks']['temporary_real_mime_default_selected'] = post_warm_step(
+            post, 'default_selected_assert', lambda: prepared['app_id'].endswith('.desktop'))
+        post['phase'] = 'complete'
         for sequence in ('pointer', 'keyboard'):
             native_guard()
             note = call('notify', sequence)['id']
@@ -379,9 +459,8 @@ def run(args, manifest):
             report['checks'][sequence + '_notification_absent_after_expiry_window'] = True
         report['success'] = True
     except BaseException as error:
-        report['failure'] = {'error_class': type(error).__name__, 'scope': 'native_default_uri_acceptance'}
-        if re.fullmatch('[a-z][a-z0-9_]{0,95}', str(error)):
-            report['failure']['fixed_reason'] = str(error)
+        phase = report.get('post_warm', {}).get('phase', 'setup')
+        record_failure(report, error, 'native_acceptance' if phase == 'complete' else phase)
     finally:
         if held:
             try:
