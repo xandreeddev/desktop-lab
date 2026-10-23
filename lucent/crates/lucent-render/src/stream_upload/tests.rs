@@ -9,6 +9,7 @@ fn upload_layout_accounts_for_odd_rows_limits_and_host_slices() {
         (64, 1, 256, 256),
         (65, 3, 512, 1536),
         (1920, 1080, 7680, 8294400),
+        (3840, 2160, 15360, 33177600),
     ] {
         let pixels = width as usize * height as usize * 4;
         let layout = Layout::rgba(width, height, pixels, bytes).unwrap();
@@ -23,7 +24,12 @@ fn upload_layout_accounts_for_odd_rows_limits_and_host_slices() {
     let full_hd = Layout::rgba(1920, 1080, 1920 * 1080 * 4, u64::MAX).unwrap();
     assert_eq!(2 * full_hd.bytes, 16588800);
     assert!(2 * full_hd.bytes <= PAYLOAD_BUDGET);
-    assert!(3 * full_hd.bytes > PAYLOAD_BUDGET);
+    assert_eq!(MAX_SLOTS, 2);
+    let ultra_hd = Layout::rgba(3840, 2160, 3840 * 2160 * 4, u64::MAX).unwrap();
+    assert!(ultra_hd.bytes > 16 * 1024 * 1024);
+    assert!(ultra_hd.bytes <= PAYLOAD_BUDGET);
+    assert!(ultra_hd.bytes + full_hd.bytes > PAYLOAD_BUDGET);
+    assert!(2 * ultra_hd.bytes > PAYLOAD_BUDGET);
 }
 
 #[test]
@@ -368,4 +374,143 @@ fn stream_upload_resize_retains_old_views_and_obeys_global_payload_budget() {
     assert!(pool.counters.fallbacks > 0);
     assert!(pool.counters.peak_owned_bytes <= 3072);
     assert!(pool.owned_bytes() <= 3072 && pool.slots.len() <= MAX_SLOTS);
+}
+
+#[test]
+#[ignore = "requires a Vulkan driver and a full 4K stream allocation"]
+fn stream_upload_4k_reuses_one_slot_and_preserves_pixels_after_fhd_resize() {
+    let gpu = gpu();
+    let mut canvas = Canvas::new(gpu.clone());
+    canvas.stream_tracing = true;
+    let stream = ImageStream::new();
+    let rect = Rect::new(0., 0., 8., 4.);
+    let large = Layout::rgba(3840, 2160, 3840 * 2160 * 4, u64::MAX).unwrap();
+    // The first image creates the texture. Subsequent same-extent revisions
+    // exercise actual full 4K pooled copies, with a tiny readback target.
+    for color in [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255]] {
+        let frame = solid(&stream, 3840, 2160, color);
+        let revision = frame.stream_revision().unwrap();
+        let pixels = canvas
+            .snapshot(8, 4, 1, &[image(frame.clone(), rect)])
+            .unwrap();
+        assert_solid(&pixels, color);
+        assert_eq!(
+            canvas.last_stream_trace.as_ref().unwrap().revisions(),
+            &[revision]
+        );
+        if color == [0, 255, 0, 255] {
+            // Check every output pixel after the first actual pooled 4K copy,
+            // rather than relying only on samples from a reduced target.
+            let full = canvas
+                .snapshot(
+                    3840,
+                    2160,
+                    1,
+                    &[image(frame, Rect::new(0., 0., 3840., 2160.))],
+                )
+                .unwrap();
+            assert_solid(&full, color);
+        }
+        wait(&gpu);
+    }
+    let retained;
+    {
+        let mut pool = gpu.stream_uploads.borrow_mut();
+        pool.drain();
+        assert_eq!(pool.counters.copies, 2);
+        assert_eq!(pool.counters.fallbacks, 0);
+        assert_eq!(pool.counters.allocations, 1);
+        assert_eq!(pool.slots.len(), 1);
+        assert_eq!(pool.slots[0].phase, Phase::Mapped);
+        assert_eq!(pool.owned_bytes(), large.bytes);
+        assert!(pool.counters.peak_owned_bytes <= PAYLOAD_BUDGET);
+        retained = pool.slots[0].id;
+    }
+    // Existing ownership/reuse policy remains unchanged on material downsizing:
+    // no pending buffer is retired, and a completed large buffer stays reusable.
+    for color in [[255, 255, 0, 255], [0, 255, 255, 255]] {
+        let frame = solid(&stream, 1920, 1080, color);
+        assert_solid(
+            &canvas.snapshot(8, 4, 1, &[image(frame, rect)]).unwrap(),
+            color,
+        );
+        wait(&gpu);
+    }
+    let mut pool = gpu.stream_uploads.borrow_mut();
+    pool.drain();
+    assert_eq!(pool.counters.allocations, 1);
+    assert_eq!(pool.counters.copies, 3);
+    assert_eq!(pool.counters.fallbacks, 0);
+    assert_eq!(pool.slots[0].id, retained);
+    assert_eq!(pool.owned_bytes(), large.bytes);
+    assert!(pool.owned_bytes() <= PAYLOAD_BUDGET);
+}
+
+#[test]
+#[ignore = "requires a Vulkan driver and a full 4K stream allocation"]
+fn stream_upload_4k_pressure_and_abandoned_copy_preserve_completion_authority() {
+    let gpu = gpu();
+    let mut canvas = Canvas::new(gpu.clone());
+    let stream = ImageStream::new();
+    let rect = Rect::new(0., 0., 8., 4.);
+    let first = solid(&stream, 3840, 2160, [255, 0, 0, 255]);
+    canvas
+        .snapshot(8, 4, 1, &[image(first.clone(), rect)])
+        .unwrap();
+    let newer = solid(&stream, 3840, 2160, [0, 255, 0, 255]);
+    let mut pending = StreamUpdates::default();
+    let texture = gpu.image(&newer, &mut ResourceProfile::default(), false, &mut pending);
+    let mut encoder = gpu.device.create_command_encoder(&Default::default());
+    let large = Layout::rgba(3840, 2160, 3840 * 2160 * 4, u64::MAX).unwrap();
+    let key;
+    let id;
+    {
+        let mut pool = gpu.stream_uploads.borrow_mut();
+        let mut upload = pool.begin(&gpu.device, true);
+        assert_eq!(pending.encode(&gpu, &mut upload, &mut encoder), large.bytes);
+        key = upload.staged[0].unwrap();
+        // This pending full-frame buffer exhausts the payload budget for even
+        // one FHD allocation. Refusal may not evict it or forge its completion.
+        drop(encoder);
+        drop(upload);
+        id = pool.slots[0].id;
+        assert_eq!(pool.slots[0].phase, Phase::Pending(key));
+        let full_hd = Layout::rgba(1920, 1080, 1920 * 1080 * 4, u64::MAX).unwrap();
+        assert!(pool.acquire(&gpu.device, full_hd.bytes).is_none());
+        assert_eq!(pool.slots.len(), 1);
+        assert_eq!(pool.slots[0].phase, Phase::Pending(key));
+        pool.complete(Completion {
+            key: Key {
+                id: key.id,
+                generation: key.generation + 1,
+            },
+            success: true,
+        });
+        assert_eq!(pool.slots[0].phase, Phase::Pending(key));
+        assert_eq!(pool.owned_bytes(), large.bytes);
+    }
+    drop(pending);
+    wait(&gpu);
+    {
+        let mut pool = gpu.stream_uploads.borrow_mut();
+        pool.drain();
+        assert_eq!(pool.slots[0].phase, Phase::Mapped);
+        assert_eq!(pool.slots[0].id, id);
+        assert_eq!(pool.acquire(&gpu.device, large.bytes), Some(0));
+        assert_eq!(pool.counters.allocations, 1);
+        assert!(pool.counters.peak_owned_bytes <= PAYLOAD_BUDGET);
+    }
+    // The abandoned encoder never committed its revision or green pixels.
+    assert_eq!(texture.revision.get(), first.stream_revision().unwrap().1);
+    assert_solid(
+        &canvas.snapshot(8, 4, 1, &[image(first, rect)]).unwrap(),
+        [255, 0, 0, 255],
+    );
+    assert_solid(
+        &canvas.snapshot(8, 4, 1, &[image(newer, rect)]).unwrap(),
+        [0, 255, 0, 255],
+    );
+    let pool = gpu.stream_uploads.borrow();
+    assert_eq!(pool.counters.allocations, 1);
+    assert!(pool.slots.len() <= MAX_SLOTS && pool.owned_bytes() <= PAYLOAD_BUDGET);
 }
