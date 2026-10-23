@@ -60,6 +60,96 @@ def unchanged_layout(monitors, baseline, name, expected):
     return found[0] if found else None
 
 
+def display_peer_signature(value, identity):
+    """Display-only observation; ordinary output leases remain enabled/unrotated.
+
+    A disabled native monitor can have no usable mode or Wayland global. Retain
+    its exact native identity rather than interpreting those inactive dimensions
+    as a rendered viewport or adopting another same-name output.
+    """
+    owned_name(identity['name'])
+    require(set(identity)=={'id','name','description'},'exact_owned_display_identity_fields_required')
+    require(all(value.get(key) == identity[key] for key in ('id', 'name', 'description')),
+            'owned_display_native_identity_changed')
+    require(type(identity['id']) is int and identity['id'] >= 0
+            and isinstance(identity['description'], str), 'owned_display_identity_required')
+    require(type(value.get('disabled')) is bool, 'native_display_enabled_state_required')
+    if value['disabled']:
+        return {**identity, 'disabled': True}
+    transform = value.get('transform')
+    require(type(transform) is int and transform in (0, 1, 2, 3),
+            'owned_display_rotation_outside_test_cases')
+    signature = monitor_signature({**value, 'transform': 0})
+    return {**signature, 'transform': transform}
+
+
+def display_layout(monitors, baseline, identity):
+    """Compare the physical/original output exactly, including disabled peers."""
+    name = owned_name(identity['name'])
+    require(type(monitors) is list and len(monitors) == len(baseline) + 1
+            and len({row.get('name') for row in monitors}) == len(monitors),
+            'exact_original_and_owned_display_inventory_required')
+    others = [monitor_signature(row) for row in monitors if row.get('name') != name]
+    require(sorted(others, key=lambda row: row['name']) == sorted(baseline, key=lambda row: row['name']),
+            'foreign_layout_changed')
+    peer = unique(monitors, lambda row: row.get('name') == name, 'owned_display_missing')
+    return display_peer_signature(peer, identity)
+
+
+def display_logical_size(monitor):
+    require(monitor.get('disabled') is False and type(monitor.get('transform')) is int
+            and monitor['transform'] in (0, 1, 2, 3),
+            'enabled_display_viewport_required')
+    width, height = finite(monitor['width']), finite(monitor['height'])
+    if monitor['transform'] % 2:
+        width, height = height, width
+    scale = finite(monitor['scale'])
+    require(width > 0 and height > 0 and scale > 0, 'positive_display_viewport_required')
+    return width / scale, height / scale
+
+
+def display_mode_index(monitor, width, height, millihertz):
+    """Identify a real mode button from the adapter's ordered native catalogue.
+
+    This selects no mode itself. The controller must still press the rendered
+    hit, then observe the native postimage produced by Apply.
+    """
+    modes = []
+    raw = monitor.get('availableModes', [])
+    require(type(raw) is list and len(raw) <= 4096, 'bounded_native_mode_catalogue_required')
+    for item in raw[:256]:
+        if not isinstance(item,str) or len(item)>128:
+            continue
+        while item.endswith('Hz'):
+            item=item[:-2]
+        match = re.fullmatch(r'([+]?[0-9]+)x([+]?[0-9]+)@([+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)',item)
+        if match:
+            hz=float(match[3]);w,h=int(match[1]),int(match[2])
+            if not math.isfinite(hz) or not (0<hz<=1000.001 and 0<w<=32768 and 0<h<=32768):
+                continue
+            mode = (w,h,math.floor(hz * 1000 + .5))
+            if not 1000<=mode[2]<=1_000_000:
+                continue
+            if mode not in modes:
+                modes.append(mode)
+    observed = (monitor.get('width'), monitor.get('height'), monitor.get('refreshRate'))
+    if (all(type(value) is int and 0<value<=32768 for value in observed[:2])
+            and type(observed[2]) in (int,float) and math.isfinite(observed[2]) and 0<observed[2]<=1000.001):
+        current = (int(observed[0]), int(observed[1]), math.floor(observed[2] * 1000 + .5))
+        if 1000<=current[2]<=1_000_000 and current not in modes:
+            modes.insert(0, current)
+    require((width, height, millihertz) in modes, 'required_owned_native_mode_not_advertised')
+    return modes.index((width, height, millihertz))
+
+
+def require_owned_display_control(identifier, selected, name):
+    owned_name(name)
+    require(isinstance(identifier,str) and
+            (identifier in ('display-reset','display-select-'+name) or
+             (selected==name and not identifier.startswith('display-select-'))),
+            'native_input_must_target_only_owned_display_draft')
+
+
 def case_layout(name, baseline, scale):
     owned_name(name)
     require(type(scale) in (float, int) and scale in (1, 2, 1.25), 'unowned_scale_request')
