@@ -1098,6 +1098,181 @@ mod tests {
         assert_eq!(serde_json::to_value(&app.settings).unwrap(), preferences);
     }
 
+    fn notification_link_completion(app: &mut Desktop, effects: &mut Effects<Message>) -> Message {
+        let note = lucent_domain::Notification {
+            id: 1,
+            revision: 1,
+            received_unix_ms: 1,
+            desktop_entry: None,
+            app: "URI Fixture".into(),
+            summary: "Owned link".into(),
+            body: "<a href='https://example.test/owned'>Open</a>".into(),
+            image: None,
+            actions: vec![],
+            critical: false,
+            resident: false,
+            transient: false,
+            timeout_ms: 0,
+        };
+        let target = note.target().unwrap();
+        app.update(
+            Message::Notifications(crate::notifications::Message::Snapshot(Ok(
+                lucent_domain::NotificationSnapshot {
+                    history: vec![note],
+                    ..Default::default()
+                },
+            ))),
+            effects,
+        );
+        app.update(open(Panel::Notifications), effects);
+        app.update(
+            Message::Notifications(crate::notifications::Message::Group(
+                "name:URI Fixture".into(),
+            )),
+            effects,
+        );
+        app.update(
+            Message::Notifications(crate::notifications::Message::OpenLink(
+                target,
+                "https://example.test/owned".into(),
+            )),
+            effects,
+        );
+        let prepared = effects
+            .activation
+            .pop()
+            .unwrap()
+            .finish(lucent_api::ActivationOutcome::NoUserInput);
+        app.update(prepared, effects);
+        let index = effects
+            .tasks
+            .iter()
+            .rposition(|task| task.queue == crate::work::CONTROLS)
+            .unwrap();
+        let done = effects.tasks.remove(index).run();
+        assert!(matches!(
+            &done,
+            Message::Notifications(crate::notifications::Message::LinkDone(_, _))
+        ));
+        done
+    }
+
+    #[test]
+    fn successful_history_link_releases_input_and_keeps_exit_paint_and_bar_carrier() {
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        let mut effects = Effects::default();
+        let done = notification_link_completion(&mut app, &mut effects);
+        submitted_at(&mut app, "notifications", None, 0.5);
+        effects.now = 1.;
+        app.update(done, &mut effects);
+        assert!(!app.notifications.history_open());
+        assert!(app.notifications.history_closing());
+        assert!(app.bar_presentation.retained("notifications").is_some());
+        let specs = app.surfaces();
+        let history = specs
+            .iter()
+            .find(|surface| surface.id == "notifications")
+            .unwrap();
+        assert!(history.visible);
+        assert_eq!(history.keyboard, Keyboard::None);
+        assert_eq!(history.pointer_input, PointerInput::None);
+        let tree = app.view(&context("notifications"));
+        assert!(contains(&tree, "notification-history-close"));
+        assert!(contains(&tree, "bar-audio"));
+        let bar = specs.iter().find(|surface| surface.id == "bar").unwrap();
+        assert!(bar.visible);
+        assert_eq!(
+            bar.exclusive_zone,
+            lucent_design::component::panel::BAR_HEIGHT as i32
+        );
+        submitted_at(&mut app, "notifications", None, 2.);
+        submitted_at(&mut app, "bar", None, 2.);
+        assert!(!app.notifications.history_closing());
+        assert!(app.bar_presentation.retained("notifications").is_none());
+        assert!(
+            !app.surfaces()
+                .iter()
+                .find(|surface| surface.id == "notifications")
+                .unwrap()
+                .visible
+        );
+        assert!(contains(&app.view(&context("bar")), "bar-audio"));
+    }
+
+    #[test]
+    fn failed_history_link_keeps_current_foreground_keyboard_and_pointer_ownership() {
+        struct FailedUri;
+        impl lucent_domain::UriPort for FailedUri {
+            fn open(
+                &self,
+                _: &lucent_domain::ExternalUri,
+                _: lucent_domain::ApplicationLaunchContext,
+            ) -> lucent_domain::Result<()> {
+                Err(lucent_domain::DomainError::Failed(
+                    "Controlled URI failure".into(),
+                ))
+            }
+        }
+        let mut adapters = crate::test_adapters::adapters();
+        adapters.uri = std::sync::Arc::new(FailedUri);
+        let mut app = Desktop::new(adapters);
+        let mut effects = Effects::default();
+        let done = notification_link_completion(&mut app, &mut effects);
+        effects.now = 1.;
+        app.update(done, &mut effects);
+        assert!(app.notifications.history_open());
+        assert!(!app.notifications.history_closing());
+        assert_eq!(app.panel_surface(), Some("notifications"));
+        let history = app
+            .surfaces()
+            .into_iter()
+            .find(|surface| surface.id == "notifications")
+            .unwrap();
+        assert!(history.visible);
+        assert_eq!(history.keyboard, Keyboard::Exclusive);
+        assert_eq!(history.pointer_input, PointerInput::All);
+    }
+
+    #[test]
+    fn old_link_completion_cannot_dismiss_another_panel_or_reopened_history() {
+        for reopen_history in [false, true] {
+            let mut app = Desktop::new(crate::test_adapters::adapters());
+            let preferences = serde_json::to_value(&app.settings).unwrap();
+            let mut effects = Effects::default();
+            let done = notification_link_completion(&mut app, &mut effects);
+            effects.now = 0.5;
+            app.update(open(Panel::Audio), &mut effects);
+            if reopen_history {
+                app.update(open(Panel::Notifications), &mut effects);
+            }
+            effects.now = 1.;
+            app.update(done, &mut effects);
+            assert_eq!(
+                app.panel_surface(),
+                Some(if reopen_history {
+                    "notifications"
+                } else {
+                    "audio"
+                })
+            );
+            assert_eq!(app.notifications.history_open(), reopen_history);
+            assert_eq!(app.audio.open(), !reopen_history);
+            let expected = if reopen_history {
+                "notifications"
+            } else {
+                "audio"
+            };
+            let foreground = app
+                .surfaces()
+                .into_iter()
+                .find(|surface| surface.id == expected)
+                .unwrap();
+            assert_eq!(foreground.keyboard, Keyboard::Exclusive);
+            assert_eq!(foreground.pointer_input, PointerInput::All);
+            assert_eq!(serde_json::to_value(&app.settings).unwrap(), preferences);
+        }
+    }
+
     #[test]
     fn notification_history_takes_keyboard_focus_and_outside_click_only_hides_history() {
         let mut app = Desktop::new(crate::test_adapters::adapters());

@@ -4,12 +4,12 @@
   "status": "in_progress",
   "completion_rule": "An item is verified only when its behavior, boundary checks, documentation and applicable native integration checks have evidence. Implemented without verification remains incomplete.",
   "current_rollup": {
-    "snapshot_source_commit": "124b206938ebc3b41f5720838d01b8edf49a438d",
+    "snapshot_source_commit": "6e471005948cbefab218a6c79b87f3f94a241c2d",
     "snapshot_date": "2026-10-23",
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted main 124b2069 includes PR98 bar handoff, PR99 opt-in developer reload and PR100 component lab. PR100 merged normally after all six checks passed on exact efeaf6d1 with CLEAN mergeability; Pages 39813782003 publishes that merge. Public desktop/library/component-lab HTML, manifest and representative native PNG exactly match the deployed artifact; all 114 capture-producing inputs match capture and merged source. These are delivery facts. Separate recorded 8a candidate panel/reload workflows and b9 component-lab interactions retain their own binaries and scopes, without promoting the performance candidate to main or asserting a currently running VM. The seven-gap objective remains incomplete: eligible RSS/presentation targets, default-handler activation context and broader physical/application validation are still open. Earlier measurements, failed reports, recovery outcomes and delivery snapshots remain historical.",
+    "scope": "Accepted main 6e471005 includes PR102 default-handler activation context, reusable decoder sessions and bounded uploads, after six exact 3560 checks and a CLEAN normal merge. Pages 39974027424 public desktop/library/component-lab HTML, manifest and representative PNG match the accepted artifact; all 116 capture producers and 480 catalogue images are verified. Archived 26d runtime/integration source trees equal the merge; only capture-manifest metadata differs. Recorded 26d deployment, owned IME, ineligible resource interval, failed Display attempt and separate recovery retain their identities and capture-time outcomes. This does not assert a current VM, natural browser keyboard handoff, fresh-browser initial focus, an eligible 300 MiB/FPS result or completion of the seven-gap goal. Previous 124/PR100 delivery is a dated historical snapshot. A later source-bound 1774fa87 harness on unchanged runtime 26d passes nine virtual two-output Display control flows, six restoration fields including the timestamp/link-count policy marker, three cursor checks and independent later normal-OFF verification. It establishes no physical, resource or pacing acceptance. Later R9 harness 563781a2 on runtime 26d passes five warm controlled default-handler checks through real notification pointer/Tab-Enter input, nine cleanup checks and independent later normal-OFF verification. Activewindow observations remain distinct from actual browser keyboard-focus or token-consumption proof. Subsequent 4K A/B preflights establish virtual geometry/restoration only, with no resource interval admitted. A separate one-off restored-FHD proc snapshot records 604.59375 MiB RSS and high anonymous residency; it motivates memory investigation, without a sampled-budget or 4K-causal claim.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -30,15 +30,16 @@
       {
         "id": "safe-display-configuration",
         "status": "merged_scoped_native_verified",
-        "implemented": "Native draft edits for advertised mode/refresh, position, scale, rotation and enabled state; ordered fresh read/watch snapshots; complete-layout validation and same-executable independent Apply/Keep/Revert/15-second/EOF guardian. Seven actual one-output QEMU input/recovery checks pass for mode, scale, position and persistence. Later harness 86df4e5b on unchanged 35ed passes four owned two-output flows: draft-only peer position, Apply/explicit Revert, scale 1.25 timeout and position Keep; original 1920x1080/scale 1 stays unchanged, peer 1280x960. Original monitor bytes/inode, settings, supervision, output/workspace/cursor restore with five positive owner checks and independent retirement/normal-OFF verification. Monitor ctime/link count are not claimed unchanged.",
-        "remaining": "Physical modes/visibility, native enable/disable/rotation, input on a fractionally scaled Displays panel, cable hotplug/suspend, compositor restart during confirmation, secure-output changes and pacing. New panel input stayed on the original 1x output; only the peer target changed to 1.25. HDR/VRR/mirroring/modelines are not editable. Keep-to-file-identity-capture host loss remains manual recovery. Initial 7ebd failed before any checks and its separate recovery does not turn that report into a pass.",
+        "implemented": "Native draft edits for advertised mode/refresh, position, scale, rotation and enabled state; ordered fresh read/watch snapshots; complete-layout validation and same-executable independent Apply/Keep/Revert/15-second/EOF guardian. Seven actual one-output QEMU input/recovery checks pass for mode, scale, position and persistence. Later harness 86df4e5b on unchanged 35ed passes four owned two-output flows: draft-only peer position, Apply/explicit Revert, scale 1.25 timeout and position Keep; original 1920x1080/scale 1 stays unchanged, peer 1280x960. Original monitor bytes/inode, settings, supervision, output/workspace/cursor restore with five positive owner checks and independent retirement/normal-OFF verification. Monitor ctime/link count are not claimed unchanged. A later 1774fa87 harness on runtime 26d passes nine virtual two-output flows, including actual control-based rotation, disable/re-enable and native pointer/keyboard Apply/Revert on a density-1.25 Displays panel. Five positive preservation checks plus one timestamp/link-count policy marker, three cursor checks and a separate later normal-OFF observation pass; the latter verifies the same desktop lifetime, original output and all 14 source/43 security entries.",
+        "remaining": "Physical monitor modes/visibility and cable hotplug/suspend, compositor restart during confirmation, secure-output changes and pacing remain unverified. HDR/VRR/mirroring/modelines are not editable. Keep-to-file-identity-capture host loss remains manual recovery. The nine-flow run closes only the scoped virtual-output enable/disable/rotation and fractional Displays-panel input gaps. Earlier failed attempts retain their original outcomes; separate recovery does not turn them into feature passes.",
         "guides": [
           "docs/native-displays.md",
           "docs/monitor-layouts.md",
           "docs/fractional-scaling.md"
         ],
         "report": "reports/measurements/lucent-display-settings.json",
-        "two_output_report": "reports/measurements/lucent-native-two-output-displays.json"
+        "two_output_report": "reports/measurements/lucent-native-two-output-displays.json",
+        "latest_two_output_report": "reports/measurements/lucent-native-two-output-displays-26d-nine.json"
       },
       {
         "id": "resources-and-animation",
@@ -46,14 +47,17 @@
         "implemented": "Event-driven redraw, bounded image/preview ownership and physical-cover video conversion.",
         "normal_desktop_rss_target_mib": 300,
         "latest_recorded_video_sample": {
-          "source_commit": "35ed87ed4c01cf62e3c8406b8abdcc0809cc155b",
-          "report": "reports/measurements/lucent-live-upload-35ed-native-trial.json",
+          "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+          "report": "reports/measurements/lucent-runtime-26d-native-trial.json",
           "accepted_main_runtime": false,
-          "seconds": 120.00041898199561,
-          "mean_rss_mib": 250.5806640625,
-          "peak_rss_mib": 252.39453125,
-          "main_cpu_percent_one_core": 154.03279552526618,
-          "guest_process_swap_mib_max": 0,
+          "accepted_main_at_capture": false,
+          "current_source_equivalent_to_accepted_main": true,
+          "seconds": 120.00080094800069,
+          "mean_rss_mib": 237.98256022135416,
+          "peak_rss_mib": 238.03515625,
+          "process_lifetime_high_water_mib": 240.21484375,
+          "main_cpu_percent_one_core": 194.2903698626392,
+          "guest_process_swap_mib_max": 0.0,
           "eligible": false,
           "normal_uninstrumented_rss_target_met": null,
           "observed_rss_exceeds_300_mib": false,
@@ -61,9 +65,12 @@
           "ineligible_reasons": [
             "host_swap_activity",
             "host_full_stall_pressure"
-          ]
+          ],
+          "source_pts_samples": 0,
+          "presentation_samples": 0,
+          "scope": "Recorded normal interval on source 26d before merge. Observed RSS below 300 MiB remains ineligible; no target/FPS/pacing/causal-gain acceptance."
         },
-        "remaining": "The unmerged 35ed trial records 250.581/252.395 MiB normal RSS and 32.2245 joined distinct prepared-revision advances/s, with 59.7333\u201360.1290 prepared callbacks/s bounded by RPC wall time. Host pressure makes both phases ineligible: no 300 MiB/60 FPS target acceptance, matched causal improvement, decoder-drop, pixel-visibility or physical-scanout claim. Eligible matched normal/animated and cold/warm evidence and bottleneck attribution remain required; preserve density, effects and motion. Earlier 8e/9b/bf98 observations retain their scopes. The standalone 85a5 client also observes below 60 feedback intervals/s (37.050043) without a video producer/upload path, but it has no host-pressure/resource interval. Measure shared native-path stages under eligible conditions; no cap or bottleneck is attributed. A later separate CPU-profiled shape run observes 48.370556 feedback intervals/s with mean 0.658506 ms/max 2.480036 ms successful draw CPU wall time and no uploads. Short successful stages do not measure callback/dispatch, failed retries, full-loop or GPU time and do not attribute the gap or establish improvement. The earlier 37.05/s shape observation remains unchanged.",
+        "remaining": "The later 26d normal interval observes 237.983/238.035 MiB mean/peak RSS and 194.290% of one core, but host swap/full-stall pressure leaves the target null. It has no presentation/PTS samples. Eligible matched normal/animated and cold/warm evidence remains required, with density/effects/motion unchanged. The historical 35ed presentation interval remains the latest instrumented sample; it is separately ineligible, not a 26d FPS measurement. Earlier source-specific resource/shape observations retain their flags and do not establish improvement or bottleneck causality. Later 4K A/B output geometry and restoration pass, but neither completes a resource interval: A refuses the <520-second lease budget and B refuses host-memory admission before sampler facts/binding. A subsequent one-off proc observation after restoring FHD is 604.59375 MiB RSS, 539.5859375 MiB anonymous RSS, 16.2421875 MiB process swap and 680.29296875 MiB process-lifetime HWM. Investigate this high anonymous residency with bounded observations; it is not an eligible 120-second result, 4K causal attribution, a demonstrated leak or budget acceptance.",
         "historical_software_video_sample": {
           "source_commit": "a7f41eccdcd8eca51e8e5ee878d8f489d8d4bde5",
           "report": "reports/measurements/lucent-display-settings.json",
@@ -264,6 +271,24 @@
             "presentation_samples": 0,
             "source_pts_samples": 0,
             "actual_60_fps_presentation_established": false
+          },
+          {
+            "source_commit": "35ed87ed4c01cf62e3c8406b8abdcc0809cc155b",
+            "report": "reports/measurements/lucent-live-upload-35ed-native-trial.json",
+            "accepted_main_runtime": false,
+            "seconds": 120.00041898199561,
+            "mean_rss_mib": 250.5806640625,
+            "peak_rss_mib": 252.39453125,
+            "main_cpu_percent_one_core": 154.03279552526618,
+            "guest_process_swap_mib_max": 0,
+            "eligible": false,
+            "normal_uninstrumented_rss_target_met": null,
+            "observed_rss_exceeds_300_mib": false,
+            "preservation_verified": true,
+            "ineligible_reasons": [
+              "host_swap_activity",
+              "host_full_stall_pressure"
+            ]
           }
         ],
         "historical_trial_presentation_samples": [
@@ -368,6 +393,30 @@
             "Immediate"
           ],
           "presentation_mode_receipt_sha256": "c0c40b0eea52824067675be32f7b28dbcd9fa91854bfcb9af82f38a4935b3bb1"
+        },
+        "later_4k_preflight_and_memory_diagnostic": {
+          "report": "reports/measurements/lucent-4k-resource-preflight-followup-26d.json",
+          "report_sha256": "5a56f3b5d6b358a91df0da24a20c1117cc57d85acf3454fb827f2542ffa75448",
+          "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+          "owned_output_setups_and_restorations_passed": 2,
+          "standardized_4k_resource_interval_completed": false,
+          "sampler_a_refusal": "bounded_measurement_and_cleanup_budget",
+          "sampler_b_refusal": "host_memory_admission",
+          "independent_later_normal_off_sha256": "f597f92d14759cce18062697c1c9c8257b9c33c043655aeffcbb6a1059191224",
+          "one_off_proc_diagnostic_sha256": "42f60816426e1a32c27a23a34755a68cdeaf84cef75e0f22758c2b271ec7701b",
+          "one_off_original_fhd_memory": {
+            "rss_kib": 619104,
+            "rss_mib": 604.59375,
+            "anonymous_rss_kib": 552536,
+            "anonymous_rss_mib": 539.5859375,
+            "process_swap_kib": 16632,
+            "process_swap_mib": 16.2421875,
+            "process_lifetime_hwm_kib": 696620,
+            "process_lifetime_hwm_mib": 680.29296875
+          },
+          "rss_target_acceptance": null,
+          "performance_accepted": false,
+          "scope": "Geometry, owned restoration and one post-restoration FHD proc snapshot only. Earlier sampled intervals and eligibility flags remain unchanged; no 4K causality, allocator/GPU attribution, leak, source-rate or physical-hardware acceptance."
         }
       },
       {
@@ -383,42 +432,20 @@
         ],
         "latest_native_attempt": {
           "status": "five_feature_and_five_restoration_checks_passed",
-          "private_report": "reports/local/international-text-native-8776afc2e1d7d3f6673bd4ef/report.json",
-          "private_report_sha256": "0daf30e5afb707ace4ff28f8c0d571ff2a69d86dbf208f089714854949cbdfb4",
-          "report": "reports/measurements/lucent-international-text.json",
-          "desktop_and_example_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
-          "peer_source_commit": "3beda6172b8ce7eeb7be77b7ebd055511388f6de",
-          "native_harness_source_commit": "6bb80e5942bb05050f9a1532497080a98b429226",
-          "owned_unit_helper_source_commit": "89604f6ef20127ae7f84d716dbb923999da5d77c",
-          "peer_sha256": "5e823533c49713b1c5f488bd51564cf84838cd3df6e39384ac276749c53d93cc",
-          "feature_checks": {
-            "native_preedit_ink_and_caret_advance_without_commit": true,
-            "commit_and_surrounding_delete_and_history": true,
-            "masked_focus_retires_composition": true,
-            "multiline_commit_and_cursor_rectangle": true,
-            "native_rtl_visual_navigation": true
-          },
-          "feature_checks_passed": 5,
-          "restoration_checks": {
-            "owned_example_and_peer_units_retired": true,
-            "owned_peer_transport_closed": true,
-            "settings_and_wallpaper_preserved": true,
-            "output_and_workspace_preserved": true,
-            "pointer_restored": true
-          },
+          "report": "reports/measurements/lucent-runtime-26d-native-trial.json",
+          "private_report": "reports/local/international-text-native-895bf49ae249be745caa1bdc/report.json",
+          "private_report_sha256": "7226315d8984ecbb76218b06849fb5cb5cce7ed559f39d67233e32ca9c074231",
+          "desktop_and_example_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+          "peer_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+          "native_feature_checks_passed": 5,
           "restoration_checks_passed": 5,
-          "native_preedit_pixel_proof": {
-            "new_noncaret_ink_pixels": 70,
-            "caret_advance_pixels": 42,
-            "canonical_text_unchanged_before_commit": true,
-            "scope": "Owned mapped-popup position and popup-local hints reconstruct advancing caret. New foreground ink lies between excluded old/new caret strips with stable field background; a blinking caret alone cannot satisfy this check."
-          },
-          "overall_passed": true,
-          "scoped_owned_native_ime_acceptance_established": true,
-          "third_party_ime_acceptance_established": false,
-          "host_observed_elapsed_seconds": 108.776,
-          "original_historical_failure_and_restoration_flags_retained": true,
-          "guide": "docs/native-text-acceptance.md"
+          "scope": "One prepared native output; independent non-replacing input-method peer, no third-party IME/hardware claim",
+          "not_established": [
+            "Third-party IME interoperability",
+            "Physical or cross-output text input",
+            "Broader GUI clipboard, pixel/scroll and delayed-transfer/focus races",
+            "Frame pacing or resource-budget acceptance"
+          ]
         },
         "historical_failed_before_composition_attempt": {
           "status": "failed_before_composition",
@@ -483,13 +510,52 @@
           },
           "cleanup_correction_native_rerun_pending": true,
           "guide": "docs/native-text-acceptance.md"
+        },
+        "historical_8e_native_attempt": {
+          "status": "five_feature_and_five_restoration_checks_passed",
+          "private_report": "reports/local/international-text-native-8776afc2e1d7d3f6673bd4ef/report.json",
+          "private_report_sha256": "0daf30e5afb707ace4ff28f8c0d571ff2a69d86dbf208f089714854949cbdfb4",
+          "report": "reports/measurements/lucent-international-text.json",
+          "desktop_and_example_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "peer_source_commit": "3beda6172b8ce7eeb7be77b7ebd055511388f6de",
+          "native_harness_source_commit": "6bb80e5942bb05050f9a1532497080a98b429226",
+          "owned_unit_helper_source_commit": "89604f6ef20127ae7f84d716dbb923999da5d77c",
+          "peer_sha256": "5e823533c49713b1c5f488bd51564cf84838cd3df6e39384ac276749c53d93cc",
+          "feature_checks": {
+            "native_preedit_ink_and_caret_advance_without_commit": true,
+            "commit_and_surrounding_delete_and_history": true,
+            "masked_focus_retires_composition": true,
+            "multiline_commit_and_cursor_rectangle": true,
+            "native_rtl_visual_navigation": true
+          },
+          "feature_checks_passed": 5,
+          "restoration_checks": {
+            "owned_example_and_peer_units_retired": true,
+            "owned_peer_transport_closed": true,
+            "settings_and_wallpaper_preserved": true,
+            "output_and_workspace_preserved": true,
+            "pointer_restored": true
+          },
+          "restoration_checks_passed": 5,
+          "native_preedit_pixel_proof": {
+            "new_noncaret_ink_pixels": 70,
+            "caret_advance_pixels": 42,
+            "canonical_text_unchanged_before_commit": true,
+            "scope": "Owned mapped-popup position and popup-local hints reconstruct advancing caret. New foreground ink lies between excluded old/new caret strips with stable field background; a blinking caret alone cannot satisfy this check."
+          },
+          "overall_passed": true,
+          "scoped_owned_native_ime_acceptance_established": true,
+          "third_party_ime_acceptance_established": false,
+          "host_observed_elapsed_seconds": 108.776,
+          "original_historical_failure_and_restoration_flags_retained": true,
+          "guide": "docs/native-text-acceptance.md"
         }
       },
       {
         "id": "application-integration",
         "status": "merged_scoped_real_application_native_verified",
-        "implemented": "Accepted main 6b50bd5e includes catalog/pins, ordinary activation, declared actions and Application bb304907 shipped in merged 8e: fresh input-bound context, explicit file/URI Open and expanded XDG parsing/observation. A later real Chromium run with the independent d1 consumer, now merged through PR89, and b6323e9 harness passes all nine feature checks, including observed first-launch focus, and all eight restoration checks; deployed desktop/CLI remain unchanged. The separate coherent 9b trial passes eleven native HTTP URI and nine restoration checks; pointer, socket and CLI Open each load two fresh exact HTTP targets while the declared Action retains local files. A later 4c harness on coherent 35ed passes 12 singular HTTP %u native feature and 9 restoration checks; pointer/socket/CLI Open each load exactly one fresh owned HTTP document, and the declared Action still loads two local documents.",
-        "remaining": "At accepted 124, notification links use contextless UriPort::open and XdgUri starts the default handler with empty launch context, so that path cannot propagate a fresh user activation token. This implementation gap is separate from explicit ApplicationPort Open, which has context and scoped native evidence. Default handlers, external navigation, other applications and broader workflows still need native acceptance; child token delivery and observed focus do not prove Chromium consumed a particular token. Earlier results keep their source and outcome.",
+        "implemented": "Accepted main 6b50bd5e includes catalog/pins, ordinary activation, declared actions and Application bb304907 shipped in merged 8e: fresh input-bound context, explicit file/URI Open and expanded XDG parsing/observation. A later real Chromium run with the independent d1 consumer, now merged through PR89, and b6323e9 harness passes all nine feature checks, including observed first-launch focus, and all eight restoration checks; deployed desktop/CLI remain unchanged. The separate coherent 9b trial passes eleven native HTTP URI and nine restoration checks; pointer, socket and CLI Open each load two fresh exact HTTP targets while the declared Action retains local files. A later 4c harness on coherent 35ed passes 12 singular HTTP %u native feature and 9 restoration checks; pointer/socket/CLI Open each load exactly one fresh owned HTTP document, and the declared Action still loads two local documents. PR102/current 6e471005 now includes canonical UriPort.open(target, ApplicationLaunchContext), optional SDK app ID, revision-bound notification-link completion and shared-policy XdgUri forwarding. R9 harness 563781a2 on runtime 26d passes five scoped warm-browser default-route checks and all nine cleanup checks: temporary MIME selection, native pointer and Tab/Enter input with fresh context, exact one-document delivery and bounded notification expiry. Independent later normal-OFF facts verify the same desktop lifetime and unchanged 14 source/43 security entries.",
+        "remaining": "Separate client fix 194c0c57 implements current-session-only history release and passes 372 desktop tests (six ignored) plus strict release Clippy. Deployment and native automatic-release/browser-key-delivery checks remain pending; Hyprland activewindow matches do not establish a browser receiving input. Fresh-browser initial focus, direct Chromium token consumption, external navigation, other handlers/applications and broader workflows retain separate acceptance. The initial cea7b8e6 preparation counts and earlier failed attempts, including V7 before-link expiry and R8 after-pointer delivery failure, remain historical outcomes. Native route transport does not establish performance or hardware acceptance.",
         "guides": [
           "docs/application-activation.md",
           "docs/application-catalog.md",
@@ -554,26 +620,180 @@
           "performance_accepted": false,
           "native_scope": "One virtual output, real owned Chromium profile, one fixed loopback HTTP target through %u; declared Action retains two local files. No default-handler/external/other-app/physical claim."
         },
-        "confirmed_implementation_gap": {
+        "historical_confirmed_implementation_gap_at_124": {
           "id": "default-handler-user-activation-context",
           "integration_base_commit": "124b206938ebc3b41f5720838d01b8edf49a438d",
           "port": "lucent/crates/lucent-domain/src/uri.rs",
           "adapter": "lucent/crates/lucent-services/src/applications.rs",
           "client": "lucent/apps/lucent-desktop/src/notifications.rs",
           "source_finding": "UriPort.open has no context argument. Notification OpenLink dispatches it directly; XdgUri calls launch.command, which uses a default ApplicationLaunchContext and removes inherited activation tokens. No runtime failure is inferred from source alone."
+        },
+        "default_handler_context_implementation": {
+          "status": "implemented_merged_scoped_warm_default_route_native_verified",
+          "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+          "accepted_main_merge_commit": "6e471005948cbefab218a6c79b87f3f94a241c2d",
+          "port": "lucent/crates/lucent-domain/src/uri.rs",
+          "adapter": "lucent/crates/lucent-services/src/applications.rs",
+          "client": "lucent/apps/lucent-desktop/src/notifications.rs",
+          "source_finding": "UriPort.open carries ApplicationLaunchContext; SDK activation requests allow an unknown app ID without inventing one. Notifications revalidate the captured link around asynchronous token delivery and use a cancellable adapter command. XdgUri preserves context through the shared application-unit policy.",
+          "native_default_handler_acceptance_passed": true,
+          "acceptance_harness_source_commit": "cea7b8e6291e8ba62dffbc9f0d12bfe392c22d07",
+          "focused_pure_cases_passed": 27,
+          "integration_cases_passed": 631,
+          "native_run_executed": true,
+          "historical_source_preparation_native_run_executed": false,
+          "latest_native_attempt": {
+            "private_report": "reports/local/native-default-uri-249f0a8946af.json",
+            "private_report_sha256": "3c82c2a853bb17a0b217e5a682f7f1d8d9129d63dd16af003376f789b6e3e393",
+            "production_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+            "host_harness_sha256": "528d4a5b9b36356344597e9ecde059cd66262a97517c983d7437183e6996bd5a",
+            "overall_passed": false,
+            "feature_checks_passed": 0,
+            "native_input_checks_passed": 0,
+            "failure": "warm_original_browser_control_admitted",
+            "cleanup": {
+              "guardian_restoration": false,
+              "canonical_browser_and_entry_retired": false,
+              "original_http_watchdog_retired": true,
+              "caller_state_and_cursor_preserved": false
+            },
+            "restoration_established_by_this_attempt": false,
+            "scope": "Warm-browser setup failed before MIME publication or rich-link feature actions. This is not a default-handler feature pass; the failed receipt is retained. Later recovery, if any, needs a separate record."
+          },
+          "preparation_checkpoint_scope": "The 27 focused and 631 integration passes belong to the initial cea7b8e6 preparation checkpoint. Later V7 and R8 native attempts failed and retain their original input/cleanup counts. R9 subsequently passes the scoped warm default route; earlier failures and their source flags stay unchanged.",
+          "subsequent_native_attempt_v7": {
+            "harness_source_commit": "de276755d263d257cfeef7e42b94d1b470798548",
+            "private_report_sha256": "ba325fa769cbcb94aee681905647e8145c074fefc8653412c48911dfa5d8bd1b",
+            "production_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+            "release_manifest_sha256": "5b228fa1bbdc71c50a245edcb70e726ef4d5826f476ba261e53042023d322aec",
+            "host_harness_sha256": "45dd8f19d53e6ff27a15bbade1771f30b217566327e17accf355c2f4aac872a6",
+            "overall_passed": false,
+            "native_run_executed": true,
+            "native_default_handler_acceptance_passed": false,
+            "temporary_real_mime_default_selected": true,
+            "post_warm_steps_completed": 9,
+            "group_native_pointer_focus": true,
+            "pointer_link_dispatch_attempted": false,
+            "keyboard_link_case_reached": false,
+            "failure_phase": "pointer_target_revalidate",
+            "fixed_reason": "one_current_selected_notification_link",
+            "link_feature_checks_passed": 0,
+            "cleanup_checks_passed": 9,
+            "cleanup": {
+              "browser_and_original_entry_retired": true,
+              "notifications_absent_after_expiry_window": true,
+              "default_mime_restored": true,
+              "default_entry_restored": true,
+              "notification_history_closed": true,
+              "configuration_guardian_retired": true,
+              "canonical_browser_and_entry_retired": true,
+              "original_http_watchdog_retired": true,
+              "caller_state_and_cursor_preserved": true
+            },
+            "timing_diagnostic": {
+              "read_only": true,
+              "private_receipt_sha256": "a38e62c5d0ed98171ffd7a024ad20c11f9d9929173c889746d074863e05f1fab",
+              "observed_revision_seconds_after_note": 16.681331,
+              "expiry_seconds_after_note": 24.999189,
+              "finish_request_seconds_after_note": 27.064112,
+              "finish_request_after_expiry": true,
+              "scope": "The controlled 25-second notification lifetime expired during audit guards before link dispatch. This diagnostic does not establish link activation or production behavior under a longer fixture lifetime."
+            },
+            "independent_later_normal_off": {
+              "receipt_sha256": "31cef7178a40ca9b83d5f25cb14be623c123a5531003d250d174a7fc0f2e9e97",
+              "success": true,
+              "read_only": true,
+              "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+              "desktop_sha256": "7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08",
+              "same_desktop_lifetime_as_previous_display_off": true,
+              "source_and_security_inventories_match_previous_display_off": true,
+              "source_inventory_count": 14,
+              "security_inventory_count": 43,
+              "original_output": {
+                "name": "Virtual-1",
+                "width": 1920,
+                "height": 1080,
+                "scale": 1,
+                "transform": 0,
+                "x": 0,
+                "y": 0,
+                "refreshRate": 60.0
+              },
+              "runtime_profiling": {
+                "frames": false,
+                "presentation": false,
+                "source_pts": false
+              },
+              "performance_acceptance": false
+            },
+            "next_r8_native_run_executed": false,
+            "scope": "Owned warm-browser setup and group focus only; no link press, keyboard link activation, token transport, fresh-browser focus, direct Chromium token consumption, hardware or performance acceptance."
+          },
+          "native_default_handler_acceptance_scope": "R9 controlled temporary HTTP default, already warm real Chromium profile, native notification pointer and Tab/Enter route transport only. No automatic history release, actual browser keyboard handoff, fresh-browser focus or direct Chromium token consumption.",
+          "latest_native_attempt_recording_scope": "The existing latest_native_attempt object is the preserved initial warm-setup failure, not the later R9 route result. Initial focused/integration counts retain their original cea7b8e6 preparation source; current acceptance is recorded separately below.",
+          "subsequent_native_attempt_r8": {
+            "overall_passed": false,
+            "private_report_sha256": "538a4d45ad06f6875b7abc58e0c65471e1517e8afc3e560568fef4d8fbbdac0a",
+            "production_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+            "native_input": {
+              "pointer_link_focus": true
+            },
+            "pointer_link_dispatch_attempted": true,
+            "pointer_link_dispatch_returned": true,
+            "failure_phase": "default_handler_delivery_wait",
+            "fixed_reason": "selected_default_handler_received_native_uri",
+            "cleanup_checks_passed": 9,
+            "read_only_diagnosis_sha256": "972984680f7e5a8d50a18704cfa4e6f6a00e46bedb50fb79ec05bb687be3bede",
+            "cause": "The installed generic xdg-open path retained quotes around the fixed -I argument, so Python treated it as a file name.",
+            "scope": "An actual native pointer link press occurred, but default-handler delivery failed. This is retained failed evidence, not R9 acceptance."
+          },
+          "current_scoped_native_route_acceptance": {
+            "report": "reports/measurements/lucent-default-uri-native-26d.json",
+            "report_sha256": "2415048c77333d89753333d6bfeb3513ff5e6dad74868eec059b9c46ac3b9c51",
+            "native_harness_source_commit": "563781a26db5db787fb788c11defaf7c28c3acc7",
+            "private_report_sha256": "bd06a90f4ccbebb0d221e22acb63bf936fb1185ae70a8389c92fe28e5bb0d707",
+            "overall_passed": true,
+            "checks_passed": 5,
+            "native_input": {
+              "pointer_link_focus": true,
+              "tab_enter_link_focus": true,
+              "tab_events_sent": 2
+            },
+            "cleanup_checks_passed": 9,
+            "browser_keyboard_handoff_accepted": false,
+            "scope": "Warm controlled default route only; see the report and scoped_native_evidence for exact authority, cleanup, activewindow and independent OFF observations."
+          }
+        },
+        "notification_history_handoff_source_progress": {
+          "source_commit": "194c0c57f12a70b0f68a84c16e4d695a9923152c",
+          "status": "source_validated_not_deployed",
+          "validation_receipt_sha256": "066916002447d373f447321cc3d6e8a3936e16b566dd043daec40b16aa36f966",
+          "files_sha256": {
+            "lucent/apps/lucent-desktop/src/notifications.rs": "404017532cc0d60ad8581c1687be0bc3ff45bbbc20fd2cda103bd5560efd0f2f",
+            "lucent/apps/lucent-desktop/src/notifications/tests.rs": "e781ddbc9f975d8ffb58d84b736b99248061865cdc023665b6390e1a646d041e",
+            "lucent/apps/lucent-desktop/src/desktop/panels.rs": "999ab97758473a92f06e7bf10c1ed1a4de50c23bd1f376ff3e8918fe0adaee79"
+          },
+          "desktop_tests_passed": 372,
+          "desktop_tests_ignored": 6,
+          "new_handoff_tests_passed": 10,
+          "strict_release_clippy_passed": true,
+          "deployed_to_recorded_26d_runtime": false,
+          "native_automatic_history_release_accepted": false,
+          "native_browser_key_delivery_accepted": false,
+          "scope": "Separate client source validation only. The recorded R9 route result used runtime26d and does not validate this later fix; the prior routes, failures, activewindow observations and cleanup scopes remain unchanged."
         }
       },
       {
         "id": "real-world-validation",
         "status": "partial_owned_native_evidence",
-        "implemented": "Source-specific owned native Notes/clipboard, SNI/DBusMenu tray, single-output video density fit, live previews, System invalidation, virtual Bluetooth and other recorded workflows. Seven one-output native Display draft/Apply/Keep/Revert/deadline/EOF-recovery flows also pass with exact file preservation and explicit expected one-restart validation. Later a7f RADV hardware-path startup and three-second native frame advancement pass with anchored user/source/settings/media/critical-file and monitor preservation. The coherent 8e release is now deployed on retained RADV, and its normal 120-second resource interval passes preservation while failing host-pressure eligibility. A fresh 16-check coherent 8e run passes two simultaneous compositor outputs, one owned headless, at 1x/2x/1.25x with real panel clicks, held-button removal, same-name new native global/host generation and exact restoration; see reports/measurements/lucent-native-multi-output.json. A later 2044e54f native harness passes nine actual Chromium textarea/Notes keyboard clipboard checks and all twelve restoration checks on unchanged 8e, one virtual output; see reports/measurements/lucent-native-gui-clipboard-2044.json. A genuine wired-only NetworkManager Applet run on unchanged 8e passes five native bar/menu/information-action checks and four cleanup checks; a fresh outside-worker post-removal observation passes thirteen preservation checks, restoring all 964 original packages/reasons with five signed test packages absent. Other apps/menus, wireless/secret-agent, physical hardware, pixel quality and performance remain unverified. Later harness 86df4e5b on runtime 35ed passes four two-output Display draft/Apply/Revert/timeout/Keep flows with one owned headless peer, five positive owner-restoration checks and independent retirement/normal-OFF verification; see reports/measurements/lucent-native-two-output-displays.json. All new panel input remains on the unchanged original 1x output.",
-        "remaining": "Physical simultaneous monitors/cable hotplug, suspend/resume, secure-output changes, fractionally scaled Displays-panel input, native enable/disable/rotation, cross-output text/clipboard, physical Bluetooth/audio/power/radio hardware, additional third-party tray applications/menus and wireless/secret-agent workflows, other GUI clipboard applications, rich content and delayed-provider/focus-retirement races. The owned headless run establishes no blanket hardware, resource or 60 FPS claim."
+        "implemented": "Source-specific owned native Notes/clipboard, SNI/DBusMenu tray, single-output video density fit, live previews, System invalidation, virtual Bluetooth and other recorded workflows. Seven one-output native Display draft/Apply/Keep/Revert/deadline/EOF-recovery flows also pass with exact file preservation and explicit expected one-restart validation. Later a7f RADV hardware-path startup and three-second native frame advancement pass with anchored user/source/settings/media/critical-file and monitor preservation. The coherent 8e release is now deployed on retained RADV, and its normal 120-second resource interval passes preservation while failing host-pressure eligibility. A fresh 16-check coherent 8e run passes two simultaneous compositor outputs, one owned headless, at 1x/2x/1.25x with real panel clicks, held-button removal, same-name new native global/host generation and exact restoration; see reports/measurements/lucent-native-multi-output.json. A later 2044e54f native harness passes nine actual Chromium textarea/Notes keyboard clipboard checks and all twelve restoration checks on unchanged 8e, one virtual output; see reports/measurements/lucent-native-gui-clipboard-2044.json. A genuine wired-only NetworkManager Applet run on unchanged 8e passes five native bar/menu/information-action checks and four cleanup checks; a fresh outside-worker post-removal observation passes thirteen preservation checks, restoring all 964 original packages/reasons with five signed test packages absent. Other apps/menus, wireless/secret-agent, physical hardware, pixel quality and performance remain unverified. Later harness 86df4e5b on runtime 35ed passes four two-output Display draft/Apply/Revert/timeout/Keep flows with one owned headless peer, five positive owner-restoration checks and independent retirement/normal-OFF verification; see reports/measurements/lucent-native-two-output-displays.json. That historical four-flow run kept all panel input on the unchanged original 1x output. The later 1774fa87 harness on runtime 26d passes nine virtual Display workflows, including rotation, disable/re-enable and native pointer/keyboard interaction on the fractional peer panel, with guarded restoration and separate later normal-OFF verification; see reports/measurements/lucent-native-two-output-displays-26d-nine.json.",
+        "remaining": "Physical simultaneous monitors/cable hotplug, suspend/resume, secure-output changes, cross-output text/clipboard, physical Bluetooth/audio/power/radio hardware, additional third-party tray applications/menus and wireless/secret-agent workflows, other GUI clipboard applications, rich content and delayed-provider/focus-retirement races. The owned headless run establishes no blanket hardware, resource or 60 FPS claim."
       },
       {
         "id": "documentation-accuracy",
         "status": "accepted_main_delivery_verified_summary_reconciled",
-        "implemented": "Accepted PR100/main 124 and its exact six successful checks/CLEAN normal merge are reconciled with successful Pages 39813782003. Desktop/library/component-lab HTML, native manifest and representative PNG match artifact bytes; all 114 producer inputs match the capture commit and merged tree. PR98/99 delivery and scoped candidate/Lab results are recorded separately. Current text, application and popover summaries distinguish later evidence from old pending checkpoints.",
-        "remaining": "Each later documentation change must pass its own source/site and delivery gates; PR94-100 historical delivery is established. Keep later summaries source-specific and preserve historical failures and acceptance limits. Documentation delivery does not close the remaining performance, default-handler or physical/interoperability work."
+        "implemented": "PR102/main 6e471005 and its exact six successful checks/CLEAN normal merge are reconciled with successful Pages 39974027424. Three public pages, native manifest and PNG match artifact bytes; all 116 producer inputs and 480 captures verify. Archived 26d runtime source equals the merge. Previous 124/PR100 delivery remains a dated snapshot; native reports retain at-time-unmerged, failed-trial and recovery outcomes. The default-handler context implementation is distinguished from pending native acceptance.",
+        "remaining": "This later documentation reconciliation needs its own source/site and delivery gates. Preserve historical outcomes and eligibility limits; Publication does not close automatic history release/browser keyboard handoff, performance, hardware or broader interoperability work."
       }
     ],
     "scoped_native_evidence": [
@@ -709,13 +929,204 @@
         "initial_failed_attempt_feature_checks_passed": 0,
         "failure_history": "The initial 7ebd harness used eval instead of dispatch for cursor movement and failed before feature checks; uncertain cursor ownership blocked cleanup. That immutable failed report and its separate guarded recovery remain unchanged. The corrected helper retains exact observed cursor confirmation and lost-authority refusal.",
         "not_established": "Physical displays/modes, cable hotplug, secure-output changes, suspend/resume, native enable/disable/rotation, compositor restart during confirmation, fractionally scaled Displays-panel input, resources or pacing. The five positive owner checks are separate from the ctime/link-count policy marker; no sixth functional restoration check is claimed. Final site, exact-head CI and publication remain separate pending gates."
+      },
+      {
+        "feature": "current-source-owned-ime",
+        "production_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+        "current_source_equivalent_to_accepted_main": true,
+        "report": "reports/measurements/lucent-runtime-26d-native-trial.json",
+        "feature_checks_passed": 5,
+        "restoration_checks_passed": 5,
+        "scope": "One prepared native output; independent non-replacing input-method peer, no third-party IME/hardware claim"
+      },
+      {
+        "feature": "two-output-display-nine-native-controls",
+        "production_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+        "native_harness_source_commit": "1774fa875745aac24d0d9e5503616ac96b356789",
+        "report": "reports/measurements/lucent-native-two-output-displays-26d-nine.json",
+        "report_sha256": "6257775f511bb738efc48713e928af2986b7414f98f3a849c1f22e0e17c99350",
+        "private_report_sha256": "5530f24309ca870d0328073ea9d54a0e4f5ffb3369307a2ebb573a9a08fc2946",
+        "controller_sha256": "ae87d7231890affe297cb28d7eb80ff2ce887858a1065be6a032f287f544a96a",
+        "guest_sha256": "97333e23de22de1105156eecf0d8a071c84361654b137ab0e81bf655d20b13c9",
+        "desktop_sha256": "7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08",
+        "release_manifest_sha256": "5b228fa1bbdc71c50a245edcb70e726ef4d5826f476ba261e53042023d322aec",
+        "feature_checks_passed": 9,
+        "owner_restoration_fields_passed": 6,
+        "positive_owner_restoration_checks_passed": 5,
+        "restoration_policy_markers_passed": 1,
+        "cursor_restoration_checks_passed": 3,
+        "bounded_owner_phases_passed": 9,
+        "resource_cleanup_completed": true,
+        "checks": [
+          "two_output_draft_has_no_native_effect",
+          "two_output_apply_explicit_revert",
+          "two_output_fractional_scale_timeout_revert",
+          "two_output_native_keep_complete_monitor_tail",
+          "owned_peer_rotation_apply_and_revert",
+          "owned_peer_disable_and_keep",
+          "owned_peer_reenable_controls_apply_and_keep",
+          "owned_peer_fractional_scale_keep",
+          "fractional_owned_panel_real_pointer_keyboard_apply_revert"
+        ],
+        "fractional_panel": {
+          "buffer_height": 960,
+          "buffer_width": 1280,
+          "density": 1.25,
+          "height": 768,
+          "id": "displays",
+          "native_frames": 26,
+          "width": 1024
+        },
+        "independent_post_run_normal_off": {
+          "binding_sha256": "d620edc12f9a8fc4c2c440bda85cf4b8b0ae0dcb09eb09d958f84f33309f1c5b",
+          "desktop_sha256": "7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08",
+          "helper_sha256": "e4914a16e126fd58bb655861e452293e210c12a83681ae1d38e31ff6f93756f9",
+          "original_output": {
+            "height": 1080,
+            "name": "Virtual-1",
+            "refreshRate": 60.0,
+            "scale": 1,
+            "transform": 0,
+            "width": 1920,
+            "x": 0,
+            "y": 0
+          },
+          "read_only": true,
+          "receipt_sha256": "0370e7fb7266545ab417ef4aadfc34bc426d6457da428258379222c28ccd75aa",
+          "resource_or_presentation_measurement": false,
+          "runtime_profiling": {
+            "frames": false,
+            "presentation": false,
+            "source_pts": false
+          },
+          "same_desktop_lifetime_as_pre_run": true,
+          "scope": "Independent later read-only observation; the original nine-flow Display receipt remains unchanged.",
+          "security_inventory_count": 43,
+          "source_and_security_inventories_match_pre_run": true,
+          "source_inventory_count": 14,
+          "success": true
+        },
+        "scope": "Original 1920x1080/60Hz/scale1 virtual output unchanged plus one exclusively owned headless peer. All nine Display workflows use rendered controls and native VM input; the fractional panel is logical 1024x768, density1.25, buffer1280x960 with26 native submissions. Exact source/security/profile preservation, original monitor bytes/inode, workspace/cursor restoration and only-owned-output removal pass. Native submissions are not presentation FPS.",
+        "monitor_ctime_and_link_count_claimed_unchanged": false,
+        "earlier_failed_attempts_unchanged": true,
+        "physical_or_secure_output_acceptance": false,
+        "presentation_or_performance_acceptance": false,
+        "whole_goal_complete": false,
+        "not_established": "Physical monitor/cable hotplug, suspend/resume, compositor restart, secure-output changes, resource targets or presentation pacing. Keep-to-file-identity-capture host-loss manual recovery remains a limitation. The result does not rewrite earlier failed Display trials or the separate recovery outcomes, and says nothing about the current running VM."
+      },
+      {
+        "feature": "notification-default-uri-warm-route",
+        "production_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+        "native_harness_source_commit": "563781a26db5db787fb788c11defaf7c28c3acc7",
+        "report": "reports/measurements/lucent-default-uri-native-26d.json",
+        "report_sha256": "2415048c77333d89753333d6bfeb3513ff5e6dad74868eec059b9c46ac3b9c51",
+        "private_report_sha256": "bd06a90f4ccbebb0d221e22acb63bf936fb1185ae70a8389c92fe28e5bb0d707",
+        "host_harness_sha256": "0e620132109bcbb5398438cc6d21df32f2a849336bf8d148272d6553645d63c6",
+        "guest_fixture_sha256": "d59aa86a38c316016c063e7c16c74fe7b060689488869b3e106102ac72d39519",
+        "release_manifest_sha256": "5b228fa1bbdc71c50a245edcb70e726ef4d5826f476ba261e53042023d322aec",
+        "overall_passed": true,
+        "checks_passed": 5,
+        "native_input": {
+          "pointer_link_focus": true,
+          "tab_enter_link_focus": true,
+          "tab_events_sent": 2
+        },
+        "cleanup_checks_passed": 9,
+        "cleanup": {
+          "browser_and_original_entry_retired": true,
+          "caller_state_and_cursor_preserved": true,
+          "canonical_browser_and_entry_retired": true,
+          "configuration_guardian_retired": true,
+          "default_entry_restored": true,
+          "default_mime_restored": true,
+          "notification_history_closed": true,
+          "notifications_absent_after_expiry_window": true,
+          "original_http_watchdog_retired": true
+        },
+        "active_window_observation": {
+          "keyboard_matches_owned_browser": true,
+          "pointer_matches_owned_browser": true,
+          "scope": "This is an active-toplevel observation, not seat keyboard-focus proof or evidence that the browser received a key.",
+          "source": "Hyprland activewindow identity matched the owned browser window."
+        },
+        "independent_later_normal_off": {
+          "binding_sha256": "d620edc12f9a8fc4c2c440bda85cf4b8b0ae0dcb09eb09d958f84f33309f1c5b",
+          "desktop_sha256": "7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08",
+          "helper_sha256": "e4914a16e126fd58bb655861e452293e210c12a83681ae1d38e31ff6f93756f9",
+          "original_output": {
+            "height": 1080,
+            "name": "Virtual-1",
+            "refreshRate": 60.0,
+            "scale": 1,
+            "transform": 0,
+            "width": 1920,
+            "x": 0,
+            "y": 0
+          },
+          "performance_acceptance": false,
+          "read_only": true,
+          "receipt_sha256": "c1cf104ed158177ffc460f501ce1195b067f3f619cc7723fd29a6eaf065e7f16",
+          "runtime_profiling": {
+            "frames": false,
+            "presentation": false,
+            "source_pts": false
+          },
+          "same_desktop_lifetime_as_previous_independent_off": true,
+          "security_inventory_count": 43,
+          "source_and_security_inventories_match_previous_independent_off": true,
+          "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+          "source_inventory_count": 14,
+          "success": true
+        },
+        "scope": "One virtual output, a temporary controlled HTTP MIME default and an already warm real Chromium browser in a disposable test profile. Native notification pointer and Tab/Enter activation each open exactly one selected owned document with fresh input-bound context.",
+        "acceptance_limits": {
+          "actual_notification_pointer_and_tab_enter_input": true,
+          "arbitrary_handlers_or_external_navigation_accepted": false,
+          "automatic_history_release_accepted": false,
+          "browser_keyboard_handoff_accepted": false,
+          "current_running_vm_state_claimed": false,
+          "direct_chromium_token_consumption_accepted": false,
+          "fresh_browser_initial_focus_accepted": false,
+          "fresh_context_and_selected_document_transport": true,
+          "owned_warm_default_handler_route": true,
+          "physical_hardware_accepted": false,
+          "resource_or_presentation_performance_accepted": false,
+          "whole_goal_complete": false
+        },
+        "not_established": "Automatic notification-history release, natural browser keyboard handoff or a real browser receiving a key, fresh-browser initial focus, direct Chromium protocol-token consumption, arbitrary/default external handlers, hardware or performance. The harness explicitly hides history between cases and during cleanup."
+      },
+      {
+        "feature": "virtual-4k-preflight-and-post-restoration-memory-diagnostic",
+        "report": "reports/measurements/lucent-4k-resource-preflight-followup-26d.json",
+        "report_sha256": "5a56f3b5d6b358a91df0da24a20c1117cc57d85acf3454fb827f2542ffa75448",
+        "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+        "owned_output_setups_and_restorations_passed": 2,
+        "standardized_4k_resource_interval_completed": false,
+        "sampler_a_refusal": "bounded_measurement_and_cleanup_budget",
+        "sampler_b_refusal": "host_memory_admission",
+        "independent_later_normal_off_sha256": "f597f92d14759cce18062697c1c9c8257b9c33c043655aeffcbb6a1059191224",
+        "one_off_proc_diagnostic_sha256": "42f60816426e1a32c27a23a34755a68cdeaf84cef75e0f22758c2b271ec7701b",
+        "one_off_original_fhd_memory": {
+          "rss_kib": 619104,
+          "rss_mib": 604.59375,
+          "anonymous_rss_kib": 552536,
+          "anonymous_rss_mib": 539.5859375,
+          "process_swap_kib": 16632,
+          "process_swap_mib": 16.2421875,
+          "process_lifetime_hwm_kib": 696620,
+          "process_lifetime_hwm_mib": 680.29296875
+        },
+        "rss_target_acceptance": null,
+        "performance_accepted": false,
+        "scope": "Geometry, owned restoration and one post-restoration FHD proc snapshot only. Earlier sampled intervals and eligibility flags remain unchanged; no 4K causality, allocator/GPU attribution, leak, source-rate or physical-hardware acceptance.",
+        "whole_goal_complete": false
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
-    "validation": "Accepted-base PR100 passed six required push/pull-request checks at exact efeaf6d1 with CLEAN mergeability and normal merge 124b2069. Pages 39813782003 build/deploy succeeded and exact public/artifact/native-producer checks passed. Separate Lab native receipt passes 8 interaction/4 restoration checks; recorded candidate 8a bar and reload scopes remain separate. This reconciliation edits documentation only and executes no runtime/native test; its own source/site/PR gates must be recorded before delivery. Earlier validation chronology is preserved in historical_rollup_snapshot_pr97 and the unchanged requirement/evidence histories.",
-    "accepted_main_base_commit": "124b206938ebc3b41f5720838d01b8edf49a438d",
-    "documentation_harness_base_commit": "cd88371923b43c53f5b48d4bafe78131ea6df8c3",
-    "runtime_compilation_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+    "validation": "PR102 exact 3560 passed all six required push/pull-request checks with CLEAN mergeability and merged normally as 6e471005 at 2026-10-23T14:57:06Z. Pages 39974027424 build/deploy and exact public/artifact/116-producer/480-capture checks pass. Current runtime source trees match archived 26d. This later documentation reconciliation executes no VM/native/build/site test; its own review/site/delivery gates remain separate. Historical validation, failed trials and recovery outcomes are retained.",
+    "accepted_main_base_commit": "6e471005948cbefab218a6c79b87f3f94a241c2d",
+    "documentation_harness_base_commit": "12970c779f75cabd189208b5a067b483aaed0d72",
+    "runtime_compilation_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
     "historical_gpu_candidate_preservation_rejection": {
       "status": "hardware_initialization_observed_preservation_rejected_software_restored",
       "driver_install_rollback_verified": true,
@@ -757,7 +1168,7 @@
       "scope": "This trial remains actual older-a7f guest hardware-path liveness, without sustained FPS, cadence, animation/RSS/GPU-memory/hardware-decoding acceptance. Later coherent 8e deployment and its host-pressure-ineligible resource observation are recorded separately; the prior rejection remains unchanged."
     },
     "coherent_release_build": {
-      "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+      "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
       "managed_executables": [
         "lucent-desktop",
         "lucent-cli",
@@ -772,40 +1183,43 @@
         "application-intent"
       ],
       "locked_offline_build_passed": true,
-      "archive_manifest_sha256": "b7a1d92c4e0e186fca4e2e7e67523763c0c57bc4b91bd3ef18247c5b5cc996c9",
+      "archive_manifest_sha256": "5b228fa1bbdc71c50a245edcb70e726ef4d5826f476ba261e53042023d322aec",
       "all_nine_binary_hashes_verified": true,
       "deployed": true,
       "native_acceptance": false,
-      "acceptance_examples_staged_only": true
+      "acceptance_examples_staged_only": true,
+      "scope": "Recorded 26d coherent nine-binary build, now source-equivalent to accepted PR102. The independent Lab artifact is separate; native feature acceptance remains scoped."
     },
     "coherent_runtime_deployment": {
-      "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
-      "private_receipt": "reports/local/daily-text-8e-deployment-33ba0219a8a4a8a4c924f896.json",
-      "private_receipt_sha256": "d65610c695efd51731d9190489419a1a225dbc3b6a77f6d5344a4846bead4523",
+      "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+      "report": "reports/measurements/lucent-runtime-26d-native-trial.json",
+      "private_receipt": "reports/local/daily-runtime-26d-deployment-6e828393f70031a1dfd523da.json",
+      "private_receipt_sha256": "6d0c2b6c820396dd03284db1886a617e6580a5b27aaf94c27be6148ac78f4ad8",
       "success": true,
       "managed_user_clients_verified": 6,
       "root_greeter_verified": true,
-      "changed_support": [
-        "compat.py"
-      ],
+      "changed_support": [],
       "acceptance_examples_staged_only": true,
       "supervised_beyond_startup_deadline": true,
       "user_state_preserved": true,
       "secure_configuration_preserved": true,
       "greetd_restarted": false,
-      "graphics_configuration_changed": false,
       "rollback_required": false,
-      "native_feature_acceptance_complete": false
+      "native_feature_acceptance_complete": false,
+      "accepted_main_at_capture": false,
+      "current_source_equivalent_to_accepted_main": true,
+      "scope": "Recorded successful deployment before PR102 merge; this is not a current graphical-session/PID claim. Its immutable native report retains capture-time flags."
     },
     "accepted_main_merge": {
-      "pull_request": 100,
-      "merge_commit": "124b206938ebc3b41f5720838d01b8edf49a438d",
-      "exact_reviewed_head": "efeaf6d177161a2825cbb283f14b721d27afac8a",
+      "pull_request": 102,
+      "merge_commit": "6e471005948cbefab218a6c79b87f3f94a241c2d",
+      "exact_reviewed_head": "3560e3b6db1d769fbfa68e3a8731c8fe6bb21961",
       "required_checks_passed": 6,
       "mergeability": "CLEAN",
       "normal_merge": true,
-      "merged_at": "2026-10-22T16:24:21Z",
-      "private_ci_receipt_sha256": "0bd49f63766eefb4747b1b76b2931659ec993af18894d9f38a6d2ecadbd534bf"
+      "merged_at": "2026-10-23T14:57:06Z",
+      "private_ci_receipt_sha256": "55c2f6901d6ee01ef957eb2e124fa23fdaa0cb27f64e737ad08e3d01bb83a49f",
+      "private_merge_receipt_sha256": "a336f65abb6007e9b5af24ba2730ef63fb27f30592e660f97900c658020a0145"
     },
     "implemented_unmerged_cohorts": [
       {
@@ -872,18 +1286,28 @@
         "independent_consumer_source_commit": "d1fff2d88e9f19f9805125ef25d43ace03bef20d",
         "independent_consumer_merged_pull_request": 89,
         "independent_consumer_accepted_main_merge_commit": "8ca4e82015ad07d77fe873c0dc827b6b82cc8164"
+      },
+      {
+        "feature": "default-handler-context-and-video-pipeline",
+        "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+        "merged_pull_request": 102,
+        "accepted_main_merge_commit": "6e471005948cbefab218a6c79b87f3f94a241c2d",
+        "runtime_source_trees_equal_merge": true,
+        "implementation": "Canonical UriPort context, optional activation app ID, revision-bound notification completion, reusable video decoder sessions and bounded stream uploads.",
+        "scoped_native_report": "reports/measurements/lucent-runtime-26d-native-trial.json",
+        "pending": "Native default-handler interaction, eligible resource/presentation targets and broader physical/application workflows. Source checks and merged delivery do not establish those results."
       }
     ],
     "documentation_delivery": {
-      "accepted_main_commit": "124b206938ebc3b41f5720838d01b8edf49a438d",
-      "published_workflow_run": 39813782003,
+      "accepted_main_commit": "6e471005948cbefab218a6c79b87f3f94a241c2d",
+      "published_workflow_run": 39974027424,
       "published_workflow_status": "SUCCESS",
       "public_http_status": 200,
-      "current_published_source_links": "124b206938ebc3b41f5720838d01b8edf49a438d",
+      "current_published_source_links": "6e471005948cbefab218a6c79b87f3f94a241c2d",
       "current_publication_valid": true,
       "public_artifact_bytes_match": true,
-      "delivery_receipt_sha256": "0941eb259c30bb459579ec29c1d6da2a8e34ce97cef7d236514e8a79cbc9c431",
-      "archive_sha256": "01912b3e48b4bb35b6f083d9e64a908c05fa31aeba7253b070f28a67b65d461f",
+      "delivery_receipt_sha256": "fe0d7725c394ea63291ec2a819e77787225254e3eaa0f892589224d9cbec1a54",
+      "archive_sha256": "eef83dc8b9c38ba80d80bad5e11e4ce07d6fc96990fe2d80d2735ec69a2606c4",
       "verified_pages": [
         "docs/desktop/",
         "docs/library/",
@@ -893,10 +1317,12 @@
         "component-lab/manifest.json",
         "component-lab/images/menu-ocean-populated-narrow-1x.png"
       ],
-      "rendering_producer_inputs_verified": 114,
-      "scope": "Recorded PR100/main publication, exact artifact/public bytes and capture provenance. This is not a live site/VM monitor, new runtime execution, physical acceptance or performance proof."
+      "rendering_producer_inputs_verified": 116,
+      "native_catalogue_captures_verified": 480,
+      "capture_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+      "scope": "Recorded PR102/main publication and exact artifact/public/producer bytes, not a live site monitor or new native/presentation acceptance."
     },
-    "accepted_main_commit": "124b206938ebc3b41f5720838d01b8edf49a438d",
+    "accepted_main_commit": "6e471005948cbefab218a6c79b87f3f94a241c2d",
     "current_vm_trial_source_commit": null,
     "current_vm_trial_performance_accepted": false,
     "historical_documentation_delivery_8ca": {
@@ -951,29 +1377,19 @@
       "scope": "The exact accepted-main desktop/library artifact equals public HTTP200 HTML; source links pin the workflow commit. This later HTTP/performance reconciliation is a separate unmerged change awaiting its own checks/publication."
     },
     "latest_recorded_trial": {
-      "source_commit": "8a3cd7d8c681700cb8d3477c747e2550c2c14b09",
+      "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
       "accepted_main": false,
+      "accepted_main_at_capture": false,
+      "current_source_equivalent_to_accepted_main": true,
+      "accepted_main_merge_commit": "6e471005948cbefab218a6c79b87f3f94a241c2d",
       "performance_accepted": false,
-      "recording_scope": "Later candidate workflow receipts, not an accepted-main renderer release or current VM observation. Native bar and reload workloads use separately identified builds; no all-client coherent-source assertion follows.",
-      "bar_workflow": {
-        "desktop_sha256": "cf2cceb8f9bf8a611a4b64ba666d63200dff5408d4319345bffca7e32bf686c3",
-        "private_report_sha256": "0e356e00b42a3775eec147af086a6cda16933850bb5705c1487a250a6bb3b9c3",
-        "feature_checks_passed": 9,
-        "restoration_checks_passed": 4,
-        "scope": "Pointer/keyboard panel workflow on one virtual output; submission/retained-state samples and static strips are not FPS, animation or transient no-flash acceptance."
-      },
-      "strict_headless_pixels": {
-        "private_report_sha256": "2884972c42151b8ad3f3fd3b9254c9db33da04f565c6b372cdeca1473a1087f0",
-        "passed": true,
-        "scope": "Original strict fixture on VM headless Vulkan driver only. No compositor/overlap/no-flash acceptance."
-      },
-      "developer_reload": {
-        "report": "reports/measurements/lucent-dev-reload.json",
-        "bundle_source_commit": "8a3cd7d8c681700cb8d3477c747e2550c2c14b09",
-        "bundle_manifest_sha256": "df37b7a728514dd00b4f55cf10cccbdfed8aed9f8db1db493c9922eaa4f236bd",
-        "native_checks_passed": 5,
-        "scope": "Host file-notification/control tests, real bounded host Cargo build, and real VM apply/readiness/rollback. No combined source-save/build/reload watcher or physical-desktop/performance acceptance."
-      }
+      "report": "reports/measurements/lucent-runtime-26d-native-trial.json",
+      "recording_scope": "Captured before PR102 merge; runtime code is now included in accepted main through exact source-tree equality. No live VM observation or broader acceptance follows. Original report/failure/recovery flags stay unchanged.",
+      "coherent_six_and_root_deployment_passed": true,
+      "owned_ime_feature_checks_passed": 5,
+      "owned_ime_restoration_checks_passed": 5,
+      "normal_resource_interval_eligible": false,
+      "default_handler_native_acceptance_passed": false
     },
     "independent_renderer_candidate": {
       "source_commit": "1db58a008b48bd4279b74bf5633159c99db45472",
@@ -1014,6 +1430,31 @@
         "recorded_ci_head": "692dfcb1feec6776511ae06f03a30576b380bef7",
         "required_checks_passed": 6,
         "recording_scope": "Latest recorded native trial, not live VM monitoring. Accepted main 2b and earlier 8e/9b/bf98 receipts retain their separate sources and scopes."
+      },
+      {
+        "source_commit": "8a3cd7d8c681700cb8d3477c747e2550c2c14b09",
+        "accepted_main": false,
+        "performance_accepted": false,
+        "recording_scope": "Later candidate workflow receipts, not an accepted-main renderer release or current VM observation. Native bar and reload workloads use separately identified builds; no all-client coherent-source assertion follows.",
+        "bar_workflow": {
+          "desktop_sha256": "cf2cceb8f9bf8a611a4b64ba666d63200dff5408d4319345bffca7e32bf686c3",
+          "private_report_sha256": "0e356e00b42a3775eec147af086a6cda16933850bb5705c1487a250a6bb3b9c3",
+          "feature_checks_passed": 9,
+          "restoration_checks_passed": 4,
+          "scope": "Pointer/keyboard panel workflow on one virtual output; submission/retained-state samples and static strips are not FPS, animation or transient no-flash acceptance."
+        },
+        "strict_headless_pixels": {
+          "private_report_sha256": "2884972c42151b8ad3f3fd3b9254c9db33da04f565c6b372cdeca1473a1087f0",
+          "passed": true,
+          "scope": "Original strict fixture on VM headless Vulkan driver only. No compositor/overlap/no-flash acceptance."
+        },
+        "developer_reload": {
+          "report": "reports/measurements/lucent-dev-reload.json",
+          "bundle_source_commit": "8a3cd7d8c681700cb8d3477c747e2550c2c14b09",
+          "bundle_manifest_sha256": "df37b7a728514dd00b4f55cf10cccbdfed8aed9f8db1db493c9922eaa4f236bd",
+          "native_checks_passed": 5,
+          "scope": "Host file-notification/control tests, real bounded host Cargo build, and real VM apply/readiness/rollback. No combined source-save/build/reload watcher or physical-desktop/performance acceptance."
+        }
       }
     ],
     "historical_documentation_delivery_6b": {
@@ -1240,7 +1681,7 @@
         "remaining": "Site checks, exact-head CI and publication for this newer CPU-shape/two-output follow-up remain separate gates. Four owned two-output Display flows now have source-specific native evidence; physical, secure-output, hotplug/suspend, fractional-panel input and pacing acceptance remain unverified. Continue source-specific updates after later merges; historical reports remain unchanged and a documentation edit executes no native test."
       }
     },
-    "current_vm_observation": "Not established by this documentation snapshot. Recorded workflow sources below do not assert a current graphical session or a coherent all-client deployment.",
+    "current_vm_observation": "Not established by this documentation snapshot. Recorded deployment and recovery facts do not assert the current graphical session, process PID or live VM state.",
     "recent_deliveries": [
       {
         "pull_request": 98,
@@ -1272,6 +1713,16 @@
         "pages_run": 39813782003,
         "guide": "docs/component-lab.md",
         "scope": "Native client and browser explorer share Rust stories. Browser captures do not substitute for native input or performance evidence."
+      },
+      {
+        "pull_request": 102,
+        "merge_commit": "6e471005948cbefab218a6c79b87f3f94a241c2d",
+        "exact_reviewed_head": "3560e3b6db1d769fbfa68e3a8731c8fe6bb21961",
+        "required_checks_passed": 6,
+        "normal_merge": true,
+        "pages_run": 39974027424,
+        "report": "reports/measurements/lucent-runtime-26d-native-trial.json",
+        "scope": "Default-handler context and native video pipeline implementation are merged. Delivery/native/resource scopes remain separate; no native default-handler or performance acceptance."
       }
     ],
     "component_lab": {
@@ -1321,6 +1772,193 @@
       "native_harness_source_file": "vm/test-component-lab.py",
       "native_harness_source_file_sha256": "a8cf098d12715e54ba5b966d19dcfb496e3bd70e93d81bfe60ed2555bcdbc377",
       "harness_identity_scope": "Recorded executed helper bytes correspond to the file at efeaf6d1; this does not relabel the separately identified native Lab binary as a build of that commit."
+    },
+    "runtime_candidate_26d": {
+      "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+      "integration_head_commit": "3560e3b6db1d769fbfa68e3a8731c8fe6bb21961",
+      "pull_request": 102,
+      "accepted_main": false,
+      "performance_accepted": false,
+      "report": "reports/measurements/lucent-runtime-26d-native-trial.json",
+      "coherent_six_and_root_deployed": true,
+      "native_ime_feature_checks_passed": 5,
+      "native_ime_restoration_checks_passed": 5,
+      "normal_resource_interval_seconds": 120.00080094800069,
+      "normal_mean_rss_mib": 237.98256022135416,
+      "normal_sampled_peak_rss_mib": 238.03515625,
+      "process_lifetime_high_water_mib": 240.21484375,
+      "cpu_percent_one_logical_core": 194.2903698626392,
+      "guest_process_swap_mib_max": 0.0,
+      "eligible": false,
+      "ineligible_reasons": [
+        "host_swap_activity",
+        "host_full_stall_pressure"
+      ],
+      "host_swap_in_pages": 6094,
+      "host_io_full_stall_fraction": 0.3502575577220913,
+      "normal_uninstrumented_rss_target_met": null,
+      "source_pts_samples": 0,
+      "presentation_samples": 0,
+      "scope": "Recorded pre-merge PR102 candidate outcomes; runtime code is now source-equivalent to accepted 6e471005. The immutable report keeps its capture-time unmerged flag and every native/performance/failure result. One 1080p60 output at scale 1 uses the unchanged 4K 60 FPS video source; no actual 4K/scale-1.5 output, eligible 300 MiB/FPS, current VM or causal-gain claim.",
+      "failed_display_attempt": {
+        "report": "reports/measurements/lucent-runtime-26d-native-trial.json",
+        "evidence_sha256": "0988114eabd8d4e86295a0f1e3f96faff0b20a2980d2e4013ab963a9186adf6c",
+        "overall_passed": false,
+        "checks_observed_before_failure": 5,
+        "failure": "bounded_guest_transport_failed",
+        "owner_success": false,
+        "restoration": null,
+        "cleanup_blocked": "foreign_or_uncertain_cursor_movement_blocks_warp",
+        "scope": "Five observations before failure do not establish full-trial success or completed restoration. No native enable/disable or fractionally scaled Displays-panel input acceptance. Any later recovery is separate evidence."
+      },
+      "display_guarded_recovery": {
+        "report": "reports/measurements/lucent-runtime-26d-native-trial.json",
+        "recovery_evidence_sha256": "ffebd898430c8e821f3a784a101d7acd7308d8df80a3fc2f5f623dcbf06c96a1",
+        "post_recovery_normal_off_evidence_sha256": "5f924565120aaf490a3bd656b8dfd30b84429328ad3135c5154f1afbc018acad",
+        "success": true,
+        "exit_code": 0,
+        "stderr_bytes": 0,
+        "original_failed_trial_preserved": true,
+        "original_monitor_bytes_inode_verified": true,
+        "only_owned_output_removed": true,
+        "original_cursor_workspace_asserted_without_input_or_warp": true,
+        "post_recovery_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+        "post_recovery_runtime_profiling": {
+          "frames": false,
+          "presentation": false,
+          "source_pts": false
+        },
+        "scope": "Separate recovery and fresh read-only all-OFF observation; failed Display attempt keeps overall_passed=false/owner_success=false/restoration=null. No new feature-flow, physical-output or performance acceptance."
+      },
+      "accepted_main_at_capture": false,
+      "current_source_equivalent_to_accepted_main": true,
+      "accepted_main_merge_commit": "6e471005948cbefab218a6c79b87f3f94a241c2d",
+      "capture_time_scope": "Separate unmerged PR102 candidate observations, not a current live VM monitor or accepted-main deployment. The unchanged4K 60 H264 source targets one 1080p60/scale1 output; an actual4K/scale1.5 output and presentation FPS are untested. Host pressure prevents budget acceptance; no causal improvement is inferred. Earlier requirement histories, flags and delivery/native snapshots remain unchanged."
+    },
+    "historical_rollup_snapshot_pr100": {
+      "snapshot_date": "2026-10-23",
+      "reconciled_at_documentation_base": "12970c779f75cabd189208b5a067b483aaed0d72",
+      "snapshot_source_commit": "124b206938ebc3b41f5720838d01b8edf49a438d",
+      "accepted_main_commit": "124b206938ebc3b41f5720838d01b8edf49a438d",
+      "accepted_main_base_commit": "124b206938ebc3b41f5720838d01b8edf49a438d",
+      "documentation_harness_base_commit": "cd88371923b43c53f5b48d4bafe78131ea6df8c3",
+      "runtime_compilation_source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+      "scope": "Accepted main 124b2069 includes PR98 bar handoff, PR99 opt-in developer reload and PR100 component lab. PR100 merged normally after all six checks passed on exact efeaf6d1 with CLEAN mergeability; Pages 39813782003 publishes that merge. Public desktop/library/component-lab HTML, manifest and representative native PNG exactly match the deployed artifact; all 114 capture-producing inputs match capture and merged source. These are delivery facts. Separate recorded 8a candidate panel/reload workflows and b9 component-lab interactions retain their own binaries and scopes, without promoting the performance candidate to main or asserting a currently running VM. The seven-gap objective remains incomplete: eligible RSS/presentation targets, default-handler activation context and broader physical/application validation are still open. Earlier measurements, failed reports, recovery outcomes and delivery snapshots remain historical.",
+      "validation": "Accepted-base PR100 passed six required push/pull-request checks at exact efeaf6d1 with CLEAN mergeability and normal merge 124b2069. Pages 39813782003 build/deploy succeeded and exact public/artifact/native-producer checks passed. Separate Lab native receipt passes 8 interaction/4 restoration checks; recorded candidate 8a bar and reload scopes remain separate. This reconciliation edits documentation only and executes no runtime/native test; its own source/site/PR gates must be recorded before delivery. Earlier validation chronology is preserved in historical_rollup_snapshot_pr97 and the unchanged requirement/evidence histories.",
+      "accepted_main_merge": {
+        "pull_request": 100,
+        "merge_commit": "124b206938ebc3b41f5720838d01b8edf49a438d",
+        "exact_reviewed_head": "efeaf6d177161a2825cbb283f14b721d27afac8a",
+        "required_checks_passed": 6,
+        "mergeability": "CLEAN",
+        "normal_merge": true,
+        "merged_at": "2026-10-22T16:24:21Z",
+        "private_ci_receipt_sha256": "0bd49f63766eefb4747b1b76b2931659ec993af18894d9f38a6d2ecadbd534bf"
+      },
+      "documentation_delivery": {
+        "accepted_main_commit": "124b206938ebc3b41f5720838d01b8edf49a438d",
+        "published_workflow_run": 39813782003,
+        "published_workflow_status": "SUCCESS",
+        "public_http_status": 200,
+        "current_published_source_links": "124b206938ebc3b41f5720838d01b8edf49a438d",
+        "current_publication_valid": true,
+        "public_artifact_bytes_match": true,
+        "delivery_receipt_sha256": "0941eb259c30bb459579ec29c1d6da2a8e34ce97cef7d236514e8a79cbc9c431",
+        "archive_sha256": "01912b3e48b4bb35b6f083d9e64a908c05fa31aeba7253b070f28a67b65d461f",
+        "verified_pages": [
+          "docs/desktop/",
+          "docs/library/",
+          "component-lab/"
+        ],
+        "verified_native_assets": [
+          "component-lab/manifest.json",
+          "component-lab/images/menu-ocean-populated-narrow-1x.png"
+        ],
+        "rendering_producer_inputs_verified": 114,
+        "scope": "Recorded PR100/main publication, exact artifact/public bytes and capture provenance. This is not a live site/VM monitor, new runtime execution, physical acceptance or performance proof."
+      },
+      "coherent_release_build": {
+        "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+        "managed_executables": [
+          "lucent-desktop",
+          "lucent-cli",
+          "lucent-menu",
+          "lucent-lock",
+          "lucent-greeter",
+          "lucent-polkit"
+        ],
+        "acceptance_executables": [
+          "international-text",
+          "input-method-peer",
+          "application-intent"
+        ],
+        "locked_offline_build_passed": true,
+        "archive_manifest_sha256": "b7a1d92c4e0e186fca4e2e7e67523763c0c57bc4b91bd3ef18247c5b5cc996c9",
+        "all_nine_binary_hashes_verified": true,
+        "deployed": true,
+        "native_acceptance": false,
+        "acceptance_examples_staged_only": true
+      },
+      "coherent_runtime_deployment": {
+        "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+        "private_receipt": "reports/local/daily-text-8e-deployment-33ba0219a8a4a8a4c924f896.json",
+        "private_receipt_sha256": "d65610c695efd51731d9190489419a1a225dbc3b6a77f6d5344a4846bead4523",
+        "success": true,
+        "managed_user_clients_verified": 6,
+        "root_greeter_verified": true,
+        "changed_support": [
+          "compat.py"
+        ],
+        "acceptance_examples_staged_only": true,
+        "supervised_beyond_startup_deadline": true,
+        "user_state_preserved": true,
+        "secure_configuration_preserved": true,
+        "greetd_restarted": false,
+        "graphics_configuration_changed": false,
+        "rollback_required": false,
+        "native_feature_acceptance_complete": false
+      },
+      "latest_recorded_trial": {
+        "source_commit": "8a3cd7d8c681700cb8d3477c747e2550c2c14b09",
+        "accepted_main": false,
+        "performance_accepted": false,
+        "recording_scope": "Later candidate workflow receipts, not an accepted-main renderer release or current VM observation. Native bar and reload workloads use separately identified builds; no all-client coherent-source assertion follows.",
+        "bar_workflow": {
+          "desktop_sha256": "cf2cceb8f9bf8a611a4b64ba666d63200dff5408d4319345bffca7e32bf686c3",
+          "private_report_sha256": "0e356e00b42a3775eec147af086a6cda16933850bb5705c1487a250a6bb3b9c3",
+          "feature_checks_passed": 9,
+          "restoration_checks_passed": 4,
+          "scope": "Pointer/keyboard panel workflow on one virtual output; submission/retained-state samples and static strips are not FPS, animation or transient no-flash acceptance."
+        },
+        "strict_headless_pixels": {
+          "private_report_sha256": "2884972c42151b8ad3f3fd3b9254c9db33da04f565c6b372cdeca1473a1087f0",
+          "passed": true,
+          "scope": "Original strict fixture on VM headless Vulkan driver only. No compositor/overlap/no-flash acceptance."
+        },
+        "developer_reload": {
+          "report": "reports/measurements/lucent-dev-reload.json",
+          "bundle_source_commit": "8a3cd7d8c681700cb8d3477c747e2550c2c14b09",
+          "bundle_manifest_sha256": "df37b7a728514dd00b4f55cf10cccbdfed8aed9f8db1db493c9922eaa4f236bd",
+          "native_checks_passed": 5,
+          "scope": "Host file-notification/control tests, real bounded host Cargo build, and real VM apply/readiness/rollback. No combined source-save/build/reload watcher or physical-desktop/performance acceptance."
+        }
+      },
+      "scope_note": "Dated PR100/124 accepted-main and delivery snapshot, retained before PR102 reconciliation. Trial and native outcomes remain source-specific; this is historical metadata, not a live VM observation.",
+      "accepted_main_delivery_date": "2026-10-22"
+    },
+    "accepted_runtime_source_equivalence": {
+      "build_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+      "accepted_main_commit": "6e471005948cbefab218a6c79b87f3f94a241c2d",
+      "identical_git_subtrees": {
+        "lucent": "36e4f922e66a2f662f0a76ed996e9702d05bfa7a",
+        "design": "8ac7a305599a8e91a524dea9ebc31e0b35317d85",
+        "configs": "a53cd7f4e268a50889335e53fca9a1b6a97f00fa",
+        "scripts": "3b3f936cc9535ee00a9a14039559af3fcbc5e6e6",
+        "vm": "b54c29929c2dda3fddaec66d2bfa0dff25bbf653"
+      },
+      "all_rust_workspace_bytes_identical": true,
+      "only_different_path": "site/public/component-lab/manifest.json",
+      "scope": "Source-tree equality, not a rebuild at the merge commit or a claim that capture-time native acceptance flags changed."
     }
   },
   "requirements": [

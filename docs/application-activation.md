@@ -1,7 +1,10 @@
 # Standard application activation
 
-Source scope: accepted main `124b206938ebc3b41f5720838d01b8edf49a438d`
-includes PR89's independent d1 consumer and the earlier PR87 runtime.
+Source scope: accepted main `6e471005948cbefab218a6c79b87f3f94a241c2d`
+includes PR102's default-handler context path, PR89's independent d1 consumer
+and the earlier PR87 runtime. The archived `26d03adf` runtime's Rust and integration
+source trees are identical to that merge; its native reports keep their original
+capture-time unmerged flags.
 Application integration `bb304907`, fresh input-bound intent, explicit file/URI
 Open and expanded XDG parsing shipped in the coherent `8e6d074b` release. Its
 later real-Chromium local-file run passes nine feature and eight restoration
@@ -11,7 +14,7 @@ performance and do not describe a currently running VM.
 
 Observed focus and token delivery do not prove Chromium consumed a particular
 activation token. Other applications, default handlers and external navigation
-still need native evidence; notification links also have the context gap below.
+still need native evidence, including the now-implemented notification-link path below.
 Earlier failed and successful reports retain their exact sources and outcomes.
 See [current readiness](current-readiness.md),
 [local-file evidence](../reports/measurements/lucent-native-application-intents-d1.json)
@@ -27,22 +30,29 @@ There is no invented executable sentinel.
 adapter; the launcher and dock consume that port. Existing pure window-class
 matching and prefer-running focus behavior remain unchanged.
 
-## Remaining default-handler activation gap
+## Default-handler activation context
 
-At this integration base, notification links take a different path:
+Notification links use the canonical port/adapter boundary:
 [the notification client](../lucent/apps/lucent-desktop/src/notifications.rs)
-revalidates its exact notification version and link, then calls
-[`UriPort::open`](../lucent/crates/lucent-domain/src/uri.rs).
-That contract has no launch context. Its
+captures the exact notification version and link, requests
+`Effects::activation_token(None, completion)` because the default handler's app
+ID is not known, and revalidates that selection after token delivery. Retired
+or superseded requests cannot reuse its pending authority. It then calls
+[`UriPort::open(target, context)`](../lucent/crates/lucent-domain/src/uri.rs).
+The domain contract carries `ApplicationLaunchContext`; its
 [`XdgUri` adapter](../lucent/crates/lucent-services/src/applications.rs)
-starts `xdg-open` through the shared application-unit policy with an empty
-context. The child receives no fresh activation token; stale inherited tokens
-are deliberately removed.
+starts `xdg-open` through the shared application-unit policy with that context.
+The optional SDK app ID preserves the physical seat/serial/surface requirements;
+it does not invent a handler identity. Empty contexts remove inherited tokens,
+and token values stay out of command-line arguments.
 
-Passing the explicit-application Open tests does not fix or validate this
-contextless default-handler path. It needs fresh user-intent propagation across
-the existing port/adapter boundary and real default-handler acceptance. Views
-must continue emitting messages rather than performing process or URI IO.
+This fixes the implementation gap recorded at the earlier `124b2069` base.
+Native default-handler acceptance remains pending: a separate source-only
+pointer/keyboard harness has 27 focused pure cases and passing integration
+checks. A later native setup attempt fails before rich-link input or feature
+checks and does not establish restoration. Earlier explicit-application Open tests do not
+validate this route or prove Chromium's protocol-token consumption. Views still
+emit messages and perform no process or URI IO.
 
 ## Native behavior
 
