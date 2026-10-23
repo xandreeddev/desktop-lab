@@ -1,0 +1,244 @@
+{
+  "schema": 1,
+  "status": "scoped-native-ime-and-normal-resources-collected-host-ineligible",
+  "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+  "integration_head_commit": "3560e3b6db1d769fbfa68e3a8731c8fe6bb21961",
+  "pull_request": 102,
+  "candidate_delivery_status": "unmerged_candidate_at_this_recording",
+  "production_candidate_is_accepted_main": false,
+  "performance_accepted": false,
+  "scope": "Source-specific coherent candidate deployment, owned-peer native IME and one normal uninstrumented resource interval, plus a separately failed owned Display attempt. Host pressure prevents RSS-budget acceptance. This report has no presentation interval, physical 4K/fractional-output resource test or causal performance comparison. Earlier sources and failed/recovered reports remain unchanged.",
+  "evidence_sha256": {
+    "deployment": "6d0c2b6c820396dd03284db1886a617e6580a5b27aaf94c27be6148ac78f4ad8",
+    "native_ime": "7226315d8984ecbb76218b06849fb5cb5cce7ed559f39d67233e32ca9c074231",
+    "normal_measurement": "8dc50b699010d9b0fc39e4d783d39dc740b900756a7b3f3301ad5d07eca8132c",
+    "normal_collector": "183f75fa3f465db79d1def3ff4adc0a327551c23715e7ad71ad25af8621ec5c0",
+    "release_manifest": "5b228fa1bbdc71c50a245edcb70e726ef4d5826f476ba261e53042023d322aec",
+    "display_failed_attempt": "0988114eabd8d4e86295a0f1e3f96faff0b20a2980d2e4013ab963a9186adf6c"
+  },
+  "binaries": {
+    "lucent-desktop": {
+      "sha256": "7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08",
+      "bytes": 37170280
+    },
+    "lucent-cli": {
+      "sha256": "4779a67d85f8c61e144a33e49030c5a63086de8ee5eb3c6fa8ce9de79ae46c28",
+      "bytes": 409112
+    },
+    "lucent-menu": {
+      "sha256": "f881d6c8ed34274c943e8ba0122d29d8f58fe10b8ef58b1ae064a75cc8f17d00",
+      "bytes": 24272248
+    },
+    "lucent-lock": {
+      "sha256": "3b011bc35e824fcb3d282d255d2c6cb990b39497fb0411274e758144b2a65ff0",
+      "bytes": 26916616
+    },
+    "lucent-greeter": {
+      "sha256": "dcfcfc178c8e1658f1d9e463be6c7f4bba1447488a6da4972f3de7db62b6a9eb",
+      "bytes": 26821256
+    },
+    "lucent-polkit": {
+      "sha256": "1032d070c4527c6c7cb22d0341c888ec8313597e04645f8d87d4b5832842e4a5",
+      "bytes": 24468144
+    },
+    "international-text": {
+      "sha256": "2eb5e9b3fe0150390ec7826944567df41391b884d14feb2c9820209f74c04e79",
+      "bytes": 24181544
+    },
+    "input-method-peer": {
+      "sha256": "ae704abdc17de18c55a08620f3bc4b8f7c38d45293d4f8b043856486fa97186a",
+      "bytes": 940024
+    },
+    "application-intent": {
+      "sha256": "3ca345c52367bebca54320d4c8b4734758fb3b2d285d2ab7a44e38c53e68508b",
+      "bytes": 26418048
+    }
+  },
+  "deployment": {
+    "success": true,
+    "coherent_six_and_root_verified": true,
+    "supervised_beyond_initial_deadline": true,
+    "user_state_preserved": true,
+    "secure_configuration_preserved": true,
+    "settings_or_theme_written": false,
+    "greetd_restarted": false,
+    "acceptance_executables_installed": false,
+    "acceptance_executables_staged": true,
+    "changed_support": []
+  },
+  "native_ime": {
+    "passed": true,
+    "source_commits": {
+      "desktop": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+      "example": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+      "peer": "26d03adf476af44c97fb7dcdbfb75cbdc2112770"
+    },
+    "binaries": {
+      "desktop": "7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08",
+      "example": "2eb5e9b3fe0150390ec7826944567df41391b884d14feb2c9820209f74c04e79",
+      "peer": "ae704abdc17de18c55a08620f3bc4b8f7c38d45293d4f8b043856486fa97186a"
+    },
+    "harness_files_match_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+    "harness_sha256": "2a82f25ec8520e63db314053b01b8ff91571411b85a28ddaeb200a266a99db55",
+    "policy_sha256": "7f248944c390a7cb3e3f4ba49c8484feebf175584f2374f606cbd58c05cf5455",
+    "pixel_proof_helper_sha256": "5de1178e3b94c4552bfd768edcf827ceb4ad3ee7424d7d347dcc29a195139d6b",
+    "feature_checks": {
+      "native_preedit_ink_and_caret_advance_without_commit": true,
+      "commit_and_surrounding_delete_and_history": true,
+      "masked_focus_retires_composition": true,
+      "multiline_commit_and_cursor_rectangle": true,
+      "native_rtl_visual_navigation": true
+    },
+    "restoration_checks": {
+      "owned_example_and_peer_units_retired": true,
+      "owned_peer_transport_closed": true,
+      "settings_and_wallpaper_preserved": true,
+      "output_and_workspace_preserved": true,
+      "pointer_restored": true
+    },
+    "feature_checks_passed": 5,
+    "restoration_checks_passed": 5,
+    "preedit_pixel_evidence": {
+      "new_noncaret_ink_pixels": 70,
+      "caret_advance_pixels": 42,
+      "scope": "Owned mapped-popup position and popup-local hints locate caret; new foreground ink excludes both caret strips with stable background."
+    },
+    "owned_units_retired": true,
+    "scope": "One prepared native output; independent non-replacing input-method peer, no third-party IME/hardware claim",
+    "not_established": [
+      "Third-party IME interoperability",
+      "Physical or cross-output text input",
+      "Broader GUI clipboard, pixel/scroll and delayed-transfer/focus races",
+      "Frame pacing or resource-budget acceptance"
+    ]
+  },
+  "environment": {
+    "runtime": "QEMU guest; one virtual compositor output",
+    "renderer": "AMD RADV RENOIR Vulkan",
+    "driver": "Mesa 26.2.2-arch1.1",
+    "output": {
+      "width": 1920,
+      "height": 1080,
+      "scale": 1,
+      "transform": 0,
+      "refreshRate": 60.0
+    },
+    "media": {
+      "sha256": "9bfaece1a34f02067005190a26c9dc5ba0e83e74875653c8336c022d133ebc35",
+      "codec": "h264",
+      "pixel_format": "yuv420p",
+      "width": 3840,
+      "height": 2160,
+      "source_rate": "60/1",
+      "duration_seconds": 28.333333,
+      "playback_setting": "source",
+      "converted_target_pixels": [
+        1920,
+        1080
+      ]
+    },
+    "quality_scope": "The fixed 4K 60 FPS source, source-rate playback preference, output density and existing effects/motion are unchanged. The preference does not establish delivered frame rate. 4K is the source video resolution, separate from the tested output resolution. No hardware video decoding claim."
+  },
+  "normal_uninstrumented_resources": {
+    "state": "collected",
+    "mode": "resources",
+    "binary_sha256": "7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08",
+    "seconds": 120.00080094800069,
+    "sample_count": 480,
+    "sample_period_seconds": 0.25,
+    "mean_rss_mib": 237.98256022135416,
+    "sampled_peak_rss_mib": 238.03515625,
+    "process_lifetime_high_water_mib": 240.21484375,
+    "cpu_percent_one_logical_core": 194.2903698626392,
+    "guest_process_swap_mib_max": 0.0,
+    "instrumentation": {
+      "frames": false,
+      "presentation": false,
+      "source_pts": false
+    },
+    "source_pts_samples": 0,
+    "presentation_samples": 0,
+    "preservation_verified": true,
+    "collector_preservation": {
+      "settings_bytes_inode": true,
+      "process_and_installed_binary": true,
+      "output_state": true,
+      "playback_generation": true
+    },
+    "eligible": false,
+    "ineligible_reasons": [
+      "host_swap_activity",
+      "host_full_stall_pressure"
+    ],
+    "rss_target_mib": 300,
+    "observed_sampled_peak_exceeds_target": false,
+    "normal_uninstrumented_rss_target_met": null,
+    "scope": "Desktop-process RSS includes its mappings; this is not a host helper/service MemoryPeak, GPU allocation total or hardware decode measurement. Sampled interval peak and process-lifetime high-water are distinct."
+  },
+  "host_pressure": {
+    "seconds": 122.06325904299956,
+    "cpu_busy_fraction": 0.4481177132095412,
+    "minimum_available_mib": 4967.17578125,
+    "swap_in_delta": 6094,
+    "swap_out_delta": 0,
+    "psi_fraction": {
+      "cpu": {
+        "full": 0.0,
+        "some": 0.004934752723485842
+      },
+      "io": {
+        "full": 0.3502575577220913,
+        "some": 0.5777315021152909
+      },
+      "memory": {
+        "full": 5.603651789758009e-06,
+        "some": 5.792078677425311e-06
+      }
+    },
+    "ineligible_reasons": [
+      "host_swap_activity",
+      "host_full_stall_pressure"
+    ]
+  },
+  "remaining": [
+    "Eligible normal and animated RSS/presentation observations under unchanged thresholds",
+    "Actual source-rate presentation/FPS and smooth-animation evidence on this candidate",
+    "3840x2160 output at scale 1.5 and broader output/hardware workflows",
+    "Native default-handler application acceptance remains separate from the earlier explicit-application Open results",
+    "CI success, normal merge and publication each require their own exact-source receipt; native observations do not imply delivery acceptance"
+  ],
+  "non_claims": [
+    "No performance or RSS-budget acceptance from below 300 MiB sampled RSS under host pressure",
+    "No causal gain over 8e/9b/bf98/35ed or another unmatched source/workload",
+    "No presentation, visible-pixel, physical scanout or animation timing conclusion from this uninstrumented run",
+    "Five recorded Display observations do not establish successful full-trial completion or restoration; the attempt remains failed",
+    "No promotion of this candidate to accepted main or completion of the seven-gap goal"
+  ],
+  "display_failed_attempt": {
+    "overall_passed": false,
+    "runtime_source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+    "desktop_sha256": "7de90a04d86621d7f51aa19f37f74c5a0675aaa17557dfb9255c9e437d4acb08",
+    "harness_sha256": "4795d03c500e70fea09b5eed1d237a0d31363c7f14ef2f18d2b3eb0f20a3b66f",
+    "guest_helper_sha256": "3eb7bc11738b69fddf862ac6fca3a7211c5aabf38a4c5d9b7f629ac49356aff2",
+    "fresh_off_reference_sha256": "fdeb012ad594cebecc633b165240978c06f9e3b67dbb27aa61d3a2d79e1aa49f",
+    "checks_observed_before_failure": [
+      "two_output_draft_has_no_native_effect",
+      "two_output_apply_explicit_revert",
+      "two_output_fractional_scale_timeout_revert",
+      "two_output_native_keep_complete_monitor_tail",
+      "owned_peer_rotation_apply_and_revert"
+    ],
+    "checks_observed_count": 5,
+    "failure": "bounded_guest_transport_failed",
+    "owner": {
+      "success": false,
+      "restoration": null,
+      "failure": "foreign_or_uncertain_cursor_movement_blocks_warp",
+      "cleanup_blocked": "foreign_or_uncertain_cursor_movement_blocks_warp"
+    },
+    "cleanup_pending": "ValueError",
+    "physical_or_secure_output_acceptance": false,
+    "presentation_or_performance_acceptance": false,
+    "scope": "Five reported observations precede an overall failed attempt. Original panel input stays on the 1x output while the owned headless peer changes. No successful full trial, completed restoration, native enable/disable, fractionally scaled Displays-panel input or physical rotation acceptance is claimed. A later recovery, if executed, needs separate evidence and cannot relabel this failed attempt."
+  }
+}

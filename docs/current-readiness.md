@@ -46,6 +46,46 @@ failed attempts and their independent recoveries remain in
 [the ledger](implementation-status.json) and the source-specific reports below.
 Accessibility remains user-deferred.
 
+## Separate current-source candidate observations
+
+The unmerged [PR102](https://github.com/xandreeddev/desktop-lab/pull/102)
+candidate has a coherent release built at
+`26d03adf476af44c97fb7dcdbfb75cbdc2112770`. Its later documentation integration
+head is `3560e3b6`; that does not change the deployed binary's source identity.
+The [candidate's native report](../reports/measurements/lucent-runtime-26d-native-trial.json)
+records a successful six-client/root-greeter deployment with user state and
+security preserved. An owned-peer IME run on the same source passes five feature
+and five restoration checks, including visible preedit ink and caret advance.
+Third-party IMEs, physical/cross-output input and broader clipboard workflows
+remain separate acceptance.
+
+A normal, uninstrumented **120.000801-second** interval on that candidate
+observes **237.983 MiB mean / 238.035 MiB sampled peak RSS**, **240.215 MiB
+process-lifetime high-water RSS**, **194.290% of one logical core** and zero
+desktop-process swap. The actual output is one virtual **1920×1080 at 60 Hz,
+scale 1**, using RADV; the unchanged **3840×2160 H.264 60 FPS source** is
+configured for source-rate playback. The source video resolution is separate from the output resolution.
+Density, effects and motion were preserved.
+
+The interval is **ineligible**: the host records **6094 swap-in pages** and
+**0.350258 I/O full-stall fraction**. The normal RSS-target result remains
+`null`, despite the observed sampled peak below 300 MiB. CPU, presentation and
+source tracing are off; no presentation/PTS samples exist. This supplies no FPS,
+animation-pacing, causal performance-gain or actual 4K/scale-1.5 output result.
+
+A separate Display attempt records five checks before an overall failure,
+including the four earlier owned-peer flows and a peer-rotation Apply/Revert
+observation. It fails with `bounded_guest_transport_failed`; the owner reports
+`success=false`, `restoration=null` and
+`foreign_or_uncertain_cursor_movement_blocks_warp`. Those observations establish
+no successful full trial, completed restoration, native enable/disable or input
+on a fractionally scaled Displays panel. Any later recovery requires separate
+evidence; it cannot change this failed report's outcome.
+
+These candidate receipts supplement the historical snapshots above. They do not
+promote PR102 to accepted main, close the performance or hardware gaps, or mark
+the seven-gap goal complete.
+
 ## What the status words mean
 
 | Claim | What it establishes | What it does not establish |

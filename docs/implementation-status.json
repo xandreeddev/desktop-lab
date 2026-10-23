@@ -1321,6 +1321,45 @@
       "native_harness_source_file": "vm/test-component-lab.py",
       "native_harness_source_file_sha256": "a8cf098d12715e54ba5b966d19dcfb496e3bd70e93d81bfe60ed2555bcdbc377",
       "harness_identity_scope": "Recorded executed helper bytes correspond to the file at efeaf6d1; this does not relabel the separately identified native Lab binary as a build of that commit."
+    },
+    "runtime_candidate_26d": {
+      "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+      "integration_head_commit": "3560e3b6db1d769fbfa68e3a8731c8fe6bb21961",
+      "pull_request": 102,
+      "accepted_main": false,
+      "performance_accepted": false,
+      "report": "reports/measurements/lucent-runtime-26d-native-trial.json",
+      "coherent_six_and_root_deployed": true,
+      "native_ime_feature_checks_passed": 5,
+      "native_ime_restoration_checks_passed": 5,
+      "normal_resource_interval_seconds": 120.00080094800069,
+      "normal_mean_rss_mib": 237.98256022135416,
+      "normal_sampled_peak_rss_mib": 238.03515625,
+      "process_lifetime_high_water_mib": 240.21484375,
+      "cpu_percent_one_logical_core": 194.2903698626392,
+      "guest_process_swap_mib_max": 0.0,
+      "eligible": false,
+      "ineligible_reasons": [
+        "host_swap_activity",
+        "host_full_stall_pressure"
+      ],
+      "host_swap_in_pages": 6094,
+      "host_io_full_stall_fraction": 0.3502575577220913,
+      "normal_uninstrumented_rss_target_met": null,
+      "source_pts_samples": 0,
+      "presentation_samples": 0,
+      "scope": "Separate unmerged PR102 candidate observations, not a current live VM monitor or accepted-main deployment. The unchanged4K 60 H264 source targets one 1080p60/scale1 output; an actual4K/scale1.5 output and presentation FPS are untested. Host pressure prevents budget acceptance; no causal improvement is inferred. Earlier requirement histories, flags and delivery/native snapshots remain unchanged.",
+      "failed_display_attempt": {
+        "report": "reports/measurements/lucent-runtime-26d-native-trial.json",
+        "evidence_sha256": "0988114eabd8d4e86295a0f1e3f96faff0b20a2980d2e4013ab963a9186adf6c",
+        "overall_passed": false,
+        "checks_observed_before_failure": 5,
+        "failure": "bounded_guest_transport_failed",
+        "owner_success": false,
+        "restoration": null,
+        "cleanup_blocked": "foreign_or_uncertain_cursor_movement_blocks_warp",
+        "scope": "Five observations before failure do not establish full-trial success or completed restoration. No native enable/disable or fractionally scaled Displays-panel input acceptance. Any later recovery is separate evidence."
+      }
     }
   },
   "requirements": [
