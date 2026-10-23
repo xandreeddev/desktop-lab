@@ -3,7 +3,7 @@
 
 --begin requires a fresh reviewed 1080p resource binding and exact VM UUID.
 Later requests use its new private receipt. No measurement is performed here;
-the unchanged 82aa wrapper can sample the resulting, freshly bound 4K runtime.
+the reviewed 9eb resource wrapper can sample the freshly bound 4K runtime.
 Presentation is refused before transport because nested tracing recovery is absent.
 """
 import argparse
@@ -22,10 +22,10 @@ import time
 
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = '26d03adf476af44c97fb7dcdbfb75cbdc2112770'
+SOURCE = '9eb41939d47ced5be2012bff41a1f2f5768d6ee7'
 PINS = {
-    'wrapper': ('.cache/daily-runtime-measurement-26d03adf/wrapper.py', '82aa55ac97c320ba41e1749e1482d0b8046cc083ef06a15cacbd584506617546'),
-    'runtime_output_proof.py': ('.cache/daily-runtime-measurement-26d03adf/guest-probe.py', 'bb64de9a4282d45ff71be651b54ec98973e32a424cc513a7a805c57c40d97b2b'),
+    'wrapper': ('.cache/daily-runtime-measurement-9eb41939-release/wrapper.py', 'dbf9dc96407897665f6902e10982ce66bb05b87f7c28e42d4b16942d47dc281a'),
+    'runtime_output_proof.py': ('.cache/daily-runtime-measurement-9eb41939-release/guest-probe.py', 'bb64de9a4282d45ff71be651b54ec98973e32a424cc513a7a805c57c40d97b2b'),
     'units.py': ('.cache/amd-native-context-controller-btrfs-fix/qualified/units.py', '9a088150a982a844b775f2078731482bd0064a1a5985217a193336adc8000df2'),
     'preservation.py': ('.cache/amd-native-context-controller-btrfs-fix/qualified/preservation.py', 'ecd796f7bce24e4ea153633089595c7ba4d5604959ca5f0131367832b173e2a3'),
     'readiness.py': ('.cache/amd-native-context-controller-btrfs-fix/qualified/readiness.py', 'c0074ece3388723608430e98ffaec82811acea278c0160e9de014abfcef48baf'),
@@ -81,7 +81,7 @@ def qualify(binding_path, binding_sha, vm_uuid, *, fresh):
         raw = read(main / relative)
         require(sha(raw) == expected, 'frozen_resource_helper_changed')
         sources[name] = raw
-    wrapper = module('frozen_26d_resource_wrapper', main / PINS['wrapper'][0])
+    wrapper = module('frozen_9eb_resource_wrapper', main / PINS['wrapper'][0])
     wrapper.qualify()  # Local archive/source checks only; no native binaries.
     for relative in CANONICAL:
         raw = read(ROOT / relative)
