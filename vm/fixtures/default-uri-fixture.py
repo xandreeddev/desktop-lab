@@ -26,6 +26,7 @@ import stat
 import subprocess
 import sys
 import time
+from urllib.error import URLError
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -177,6 +178,84 @@ def launch(run, run_id, uri=None):
     result = subprocess.run(argv, env=environment, capture_output=True, timeout=8)
     p.require(result.returncode == 0, 'owned_browser_request_admitted')
     return {'admitted': True}
+
+
+def warm_native_clients():
+    result = subprocess.run(['hyprctl', '-j', 'clients'], capture_output=True, timeout=5)
+    p.require(result.returncode == 0 and len(result.stdout) + len(result.stderr) <= 1024 * 1024,
+              'bounded_warm_native_client_observation')
+    return json.loads(result.stdout)
+
+
+def warm_ready(run, run_id):
+    """Read-only barrier before the canonical first immutable browser lease.
+
+    The original event already owns this process birth and private startup
+    declaration. Nothing here writes, refreshes or adopts a persisted lease.
+    Missing mapping/DevTools readiness is bounded waiting; authority changes
+    block the run with fixed diagnostics rather than disappearing in a retry.
+    """
+    phase = 'context'
+    def waiting():
+        return {'ready': False, 'blocked': False, 'phase': phase}
+    try:
+        run, _, base = context(run, run_id)
+        admitted(run, run_id, config=False)
+        p.require(not os.path.lexists(run / 'default-closing') and not os.path.lexists(run / 'closing'),
+                  'open_warm_browser_readiness_required')
+        p.require(not os.path.lexists(run / 'chromium-lease.json')
+                  and not os.path.lexists(run / 'browser-admission.json'),
+                  'warm_readiness_never_refreshes_an_existing_immutable_lease')
+        phase = 'original_event'
+        recorded = base.events(run)
+        p.require(len(recorded) == 1 and recorded[0]['operation'] == 'open'
+                  and recorded[0]['uris'] == [] and not recorded[0]['fresh_token_present']
+                  and not recorded[0]['legacy_startup_present'], 'one_original_warm_request_required')
+        event = recorded[0]
+        _, manifest = base.context(run, run_id)
+        origin, declared = event['origin'], manifest['browser_startup']
+        p.require(event['cgroup'] == origin['unit']['group'], 'original_warm_unit_required')
+        phase = 'original_birth'
+        # Exec can still be crossing the recorded Python/launcher boundary.
+        # Check birth here; the mapped-browser observer below owns executable,
+        # command and scope proof without persisting an intermediate lease.
+        p.require(type(origin['process']['pid']) is int and origin['process']['pid'] > 1
+                  and isinstance(origin['process']['start'], str)
+                  and re.fullmatch(r'[1-9][0-9]{0,19}', origin['process']['start'])
+                  and not base.chromium.original_gone(origin['process']),
+                  'original_warm_process_birth_required')
+        phase = 'mapped_client'
+        clients = warm_native_clients()
+        mapped = p.warm_client(clients, origin['process']['pid'], declared['class'])
+        if mapped is None:
+            return waiting()
+        phase = 'authority_before'
+        before = base.chromium.observe(origin, declared)
+        phase = 'cdp_endpoint'
+        try:
+            endpoint = base.browser_endpoint(run)
+        except FileNotFoundError:
+            return waiting()
+        phase = 'blank_control'
+        try:
+            control = p.warm_control(base.browser_pages(run))
+        except (ConnectionError, TimeoutError, URLError):
+            return waiting()
+        if control is None:
+            return waiting()
+        phase = 'authority_after'
+        base.chromium.observe(origin, declared, before)
+        phase = 'mapped_client_after'
+        p.require(p.warm_client(warm_native_clients(),
+                               origin['process']['pid'], declared['class']) == mapped,
+                  'warm_native_mapping_changed_during_readiness')
+        phase = 'cdp_endpoint_after'
+        p.require(base.browser_endpoint(run) == endpoint, 'warm_cdp_endpoint_changed_during_readiness')
+        return {'ready': True, 'blocked': False, 'phase': 'ready'}
+    except Exception as error:
+        name = type(error).__name__
+        return {'ready': False, 'blocked': True, 'phase': phase,
+                'error_class': name if name in p.WARM_ERROR_CLASSES else 'OtherError'}
 
 
 def notify(run, run_id, sequence):
@@ -389,7 +468,7 @@ def watchdog(run, run_id):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('operation', choices=('prepare', 'publish', 'admission', 'warm', 'open',
-                                              'notify', 'observe-note', 'wait-expiry', 'watchdog', 'finish', 'state',
+                                              'warm-ready', 'notify', 'observe-note', 'wait-expiry', 'watchdog', 'finish', 'state',
                                               'security', 'retire-guardian'))
     parser.add_argument('directory', type=Path)
     parser.add_argument('run_id')
@@ -398,6 +477,9 @@ def main():
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     if args.operation == 'watchdog':
         watchdog(args.directory, args.run_id)
+        return
+    if args.operation == 'warm-ready':
+        print(json.dumps(warm_ready(args.directory, args.run_id)))
         return
     run, _, base = context(args.directory, args.run_id)
     if args.operation in ('prepare', 'publish', 'admission'):

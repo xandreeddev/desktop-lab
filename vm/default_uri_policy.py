@@ -194,3 +194,54 @@ def notification_absence(snapshot, records):
                 visible.append(identifier)
     require(count <= len(known), 'foreign_remaining_notification_preserved')
     return count == 0 and not visible
+
+
+WARM_PHASES = ('context', 'original_event', 'original_birth', 'mapped_client', 'authority_before',
+               'cdp_endpoint', 'blank_control', 'authority_after', 'mapped_client_after',
+               'cdp_endpoint_after', 'ready')
+WARM_ERROR_CLASSES = ('ValueError', 'AssertionError', 'FileNotFoundError', 'PermissionError',
+                      'TimeoutError', 'TimeoutExpired', 'ConnectionError', 'ConnectionRefusedError',
+                      'ConnectionResetError', 'JSONDecodeError', 'URLError', 'HTTPError', 'OSError',
+                      'OtherError')
+
+
+def warm_client(clients, pid, app_class):
+    """One actual mapped window of the original temporary browser, or not ready."""
+    require(type(clients) is list and len(clients) <= 32, 'bounded_warm_native_clients')
+    if not clients:
+        return None
+    require(len(clients) == 1, 'sole_owned_warm_native_client_required')
+    client = clients[0]
+    require(type(pid) is int and pid > 1 and type(client.get('pid')) is int and client['pid'] == pid
+            and client.get('class') == app_class and client.get('mapped') is True
+            and client.get('hidden') is False and isinstance(client.get('address'), str)
+            and re.fullmatch(r'0x[0-9a-fA-F]{1,32}', client['address']),
+            'original_owned_mapped_warm_client_required')
+    return {key: client[key] for key in ('pid', 'class', 'address')}
+
+
+def warm_control(pages):
+    """CDP has no page during startup; any nonblank/extra page blocks proof."""
+    require(type(pages) is list and len(pages) <= 32, 'bounded_warm_cdp_pages')
+    if not pages:
+        return None
+    require(len(pages) == 1 and pages[0].get('url') == 'about:blank'
+            and isinstance(pages[0].get('id'), str)
+            and re.fullmatch(r'[A-Za-z0-9-]{1,128}', pages[0]['id']),
+            'sole_blank_warm_control_required')
+    return dict(pages[0])
+
+
+def warm_diagnostic(value):
+    """Allow only fixed readiness labels; never relay native exception text."""
+    require(type(value) is dict and set(value) <= {'ready', 'blocked', 'phase', 'error_class'}
+            and type(value.get('ready')) is bool and type(value.get('blocked')) is bool
+            and value.get('phase') in WARM_PHASES and not (value['ready'] and value['blocked'])
+            and (not value['ready'] or value['phase'] == 'ready')
+            and (value['phase'] != 'ready' or value['ready'])
+            and (value['ready'] or value['blocked']
+                 or value['phase'] in ('mapped_client', 'cdp_endpoint', 'blank_control'))
+            and (('error_class' in value) == value['blocked'])
+            and (not value['blocked'] or value['error_class'] in WARM_ERROR_CLASSES),
+            'bounded_warm_readiness_reply_required')
+    return dict(value)

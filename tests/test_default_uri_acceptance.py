@@ -378,6 +378,196 @@ class NotificationExpiry(unittest.TestCase):
                 driver.wait_expiry(Path('/tmp/unused-owned-fixture'), 'abcdef123456')
 
 
+class WarmStartupBarrier(unittest.TestCase):
+    def fixture(self, run):
+        origin = {'unit': {'group': '/owned/run-original.service'},
+                  'process': {'pid': 321, 'start': '12345'}}
+        declared = {'class': 'LucentIntentabcdef123456'}
+        event = {'operation': 'open', 'uris': [], 'fresh_token_present': False,
+                 'legacy_startup_present': False, 'origin': origin, 'cgroup': origin['unit']['group']}
+        lease = {'process': {'pid': 321, 'start': '12345', 'group': origin['unit']['group']},
+                 'scope': None, 'command': {'sha256': 'before-title'}}
+        client = {'pid': 321, 'class': declared['class'], 'address': '0xabc',
+                  'mapped': True, 'hidden': False}
+        endpoint = {'port': 23456, 'browser': '/devtools/browser/owned', 'file': [1, 2]}
+        control = {'id': 'owned-blank', 'url': 'about:blank', 'title': 'about:blank'}
+        base = types.SimpleNamespace(
+            events=Mock(return_value=[event]), context=Mock(return_value=(run, {'browser_startup': declared})),
+            chromium=types.SimpleNamespace(original_gone=Mock(return_value=False), observe=Mock(return_value=lease)),
+            browser_endpoint=Mock(return_value=endpoint), browser_pages=Mock(return_value=[control]),
+            browser_lease=Mock(side_effect=AssertionError('no immutable lease before readiness')),
+            browser_authority=Mock(side_effect=AssertionError('no immutable admission before readiness')),
+            original_receipt=Mock(side_effect=AssertionError('no immutable writes in read-only barrier')))
+        return base, origin, declared, lease, client, endpoint, control
+
+    def probe(self, run, base, clients):
+        with patch.object(driver, 'context', return_value=(run, {}, base)), \
+             patch.object(driver, 'admitted'), \
+             patch.object(driver, 'warm_native_clients', side_effect=clients), \
+             patch.object(driver.p, 'private', side_effect=AssertionError('no private writes')) as write:
+            value = driver.warm_ready(run, 'abcdef123456')
+        write.assert_not_called()
+        base.browser_lease.assert_not_called()
+        base.browser_authority.assert_not_called()
+        base.original_receipt.assert_not_called()
+        return value
+
+    def test_full_readonly_ready_proof_is_stable_before_any_immutable_admission(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run = Path(temporary)
+            base, origin, declared, lease, client, _, _ = self.fixture(run)
+            self.assertEqual(self.probe(run, base, [[client], [client]]),
+                             {'ready': True, 'blocked': False, 'phase': 'ready'})
+            self.assertEqual(base.chromium.observe.call_args_list,
+                             [unittest.mock.call(origin, declared), unittest.mock.call(origin, declared, lease)])
+            self.assertEqual(base.browser_endpoint.call_count, 2)
+            self.assertEqual(list(run.iterdir()), [])
+
+    def test_missing_mapping_and_endpoint_are_not_ready_without_immutable_writes(self):
+        for missing in ('mapping', 'endpoint', 'control', 'connection'):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory() as temporary:
+                run = Path(temporary)
+                base, _, _, _, client, _, _ = self.fixture(run)
+                if missing == 'endpoint':
+                    base.browser_endpoint.side_effect = FileNotFoundError()
+                if missing == 'control':
+                    base.browser_pages.return_value = []
+                if missing == 'connection':
+                    base.browser_pages.side_effect = driver.URLError('private opaque token must not escape')
+                result = self.probe(run, base, [[]] if missing == 'mapping' else [[client]])
+                self.assertFalse(result['ready']); self.assertFalse(result['blocked'])
+                self.assertEqual(result['phase'], {'mapping': 'mapped_client', 'endpoint': 'cdp_endpoint',
+                                                  'control': 'blank_control', 'connection': 'blank_control'}[missing])
+                self.assertNotIn('private opaque token', json.dumps(result))
+                self.assertEqual(list(run.iterdir()), [])
+
+    def test_unknown_process_birth_is_an_ownership_failure_before_mapping_or_cdp(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run = Path(temporary)
+            base, _, _, _, _, _, _ = self.fixture(run)
+            base.chromium.original_gone.return_value = True
+            result = self.probe(run, base, [])
+            self.assertEqual(result, {'ready': False, 'blocked': True, 'phase': 'original_birth',
+                                      'error_class': 'ValueError'})
+            base.chromium.observe.assert_not_called(); base.browser_endpoint.assert_not_called()
+
+    def test_unstable_title_scope_or_original_authority_is_never_adopted(self):
+        for change in ('title', 'scope', 'unit'):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                run = Path(temporary)
+                base, _, _, lease, client, _, _ = self.fixture(run)
+                # The canonical observer's expected=first contract rejects a
+                # changed title/scope/unit. The barrier must neither refresh
+                # that observation nor turn this ownership error into waiting.
+                changed = json.loads(json.dumps(lease))
+                if change == 'title': changed['command']['sha256'] = 'changed-title'
+                if change == 'scope':
+                    changed['scope'] = {'invocation': 'new-scope'}
+                    changed['process']['group'] = '/owned/app-original.scope'
+                if change == 'unit': changed['unit'] = {'invocation': 'successor'}
+                def observe(origin, declared, expected=None):
+                    if expected is None:
+                        return lease
+                    self.assertEqual(expected, lease)
+                    if changed != expected:
+                        raise ValueError('opaque token and argv must stay private')
+                    self.fail('changed external state must not match the expected observation')
+                base.chromium.observe.side_effect = observe
+                result = self.probe(run, base, [[client]])
+                self.assertEqual(result, {'ready': False, 'blocked': True, 'phase': 'authority_after',
+                                          'error_class': 'ValueError'})
+                self.assertEqual(base.chromium.observe.call_count, 2)
+                self.assertNotIn('opaque token', json.dumps(result))
+                self.assertEqual(list(run.iterdir()), [])
+
+    def test_foreign_or_changed_mapping_and_nonblank_controls_fail_before_write(self):
+        for change in ('foreign_pid', 'floating_pid', 'foreign_class', 'unmapped', 'mapping_changed', 'nonblank', 'extra_control',
+                       'endpoint_changed'):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                run = Path(temporary)
+                base, _, _, _, client, endpoint, control = self.fixture(run)
+                first = dict(client); second = dict(client)
+                if change == 'foreign_pid': first['pid'] = 999
+                if change == 'floating_pid': first['pid'] = float(first['pid'])
+                if change == 'foreign_class': first['class'] = 'PersonalBrowser'
+                if change == 'unmapped': first['mapped'] = False
+                if change == 'mapping_changed': second['address'] = '0xdef'
+                if change == 'nonblank': base.browser_pages.return_value = [{**control, 'url': 'https://foreign.test'}]
+                if change == 'extra_control': base.browser_pages.return_value = [control, {**control, 'id': 'another'}]
+                if change == 'endpoint_changed':
+                    base.browser_endpoint.side_effect = [endpoint, {**endpoint, 'port': endpoint['port'] + 1}]
+                result = self.probe(run, base, [[first], [second]])
+                self.assertFalse(result['ready']); self.assertTrue(result['blocked'])
+                self.assertEqual(list(run.iterdir()), [])
+
+    def test_existing_failed_or_admitted_immutable_files_are_never_refreshed(self):
+        for name in ('chromium-lease.json', 'browser-admission.json'):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                run = Path(temporary)
+                file = run / name; file.write_bytes(b'existing immutable evidence')
+                base, _, _, _, _, _, _ = self.fixture(run)
+                result = self.probe(run, base, [])
+                self.assertTrue(result['blocked']); self.assertEqual(result['phase'], 'context')
+                self.assertEqual(file.read_bytes(), b'existing immutable evidence')
+                base.events.assert_not_called(); base.chromium.observe.assert_not_called()
+
+    def test_controller_commits_exactly_once_only_after_readonly_ready(self):
+        history = []
+        results = iter([{'ready': False, 'blocked': False, 'phase': 'mapped_client'},
+                        {'ready': False, 'blocked': False, 'phase': 'cdp_endpoint'},
+                        {'ready': True, 'blocked': False, 'phase': 'ready'}])
+        control = {'id': 'blank', 'url': 'about:blank'}
+        def call(operation, *args, **kwargs):
+            history.append(operation)
+            if operation == 'warm-ready': return next(results)
+            self.assertEqual(operation, 'browser-snapshot'); self.assertTrue(kwargs['canonical'])
+            self.assertEqual(json.loads(args[0]), {'identity': None})
+            return {'identity': {'control': control}, 'pages': [control]}
+        def wait(predicate, label, timeout):
+            self.assertEqual(timeout, 30)
+            for _ in range(3):
+                if predicate(): return True
+            self.fail(label)
+        diagnostic = {}
+        self.assertEqual(controller.admit_warm_browser(call, wait, diagnostic)['pages'], [control])
+        self.assertEqual(history, ['warm-ready', 'warm-ready', 'warm-ready', 'browser-snapshot'])
+        self.assertEqual(diagnostic['polls'], 3); self.assertTrue(diagnostic['immutable_admission'])
+
+    def test_controller_does_not_commit_or_blindly_retry_ownership_failure(self):
+        history = []
+        def call(operation, *args, **kwargs):
+            history.append(operation)
+            self.assertEqual(operation, 'warm-ready')
+            return {'ready': False, 'blocked': True, 'phase': 'authority_after', 'error_class': 'ValueError'}
+        def wait(predicate, label, timeout): return predicate()
+        diagnostic = {}
+        with self.assertRaisesRegex(ValueError, 'warm_readonly_authority_after_refused'):
+            controller.admit_warm_browser(call, wait, diagnostic)
+        self.assertEqual(history, ['warm-ready']); self.assertFalse(diagnostic['immutable_admission'])
+        self.assertEqual(diagnostic['phases'][0]['phase'], 'authority_after')
+
+    def test_wait_return_without_ready_proof_cannot_persist_an_immutable_lease(self):
+        history = []
+        def call(operation, *args, **kwargs):
+            history.append(operation)
+            self.assertEqual(operation, 'warm-ready')
+            return {'ready': False, 'blocked': False, 'phase': 'mapped_client'}
+        with self.assertRaisesRegex(ValueError, 'warm_readonly_startup_not_proven'):
+            controller.admit_warm_browser(call, lambda probe, *args, **kwargs: probe(), {})
+        self.assertEqual(history, ['warm-ready'])
+
+    def test_diagnostic_packets_cannot_relay_raw_exception_or_environment_values(self):
+        for value in ({'ready': False, 'blocked': True, 'phase': 'argv=private', 'error_class': 'ValueError'},
+                      {'ready': False, 'blocked': True, 'phase': 'authority_before', 'error_class': 'private token'},
+                      {'ready': False, 'blocked': False, 'phase': 'original_birth'},
+                      {'ready': True, 'blocked': False, 'phase': 'ready', 'argv': ['private']}):
+            diagnostic = {}
+            with self.assertRaisesRegex(ValueError, 'bounded_warm_readiness_reply'):
+                controller.admit_warm_browser(lambda *_: value, lambda probe, *args, **kwargs: probe(), diagnostic)
+            self.assertEqual(diagnostic['phases'], [])
+            self.assertNotIn('private', json.dumps(diagnostic))
+
+
 class GuardianRecovery(unittest.TestCase):
     def test_independent_expiry_restores_both_configurations_after_controller_disappears(self):
         with tempfile.TemporaryDirectory() as temporary:

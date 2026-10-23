@@ -6,6 +6,8 @@ VM UUID. This never deploys, logs in, creates activation tokens or forces focus.
 The existing fixture owns a warm Chromium profile/HTTP listener. Real pointer
 and Tab/Enter requests must each deliver fresh authority through xdg-open and
 create one exact fresh document. Browser focus is reported independently.
+Read-only startup proof precedes the canonical first immutable browser lease;
+fixed readiness phases distinguish missing startup state from ownership errors.
 Every browser window in the new private test profile is closed by canonical
 teardown. All content there, including user-added content, is disposable and
 unprotected; private evidence may remain. Existing personal profiles, browser
@@ -117,6 +119,32 @@ def normal_off(snapshot):
             and snapshot['presentation_feedback']['enabled'] is False
             and all(row['source_frames'] is None for row in snapshot['client']['live_wallpaper']['producers']),
             'normal_off_instrumentation_required')
+
+
+def admit_warm_browser(call, wait, diagnostics):
+    """Persist the first canonical lease only after read-only startup proof."""
+    from default_uri_policy import warm_diagnostic
+    diagnostics.update(polls=0, phases=[], immutable_admission=False)
+    proven = False
+    def ready():
+        nonlocal proven
+        diagnostics['phase'] = 'readonly_probe'
+        value = warm_diagnostic(call('warm-ready'))
+        diagnostics['polls'] += 1
+        require(diagnostics['polls'] <= 256, 'bounded_warm_readiness_observations')
+        if not diagnostics['phases'] or diagnostics['phases'][-1] != value:
+            require(len(diagnostics['phases']) < 64, 'bounded_warm_readiness_phase_history')
+            diagnostics['phases'].append(value)
+        require(not value['blocked'], 'warm_readonly_' + value['phase'] + '_refused')
+        proven = value['ready']
+        return value['ready']
+    wait(ready, 'warm_readonly_startup_not_ready', timeout=30)
+    require(proven, 'warm_readonly_startup_not_proven')
+    diagnostics['phase'] = 'immutable_admission'
+    value = call('browser-snapshot', json.dumps({'identity': None}), canonical=True)
+    require(value['pages'] == [value['identity']['control']], 'only_original_blank_control')
+    diagnostics['immutable_admission'] = True
+    return value
 
 
 def run(args, manifest):
@@ -251,16 +279,8 @@ def run(args, manifest):
         def browser_state():
             return call('browser-snapshot', json.dumps({'identity': browser}), canonical=True)
         wait(lambda: len(call('state', canonical=True)['events']) == 1, 'warm_original_browser_recorded')
-        def browser_ready():
-            try:
-                return bool(browser_state())
-            except old.CheckFailure:
-                # This only admits initial creation of our original blank
-                # browser, before any input. Native authority is checked again.
-                return False
-        wait(browser_ready, 'warm_original_browser_control_admitted')
-        browser = browser_state()['identity']
-        require(browser_state()['pages'] == [browser['control']], 'only_original_blank_control')
+        report['warm_readiness'] = {}
+        browser = admit_warm_browser(call, wait, report['warm_readiness'])['identity']
         warm = call('state', canonical=True)['events'][0]
         require(not warm['fresh_token_present'] and not warm['legacy_startup_present'], 'warm_setup_has_no_input_authority')
         call('publish')
