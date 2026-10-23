@@ -431,6 +431,175 @@ class BridgeDiagnostics(unittest.TestCase):
         action.assert_not_called()
 
 
+class NativeFlowDiagnostics(unittest.TestCase):
+    def history(self, expanded=False):
+        run_id = 'abcdef123456'
+        uri = 'http://127.0.0.1:1234/owned'
+        group = {'id': 'notification-group-name:Lucent owned URI ' + run_id,
+                 'x': 20, 'y': 30, 'width': 200, 'height': 32,
+                 'clip': {'x': 0, 'y': 0, 'width': 1920, 'height': 1080}}
+        link = {**group, 'id': 'notification-body-7-2-0/link/' + uri, 'y': 80}
+        surface = {'id': 'notifications', 'role': 'notifications', 'instance': 'original-history',
+                   'output': 'Virtual-1', 'keyboard': 'exclusive', 'pointer_input': 'all',
+                   'frames': 3, 'native_frames': 2, 'density': 1, 'width': 1920, 'height': 1080,
+                   'buffer_width': 1920, 'buffer_height': 1080, 'hits': [group, link] if expanded else [group]}
+        layer = {'namespace': 'lucent-notifications', 'address': '0xabc', 'pid': 123,
+                 'x': 0, 'y': 0, 'w': 1920, 'h': 1080}
+        return {'surfaces': [surface]}, {'Virtual-1': {'levels': {'3': [layer]}}}, run_id, uri
+
+    def test_group_hit_matches_actual_client_and_fixture_declarations_before_a_link_exists(self):
+        view = (ROOT / 'lucent/apps/lucent-desktop/src/notifications/view.rs').read_text()
+        grouping = (ROOT / 'lucent/crates/lucent-usecases/src/notifications.rs').read_text()
+        self.assertIn('.id(format!("notification-group-{}", group.key))', view)
+        self.assertIn('format!("name:{}", note.app)', grouping)
+        tree = ast.parse((ROOT / 'vm/fixtures/default-uri-fixture.py').read_text())
+        notify = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'notify')
+        call = next(node for node in ast.walk(notify) if isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute) and node.func.attr == 'Notify')
+        self.assertEqual(ast.literal_eval(call.args[0].left), 'Lucent owned URI ')
+        snapshot, layers, run_id, uri = self.history()
+        value = controller.group_target(snapshot, layers, run_id, 123)
+        self.assertEqual(value['hit']['id'], 'notification-group-name:Lucent owned URI ' + run_id)
+        self.assertEqual(value['point'], (120, 46))
+        with self.assertRaisesRegex(ValueError, 'one_current_selected_notification_link'):
+            controller.target(snapshot, layers, 7, uri, 123)
+
+    def test_group_hit_rejects_foreign_duplicate_unsubmitted_scaled_and_clipped_targets(self):
+        snapshot, layers, run_id, _ = self.history()
+        surface = snapshot['surfaces'][0]
+        for changed in ({'hits': []}, {'hits': surface['hits'] * 2}, {'native_frames': 0},
+                        {'keyboard': 'none'}, {'density': 2}, {'output': 'foreign'}):
+            with self.subTest(changed=tuple(changed)), self.assertRaises(ValueError):
+                controller.group_target({'surfaces': [{**surface, **changed}]}, layers, run_id, 123)
+        with self.assertRaises(RuntimeError):
+            controller.group_target(snapshot, layers, run_id, 456)
+        clipped = {**surface['hits'][0], 'clip': {'x': 0, 'y': 0, 'width': 4, 'height': 4}}
+        with self.assertRaises(RuntimeError):
+            controller.group_target({'surfaces': [{**surface, 'hits': [clipped]}]}, layers, run_id, 123)
+        with self.assertRaisesRegex(ValueError, 'owned_notification_group_run_required'):
+            controller.group_target(snapshot, layers, 'private_lowercase_secret', 123)
+
+    def pointer_fixture(self, kind, case):
+        snapshot, layers, run_id, uri = self.history(expanded=True)
+        target = (controller.group_target(snapshot, layers, run_id, 123) if kind == 'group'
+                  else controller.target(snapshot, layers, 7, uri, 123))
+        current = {'x': 1, 'y': 1}
+        from application_intent_policy import CursorOwnership
+        cursor = CursorOwnership(dict(current))
+        report = {'native_input': {}}
+        controller.begin_native_case(report, case)
+        events = []
+        focused = False
+        def observe():
+            events.append('observe')
+            return {**target, 'focus': target['hit']['id'] if focused else None}
+        def move(point):
+            events.append('cursor_dispatch');current.update(zip(('x', 'y'), point))
+        def button(down):
+            nonlocal focused
+            events.append('button_down' if down else 'button_up')
+            focused = down
+        def wait(predicate, label, timeout):
+            self.assertEqual(timeout, 3)
+            self.assertTrue(predicate(), label)
+        held = []
+        return report, cursor, lambda: dict(current), observe, move, button, wait, held, events
+
+    def test_actual_group_setup_pointer_flow_is_separate_from_pointer_and_keyboard_link_proof(self):
+        for case in ('pointer', 'keyboard'):
+            with self.subTest(case=case):
+                report, cursor, read, observe, move, button, wait, held, events = self.pointer_fixture('group', case)
+                with patch.object(controller.time, 'monotonic', return_value=0):
+                    controller.native_pointer_control(report, 'group', observe, cursor, read, move, button, wait, 10, held.append)
+                self.assertEqual(held, [True, False])
+                self.assertEqual([event for event in events if event.startswith('button_')], ['button_down', 'button_up'])
+                self.assertEqual(cursor.expected, (120, 46))
+                self.assertTrue(report['native_flow']['group_dispatch_attempted'])
+                self.assertTrue(report['native_flow']['group_dispatch_returned'])
+                self.assertFalse(report['native_flow']['pointer_dispatch_attempted'])
+                self.assertEqual(report['native_input'], {})
+                self.assertNotIn('failure', report)
+
+    def test_failure_before_button_dispatch_retains_the_exact_phase_without_claiming_input(self):
+        for kind in ('group', 'pointer'):
+            with self.subTest(kind=kind):
+                report, cursor, read, _, move, button, wait, held, events = self.pointer_fixture(kind, 'pointer')
+                observe = Mock(side_effect=ValueError('one_current_selected_notification_link'))
+                with self.assertRaises(ValueError):
+                    controller.native_pointer_control(report, kind, observe, cursor, read, move, button, wait, 10, held.append)
+                failure = report['failure']
+                self.assertEqual(failure['phase'], kind + '_target_capture')
+                self.assertEqual(failure['current_case'], 'pointer')
+                self.assertFalse(failure[kind + '_dispatch_attempted'])
+                self.assertEqual(events, []);self.assertEqual(held, [])
+
+    def test_failed_focus_after_dispatch_is_not_replaced_by_release_failure(self):
+        for kind in ('group', 'pointer'):
+            with self.subTest(kind=kind):
+                report, cursor, read, observe, move, button, _, held, _ = self.pointer_fixture(kind, 'pointer')
+                label = 'native_pointer_focus_on_owned_group' if kind == 'group' else 'native_pointer_focus_on_owned_link'
+                def release_fails(down):
+                    if not down:
+                        raise ValueError('private_lowercase_secret')
+                    return button(down)
+                with patch.object(controller.time, 'monotonic', return_value=0), self.assertRaises(ValueError):
+                    controller.native_pointer_control(report, kind, observe, cursor, read, move, release_fails,
+                        Mock(side_effect=ValueError(label)), 10, held.append)
+                failure = report['failure']
+                self.assertEqual(failure['phase'], kind + '_focus_wait')
+                self.assertEqual(failure['fixed_reason'], label)
+                self.assertTrue(failure[kind + '_dispatch_attempted']);self.assertTrue(failure[kind + '_dispatch_returned'])
+                self.assertEqual(held, [True])
+                self.assertNotIn('private', json.dumps(failure))
+
+    def test_failed_dispatch_reports_attempt_without_claiming_a_successful_return(self):
+        report, cursor, read, observe, move, _, wait, held, _ = self.pointer_fixture('pointer', 'pointer')
+        def button(down):
+            if down:
+                raise TimeoutError('private_lowercase_secret')
+        with patch.object(controller.time, 'monotonic', return_value=0), self.assertRaises(TimeoutError):
+            controller.native_pointer_control(report, 'pointer', observe, cursor, read, move, button, wait, 10, held.append)
+        failure = report['failure']
+        self.assertEqual(failure['phase'], 'pointer_button_down')
+        self.assertTrue(failure['pointer_dispatch_attempted']);self.assertFalse(failure['pointer_dispatch_returned'])
+        self.assertEqual(held, [True, False]);self.assertNotIn('fixed_reason', failure)
+
+    def test_native_case_phase_and_reason_labels_are_explicit_and_private_values_are_redacted(self):
+        for case in ('private_lowercase_secret', None, 1):
+            report = {}
+            with self.assertRaisesRegex(ValueError, 'known_native_case_required'):
+                controller.begin_native_case(report, case)
+            self.assertEqual(report, {})
+        report = {};controller.begin_native_case(report, 'keyboard');action = Mock()
+        for phase in ('private_lowercase_secret', 'pointer_button_down'):
+            with self.assertRaises(ValueError):controller.native_step(report, phase, action)
+        action.assert_not_called()
+        with self.assertRaisesRegex(ValueError, 'known_native_pointer_control_required'):
+            controller.native_pointer_control(report, 'pointer', *([action] * 8))
+        controller.record_failure(report, ValueError('private_lowercase_secret'), 'private_lowercase_secret')
+        self.assertEqual(report['failure']['phase'], 'setup')
+        self.assertNotIn('private', json.dumps(report))
+
+    def test_every_literal_controller_and_pinned_native_policy_failure_label_is_admitted(self):
+        labels = {'bounded_subprocess_failed'}
+        for relative in ('vm/test-default-uri-notification.py', 'vm/application_intent_policy.py', 'vm/multi_output_policy.py'):
+            for node in ast.walk(ast.parse((ROOT / relative).read_text())):
+                if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                    continue
+                index = {'require': 1, 'wait': 1, 'unique': 2}.get(node.func.id)
+                if index is not None and len(node.args) > index:
+                    argument = node.args[index]
+                    values = [argument] if isinstance(argument, ast.Constant) else list(ast.walk(argument)) if isinstance(argument, ast.IfExp) else []
+                    labels.update(value.value for value in values if isinstance(value, ast.Constant) and isinstance(value.value, str))
+                if node.func.id == 'ValueError' and len(node.args) == 1 and isinstance(node.args[0], ast.Constant):
+                    labels.add(node.args[0].value)
+        self.assertTrue(labels <= set(controller.FAILURE_REASONS), sorted(labels - set(controller.FAILURE_REASONS)))
+        for label in labels:
+            report = {};controller.begin_native_case(report, 'pointer')
+            controller.record_failure(report, ValueError(label), 'case_preflight')
+            self.assertEqual(report['failure']['fixed_reason'], label)
+
+
 class AdmissionAndBridge(unittest.TestCase):
     def test_imports_and_default_controller_do_not_access_transport_or_native_desktop(self):
         with patch.object(subprocess, 'run', side_effect=AssertionError('transport forbidden')), \
