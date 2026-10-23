@@ -13,8 +13,12 @@ use wgpu::{
 };
 
 // Resource policy in the renderer, independent of desktop layout/theme tokens.
+// One 3840x2160 RGBA upload needs 33,177,600 bytes; 32 MiB admits one reusable
+// completed slot. Two slots still cap parallel FHD uploads. This bounds owned
+// payload only; completed large buffers may stay reusable after downsizing,
+// and native/fallback allocations remain separate.
 const MAX_SLOTS: usize = 2;
-const PAYLOAD_BUDGET: u64 = 16 * 1024 * 1024;
+const PAYLOAD_BUDGET: u64 = 32 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Layout {
