@@ -9,10 +9,29 @@ import ctypes
 import hashlib
 import io
 import json
+import math
 import os
 from pathlib import Path
 import re
 import stat
+
+
+# Finite test-fixture budgets, independent of desktop authority or performance.
+NOTIFICATION_CASES = ('pointer', 'keyboard')
+NOTIFICATION_TTL_MS = 60000
+NOTIFICATION_EXPIRY_SECONDS = 65
+NOTIFICATION_POST_EXPIRY_SECONDS = 15
+BRIDGE_COMMAND_SECONDS = 30
+BRIDGE_EXPIRY_SECONDS = 70
+NATIVE_INPUT_SECONDS = 180
+CANONICAL_HTTP_SECONDS = 210
+HTTP_DELIVERY_MARGIN_SECONDS = 30
+BROWSER_RUNTIME_SECONDS = 240
+GUARDIAN_OPEN_SECONDS = 210
+GUARDIAN_CLEANUP_RESERVE_SECONDS = 120
+GUARDIAN_STARTUP_MARGIN_SECONDS = 15
+GUARDIAN_UNIT_RUNTIME_SECONDS = 345
+FINISH_RECEIPT_SECONDS = 90
 
 
 def require(value, reason):
@@ -264,6 +283,19 @@ BRIDGE_REASONS = ('unclassified_fixture_failure', 'owned_default_uri_run',
                   'original_owned_http_listener', 'fresh_exact_desktop_pid',
                   'bounded_fixed_security_file', 'fixed_security_file_changed',
                   'owned_chromium_lease_refused')
+
+
+def bridge_timeout(operation):
+    require(operation in BRIDGE_OPERATIONS, 'known_default_uri_bridge_operation')
+    return BRIDGE_EXPIRY_SECONDS if operation == 'wait-expiry' else BRIDGE_COMMAND_SECONDS
+
+
+def admit_notification_case(now, input_deadline, http_deadline):
+    require(all(type(value) in (int, float) and math.isfinite(value)
+                for value in (now, input_deadline, http_deadline)), 'finite_notification_case_budget_required')
+    require(now >= 0 and now + NOTIFICATION_TTL_MS / 1000 + NOTIFICATION_POST_EXPIRY_SECONDS
+            <= min(input_deadline, http_deadline), 'notification_case_budget_exhausted')
+    return True
 
 
 def bridge_error(error, operation, phase):

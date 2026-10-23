@@ -34,9 +34,6 @@ import default_uri_policy as p
 from owned_application_units import (capture_unit_origin, assert_unit_origin, unit_snapshot,
                                      retire_original_unit, _retirement_drained)
 
-NOTIFICATION_TTL_MS = 25000
-
-
 def base_fixture():
     path = Path(__file__).with_name('fixture.py')
     spec = importlib.util.spec_from_file_location('canonical_intent_fixture', path)
@@ -167,7 +164,7 @@ def launch(run, run_id, uri=None):
         arguments = [uri]
     argv = ['systemd-run', '--user', '--quiet', '--collect', '--service-type=exec',
             '--expand-environment=no', '--slice=app.slice', '--property=ExitType=cgroup',
-            '--property=RuntimeMaxSec=150', '--property=MemoryMax=768M',
+            '--property=RuntimeMaxSec=' + str(p.BROWSER_RUNTIME_SECONDS), '--property=MemoryMax=768M',
             '--property=UnsetEnvironment=' + ('DESKTOP_STARTUP_ID' if environment.get('XDG_ACTIVATION_TOKEN')
                                              else 'XDG_ACTIVATION_TOKEN DESKTOP_STARTUP_ID')]
     for name in ('HOME', 'PATH', 'DISPLAY', 'WAYLAND_DISPLAY', 'XDG_RUNTIME_DIR',
@@ -262,7 +259,7 @@ def warm_ready(run, run_id):
 def notify(run, run_id, sequence):
     run, header, _ = context(run, run_id)
     admitted(run, run_id)
-    p.require(sequence in ('pointer', 'keyboard'), 'known_native_notification_interaction')
+    p.require(sequence in p.NOTIFICATION_CASES, 'known_native_notification_interaction')
     path = run / ('notification-' + sequence + '.json')
     p.require(not path.exists(), 'new_owned_transient_notification')
     plan = json.loads(p.read(run / 'default-plan.json'))
@@ -275,13 +272,13 @@ def notify(run, run_id, sequence):
         identifier = int(proxy.Notify('Lucent owned URI ' + run_id, 0, '', 'Owned URI ' + sequence,
             '<a href="' + html.escape(plan['http']['targets'][0]['uri'], quote=True) + '">Open owned document</a>',
             dbus.Array([], signature='s'), dbus.Dictionary({'transient': dbus.Boolean(True)}, signature='sv'),
-            NOTIFICATION_TTL_MS, timeout=5))
+            p.NOTIFICATION_TTL_MS, timeout=5))
     finally:
         bus.close()
     p.require(0 < identifier < 2**32, 'concrete_owned_notification_id')
     # These are observed routing facts, not authority over a mutable wire ID.
     p.private(path, json.dumps({'id': identifier, 'owner': owner, 'desktop_pid': header['desktop_pid'],
-                                'expires_after': time.monotonic() + NOTIFICATION_TTL_MS / 1000}).encode())
+                                'expires_after': time.monotonic() + p.NOTIFICATION_TTL_MS / 1000}).encode())
     return {'id': identifier}
 
 
@@ -319,7 +316,7 @@ def observed_notes(run):
 
 def observe_note(run, run_id, sequence):
     admitted(run, run_id)
-    p.require(sequence in ('pointer', 'keyboard') and not (run / 'default-closing').exists(),
+    p.require(sequence in p.NOTIFICATION_CASES and not (run / 'default-closing').exists(),
               'open_native_fixture_note_required')
     record = json.loads(p.read(run / ('notification-' + sequence + '.json')))
     plan = json.loads(p.read(run / 'default-plan.json'))
@@ -343,7 +340,7 @@ def wait_expiry(run, run_id):
     try:
         started = time.monotonic()
         p.require(all(type(row['expires_after']) in (int, float)
-                      and 0 <= row['expires_after'] <= started + NOTIFICATION_TTL_MS / 1000 + 1
+                      and 0 <= row['expires_after'] <= started + p.NOTIFICATION_TTL_MS / 1000 + 1
                       for row in records), 'bounded_fixture_expiry_timestamp')
         after = max([row['expires_after'] for row in records], default=0)
         while True:
@@ -352,9 +349,9 @@ def wait_expiry(run, run_id):
                 p.require(owner == record['owner'], 'notification_daemon_changed_during_expiry_wait')
             absent = p.notification_absence(inspection(), records)
             now = time.monotonic()
+            p.require(now - started < p.NOTIFICATION_EXPIRY_SECONDS, 'remaining_notification_preserved_after_expiry_window')
             if absent and now >= after:
                 break
-            p.require(now - started < 30, 'remaining_notification_preserved_after_expiry_window')
             time.sleep(.2)
     finally:
         bus.close()
@@ -437,7 +434,7 @@ def watchdog(run, run_id):
         p.private(run / 'default-ready.json', b'{"ready":true}\n')
         result = {'success': False, 'restoration': {}}
         try:
-            deadline = time.monotonic() + 150
+            deadline = time.monotonic() + p.GUARDIAN_OPEN_SECONDS
             while not (run / 'default-finish').exists() and time.monotonic() < deadline:
                 time.sleep(.2)
         finally:
