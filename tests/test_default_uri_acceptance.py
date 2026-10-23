@@ -1268,5 +1268,301 @@ class GuardianRecovery(unittest.TestCase):
             self.assertFalse(result['restoration']['notification_history_closed'])
 
 
+class BrowserKeyHandoff(unittest.TestCase):
+    def event(self, **changes):
+        return {'count': 1, 'event': {'trusted': True, 'key': 'a', 'code': 'KeyA', 'ctrl': False,
+                'alt': False, 'meta': False, 'shift': False, 'repeat': False, **changes}}
+
+    def snapshot(self, opened=False, frames=11, keyboard='none', pointer='none', instance='original'):
+        return {'client': {'notification_history_open': opened}, 'surfaces': [{
+            'id': 'notifications', 'role': 'notifications', 'instance': instance,
+            'native_frames': frames, 'keyboard': keyboard, 'pointer_input': pointer}]}
+
+    def flow(self, case='pointer', observed=None, snapshot=None, initial=None, guard_snapshots=None, preflight=None):
+        report = {};controller.begin_native_case(report, case)
+        operations = []
+        reads = iter([{'count': 0, 'event': None} if initial is None else initial,
+                      *(observed if observed is not None else [self.event()])])
+        snapshots = iter(guard_snapshots) if guard_snapshots is not None else None
+        def call(operation, packet):
+            self.assertEqual(json.loads(packet), {'case': case})
+            operations.append(operation)
+            return {'armed': True, 'count': 0} if operation == 'browser-key-arm' else next(reads)
+        def guard():
+            operations.append('guard')
+            return (next(snapshots) if snapshots is not None else
+                    self.snapshot() if snapshot is None else snapshot), []
+        def wait(predicate, label):
+            for _ in range(3):
+                result = predicate()
+                if result:
+                    return result
+            raise ValueError(label)
+        send = Mock(side_effect=lambda: operations.append('KEY_A'))
+        def input_preflight():
+            operations.append('input_preflight')
+            if preflight is not None:
+                preflight()
+        def run():
+            with patch.object(controller.time, 'monotonic', return_value=1):
+                controller.assert_browser_key_handoff(report, {'case': case},
+                    {'id': 'notifications', 'instance': 'original', 'native_frames': 10},
+                    call, guard, wait, input_preflight, send, 100)
+        return report, operations, send, run
+
+    def test_both_cases_send_exactly_one_key_after_arming_and_normal_input_release(self):
+        for case in ('pointer', 'keyboard'):
+            with self.subTest(case=case):
+                report, operations, send, run = self.flow(case)
+                run()
+                send.assert_called_once_with()
+                proof = report['browser_key_handoff'][case]
+                self.assertTrue(proof['accepted'])
+                self.assertEqual(proof['event'], self.event())
+                self.assertEqual(proof['release_observation']['native_frames_advanced'], True)
+                self.assertEqual(operations, ['browser-key-arm', 'guard', 'browser-key-read',
+                                              'input_preflight', 'guard', 'KEY_A', 'browser-key-read', 'guard'])
+                self.assertEqual(proof['pre_dispatch_release']['notification_policy'], 'exit-paint')
+                self.assertEqual(proof['post_event_release']['notification_policy'], 'exit-paint')
+
+    def test_real_normal_toast_policy_is_nonmodal_after_close_and_still_requires_actual_key(self):
+        toast = self.snapshot(keyboard='on-demand', pointer='content')
+        for case in ('pointer', 'keyboard'):
+            with self.subTest(case=case):
+                report, _, send, run = self.flow(case, guard_snapshots=[self.snapshot(), toast, toast])
+                run()
+                send.assert_called_once_with()
+                proof = report['browser_key_handoff'][case]
+                self.assertTrue(proof['accepted'])
+                self.assertEqual(proof['pre_dispatch_release']['notification_policy'], 'normal-toast')
+                self.assertEqual(proof['post_event_release']['notification_policy'], 'normal-toast')
+
+    def test_reopened_modal_or_changed_surface_in_last_guard_blocks_key_after_release_and_cdp_read(self):
+        for changed in (self.snapshot(opened=True, keyboard='exclusive', pointer='all'),
+                        self.snapshot(keyboard='exclusive', pointer='all'), self.snapshot(instance='newer'),
+                        self.snapshot(frames=10)):
+            with self.subTest(changed=changed):
+                report, operations, send, run = self.flow(guard_snapshots=[self.snapshot(), changed])
+                with self.assertRaises(ValueError):
+                    run()
+                send.assert_not_called()
+                self.assertEqual(operations, ['browser-key-arm', 'guard', 'browser-key-read', 'input_preflight', 'guard'])
+                self.assertFalse(report['browser_key_handoff']['pointer']['key_dispatch_attempted'])
+                self.assertEqual(report['failure']['phase'], 'browser_key_before_release_assert')
+
+    def test_reopened_modal_or_changed_final_surface_rejects_successful_key_receipt(self):
+        for changed in (self.snapshot(opened=True, keyboard='exclusive', pointer='all'),
+                        self.snapshot(keyboard='exclusive', pointer='all'), self.snapshot(instance='newer'),
+                        self.snapshot(frames=10)):
+            with self.subTest(changed=changed):
+                report, _, send, run = self.flow(guard_snapshots=[self.snapshot(), self.snapshot(), changed])
+                with self.assertRaises(ValueError):
+                    run()
+                send.assert_called_once_with()
+                proof = report['browser_key_handoff']['pointer']
+                self.assertFalse(proof['accepted'])
+                self.assertEqual(proof['event'], self.event())
+                self.assertEqual(report['failure']['phase'], 'browser_key_after_release_assert')
+
+    def test_repeat_original_us_caps_and_binding_admission_is_after_cdp_read_before_last_ui_guard(self):
+        tree = ast.parse((ROOT / 'vm/test-application-actions.py').read_text())
+        original = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                        and node.name == 'keyboard_preflight')
+        for changes, bindings, expected in (({'layout': 'se'}, [], 'plain_us_main_keyboard_with_caps_off'),
+                                            ({'capsLock': True}, [], 'plain_us_main_keyboard_with_caps_off'),
+                                            ({}, [{'modmask': 0, 'key': 'a'}], 'typed_query_keys_have_no_compositor_bindings')):
+            with self.subTest(changes=changes, bindings=bindings):
+                main = {'main': True, 'layout': 'us', 'variant': '', 'capsLock': False, **changes}
+                session = Mock(side_effect=[json.dumps({'keyboards': [main]}), json.dumps(bindings)])
+                namespace = {'json': json, 'session': session, 'require': controller.require}
+                exec(compile(ast.Module(body=[original], type_ignores=[]), '<reviewed-original-preflight>', 'exec'), namespace)
+                report, operations, send, run = self.flow(preflight=namespace['keyboard_preflight'])
+                with self.assertRaisesRegex(ValueError, '^' + expected + '$'):
+                    run()
+                send.assert_not_called()
+                self.assertEqual(operations, ['browser-key-arm', 'guard', 'browser-key-read', 'input_preflight'])
+                self.assertEqual(report['failure']['phase'], 'browser_key_input_preflight')
+                self.assertEqual(report['failure']['fixed_reason'], expected)
+
+    def test_missing_key_fails_without_retry_and_preserves_first_failure(self):
+        report, _, send, run = self.flow(observed=[{'count': 0, 'event': None}] * 3)
+        with self.assertRaisesRegex(ValueError, '^owned_browser_received_native_key_a$'):
+            run()
+        send.assert_called_once_with()
+        self.assertFalse(report['browser_key_handoff']['pointer']['accepted'])
+        self.assertEqual(report['failure']['phase'], 'browser_key_delivery_wait')
+        first = dict(report['failure'])
+        controller.record_failure(report, ValueError('cleanup'), 'setup')
+        self.assertEqual(report['failure'], first)
+
+    def test_preexisting_key_or_failed_dispatch_never_becomes_owned_success(self):
+        report, _, send, run = self.flow(initial=self.event())
+        with self.assertRaisesRegex(ValueError, '^no_key_before_owned_native_dispatch$'):
+            run()
+        send.assert_not_called()
+        report, _, send, run = self.flow()
+        send.side_effect = ValueError('bounded_subprocess_failed')
+        with self.assertRaisesRegex(ValueError, '^bounded_subprocess_failed$'):
+            run()
+        send.assert_called_once_with()
+        proof = report['browser_key_handoff']['pointer']
+        self.assertTrue(proof['key_dispatch_attempted'])
+        self.assertFalse(proof['key_dispatch_returned'])
+        self.assertFalse(proof['accepted'])
+        self.assertEqual(report['failure']['phase'], 'browser_key_dispatch')
+
+    def test_open_history_or_unreleased_input_or_unsubmitted_exit_never_sends_key(self):
+        for snapshot in (self.snapshot(opened=True), self.snapshot(keyboard='exclusive'),
+                         self.snapshot(pointer='all'), self.snapshot(keyboard='on-demand', pointer='all'),
+                         self.snapshot(keyboard='exclusive', pointer='content'), self.snapshot(frames=10)):
+            with self.subTest(snapshot=snapshot):
+                report, _, send, run = self.flow(snapshot=snapshot)
+                with self.assertRaisesRegex(ValueError, '^natural_notification_input_release_required$'):
+                    run()
+                send.assert_not_called()
+                self.assertFalse(report['browser_key_handoff']['pointer']['key_dispatch_attempted'])
+
+    def test_retired_surface_is_recorded_without_inventing_native_frame_proof(self):
+        value = controller.notification_handoff({'client': {'notification_history_open': False}, 'surfaces': []}, {})
+        self.assertTrue(value['surface_absent'])
+        self.assertIsNone(value['native_frames_advanced'])
+        with self.assertRaisesRegex(ValueError, '^notification_handoff_surface_identity_changed$'):
+            controller.notification_handoff(self.snapshot(instance='newer'),
+                {'id': 'notifications', 'instance': 'original', 'native_frames': 10})
+
+    def test_only_one_trusted_exact_unmodified_key_a_can_pass(self):
+        for changes in ({'trusted': False}, {'key': 'other'}, {'ctrl': True}, {'alt': True},
+                        {'meta': True}, {'shift': True}, {'repeat': True}):
+            with self.subTest(changes=changes), self.assertRaisesRegex(ValueError, '^trusted_unmodified_key_a_required$'):
+                p.received_browser_key(self.event(**changes))
+        with self.assertRaises(ValueError):p.received_browser_key({**self.event(), 'count': 2})
+        for value in ({**self.event(), 'private': 'secret'}, self.event(key='secret'),
+                      self.event(code='private'), self.event(trusted=1), {'count': True, 'event': None}):
+            with self.assertRaisesRegex(ValueError, '^bounded_browser_key_result_required$'):
+                p.browser_key_observation(value)
+
+    def test_js_records_only_fixed_key_data_and_never_focuses_or_synthesizes_input(self):
+        target = {'url': 'http://127.0.0.1:1234/owned?literal=%22', 'title': 'Owned " document'}
+        for operation in ('arm', 'read'):
+            expression = p.browser_key_expression(operation, target, 'abcdef123456', 'pointer')
+            for forbidden in ('.focus(', 'bringToFront', 'activateTarget', 'dispatchEvent', 'Input.dispatch',
+                              'navigator.clipboard', 'innerHTML', 'textContent'):
+                self.assertNotIn(forbidden, expression)
+            self.assertIn(json.dumps(target['url']), expression)
+        expression = p.browser_key_expression('arm', target, 'abcdef123456', 'pointer')
+        self.assertIn('if(event.code!=="KeyA")return;', expression)
+        self.assertIn('key:event.key==="a"?"a":"other"', expression)
+        self.assertIn('trusted:event.isTrusted', expression)
+
+    def test_optional_mode_is_inert_and_adds_key_binding_checks_only_when_requested(self):
+        with patch.object(sys, 'argv', ['controller', '--assert-browser-key-handoff']), \
+             patch.object(controller, 'run', side_effect=AssertionError('native forbidden')), \
+             contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(controller.main(), 0)
+        self.assertFalse(json.loads(output.getvalue())['guest_actions'])
+        for binding in ({'modmask': 0, 'key': 'a'}, {'modmask': 0, 'keycode': 30}, {'modmask': 0, 'key': 'code:38'}):
+            controller.keyboard_preflight([binding])
+            with self.assertRaisesRegex(ValueError, '^plain_browser_key_a_must_be_unbound$'):
+                controller.keyboard_preflight([binding], browser_key=True)
+
+    def test_additional_cdp_transport_is_exact_pinned_source_and_default_never_loads_it(self):
+        self.assertEqual(hashlib.sha256(controller.key_transport()).hexdigest(), controller.KEY_CDP_SHA)
+        with patch.object(controller.Path, 'read_bytes', return_value=b'locally changed transport'):
+            with self.assertRaisesRegex(ValueError, '^reviewed_browser_key_transport_required$'):
+                controller.key_transport()
+        with patch.object(controller, 'key_transport', side_effect=AssertionError('optional transport forbidden')), \
+             patch.object(sys, 'argv', ['controller']), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(controller.main(), 0)
+
+    def test_real_mode_wires_one_linux_key_a_command_and_no_dom_key_dispatch(self):
+        tree = ast.parse((ROOT / 'vm/test-default-uri-notification.py').read_text())
+        calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Attribute) and node.func.attr == 'virsh'
+                 and any(isinstance(arg, ast.Constant) and arg.value == '30' for arg in node.args)]
+        self.assertEqual(len(calls), 1)
+        self.assertEqual([arg.value for arg in calls[0].args if isinstance(arg, ast.Constant)],
+                         ['send-key', '--codeset', 'linux', '--holdtime', '50', '30'])
+        self.assertEqual([(item.arg, ast.literal_eval(item.value)) for item in calls[0].keywords], [('capture', True)])
+        handoff = next(node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                       and isinstance(node.func, ast.Name) and node.func.id == 'assert_browser_key_handoff')
+        callback = handoff.args[6]
+        self.assertIsInstance(callback, ast.Lambda)
+        self.assertIn("old.a['keyboard_preflight']()", ast.unparse(callback))
+        self.assertIn("keyboard_preflight(json.loads(session('hyprctl', '-j', 'binds')), browser_key=True)", ast.unparse(callback))
+
+
+class OwnedBrowserKeyBridge(unittest.TestCase):
+    def fixture(self, run):
+        control = {'id': 'blank', 'url': 'about:blank', 'title': ''}
+        target = {'id': 'fresh', 'url': 'http://127.0.0.1:1234/owned', 'title': 'Owned'}
+        endpoint = {'port': 12345, 'browser': '/devtools/browser/original'}
+        identity = {'control': control, 'endpoint': endpoint}
+        request = {'identity': identity, 'before': [control], 'targets': [target], 'case': 'pointer'}
+        from application_intent_browser import pages, fresh_documents
+        base = types.SimpleNamespace(browser_authority=Mock(return_value=identity),
+            context=Mock(return_value=(run, {})), browser_pages=Mock(return_value=[control, target]),
+            request_documents=Mock(return_value=[{'uri': target['url'], 'title': target['title']}]),
+            fresh_documents=fresh_documents, browser_endpoint=Mock(return_value=endpoint), pages=pages,
+            browser_http=Mock(return_value=json.dumps([{'type': 'page', **control},
+                {'type': 'page', **target, 'webSocketDebuggerUrl': 'ws://127.0.0.1:12345/devtools/page/fresh'}])))
+        peer = Mock()
+        peer.call.return_value = {'result': {'type': 'object', 'value': {'armed': True, 'count': 0}}}
+        transport = types.SimpleNamespace(Peer=types.SimpleNamespace(connect=Mock(return_value=peer)))
+        return base, request, peer, transport
+
+    def test_actual_bridge_arms_and_reads_only_exact_original_fresh_target_without_user_gesture(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run = Path(temporary);base, request, peer, transport = self.fixture(run)
+            with patch.object(driver, 'context', return_value=(run, {'assert_browser_key_handoff': True}, base)), \
+                 patch.object(driver, 'admitted'), patch.dict(sys.modules, {'cdp_peer': transport}):
+                self.assertEqual(driver.browser_key(run, 'abcdef123456', request, True), {'armed': True, 'count': 0})
+                transport.Peer.connect.assert_called_once_with('ws://127.0.0.1:12345/devtools/page/fresh', 12345, 'fresh')
+                args = peer.call.call_args.args
+                self.assertEqual(args[0], 'Runtime.evaluate')
+                self.assertIs(args[1]['userGesture'], False)
+                self.assertIs(args[1]['returnByValue'], True)
+                peer.call.return_value = {'result': {'value': {'count': 0, 'event': None}}}
+                self.assertEqual(driver.browser_key(run, 'abcdef123456', request, False), {'count': 0, 'event': None})
+                with self.assertRaisesRegex(ValueError, '^new_key_capture_required$'):
+                    driver.browser_key(run, 'abcdef123456', request, True)
+                self.assertEqual(peer.close.call_count, 2)
+
+    def test_actual_cli_dispatches_both_key_operations_with_exact_json_request(self):
+        request = {'case': 'pointer', 'identity': {}, 'before': [], 'targets': []}
+        for operation, arm in (('browser-key-arm', True), ('browser-key-read', False)):
+            with self.subTest(operation=operation), \
+                 patch.object(sys, 'argv', ['fixture', operation, '/owned-run', 'abcdef123456', json.dumps(request)]), \
+                 patch.object(driver.signal, 'signal'), \
+                 patch.object(driver, 'context', return_value=(Path('/owned-run'), {}, Mock())), \
+                 patch.object(driver, 'browser_key', return_value={'controlled': True}) as handler, \
+                 contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(driver.main(), 0)
+                self.assertEqual(json.loads(output.getvalue()), {'controlled': True})
+                handler.assert_called_once_with(Path('/owned-run'), 'abcdef123456', request, arm)
+
+    def test_default_mode_foreign_target_and_changed_endpoint_refuse_before_cdp(self):
+        for mutation in ('default', 'foreign_target', 'endpoint'):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                run = Path(temporary);base, request, _, transport = self.fixture(run)
+                header = {'assert_browser_key_handoff': mutation != 'default'}
+                if mutation == 'foreign_target':request['targets'][0] = {**request['targets'][0], 'id': 'foreign'}
+                if mutation == 'endpoint':base.browser_endpoint.return_value = {'port': 23456}
+                with patch.object(driver, 'context', return_value=(run, header, base)), \
+                     patch.object(driver, 'admitted'), patch.dict(sys.modules, {'cdp_peer': transport}):
+                    with self.assertRaises(ValueError):driver.browser_key(run, 'abcdef123456', request, True)
+                transport.Peer.connect.assert_not_called()
+                self.assertEqual(list(run.iterdir()), [])
+
+    def test_target_navigation_after_evaluation_cannot_create_a_capture_receipt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run = Path(temporary);base, request, _, transport = self.fixture(run)
+            base.browser_pages.side_effect = [[request['before'][0], request['targets'][0]], []]
+            with patch.object(driver, 'context', return_value=(run, {'assert_browser_key_handoff': True}, base)), \
+                 patch.object(driver, 'admitted'), patch.dict(sys.modules, {'cdp_peer': transport}):
+                with self.assertRaisesRegex(ValueError, '^exact_owned_key_target_endpoint_required$'):
+                    driver.browser_key(run, 'abcdef123456', request, True)
+            self.assertEqual(list(run.iterdir()), [])
+
+
 if __name__ == '__main__':
     unittest.main()
