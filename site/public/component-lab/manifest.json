@@ -95,8 +95,8 @@
       "lucent/crates/lucent-render/src/raster.rs": "7d0a752b7563e568546c02f7c680de6584803c074d5c91bfeba736550a2b4aa9",
       "lucent/crates/lucent-render/src/scene.rs": "5e15366bf98364942136e7f45883b0cbe1feba6665d8adcc8743e62b8a45fe1e",
       "lucent/crates/lucent-render/src/stream_trace.rs": "f6390b046ba0f2d027b731a0cf17052b562520292beb1d6993e8b6bc36285a06",
-      "lucent/crates/lucent-render/src/stream_upload.rs": "628c41347aa3978aef19448f270aa4c5f7d7e38308372d79d2453b0192225e46",
-      "lucent/crates/lucent-render/src/stream_upload/tests.rs": "3200c0fe260a419425b00785bd94bd6c85be3cc553db86e34d9d588f67375fcc",
+      "lucent/crates/lucent-render/src/stream_upload.rs": "34b2b0e9f984601afc3690b6c1c7f12a32cb3f421075ed605aefe1fc58eee220",
+      "lucent/crates/lucent-render/src/stream_upload/tests.rs": "54f6850b2b91068900ffcf4191dc714f9c39d1cd792a1bec0b2ffc4419dec06d",
       "lucent/crates/lucent-render/src/wrapped_bidi_tests.rs": "386b418f778aedcaa5e633422fb1e690a04ad396bfdbd2b3b9dd451ed8f6e784",
       "lucent/crates/lucent-ui/Cargo.toml": "ea158c01c409bdac8213407763b15276d93bef1bb5d0eadfb2a309aaa3f71695",
       "lucent/crates/lucent-ui/assets/Hind-Regular.test.ttf": "01de158022f53077b52303e46de3b0ab5fb245222a7ffe25a2a57fdd9e969162",
@@ -142,7 +142,7 @@
       "lucent/crates/lucent-usecases/src/widgets.rs": "146a59d9911213f6b9ced12f3b5eec8d8295c318faff161f0d9e4f942cc284b0"
     },
     "scope": "offscreen-native",
-    "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+    "source_commit": "950f4d199c16202b18ddb41b66e724c5da2a3c07",
     "token_sha256": "6bca133253d845990df42b847b33b921d7c6d29c85c3f298516bd30a1c78fd44"
   },
   "schema_version": 1,

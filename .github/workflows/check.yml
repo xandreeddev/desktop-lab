@@ -45,6 +45,37 @@ jobs:
       - name: Install native build dependencies
         timeout-minutes: 10
         run: |
+          # Skip the slow Azure mirror without changing Ubuntu release or signing policy.
+          sudo python3 - <<'PYTHON'
+          from pathlib import Path
+          import re
+
+          sources = [path for path in (Path("/etc/apt/sources.list.d/ubuntu.sources"), Path("/etc/apt/sources.list")) if path.exists()]
+          assert sources and all(path.is_file() and not path.is_symlink() for path in sources), "Expected regular Ubuntu APT sources"
+          mirror = Path("/etc/apt/apt-mirrors.txt")
+          reference = "mirror+file:/etc/apt/apt-mirrors.txt"
+          if any(reference in line.split() for path in sources for line in path.read_text().splitlines() if not line.lstrip().startswith("#")):
+              assert mirror.is_file() and not mirror.is_symlink(), "Expected runner mirror list"
+              lines = mirror.read_text().splitlines(keepends=True)
+              entries = [tuple(line.split()) for line in lines if line.strip() and not line.lstrip().startswith("#")]
+              expected = {("http://azure.archive.ubuntu.com/ubuntu/", "priority:1"),
+                          ("https://archive.ubuntu.com/ubuntu/", "priority:2"),
+                          ("https://security.ubuntu.com/ubuntu/", "priority:3")}
+              assert len(entries) == 3 and set(entries) == expected, "Unexpected runner mirror layout"
+              updates = {mirror: "".join(line for line in lines if tuple(line.split()) != ("http://azure.archive.ubuntu.com/ubuntu/", "priority:1"))}
+          else:
+              azure = re.compile(r"(?<!\S)http://azure\.archive\.ubuntu\.com/ubuntu/?(?=\s|$)")
+              updates = {}
+              for path in sources:
+                  before = path.read_text()
+                  after = "".join(line if line.lstrip().startswith("#") else azure.sub("https://archive.ubuntu.com/ubuntu/", line) for line in before.splitlines(keepends=True))
+                  if after != before:
+                      updates[path] = after
+              assert updates, "Expected known Azure Ubuntu source; refusing a silent no-op"
+          for path, contents in updates.items():
+              path.write_text(contents)
+          print("Ubuntu HTTPS archive selected; security endpoint, suites, components and signing keys preserved")
+          PYTHON
           sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=3 -o DPkg::Lock::Timeout=60 update &&
           sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=3 -o DPkg::Lock::Timeout=60 install -y libwayland-dev libxkbcommon-dev pkg-config mesa-vulkan-drivers libpam0g-dev libpolkit-agent-1-dev libclang-dev dbus libpulse-dev libavcodec-dev libavformat-dev libavutil-dev libswscale-dev ffmpeg pipewire pipewire-pulse pipewire-bin pulseaudio-utils
       - run: rustup update stable && rustup component add rustfmt clippy
