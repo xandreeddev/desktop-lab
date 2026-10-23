@@ -1,23 +1,24 @@
 # Current daily-use readiness
 
-The current accepted integration base is
-`bdffd42438990ef546ad13f302556913339acce0`
-([PR106](https://github.com/xandreeddev/desktop-lab/pull/106)), merged normally at
-2026-10-23 21:24:25 UTC after six successful checks on exact `8d102d64` and CLEAN
-mergeability. It includes PR105's session-owned notification-history release fix and
-the 32 MiB bounded upload pool. The recorded runtime remains the archive built at
-`9eb41939`, manifest `c669b9d5`; its complete Rust, design, configuration and scripts
-Git trees are identical to accepted main. No rebuild at the merge commit is claimed.
-The source-specific report's new accepted-main follow-up records this later delivery;
-its archived UNMERGED and capture-time acceptance flags remain unchanged.
+The accepted-main checkpoint is
+`f5b6db0b4cef726891ea154faa7f3ab14fac376a`
+([PR107](https://github.com/xandreeddev/desktop-lab/pull/107)), merged normally at
+2026-10-23 22:44:33 UTC after six successful checks on exact `5d8c116b` and CLEAN
+mergeability. The archived VM runtime is still built at `9eb41939`, manifest
+`c669b9d5`; its Rust, design, configuration and scripts Git trees match this
+accepted checkpoint. No rebuild or new VM deployment is implied. The separate
+host-observer result below identifies source `6f9e75d0`, rather than that VM archive.
 
-The latest verified Pages delivery is PR106/main `bdffd424`,
-[run 40026533176](https://github.com/xandreeddev/desktop-lab/actions/runs/40026533176):
-three public pages, native manifest `d5384a6b` and PNG match their artifact; all 116
-producer inputs and 480 captures verify from the recorded `950f4d19` capture source. The last verified LAN bundle is `8b20b78a`, with
-six HTTP checks. This newer evidence/documentation source has not been locally
-Node/site-built or published here; the verified receipt covers accepted PR106 content. The prior PR102/main `6e471005` delivery and archived
-`26d03adf` source-equivalence facts remain historical evidence in the ledger.
+[Pages run 40035549254](https://github.com/xandreeddev/desktop-lab/actions/runs/40035549254)
+verifies the exact PR107/main `f5b6db0b` publication: three HTML pages, native manifest
+`d5384a6b` and a PNG match the artifact; 116 producer inputs and 480 captures verify
+from `950f4d19`. The exact same artifact is served on LAN, with 20 HTTP checks across
+root/project paths and loopback/LAN access. These are recorded source checkpoints.
+The [Pages workflow](../.github/workflows/pages.yml) builds and publishes main;
+check its exact commit/run receipts for later revisions. Earlier pending-publication
+statements in source-specific reports describe their capture checkpoints, not a standing
+claim about the page being read. Historical `26d03adf` and earlier delivery facts remain
+in the ledger.
 
 The core Wi-Fi repair, safe display editing, international text and explicit
 application-opening paths are implemented with scoped native evidence. The
@@ -65,6 +66,24 @@ failed attempts and their independent recoveries remain in
 [the ledger](implementation-status.json) and the source-specific reports below.
 Accessibility remains user-deferred.
 
+## Read-only host service observations
+
+The [host observer report](../reports/measurements/lucent-host-service-observations-6f9.json)
+records four separately built consumers from `6f9e75d0`, each observing the real host
+user's services for 15 seconds without controls or input. Four mock tests, strict release
+Clippy and all four binary builds pass. Every observed process exits successfully and
+its owned unit is inactive/collected; the audio watch explicitly returns after its own
+cancellation.
+
+Audio reports **3 outputs / 5 inputs**, including **3 monitor inputs**. Bluetooth
+reports **1 adapter / 3 catalog devices / 1 connected / 0 pairing requests**. Power's
+count-only snapshot reports **battery_present=false / 0 profiles / 0 backlights**, but conflates
+absent and unavailable capabilities. Compositor observation reports **1 monitor /
+5 workspaces / 6 windows**, with unambiguous focus. These establish adapter observation,
+not audible playback/recording, a particular paired keyboard or key events, pairing,
+physical controls, changed-state delivery, hotplug, suspend, desktop UI or performance.
+All broader hardware and seven-gap acceptance limits remain open.
+
 ## Latest recorded 9eb deployment and keyboard handoff
 
 The [source-specific trial report](../reports/measurements/lucent-runtime-9eb-native-trial.json)
@@ -103,9 +122,10 @@ read-only host I/O diagnostic is complete: global I/O full stalls are 7.13%, CPU
 is 87.85%, and 169 swap-in pages are observed. It finds no sustained NVMe saturation
 evidence and leaves the cause unresolved, with no code change, headroom-recovery proof
 or performance acceptance. This host observation is separate from the FHD guest interval.
-The integrated source checks pass 774 Python cases in 6.870 seconds and the catalogue
-check verifies nine stories/480 captures/116 inputs; local Node/site build of this
-newer source remains unrun. Performance, physical
+The pre-publication source checkpoint passed 774 Python cases in 6.870 seconds and
+the nine-story/480-capture/116-input catalogue check. Subsequent PR107 CI built and
+published the exact `f5b6db0b` artifact verified above; later revisions use their own
+workflow receipts. Performance, physical
 hardware and the overall seven-gap goal remain open; accessibility remains user-deferred.
 
 ## Recorded 26d observations captured before merge
@@ -295,8 +315,8 @@ ledger's requirement history remains useful for the broader backlog.
 | Resources and animation | The later [9eb trial](../reports/measurements/lucent-runtime-9eb-native-trial.json) observes **230.063/230.129 MiB** mean/peak RSS, **147.558% of one logical core** and zero process swap over 120.000484 seconds/480 samples on one FHD output. Host 15 swap-in pages and 0.450095 I/O full stalls make it ineligible; target `null`, all profiling OFF and no FPS samples. The recorded `26d03adf` normal interval observes **237.983/238.035 MiB** mean/peak RSS and **194.290% of one logical core**, with host-pressure eligibility failing. The older `35ed87ed` interval observes **250.581/252.395 MiB** and **154.033% of one logical core**. Its separate metadata interval records **32.2245 distinct prepared-revision advances/s** in compositor feedback, while RPC wall-time bounds record **59.7333–60.1290 prepared callbacks/s** before mailbox publication. Profiling restores off with fresh independent verification. Later [4K preflights](../reports/measurements/lucent-4k-resource-preflight-followup-26d.json) verify geometry/restoration but collect no resource interval. A subsequent one-off observation at restored FHD records **604.594 MiB RSS**, 539.586 MiB anonymous RSS and 16.242 MiB process swap; its process-lifetime HWM is 680.293 MiB. | The new 9eb 4K sampler is prepared but unrun; its latest admission refusal occurs before VM contact or creating a handoff/acquisition/binding/lease. The separate 30-second host I/O diagnostic completes without sustained NVMe saturation evidence or cause attribution; it changes no code or performance-acceptance gate. Neither earlier 26d 4K A nor B completed resource sampling: A lacked the required remaining lease and B failed host-memory admission. The one-off FHD diagnostic requires memory investigation but proves neither 4K causality nor an eligible steady-state budget result. The 9eb and 26d normal intervals and both historical 35ed phases are host-pressure-ineligible; observed RSS below 300 MiB is not accepted budget evidence, and 60 FPS presentation is not established. No causal gain, bottleneck attribution, decoder-drop, pixel-visibility or physical-scanout claim. Separate geometry-only runs record 37.0500 and later 48.3706 feedback intervals/s; the latter has 0.6585 ms mean successful draw CPU wall time. Neither has a host-pressure sample or attributes the unmeasured gaps. The short successful draw stages exclude GPU, full-loop, callback/dispatch and failed-retry timing. Eligible matched normal/animated and cold/warm evidence remains required. See [the source-specific upload trial](../reports/measurements/lucent-live-upload-35ed-native-trial.json), [shape diagnostic](../reports/measurements/lucent-native-shape-diagnostic.json), [later CPU diagnostic](../reports/measurements/lucent-native-shape-cpu-diagnostic.json) and [presentation analysis](native-presentation-analysis.md). |
 | International text | Merged `8e6d074b` implements script shaping, hard-paragraph context across soft wraps, exact row-bound visual source/caret maps, tab separator projection, deterministic fallback and opt-in text-input-v3 composition. Five owned native feature checks pass: visible preedit/caret advance, CJK commit/delete/history, masked-focus retirement, multiline composition and RTL navigation. | The fresh owned native suite passes all five feature and five restoration checks; earlier cleanup failures retain their original results. Third-party IME, broader native pixel/scroll details, delayed clipboard/focus races, physical/cross-output text and broader GUI clipboard coverage remain pending. The later Chromium/Notes test passes both directions with nine interaction and twelve restoration checks on one virtual output. Exact merged `8e6d074b` passes six CI checks, full workspace, six controlled service-protocol filters and 832 Vulkan desktop cases; those checks retain their own scope. |
 | Application integration | Accepted main includes fresh input-bound context, explicit file/URI Open, expanded XDG parsing and the canonical default-handler `UriPort::open(target, context)` path. Notification links use the SDK's optional app ID and revalidate their revision/link around token delivery; `XdgUri` forwards that context through the shared application-unit policy. Earlier local-file `8e` and HTTP `%U` `9b` results keep their original scope. The `4c9a4739` harness on coherent `35ed` passes **twelve singular HTTP `%u` feature and nine restoration checks**: pointer, socket and CLI Open each create exactly one fresh owned HTTP document; the declared Action still creates two local documents. The later [R9 default-route run](../reports/measurements/lucent-default-uri-native-26d.json), harness `563781a2` on `26d03adf`, passes five scoped checks and nine cleanup checks: native pointer and Tab/Enter each load one exact selected document through the temporary default handler with fresh context, using an already warm real browser. PR105 accepts source fix `194c0c57`; the later [9eb run](../reports/measurements/lucent-runtime-9eb-native-trial.json) separately passes five route/nine cleanup checks and both trusted browser KeyA cases after natural history close, using the same controlled warm-browser scope. | The later run establishes actual controlled-document keyboard delivery; the older R9 active-window observation alone does not. Fresh-browser initial focus, direct protocol-token consumption, external navigation, other handlers/applications and broader workflows retain separate scope. Historical explicit-application and failed default-route reports keep their source/input/cleanup outcomes. Application acceptance does not accept performance. |
-| Real-world validation | Several owned native workflows already pass. The coherent `8e6d074b` also passes 16 checks for two simultaneous compositor outputs, one headless, including real panel input at 1×/2×/1.25×, held-button retirement, same-name recreation and exact restoration. | Physical monitors/cable hotplug, suspend/resume, secure-output changes, physical Bluetooth/audio and other power/radio hardware, additional third-party tray applications/menus, other GUI clipboard applications, rich content and delayed-transfer/focus races need broader testing. One genuine wired-only NetworkManager Applet item/menu/information action passes five interaction, four cleanup and thirteen outside-worker preservation checks on unchanged `8e`. The owned real Chromium/Notes keyboard flow passes nine interaction and twelve restoration checks. The earlier output test establishes no Display transaction or presentation FPS. The historical four-flow [two-output Displays run](../reports/measurements/lucent-native-two-output-displays.json) and later [nine-flow run](../reports/measurements/lucent-native-two-output-displays-26d-nine.json) separately cover Display transactions. The later run adds virtual rotation, disable/re-enable and native input on a fractional Displays panel; it establishes no physical/secure-output behavior or pacing. |
-| Documentation accuracy | Accepted PR106/main `bdffd424` has the same Rust/design/configs/scripts trees as the archived 9eb runtime. The accepted-source follow-up, the recorded 9eb build/deployment/key-delivery evidence and its ineligible FHD resource sample are reconciled above. The latest verified Pages delivery is PR106/main `bdffd424` (116 producers/480 captures from `950f4d19`), with LAN source `8b20b78a`. Earlier deliveries and source-specific reports remain historical evidence. | This newer reconciliation still needs its own local Node/site build and publication; the verified PR106 Pages receipt predates it. Publication does not close broader application, performance or hardware work. Historical reports retain capture-time flags and failed outcomes. |
+| Real-world validation | The [6f9 host observers](../reports/measurements/lucent-host-service-observations-6f9.json) pass four 15-second read-only service observations and owned-unit completion, without controls/input. Audio, Bluetooth, power and compositor counts are scoped below; power absence/unavailability is ambiguous.  Several owned native workflows already pass. The coherent `8e6d074b` also passes 16 checks for two simultaneous compositor outputs, one headless, including real panel input at 1×/2×/1.25×, held-button retirement, same-name recreation and exact restoration. | Physical monitors/cable hotplug, suspend/resume, secure-output changes, physical Bluetooth/audio and other power/radio hardware, additional third-party tray applications/menus, other GUI clipboard applications, rich content and delayed-transfer/focus races need broader testing. One genuine wired-only NetworkManager Applet item/menu/information action passes five interaction, four cleanup and thirteen outside-worker preservation checks on unchanged `8e`. The owned real Chromium/Notes keyboard flow passes nine interaction and twelve restoration checks. The earlier output test establishes no Display transaction or presentation FPS. The historical four-flow [two-output Displays run](../reports/measurements/lucent-native-two-output-displays.json) and later [nine-flow run](../reports/measurements/lucent-native-two-output-displays-26d-nine.json) separately cover Display transactions. The later run adds virtual rotation, disable/re-enable and native input on a fractional Displays panel; it establishes no physical/secure-output behavior or pacing. |
+| Documentation accuracy | Accepted PR107/main `f5b6db0b` has source-specific CI, Pages and exact-artifact LAN delivery receipts: 3 HTML pages, manifest/PNG, 116 producers/480 captures and 20 LAN HTTP checks. New host observations keep source `6f9e75d0`; archived VM/native/performance reports retain their original source, flags and outcomes. | CI provides build/publication evidence for each exact revision; later commits need their own receipts. Published docs and read-only host observation do not establish physical controls, broader application compatibility, eligible performance or seven-gap completion. |
 
 The later [native HTTP URI result](../reports/measurements/lucent-native-http-uris-9b.json)
 uses harness `7a92749e` and coherent `9b5420b7` desktop/CLI/consumer. Pointer,

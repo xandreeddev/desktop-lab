@@ -4,12 +4,12 @@
   "status": "in_progress",
   "completion_rule": "An item is verified only when its behavior, boundary checks, documentation and applicable native integration checks have evidence. Implemented without verification remains incomplete.",
   "current_rollup": {
-    "snapshot_source_commit": "bdffd42438990ef546ad13f302556913339acce0",
+    "snapshot_source_commit": "f5b6db0b4cef726891ea154faa7f3ab14fac376a",
     "snapshot_date": "2026-10-23",
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted PR106/main bdffd424 includes the PR105 history-release client and 32 MiB bounded upload pool. Rust/design/configs/scripts Git trees equal the archived 9eb runtime; original build/deployment/native capture flags remain historical. Recorded five route checks, two trusted document-key cases and nine named cleanup checks pass in the owned warm-browser flow; the 120-second FHD interval remains host-pressure-ineligible. Last verified Pages source is PR106/main bdffd424 (run 40026533176), LAN remains 8b20, and newer evidence-docs local Node/site build/publication remain unrun. Latest 4K host-memory admission fails before VM contact or creating ownership state; a separate 30-second host I/O diagnostic completes with cause unresolved and no code/performance-acceptance change. No live VM state, general-handler/cold-browser focus, eligible 300 MiB/FPS, hardware or seven-goal completion claim.",
+    "scope": "Accepted PR107/main f5b6db0b contains the source-equivalent archived 9eb runtime and recorded native/performance evidence. Four separate source 6f9 host consumers pass actual fifteen-second read-only audio/Bluetooth/power/compositor observation and owned-unit completion. They issue no controls/input and do not establish audible audio, pairing/keyboard events, physical controls, state-change delivery, hotplug, suspend or full hardware acceptance. The earlier FHD resource interval remains ineligible; seven-gap completion is false. Exact f5b6db0b Pages 40035549254 and the same LAN artifact are verified checkpoints. Publication evidence is scoped to its named source, not an automatic assertion about future revisions.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -856,14 +856,14 @@
       {
         "id": "real-world-validation",
         "status": "partial_owned_native_evidence",
-        "implemented": "Source-specific owned native Notes/clipboard, SNI/DBusMenu tray, single-output video density fit, live previews, System invalidation, virtual Bluetooth and other recorded workflows. Seven one-output native Display draft/Apply/Keep/Revert/deadline/EOF-recovery flows also pass with exact file preservation and explicit expected one-restart validation. Later a7f RADV hardware-path startup and three-second native frame advancement pass with anchored user/source/settings/media/critical-file and monitor preservation. The coherent 8e release is now deployed on retained RADV, and its normal 120-second resource interval passes preservation while failing host-pressure eligibility. A fresh 16-check coherent 8e run passes two simultaneous compositor outputs, one owned headless, at 1x/2x/1.25x with real panel clicks, held-button removal, same-name new native global/host generation and exact restoration; see reports/measurements/lucent-native-multi-output.json. A later 2044e54f native harness passes nine actual Chromium textarea/Notes keyboard clipboard checks and all twelve restoration checks on unchanged 8e, one virtual output; see reports/measurements/lucent-native-gui-clipboard-2044.json. A genuine wired-only NetworkManager Applet run on unchanged 8e passes five native bar/menu/information-action checks and four cleanup checks; a fresh outside-worker post-removal observation passes thirteen preservation checks, restoring all 964 original packages/reasons with five signed test packages absent. Other apps/menus, wireless/secret-agent, physical hardware, pixel quality and performance remain unverified. Later harness 86df4e5b on runtime 35ed passes four two-output Display draft/Apply/Revert/timeout/Keep flows with one owned headless peer, five positive owner-restoration checks and independent retirement/normal-OFF verification; see reports/measurements/lucent-native-two-output-displays.json. That historical four-flow run kept all panel input on the unchanged original 1x output. The later 1774fa87 harness on runtime 26d passes nine virtual Display workflows, including rotation, disable/re-enable and native pointer/keyboard interaction on the fractional peer panel, with guarded restoration and separate later normal-OFF verification; see reports/measurements/lucent-native-two-output-displays-26d-nine.json.",
-        "remaining": "Physical simultaneous monitors/cable hotplug, suspend/resume, secure-output changes, cross-output text/clipboard, physical Bluetooth/audio/power/radio hardware, additional third-party tray applications/menus and wireless/secret-agent workflows, other GUI clipboard applications, rich content and delayed-provider/focus-retirement races. The owned headless run establishes no blanket hardware, resource or 60 FPS claim."
+        "implemented": "Later source 6f9 passes four actual 15-second read-only HOST service observations (audio/Bluetooth/power/compositor) with exact built binary identities and collected owned units; see reports/measurements/lucent-host-service-observations-6f9.json. No controls/input are sent; audio cancellation is observed, power capability absence is ambiguous and state-change delivery is untested. Source-specific owned native Notes/clipboard, SNI/DBusMenu tray, single-output video density fit, live previews, System invalidation, virtual Bluetooth and other recorded workflows. Seven one-output native Display draft/Apply/Keep/Revert/deadline/EOF-recovery flows also pass with exact file preservation and explicit expected one-restart validation. Later a7f RADV hardware-path startup and three-second native frame advancement pass with anchored user/source/settings/media/critical-file and monitor preservation. The coherent 8e release is now deployed on retained RADV, and its normal 120-second resource interval passes preservation while failing host-pressure eligibility. A fresh 16-check coherent 8e run passes two simultaneous compositor outputs, one owned headless, at 1x/2x/1.25x with real panel clicks, held-button removal, same-name new native global/host generation and exact restoration; see reports/measurements/lucent-native-multi-output.json. A later 2044e54f native harness passes nine actual Chromium textarea/Notes keyboard clipboard checks and all twelve restoration checks on unchanged 8e, one virtual output; see reports/measurements/lucent-native-gui-clipboard-2044.json. A genuine wired-only NetworkManager Applet run on unchanged 8e passes five native bar/menu/information-action checks and four cleanup checks; a fresh outside-worker post-removal observation passes thirteen preservation checks, restoring all 964 original packages/reasons with five signed test packages absent. Other apps/menus, wireless/secret-agent, physical hardware, pixel quality and performance remain unverified. Later harness 86df4e5b on runtime 35ed passes four two-output Display draft/Apply/Revert/timeout/Keep flows with one owned headless peer, five positive owner-restoration checks and independent retirement/normal-OFF verification; see reports/measurements/lucent-native-two-output-displays.json. That historical four-flow run kept all panel input on the unchanged original 1x output. The later 1774fa87 harness on runtime 26d passes nine virtual Display workflows, including rotation, disable/re-enable and native pointer/keyboard interaction on the fractional peer panel, with guarded restoration and separate later normal-OFF verification; see reports/measurements/lucent-native-two-output-displays-26d-nine.json.",
+        "remaining": "Physical simultaneous monitors/cable hotplug, suspend/resume, secure-output changes, cross-output text/clipboard, physical Bluetooth/audio/power/radio controls and hardware behavior, additional third-party tray applications/menus and wireless/secret-agent workflows, other GUI clipboard applications, rich content and delayed-provider/focus-retirement races. The owned headless run establishes no blanket hardware, resource or 60 FPS claim."
       },
       {
         "id": "documentation-accuracy",
-        "status": "current_source_and_recorded_native_evidence_reconciled_delivery_pending",
-        "implemented": "Current accepted PR106/main bdffd424 (exact four-tree runtime equality with archived 9eb) and separate 9eb build/deployment/native keyboard evidence are reconciled with the ineligible FHD sample. Last verified publication is PR106/main bdffd424 (116 inputs/480 captures from 950f4d19), with LAN 8b20. Historical delivery snapshots, failed trials, archived flags and performance limits are preserved.",
-        "remaining": "This newer evidence/doc reconciliation still needs its own local Node/site build and publication; the verified PR106 Pages receipt predates it. Publication and controlled warm-browser keyboard acceptance do not close broader applications, physical hardware, eligible performance or the seven-gap goal."
+        "status": "source_specific_build_and_delivery_evidence_recorded",
+        "implemented": "Accepted PR107/main f5b6db0b has six-check/CLEAN merge, Pages 40035549254 and same-artifact LAN verification (3 HTML, manifest/PNG, 116 producers/480 captures, 20 LAN responses). New host observation evidence identifies separate consumer source 6f9; earlier reports/flags/eligibility/history are preserved.",
+        "remaining": "CI build and publication receipts are scoped to their named commits; later revisions require their own workflow evidence. Publication and read-only service observation do not close physical controls, broader interoperability, eligible performance or the seven-gap goal."
       }
     ],
     "scoped_native_evidence": [
@@ -1220,12 +1220,33 @@
         "presentation_samples": 0,
         "source_pts_samples": 0,
         "scope": "One FHD output with a 4K source, not a 4K-output interval. Host swap/full-stall pressure makes the interval ineligible despite observed RSS below 300 MiB. HWM is process-lifetime, not sampled phase peak. All profiling remains off; no presentation/source-PTS/FPS result, causal gain over earlier 238 MiB intervals or attribution for the one-off 605 MiB diagnostic follows."
+      },
+      {
+        "feature": "read-only-host-service-observations",
+        "source_commit": "6f9e75d0477ae02809bf62bb6a9515894e1767f3",
+        "report": "reports/measurements/lucent-host-service-observations-6f9.json",
+        "report_sha256": "512233beccefbb1fc1176fcfe27c60cb77f5e99b36766d887f8f19569b723165",
+        "private_observation_summary_sha256": "46f30f3b7e7ccd2b1f82bbeae4ada3403081ee126240b9cee6a328c58bbe5031",
+        "private_build_result_sha256": "9e43d86e5653c7687207d2a04374b1257f397846a8e30c782c3bb7ba6dc8bffc",
+        "qualification_sha256": "2378d78523c3f4c487d877881e2cf26cd7b647a63723544083a24e6e7efd15f0",
+        "strict_release_clippy_passed": true,
+        "audio_example_tests_passed": 4,
+        "four_binaries_built": true,
+        "read_only_host_observations_passed": 4,
+        "each_requested_seconds": 15,
+        "audio_watch_returned_after_cancellation": true,
+        "owned_units_inactive_and_collected": true,
+        "controls_or_input_sent": false,
+        "full_hardware_acceptance": false,
+        "state_change_delivery_accepted": false,
+        "performance_accepted": false,
+        "scope": "Four separately built independent consumers observed the current host user services for fifteen seconds each. This is source/binary-identified read-only adapter observation and process completion, not desktop UI or physical-device control acceptance."
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
-    "validation": "PR106 exact 8d102 passed six required checks with CLEAN mergeability and merged normally as bdffd424 at 2026-10-23T21:24:25Z. Its four scoped Git trees equal archived 9eb (15 stages / 761 targeted tests); this is source equality, not a rebuild or repeated native run. Existing five route/nine cleanup/two key receipts and host-ineligible FHD metrics remain unchanged. Integration checks at the earlier f7ea source passed 756 Python cases; the integrated catalogue checks nine stories/480 captures/116 producers. This follow-up has not run Node/site or publication gates. PR106 Pages 40026533176 now verifies three public HTML pages, manifest/PNG and 116 inputs/480 captures from 950f4d19. The later integrated Python run passes 774 checks in 6.870 seconds; catalogue 9/480/116 passes. A separate 30-second host I/O diagnostic completes, with cause unresolved and no performance acceptance; this newer source still has no local Node/site build or publication.",
-    "accepted_main_base_commit": "bdffd42438990ef546ad13f302556913339acce0",
-    "documentation_harness_base_commit": "6330c11df36bcef7f9f8b46332ccecc40a13c844",
+    "validation": "PR107 exact 5d8c116b passed six checks/CLEAN and merged normally as f5b6db0b at 2026-10-23T22:44:33Z. Pages 40035549254 and 20 LAN HTTP checks verify the exact artifact plus 116 producers/480 captures from 950f4d19. Earlier 774 Python/6.870s and catalogue 9/480/116 results belong to their recorded checkpoint; CI supplies subsequent site build/publication evidence. Standalone source 6f9 passes four audio-example tests, strict release Clippy and four binary builds; a later separate actual host run passes all four read-only observations. No new checks or native actions were performed by this documentation task.",
+    "accepted_main_base_commit": "f5b6db0b4cef726891ea154faa7f3ab14fac376a",
+    "documentation_harness_base_commit": "c4eb922ca423dfbe255630e8717dc9cb2836a4c2",
     "runtime_compilation_source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
     "historical_gpu_candidate_preservation_rejection": {
       "status": "hardware_initialization_observed_preservation_rejected_software_restored",
@@ -1314,15 +1335,15 @@
       "settings_or_theme_written": false
     },
     "accepted_main_merge": {
-      "pull_request": 106,
-      "merge_commit": "bdffd42438990ef546ad13f302556913339acce0",
-      "exact_reviewed_head": "8d102d64d3be2e3f4fa2f909b71baec1162b33e1",
+      "pull_request": 107,
+      "merge_commit": "f5b6db0b4cef726891ea154faa7f3ab14fac376a",
+      "exact_reviewed_head": "5d8c116b5a38497a6aa5d53604c97c7fd89bd29a",
       "required_checks_passed": 6,
       "mergeability": "CLEAN",
       "normal_merge": true,
-      "merged_at": "2026-10-23T21:24:25Z",
-      "private_ci_receipt_sha256": "2f6a3f21150dfad21b1e9bfb811065d3945b1d2078fe2d7950d786b8babee16d",
-      "private_merge_receipt_sha256": "218b439af31f3a3991ecdde54174e73a7c190a9d0393c5be434707fb559ac641"
+      "merged_at": "2026-10-23T22:44:33Z",
+      "private_ci_receipt_sha256": "b9b42cff568287c62ac620c990e4ed27507e50705dffa57c1c56dea1f28b0f89",
+      "private_merge_receipt_sha256": "a0c1c45f501eb717e0468ae680f3676f80481d98edf8823d2171418e4ccb7c0b"
     },
     "implemented_unmerged_cohorts": [
       {
@@ -1411,15 +1432,15 @@
       }
     ],
     "documentation_delivery": {
-      "accepted_main_commit": "bdffd42438990ef546ad13f302556913339acce0",
-      "published_workflow_run": 40026533176,
+      "accepted_main_commit": "f5b6db0b4cef726891ea154faa7f3ab14fac376a",
+      "published_workflow_run": 40035549254,
       "published_workflow_status": "SUCCESS",
       "public_http_status": 200,
-      "current_published_source_links": "bdffd42438990ef546ad13f302556913339acce0",
+      "current_published_source_links": "f5b6db0b4cef726891ea154faa7f3ab14fac376a",
       "current_publication_valid": true,
       "public_artifact_bytes_match": true,
-      "delivery_receipt_sha256": "dedcc9c7778c959a5b420976fcadbebe585e428a38915bc1c8c011d36efd3f74",
-      "archive_sha256": "060e34bbf7ad10d0d458b5ca44d932bd34c81f39e9212d59cbc4fbd00134125d",
+      "delivery_receipt_sha256": "253b953dff8c28185373985ded23fd6bc17e4a715274bd2663c4efc65c7ce06e",
+      "archive_sha256": "7a02e1b6df0dae74253e0669db6cb70623c4a83bbdf899fc1f5b38361789c026",
       "verified_pages": [
         "docs/desktop/",
         "docs/library/",
@@ -1432,15 +1453,16 @@
       "rendering_producer_inputs_verified": 116,
       "native_catalogue_captures_verified": 480,
       "capture_source_commit": "950f4d199c16202b18ddb41b66e724c5da2a3c07",
-      "latest_verified_lan_source_commit": "8b20b78a819db7b88d2fbdaedb219fbd18576413",
-      "latest_verified_lan_http_checks_passed": 6,
-      "latest_verified_lan_receipt_sha256": "9c5eabccefc5e680df578e034b8f2834366ae62ebe15bdbeeba1482d881a014c",
+      "latest_verified_lan_source_commit": "f5b6db0b4cef726891ea154faa7f3ab14fac376a",
+      "latest_verified_lan_http_checks_passed": 20,
+      "latest_verified_lan_receipt_sha256": "78e0dad3bf06c6106fe6167611eaffc1ae864d9b33812b1406c75400887f96ca",
       "pr105_pages_verified": true,
-      "current_reconciliation_published": false,
-      "scope": "Verified PR106/main bdffd424 Pages content: three public HTML pages, manifest d5384a6b and representative PNG match the artifact; 116 inputs and 480 captures verify from 950f4d19. LAN remains 8b20. This newer evidence/doc follow-up has not been locally Node/site-built or published; no native/performance scope is expanded.",
-      "pr106_pages_verified": true
+      "scope": "Verified PR107/main f5b6db0b Pages and same-artifact LAN checkpoint. Three HTML pages, manifest/PNG and 116 producer inputs/480 captures match; 20 LAN HTTP checks cover root/project paths and loopback/LAN access. CI builds/publishes main; later source revisions have their own workflow receipts. No automatic future-publication or expanded native/performance claim.",
+      "pr106_pages_verified": true,
+      "pr107_pages_verified": true,
+      "verification_is_source_specific": true
     },
-    "accepted_main_commit": "bdffd42438990ef546ad13f302556913339acce0",
+    "accepted_main_commit": "f5b6db0b4cef726891ea154faa7f3ab14fac376a",
     "current_vm_trial_source_commit": null,
     "current_vm_trial_performance_accepted": false,
     "historical_documentation_delivery_8ca": {
@@ -1873,6 +1895,18 @@
         "normal_merge": true,
         "merged_at": "2026-10-23T21:24:25Z",
         "scope": "Bounded 32 MiB pool, actual offscreen catalogue recapture and CI hardening accepted; current runtime source-equivalent to archived 9eb. No additional native/FPS/resource acceptance from merge."
+      },
+      {
+        "pull_request": 107,
+        "merge_commit": "f5b6db0b4cef726891ea154faa7f3ab14fac376a",
+        "exact_reviewed_head": "5d8c116b5a38497a6aa5d53604c97c7fd89bd29a",
+        "required_checks_passed": 6,
+        "mergeability": "CLEAN",
+        "normal_merge": true,
+        "merged_at": "2026-10-23T22:44:33Z",
+        "pages_run": 40035549254,
+        "public_and_LAN_artifact_verified": true,
+        "scope": "Recorded source-specific documentation/evidence delivery; no new VM run or performance acceptance."
       }
     ],
     "component_lab": {
@@ -2098,7 +2132,7 @@
     },
     "accepted_runtime_source_equivalence": {
       "build_source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
-      "accepted_main_commit": "bdffd42438990ef546ad13f302556913339acce0",
+      "accepted_main_commit": "f5b6db0b4cef726891ea154faa7f3ab14fac376a",
       "identical_git_subtrees": {
         "lucent": "d46ea5522a3a83002154741c8cb33f07210c2720",
         "design": "8ac7a305599a8e91a524dea9ebc31e0b35317d85",
@@ -2112,7 +2146,7 @@
       "renderer_pull_request_head": "8d102d64d3be2e3f4fa2f909b71baec1162b33e1",
       "renderer_pull_request_rust_tree_equals_candidate": true,
       "rebuilt_at_merge_commit": false,
-      "scope": "Independent later PR106 merge/source equality. The archived runtime remains built at 9eb; no capture-time flags, native results or performance eligibility are rewritten."
+      "scope": "Archived 9eb Rust/design/configs/scripts trees equal accepted PR107/main f5b6db0b. No rebuild or new VM native run is implied; the separate host-observer consumer source is 6f9e75d0. Original archive/native/performance flags remain unchanged."
     },
     "historical_rollup_snapshot_pr102_delivery": {
       "snapshot_source_commit": "6e471005948cbefab218a6c79b87f3f94a241c2d",
@@ -2502,6 +2536,93 @@
       },
       "new_4k_resource_interval_executed": false,
       "whole_seven_gap_goal_complete": false
+    },
+    "historical_rollup_snapshot_pr106_before_pr107": {
+      "snapshot_source_commit": "bdffd42438990ef546ad13f302556913339acce0",
+      "accepted_main_commit": "bdffd42438990ef546ad13f302556913339acce0",
+      "accepted_main_base_commit": "bdffd42438990ef546ad13f302556913339acce0",
+      "documentation_harness_base_commit": "6330c11df36bcef7f9f8b46332ccecc40a13c844",
+      "scope": "Accepted PR106/main bdffd424 includes the PR105 history-release client and 32 MiB bounded upload pool. Rust/design/configs/scripts Git trees equal the archived 9eb runtime; original build/deployment/native capture flags remain historical. Recorded five route checks, two trusted document-key cases and nine named cleanup checks pass in the owned warm-browser flow; the 120-second FHD interval remains host-pressure-ineligible. Last verified Pages source is PR106/main bdffd424 (run 40026533176), LAN remains 8b20, and newer evidence-docs local Node/site build/publication remain unrun. Latest 4K host-memory admission fails before VM contact or creating ownership state; a separate 30-second host I/O diagnostic completes with cause unresolved and no code/performance-acceptance change. No live VM state, general-handler/cold-browser focus, eligible 300 MiB/FPS, hardware or seven-goal completion claim.",
+      "validation": "PR106 exact 8d102 passed six required checks with CLEAN mergeability and merged normally as bdffd424 at 2026-10-23T21:24:25Z. Its four scoped Git trees equal archived 9eb (15 stages / 761 targeted tests); this is source equality, not a rebuild or repeated native run. Existing five route/nine cleanup/two key receipts and host-ineligible FHD metrics remain unchanged. Integration checks at the earlier f7ea source passed 756 Python cases; the integrated catalogue checks nine stories/480 captures/116 producers. This follow-up has not run Node/site or publication gates. PR106 Pages 40026533176 now verifies three public HTML pages, manifest/PNG and 116 inputs/480 captures from 950f4d19. The later integrated Python run passes 774 checks in 6.870 seconds; catalogue 9/480/116 passes. A separate 30-second host I/O diagnostic completes, with cause unresolved and no performance acceptance; this newer source still has no local Node/site build or publication.",
+      "accepted_main_merge": {
+        "pull_request": 106,
+        "merge_commit": "bdffd42438990ef546ad13f302556913339acce0",
+        "exact_reviewed_head": "8d102d64d3be2e3f4fa2f909b71baec1162b33e1",
+        "required_checks_passed": 6,
+        "mergeability": "CLEAN",
+        "normal_merge": true,
+        "merged_at": "2026-10-23T21:24:25Z",
+        "private_ci_receipt_sha256": "2f6a3f21150dfad21b1e9bfb811065d3945b1d2078fe2d7950d786b8babee16d",
+        "private_merge_receipt_sha256": "218b439af31f3a3991ecdde54174e73a7c190a9d0393c5be434707fb559ac641"
+      },
+      "accepted_runtime_source_equivalence": {
+        "build_source_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
+        "accepted_main_commit": "bdffd42438990ef546ad13f302556913339acce0",
+        "identical_git_subtrees": {
+          "lucent": "d46ea5522a3a83002154741c8cb33f07210c2720",
+          "design": "8ac7a305599a8e91a524dea9ebc31e0b35317d85",
+          "configs": "a53cd7f4e268a50889335e53fca9a1b6a97f00fa",
+          "scripts": "3b3f936cc9535ee00a9a14039559af3fcbc5e6e6"
+        },
+        "all_rust_workspace_bytes_identical": true,
+        "notification_client_matches_accepted_main": true,
+        "remaining_rust_differences": [],
+        "renderer_pull_request": 106,
+        "renderer_pull_request_head": "8d102d64d3be2e3f4fa2f909b71baec1162b33e1",
+        "renderer_pull_request_rust_tree_equals_candidate": true,
+        "rebuilt_at_merge_commit": false,
+        "scope": "Independent later PR106 merge/source equality. The archived runtime remains built at 9eb; no capture-time flags, native results or performance eligibility are rewritten."
+      },
+      "documentation_delivery": {
+        "accepted_main_commit": "bdffd42438990ef546ad13f302556913339acce0",
+        "published_workflow_run": 40026533176,
+        "published_workflow_status": "SUCCESS",
+        "public_http_status": 200,
+        "current_published_source_links": "bdffd42438990ef546ad13f302556913339acce0",
+        "current_publication_valid": true,
+        "public_artifact_bytes_match": true,
+        "delivery_receipt_sha256": "dedcc9c7778c959a5b420976fcadbebe585e428a38915bc1c8c011d36efd3f74",
+        "archive_sha256": "060e34bbf7ad10d0d458b5ca44d932bd34c81f39e9212d59cbc4fbd00134125d",
+        "verified_pages": [
+          "docs/desktop/",
+          "docs/library/",
+          "component-lab/"
+        ],
+        "verified_native_assets": [
+          "component-lab/manifest.json",
+          "component-lab/images/menu-ocean-populated-narrow-1x.png"
+        ],
+        "rendering_producer_inputs_verified": 116,
+        "native_catalogue_captures_verified": 480,
+        "capture_source_commit": "950f4d199c16202b18ddb41b66e724c5da2a3c07",
+        "latest_verified_lan_source_commit": "8b20b78a819db7b88d2fbdaedb219fbd18576413",
+        "latest_verified_lan_http_checks_passed": 6,
+        "latest_verified_lan_receipt_sha256": "9c5eabccefc5e680df578e034b8f2834366ae62ebe15bdbeeba1482d881a014c",
+        "pr105_pages_verified": true,
+        "current_reconciliation_published": false,
+        "scope": "Verified PR106/main bdffd424 Pages content: three public HTML pages, manifest d5384a6b and representative PNG match the artifact; 116 inputs and 480 captures verify from 950f4d19. LAN remains 8b20. This newer evidence/doc follow-up has not been locally Node/site-built or published; no native/performance scope is expanded.",
+        "pr106_pages_verified": true
+      }
+    },
+    "host_service_observations_6f9": {
+      "source_commit": "6f9e75d0477ae02809bf62bb6a9515894e1767f3",
+      "report": "reports/measurements/lucent-host-service-observations-6f9.json",
+      "report_sha256": "512233beccefbb1fc1176fcfe27c60cb77f5e99b36766d887f8f19569b723165",
+      "private_observation_summary_sha256": "46f30f3b7e7ccd2b1f82bbeae4ada3403081ee126240b9cee6a328c58bbe5031",
+      "private_build_result_sha256": "9e43d86e5653c7687207d2a04374b1257f397846a8e30c782c3bb7ba6dc8bffc",
+      "qualification_sha256": "2378d78523c3f4c487d877881e2cf26cd7b647a63723544083a24e6e7efd15f0",
+      "strict_release_clippy_passed": true,
+      "audio_example_tests_passed": 4,
+      "four_binaries_built": true,
+      "read_only_host_observations_passed": 4,
+      "each_requested_seconds": 15,
+      "audio_watch_returned_after_cancellation": true,
+      "owned_units_inactive_and_collected": true,
+      "controls_or_input_sent": false,
+      "full_hardware_acceptance": false,
+      "state_change_delivery_accepted": false,
+      "performance_accepted": false,
+      "scope": "Four separately built independent consumers observed the current host user services for fifteen seconds each. This is source/binary-identified read-only adapter observation and process completion, not desktop UI or physical-device control acceptance."
     }
   },
   "requirements": [
