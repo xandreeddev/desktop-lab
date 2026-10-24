@@ -1,0 +1,276 @@
+{
+  "schema": 1,
+  "recorded_on": "2026-10-24",
+  "scope": "Two separate standalone playback-port consumers, each a same-process FHD→4K→FHD sequence. CPU path only; no renderer, desktop change or performance acceptance.",
+  "source": {
+    "observer_commit": "bf7b4432ff8f962cb0072bd77e046a89af287804",
+    "binary_sha256": "b497cb10bb40b708a288004114fd05fbd7ad6aaa3358cbdbe839e8daeea974cf",
+    "build_report_sha256": "45dd29e331c7bca354c4bfc6edf296e78571a64f49f586303cc08055fd91dee8",
+    "build_checks": {
+      "formatting": true,
+      "strict_release_clippy": true,
+      "focused_tests_passed": 9,
+      "release_build": true
+    }
+  },
+  "workload": {
+    "existing_media_sha256": "9bfaece1a34f02067005190a26c9dc5ba0e83e74875653c8336c022d133ebc35",
+    "source_codec": "h264",
+    "source_dimensions": [
+      3840,
+      2160
+    ],
+    "configured_frame_rate": "source",
+    "phase_seconds": 20,
+    "other_workload": "The primary desktop continued running; the observer did not pause or replace its wallpaper."
+  },
+  "diagnostic_budget": {
+    "guest_cpu_quota_percent": 100,
+    "memory_high_mib": 400,
+    "memory_max_mib": 650,
+    "runtime_max_seconds": 150,
+    "host_minimum_available_mib": 4500
+  },
+  "runs": [
+    {
+      "sdk_bridge": false,
+      "receipt_sha256": "806315af9796c41f62005aba48cba2614aa2a7bc33e2690bd5d362e521b5a107",
+      "success": true,
+      "observer_terminated": true,
+      "observer_cgroup_drained": true,
+      "owned_cleanup_verified": true,
+      "desktop_and_media_preserved": true,
+      "phases": [
+        {
+          "phase": "first_fhd",
+          "elapsed_ms": 20073,
+          "published_frames": 166,
+          "actual_size": [
+            1920,
+            1080
+          ],
+          "maximum_published_vector_capacity_bytes": 8294400,
+          "latest_capacity_bytes_before_drop": 8294400,
+          "consumer_held_pixel_capacity_after_drop": 0,
+          "watch_joined": true,
+          "sampled_peak_rss_kib": 124992,
+          "point_samples_kib": {
+            "before_play": {
+              "anonymous_kib": 5056,
+              "rss_high_water_kib": 25764,
+              "rss_kib": 25764,
+              "swap_kib": 0
+            },
+            "after_join_latest_held": {
+              "anonymous_kib": 52772,
+              "rss_high_water_kib": 124544,
+              "rss_kib": 81464,
+              "swap_kib": 0
+            },
+            "after_latest_dropped": {
+              "anonymous_kib": 24036,
+              "rss_high_water_kib": 124544,
+              "rss_kib": 52728,
+              "swap_kib": 0
+            }
+          }
+        },
+        {
+          "phase": "four_k",
+          "elapsed_ms": 20009,
+          "published_frames": 97,
+          "actual_size": [
+            3840,
+            2160
+          ],
+          "maximum_published_vector_capacity_bytes": 33177600,
+          "latest_capacity_bytes_before_drop": 33177600,
+          "consumer_held_pixel_capacity_after_drop": 0,
+          "watch_joined": true,
+          "sampled_peak_rss_kib": 234192,
+          "point_samples_kib": {
+            "before_play": {
+              "anonymous_kib": 24168,
+              "rss_high_water_kib": 124544,
+              "rss_kib": 52860,
+              "swap_kib": 0
+            },
+            "after_join_latest_held": {
+              "anonymous_kib": 140316,
+              "rss_high_water_kib": 233768,
+              "rss_kib": 169072,
+              "swap_kib": 0
+            },
+            "after_latest_dropped": {
+              "anonymous_kib": 107912,
+              "rss_high_water_kib": 233768,
+              "rss_kib": 136668,
+              "swap_kib": 0
+            }
+          }
+        },
+        {
+          "phase": "restored_fhd",
+          "elapsed_ms": 20025,
+          "published_frames": 178,
+          "actual_size": [
+            1920,
+            1080
+          ],
+          "maximum_published_vector_capacity_bytes": 8294400,
+          "latest_capacity_bytes_before_drop": 8294400,
+          "consumer_held_pixel_capacity_after_drop": 0,
+          "watch_joined": true,
+          "sampled_peak_rss_kib": 152928,
+          "point_samples_kib": {
+            "before_play": {
+              "anonymous_kib": 107916,
+              "rss_high_water_kib": 233768,
+              "rss_kib": 136672,
+              "swap_kib": 0
+            },
+            "after_join_latest_held": {
+              "anonymous_kib": 124100,
+              "rss_high_water_kib": 233768,
+              "rss_kib": 152856,
+              "swap_kib": 0
+            },
+            "after_latest_dropped": {
+              "anonymous_kib": 124100,
+              "rss_high_water_kib": 233768,
+              "rss_kib": 152856,
+              "swap_kib": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sdk_bridge": true,
+      "receipt_sha256": "162f382d802695d8f472c2b5deb01f8dfc5dc6083219fd376c77213f3e351610",
+      "success": true,
+      "observer_terminated": true,
+      "observer_cgroup_drained": true,
+      "owned_cleanup_verified": true,
+      "desktop_and_media_preserved": true,
+      "phases": [
+        {
+          "phase": "first_fhd",
+          "elapsed_ms": 20020,
+          "published_frames": 148,
+          "actual_size": [
+            1920,
+            1080
+          ],
+          "maximum_published_vector_capacity_bytes": 8294400,
+          "latest_capacity_bytes_before_drop": 8294400,
+          "consumer_held_pixel_capacity_after_drop": 0,
+          "watch_joined": true,
+          "sampled_peak_rss_kib": 125316,
+          "point_samples_kib": {
+            "before_play": {
+              "anonymous_kib": 5056,
+              "rss_high_water_kib": 25840,
+              "rss_kib": 25840,
+              "swap_kib": 0
+            },
+            "after_join_latest_held": {
+              "anonymous_kib": 57908,
+              "rss_high_water_kib": 125064,
+              "rss_kib": 86732,
+              "swap_kib": 0
+            },
+            "after_latest_dropped": {
+              "anonymous_kib": 29176,
+              "rss_high_water_kib": 125064,
+              "rss_kib": 58000,
+              "swap_kib": 0
+            }
+          }
+        },
+        {
+          "phase": "four_k",
+          "elapsed_ms": 20009,
+          "published_frames": 75,
+          "actual_size": [
+            3840,
+            2160
+          ],
+          "maximum_published_vector_capacity_bytes": 33177600,
+          "latest_capacity_bytes_before_drop": 33177600,
+          "consumer_held_pixel_capacity_after_drop": 0,
+          "watch_joined": true,
+          "sampled_peak_rss_kib": 203728,
+          "point_samples_kib": {
+            "before_play": {
+              "anonymous_kib": 29308,
+              "rss_high_water_kib": 125064,
+              "rss_kib": 58132,
+              "swap_kib": 0
+            },
+            "after_join_latest_held": {
+              "anonymous_kib": 104860,
+              "rss_high_water_kib": 203124,
+              "rss_kib": 133748,
+              "swap_kib": 0
+            },
+            "after_latest_dropped": {
+              "anonymous_kib": 72456,
+              "rss_high_water_kib": 203124,
+              "rss_kib": 101344,
+              "swap_kib": 0
+            }
+          }
+        },
+        {
+          "phase": "restored_fhd",
+          "elapsed_ms": 20008,
+          "published_frames": 162,
+          "actual_size": [
+            1920,
+            1080
+          ],
+          "maximum_published_vector_capacity_bytes": 8294400,
+          "latest_capacity_bytes_before_drop": 8294400,
+          "consumer_held_pixel_capacity_after_drop": 0,
+          "watch_joined": true,
+          "sampled_peak_rss_kib": 152716,
+          "point_samples_kib": {
+            "before_play": {
+              "anonymous_kib": 72460,
+              "rss_high_water_kib": 203124,
+              "rss_kib": 101348,
+              "swap_kib": 0
+            },
+            "after_join_latest_held": {
+              "anonymous_kib": 123756,
+              "rss_high_water_kib": 203124,
+              "rss_kib": 152644,
+              "swap_kib": 0
+            },
+            "after_latest_dropped": {
+              "anonymous_kib": 123756,
+              "rss_high_water_kib": 203124,
+              "rss_kib": 152644,
+              "swap_kib": 0
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "interpretation": [
+    "Both consumers retain additional RSS after their workers join and latest pixel owners drop, despite using no renderer. The unresolved memory behavior is therefore also observable in this independent CPU path.",
+    "These runs do not identify live allocation owners, codec caching, allocator retention or a leak. They do not attribute the separate desktop435MiB observation to this path.",
+    "Each mode has its own process birth and CPU-capped diagnostic workload; differences between modes are not a measured gain.",
+    "Published-frame counts are not FPS. The source-rate setting, point samples and250ms sampling do not establish presentation, steady state or all transient peaks.",
+    "No allocator trimming, override, renderer/driver reset, selection/configuration/import or desktop restart was performed."
+  ],
+  "acceptance": {
+    "allocation_cause_established": false,
+    "desktop_memory_gain_established": false,
+    "memory_target_met": null,
+    "fps_established": false,
+    "performance_accepted": false
+  }
+}
