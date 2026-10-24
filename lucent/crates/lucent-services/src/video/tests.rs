@@ -1,4 +1,217 @@
 use super::*;
+
+#[test]
+fn video_publication_pool_is_exclusive_to_proven_opaque_live_converters() {
+    use ffmpeg::{format::Pixel, util::frame::video::Video};
+    let opaque = Video::new(Pixel::YUV420P, 14, 10);
+    assert!(
+        FrameConverter::new_live(&opaque, None)
+            .unwrap()
+            .pixels
+            .is_some()
+    );
+    assert!(FrameConverter::new(&opaque, None).unwrap().pixels.is_none());
+    assert!(
+        FrameConverter::new_sized(
+            &opaque,
+            None,
+            Some(WallpaperPreviewOptions::new(9, 7).unwrap()),
+        )
+        .unwrap()
+        .pixels
+        .is_none()
+    );
+    let alpha = Video::new(Pixel::RGBA, 14, 10);
+    assert!(
+        FrameConverter::new_live(&alpha, None)
+            .unwrap()
+            .pixels
+            .is_none()
+    );
+    assert!(!opaque_format(Pixel::PAL8).unwrap());
+    assert!(opaque_format(Pixel::None).is_err());
+}
+
+#[test]
+fn video_pool_reuses_released_pixels_but_preserves_sdk_images_and_fallbacks() {
+    use ffmpeg::{format::Pixel, util::frame::video::Video};
+    let mut source = Video::new(Pixel::YUV420P, 14, 10);
+    source.data_mut(0).fill(81);
+    source.data_mut(1).fill(90);
+    source.data_mut(2).fill(240);
+    let mut converter =
+        FrameConverter::new_live(&source, Some(WallpaperPixelTarget::new(9, 5).unwrap())).unwrap();
+    let (width, height, first, aspect) = converter
+        .convert(&source, Duration::ZERO)
+        .unwrap()
+        .into_shared_rgba_with_aspect();
+    let first_pointer = first.as_ptr();
+    let original = (*first).clone();
+    let stream = lucent_api::ImageStream::new();
+    let image = stream
+        .frame_rgba_shared_with_aspect(width, height, first, aspect)
+        .unwrap();
+    assert_eq!(image.pixels().as_ptr(), first_pointer);
+    source.data_mut(0).fill(145);
+    source.data_mut(1).fill(54);
+    source.data_mut(2).fill(34);
+    let second = converter
+        .convert(&source, Duration::from_millis(17))
+        .unwrap()
+        .into_shared_rgba_with_aspect()
+        .2;
+    let second_pointer = second.as_ptr();
+    assert_ne!(second_pointer, first_pointer);
+    let fallback = converter
+        .convert(&source, Duration::from_millis(34))
+        .unwrap()
+        .into_shared_rgba_with_aspect()
+        .2;
+    assert_ne!(fallback.as_ptr(), first_pointer);
+    assert_ne!(fallback.as_ptr(), second_pointer);
+    assert_eq!(image.pixels(), original);
+    drop(second);
+    let reused = converter
+        .convert(&source, Duration::from_millis(51))
+        .unwrap()
+        .into_shared_rgba_with_aspect()
+        .2;
+    assert_eq!(reused.as_ptr(), second_pointer);
+    assert_eq!(image.pixels(), original);
+    drop(reused);
+    drop(image);
+    let reused = converter
+        .convert(&source, Duration::from_millis(68))
+        .unwrap()
+        .into_shared_rgba_with_aspect()
+        .2;
+    assert_eq!(reused.as_ptr(), first_pointer);
+    let weak = Arc::downgrade(&reused);
+    drop(converter);
+    assert_eq!(Arc::strong_count(&reused), 1);
+    assert_eq!(reused.len(), 9 * 7 * 4);
+    drop(reused);
+    assert!(weak.upgrade().is_none());
+}
+
+#[test]
+fn video_live_h264_publication_pool_survives_drained_eof_cycles() {
+    let root = Directory::new();
+    let file = h264_fixture(&root.0);
+    ffmpeg::init().unwrap();
+    let mut session =
+        DecoderSession::open(&file, DecodePurpose::LiveWallpaper, Arc::new(Never)).unwrap();
+    let options = PlaybackOptions {
+        fps: WallpaperFrameRate::Source,
+        looping: true,
+        target: Some(WallpaperPixelTarget::new(32, 24).unwrap()),
+    };
+    let stream = lucent_api::ImageStream::new();
+    let mut current = None;
+    let mut pointers = std::collections::BTreeSet::new();
+    let mut delivered = 0;
+    for _ in 0..3 {
+        assert!(
+            session
+                .cycle(
+                    options,
+                    DecodePurpose::LiveWallpaper,
+                    &mut |frame| {
+                        let (width, height, pixels, aspect) = frame.into_shared_rgba_with_aspect();
+                        let pointer = pixels.as_ptr() as usize;
+                        let image = stream
+                            .frame_rgba_shared_with_aspect(width, height, pixels, aspect)
+                            .unwrap();
+                        assert_eq!(image.pixels().as_ptr() as usize, pointer);
+                        pointers.insert(pointer);
+                        delivered += 1;
+                        current = Some(image);
+                        true
+                    },
+                    &Never
+                )
+                .unwrap()
+        );
+        assert!(session.rewind(&Never));
+    }
+    assert_eq!(delivered, 24, "every cycle includes reordered EOF frames");
+    assert_eq!(
+        pointers.len(),
+        2,
+        "one held image permits a bounded pair of slots"
+    );
+    let last = current.unwrap();
+    let original = last.pixels().to_vec();
+    drop(session);
+    assert_eq!(last.pixels(), original);
+}
+
+#[test]
+fn video_retarget_retires_old_pool_without_mutating_held_pixels() {
+    use ffmpeg::{format::Pixel, util::frame::video::Video};
+    let mut source = Video::new(Pixel::YUV420P, 14, 10);
+    source.data_mut(0).fill(81);
+    source.data_mut(1).fill(90);
+    source.data_mut(2).fill(240);
+    let mut old = FrameConverter::new_live(&source, None).unwrap();
+    let (width, height, pixels, aspect) = old
+        .convert(&source, Duration::ZERO)
+        .unwrap()
+        .into_shared_rgba_with_aspect();
+    let pointer = pixels.as_ptr();
+    let stream = lucent_api::ImageStream::new();
+    let held = stream
+        .frame_rgba_shared_with_aspect(width, height, pixels, aspect)
+        .unwrap();
+    let original = held.pixels().to_vec();
+    drop(old);
+    assert_eq!(Arc::strong_count(&held.levels()[0].pixels), 1);
+    let mut replacement =
+        FrameConverter::new_live(&source, Some(WallpaperPixelTarget::new(7, 5).unwrap())).unwrap();
+    let next = replacement
+        .convert(&source, Duration::from_millis(17))
+        .unwrap();
+    assert_eq!(next.dimensions(), (7, 5));
+    let pixels = next.into_shared_rgba_with_aspect().2;
+    assert_ne!(pixels.as_ptr(), pointer);
+    assert_eq!(held.pixels(), original);
+}
+
+#[test]
+fn video_cancelled_live_owner_drops_pool_while_its_sdk_frame_stays_valid() {
+    let root = Directory::new();
+    let file = h264_fixture(&root.0);
+    let stop = Arc::new(Stop(AtomicBool::new(false)));
+    let stream = lucent_api::ImageStream::new();
+    let mut held = None;
+    let mut weak = None;
+    decode(
+        &file,
+        PlaybackOptions::default(),
+        DecodePurpose::LiveWallpaper,
+        &mut |frame| {
+            let (width, height, pixels, aspect) = frame.into_shared_rgba_with_aspect();
+            weak = Some(Arc::downgrade(&pixels));
+            held = Some(
+                stream
+                    .frame_rgba_shared_with_aspect(width, height, pixels, aspect)
+                    .unwrap(),
+            );
+            stop.0.store(true, Ordering::Relaxed);
+            true
+        },
+        stop.clone(),
+    )
+    .unwrap();
+    assert!(stop.cancelled());
+    let held = held.unwrap();
+    assert_eq!(Arc::strong_count(&held.levels()[0].pixels), 1);
+    assert!(held.is_opaque());
+    assert!(!held.pixels().is_empty());
+    drop(held);
+    assert!(weak.unwrap().upgrade().is_none());
+}
+
 #[test]
 fn video_frame_threading_is_exclusive_to_live_h264() {
     use ffmpeg::codec::{Id, threading::Type};
