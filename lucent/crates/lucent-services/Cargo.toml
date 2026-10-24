@@ -30,3 +30,8 @@ ffmpeg-next = { version = "9", default-features = false, features = ["codec", "f
 name = "audio-observer"
 path = "examples/audio-observer/main.rs"
 test = true
+
+[[example]]
+name = "video-allocation-observer"
+path = "examples/video-allocation-observer/main.rs"
+test = true
