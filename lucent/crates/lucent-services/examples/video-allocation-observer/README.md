@@ -52,3 +52,16 @@ a codec or GPU, establish a memory target, or prove visible frame cadence.
 
 The source and mock tests are prepared for review. They have not been compiled,
 run against media, or used to collect native measurements at this checkpoint.
+
+## Recorded follow-up
+
+The later [bf7 observer report](../../../../../reports/measurements/lucent-playback-allocation-observer-bf7.json)
+records strict release Clippy, nine focused tests and an actual release build.
+Two separate native processes then complete the domain-frame and SDK-image
+sequences against the same existing imported video. All producers join, latest
+pixel owners drop, owned processes drain, and desktop/media preservation passes.
+After the final drop, RSS remains about 149 MiB in both runs, versus about
+52–57 MiB after the first FHD phase. This is an independent CPU-path observation;
+it neither assigns the desktop's retained memory to this path nor proves an
+allocator/codec cause, improvement, memory target or FPS. The CPU quota and
+separate process births also prevent treating mode differences as a gain.
