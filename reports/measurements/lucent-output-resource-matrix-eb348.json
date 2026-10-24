@@ -1,0 +1,445 @@
+{
+  "schema": 1,
+  "recorded_on": "2026-10-24",
+  "scope": "Completed uninstrumented cold FHD\u21924K\u2192restored warm FHD sequence on one archived eb348 runtime; all intervals host-pressure-ineligible. No allocation-cause, leak, GPU-residency, FPS or budget acceptance. A separate instrumented FHD follow-up is recorded below in a different process birth; the original same-birth resource matrix is unchanged.",
+  "source": {
+    "build_commit": "eb3481f4c75da9e0783975ad9c3e920ad8833ce2",
+    "release_manifest_sha256": "e48716b0d7b797292032fec62e3c19219f39184b75221e3249b85633e3812183",
+    "desktop_binary_sha256": "04a9c2c3b7c690b8763fe1dca85ff972bc75acf287f3f23442c81f29124cfa8b",
+    "accepted_main_checkpoint": "9b52666ba39b2ea2718e72424c37dc8b341051e2",
+    "accepted_pull_request": 110,
+    "core_git_subtrees_identical": {
+      "lucent": "7c81e45e34046ba44be27c37563b347ab2b8d022",
+      "design": "8ac7a305599a8e91a524dea9ebc31e0b35317d85",
+      "configs": "a53cd7f4e268a50889335e53fca9a1b6a97f00fa",
+      "scripts": "3b3f936cc9535ee00a9a14039559af3fcbc5e6e6"
+    },
+    "rebuilt_at_merge_commit": false,
+    "archive_classification_at_build": {
+      "accepted_main": false,
+      "vm_deployed": false,
+      "native_activated": false
+    },
+    "scope": "Archive build classification is preserved separately from later coherent deployment and accepted-main code equality."
+  },
+  "build_and_deployment": {
+    "all_stages_passed": 15,
+    "targeted_tests_passed": 786,
+    "six_managed_clients_and_root_greeter_verified": true,
+    "acceptance_executables_staged": 3,
+    "acceptance_examples_natively_tested_by_staging": false,
+    "supervised_beyond_startup_deadline": true,
+    "user_state_preserved": true,
+    "security_preserved": true,
+    "greetd_restarted": false,
+    "settings_or_theme_written": false
+  },
+  "identity_and_workload": {
+    "same_boot_pid_start_binary_across_all_three": true,
+    "same_media_settings_wallpaper_and_adapter": true,
+    "source_video": {
+      "codec": "h264",
+      "width": 3840,
+      "height": 2160,
+      "nominal_fps": "60/1",
+      "playback_setting": "source"
+    },
+    "gpu": "AMD Radeon Graphics (RADV RENOIR)",
+    "backend": "Vulkan",
+    "scope": "Same-lifetime output sequence, not matched eligible host conditions or an old-versus-new CPU-reuse comparison. Video source60FPS is a configured source rate, not measured presentation."
+  },
+  "intervals": [
+    {
+      "phase": "cold_fhd",
+      "output": {
+        "height": 1080,
+        "name": "Virtual-1",
+        "refreshRate": 60.0,
+        "scale": 1,
+        "transform": 0,
+        "width": 1920,
+        "x": 0,
+        "y": 0
+      },
+      "seconds": 120.00043673799519,
+      "samples": 480,
+      "rss_mean_mib": 229.18123372395834,
+      "rss_sampled_peak_mib": 230.875,
+      "process_lifetime_hwm_mib": 234.4453125,
+      "cpu_percent_one_core": 142.74948046565075,
+      "process_swap_mib_max": 0.0,
+      "smaps_rollup_before_kib": {
+        "Anonymous": 154300,
+        "Private_Clean": 40772,
+        "Private_Dirty": 154300,
+        "Pss": 202353,
+        "Pss_Anon": 154300,
+        "Pss_File": 48049,
+        "Pss_Shmem": 3,
+        "Rss": 229308,
+        "Shared_Clean": 34212,
+        "Shared_Dirty": 24,
+        "Swap": 0
+      },
+      "smaps_rollup_after_kib": {
+        "Anonymous": 161408,
+        "Private_Clean": 40772,
+        "Private_Dirty": 161408,
+        "Pss": 209460,
+        "Pss_Anon": 161408,
+        "Pss_File": 48048,
+        "Pss_Shmem": 3,
+        "Rss": 236416,
+        "Shared_Clean": 34212,
+        "Shared_Dirty": 24,
+        "Swap": 0
+      },
+      "final_current_video_frame_bytes": 8294400,
+      "prepared_image_bytes_before": 14859679,
+      "prepared_image_bytes_after": 14859679,
+      "gpu_cache_payload_bytes_before": 9830653,
+      "gpu_cache_payload_bytes_after": 9905942,
+      "gpu_cache_active_payload_bytes_before": 9668974,
+      "gpu_cache_active_payload_bytes_after": 9667800,
+      "preservation_verified": true,
+      "all_tracing_off": true,
+      "eligible": false,
+      "memory_target_result": null,
+      "host_swap_in_pages": 2372,
+      "host_swap_out_pages": 0,
+      "host_io_full_stall_fraction": 0.4783481351632462,
+      "ineligible_reasons": [
+        "host_swap_activity",
+        "host_full_stall_pressure"
+      ]
+    },
+    {
+      "phase": "four_k",
+      "output": {
+        "height": 2160,
+        "name": "Virtual-1",
+        "refreshRate": 60.0,
+        "scale": 1.5,
+        "transform": 0,
+        "width": 3840,
+        "x": 0,
+        "y": 0
+      },
+      "seconds": 120.0006379990009,
+      "samples": 480,
+      "rss_mean_mib": 494.6829345703125,
+      "rss_sampled_peak_mib": 526.515625,
+      "process_lifetime_hwm_mib": 526.515625,
+      "cpu_percent_one_core": 191.59898133367778,
+      "process_swap_mib_max": 0.0,
+      "smaps_rollup_before_kib": {
+        "Anonymous": 430784,
+        "Private_Clean": 40836,
+        "Private_Dirty": 430784,
+        "Pss": 478889,
+        "Pss_Anon": 430784,
+        "Pss_File": 48102,
+        "Pss_Shmem": 3,
+        "Rss": 505856,
+        "Shared_Clean": 34212,
+        "Shared_Dirty": 24,
+        "Swap": 0
+      },
+      "smaps_rollup_after_kib": {
+        "Anonymous": 432176,
+        "Private_Clean": 38672,
+        "Private_Dirty": 432176,
+        "Pss": 478116,
+        "Pss_Anon": 432176,
+        "Pss_File": 45937,
+        "Pss_Shmem": 3,
+        "Rss": 505084,
+        "Shared_Clean": 34212,
+        "Shared_Dirty": 24,
+        "Swap": 0
+      },
+      "final_current_video_frame_bytes": 33177600,
+      "prepared_image_bytes_before": 48037279,
+      "prepared_image_bytes_after": 48037279,
+      "gpu_cache_payload_bytes_before": 35191768,
+      "gpu_cache_payload_bytes_after": 35389738,
+      "gpu_cache_active_payload_bytes_before": 34638315,
+      "gpu_cache_active_payload_bytes_after": 34638301,
+      "preservation_verified": true,
+      "all_tracing_off": true,
+      "eligible": false,
+      "memory_target_result": null,
+      "host_swap_in_pages": 9721,
+      "host_swap_out_pages": 511,
+      "host_io_full_stall_fraction": 0.41852224193610965,
+      "ineligible_reasons": [
+        "host_swap_activity",
+        "host_full_stall_pressure"
+      ]
+    },
+    {
+      "phase": "restored_warm_fhd",
+      "output": {
+        "height": 1080,
+        "name": "Virtual-1",
+        "refreshRate": 60.0,
+        "scale": 1,
+        "transform": 0,
+        "width": 1920,
+        "x": 0,
+        "y": 0
+      },
+      "seconds": 120.00066558599792,
+      "samples": 480,
+      "rss_mean_mib": 435.0625,
+      "rss_sampled_peak_mib": 435.0625,
+      "process_lifetime_hwm_mib": 578.984375,
+      "cpu_percent_one_core": 146.54085387049616,
+      "process_swap_mib_max": 0.0,
+      "smaps_rollup_before_kib": {
+        "Anonymous": 372212,
+        "Private_Clean": 39056,
+        "Private_Dirty": 372212,
+        "Pss": 418536,
+        "Pss_Anon": 372212,
+        "Pss_File": 46320,
+        "Pss_Shmem": 3,
+        "Rss": 445504,
+        "Shared_Clean": 34212,
+        "Shared_Dirty": 24,
+        "Swap": 0
+      },
+      "smaps_rollup_after_kib": {
+        "Anonymous": 372212,
+        "Private_Clean": 39056,
+        "Private_Dirty": 372212,
+        "Pss": 418559,
+        "Pss_Anon": 372212,
+        "Pss_File": 46344,
+        "Pss_Shmem": 3,
+        "Rss": 445504,
+        "Shared_Clean": 34212,
+        "Shared_Dirty": 24,
+        "Swap": 0
+      },
+      "final_current_video_frame_bytes": 8294400,
+      "prepared_image_bytes_before": 14859679,
+      "prepared_image_bytes_after": 14859679,
+      "gpu_cache_payload_bytes_before": 10664149,
+      "gpu_cache_payload_bytes_after": 10725718,
+      "gpu_cache_active_payload_bytes_before": 9668767,
+      "gpu_cache_active_payload_bytes_after": 9671109,
+      "preservation_verified": true,
+      "all_tracing_off": true,
+      "eligible": false,
+      "memory_target_result": null,
+      "host_swap_in_pages": 3284,
+      "host_swap_out_pages": 0,
+      "host_io_full_stall_fraction": 0.4444412784919217,
+      "ineligible_reasons": [
+        "host_swap_activity",
+        "host_full_stall_pressure"
+      ]
+    }
+  ],
+  "four_k_restoration": {
+    "success": true,
+    "cleanup_success": true,
+    "checks": {
+      "configuration_security_runtime_preserved": true,
+      "cursor_unchanged": true,
+      "output_restored": true,
+      "workspace_unchanged": true,
+      "runtime_restarted": false,
+      "input_synthesized": false,
+      "windows_closed": false
+    },
+    "scope": "Saved finish verifies owned source/config/security/runtime and original FHD/cursor/workspace restoration, with no restart/input/window close. Warm interval remains separate."
+  },
+  "post_matrix_snapshot": {
+    "seconds": 0.04401850700378418,
+    "status_kib": {
+      "VmRSS": 445504,
+      "RssAnon": 372212,
+      "RssFile": 73268,
+      "RssShmem": 24,
+      "VmHWM": 592880,
+      "VmSwap": 0
+    },
+    "same_pid_and_start_as_warm_interval": true,
+    "profiling_off_and_output_guard_inactive": true,
+    "anonymous_labelled_vma_rss_kib": 276592,
+    "heap_labelled_vma_rss_kib": 87444,
+    "scope": "Separate one-off procfs categories, not an interval or allocator ownership breakdown. File-labelled VMAs can contain anonymous COW pages; device-labelled Rss0 is not total GPU memory."
+  },
+  "interpretation": [
+    "After FHD restoration, RSS remains435.0625MiB over a full120-second interval versus cold229.181mean/230.875sampled peak. This is an unresolved retained-memory concern.",
+    "Current-frame and total prepared-image payloads return to cold-FHD values; active GPU-cache payload returns near its cold value. These overlapping counters cannot be summed into RSS or used to assign the remaining anonymous pages to a subsystem.",
+    "Unused CPU pool capacity/Arc owners, codec allocations, staging capacity, live/free allocator blocks and total driver/swapchain backing are not established by these receipts. Separate source/codec consumers can guide attribution.",
+    "The warm process-lifetime HWM578.984MiB is not its interval peak435.0625MiB. Post-matrix mapping labels do not prove a leak or allocation owner.",
+    "All tracing staysOFF. No compositor FPS, source-rate presentation, causal CPU-pool gain, physical output/hardware behavior or eligible memory target is accepted."
+  ],
+  "acceptance": {
+    "memory_target_met": null,
+    "performance_accepted": false,
+    "allocation_cause_established": false,
+    "leak_established": false,
+    "presentation_fps_established": false,
+    "hardware_acceptance": false,
+    "all_seven_requested_gaps_closed": false
+  },
+  "evidence_sha256": {
+    "cold": "246b643c2ed7c7413b23dc5c2ad601de231896d0975bc950675ce2dd2ac4b0bf",
+    "four_k": "291ce00c2a6b4fe256576ad6e9e8182b4e37e7152962f5301e7fd24328765300",
+    "cold_collector": "523b43c8b937a8beb8f8080b93dce4b7a82ec7dcd7e99d6f12449a0258a39b57",
+    "four_k_collector": "1c8b1809fa9294da173f0b2ed2070fee533e0ed1f52b6d5e931d3bac6207096f",
+    "derivation": "4a723b7fcb8bd850be5a874a3b0dfa7bd07b82975a47bb41bb645410d9c50228",
+    "finish": "0f4bbfd8b57fa4af81ca336dbf76da596bc3c52b1c21a067a3e59647513707fe",
+    "four_k_facts": "4a08cb61ee0c4a3fa4a5347953761f707ed195c1afb1d150d341c8dc126f62e1",
+    "warm": "b2a5e1f2b2dc124051ca9111123a0b2fd04e8e98822f6dd5b239ff328f9b7f04",
+    "warm_collector": "ed8ab42006cab348bf037e9b263f76842c62f3527f8ced5edc969695e1701d3f",
+    "post_matrix_mapping": "5323d5cc910ecddebbc8d8486f8387e72291b68dbe0a3244168c4abced0d907e"
+  },
+  "build_and_deployment_evidence_sha256": {
+    "manifest": "e48716b0d7b797292032fec62e3c19219f39184b75221e3249b85633e3812183",
+    "build": "6bed8454b64bbcb9513500eea075ee51c0b7ea2ae3955f5ce0f4022234bda170",
+    "deployment": "1ec5728696604a528b496d9675249d777c2d7868aaf968aa7c0de33858ff98b2",
+    "private_complete_comparison": "d35989382235ea498751c2fe3278555e378b78fb1e9e4457dd7687d7765c2d08"
+  },
+  "instrumented_followup": {
+    "scope": "Separate FHD opt-in presentation/source-metadata follow-up on the same archived source/binary and matched workload/cohort, in a different process birth from the normal matrix. Its RSS is not a warm-memory improvement.",
+    "phase_identity": {
+      "same_process_lifetime": false,
+      "same_source_binary_wrapper_and_cohort": true,
+      "scope": "Instrumented and normal reference process births differ. No causal cross-phase memory comparison."
+    },
+    "resources": {
+      "cpu_percent_one_core": 146.84102958094905,
+      "process_lifetime_high_water_mib": 236.7890625,
+      "rss_mib_max_interval": 236.7890625,
+      "rss_mib_mean": 236.03882649739583,
+      "rss_sample_count": 480,
+      "seconds": 120.00052063300245,
+      "swap_mib_max": 0.0
+    },
+    "eligibility": {
+      "eligible": false,
+      "host_pressure": {
+        "cpu_busy_fraction": 0.3778651039241997,
+        "ineligible_reasons": [
+          "host_swap_activity",
+          "host_full_stall_pressure"
+        ],
+        "minimum_available_mib": 5149.1171875,
+        "psi_fraction": {
+          "cpu": {
+            "full": 0.0,
+            "some": 0.0032063997826708036
+          },
+          "io": {
+            "full": 0.40270145922680145,
+            "some": 0.6269488887603603
+          },
+          "memory": {
+            "full": 7.784051290044926e-07,
+            "some": 7.866860346321998e-07
+          }
+        },
+        "seconds": 120.75973872399481,
+        "swap_in_delta": 817,
+        "swap_out_delta": 0
+      },
+      "ineligible_reasons": [
+        "host_swap_activity",
+        "host_full_stall_pressure",
+        "resource_reference_ineligible",
+        "host_psi_not_matched_io_full",
+        "host_psi_not_matched_io_some"
+      ],
+      "normal_reference_eligible": false,
+      "normal_reference_ineligible_reasons": [
+        "host_swap_activity",
+        "host_full_stall_pressure"
+      ],
+      "normal_target_result": null
+    },
+    "background_request_window": {
+      "definition": "first desktop-uptime request boundary <= request_at < boundary + measured resource seconds; not synchronized resource/presentation clocks.",
+      "rate_denominator": "Own compositor last-first timestamp span; numerator is interval/advance count, not sample count.",
+      "background_feedback_samples": 7181,
+      "distinct_prepared_revisions_referenced": 7181,
+      "distinct_revision_advances": 7180,
+      "compositor_span_ns": 119983328000,
+      "distinct_revision_advances_per_second": 59.84164733286945,
+      "presentation_interval_ns": {
+        "count": 7180,
+        "max_ns": 33334000,
+        "mean_ns": 16710769.91643454,
+        "min_ns": 16666000,
+        "p50_ns": 16667000,
+        "p95_ns": 16667000,
+        "p99_ns": 16667000
+      },
+      "clock_id": 1,
+      "flags_histogram": {
+        "7": 7181
+      },
+      "adjacent_repeated_prepared_revisions": 0,
+      "source_cycle_crossings_excluded": 4,
+      "scope": "Successful compositor feedback with bound prepared-resource references; not pixel visibility, decoder completeness, scanout or accepted performance."
+    },
+    "feedback_count_scope": {
+      "all_surface_count_is_not_background_fps": true,
+      "all_surface_feedback_samples_by_window": {
+        "collector_request_lower_bound": 7257,
+        "nominal_resource_duration_request_window": 7213,
+        "retained": 7451
+      },
+      "background_only_feedback_samples_by_window": {
+        "collector_request_lower_bound": 7225,
+        "nominal_resource_duration_request_window": 7181,
+        "retained": 7347
+      },
+      "surface_groups": 6
+    },
+    "metadata_limits": {
+      "observations": 137,
+      "maximum_inspection_gap_seconds": 0.9712893709947821,
+      "presentation_sampling_truncated": false,
+      "source_sampling_truncated": false,
+      "one_native_generation_observed_per_role": true,
+      "pending_requests_at_final_capture": 2,
+      "retired_results_at_final_capture": 0,
+      "skipped_requests": 0,
+      "unmatched_results": 0,
+      "pending_lost": 0,
+      "complete_feedback_coverage_claimed": false,
+      "scope": "Native generation IDs identify observed sample lifetimes. Final counters and no ring truncation do not prove all accepted requests completed; two pending requests remain. Retired results are zero in the final captured state. Unobserved sub-poll activity and exact animation bounds are not established."
+    },
+    "restoration": {
+      "driver_restore_verified": true,
+      "source_security_and_settings_equal_original": true,
+      "normal_runtime_flags_all_off": true,
+      "scope": "Separately saved driver/restore receipts verify original source/security/settings and normal profiling OFF. Instrumentation uses a different process lifetime from the resource matrix."
+    },
+    "acceptance": {
+      "causal_gain_established": false,
+      "decoder_completeness_established": false,
+      "eligible_60fps": false,
+      "launcher_animation_established": false,
+      "normal_300mib_target_met": null,
+      "physical_scanout_established": false,
+      "pixel_visibility_established": false
+    },
+    "evidence_sha256": {
+      "saved_analysis": "21ea3dec97f444fb65f34c130932c35c99e6fc293ea0e9d51aba64a479401fd3",
+      "saved_analysis_freeze": "a9670eea353865f144009c4d4b754d7b3ec4e322c3529ef2d364c25a1df119fe",
+      "instrumented_interval": "d8297d1e6507461ed8de92db51c75bcd391b13c67cdd8913464c56e6ac87b3da",
+      "collector": "335f5b4c9eb677d2e216faeb0fd67c10d1b882231f8eadeddc0af139e1a03d18",
+      "normal_warm_reference": "b2a5e1f2b2dc124051ca9111123a0b2fd04e8e98822f6dd5b239ff328f9b7f04",
+      "maintained_analysis_helper": "ea55a19d104a701fd30fce860fb3df6e2884e02965912d42e5a7000931017ca8",
+      "driver_restoration": "f854d70f0931a7a36e3d82779960b7bb9d99b7f1a2f33ec5b7f561dcae50ccb3",
+      "restore_report": "265c9f6cdbc49c9262c43855e4235761d32d4de3da4e8beb1eba027cdbc825ab"
+    }
+  }
+}
