@@ -98,3 +98,19 @@ inode and content ownership checks. Notifications expire naturally; only an
 owned empty history may be closed during cleanup. All windows and user-added
 content in these new disposable test profiles are retired; existing personal
 profiles and foreign applications are preserved.
+
+## Recorded cold trial on eb348
+
+The preparation section above describes the earlier unbound checkpoint. The later
+[source-specific report](../reports/measurements/lucent-cold-default-uri-eb348.json)
+uses bound harness `896e479f` and runtime `eb3481f4`, archive `e48716b0`. The pointer
+route opens its exact fresh document and receives one trusted, unmodified KeyA.
+Its nine named cleanup checks pass.
+
+The separate Tab/Enter route reaches the exact document with fresh launch
+context, but its focus observation is false and trusted KeyA delivery is not
+observed before the bounded wait fails. Natural history/modal release and native
+submission-advance guards pass before dispatch; all nine cleanup checks pass.
+Cold acceptance remains incomplete. Cleanup does not turn that feature failure
+into a pass, and no failure cause or production fix is established. Existing
+warm-route evidence keeps its original scope.
