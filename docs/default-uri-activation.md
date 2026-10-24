@@ -60,3 +60,41 @@ original handler configuration. The existing explicit-application Open tests do
 not prove this default-handler path, physical focus behavior or direct native
 token consumption. Preparing this implementation or harness closes none of
 those native validation requirements by itself.
+
+## Separate cold-browser acceptance
+
+`vm/test-cold-default-uri-notification.py` prepares two independent cold tests:
+a pointer link, followed by a Tab/Enter link. Each route allocates a new private
+profile and Chromium process birth. The second route cannot start unless the
+first feature checks and cleanup succeed. The maintained warm-browser harness
+and its blank control window retain their existing contract.
+
+This new harness is source-only. It pins the actual `eb3481f4` release manifest
+with digest `e48716b0…`; its default command performs no VM actions. `--run`
+also requires that exact manifest, a fresh desktop PID and the exact test VM
+UUID before contacting the VM. This preparation establishes no cold native
+pass, focus result or performance result.
+
+Before native dispatch, the cold fixture pins an absent-profile startup
+declaration containing the one owned HTTP URI. It does not launch a blank
+browser or change the canonical startup manifest. The first real link must
+create the original recorded process, map its exact class and PID, and expose
+one exact document through its original DevTools endpoint. Identity changes and
+extra pages fail; no process, profile, target or lease is refreshed or adopted.
+
+Each route then requires a trusted, unmodified native `KeyA` in that exact
+document after the history closes and releases modal input. CDP only arms and
+reads the bounded observer. The harness does not focus a browser, activate a
+target, click browser content or hide the shell to make the key succeed.
+Reading an active window or seeing an activation variable is insufficient.
+
+The independent configuration guardian revokes queued work and retires the
+exact cold Chromium scope before canonical entry cleanup. It also handles a
+still-original startup wrapper without waiting for window or CDP readiness.
+If the original process has already disappeared before any moved-scope lease
+was recorded, cleanup remains failed: an unknown scope cannot be searched for,
+adopted or signalled. MIME/entry restoration still runs with its existing
+inode and content ownership checks. Notifications expire naturally; only an
+owned empty history may be closed during cleanup. All windows and user-added
+content in these new disposable test profiles are retired; existing personal
+profiles and foreign applications are preserved.
