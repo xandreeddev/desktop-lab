@@ -1,0 +1,219 @@
+{
+  "schema": 1,
+  "recorded_on": "2026-10-24",
+  "scope": "Completed matched-source/workload FHD resource and opt-in presentation phases on archived 9eb; both host-pressure-ineligible. A recorded checkpoint, not live VM state or accepted performance.",
+  "source": {
+    "runtime_commit": "9eb41939d47ced5be2012bff41a1f2f5768d6ee7",
+    "release_manifest_sha256": "c669b9d53879d504f0a4efa5e131c93f57cc77bc8c26c18dacef54565fe2703f",
+    "desktop_binary_sha256": "eb1980a5c81a60512218eb69fcee80fd1124a1112c317f7dbb66ef95e311a1a5",
+    "accepted_main_checkpoint": "fb7b1b26b1c4df1c254a39215eeac286c1031cc6",
+    "cpu_reuse_pull_request": 108,
+    "cpu_reuse_merged": true,
+    "cpu_reuse_in_tested_vm": false,
+    "docs_base_commit": "072a153edcbb98856bd8ecac0d4dd4972f00131c",
+    "wrapper_sha256": "3859f40c25b191879e48a1f833df465f804ca8a9542880e8c26783340ceac032",
+    "source_set_sha256": "36d29d0851f2d09d4bd3d8555cb0dc3497457f9a3ac855198033654c18f3ddcf"
+  },
+  "environment": {
+    "output": {
+      "kind": "virtual",
+      "count": 1,
+      "width": 1920,
+      "height": 1080,
+      "refresh_hz": 60,
+      "scale": 1,
+      "transform": 0
+    },
+    "gpu": "AMD Radeon Graphics (RADV RENOIR)",
+    "backend": "Vulkan",
+    "driver": "radv / Mesa 26.2.2-arch1.1",
+    "media": {
+      "codec": "h264",
+      "width": 3840,
+      "height": 2160,
+      "frame_rate": "60/1",
+      "playback_setting": "source",
+      "content_sha256": "9bfaece1a34f02067005190a26c9dc5ba0e83e74875653c8336c022d133ebc35"
+    },
+    "same_workload_and_wallpaper_between_phases": true
+  },
+  "phase_identity": {
+    "different_process_birth_observed": true,
+    "presentation_reference_matches_normal_receipt": true,
+    "same_process_lifetime": false,
+    "same_source_and_binary": true,
+    "scope": "Instrumentation uses a separate process lifetime. These phase RSS values are not a same-lifetime causal memory comparison."
+  },
+  "normal_resources": {
+    "eligible": false,
+    "host_pressure": {
+      "minimum_available_mib": 6179.35546875,
+      "psi_fraction": {
+        "cpu": {
+          "full": 0.0,
+          "some": 0.002681988742410026
+        },
+        "io": {
+          "full": 0.4230435428500525,
+          "some": 0.5878607199233261
+        },
+        "memory": {
+          "full": 8.238508407215103e-08,
+          "some": 8.238508407215103e-08
+        }
+      },
+      "seconds": 121.38119554799778,
+      "swap_in_delta": 9634,
+      "swap_out_delta": 0
+    },
+    "ineligible_reasons": [
+      "host_swap_activity",
+      "host_full_stall_pressure"
+    ],
+    "mode": "resources",
+    "preservation_verified_recorded": true,
+    "resources": {
+      "cpu_percent_one_core": 142.63279328992417,
+      "process_lifetime_high_water_mib": 616.0078125,
+      "rss_mib_max_interval": 497.0625,
+      "rss_mib_mean": 497.0625,
+      "rss_sample_count": 480,
+      "seconds": 120.00045434999629,
+      "swap_mib_max": 0.0
+    },
+    "rss_target_result": null,
+    "state": "collected"
+  },
+  "instrumented_presentation": {
+    "eligible": false,
+    "host_pressure": {
+      "minimum_available_mib": 5759.80859375,
+      "psi_fraction": {
+        "cpu": {
+          "full": 0.0,
+          "some": 0.0032333428361669444
+        },
+        "io": {
+          "full": 0.4014640961065405,
+          "some": 0.5701149508102223
+        },
+        "memory": {
+          "full": 6.010986985038033e-07,
+          "some": 6.010986985038033e-07
+        }
+      },
+      "seconds": 121.44428224799776,
+      "swap_in_delta": 32833,
+      "swap_out_delta": 0
+    },
+    "ineligible_reasons": [
+      "host_swap_activity",
+      "host_full_stall_pressure",
+      "resource_reference_ineligible",
+      "host_psi_not_matched_io_full",
+      "host_psi_not_matched_io_some"
+    ],
+    "mode": "presentation",
+    "preservation_verified_recorded": true,
+    "resources": {
+      "cpu_percent_one_core": 150.92387102278582,
+      "process_lifetime_high_water_mib": 236.44140625,
+      "rss_mib_max_interval": 236.44140625,
+      "rss_mib_mean": 231.784619140625,
+      "rss_sample_count": 480,
+      "seconds": 120.00089765300072,
+      "swap_mib_max": 0.0
+    },
+    "rss_target_result": null,
+    "state": "collected"
+  },
+  "instrumentation": {
+    "normal": {
+      "frames": false,
+      "presentation": false,
+      "source_pts": false
+    },
+    "instrumented": {
+      "frames": false,
+      "presentation": true,
+      "source_pts": true
+    }
+  },
+  "background_request_window": {
+    "definition": "first desktop-uptime request boundary <= request_at < boundary + measured resource seconds; not synchronized resource/presentation clocks.",
+    "denominator": "Own compositor last-first timestamp span; numerator is interval/advance count, not sample count.",
+    "feedback_samples": 7180,
+    "distinct_prepared_revisions_referenced": 7180,
+    "distinct_revision_advances": 7179,
+    "presentation_span_ns": 119983329000,
+    "distinct_revision_advances_per_second": 59.83331234291724,
+    "adjacent_repeated_prepared_revisions": 0,
+    "presentation_interval_ns": {
+      "count": 7179,
+      "max_ns": 50000000,
+      "mean_ns": 16713097.785206852,
+      "min_ns": 16666000,
+      "p50_ns": 16667000,
+      "p95_ns": 16667000,
+      "p99_ns": 16667000
+    },
+    "presentation_clock_id": 1,
+    "flags_histogram": {
+      "7": 7180
+    },
+    "joined_source_samples": 7180,
+    "source_cycle_crossings_excluded": 4,
+    "scope": "Successful compositor feedback with bound prepared-resource references; not pixel visibility, decoder completeness, scanout or accepted performance."
+  },
+  "metadata_scope": {
+    "all_surface_feedback_records": 7507,
+    "all_surface_records_are_not_a_background_fps_numerator": true,
+    "presentation_or_source_ring_truncation_reported": false,
+    "native_generation_continuity_established": false,
+    "source_pts_gaps_are_not_decoder_drop_counts": true
+  },
+  "restoration": {
+    "driver_completed_successfully": true,
+    "driver_collector_exit": 0,
+    "driver_restore_verified": true,
+    "independent_guardian_terminal_restore_verified": true,
+    "guardian_inactive_and_owned_processes_drained": true,
+    "restored_normal_binary_matches_tested_source": true,
+    "normal_profiling_flags": {
+      "frames": false,
+      "presentation": false,
+      "source_pts": false
+    },
+    "scope": "Driver restoration plus separate guardian-terminal and normal-OFF observation; no broader hardware or performance acceptance."
+  },
+  "private_evidence_sha256": {
+    "normal_interval": "a14cd81bc0ee0ef33527f2d3238ff81f2fd11c9f3a60ef212ab23d0cdfec8475",
+    "instrumented_interval": "2ef52f0d2f91fe78c7e98a5e1995e89e5afe77a2f8b3fa218dbc0141f22addbb",
+    "normal_collector": "30f0b417a05e6f4dfd7f825dfe067c42c58442adc90d629fdd76502bd6db1e4c",
+    "instrumented_collector": "290a6ade32e67aed003eff9129545230af437c4d9abbc6084518b44ad987f06d",
+    "offline_analysis": "bd29f96013620ae765741431515a2a455af1cbda913b7a7e0d9b99cde8e6c7c1",
+    "offline_analyzer": "ea55a19d104a701fd30fce860fb3df6e2884e02965912d42e5a7000931017ca8",
+    "driver_restore": "bf3ab7b749b5608cf643981034c2ff09dbce416b4a22a159a699a7b1ea4b1a3e",
+    "restore_receipt": "a274fc08eb301d232d2bd1aeef5a015456671764d4a1e82cb7e4d6adf3033a87",
+    "guardian_terminal_and_normal_off": "db7997e7f239a4eed2b2a77e70b11f182a57eb6e7b9a397c4c8b105fc910957f",
+    "guardian_finished": "dccd685668f06c957d88abf82f7c6dc829a5f9bea8a535319a51fea71acf8669"
+  },
+  "acceptance": {
+    "causal_gain_established": false,
+    "decoder_completeness_established": false,
+    "eligible_60fps": false,
+    "normal_300mib_target_met": null,
+    "physical_scanout_established": false,
+    "pixel_visibility_established": false,
+    "cpu_reuse_candidate_gain_established": false,
+    "hardware_acceptance": false,
+    "all_seven_requested_gaps_complete": false
+  },
+  "interpretation": [
+    "Normal RSS remained 497.063 MiB throughout the completed 120-second sample; this is a concrete memory concern, without eligible target acceptance or allocation-owner attribution.",
+    "The instrumented phase observed 59.833 distinct prepared-revision advances/s on its own compositor clock span. This separate interval does not reproduce the earlier roughly32/s pattern or establish a causal improvement.",
+    "The normal and instrumented RSS values belong to different process lifetimes and are not a same-lifetime memory comparison.",
+    "The archived runtime predates PR108 CPU frame reuse. These measurements neither test that change nor establish its gain.",
+    "No visible-pixel, physical-scanout, decoder-completeness, launcher-animation or accepted60FPS claim follows. Earlier source-specific reports and failed attempts retain their outcomes."
+  ]
+}
