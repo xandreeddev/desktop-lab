@@ -51,8 +51,8 @@ alpha-copy rules; it still creates no renderer. This example isolates one
 consumer path for later comparison and cannot attribute desktop RSS growth to
 a codec or GPU, establish a memory target, or prove visible frame cadence.
 
-The source and mock tests are prepared for review. They have not been compiled,
-run against media, or used to collect native measurements at this checkpoint.
+The initial source checkpoint preceded compilation and native measurements.
+The source-specific follow-ups below record later execution separately.
 
 ## Recorded follow-up
 
@@ -110,6 +110,12 @@ not an atomic whole-process snapshot, and the diagnostic and its saved JSON
 also allocate memory. Keep the native run bounded and treat this as additional
 accounting evidence, not an allocation profiler or a performance target pass.
 
-This optional extension and its injected tests are source-only at this
-checkpoint. It needs a new reviewed build and native run; earlier observer
-measurements do not contain these fields.
+The later [0fab accounting report](../../../../../reports/measurements/lucent-playback-malloc-accounting-0fab.json)
+records strict release Clippy, fourteen focused tests and a release build, then
+one native sequence with all nine stopped-worker allocator snapshots on glibc
+2.44. The final after-drop observation has about 114 MiB of malloc-free arena
+space, versus about 17 MiB after the first FHD phase. Accounted in-use grows only
+1,440 bytes between those observations; RSS grows about 96.94 MiB. This supports
+free arena retention in the independent consumer, without identifying resident
+page owners, a codec leak or the desktop's full memory cost. Original desktop,
+media and owned-process cleanup checks pass. No allocator policy was changed.

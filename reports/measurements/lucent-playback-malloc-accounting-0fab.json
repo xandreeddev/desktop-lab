@@ -1,0 +1,334 @@
+{
+  "schema": 1,
+  "recorded_on": "2026-10-24",
+  "scope": "One standalone CPU playback-port consumer; three20-second phases reopen playback, join each producer and drop the latest frame. Optional malloc accounting adds observations only, without any allocator or desktop change.",
+  "source": {
+    "observer_commit": "0fab0e73a1a2744332dc43a05144a26f68bb20e3",
+    "binary_sha256": "baa5ffe967b02b851dafde37f03360388e8120993e13cf794fdcda169678ec98",
+    "build_report_sha256": "3bc4e73d5a33a49603f2fadbcd9141fc1d116db11ac3fd7f57fb4859fd5f0b9e",
+    "actual_focused_tests_passed": 14,
+    "strict_release_clippy_passed": true,
+    "release_build_passed": true,
+    "native_receipt_sha256": "26e603499d47fb260d9389c2d0b7188a4e78dafcf91cdc5765ec41bdd0c93750"
+  },
+  "workload": {
+    "media_sha256": "9bfaece1a34f02067005190a26c9dc5ba0e83e74875653c8336c022d133ebc35",
+    "sdk_bridge": false,
+    "renderer_used": false,
+    "configured_frame_rate": "source",
+    "phase_seconds": 20,
+    "actual_runtime_glibc": "2.44",
+    "primary_desktop_continued": true,
+    "cpu_quota_percent": 100,
+    "memory_high_mib": 400,
+    "memory_max_mib": 650,
+    "runtime_max_seconds": 150
+  },
+  "phases": [
+    {
+      "phase": "first_fhd",
+      "elapsed_ms": 20018,
+      "published_frames": 164,
+      "actual_size": [
+        1920,
+        1080
+      ],
+      "latest_capacity_bytes_before_drop": 8294400,
+      "consumer_held_pixel_capacity_after_drop": 0,
+      "worker_joined": true,
+      "stopped_boundary_samples": [
+        {
+          "moment": "before_play",
+          "elapsed_ms": 0,
+          "memory": {
+            "anonymous_kib": 5056,
+            "rss_high_water_kib": 25824,
+            "rss_kib": 25824,
+            "swap_kib": 0
+          },
+          "allocator": {
+            "available": true,
+            "bytes": {
+              "arena": 401408,
+              "arena_accounted_in_use": 271984,
+              "arena_free": 129424,
+              "direct_mmap": 0,
+              "malloc_accounted_in_use_total": 271984
+            },
+            "counts": {
+              "arena_free_chunks": 447,
+              "direct_mmap_regions": 0
+            },
+            "glibc_version": "2.44",
+            "kind": "glibc_mallinfo2"
+          }
+        },
+        {
+          "moment": "after_join_latest_held",
+          "elapsed_ms": 20016,
+          "memory": {
+            "anonymous_kib": 53312,
+            "rss_high_water_kib": 125472,
+            "rss_kib": 82128,
+            "swap_kib": 0
+          },
+          "allocator": {
+            "available": true,
+            "bytes": {
+              "arena": 47681536,
+              "arena_accounted_in_use": 8712448,
+              "arena_free": 38969088,
+              "direct_mmap": 0,
+              "malloc_accounted_in_use_total": 8712448
+            },
+            "counts": {
+              "arena_free_chunks": 20,
+              "direct_mmap_regions": 0
+            },
+            "glibc_version": "2.44",
+            "kind": "glibc_mallinfo2"
+          }
+        },
+        {
+          "moment": "after_latest_dropped",
+          "elapsed_ms": 20018,
+          "memory": {
+            "anonymous_kib": 24576,
+            "rss_high_water_kib": 125472,
+            "rss_kib": 53392,
+            "swap_kib": 0
+          },
+          "allocator": {
+            "available": true,
+            "bytes": {
+              "arena": 18190336,
+              "arena_accounted_in_use": 421936,
+              "arena_free": 17768400,
+              "direct_mmap": 0,
+              "malloc_accounted_in_use_total": 421936
+            },
+            "counts": {
+              "arena_free_chunks": 16,
+              "direct_mmap_regions": 0
+            },
+            "glibc_version": "2.44",
+            "kind": "glibc_mallinfo2"
+          }
+        }
+      ]
+    },
+    {
+      "phase": "four_k",
+      "elapsed_ms": 20018,
+      "published_frames": 105,
+      "actual_size": [
+        3840,
+        2160
+      ],
+      "latest_capacity_bytes_before_drop": 33177600,
+      "consumer_held_pixel_capacity_after_drop": 0,
+      "worker_joined": true,
+      "stopped_boundary_samples": [
+        {
+          "moment": "before_play",
+          "elapsed_ms": 0,
+          "memory": {
+            "anonymous_kib": 24720,
+            "rss_high_water_kib": 125472,
+            "rss_kib": 53536,
+            "swap_kib": 0
+          },
+          "allocator": {
+            "available": true,
+            "bytes": {
+              "arena": 18325504,
+              "arena_accounted_in_use": 297632,
+              "arena_free": 18027872,
+              "direct_mmap": 0,
+              "malloc_accounted_in_use_total": 297632
+            },
+            "counts": {
+              "arena_free_chunks": 489,
+              "direct_mmap_regions": 0
+            },
+            "glibc_version": "2.44",
+            "kind": "glibc_mallinfo2"
+          }
+        },
+        {
+          "moment": "after_join_latest_held",
+          "elapsed_ms": 20017,
+          "memory": {
+            "anonymous_kib": 139896,
+            "rss_high_water_kib": 233100,
+            "rss_kib": 168776,
+            "swap_kib": 0
+          },
+          "allocator": {
+            "available": true,
+            "bytes": {
+              "arena": 103350272,
+              "arena_accounted_in_use": 419296,
+              "arena_free": 102930976,
+              "direct_mmap": 33181696,
+              "malloc_accounted_in_use_total": 33600992
+            },
+            "counts": {
+              "arena_free_chunks": 39,
+              "direct_mmap_regions": 1
+            },
+            "glibc_version": "2.44",
+            "kind": "glibc_mallinfo2"
+          }
+        },
+        {
+          "moment": "after_latest_dropped",
+          "elapsed_ms": 20018,
+          "memory": {
+            "anonymous_kib": 107492,
+            "rss_high_water_kib": 233100,
+            "rss_kib": 136372,
+            "swap_kib": 0
+          },
+          "allocator": {
+            "available": true,
+            "bytes": {
+              "arena": 103350272,
+              "arena_accounted_in_use": 423184,
+              "arena_free": 102927088,
+              "direct_mmap": 0,
+              "malloc_accounted_in_use_total": 423184
+            },
+            "counts": {
+              "arena_free_chunks": 38,
+              "direct_mmap_regions": 0
+            },
+            "glibc_version": "2.44",
+            "kind": "glibc_mallinfo2"
+          }
+        }
+      ]
+    },
+    {
+      "phase": "restored_fhd",
+      "elapsed_ms": 20008,
+      "published_frames": 175,
+      "actual_size": [
+        1920,
+        1080
+      ],
+      "latest_capacity_bytes_before_drop": 8294400,
+      "consumer_held_pixel_capacity_after_drop": 0,
+      "worker_joined": true,
+      "stopped_boundary_samples": [
+        {
+          "moment": "before_play",
+          "elapsed_ms": 0,
+          "memory": {
+            "anonymous_kib": 107496,
+            "rss_high_water_kib": 233100,
+            "rss_kib": 136376,
+            "swap_kib": 0
+          },
+          "allocator": {
+            "available": true,
+            "bytes": {
+              "arena": 103350272,
+              "arena_accounted_in_use": 297744,
+              "arena_free": 103052528,
+              "direct_mmap": 0,
+              "malloc_accounted_in_use_total": 297744
+            },
+            "counts": {
+              "arena_free_chunks": 488,
+              "direct_mmap_regions": 0
+            },
+            "glibc_version": "2.44",
+            "kind": "glibc_mallinfo2"
+          }
+        },
+        {
+          "moment": "after_join_latest_held",
+          "elapsed_ms": 20008,
+          "memory": {
+            "anonymous_kib": 123776,
+            "rss_high_water_kib": 233100,
+            "rss_kib": 152656,
+            "swap_kib": 0
+          },
+          "allocator": {
+            "available": true,
+            "bytes": {
+              "arena": 119721984,
+              "arena_accounted_in_use": 8713904,
+              "arena_free": 111008080,
+              "direct_mmap": 0,
+              "malloc_accounted_in_use_total": 8713904
+            },
+            "counts": {
+              "arena_free_chunks": 37,
+              "direct_mmap_regions": 0
+            },
+            "glibc_version": "2.44",
+            "kind": "glibc_mallinfo2"
+          }
+        },
+        {
+          "moment": "after_latest_dropped",
+          "elapsed_ms": 20008,
+          "memory": {
+            "anonymous_kib": 123776,
+            "rss_high_water_kib": 233100,
+            "rss_kib": 152656,
+            "swap_kib": 0
+          },
+          "allocator": {
+            "available": true,
+            "bytes": {
+              "arena": 119721984,
+              "arena_accounted_in_use": 423376,
+              "arena_free": 119298608,
+              "direct_mmap": 0,
+              "malloc_accounted_in_use_total": 423376
+            },
+            "counts": {
+              "arena_free_chunks": 35,
+              "direct_mmap_regions": 0
+            },
+            "glibc_version": "2.44",
+            "kind": "glibc_mallinfo2"
+          }
+        }
+      ]
+    }
+  ],
+  "cold_to_restored_after_drop": {
+    "rss_delta_kib": 99264,
+    "anonymous_delta_kib": 99200,
+    "malloc_arena_delta_bytes": 101531648,
+    "malloc_arena_free_delta_bytes": 101530208,
+    "malloc_accounted_in_use_delta_bytes": 1440,
+    "direct_mmap_bytes_at_both_endpoints": 0
+  },
+  "cleanup": {
+    "observer_terminated": true,
+    "observer_cgroup_drained": true,
+    "owned_cleanup_verified": true,
+    "desktop_and_media_preserved": true
+  },
+  "interpretation": [
+    "This run adds96.9375MiB RSS and96.8267517MiB malloc-free arena space between its first and restored FHD after-drop observations, while malloc-accounted in-use grows only1440bytes. It supports retained free arena storage in this independent CPU path.",
+    "At the last frame drop,8,290,528bytes move from malloc-accounted in-use to free, with unchanged RSS. These are allocation-accounting bytes, not resident-page ownership; thread caches, library state and diagnostic allocations limit object-level interpretation.",
+    "The allocator snapshots occur only with the exact playback worker stopped. The primary desktop is a separate continuing workload; this does not attribute its435MiB observation or establish a memory improvement.",
+    "The dynamically adjusted mmap/trim thresholds were not measured, and no threshold cause is established. No trim, allocator override, driver reset, process offload or quality reduction was used.",
+    "Point samples and capped publication counts are not steady-state, presentation FPS or complete transient-peak evidence."
+  ],
+  "acceptance": {
+    "free_arena_retention_observed_in_this_consumer": true,
+    "live_object_or_leak_cause_established": false,
+    "desktop_allocation_cause_established": false,
+    "desktop_memory_gain_established": false,
+    "memory_target_met": null,
+    "performance_accepted": false
+  }
+}
