@@ -54,6 +54,7 @@ mod effects;
 mod fractional;
 mod handoff;
 mod input_method;
+mod input_release;
 mod ipc;
 mod keyboard;
 mod layer_commit;
@@ -143,6 +144,7 @@ struct State<A: Application> {
     clipboard: clipboard::Clipboard<A::Message>,
     input_method: input_method::InputMethod,
     activation: activation::Activation<A::Message>,
+    input_release: input_release::Releases<A::Message>,
     modifiers: Modifiers,
     epoch: Instant,
     profile_frames: bool,
@@ -292,6 +294,7 @@ fn run_inner<A: Application>(
         clipboard: clipboard::Clipboard::new(clipboard_manager),
         input_method: input_method::InputMethod::bind(&globals, &qh, !input_method_allowed),
         activation,
+        input_release: Default::default(),
         modifiers: Modifiers::default(),
         epoch: Instant::now(),
         presentation: presentation::Capture::bind(&globals, &qh, ipc && authorize_unlock.is_none()),
@@ -603,6 +606,10 @@ impl<A: Application> State<A> {
         if let Err(e) = self.reconcile_with_recreation(qh, &recreate) {
             self.error = Some(e.to_string());
             self.exit = true;
+        }
+        self.input_release_revalidate(qh);
+        for request in effects.input_release {
+            self.input_release_request(request, qh);
         }
         for id in &effects.redraw {
             for s in self
@@ -1017,6 +1024,7 @@ impl<A: Application> State<A> {
             s.renderer.enable_profiling(self.profile_frames);
             s.renderer
                 .enable_stream_tracing(self.presentation.tracing());
+            let mut input_release_frame = None;
             let outcome =
                 s.renderer
                     .render_scaled(width, height, density, &scene.paint, |streams| {
@@ -1043,7 +1051,17 @@ impl<A: Application> State<A> {
                             );
                         }
                         surface.frame(qh, FrameCallbackData(surface.clone()));
+                        input_release_frame = self.input_release.frame(
+                            surface,
+                            s.spec.keyboard == api::Keyboard::None
+                                && s.spec.pointer_input == api::PointerInput::None,
+                            qh,
+                        );
                     });
+            self.input_release.submitted(
+                input_release_frame,
+                matches!(&outcome, Ok(RenderOutcome::Presented)),
+            );
             if let Some(trace) = &mut s.pacing {
                 let observed = match &outcome {
                     Ok(RenderOutcome::Presented) => pacing::Outcome::Presented,

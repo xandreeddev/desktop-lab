@@ -180,6 +180,17 @@ application exits. `Subscription::every` is a convenience for bounded periodic
 sources. A subscription whose parameters change must use a new ID or explicitly
 react to its own configuration; a stable ID is not automatically restarted.
 
+`Effects::after_input_release(address, cancellation, callback)` acknowledges a
+client-requested native layer input release before handing work to another app.
+The client requests keyboard and pointer `None`; the backend waits for the actual
+compositor frame callback for a successful post-admission submission on that exact
+native object. It returns a typed result within two seconds, bounds requests and
+outstanding callbacks to eight, and suppresses cancelled delivery. It never changes
+focus, performs an extra surface commit, or promises scanout. Notification links
+use it alongside captured activation context; see [default URI activation](default-uri-activation.md).
+This new source capability and its tests still require compilation and fresh native
+validation; older launcher results are not evidence for the new ordering.
+
 Runtime ingress is a shared FIFO with capacity for 64 waiting messages from
 subscriptions, effect completions and local IPC. When full, background producers
 wait; the UI never waits to enqueue. Each calloop dispatch handles at most 65

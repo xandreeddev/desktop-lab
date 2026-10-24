@@ -279,6 +279,7 @@ fn rich_links_use_current_content_and_history_never_invokes_the_sender() {
         )),
         &mut effects,
     );
+    release_link_input(&mut center, &mut effects);
     let result = effects.tasks.pop().unwrap().run();
     center.update(result, &mut effects);
     assert_eq!(
@@ -306,6 +307,7 @@ fn rich_links_use_current_content_and_history_never_invokes_the_sender() {
         .unwrap()
         .finish(ActivationOutcome::NoUserInput);
     center.update(completion, &mut effects);
+    release_link_input(&mut center, &mut effects);
     let result = effects.tasks.pop().unwrap().run();
     center.update(result, &mut effects);
     assert!(adapter.calls.lock().unwrap().is_empty());
@@ -349,6 +351,14 @@ fn show_link_history(center: &mut Center, effects: &mut Effects<Message>) -> Not
     target
 }
 
+fn release_link_input(center: &mut Center, effects: &mut Effects<Message>) {
+    let request = effects.input_release.pop().unwrap();
+    center.update(
+        request.finish(InputReleaseOutcome::Released).unwrap(),
+        effects,
+    );
+}
+
 fn prepared_link_task(
     center: &mut Center,
     effects: &mut Effects<Message>,
@@ -360,9 +370,169 @@ fn prepared_link_task(
     );
     let prepared = effects.activation.pop().unwrap().finish(token());
     center.update(prepared, effects);
+    release_link_input(center, effects);
     let task = effects.tasks.pop().unwrap();
     assert_eq!(task.queue, crate::work::CONTROLS);
     task
+}
+
+#[test]
+fn uri_dispatch_waits_for_both_context_and_actual_release_ack_in_either_order() {
+    for release_first in [false, true] {
+        let (mut center, adapter) = center();
+        let mut effects = Effects::default();
+        let target = show_link_history(&mut center, &mut effects);
+        let session = center.history_session;
+        center.update(
+            Message::OpenLink(target, "https://example.test/first".into()),
+            &mut effects,
+        );
+        assert!(center.history_open() && center.yielding_input());
+        let token = effects.activation.pop().unwrap().finish(token());
+        let released = effects
+            .input_release
+            .pop()
+            .unwrap()
+            .finish(InputReleaseOutcome::Released)
+            .unwrap();
+        let (first, second) = if release_first {
+            (released, token)
+        } else {
+            (token, released)
+        };
+        center.update(first.clone(), &mut effects);
+        assert!(
+            effects.tasks.is_empty(),
+            "one completion cannot open the handler"
+        );
+        assert!(adapter.links.lock().unwrap().is_empty());
+        center.update(second.clone(), &mut effects);
+        center.update(first, &mut effects);
+        center.update(second, &mut effects);
+        assert_eq!(effects.tasks.len(), 1);
+        assert_eq!(center.history_session, session);
+        assert!(center.history_open(), "release is not dismissal");
+        assert!(
+            center.yielding_input(),
+            "keep released until handler outcome"
+        );
+        center.update(effects.tasks.pop().unwrap().run(), &mut effects);
+        assert!(!center.history_open());
+        assert!(!center.yielding_input());
+        assert_eq!(
+            *adapter.links.lock().unwrap(),
+            ["https://example.test/first"]
+        );
+    }
+}
+
+#[test]
+fn release_failure_retains_current_history_and_never_invokes_uri_adapter() {
+    for context_first in [false, true] {
+        for outcome in [
+            InputReleaseOutcome::Unavailable,
+            InputReleaseOutcome::Retired,
+            InputReleaseOutcome::Superseded,
+            InputReleaseOutcome::Timeout,
+            InputReleaseOutcome::Busy,
+        ] {
+            let (mut center, adapter) = center();
+            let mut effects = Effects::default();
+            let target = show_link_history(&mut center, &mut effects);
+            let session = center.history_session;
+            center.update(
+                Message::OpenLink(target, "https://example.test/first".into()),
+                &mut effects,
+            );
+            let token = effects.activation.pop().unwrap().finish(token());
+            if context_first {
+                center.update(token.clone(), &mut effects);
+            }
+            let failure = effects
+                .input_release
+                .pop()
+                .unwrap()
+                .finish(outcome)
+                .unwrap();
+            center.update(failure.clone(), &mut effects);
+            center.update(token, &mut effects);
+            center.update(failure, &mut effects);
+            assert!(center.history_open());
+            assert_eq!(center.history_session, session);
+            assert!(center.error);
+            assert!(!center.yielding_input());
+            assert!(effects.tasks.is_empty());
+            assert!(adapter.links.lock().unwrap().is_empty());
+        }
+    }
+}
+
+#[test]
+fn hide_reopen_and_new_presentation_cancel_unadmitted_handoff_without_closing_new_ui() {
+    for context_first in [false, true] {
+        let (mut center, adapter) = center();
+        let mut effects = Effects::default();
+        let target = show_link_history(&mut center, &mut effects);
+        center.update(
+            Message::OpenLink(target, "https://example.test/first".into()),
+            &mut effects,
+        );
+        let activation = effects.activation.pop().unwrap().finish(token());
+        let release = effects.input_release.pop().unwrap();
+        if context_first {
+            center.update(activation.clone(), &mut effects);
+        }
+        center.update(Message::Hide, &mut effects);
+        center.update(Message::Show, &mut effects);
+        let session = center.history_session;
+        assert!(release.cancellation.cancelled());
+        assert!(release.finish(InputReleaseOutcome::Released).is_none());
+        center.update(activation, &mut effects);
+        assert!(center.history_open());
+        assert_eq!(center.history_session, session);
+        assert!(!center.yielding_input());
+        assert!(!center.error);
+        assert!(effects.tasks.is_empty());
+        assert!(adapter.links.lock().unwrap().is_empty());
+    }
+}
+
+#[test]
+fn changed_note_and_invalid_new_link_retire_waiting_release_and_checked_context() {
+    for replace in [false, true] {
+        let (mut center, adapter) = center();
+        let mut effects = Effects::default();
+        let target = show_link_history(&mut center, &mut effects);
+        center.update(
+            Message::OpenLink(target, "https://example.test/first".into()),
+            &mut effects,
+        );
+        let activation = effects.activation.pop().unwrap().finish(token());
+        center.update(activation, &mut effects);
+        let release = effects.input_release.pop().unwrap();
+        if replace {
+            let mut changed = link_note();
+            changed.revision += 1;
+            center.update(
+                Message::Snapshot(Ok(NotificationSnapshot {
+                    history: vec![changed],
+                    ..Default::default()
+                })),
+                &mut effects,
+            );
+        } else {
+            center.update(
+                Message::OpenLink(target, "javascript:invalid".into()),
+                &mut effects,
+            );
+        }
+        assert!(release.cancellation.cancelled());
+        assert!(release.finish(InputReleaseOutcome::Released).is_none());
+        assert!(effects.tasks.is_empty());
+        assert!(adapter.links.lock().unwrap().is_empty());
+        assert!(center.history_open());
+        assert!(!center.yielding_input());
+    }
 }
 
 #[test]
@@ -629,6 +799,7 @@ fn newer_link_intent_rejects_old_tokens_and_completion_replay() {
     let prepared = effects.activation.pop().unwrap().finish(token());
     center.update(prepared.clone(), &mut effects);
     center.update(prepared.clone(), &mut effects);
+    release_link_input(&mut center, &mut effects);
     assert_eq!(
         effects.tasks.len(),
         1,
@@ -663,7 +834,7 @@ fn newer_link_intent_rejects_old_tokens_and_completion_replay() {
 
 #[test]
 fn retiring_a_link_cancels_an_opening_still_waiting_on_the_controls_queue() {
-    for retirement in 0..3 {
+    for retirement in 0..6 {
         let (mut center, adapter) = center();
         let mut effects = Effects::default();
         let value = link_note();
@@ -681,6 +852,7 @@ fn retiring_a_link_cancels_an_opening_still_waiting_on_the_controls_queue() {
         );
         let prepared = effects.activation.pop().unwrap().finish(token());
         center.update(prepared, &mut effects);
+        release_link_input(&mut center, &mut effects);
         let task = effects.tasks.pop().unwrap();
         assert!(!task.cancellation.cancelled());
         if retirement == 0 {
@@ -690,9 +862,18 @@ fn retiring_a_link_cancels_an_opening_still_waiting_on_the_controls_queue() {
                 Message::Snapshot(Ok(NotificationSnapshot::default())),
                 &mut effects,
             );
-        } else {
+        } else if retirement == 2 {
             center.update(
                 Message::OpenLink(target, "https://example.test/second".into()),
+                &mut effects,
+            );
+        } else {
+            center.update(
+                match retirement {
+                    3 => Message::Hide,
+                    4 => Message::Show,
+                    _ => Message::Toggle,
+                },
                 &mut effects,
             );
         }
@@ -710,6 +891,49 @@ fn retiring_a_link_cancels_an_opening_still_waiting_on_the_controls_queue() {
             assert!(center.link_opening.is_none());
         }
     }
+}
+
+#[test]
+fn link_request_exhaustion_retires_the_last_queued_task_and_rejects_phase_replay() {
+    let (mut center, adapter) = center();
+    let mut effects = Effects::default();
+    let target = show_link_history(&mut center, &mut effects);
+    let session = center.history_session;
+    center.next_link_request = u64::MAX - 1;
+    let task = prepared_link_task(&mut center, &mut effects, target);
+    assert_eq!(center.next_link_request, u64::MAX);
+    assert!(!task.cancellation.cancelled());
+    center.update(
+        Message::OpenLink(target, "https://example.test/second".into()),
+        &mut effects,
+    );
+    assert!(task.cancellation.cancelled());
+    assert!(center.error);
+    assert!(!center.yielding_input());
+    assert!(center.history_open());
+    assert_eq!(center.history_session, session);
+    assert!(effects.activation.is_empty());
+    assert!(effects.input_release.is_empty());
+    center.error = false;
+    for message in [
+        Message::LinkPrepared(u64::MAX, token()),
+        Message::LinkInputReleased(u64::MAX, InputReleaseOutcome::Released),
+        Message::LinkInputReleased(u64::MAX, InputReleaseOutcome::Timeout),
+        Message::LinkDone(u64::MAX, Ok(())),
+        Message::LinkDone(
+            u64::MAX,
+            Err(lucent_domain::DomainError::Failed("stale".into())),
+        ),
+    ] {
+        center.update(message, &mut effects);
+    }
+    assert_eq!(center.next_link_request, u64::MAX);
+    assert!(center.history_open());
+    assert_eq!(center.history_session, session);
+    assert!(!center.error);
+    assert!(!center.yielding_input());
+    assert!(effects.tasks.is_empty());
+    assert!(adapter.links.lock().unwrap().is_empty());
 }
 
 #[test]

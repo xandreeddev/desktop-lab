@@ -1412,12 +1412,25 @@ impl Component for Desktop {
             }
             Message::DismissPanels => self.dismiss_panels(effects),
             Message::Notifications(message) => {
-                let was_open = self.notifications.history_open();
-                effects.delegate(
-                    |child| self.notifications.update(message, child),
-                    Message::Notifications,
-                );
-                self.panel_opened(Panel::Notifications, was_open, effects);
+                // A toast action cannot release some other child's foreground
+                // ownership. Keep that UI and report the unavailable handoff.
+                if matches!(&message, crate::notifications::Message::OpenLink(..))
+                    && self
+                        .panel_surface()
+                        .is_some_and(|surface| surface != "notifications")
+                {
+                    effects.delegate(
+                        |child| self.notifications.reject_link(child),
+                        Message::Notifications,
+                    );
+                } else {
+                    let was_open = self.notifications.history_open();
+                    effects.delegate(
+                        |child| self.notifications.update(message, child),
+                        Message::Notifications,
+                    );
+                    self.panel_opened(Panel::Notifications, was_open, effects);
+                }
             }
             Message::Loaded(settings, wallpapers, current_wallpaper) => {
                 self.monitors.cancel_interactions();
@@ -2384,15 +2397,19 @@ impl api::Application for Desktop {
                 width: 0,
                 height: 0,
                 exclusive_zone: -1,
-                keyboard: if self.notifications.history_open() {
+                // Passive toasts keep pointer actions without requesting
+                // native keyboard ownership, including after a URI handoff.
+                keyboard: if self.notifications.history_open()
+                    && !self.notifications.yielding_input()
+                {
                     Keyboard::Exclusive
-                } else if self.notifications.history_closing() {
-                    Keyboard::None
                 } else {
-                    Keyboard::OnDemand
+                    Keyboard::None
                 },
                 visible: self.notifications.visible(),
-                pointer_input: if self.notifications.history_open() {
+                pointer_input: if self.notifications.yielding_input() {
+                    PointerInput::None
+                } else if self.notifications.history_open() {
                     PointerInput::All
                 } else if self.notifications.history_closing() {
                     PointerInput::None

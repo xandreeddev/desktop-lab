@@ -139,7 +139,13 @@ impl Desktop {
                 },
                 Message::Notifications,
             ),
-            Panel::Notifications => (),
+            // Toast-origin work may await its own ack with history closed.
+            // A new foreground owner retires that queued handoff as well.
+            Panel::Notifications => {
+                if self.notifications.cancel_link() {
+                    effects.redraw("notifications");
+                }
+            }
         }
     }
 
@@ -1098,8 +1104,8 @@ mod tests {
         assert_eq!(serde_json::to_value(&app.settings).unwrap(), preferences);
     }
 
-    fn notification_link_completion(app: &mut Desktop, effects: &mut Effects<Message>) -> Message {
-        let note = lucent_domain::Notification {
+    fn notification_link_note() -> lucent_domain::Notification {
+        lucent_domain::Notification {
             id: 1,
             revision: 1,
             received_unix_ms: 1,
@@ -1113,7 +1119,11 @@ mod tests {
             resident: false,
             transient: false,
             timeout_ms: 0,
-        };
+        }
+    }
+
+    fn begin_notification_link(app: &mut Desktop, effects: &mut Effects<Message>) {
+        let note = notification_link_note();
         let target = note.target().unwrap();
         app.update(
             Message::Notifications(crate::notifications::Message::Snapshot(Ok(
@@ -1138,12 +1148,23 @@ mod tests {
             )),
             effects,
         );
+    }
+
+    fn notification_link_completion(app: &mut Desktop, effects: &mut Effects<Message>) -> Message {
+        begin_notification_link(app, effects);
         let prepared = effects
             .activation
             .pop()
             .unwrap()
             .finish(lucent_api::ActivationOutcome::NoUserInput);
         app.update(prepared, effects);
+        let released = effects
+            .input_release
+            .pop()
+            .unwrap()
+            .finish(lucent_api::InputReleaseOutcome::Released)
+            .unwrap();
+        app.update(released, effects);
         let index = effects
             .tasks
             .iter()
@@ -1155,6 +1176,150 @@ mod tests {
             Message::Notifications(crate::notifications::Message::LinkDone(_, _))
         ));
         done
+    }
+
+    #[test]
+    fn pending_link_keeps_history_paint_but_releases_input_before_any_adapter_task() {
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        let mut effects = Effects::default();
+        begin_notification_link(&mut app, &mut effects);
+        let surface = app
+            .surfaces()
+            .into_iter()
+            .find(|surface| surface.id == "notifications")
+            .unwrap();
+        assert!(surface.visible && app.notifications.history_open());
+        assert_eq!(surface.keyboard, Keyboard::None);
+        assert_eq!(surface.pointer_input, PointerInput::None);
+        assert!(contains(
+            &app.view(&context("notifications")),
+            "notification-history-close"
+        ));
+        assert_eq!(effects.input_release.len(), 1);
+        let prepared = effects
+            .activation
+            .pop()
+            .unwrap()
+            .finish(lucent_api::ActivationOutcome::NoUserInput);
+        app.update(prepared, &mut effects);
+        assert!(app.notifications.yielding_input());
+        let release = effects.input_release.pop().unwrap();
+        app.update(open(Panel::Audio), &mut effects);
+        assert!(release.cancellation.cancelled());
+        assert!(
+            release
+                .finish(lucent_api::InputReleaseOutcome::Released)
+                .is_none()
+        );
+        assert!(app.audio.open());
+        assert!(!app.notifications.yielding_input());
+        assert_eq!(app.panel_surface(), Some("audio"));
+    }
+
+    #[test]
+    fn toast_link_does_not_release_an_existing_unrelated_foreground_owner() {
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        let mut effects = Effects::default();
+        app.update(
+            Message::Notifications(crate::notifications::Message::Snapshot(Ok(
+                lucent_domain::NotificationSnapshot {
+                    active: vec![notification_link_note()],
+                    ..Default::default()
+                },
+            ))),
+            &mut effects,
+        );
+        app.update(open(Panel::Audio), &mut effects);
+        let activation_count = effects.activation.len();
+        let release_count = effects.input_release.len();
+        effects.redraw.clear();
+        app.update(
+            Message::Notifications(crate::notifications::Message::OpenLink(
+                lucent_domain::NotificationTarget::new(1, 1).unwrap(),
+                "https://example.test/owned".into(),
+            )),
+            &mut effects,
+        );
+        assert!(app.audio.open());
+        assert_eq!(app.panel_surface(), Some("audio"));
+        assert!(!app.notifications.yielding_input());
+        assert_eq!(effects.activation.len(), activation_count);
+        assert_eq!(effects.input_release.len(), release_count);
+        assert!(effects.redraw.contains("notifications"));
+        assert!(effects.redraw.contains("bar"));
+    }
+
+    #[test]
+    fn toast_pending_handoff_retires_when_another_panel_takes_foreground() {
+        for context_first in [false, true] {
+            let mut app = Desktop::new(crate::test_adapters::adapters());
+            let mut effects = Effects::default();
+            let note = notification_link_note();
+            let target = note.target().unwrap();
+            app.update(
+                Message::Notifications(crate::notifications::Message::Snapshot(Ok(
+                    lucent_domain::NotificationSnapshot {
+                        active: vec![note],
+                        ..Default::default()
+                    },
+                ))),
+                &mut effects,
+            );
+            app.update(
+                Message::Notifications(crate::notifications::Message::OpenLink(
+                    target,
+                    "https://example.test/owned".into(),
+                )),
+                &mut effects,
+            );
+            assert!(!app.notifications.history_open());
+            assert!(app.notifications.yielding_input());
+            let token = effects
+                .activation
+                .pop()
+                .unwrap()
+                .finish(lucent_api::ActivationOutcome::NoUserInput);
+            let request = match &token {
+                Message::Notifications(crate::notifications::Message::LinkPrepared(request, _)) => {
+                    *request
+                }
+                _ => panic!("notification activation completion required"),
+            };
+            let release = effects.input_release.pop().unwrap();
+            if context_first {
+                app.update(token.clone(), &mut effects);
+            }
+            effects.redraw.clear();
+            app.update(open(Panel::Audio), &mut effects);
+            let task_count = effects.tasks.len();
+            assert!(effects.redraw.contains("notifications"));
+            assert!(release.cancellation.cancelled());
+            assert!(
+                release
+                    .finish(lucent_api::InputReleaseOutcome::Released)
+                    .is_none()
+            );
+            // Already-delivered phase messages have the same retirement guard.
+            app.update(token, &mut effects);
+            app.update(
+                Message::Notifications(crate::notifications::Message::LinkInputReleased(
+                    request,
+                    lucent_api::InputReleaseOutcome::Released,
+                )),
+                &mut effects,
+            );
+            assert_eq!(effects.tasks.len(), task_count);
+            assert_eq!(app.panel_surface(), Some("audio"));
+            assert!(app.audio.open());
+            assert!(!app.notifications.yielding_input());
+            let surface = app
+                .surfaces()
+                .into_iter()
+                .find(|surface| surface.id == "notifications")
+                .unwrap();
+            assert_eq!(surface.keyboard, Keyboard::None);
+            assert_eq!(surface.pointer_input, PointerInput::Content);
+        }
     }
 
     #[test]
@@ -1197,6 +1362,126 @@ mod tests {
                 .visible
         );
         assert!(contains(&app.view(&context("bar")), "bar-audio"));
+    }
+
+    #[test]
+    fn passive_toasts_keep_pointer_actions_and_history_retains_keyboard_navigation() {
+        use lucent_ui::{Interaction, Layout};
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        app.viewport = (1920., 1080.);
+        let mut effects = Effects::default();
+        app.update(
+            Message::Notifications(crate::notifications::Message::Snapshot(Ok(
+                lucent_domain::NotificationSnapshot {
+                    active: vec![notification_link_note()],
+                    ..Default::default()
+                },
+            ))),
+            &mut effects,
+        );
+        let toast = app
+            .surfaces()
+            .into_iter()
+            .find(|surface| surface.id == "notifications")
+            .unwrap();
+        assert!(toast.visible);
+        assert_eq!(toast.keyboard, Keyboard::None);
+        assert_eq!(toast.pointer_input, PointerInput::Content);
+        let layout = Layout::new(std::sync::Arc::new(
+            app.fonts()
+                .into_iter()
+                .map(|bytes| lucent_ui::text::Font::from_bytes(bytes, Default::default()).unwrap())
+                .collect(),
+        ));
+        let cx = context("notifications");
+        let scene = layout.build(
+            &app.view(&cx),
+            cx.width,
+            cx.height,
+            &Interaction::default(),
+            cx.now,
+        );
+        let dismiss = scene
+            .hits
+            .iter()
+            .find(|hit| hit.id == "notification-dismiss-1-1")
+            .unwrap();
+        let (x, y) = (
+            dismiss.rect.x + dismiss.rect.w / 2.,
+            dismiss.rect.y + dismiss.rect.h / 2.,
+        );
+        let mut pointer = Interaction::default();
+        pointer.press(&scene, x, y);
+        assert!(matches!(
+            pointer.release(x, y),
+            Some(Message::Notifications(
+                crate::notifications::Message::Dismiss(_)
+            ))
+        ));
+        app.update(open(Panel::Notifications), &mut effects);
+        let history = app
+            .surfaces()
+            .into_iter()
+            .find(|surface| surface.id == "notifications")
+            .unwrap();
+        assert_eq!(history.keyboard, Keyboard::Exclusive);
+        assert_eq!(history.pointer_input, PointerInput::All);
+        effects.now = 1.;
+        app.update(
+            Message::Notifications(crate::notifications::Message::Hide),
+            &mut effects,
+        );
+        let closing = app
+            .surfaces()
+            .into_iter()
+            .find(|surface| surface.id == "notifications")
+            .unwrap();
+        assert_eq!(closing.keyboard, Keyboard::None);
+        assert_eq!(closing.pointer_input, PointerInput::None);
+        submitted_at(&mut app, "notifications", None, 2.);
+        let toast = app
+            .surfaces()
+            .into_iter()
+            .find(|surface| surface.id == "notifications")
+            .unwrap();
+        assert!(toast.visible);
+        assert_eq!(toast.keyboard, Keyboard::None);
+        assert_eq!(toast.pointer_input, PointerInput::Content);
+    }
+
+    #[test]
+    fn successful_uri_handoff_never_restores_keyboard_ownership_to_remaining_toasts() {
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        let mut effects = Effects::default();
+        let done = notification_link_completion(&mut app, &mut effects);
+        app.update(
+            Message::Notifications(crate::notifications::Message::Snapshot(Ok(
+                lucent_domain::NotificationSnapshot {
+                    active: vec![notification_link_note()],
+                    ..Default::default()
+                },
+            ))),
+            &mut effects,
+        );
+        effects.now = 1.;
+        app.update(done, &mut effects);
+        let fading = app
+            .surfaces()
+            .into_iter()
+            .find(|surface| surface.id == "notifications")
+            .unwrap();
+        assert_eq!(fading.keyboard, Keyboard::None);
+        submitted_at(&mut app, "notifications", None, 2.);
+        assert!(!app.notifications.history_open());
+        assert!(!app.notifications.history_closing());
+        let toast = app
+            .surfaces()
+            .into_iter()
+            .find(|surface| surface.id == "notifications")
+            .unwrap();
+        assert!(toast.visible, "the live toast remains after history exit");
+        assert_eq!(toast.keyboard, Keyboard::None);
+        assert_eq!(toast.pointer_input, PointerInput::Content);
     }
 
     #[test]

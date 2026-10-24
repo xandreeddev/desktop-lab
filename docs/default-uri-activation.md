@@ -19,15 +19,19 @@ The path is:
    For an unknown destination it omits optional `set_app_id`; it never invents an
    identity such as `xdg-open`. Secure-client opt-out, bounded pending requests,
    timeouts and one-use input ownership remain unchanged.
-4. On completion the client matches the operation generation and revalidates the
-   exact notification version and current content URI. A stale completion cannot
-   admit another opening or change a newer operation. Current content is checked
-   independently of the prepared view cache.
-5. The client converts the SDK outcome into the existing opaque
-   `ApplicationLaunchContext`, then schedules `UriPort::open(target, context)` on
-   the controls queue. Replacement, clear, a newer opening or client retirement
-   cancels work that has not started. An already-running OS operation cannot be
-   undone; its late completion cannot affect a newer intent.
+4. The client yields its own notification layer's keyboard and pointer input
+   while retaining the visible history. It requests
+   `Effects::after_input_release` for that exact surface and retains the checked
+   `ApplicationLaunchContext` until both the activation outcome and release
+   acknowledgement arrive. Their order does not matter. A failed release keeps
+   current history and restores its input with ordinary error feedback.
+5. Only after both completions does the client revalidate the operation,
+   notification revision, URI and initiating presentation, then schedule
+   `UriPort::open(target, context)` on the existing controls queue. Hide/reopen,
+   another foreground owner, replacement, clear or a newer opening cancels queued
+   handoff work. An already-running OS operation cannot be undone. Success
+   closes only the same initiating history session; a stale result cannot close
+   newer UI. Toast-origin work never owns a later history presentation.
 6. `XdgUri` sends one literal URI argument to `xdg-open` through the shared
    independent application-unit launch policy. The fresh token is passed through
    `XDG_ACTIVATION_TOKEN` by environment, never embedded in argv or inspector
@@ -60,3 +64,37 @@ original handler configuration. The existing explicit-application Open tests do
 not prove this default-handler path, physical focus behavior or direct native
 token consumption. Preparing this implementation or harness closes none of
 those native validation requirements by itself.
+
+## Native input-release acknowledgement
+
+The generic SDK effect requires the client to request `Keyboard::None` and
+`PointerInput::None` on an existing ordinary layer surface. The Wayland backend
+captures that exact native object. A private, never-reused callback tag is bound
+only to a successful buffer submission after barrier admission. The compositor's
+real `wl_surface.frame` callback for that submission acknowledges processing of
+the commit carrying those input policies. The ordinary pacing callback and render
+commit remain unchanged; no extra surface commit, blocking roundtrip, fixed delay
+or focus command is used. `FrameSubmitted` alone cannot complete this effect.
+
+The callback revalidates native lifetime and current requested/committed policies.
+Retirement, interactive supersession, unsupported/secure roles, busy admission and
+a two-second timeout are typed outcomes. Cancellation suppresses completion. Eight
+requests and eight outstanding tagged callbacks bound retention, including callbacks
+whose cancelled or timed-out caller is gone. Old or failed submissions cannot
+acknowledge a newer request. A hidden or DPMS-disabled compositor can withhold frame
+callbacks; the effect times out without dispatching a handler.
+
+Passive toasts request `Keyboard::None` and keep `PointerInput::Content`, so their
+buttons and links remain clickable without requesting native keyboard ownership.
+History requests exclusive keyboard input for navigation; yielding and exit paint
+disable both inputs. Successful handoff or an ordinary history close restores only
+passive pointer actions while a toast remains. It never restores toast keyboard
+ownership before a newly opened application maps. The compositor's global focus
+configuration is unchanged.
+
+This is a commit-processing acknowledgement, not a scanout, compositor focus,
+destination mapping or trusted keyboard-input guarantee. The source implementation
+and protocol/client tests are prepared for review; they have not been compiled or
+run at this checkpoint. A new coherent archive and fresh cold-browser pointer and
+Tab/Enter tests, including trusted document `KeyA`, remain required. Earlier native
+trial outcomes and their cleanup flags remain unchanged.
