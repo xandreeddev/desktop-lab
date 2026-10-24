@@ -312,7 +312,7 @@ impl Gpu {
             &[lucent_api::ImageLevel {
                 width: 1,
                 height: 1,
-                pixels: vec![255; 4],
+                pixels: vec![255; 4].into(),
             }],
             ImageFormat::PremultipliedRgba8,
             profile,
@@ -404,7 +404,7 @@ impl Gpu {
             &[lucent_api::ImageLevel {
                 width,
                 height,
-                pixels,
+                pixels: pixels.into(),
             }],
             ImageFormat::Alpha8,
             profile,

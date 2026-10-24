@@ -406,9 +406,9 @@ impl LiveWallpaper {
                             }
                             let delivery = match result.and_then(|frame| {
                                 let timestamp = frame.timestamp;
-                                let (w, h, bytes, aspect) = frame.into_rgba_with_aspect();
+                                let (w, h, bytes, aspect) = frame.into_shared_rgba_with_aspect();
                                 let image = stream
-                                    .frame_rgba_with_aspect(w, h, bytes, aspect)
+                                    .frame_rgba_shared_with_aspect(w, h, bytes, aspect)
                                     .map_err(|e| DomainError::Failed(e.to_string()))?;
                                 if source_frame_profiling
                                     && let Some(trace) = mailbox

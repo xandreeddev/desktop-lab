@@ -241,7 +241,7 @@ pub struct MediaFrame {
     width: u32,
     height: u32,
     aspect_size: (u32, u32),
-    pixels: Vec<u8>,
+    pixels: Arc<Vec<u8>>,
     pub timestamp: Duration,
 }
 impl MediaFrame {
@@ -254,6 +254,17 @@ impl MediaFrame {
         width: u32,
         height: u32,
         pixels: Vec<u8>,
+        aspect_size: (u32, u32),
+        timestamp: Duration,
+    ) -> Result<Self> {
+        Self::rgba_shared_with_aspect(width, height, Arc::new(pixels), aspect_size, timestamp)
+    }
+    /// Admit shared, tightly packed straight-alpha RGBA8 pixels. Shared owners
+    /// cannot mutate the published bytes; no codec or presentation state is held.
+    pub fn rgba_shared_with_aspect(
+        width: u32,
+        height: u32,
+        pixels: Arc<Vec<u8>>,
         aspect_size: (u32, u32),
         timestamp: Duration,
     ) -> Result<Self> {
@@ -278,11 +289,87 @@ impl MediaFrame {
     pub fn aspect_size(&self) -> (u32, u32) {
         self.aspect_size
     }
+    /// Recover unique vector storage, or copy when another owner retains it.
+    /// Shared consumers should use `into_shared_rgba_with_aspect` instead.
     pub fn into_rgba(self) -> (u32, u32, Vec<u8>) {
-        (self.width, self.height, self.pixels)
+        (self.width, self.height, owned_pixels(self.pixels))
     }
+    /// Recover unique vector storage, or copy when another owner retains it.
     pub fn into_rgba_with_aspect(self) -> (u32, u32, Vec<u8>, (u32, u32)) {
+        (
+            self.width,
+            self.height,
+            owned_pixels(self.pixels),
+            self.aspect_size,
+        )
+    }
+    /// Transfer immutable pixel ownership without copying the allocation.
+    pub fn into_shared_rgba_with_aspect(self) -> (u32, u32, Arc<Vec<u8>>, (u32, u32)) {
         (self.width, self.height, self.pixels, self.aspect_size)
+    }
+}
+fn owned_pixels(pixels: Arc<Vec<u8>>) -> Vec<u8> {
+    Arc::try_unwrap(pixels).unwrap_or_else(|shared| (*shared).clone())
+}
+
+#[cfg(test)]
+mod shared_frame_tests {
+    use super::*;
+
+    #[test]
+    fn shared_frames_transfer_the_exact_immutable_allocation() {
+        let pixels = Arc::new(vec![40, 80, 120, 128]);
+        let frame = MediaFrame::rgba_shared_with_aspect(
+            1,
+            1,
+            pixels.clone(),
+            (65, 37),
+            Duration::from_millis(17),
+        )
+        .unwrap();
+        assert_eq!(frame.dimensions(), (1, 1));
+        assert_eq!(frame.aspect_size(), (65, 37));
+        assert_eq!(frame.timestamp, Duration::from_millis(17));
+        let (_, _, shared, _) = frame.into_shared_rgba_with_aspect();
+        assert!(Arc::ptr_eq(&pixels, &shared));
+        assert_eq!(shared.as_slice(), [40, 80, 120, 128]);
+    }
+
+    #[test]
+    fn legacy_extraction_unwraps_unique_pixels_or_copies_retained_pixels() {
+        let pixels = vec![20; 4];
+        let pointer = pixels.as_ptr();
+        let frame = MediaFrame::rgba(1, 1, pixels, Duration::ZERO).unwrap();
+        assert_eq!(frame.into_rgba().2.as_ptr(), pointer);
+        let shared = Arc::new(vec![60; 4]);
+        let frame =
+            MediaFrame::rgba_shared_with_aspect(1, 1, shared.clone(), (1, 1), Duration::ZERO)
+                .unwrap();
+        let mut owned = frame.into_rgba_with_aspect().2;
+        assert_ne!(owned.as_ptr(), shared.as_ptr());
+        owned[0] = 90;
+        assert_eq!(shared.as_slice(), [60; 4]);
+    }
+
+    #[test]
+    fn shared_storage_does_not_bypass_media_validation() {
+        for (width, height, length, aspect) in [
+            (0, 1, 4, (1, 1)),
+            (1, 1, 3, (1, 1)),
+            (1, 1, 4, (0, 1)),
+            (4097, 1, 4, (1, 1)),
+        ] {
+            assert!(
+                MediaFrame::rgba_shared_with_aspect(
+                    width,
+                    height,
+                    Arc::new(vec![0; length]),
+                    aspect,
+                    Duration::ZERO,
+                )
+                .is_err()
+            );
+        }
     }
 }
 fn media_frame_byte_size(width: u32, height: u32) -> Result<u64> {

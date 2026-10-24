@@ -276,7 +276,7 @@ mod tests {
         assert_eq!(mask.bytes() * 4, image.bytes());
         for (mask, image) in mask.levels().iter().zip(image.levels()) {
             let expanded: Vec<u8> = mask.pixels.iter().flat_map(|a| [*a; 4]).collect();
-            assert_eq!(expanded, image.pixels);
+            assert_eq!(expanded, *image.pixels);
         }
         let colored = svg(&source.replace("white", "#cc3322"), 65, "color".into()).unwrap();
         assert!(
