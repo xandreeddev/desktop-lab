@@ -1325,8 +1325,8 @@ class BrowserKeyHandoff(unittest.TestCase):
                 self.assertEqual(proof['pre_dispatch_release']['notification_policy'], 'exit-paint')
                 self.assertEqual(proof['post_event_release']['notification_policy'], 'exit-paint')
 
-    def test_real_normal_toast_policy_is_nonmodal_after_close_and_still_requires_actual_key(self):
-        toast = self.snapshot(keyboard='on-demand', pointer='content')
+    def test_normal_toast_requires_no_keyboard_ownership_and_still_requires_actual_key(self):
+        toast = self.snapshot(keyboard='none', pointer='content')
         for case in ('pointer', 'keyboard'):
             with self.subTest(case=case):
                 report, _, send, run = self.flow(case, guard_snapshots=[self.snapshot(), toast, toast])
@@ -1336,6 +1336,25 @@ class BrowserKeyHandoff(unittest.TestCase):
                 self.assertTrue(proof['accepted'])
                 self.assertEqual(proof['pre_dispatch_release']['notification_policy'], 'normal-toast')
                 self.assertEqual(proof['post_event_release']['notification_policy'], 'normal-toast')
+
+    def test_legacy_on_demand_toast_rejects_initial_last_and_final_handoff_guards(self):
+        legacy = self.snapshot(keyboard='on-demand', pointer='content')
+        before = {'id': 'notifications', 'instance': 'original', 'native_frames': 10}
+        self.assertIsNone(controller.notification_handoff(legacy, before))
+        for case in ('pointer', 'keyboard'):
+            for snapshots, dispatched, phase in (
+                    ([legacy, legacy, legacy], False, 'browser_key_release_wait'),
+                    ([self.snapshot(), legacy], False, 'browser_key_before_release_assert'),
+                    ([self.snapshot(), self.snapshot(), legacy], True, 'browser_key_after_release_assert')):
+                with self.subTest(case=case, phase=phase):
+                    report, _, send, run = self.flow(case, guard_snapshots=snapshots)
+                    with self.assertRaisesRegex(ValueError, '^natural_notification_input_release_required$'):
+                        run()
+                    self.assertEqual(send.call_count, int(dispatched))
+                    proof = report['browser_key_handoff'][case]
+                    self.assertEqual(proof['key_dispatch_attempted'], dispatched)
+                    self.assertFalse(proof['accepted'])
+                    self.assertEqual(report['failure']['phase'], phase)
 
     def test_reopened_modal_or_changed_surface_in_last_guard_blocks_key_after_release_and_cdp_read(self):
         for changed in (self.snapshot(opened=True, keyboard='exclusive', pointer='all'),
