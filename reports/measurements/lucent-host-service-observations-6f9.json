@@ -1,0 +1,129 @@
+{
+  "schema": 1,
+  "recorded_on": "2026-10-24",
+  "source_commit": "6f9e75d0477ae02809bf62bb6a9515894e1767f3",
+  "scope": "Four separately built independent consumers observed the current host user services for fifteen seconds each. This is source/binary-identified read-only adapter observation and process completion, not desktop UI or physical-device control acceptance.",
+  "provenance": {
+    "private_observation_summary_sha256": "46f30f3b7e7ccd2b1f82bbeae4ada3403081ee126240b9cee6a328c58bbe5031",
+    "private_build_result_sha256": "9e43d86e5653c7687207d2a04374b1257f397846a8e30c782c3bb7ba6dc8bffc",
+    "private_qualification_sha256": "2378d78523c3f4c487d877881e2cf26cd7b647a63723544083a24e6e7efd15f0"
+  },
+  "build_and_source_checks": {
+    "passed": true,
+    "strict_release_clippy_passed": true,
+    "audio_example_tests_passed": 4,
+    "audio_example_tests_failed": 0,
+    "four_release_binaries_built": true,
+    "build_receipt_native_run": false,
+    "scope": "The build receipt records no native run; the separate later host-observation receipt supplies the four actual observations below."
+  },
+  "observations": [
+    {
+      "consumer": "audio-observer",
+      "binary_sha256": "8d998e5d4ec86d592575620ab1dba6a7c3268b935dad81ab600c7f78abfea5fe",
+      "requested_seconds": 15,
+      "observed_wall_seconds": 15.334334983002918,
+      "read_only_observation_passed": true,
+      "observed_snapshot_records": 1,
+      "snapshot_counts": {
+        "outputs": 3,
+        "inputs": 5,
+        "monitor_inputs": 3,
+        "playback_streams": 0,
+        "capture_streams": 0
+      },
+      "audio_watch_returned_after_own_cancellation": true,
+      "exit_code": 0,
+      "outer_timeout": false,
+      "panic_observed": false,
+      "controls_or_input_sent": false,
+      "owned_unit_inactive_and_collected": true,
+      "owned_unit_main_and_control_process_ids_cleared": true
+    },
+    {
+      "consumer": "bluetooth-service",
+      "binary_sha256": "9402929adab3c644fea1e62d6876a75c188520a5cb61ca81bd12b145951acd66",
+      "requested_seconds": 15,
+      "observed_wall_seconds": 15.197740171999612,
+      "read_only_observation_passed": true,
+      "observed_snapshot_records": 1,
+      "snapshot_counts": {
+        "adapters": 1,
+        "connected": 1,
+        "devices": 3,
+        "pairing_requests": 0
+      },
+      "audio_watch_returned_after_own_cancellation": null,
+      "exit_code": 0,
+      "outer_timeout": false,
+      "panic_observed": false,
+      "controls_or_input_sent": false,
+      "owned_unit_inactive_and_collected": true,
+      "owned_unit_main_and_control_process_ids_cleared": true
+    },
+    {
+      "consumer": "power-service",
+      "binary_sha256": "9c144b0211e8db2b73e5c5ab015cd3666a7893fa24f834fd9c1cd5f846cda8d1",
+      "requested_seconds": 15,
+      "observed_wall_seconds": 15.30359434500133,
+      "read_only_observation_passed": true,
+      "observed_snapshot_records": 1,
+      "snapshot_counts": {
+        "backlights": 0,
+        "battery_present": false,
+        "operation": null,
+        "profiles": 0
+      },
+      "audio_watch_returned_after_own_cancellation": null,
+      "exit_code": 0,
+      "outer_timeout": false,
+      "panic_observed": false,
+      "controls_or_input_sent": false,
+      "owned_unit_inactive_and_collected": true,
+      "owned_unit_main_and_control_process_ids_cleared": true
+    },
+    {
+      "consumer": "compositor-service",
+      "binary_sha256": "5181fada2bb84ca207687eb2b748f91c059c543dd629c79729bbba3a8503beae",
+      "requested_seconds": 15,
+      "observed_wall_seconds": 15.211445895998622,
+      "read_only_observation_passed": true,
+      "observed_snapshot_records": 1,
+      "snapshot_counts": {
+        "monitors": 1,
+        "workspaces": 5,
+        "windows": 6,
+        "unique_focus": true
+      },
+      "audio_watch_returned_after_own_cancellation": null,
+      "exit_code": 0,
+      "outer_timeout": false,
+      "panic_observed": false,
+      "controls_or_input_sent": false,
+      "owned_unit_inactive_and_collected": true,
+      "owned_unit_main_and_control_process_ids_cleared": true
+    }
+  ],
+  "observations_passed": 4,
+  "interpretation": {
+    "audio": "The native audio adapter reports three outputs and five inputs, including three monitor inputs. The observer creates no playback or capture stream; its own watch returns after cooperative cancellation. Device names, keys and default volume/mute preferences are omitted here.",
+    "bluetooth": "One adapter, three catalog devices, one connected device and zero pairing requests were observed. No pairing agent, discovery, connection, trust or device control was requested. Counts do not identify a particular paired keyboard or report key events.",
+    "power": "The count-only snapshot reports battery_present=false, zero profiles and zero backlights. This format conflates absent and unavailable capabilities, so it does not establish absence or working physical battery/profile/brightness controls.",
+    "compositor": "The current Hyprland observation reports one monitor, five workspaces, six windows and unambiguous focus. No workspace/window/display dispatch or input was sent.",
+    "delivery": "Each observer produced one snapshot during its idle window. No state-changing event was induced, so later change delivery/reconnect/hotplug behavior is not established."
+  },
+  "acceptance_limits": {
+    "source_and_binary_identified_host_service_observation": true,
+    "actual_controls_or_input_sent": false,
+    "audible_playback_or_recording_accepted": false,
+    "pairing_or_paired_keyboard_key_events_accepted": false,
+    "physical_hardware_controls_accepted": false,
+    "state_change_delivery_accepted": false,
+    "display_hotplug_or_suspend_resume_accepted": false,
+    "desktop_UI_accepted": false,
+    "resource_or_FPS_performance_accepted": false,
+    "full_hardware_acceptance": false,
+    "whole_seven_gap_goal_complete": false
+  },
+  "history_policy": "Earlier source-specific VM reports, capture-time flags, resource eligibility and failed attempts remain unchanged. This report supplies only the additional named read-only host observations."
+}
