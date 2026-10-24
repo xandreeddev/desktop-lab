@@ -35,8 +35,9 @@ impl ImageFormat {
 pub struct ImageLevel {
     pub width: u32,
     pub height: u32,
-    /// Tightly packed, with no row padding; see ImageData::format().
-    pub pixels: Vec<u8>,
+    /// Immutable tightly packed bytes, without row padding; see ImageData::format().
+    /// Construct a level from an owned vector with `pixels: pixels.into()`.
+    pub pixels: Arc<Vec<u8>>,
 }
 #[derive(Debug)]
 struct Prepared {
@@ -53,13 +54,13 @@ pub struct ImageData {
     aspect_size: (u32, u32),
     prepared: Arc<Prepared>,
 }
-/// A weak observation of an immutable image's pixel allocation. It retains no
-/// pixels and grants no access to them. Clones and frozen snapshots share the
-/// allocation's lifetime, independently of their outer `Arc<ImageData>` values.
+/// A weak observation of an immutable image's prepared levels. It retains no
+/// pixels and grants no access to them. Clones and frozen snapshots share this
+/// lifetime, independently of outer `Arc<ImageData>` or producer storage owners.
 #[derive(Clone, Debug)]
 pub struct ImageLifetime(Weak<[ImageLevel]>);
 impl ImageLifetime {
-    /// Whether a consumer still owns these pixels. A true observation can
+    /// Whether a consumer still owns these prepared levels. A true observation can
     /// become false concurrently; false is final. Resource caches must also
     /// preserve their own active draw references before retiring a texture.
     pub fn is_alive(&self) -> bool {
@@ -107,25 +108,52 @@ impl ImageStream {
         mut pixels: Vec<u8>,
         aspect_size: (u32, u32),
     ) -> Result<ImageData, ImageError> {
-        validate(&pixels, width, height, ImageFormat::PremultipliedRgba8)?;
-        if aspect_size.0 == 0
-            || aspect_size.1 == 0
-            || aspect_size.0 > 16384
-            || aspect_size.1 > 16384
-        {
-            return Err(ImageError(
-                "Image aspect dimensions exceed the presentation budget",
-            ));
-        }
-        let mut opaque = true;
-        for pixel in pixels.as_chunks_mut::<4>().0 {
-            if pixel[3] != 255 {
-                opaque = false;
-                for channel in 0..3 {
-                    pixel[channel] = (u16::from(pixel[channel]) * u16::from(pixel[3]) / 255) as u8;
-                }
+        validate_stream_frame(&pixels, width, height, aspect_size)?;
+        let opaque = premultiply_stream(&mut pixels);
+        self.prepared_frame(width, height, Arc::new(pixels), aspect_size, opaque)
+    }
+    /// Prepare shared straight-alpha RGBA8 without trusting coverage metadata.
+    /// Opaque pixels share their exact allocation. Unique alpha pixels are
+    /// premultiplied in place; shared alpha pixels are explicitly copied first
+    /// so an older frame or producer owner can never observe mutation.
+    pub fn frame_rgba_shared_with_aspect(
+        &self,
+        width: u32,
+        height: u32,
+        pixels: Arc<Vec<u8>>,
+        aspect_size: (u32, u32),
+    ) -> Result<ImageData, ImageError> {
+        validate_stream_frame(&pixels, width, height, aspect_size)?;
+        let (pixels, opaque) = match Arc::try_unwrap(pixels) {
+            Ok(mut pixels) => {
+                let opaque = premultiply_stream(&mut pixels);
+                (Arc::new(pixels), opaque)
             }
-        }
+            Err(shared)
+                if shared
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .all(|pixel| pixel[3] == 255) =>
+            {
+                (shared, true)
+            }
+            Err(shared) => {
+                let mut pixels = (*shared).clone();
+                let opaque = premultiply_stream(&mut pixels);
+                (Arc::new(pixels), opaque)
+            }
+        };
+        self.prepared_frame(width, height, pixels, aspect_size, opaque)
+    }
+    fn prepared_frame(
+        &self,
+        width: u32,
+        height: u32,
+        pixels: Arc<Vec<u8>>,
+        aspect_size: (u32, u32),
+        opaque: bool,
+    ) -> Result<ImageData, ImageError> {
         let revision = self
             .0
             .revision
@@ -151,6 +179,32 @@ impl ImageStream {
             }),
         })
     }
+}
+fn validate_stream_frame(
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    aspect_size: (u32, u32),
+) -> Result<(), ImageError> {
+    validate(pixels, width, height, ImageFormat::PremultipliedRgba8)?;
+    if aspect_size.0 == 0 || aspect_size.1 == 0 || aspect_size.0 > 16384 || aspect_size.1 > 16384 {
+        return Err(ImageError(
+            "Image aspect dimensions exceed the presentation budget",
+        ));
+    }
+    Ok(())
+}
+fn premultiply_stream(pixels: &mut [u8]) -> bool {
+    let mut opaque = true;
+    for pixel in pixels.as_chunks_mut::<4>().0 {
+        if pixel[3] != 255 {
+            opaque = false;
+            for channel in 0..3 {
+                pixel[channel] = (u16::from(pixel[channel]) * u16::from(pixel[3]) / 255) as u8;
+            }
+        }
+    }
+    opaque
 }
 impl ImageData {
     /// Validate straight-alpha RGBA8, premultiply and prepare the full mip chain.
@@ -209,7 +263,7 @@ impl ImageData {
         let mut levels = vec![ImageLevel {
             width,
             height,
-            pixels,
+            pixels: pixels.into(),
         }];
         while levels
             .last()
@@ -221,7 +275,7 @@ impl ImageData {
             levels.push(ImageLevel {
                 width,
                 height,
-                pixels,
+                pixels: pixels.into(),
             });
         }
         Self {
@@ -257,7 +311,15 @@ impl ImageData {
                 format: self.format(),
                 opaque: self.is_opaque(),
                 stream: None,
-                levels: self.levels()[index..].to_vec().into(),
+                levels: self.levels()[index..]
+                    .iter()
+                    .map(|level| ImageLevel {
+                        width: level.width,
+                        height: level.height,
+                        pixels: Arc::new((*level.pixels).clone()),
+                    })
+                    .collect::<Vec<_>>()
+                    .into(),
             }),
         }
     }
@@ -471,7 +533,7 @@ mod tests {
             for (mask, color) in mask.levels().iter().zip(color.levels()) {
                 assert_eq!((mask.width, mask.height), (color.width, color.height));
                 let expanded: Vec<u8> = mask.pixels.iter().flat_map(|a| [*a; 4]).collect();
-                assert_eq!(expanded, color.pixels);
+                assert_eq!(expanded, *color.pixels);
             }
             let preview = mask.downsample(2);
             assert_eq!(preview.format(), ImageFormat::Alpha8);
@@ -504,8 +566,8 @@ mod tests {
         assert_eq!(normal.aspect_size(), (64, 36));
         assert!(normal.bytes() < image.bytes() / 4);
         assert_ne!(normal.cache_id(), image.cache_id());
-        assert_eq!(normal.pixels(), image.levels()[2].pixels);
-        assert_eq!(hidpi.pixels(), image.levels()[1].pixels);
+        assert_eq!(normal.pixels(), image.levels()[2].pixels.as_slice());
+        assert_eq!(hidpi.pixels(), image.levels()[1].pixels.as_slice());
         let tall_target = image.downsample_for_cover(8, 32).unwrap();
         assert_eq!(tall_target.cache_id(), image.cache_id());
         assert_eq!(
@@ -523,7 +585,8 @@ mod tests {
         let image = ImageData::from_rgba("alpha", 8, 4, [240, 80, 40, 128].repeat(32)).unwrap();
         let preview = image.downsample(3);
         assert_eq!((preview.width(), preview.height()), (2, 1));
-        assert_eq!(preview.pixels(), image.levels()[2].pixels);
+        assert_eq!(preview.pixels(), image.levels()[2].pixels.as_slice());
+        assert_ne!(preview.pixels().as_ptr(), image.levels()[2].pixels.as_ptr());
         assert!(preview.bytes() < image.bytes());
         assert_ne!(preview.cache_id(), image.cache_id());
         assert_eq!(image.downsample(8).cache_id(), image.cache_id());
@@ -547,7 +610,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(image.pixels()[..4], [128, 0, 0, 128]);
-        assert_eq!(image.levels()[1].pixels, [43, 0, 0, 43]);
+        assert_eq!(image.levels()[1].pixels.as_slice(), [43, 0, 0, 43]);
         assert_eq!(image.bytes(), 16);
         assert_eq!(image.clone().cache_id(), image.cache_id());
         let replacement = ImageData::from_rgba("same-name", 1, 1, vec![255; 4]).unwrap();
@@ -558,6 +621,81 @@ mod tests {
 #[cfg(test)]
 mod streaming_tests {
     use super::*;
+    #[test]
+    fn shared_opaque_pixels_keep_exact_storage_and_prepared_lifetimes_retire() {
+        let stream = ImageStream::new();
+        let mut pixels = Arc::new([20, 40, 60, 255].repeat(6));
+        let frame = stream
+            .frame_rgba_shared_with_aspect(3, 2, pixels.clone(), (65, 37))
+            .unwrap();
+        assert_eq!(frame.pixels().as_ptr(), pixels.as_ptr());
+        assert_eq!(frame.aspect_size(), (65, 37));
+        assert!(frame.is_opaque());
+        assert_eq!(frame.levels().len(), 1);
+        let lifetime = frame.lifetime();
+        let snapshot = frame.snapshot();
+        drop(frame);
+        assert!(lifetime.is_alive());
+        assert!(Arc::get_mut(&mut pixels).is_none());
+        drop(snapshot);
+        assert!(
+            !lifetime.is_alive(),
+            "a producer owner is not an image consumer"
+        );
+        assert_eq!(Arc::strong_count(&pixels), 1);
+        assert!(Arc::get_mut(&mut pixels).is_some());
+    }
+
+    #[test]
+    fn shared_alpha_pixels_are_copied_before_exact_premultiplication() {
+        let stream = ImageStream::new();
+        let pixels = Arc::new(vec![200, 100, 50, 128, 90, 80, 70, 0, 1, 2, 3, 255]);
+        let original = (*pixels).clone();
+        let frame = stream
+            .frame_rgba_shared_with_aspect(3, 1, pixels.clone(), (3, 1))
+            .unwrap();
+        assert_ne!(frame.pixels().as_ptr(), pixels.as_ptr());
+        assert_eq!(pixels.as_slice(), original);
+        assert_eq!(frame.pixels(), [100, 50, 25, 128, 0, 0, 0, 0, 1, 2, 3, 255]);
+        assert!(!frame.is_opaque());
+        let reference = stream.frame_rgba(3, 1, original).unwrap();
+        assert_eq!(frame.pixels(), reference.pixels());
+    }
+
+    #[test]
+    fn unique_shared_alpha_storage_is_unwrapped_and_premultiplied_in_place() {
+        let stream = ImageStream::new();
+        let pixels = Arc::new(vec![200, 100, 50, 128]);
+        let pointer = pixels.as_ptr();
+        let frame = stream
+            .frame_rgba_shared_with_aspect(1, 1, pixels, (1, 1))
+            .unwrap();
+        assert_eq!(frame.pixels().as_ptr(), pointer);
+        assert_eq!(frame.pixels(), [100, 50, 25, 128]);
+        assert!(!frame.is_opaque());
+    }
+
+    #[test]
+    fn shared_frames_validate_storage_and_aspect_before_advancing_revision() {
+        let stream = ImageStream::new();
+        for (width, height, length, aspect) in [
+            (0, 1, 4, (1, 1)),
+            (1, 1, 3, (1, 1)),
+            (1, 1, 4, (0, 1)),
+            (1, 1, 4, (16385, 1)),
+        ] {
+            assert!(
+                stream
+                    .frame_rgba_shared_with_aspect(width, height, Arc::new(vec![0; length]), aspect)
+                    .is_err()
+            );
+        }
+        let valid = stream
+            .frame_rgba_shared_with_aspect(1, 1, Arc::new(vec![255; 4]), (1, 1))
+            .unwrap();
+        assert_eq!(valid.stream_revision().unwrap().1, 1);
+    }
+
     #[test]
     fn converted_frames_keep_natural_aspect_and_immutable_premultiplied_pixels() {
         let stream = ImageStream::new();

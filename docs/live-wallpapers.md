@@ -378,6 +378,16 @@ prepared SDK image, so rounding odd dimensions does not alter cover geometry.
 The existing private FFmpeg frame and owned row copy remain; published bytes are
 never borrowed from conversion scratch.
 
+Opaque live converters reuse at most two CPU publication buffers, retaining at
+most 64 MiB of actual vector capacity per converter. A buffer is writable only
+after every published owner releases it. If both slots remain held or the
+capacity limit prevents retention, playback uses an immediate, non-retained
+allocation. Alpha/palette media, posters and previews do not use this pool.
+Retargeting or cancellation retires the converter's pool; outstanding frames
+remain immutable. Checked row packing and the SDK's opacity scan still run.
+These limits do not bound total RSS, and no measured memory or frame-rate gain
+is claimed for this policy.
+
 The first successfully decoded frame establishes the source dimensions and
 pixel format. Codec metadata before packet parsing can still report an unknown
 format; it never authorizes constructing a scaler. Every later decoded frame,
@@ -438,6 +448,15 @@ A separate stream resource ID and revision let the renderer update the same GPU
 allocation when dimensions match; a dimension change replaces that resource.
 Per-frame mip generation is omitted. Already submitted work keeps its native
 resource lifetime. The renderer has no wallpaper or codec policy.
+
+`MediaFrame::rgba_shared_with_aspect` and
+`into_shared_rgba_with_aspect` transfer straight-alpha pixels through
+`Arc<Vec<u8>>`, without adding codec or renderer types to the domain. The desktop
+passes them to `ImageStream::frame_rgba_shared_with_aspect`, whose alpha check
+decides whether the allocation can be shared or needs premultiplication in
+independent storage. Existing vector constructors remain; legacy `into_rgba`
+and `into_rgba_with_aspect` unwrap unique vectors or copy when aliased. Shared
+consumers use the explicit shared method to avoid that compatibility copy.
 
 `WallpaperPlaybackPolicy`, `WallpaperPlaybackContext` and `WallpaperPauseReason`
 are domain values. The pure `wallpaper_pause_reason` use case applies explicit

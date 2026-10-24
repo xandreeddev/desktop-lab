@@ -453,9 +453,9 @@ impl Preview {
                             "Preview frame exceeds the requested dimensions".into(),
                         ));
                     }
-                    let (width, height, pixels, aspect) = frame.into_rgba_with_aspect();
+                    let (width, height, pixels, aspect) = frame.into_shared_rgba_with_aspect();
                     stream
-                        .frame_rgba_with_aspect(width, height, pixels, aspect)
+                        .frame_rgba_shared_with_aspect(width, height, pixels, aspect)
                         .map(Arc::new)
                         .map_err(|error| DomainError::Failed(error.to_string()))
                 };
