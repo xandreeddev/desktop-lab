@@ -84,11 +84,12 @@
       "lucent/crates/lucent-domain/src/wallpaper_catalog.rs": "f44fb07bb17f1a251328e1a5221a7aa671f9478a3bce82e78fcd523f002cdb71",
       "lucent/crates/lucent-domain/src/weather.rs": "28677da304e89ce68ac052d1744ce6bce5649fa1236dc70375437165c683915a",
       "lucent/crates/lucent-render/Cargo.toml": "6abc9aa405efed7d98091b16690468601633adbd542dff2cd3fc384d7e0bd861",
+      "lucent/crates/lucent-render/src/allocation.rs": "66b7aa386b7d3ec5245e519b7a937eb20e366db034f7a30dd76b29700c2be9db",
       "lucent/crates/lucent-render/src/cache.rs": "ed0ad345bc4ed6ede884909d4e899d907bba4fbe1b87f92a48cb634fc20ce5b4",
       "lucent/crates/lucent-render/src/extent.rs": "03564f16960aa17511fc3cfab7917188d56739db9f4f3d641f938333562a1302",
       "lucent/crates/lucent-render/src/fallback.rs": "8e99ac02cf23d65ef2ef49dc40c569f13d0056ffb7c3a2f0d570607b510818a8",
       "lucent/crates/lucent-render/src/font_resources.rs": "c52603b5036893323bf2ccbdc4dd39180311bedbe853246a7223f1ba959f7802",
-      "lucent/crates/lucent-render/src/lib.rs": "93e3be5b3099a28872b280ec31f6a05a312b0f167003a8504a5ea1fe321f4bd6",
+      "lucent/crates/lucent-render/src/lib.rs": "d602044d02b060c2db8255dae0341a099dcf88ae58e0520047ac901d938fda9b",
       "lucent/crates/lucent-render/src/present.wgsl": "79db3dfc0e4a5cc2a215141e69bf0fba141248193f32c88dfc98ae65987f0c2e",
       "lucent/crates/lucent-render/src/presentation.rs": "ab64a544073e87f963c22f5fbe9399927852cf3e385204017eab79ff3111331f",
       "lucent/crates/lucent-render/src/profiling.rs": "4ce21cbe63ffea9b6bd8301d100502a3856a63c86b67f4eeb3fe5c06a2efd917",
@@ -142,7 +143,7 @@
       "lucent/crates/lucent-usecases/src/widgets.rs": "146a59d9911213f6b9ced12f3b5eec8d8295c318faff161f0d9e4f942cc284b0"
     },
     "scope": "offscreen-native",
-    "source_commit": "b3c91fab62b6fb545255ff7762f7ad8af6573419",
+    "source_commit": "4a0f932a7c82ac0459715007bdbd314d145a4ae4",
     "token_sha256": "6bca133253d845990df42b847b33b921d7c6d29c85c3f298516bd30a1c78fd44"
   },
   "schema_version": 1,

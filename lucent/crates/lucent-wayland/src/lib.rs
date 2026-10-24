@@ -465,12 +465,29 @@ impl<A: Application> State<A> {
                 }
             }
         }
-        let profile_memory = self.profile_frames.then(|| serde_json::json!({
+        let profile_memory = self.profile_frames.then(|| {
+            // One shared-device snapshot per enabled inspection, outside the
+            // surface loop. Normal inspection does not query the allocator.
+            let gpu_allocator = match self.gpu.allocation_snapshot(true) {
+                lucent_render::GpuAllocationSnapshot::Available(stats) => serde_json::json!({
+                    "status":"available",
+                    "total_allocated_bytes":stats.total_allocated_bytes,
+                    "total_reserved_bytes":stats.total_reserved_bytes,
+                    "block_count":stats.block_count,
+                    "allocation_count":stats.allocation_count,
+                }),
+                lucent_render::GpuAllocationSnapshot::Unavailable => serde_json::json!({"status":"unavailable"}),
+                lucent_render::GpuAllocationSnapshot::Disabled => serde_json::json!({"status":"disabled"}),
+                lucent_render::GpuAllocationSnapshot::CountOverflow => serde_json::json!({"status":"count-overflow"}),
+            };
+            serde_json::json!({
             "scene_image_payload_bytes": scene_images.values().sum::<u64>(),
             "geometry_buffer_payload_bytes": self.surfaces.values().chain(self.retiring.iter().map(|(_, native)| native)).map(|s| s.renderer.buffer_payload_bytes()).sum::<u64>(),
             "one_color_buffer_per_surface_bytes": self.surfaces.values().chain(self.retiring.iter().map(|(_, native)| native)).map(|s| s.renderer.single_surface_buffer_bytes()).sum::<u64>(),
-            "scope":"Prepared image payloads referenced by current and retiring scenes only; app caches excluded. GPU buffer values are requested payloads, not driver allocations. Actual surface buffer counts and total GPU memory are unknown."
-        }));
+            "gpu_allocator":gpu_allocator,
+            "scope":"Prepared image payloads reference current and retiring scenes; app caches excluded. Geometry and color values are requested payloads. gpu_allocator separately reports backend-managed live allocations and reserved blocks, not RSS, residency or total driver/GPU memory. Actual surface buffer counts remain unknown."
+            })
+        });
         let surfaces = self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id.to_string(),"role":s.spec.id,"instance":s.spec.instance.as_ref().map(api::SurfaceInstance::as_str),"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"keyboard":match s.spec.keyboard { api::Keyboard::None=>"none", api::Keyboard::OnDemand=>"on-demand", api::Keyboard::Exclusive=>"exclusive" },"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"density":s.density().factor(),"buffer_scale":if s.fractional.is_some(){1}else{s.scale},"buffer_width":s.density().physical_size(s.width,s.height).ok().map(|size|size.0),"buffer_height":s.density().physical_size(s.width,s.height).ok().map(|size|size.1),"frames":s.history.frames,"native_frames":s.renderer.frames,"native_generation":s.native_generation,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.history.frame_times,"frame_profiles":s.history.profiles.json(),"frame_pacing":s.pacing.as_ref().map(pacing::Trace::json),"presentation":s.history.presentation.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>();
         let mut result = serde_json::json!({"profile_memory":profile_memory,"presentation_feedback":self.presentation.json(),"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":surfaces,"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)});
         result["frame_pacing"] = self.pacing.json();
