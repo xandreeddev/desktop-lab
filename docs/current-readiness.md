@@ -1,24 +1,24 @@
 # Current daily-use readiness
 
-The accepted-main checkpoint is fb7b1b26
-([PR108](https://github.com/xandreeddev/desktop-lab/pull/108)), normally merged on
-2026-10-24 after six exact-head successes. It adds bounded immutable CPU video-frame
-reuse. The recorded VM measurements below still use archived runtime 9eb41939,
-manifest c669b9d5; they do not test PR108 or establish a reuse gain. That archive
-matched the earlier PR107 checkpoint; current main has newer video-buffer code.
-The independent read-only host observations retain their separate source 6f9e75d0.
+The accepted-main checkpoint is 9b52666b
+([PR110](https://github.com/xandreeddev/desktop-lab/pull/110)), normally merged on
+2026-10-24 after six exact-head successes. Its Rust, design, configuration and
+scripts trees match the archived eb3481f4 runtime used in the new measurements
+below. That release includes CPU frame reuse and opt-in presentation-lifetime
+diagnostics. The archive was built at eb3481f4, not rebuilt at the merge commit;
+its original build-classification flags remain unchanged.
 
-[Pages run 40044620948](https://github.com/xandreeddev/desktop-lab/actions/runs/40044620948)
-verifies exact main fb7b1b26: three public HTML pages, native manifest/PNG and all
+[Pages run 40049047514](https://github.com/xandreeddev/desktop-lab/actions/runs/40049047514)
+verifies exact main 9b52666b: three HTML pages, native manifest/PNG and all
 116 producer inputs/480 captures from b3c91fab match their artifact. The same
-artifact passes 20 LAN HTTP checks. These are named delivery checkpoints; the
-[Pages workflow](../.github/workflows/pages.yml) builds and publishes later main
-revisions through their own receipts. Earlier delivery facts remain in the ledger.
+artifact passes 20 LAN HTTP checks. These are named delivery checkpoints;
+[CI](../.github/workflows/pages.yml) provides later revisions' own receipts.
+Earlier accepted-source and delivery observations remain historical evidence.
 
 The core Wi-Fi repair, safe display editing, international text and explicit
 application-opening paths are implemented with scoped native evidence. The
 seven-gap goal is **not complete**: eligible ≤300 MiB and source-rate presentation
-measurements, physical devices and broader application interoperability remain
+acceptance, physical devices and broader application interoperability remain
 open. Delivery and a green test suite do not establish those results.
 
 The recent changes add:
@@ -61,6 +61,53 @@ failed attempts and their independent recoveries remain in
 [the ledger](implementation-status.json) and the source-specific reports below.
 Accessibility remains user-deferred.
 
+## Latest same-runtime memory sequence
+
+The [eb348 output/resource matrix](../reports/measurements/lucent-output-resource-matrix-eb348.json)
+records a successful 15-stage build with 786 targeted tests and coherent six-client/
+root-greeter deployment. Three acceptance executables are staged; staging is not
+native feature testing. User/security state and supervision are verified without
+restarting greetd or writing settings/themes.
+
+Three uninstrumented intervals use the same boot, PID, process birth, binary,
+media, settings and adapter. Each runs 120 seconds with 480 RSS samples and zero
+process swap. Playback is configured to source rate for the same 3840×2160 H.264
+60 FPS source; no presentation FPS is collected.
+
+| Recorded output phase | Mean / sampled peak RSS | CPU, % of one logical core |
+| --- | ---: | ---: |
+| Cold FHD, 1920×1080/60 Hz/1× | 229.181 / 230.875 MiB | 142.749% |
+| 4K, 3840×2160/60 Hz/1.5× | 494.683 / 526.516 MiB | 191.599% |
+| Restored warm FHD | 435.063 / 435.063 MiB | 146.541% |
+
+All three intervals are **host-pressure-ineligible**; memory-target results remain
+null. The owned 4K finish verifies original FHD, source/configuration/security,
+cursor/workspace and runtime preservation, with no restart, input or window close.
+The warm interval then confirms that elevated memory remains in the same process.
+
+Current-frame bytes return from 33,177,600 at 4K to the cold-FHD value 8,294,400;
+prepared-image bytes return from 48,037,279 to 14,859,679. Active GPU-cache payload
+returns near its cold value, while warm smaps Anonymous remains 372,212 KiB versus
+cold 161,408 KiB. These counters overlap and do not form an additive RSS ledger.
+A separate final procfs observation adds VMA-label groups, not allocation owners.
+Unused pool/codec/staging allocations and allocator/driver backing need isolated
+measurement. No cause, leak, CPU-reuse gain, FPS or eligible budget is established.
+The 578.984 MiB lifetime HWM is not the warm interval's 435.063 MiB sampled peak.
+
+A separate instrumented FHD follow-up on the same source records **59.842 distinct
+prepared-revision advances/s**: 7,180 advances over 119.983328 compositor seconds,
+from 7,181 background feedbacks. Gap p50/p95/p99 is 16.667 ms; maximum is 33.334 ms.
+The six-group aggregate is not the background numerator. No sampling truncation is
+reported, but two background feedback requests remain pending; complete feedback,
+visible pixels, physical scanout and launcher-animation acceptance are not established.
+
+That follow-up has a different process birth: its 236.039/236.789 MiB mean/peak
+RSS and 146.841% CPU do not resolve the warm-memory concern. The 120.000521-second
+interval and its normal reference remain host-pressure-ineligible, with unmatched
+I/O pressure and null targets. Separate driver/restore receipts verify original
+source/security/settings and return to normal profiling OFF. This adds no eligible
+60 FPS or causal CPU-reuse gain and leaves the original memory matrix unchanged.
+
 ## Read-only host service observations
 
 The [host observer report](../reports/measurements/lucent-host-service-observations-6f9.json)
@@ -79,7 +126,7 @@ not audible playback/recording, a particular paired keyboard or key events, pair
 physical controls, changed-state delivery, hotplug, suspend, desktop UI or performance.
 All broader hardware and seven-gap acceptance limits remain open.
 
-## Latest matched-source FHD video measurements
+## Recorded 9eb matched-source FHD video measurements
 
 The [completed V2 report](../reports/measurements/lucent-fhd-timing-9eb-v2.json)
 records two 120-second phases on archived 9eb41939, one virtual 1920×1080/60 Hz/1×
@@ -108,7 +155,7 @@ historical V1 coverage failure remains failed and unattributed. Source-rate
 presentation and the memory target remain unaccepted; eligible measurements,
 physical devices and broader application compatibility remain open.
 
-## Latest recorded 9eb deployment and keyboard handoff
+## Recorded 9eb deployment and keyboard handoff
 
 The [source-specific trial report](../reports/measurements/lucent-runtime-9eb-native-trial.json)
 records a terminal build of `9eb41939d47ced5be2012bff41a1f2f5768d6ee7`, manifest
@@ -345,11 +392,11 @@ ledger's requirement history remains useful for the broader backlog.
 | --- | --- | --- |
 | Saved Wi-Fi recovery | Merged native masked SecretAgent repair retains the saved profile UUID and storage policy. Fourteen native NetworkManager/GUI checks pass against owned simulated WPA2/hidden radios, including cancellation, repair, DHCP, saved reconnection and exact restoration. | Enterprise/WEP provisioning, agent-owned vaults and physical-radio acceptance remain separate gaps; they are not implied by the owned fixture. |
 | Safe display settings | Native whole-layout drafts, Apply → Keep/Revert and independent 15-second/UI-crash EOF rollback. Seven earlier one-output flows and the historical four-flow two-output run retain their results. The later [nine-flow run](../reports/measurements/lucent-native-two-output-displays-26d-nine.json), harness `1774fa87` on runtime `26d03adf`, also covers rotation, disable/re-enable, fractional scale Keep and native pointer/keyboard input on a scale-1.25 Displays panel. Five positive preservation checks, one explicit ctime/link-count scope marker, three cursor checks and independent later normal-OFF verification pass. | Physical displays/cable hotplug, suspend/resume, compositor restart, secure-output changes and pacing remain open. Monitor ctime, link count and parent entry timestamps are not claimed unchanged. Earlier failed attempts remain failed; their separate recoveries are not feature passes. The Keep-to-file-identity-capture host-loss interval retains manual recovery. |
-| Resources and animation | The [completed V2 phases](../reports/measurements/lucent-fhd-timing-9eb-v2.json) add 497.063 MiB normal mean/peak RSS and 59.833 distinct prepared-revision advances/s in a separate instrumented process. Both 120-second phases are host-pressure-ineligible; preservation and return to normal-OFF pass. PR108 CPU reuse is merged but absent from this tested VM. The earlier [9eb trial](../reports/measurements/lucent-runtime-9eb-native-trial.json) observes **230.063/230.129 MiB** mean/peak RSS, **147.558% of one logical core** and zero process swap over 120.000484 seconds/480 samples on one FHD output. Host 15 swap-in pages and 0.450095 I/O full stalls make it ineligible; target `null`, all profiling OFF and no FPS samples. The recorded `26d03adf` normal interval observes **237.983/238.035 MiB** mean/peak RSS and **194.290% of one logical core**, with host-pressure eligibility failing. The older `35ed87ed` interval observes **250.581/252.395 MiB** and **154.033% of one logical core**. Its separate metadata interval records **32.2245 distinct prepared-revision advances/s** in compositor feedback, while RPC wall-time bounds record **59.7333–60.1290 prepared callbacks/s** before mailbox publication. Profiling restores off with fresh independent verification. Later [4K preflights](../reports/measurements/lucent-4k-resource-preflight-followup-26d.json) verify geometry/restoration but collect no resource interval. A subsequent one-off observation at restored FHD records **604.594 MiB RSS**, 539.586 MiB anonymous RSS and 16.242 MiB process swap; its process-lifetime HWM is 680.293 MiB. | The later [9eb 4K follow-up](../reports/measurements/lucent-4k-setup-and-memory-followup-9eb.json) verifies native setup/restoration, but its sampler refuses host-memory admission before facts, resource binding or collection. After FHD restoration, one-off RSS is **490.176 MiB**, anonymous RSS 422.914 MiB, process-lifetime HWM 616.008 MiB and swap zero; this remains a memory concern, not a steady-state interval or 4K peak. The separate resource-only FHD timing V1 attempt fails coverage with no completed interval; the later V2 resource/presentation phases complete but remain host-pressure-ineligible; the actual V1 cause remains unproved. The separate 30-second host I/O diagnostic completes without sustained NVMe saturation evidence or cause attribution; it changes no code or performance-acceptance gate. Neither earlier 26d 4K A nor B completed resource sampling: A lacked the required remaining lease and B failed host-memory admission. The one-off FHD diagnostic requires memory investigation but proves neither 4K causality nor an eligible steady-state budget result. The 9eb and 26d normal intervals and both historical 35ed phases are host-pressure-ineligible; observed RSS below 300 MiB is not accepted budget evidence, and 60 FPS presentation is not established. No causal gain, bottleneck attribution, decoder-drop, pixel-visibility or physical-scanout claim. Separate geometry-only runs record 37.0500 and later 48.3706 feedback intervals/s; the latter has 0.6585 ms mean successful draw CPU wall time. Neither has a host-pressure sample or attributes the unmeasured gaps. The short successful draw stages exclude GPU, full-loop, callback/dispatch and failed-retry timing. Eligible matched normal/animated and cold/warm evidence remains required. See [the source-specific upload trial](../reports/measurements/lucent-live-upload-35ed-native-trial.json), [shape diagnostic](../reports/measurements/lucent-native-shape-diagnostic.json), [later CPU diagnostic](../reports/measurements/lucent-native-shape-cpu-diagnostic.json) and [presentation analysis](native-presentation-analysis.md). |
+| Resources and animation | The new [same-runtime eb348 matrix](../reports/measurements/lucent-output-resource-matrix-eb348.json) completes cold FHD →4K →restored warm FHD with preservation/all tracing OFF. Mean/peak RSS is 229.181/230.875, 494.683/526.516 and 435.063/435.063 MiB respectively; all host-pressure-ineligible. Earlier 9eb/26d/35ed and shape/presentation reports retain their own values and limitations. | Warm FHD memory remains elevated even after current-frame/prepared-image payloads return to FHD values. Isolate pool/codec/staging/allocator/driver ownership; collect eligible resource and presentation evidence. Overlapping payload/RSS counters, same-runtime sequencing and VMA labels do not establish cause, leak, CPU-reuse gain, visible pixels or physical scanout. Preserve earlier failed attempts and independent recoveries. |
 | International text | Merged `8e6d074b` implements script shaping, hard-paragraph context across soft wraps, exact row-bound visual source/caret maps, tab separator projection, deterministic fallback and opt-in text-input-v3 composition. Five owned native feature checks pass: visible preedit/caret advance, CJK commit/delete/history, masked-focus retirement, multiline composition and RTL navigation. | The fresh owned native suite passes all five feature and five restoration checks; earlier cleanup failures retain their original results. Third-party IME, broader native pixel/scroll details, delayed clipboard/focus races, physical/cross-output text and broader GUI clipboard coverage remain pending. The later Chromium/Notes test passes both directions with nine interaction and twelve restoration checks on one virtual output. Exact merged `8e6d074b` passes six CI checks, full workspace, six controlled service-protocol filters and 832 Vulkan desktop cases; those checks retain their own scope. |
 | Application integration | Accepted main includes fresh input-bound context, explicit file/URI Open, expanded XDG parsing and the canonical default-handler `UriPort::open(target, context)` path. Notification links use the SDK's optional app ID and revalidate their revision/link around token delivery; `XdgUri` forwards that context through the shared application-unit policy. Earlier local-file `8e` and HTTP `%U` `9b` results keep their original scope. The `4c9a4739` harness on coherent `35ed` passes **twelve singular HTTP `%u` feature and nine restoration checks**: pointer, socket and CLI Open each create exactly one fresh owned HTTP document; the declared Action still creates two local documents. The later [R9 default-route run](../reports/measurements/lucent-default-uri-native-26d.json), harness `563781a2` on `26d03adf`, passes five scoped checks and nine cleanup checks: native pointer and Tab/Enter each load one exact selected document through the temporary default handler with fresh context, using an already warm real browser. PR105 accepts source fix `194c0c57`; the later [9eb run](../reports/measurements/lucent-runtime-9eb-native-trial.json) separately passes five route/nine cleanup checks and both trusted browser KeyA cases after natural history close, using the same controlled warm-browser scope. | The later run establishes actual controlled-document keyboard delivery; the older R9 active-window observation alone does not. Fresh-browser initial focus, direct protocol-token consumption, external navigation, other handlers/applications and broader workflows retain separate scope. Historical explicit-application and failed default-route reports keep their source/input/cleanup outcomes. Application acceptance does not accept performance. |
 | Real-world validation | The [6f9 host observers](../reports/measurements/lucent-host-service-observations-6f9.json) pass four 15-second read-only service observations and owned-unit completion, without controls/input. Audio, Bluetooth, power and compositor counts are scoped below; power absence/unavailability is ambiguous.  Several owned native workflows already pass. The coherent `8e6d074b` also passes 16 checks for two simultaneous compositor outputs, one headless, including real panel input at 1×/2×/1.25×, held-button retirement, same-name recreation and exact restoration. | Physical monitors/cable hotplug, suspend/resume, secure-output changes, physical Bluetooth/audio and other power/radio hardware, additional third-party tray applications/menus, other GUI clipboard applications, rich content and delayed-transfer/focus races need broader testing. One genuine wired-only NetworkManager Applet item/menu/information action passes five interaction, four cleanup and thirteen outside-worker preservation checks on unchanged `8e`. The owned real Chromium/Notes keyboard flow passes nine interaction and twelve restoration checks. The earlier output test establishes no Display transaction or presentation FPS. The historical four-flow [two-output Displays run](../reports/measurements/lucent-native-two-output-displays.json) and later [nine-flow run](../reports/measurements/lucent-native-two-output-displays-26d-nine.json) separately cover Display transactions. The later run adds virtual rotation, disable/re-enable and native input on a fractional Displays panel; it establishes no physical/secure-output behavior or pacing. |
-| Documentation accuracy | The latest verified PR108/main fb7b1b26 Pages run 40044620948 and same-artifact LAN pass 3 HTML/manifest/PNG, 116 inputs/480 captures and 20 HTTP checks. The earlier accepted PR107/main `f5b6db0b` has source-specific CI, Pages and exact-artifact LAN delivery receipts: 3 HTML pages, manifest/PNG, 116 producers/480 captures and 20 LAN HTTP checks. New host observations keep source `6f9e75d0`; archived VM/native/performance reports retain their original source, flags and outcomes. | CI provides build/publication evidence for each exact revision; later commits need their own receipts. Published docs and read-only host observation do not establish physical controls, broader application compatibility, eligible performance or seven-gap completion. |
+| Documentation accuracy | The latest verified PR110/main 9b52666b Pages run 40049047514 and same-artifact LAN pass 3 HTML/manifest/PNG, 116 inputs/480 captures and 20 HTTP checks. The earlier accepted PR107/main `f5b6db0b` has source-specific CI, Pages and exact-artifact LAN delivery receipts: 3 HTML pages, manifest/PNG, 116 producers/480 captures and 20 LAN HTTP checks. New host observations keep source `6f9e75d0`; archived VM/native/performance reports retain their original source, flags and outcomes. | CI provides build/publication evidence for each exact revision; later commits need their own receipts. Published docs and read-only host observation do not establish physical controls, broader application compatibility, eligible performance or seven-gap completion. |
 
 The later [native HTTP URI result](../reports/measurements/lucent-native-http-uris-9b.json)
 uses harness `7a92749e` and coherent `9b5420b7` desktop/CLI/consumer. Pointer,
