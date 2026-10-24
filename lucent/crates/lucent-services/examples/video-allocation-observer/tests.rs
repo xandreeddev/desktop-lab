@@ -76,6 +76,107 @@ fn input_is_bounded_known_schema_and_allows_legitimate_local_names() {
 }
 
 #[test]
+fn allocator_statistics_require_a_boolean_opt_in_and_default_to_disabled() {
+    assert!(!request().allocator_stats);
+    for enabled in [false, true] {
+        let mut value = descriptor();
+        value["allocator_stats"] = json!(enabled);
+        assert_eq!(
+            input(&serde_json::to_vec(&value).unwrap())
+                .unwrap()
+                .allocator_stats,
+            enabled
+        );
+    }
+    for invalid in [json!("true"), json!(1), Value::Null] {
+        let mut value = descriptor();
+        value["allocator_stats"] = invalid;
+        assert_eq!(
+            input(&serde_json::to_vec(&value).unwrap()).err(),
+            Some("invalid_input")
+        );
+    }
+}
+
+fn accounting() -> MallocAccounting {
+    MallocAccounting {
+        arena: 64,
+        in_use: 17,
+        free: 47,
+        direct_mmap: 99,
+        direct_mmap_regions: 3,
+        free_chunks: 5,
+    }
+}
+
+#[test]
+fn allocator_accounting_separates_arena_direct_mmap_bytes_and_counts() {
+    let result = allocator_report("2.42", accounting());
+    assert_eq!(
+        result,
+        json!({"kind":"glibc_mallinfo2", "available":true, "glibc_version":"2.42",
+            "bytes":{"arena":64, "arena_accounted_in_use":17, "arena_free":47,
+                     "direct_mmap":99, "malloc_accounted_in_use_total":116},
+            "counts":{"arena_free_chunks":5, "direct_mmap_regions":3}})
+    );
+    let mut empty = accounting();
+    empty.arena = 0;
+    empty.in_use = 0;
+    empty.free = 0;
+    empty.direct_mmap = 0;
+    empty.direct_mmap_regions = 0;
+    empty.free_chunks = 0;
+    let empty = allocator_report("2.33", empty);
+    assert_eq!(empty["available"], true);
+    assert_eq!(empty["bytes"]["malloc_accounted_in_use_total"], 0);
+    assert_ne!(empty, allocator_unavailable("unsupported_target"));
+}
+
+#[test]
+fn allocator_totals_never_wrap_and_invalid_runtime_versions_stay_private() {
+    let mut large = accounting();
+    large.in_use = u64::MAX;
+    let result = allocator_report("2.42.1", large);
+    assert_eq!(result["bytes"]["arena_accounted_in_use"], u64::MAX);
+    assert!(result["bytes"]["malloc_accounted_in_use_total"].is_null());
+    for version in ["", "2", "2.private-device", "/private/2.42", "2..42"] {
+        let result = allocator_report(version, accounting());
+        assert_eq!(result["available"], false);
+        assert_eq!(result["reason"], "invalid_runtime_version");
+        assert!(!result.to_string().contains("private"));
+        assert!(result.get("bytes").is_none());
+    }
+    assert_eq!(
+        allocator_report("2.32", accounting())["reason"],
+        "unsupported_glibc_version"
+    );
+}
+
+#[test]
+fn unsupported_allocator_observation_is_explicit_and_never_polled_during_play() {
+    let mut calls = 0;
+    let mut memory = || json!({"rss_kib":4});
+    let mut query = || {
+        calls += 1;
+        allocator_unavailable("unsupported_target")
+    };
+    let mut samples = Samples {
+        memory: &mut memory,
+        allocator: Some(&mut query),
+    };
+    let before = samples.capture(Moment::BeforePlay, 0);
+    assert_eq!(before["memory"], json!({"rss_kib":4}));
+    assert_eq!(before["allocator"]["available"], false);
+    assert_eq!(before["allocator"]["reason"], "unsupported_target");
+    for elapsed in [250, 500, 750] {
+        let during = samples.capture(Moment::DuringPlay, elapsed);
+        assert!(during.get("allocator").is_none());
+        assert_eq!(during["memory"], json!({"rss_kib":4}));
+    }
+    assert_eq!(calls, 1);
+}
+
+#[test]
 fn latest_replacement_retains_only_current_domain_storage_and_actual_capacity() {
     let mut first = Vec::with_capacity(128);
     first.extend_from_slice(&[1, 2, 3, 255]);
@@ -209,6 +310,7 @@ fn matrix_cancels_and_joins_each_watch_before_drop_and_next_phase_for_both_consu
             Duration::from_millis(15),
             Duration::from_secs(1),
             &mut || json!({"rss_kib":null}),
+            &mut || panic!("disabled allocator callback must not run"),
             &mut |value| {
                 reports.push(value);
                 Ok(())
@@ -251,9 +353,72 @@ fn matrix_cancels_and_joins_each_watch_before_drop_and_next_phase_for_both_consu
                     .unwrap()["moment"],
                 "after_latest_dropped"
             );
+            assert!(
+                report["result"]["memory_samples"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|sample| sample.get("allocator").is_none())
+            );
         }
         assert_eq!(reports[3]["performance_accepted"], false);
         assert!(!serde_json::to_string(&reports).unwrap().contains("private"));
+    }
+}
+
+#[test]
+fn enabled_allocator_queries_run_only_before_start_after_join_and_after_latest_drop() {
+    let adapter = Arc::new(Fake::default());
+    let mut request = request();
+    request.allocator_stats = true;
+    let mut calls = 0;
+    let mut reports = Vec::new();
+    observe(
+        adapter.clone(),
+        request,
+        Duration::from_millis(15),
+        Duration::from_secs(1),
+        &mut || json!({"rss_kib":4}),
+        &mut || {
+            assert_eq!(adapter.active.load(Ordering::SeqCst), 0);
+            let held = adapter
+                .pixels
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|pixels| pixels.upgrade().is_some())
+                .count();
+            assert_eq!(held, usize::from(calls % 3 == 1));
+            calls += 1;
+            allocator_report("2.42", accounting())
+        },
+        &mut |value| {
+            reports.push(value);
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert_eq!(calls, 9);
+    for report in reports.iter().take(3) {
+        let samples = report["result"]["memory_samples"].as_array().unwrap();
+        let allocator_samples: Vec<_> = samples
+            .iter()
+            .filter(|sample| sample.get("allocator").is_some())
+            .map(|sample| sample["moment"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            allocator_samples,
+            [
+                "before_play",
+                "after_join_latest_held",
+                "after_latest_dropped"
+            ]
+        );
+        assert!(
+            samples
+                .iter()
+                .all(|sample| sample["memory"]["rss_kib"] == 4)
+        );
     }
 }
 
@@ -270,13 +435,21 @@ fn errors_panics_and_early_return_stop_sequence_without_native_error_output() {
             panic,
             ..Default::default()
         });
+        let mut request = request();
+        request.allocator_stats = true;
+        let mut allocator_calls = 0;
         let mut reports = Vec::new();
         let result = observe(
             adapter.clone(),
-            request(),
+            request,
             Duration::from_millis(20),
             Duration::from_secs(1),
             &mut || json!({"rss_kib":null}),
+            &mut || {
+                assert_eq!(adapter.active.load(Ordering::SeqCst), 0);
+                allocator_calls += 1;
+                allocator_report("2.42", accounting())
+            },
             &mut |value| {
                 reports.push(value);
                 Ok(())
@@ -285,6 +458,7 @@ fn errors_panics_and_early_return_stop_sequence_without_native_error_output() {
         assert_eq!(result, Err(expected));
         assert_eq!(adapter.calls.load(Ordering::SeqCst), 1);
         assert_eq!(adapter.active.load(Ordering::SeqCst), 0);
+        assert_eq!(allocator_calls, 1);
         assert!(reports.is_empty());
         assert!(!expected.contains("private"));
     }
@@ -294,16 +468,25 @@ fn errors_panics_and_early_return_stop_sequence_without_native_error_output() {
 fn missing_join_confirmation_never_starts_another_phase() {
     let adapter = Arc::new(Fake::default());
     adapter.ignore_stop.store(true, Ordering::Release);
+    let mut request = request();
+    request.allocator_stats = true;
+    let mut allocator_calls = 0;
     let result = observe(
         adapter.clone(),
-        request(),
+        request,
         Duration::from_millis(10),
         Duration::from_millis(2),
         &mut || json!({"rss_kib":null}),
+        &mut || {
+            assert_eq!(adapter.active.load(Ordering::SeqCst), 0);
+            allocator_calls += 1;
+            allocator_report("2.42", accounting())
+        },
         &mut |_| panic!("unjoined phase cannot publish success"),
     );
     assert_eq!(result, Err("worker_join_timeout"));
     assert_eq!(adapter.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(allocator_calls, 1);
     // Test-only release of the deliberately noncooperative mock. The real
     // executable instead exits failed; its independent outer unit is bounded.
     adapter.ignore_stop.store(false, Ordering::Release);
@@ -323,6 +506,7 @@ fn stdout_failure_stops_after_joined_phase_without_allocating_next_watch() {
         Duration::from_millis(10),
         Duration::from_secs(1),
         &mut || json!({}),
+        &mut || panic!("disabled allocator callback must not run"),
         &mut |_| Err("output_unavailable"),
     );
     assert_eq!(result, Err("output_unavailable"));

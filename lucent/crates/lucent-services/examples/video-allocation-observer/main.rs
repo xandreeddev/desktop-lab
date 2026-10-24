@@ -37,6 +37,8 @@ struct Input {
     phase_seconds: u64,
     #[serde(default)]
     sdk_bridge: bool,
+    #[serde(default)]
+    allocator_stats: bool,
 }
 
 fn local(path: &Path) -> bool {
@@ -229,6 +231,131 @@ fn memory() -> Value {
     })
 }
 
+// glibc's arena accounting includes all arenas, but excludes direct-mapped
+// malloc chunks. Thread-cache frees can still count as arena in-use bytes.
+// None of these counters describes Rust object ownership or resident pages.
+#[cfg(any(test, all(target_os = "linux", target_env = "gnu")))]
+struct MallocAccounting {
+    arena: u64,
+    in_use: u64,
+    free: u64,
+    direct_mmap: u64,
+    direct_mmap_regions: u64,
+    free_chunks: u64,
+}
+
+fn allocator_unavailable(reason: &'static str) -> Value {
+    json!({"kind":"glibc_mallinfo2", "available":false, "reason":reason})
+}
+
+#[cfg(any(test, all(target_os = "linux", target_env = "gnu")))]
+fn allocator_report(version: &str, stats: MallocAccounting) -> Value {
+    let parts: Vec<_> = version.split('.').collect();
+    if version.len() > 32
+        || parts.len() < 2
+        || !parts
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+    {
+        return allocator_unavailable("invalid_runtime_version");
+    }
+    let major = parts[0].parse::<u32>().ok();
+    let minor = parts[1].parse::<u32>().ok();
+    if !matches!((major, minor), (Some(major), Some(minor)) if (major, minor) >= (2, 33)) {
+        return allocator_unavailable("unsupported_glibc_version");
+    }
+    json!({"kind":"glibc_mallinfo2", "available":true, "glibc_version":version,
+        "bytes":{"arena":stats.arena, "arena_accounted_in_use":stats.in_use,
+                 "arena_free":stats.free, "direct_mmap":stats.direct_mmap,
+                 "malloc_accounted_in_use_total":stats.in_use.checked_add(stats.direct_mmap)},
+        "counts":{"arena_free_chunks":stats.free_chunks,
+                  "direct_mmap_regions":stats.direct_mmap_regions}})
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn allocator() -> Value {
+    // GNU guarantees a static NUL-terminated version string. This optional
+    // diagnostic targets glibc >= 2.33 (mallinfo2's symbol version). It neither
+    // tunes nor trims malloc, and runs only with the playback worker stopped.
+    let version = unsafe { std::ffi::CStr::from_ptr(libc::gnu_get_libc_version()) };
+    let Ok(version) = version.to_str() else {
+        return allocator_unavailable("invalid_runtime_version");
+    };
+    // SAFETY: mallinfo2 returns an owned scalar snapshot without arguments.
+    // The example has already initialized malloc, never calls mallopt, and
+    // invokes this outside signal handlers and playback-worker lifetimes.
+    let stats = unsafe { libc::mallinfo2() };
+    let converted = (
+        u64::try_from(stats.arena),
+        u64::try_from(stats.uordblks),
+        u64::try_from(stats.fordblks),
+        u64::try_from(stats.hblkhd),
+        u64::try_from(stats.hblks),
+        u64::try_from(stats.ordblks),
+    );
+    match converted {
+        (
+            Ok(arena),
+            Ok(in_use),
+            Ok(free),
+            Ok(direct_mmap),
+            Ok(direct_mmap_regions),
+            Ok(free_chunks),
+        ) => allocator_report(
+            version,
+            MallocAccounting {
+                arena,
+                in_use,
+                free,
+                direct_mmap,
+                direct_mmap_regions,
+                free_chunks,
+            },
+        ),
+        _ => allocator_unavailable("counter_out_of_range"),
+    }
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+fn allocator() -> Value {
+    allocator_unavailable("unsupported_target")
+}
+
+#[derive(Clone, Copy)]
+enum Moment {
+    BeforePlay,
+    DuringPlay,
+    JoinedLatestHeld,
+    LatestDropped,
+}
+impl Moment {
+    fn label(self) -> &'static str {
+        match self {
+            Self::BeforePlay => "before_play",
+            Self::DuringPlay => "during_play",
+            Self::JoinedLatestHeld => "after_join_latest_held",
+            Self::LatestDropped => "after_latest_dropped",
+        }
+    }
+}
+
+struct Samples<'a> {
+    memory: &'a mut dyn FnMut() -> Value,
+    allocator: Option<&'a mut dyn FnMut() -> Value>,
+}
+impl Samples<'_> {
+    fn capture(&mut self, moment: Moment, elapsed_ms: u128) -> Value {
+        let mut value = json!({"moment":moment.label(), "elapsed_ms":elapsed_ms,
+                               "memory":(self.memory)()});
+        if !matches!(moment, Moment::DuringPlay)
+            && let Some(query) = self.allocator.as_mut()
+        {
+            value["allocator"] = query();
+        }
+        value
+    }
+}
+
 fn phase(
     adapter: Arc<dyn WallpaperPlaybackPort>,
     asset: LiveWallpaperAsset,
@@ -236,10 +363,10 @@ fn phase(
     sdk_bridge: bool,
     duration: Duration,
     join_timeout: Duration,
-    sample: &mut dyn FnMut() -> Value,
+    samples: &mut Samples<'_>,
 ) -> Check<Value> {
     let start = Instant::now();
-    let mut samples = vec![json!({"moment":"before_play", "elapsed_ms":0, "memory":sample()})];
+    let mut observations = vec![samples.capture(Moment::BeforePlay, 0)];
     let stop = Arc::new(Stop::new(duration));
     let publications = Arc::new(Mutex::new(Publications::default()));
     let state = publications.clone();
@@ -275,10 +402,7 @@ fn phase(
     });
     while !stop.cancelled() && !worker.is_finished() {
         stop.wait(SAMPLE_INTERVAL);
-        samples.push(
-            json!({"moment":"during_play", "elapsed_ms":start.elapsed().as_millis(),
-                            "memory":sample()}),
-        );
+        observations.push(samples.capture(Moment::DuringPlay, start.elapsed().as_millis()));
     }
     stop.cancel();
     let join_deadline = Instant::now() + join_timeout;
@@ -300,17 +424,11 @@ fn phase(
     if !cancellation_observed || state.count == 0 {
         return Err("worker_ended_before_finite_observation");
     }
-    samples.push(
-        json!({"moment":"after_join_latest_held", "elapsed_ms":start.elapsed().as_millis(),
-                        "memory":sample()}),
-    );
+    observations.push(samples.capture(Moment::JoinedLatestHeld, start.elapsed().as_millis()));
     let latest_capacity = state.latest.as_ref().map(|latest| latest.capacity);
     let last_size = state.latest.as_ref().map(Latest::dimensions);
     state.latest = None;
-    samples.push(
-        json!({"moment":"after_latest_dropped", "elapsed_ms":start.elapsed().as_millis(),
-                        "memory":sample()}),
-    );
+    observations.push(samples.capture(Moment::LatestDropped, start.elapsed().as_millis()));
     Ok(
         json!({"publications":state.count, "first_size":state.first_size, "last_size":last_size,
               "geometry_changes":state.geometry_changes,
@@ -318,7 +436,7 @@ fn phase(
               "latest_capacity_bytes_before_drop":latest_capacity,
               "consumer_held_pixel_capacity_after_drop":0,
               "stop_requested":true, "watch_joined":true, "cancellation_observed":true,
-              "elapsed_ms":start.elapsed().as_millis(), "memory_samples":samples}),
+              "elapsed_ms":start.elapsed().as_millis(), "memory_samples":observations}),
     )
 }
 
@@ -328,8 +446,13 @@ fn observe(
     duration: Duration,
     join_timeout: Duration,
     sample: &mut dyn FnMut() -> Value,
+    allocator_query: &mut dyn FnMut() -> Value,
     emit: &mut dyn FnMut(Value) -> Check<()>,
 ) -> Check<()> {
+    let mut samples = Samples {
+        memory: sample,
+        allocator: request.allocator_stats.then_some(allocator_query),
+    };
     for (label, width, height) in PHASES {
         let result = phase(
             adapter.clone(),
@@ -344,7 +467,7 @@ fn observe(
             request.sdk_bridge,
             duration,
             join_timeout,
-            sample,
+            &mut samples,
         )?;
         // phase returned only after its exact worker joined and latest dropped.
         emit(json!({"kind":"phase", "phase":label, "result":result}))?;
@@ -399,6 +522,7 @@ fn run() -> Check<()> {
         duration,
         Duration::from_secs(JOIN_SECONDS),
         &mut memory,
+        &mut allocator,
         &mut |value| writeln!(output, "{value}").map_err(|_| "output_unavailable"),
     )
 }

@@ -23,7 +23,8 @@ private stdin. Supply the actual existing prepared descriptor, for example:
     }
   },
   "phase_seconds": 10,
-  "sdk_bridge": false
+  "sdk_bridge": false,
+  "allocator_stats": false
 }
 ```
 
@@ -52,3 +53,50 @@ a codec or GPU, establish a memory target, or prove visible frame cadence.
 
 The source and mock tests are prepared for review. They have not been compiled,
 run against media, or used to collect native measurements at this checkpoint.
+
+## Optional glibc allocator accounting
+
+`allocator_stats` defaults to `false`. Disabled mode makes no allocator-statistics
+FFI calls and adds no allocator fields to the existing output. With it enabled,
+the example samples only at `before_play`, `after_join_latest_held` and
+`after_latest_dropped`, with the exact playback worker stopped. The regular
+250 ms memory samples do not query the allocator. There are at most nine
+allocator observations across the three successful phases; an unsuccessful
+phase does not authorize another playback worker or later boundary samples.
+
+Each boundary sample gains a separate `allocator` object. GNU/Linux builds use
+`gnu_get_libc_version` and `mallinfo2`; other targets explicitly report
+`available: false` with `unsupported_target`, rather than zero counters. Direct
+linking to `mallinfo2` requires glibc 2.33 or newer. This is not an old-glibc
+compatibility shim. The actual runtime version is included in successful
+observations. This diagnostic does not call `malloc_trim`, `mallopt`, install an
+allocator, change environment settings or add a sampling thread.
+
+`allocator.bytes` contains `arena`, `arena_accounted_in_use`, `arena_free`,
+`direct_mmap` and a checked `malloc_accounted_in_use_total` (arena in-use plus
+direct mmap). An overflowing total is null. `allocator.counts` contains
+`arena_free_chunks` and `direct_mmap_regions`; malloc does not provide a live
+object count here. These byte values are separate from the existing
+`memory.*_kib` counters and must not be added to RSS or PSS.
+
+The [reviewed glibc implementation](https://github.com/bminor/glibc/blob/glibc-2.42/malloc/malloc.c)
+visits all arenas, taking their locks sequentially. Arena allocations can
+themselves be backed by mmap; the separate direct-mmap counter covers malloc's
+individually mapped chunks. Freed chunks in a thread cache can still appear in
+arena in-use accounting. Worker exit drains that worker's cache, but the main
+thread and library state can remain. Therefore these counters do not identify
+live Rust objects, allocation owners, fragmentation, a leak, or resident pages.
+A rise in free arena bytes after join/drop is consistent with allocator
+retention; it does not prove which pages account for retained RSS.
+
+The [GNU safety notes](https://github.com/bminor/glibc/blob/glibc-2.42/manual/memory.texi)
+describe allocator locking, initialization and concurrent-setting caveats.
+The call is outside signal handlers, follows ordinary input allocations and
+never races an allocator-setting operation performed by this example. It is
+not an atomic whole-process snapshot, and the diagnostic and its saved JSON
+also allocate memory. Keep the native run bounded and treat this as additional
+accounting evidence, not an allocation profiler or a performance target pass.
+
+This optional extension and its injected tests are source-only at this
+checkpoint. It needs a new reviewed build and native run; earlier observer
+measurements do not contain these fields.
