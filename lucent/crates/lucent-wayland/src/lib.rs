@@ -88,6 +88,7 @@ struct Native<M> {
     regions: Vec<api::Clip>,
     history: handoff::SubmissionHistory,
     pacing: Option<pacing::Trace>,
+    native_generation: Option<u64>, // Presentation-only identity; never reused.
 }
 #[derive(Clone, Copy)]
 struct PresentationState {
@@ -164,6 +165,7 @@ impl<A: Application> Drop for State<A> {
         }
         self.clipboard_drop();
         self.input_method.shutdown();
+        self.presentation.clear_pending();
         // Drop GPU surfaces before their protocol roles, then send the queued
         // destroy requests while the connection is still alive. A caller such
         // as a permission agent can outlive this individual runtime invocation.
@@ -438,6 +440,7 @@ impl<A: Application> State<A> {
                     regions: vec![],
                     history: Default::default(),
                     pacing: self.pacing.start_native(),
+                    native_generation: self.presentation.start_native(),
                 },
             );
         }
@@ -465,7 +468,7 @@ impl<A: Application> State<A> {
             "one_color_buffer_per_surface_bytes": self.surfaces.values().chain(self.retiring.iter().map(|(_, native)| native)).map(|s| s.renderer.single_surface_buffer_bytes()).sum::<u64>(),
             "scope":"Prepared image payloads referenced by current and retiring scenes only; app caches excluded. GPU buffer values are requested payloads, not driver allocations. Actual surface buffer counts and total GPU memory are unknown."
         }));
-        let surfaces = self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id.to_string(),"role":s.spec.id,"instance":s.spec.instance.as_ref().map(api::SurfaceInstance::as_str),"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"keyboard":match s.spec.keyboard { api::Keyboard::None=>"none", api::Keyboard::OnDemand=>"on-demand", api::Keyboard::Exclusive=>"exclusive" },"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"density":s.density().factor(),"buffer_scale":if s.fractional.is_some(){1}else{s.scale},"buffer_width":s.density().physical_size(s.width,s.height).ok().map(|size|size.0),"buffer_height":s.density().physical_size(s.width,s.height).ok().map(|size|size.1),"frames":s.history.frames,"native_frames":s.renderer.frames,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.history.frame_times,"frame_profiles":s.history.profiles.json(),"frame_pacing":s.pacing.as_ref().map(pacing::Trace::json),"presentation":s.history.presentation.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>();
+        let surfaces = self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id.to_string(),"role":s.spec.id,"instance":s.spec.instance.as_ref().map(api::SurfaceInstance::as_str),"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"keyboard":match s.spec.keyboard { api::Keyboard::None=>"none", api::Keyboard::OnDemand=>"on-demand", api::Keyboard::Exclusive=>"exclusive" },"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"density":s.density().factor(),"buffer_scale":if s.fractional.is_some(){1}else{s.scale},"buffer_width":s.density().physical_size(s.width,s.height).ok().map(|size|size.0),"buffer_height":s.density().physical_size(s.width,s.height).ok().map(|size|size.1),"frames":s.history.frames,"native_frames":s.renderer.frames,"native_generation":s.native_generation,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.history.frame_times,"frame_profiles":s.history.profiles.json(),"frame_pacing":s.pacing.as_ref().map(pacing::Trace::json),"presentation":s.history.presentation.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>();
         let mut result = serde_json::json!({"profile_memory":profile_memory,"presentation_feedback":self.presentation.json(),"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":surfaces,"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)});
         result["frame_pacing"] = self.pacing.json();
         result["outputs"]=serde_json::json!(self.output_bindings.iter().map(|(info,_)|serde_json::json!({"global":info.global,"name":info.name.as_ref().map(api::OutputName::as_str),"logical_size":info.logical_size,"integer_scale":info.integer_scale})).collect::<Vec<_>>());
@@ -814,6 +817,7 @@ impl<A: Application> State<A> {
                         regions: vec![],
                         history: history.unwrap_or_default(),
                         pacing: self.pacing.start_native(),
+                        native_generation: self.presentation.start_native(),
                     },
                 );
             }
@@ -831,6 +835,7 @@ impl<A: Application> State<A> {
         self.retiring.retire(id);
         let mut native = self.surfaces.remove(id)?;
         self.pacing.retire(native.pacing.take());
+        self.presentation.retire_native(native.native_generation);
         Some(native)
     }
     fn begin_recreation(
@@ -868,6 +873,7 @@ impl<A: Application> State<A> {
         }
         let mut previous = self.surfaces.remove(id).expect("validated native surface");
         self.pacing.retire(previous.pacing.take());
+        self.presentation.retire_native(previous.native_generation);
         let history = previous.history.continuation();
         let presented = previous.presented.is_some();
         self.retiring
@@ -1024,6 +1030,8 @@ impl<A: Application> State<A> {
                         self.presentation.request(
                             surface,
                             qh,
+                            s.native_generation
+                                .map(|generation| (generation, s.spec.address())),
                             s.history.frames.saturating_add(1),
                             self.epoch.elapsed().as_secs_f64() * 1000.,
                             streams.copied(),
