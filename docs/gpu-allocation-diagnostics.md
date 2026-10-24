@@ -40,7 +40,16 @@ enabled by this existing flag, so this is an instrumented cohort, not an
 uninstrumented memory-budget measurement. No memory gain or resource target is
 accepted by adding this observation.
 
-Three authored pure tests cover disabled/no-query, unavailable versus an empty
-allocator, and one-query aggregate byte/count mapping. Compilation, test
-execution, native backend availability and cold/4K/warm observations remain
-separate validation; none is established by source preparation.
+At source `4a0f932a7c82ac0459715007bdbd314d145a4ae4`, formatting and strict
+release Clippy for renderer and Wayland all targets passed. All three allocation
+tests and 84 Wayland tests passed, and the release Lab binary built successfully.
+The allocation tests cover disabled/no-query, unavailable versus an empty
+allocator, and one-query aggregate byte/count mapping.
+
+A fresh offscreen native Vulkan export on the same AMD RADV backend as the
+previous catalogue passed its strict check: 9 stories, 5 palettes, 480 captures
+and 117 producer inputs. All 480 PNGs are byte-identical to the previous catalogue;
+only the manifest records the new source and producer inputs. This offscreen
+export does not exercise the inspector allocator query. Native allocator report
+availability and cold/4K/warm observations remain unverified; these checks do not
+identify the retained-memory cause or accept an RSS, FPS or other resource target.
