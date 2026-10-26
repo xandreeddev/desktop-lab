@@ -210,3 +210,57 @@ Later read-only options and widget-policy observations occur after cleanup and
 do not establish the keyboard owner at failure time. The cause remains open.
 Protocol tests, deployment and the separate 118-input/480-image offscreen export
 do not establish a keyboard fix, broader handlers, hardware or performance.
+
+## Focus geometry and cursor-only diagnostic
+
+The later [focus investigation report](../reports/measurements/lucent-cold-default-uri-focus-diagnostic-3640.json)
+keeps runtime `3640bd86c6ec` unchanged. A read-only recorder repeats the canonical
+pointer success and keyboard failure. At browser mapping, before `KeyA` and after
+its dispatch, the owned browser is mapped, visible and accepting input in both
+cases. The pointer document reports focus; the keyboard document does not.
+Every case passes its own nine cleanup checks.
+
+The keyboard cursor lies within the recorded Clock card bounds. The pointer route
+ends at the selected notification link, outside that card's bounds but inside the
+larger native group named `clock`. That group also contains Media controls, so its
+keyboard capability cannot be inferred from its first member's name.
+
+| Case | Actual observation | Acceptance boundary |
+| --- | --- | --- |
+| Canonical pointer with recorder | Document focus and one trusted, unmodified, nonrepeat `KeyA`. | Scoped pointer pass. |
+| Canonical Tab/Enter with recorder | No document focus; trusted `KeyA` delivery is not observed before the bounded wait fails. | Keyboard failure preserved. |
+| Tab/Enter with cursor moved to the pointer route's link point | Document focus and one trusted, unmodified, nonrepeat `KeyA`. | Diagnostic success; canonical acceptance is explicitly false. |
+
+The last case adds only cursor movement. It retains Tab/Enter and adds no browser
+focus request, activation, click or forced shell hide. The changed outcome supports
+an under-cursor widget hypothesis. These snapshots are non-atomic, their input
+modes are requested policy, and runtime 3640 exposes no actual seat keyboard owner.
+Rectangle membership and document focus do not establish the failure mechanism.
+The original negative trial remains unchanged.
+
+Candidate `0a981631dca2` uses the existing root foreground lifetime to suppress all
+widget keyboard demand while a panel remains open, including notification release
+and URI dispatch. Otherwise, each group's current members determine its static
+`OnDemand` capability: Notes and existing interactive controls remain available;
+Clock/System-only groups are passive outside layout editing. Candidate
+`b2f54551dfbe` adds read-only exact Lucent-native keyboard observations and separates
+requested from committed input policies. A client observing no current keyboard
+surface does not identify the compositor's global keyboard owner.
+
+Exact `b2f54551dfbe` now passes the Ubuntu
+[Rust job](https://github.com/xandreeddev/desktop-lab/actions/runs/40411820911/job/121884163923)
+in [CI run40411820911](https://github.com/xandreeddev/desktop-lab/actions/runs/40411820911),
+including workspace checks, controlled service-protocol suites and software Vulkan
+visual regressions. All **11 widget-policy and six diagnostic tests** have
+individually verified passing log entries. A coherent Arch release, candidate VM
+deployment and native keyboard acceptance remain pending. A widget's requested
+`None` can still await its own frame callback or render retry. Notification release
+does not acknowledge every widget commit, so this policy retains no unconditional
+focus or keyboard-fix claim.
+
+The b2 changes are merged through [PR115](https://github.com/xandreeddev/desktop-lab/pull/115)
+as main `912074f1678b`. Its [Pages run40414422493](https://github.com/xandreeddev/desktop-lab/actions/runs/40414422493)
+and twenty same-artifact LAN checks verify publication, including source3640's
+118 producer inputs and 480 native catalogue captures. This named delivery
+checkpoint does not publish this later investigation/CI reconciliation or establish
+candidate VM deployment. See [current readiness](current-readiness.md).

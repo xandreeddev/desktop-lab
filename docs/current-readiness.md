@@ -1,15 +1,19 @@
 # Current daily-use readiness
 
 The named accepted-main and verified delivery checkpoint is
-[`9d42c20e`](https://github.com/xandreeddev/desktop-lab/commit/9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24),
-through [PR114](https://github.com/xandreeddev/desktop-lab/pull/114).
-[Pages40396627106](https://github.com/xandreeddev/desktop-lab/actions/runs/40396627106)
+[`912074f1`](https://github.com/xandreeddev/desktop-lab/commit/912074f1678b67b789b75217ea253d40dd327e73),
+through [PR115](https://github.com/xandreeddev/desktop-lab/pull/115).
+[Pages40414422493](https://github.com/xandreeddev/desktop-lab/actions/runs/40414422493)
 passes three exact public HTML artifact matches and the native manifest/PNG:
-**117 producer inputs and 480 captures from source 4a0f932a**. Twenty same-artifact
-LAN HTTP checks pass (receipt `dbd81b2611a8ad809093f30518bf07d1b0fb5f79fa282943882b0bc3b65a335e`).
-Earlier ca88/Pages40392718403 served b3c91fab's **116** producers; that checkpoint
-remains historical. This later reconciliation and staged guides still need their
-own final build, protected-main merge and publication.
+**118 producer inputs and 480 captures from source 3640bd86** (public receipt
+`695a4c42b0f018eaf0339d947bf2814c8c1440deb1437bea55a22c133e8e23ea`).
+Twenty same-artifact LAN HTTP checks pass, retaining the 64/128 MiB static-server
+limits (receipt `7f47d1a2d4c22760cdc8b337d65d581a2e4d424387dd73b659493042067833db`).
+Earlier 9d42/PR114/Pages40396627106 served 4a0f932a's **117** producers;
+ca88/Pages40392718403 served b3c91fab's **116**. Those checkpoints remain historical.
+This later focus-investigation, CI and delivery reconciliation still needs its own
+final build, protected-main merge and publication. Delivery establishes no native
+keyboard fix or performance acceptance.
 
 Archived resource and earlier feature observations below retain `eb3481f4` and
 their other named sources. At the earlier [PR110](https://github.com/xandreeddev/desktop-lab/pull/110)
@@ -42,8 +46,27 @@ and a keyboard fix remain unestablished. The earlier
 [eb348 cold run](../reports/measurements/lucent-cold-default-uri-eb348.json) keeps
 its original outcome. This source 3640 deployment was an unmerged candidate at capture;
 the archive's original capture flags are unchanged.
-These 118 candidate producers are separate from 9d42's published 117 inputs and
-the historical ca88/b3 catalogue's 116 inputs.
+
+The later [focus investigation](../reports/measurements/lucent-cold-default-uri-focus-diagnostic-3640.json)
+on unchanged 3640 repeats canonical pointer success and keyboard failure. Moving
+only the cursor to the pointer route's link point while retaining Tab/Enter makes
+a separate diagnostic receive document focus and one trusted `KeyA`; canonical
+acceptance is explicitly false. All three cases pass their own nine cleanup
+checks. The comparison supports an under-cursor widget hypothesis, but the
+non-atomic geometry/requested-policy recorder exposes no actual seat owner and
+establishes no cause or production fix. Source `0a981631dca2`/`b2f54551dfbe` prepares
+member-aware widget suppression and read-only native keyboard diagnostics. Exact
+b2 passes the Ubuntu [Rust job](https://github.com/xandreeddev/desktop-lab/actions/runs/40411820911/job/121884163923)
+in [CI run40411820911](https://github.com/xandreeddev/desktop-lab/actions/runs/40411820911):
+workspace/protocol/software-Vulkan suites and all 17 individually verified new
+tests pass. A coherent Arch release, candidate VM deployment and native keyboard
+acceptance remain pending. See
+[the activation guide](default-uri-activation.md#focus-geometry-and-cursor-only-diagnostic)
+for the requested-versus-committed ordering limitation. The seven-gap goal stays open.
+
+The 118 source3640 capture inputs are now published at main912, separate from
+historical 9d42's 117 inputs and ca88/b3's 116 inputs. This does not deploy the b2
+widget policy or diagnostic runtime to the VM.
 
 The recent changes add:
 
