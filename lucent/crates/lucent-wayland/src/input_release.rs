@@ -2,10 +2,40 @@
 //! Tagged frame callbacks share the normal buffer commit; no extra commit,
 //! geometry mutation, synchronous roundtrip or destination focus belongs here.
 use super::*;
+use std::cell::Cell;
 use wayland_client::{Dispatch, protocol::wl_callback::WlCallback};
 
 const CAPACITY: usize = 8;
 const TIMEOUT: Duration = Duration::from_secs(2);
+/// Lazy, exclusive ownership of only this native's tagged release callbacks.
+/// Frame records share the retirement flag, not ownership of this guard.
+#[derive(Default)]
+pub(super) struct CallbackOwner {
+    retired: Rc<Cell<bool>>,
+    callbacks: Vec<WlCallback>,
+}
+impl CallbackOwner {
+    fn register(&mut self, callback: &WlCallback) -> Rc<Cell<bool>> {
+        // This only drops our extra proxy handles. Releases must retain a Done
+        // queued for the current native even after its proxy becomes dead.
+        self.callbacks.retain(Proxy::is_alive);
+        self.callbacks.push(callback.clone());
+        self.retired.clone()
+    }
+}
+impl Drop for CallbackOwner {
+    fn drop(&mut self) {
+        self.retired.set(true);
+        for callback in self.callbacks.drain(..) {
+            if let Some(backend) = callback.backend().upgrade() {
+                // wl_callback has no destructor request. This public operation
+                // retires the local proxy, with backend ID bookkeeping retained
+                // until server delete_id. Already-delivered Done is InvalidId.
+                let _ = backend.destroy_object(&callback.id());
+            }
+        }
+    }
+}
 struct Pending<M> {
     request: api::InputReleaseRequest<M>,
     surface: wl_surface::WlSurface,
@@ -18,6 +48,7 @@ struct Frame {
     callback: WlCallback,
     requests: Vec<u64>,
     presented: bool,
+    owner_retired: Rc<Cell<bool>>,
 }
 #[derive(Clone)]
 pub(super) struct FrameData {
@@ -26,8 +57,8 @@ pub(super) struct FrameData {
 }
 pub(super) struct Releases<M> {
     requests: BTreeMap<u64, Pending<M>>,
-    // Timed-out/cancelled callbacks remain counted until their server Done.
-    // wl_callback has no client destructor request; never admit unbounded ghosts.
+    // Timed-out/cancelled callbacks remain counted until Done or explicit native
+    // owner teardown. A dead surface/proxy alone cannot authorize reclamation.
     frames: BTreeMap<u64, Frame>,
     next_request: u64,
     next_frame: u64,
@@ -69,11 +100,15 @@ fn current_policy<A: Application>(
     (!released(&native.spec)).then_some(api::InputReleaseOutcome::Superseded)
 }
 impl<M: 'static> Releases<M> {
+    fn prune_retired(&mut self) {
+        self.frames.retain(|_, frame| !frame.owner_retired.get());
+    }
     fn insert(
         &mut self,
         request: api::InputReleaseRequest<M>,
         surface: wl_surface::WlSurface,
     ) -> Result<u64, api::InputReleaseRequest<M>> {
+        self.prune_retired();
         let Some(id) = self.next_request.checked_add(1) else {
             return Err(request);
         };
@@ -102,8 +137,10 @@ impl<M: 'static> Releases<M> {
         &mut self,
         surface: &wl_surface::WlSurface,
         none: bool,
+        owner: &mut Option<CallbackOwner>,
         qh: &QueueHandle<D>,
     ) -> Option<u64> {
+        self.prune_retired();
         if !none || self.frames.len() >= CAPACITY {
             return None;
         }
@@ -130,6 +167,9 @@ impl<M: 'static> Releases<M> {
                 surface: surface.clone(),
             },
         );
+        let owner_retired = owner
+            .get_or_insert_with(CallbackOwner::default)
+            .register(&callback);
         for request in &requests {
             self.requests.get_mut(request).unwrap().frame = Some(id);
         }
@@ -140,6 +180,7 @@ impl<M: 'static> Releases<M> {
                 callback,
                 requests,
                 presented: false,
+                owner_retired,
             },
         );
         Some(id)
@@ -165,6 +206,7 @@ impl<M: 'static> Releases<M> {
         }
     }
     fn take_frame(&mut self, proxy: &WlCallback, data: &FrameData) -> Option<Frame> {
+        self.prune_retired();
         if !self
             .frames
             .get(&data.id)
@@ -460,20 +502,21 @@ mod tests {
             shell.get_layer_surface(&surface, None, Layer::Overlay, "owned".into(), &qh, ());
         let empty = compositor.create_region(&qh, ());
         let mut releases = Releases::default();
+        let mut owner = None;
         let id = releases
             .insert(request(api::Cancellation::default()), surface.clone())
             .ok()
             .unwrap();
         assert!(
             releases
-                .frame(&surface, released(&spec(false)), &qh)
+                .frame(&surface, released(&spec(false)), &mut owner, &qh)
                 .is_none()
         );
         assert!(releases.requests[&id].frame.is_none());
         layer.set_keyboard_interactivity(KeyboardInteractivity::None);
         surface.set_input_region(Some(&empty));
         let frame = releases
-            .frame(&surface, released(&spec(true)), &qh)
+            .frame(&surface, released(&spec(true)), &mut owner, &qh)
             .unwrap();
         surface.commit(); // Owned protocol peer stands in for the WSI commit.
         releases.submitted(Some(frame), true);
@@ -561,14 +604,15 @@ mod tests {
         let (connection, mut queue, mut server, surface) = socket();
         let qh = queue.handle();
         let mut releases = Releases::default();
+        let mut owner = None;
         let id = releases
             .insert(request(api::Cancellation::default()), surface.clone())
             .ok()
             .unwrap();
-        let failed = releases.frame(&surface, true, &qh).unwrap();
+        let failed = releases.frame(&surface, true, &mut owner, &qh).unwrap();
         releases.submitted(Some(failed), false);
         assert!(releases.requests[&id].frame.is_none());
-        let valid = releases.frame(&surface, true, &qh).unwrap();
+        let valid = releases.frame(&surface, true, &mut owner, &qh).unwrap();
         assert_ne!(failed, valid);
         releases.submitted(Some(valid), true);
         surface.commit();
@@ -622,11 +666,12 @@ mod tests {
         let (connection, mut queue, mut server, surface) = socket();
         let qh = queue.handle();
         let mut releases = Releases::default();
+        let mut owner = None;
         let old = releases
             .insert(request(api::Cancellation::default()), surface.clone())
             .ok()
             .unwrap();
-        let frame = releases.frame(&surface, true, &qh).unwrap();
+        let frame = releases.frame(&surface, true, &mut owner, &qh).unwrap();
         releases.submitted(Some(frame), true);
         releases.requests.remove(&old);
         let new = releases
@@ -657,7 +702,7 @@ mod tests {
                 )
                 .is_empty()
         );
-        let frame = releases.frame(&surface, true, &qh).unwrap();
+        let frame = releases.frame(&surface, true, &mut owner, &qh).unwrap();
         releases.submitted(Some(frame), true);
         surface.commit();
         let (proxy, data) = receive_done(
@@ -701,13 +746,14 @@ mod tests {
         let (_connection, queue, _server, surface) = socket();
         let qh = queue.handle();
         let mut releases = Releases::default();
+        let mut owner = None;
         for _ in 0..CAPACITY {
             let cancel = api::Cancellation::default();
             let id = releases
                 .insert(request(cancel.clone()), surface.clone())
                 .ok()
                 .unwrap();
-            let frame = releases.frame(&surface, true, &qh).unwrap();
+            let frame = releases.frame(&surface, true, &mut owner, &qh).unwrap();
             releases.submitted(Some(frame), true);
             let pending = releases.requests.remove(&id).unwrap();
             cancel.cancel();
@@ -749,17 +795,221 @@ mod tests {
         assert_eq!(exhausted.next_request, u64::MAX);
     }
 
+    fn queue_done(
+        connection: &Connection,
+        server: &mut std::os::unix::net::UnixStream,
+        callback: &WlCallback,
+    ) {
+        connection.flush().unwrap();
+        server
+            .write_all(&callback.id().protocol_id().to_ne_bytes())
+            .unwrap();
+        server.write_all(&(12u32 << 16).to_ne_bytes()).unwrap();
+        server.write_all(&1u32.to_ne_bytes()).unwrap();
+        connection.prepare_read().unwrap().read().unwrap();
+    }
+
+    #[test]
+    fn queued_done_from_live_native_survives_proxy_death_and_new_admission() {
+        let (connection, mut queue, mut server, surface) = socket();
+        let qh = queue.handle();
+        let mut releases = Releases::default();
+        let mut owner = None;
+        let first = releases
+            .insert(request(api::Cancellation::default()), surface.clone())
+            .ok()
+            .unwrap();
+        let frame = releases.frame(&surface, true, &mut owner, &qh).unwrap();
+        releases.submitted(Some(frame), true);
+        surface.commit();
+        queue_done(&connection, &mut server, &releases.frames[&frame].callback);
+        assert!(!releases.frames[&frame].callback.is_alive());
+        // Reading Done has retired the protocol proxy, but its typed dispatch is
+        // still queued. Another admission/registration must not erase it.
+        let second = releases
+            .insert(request(api::Cancellation::default()), surface.clone())
+            .ok()
+            .unwrap();
+        let next = releases.frame(&surface, true, &mut owner, &qh).unwrap();
+        assert_ne!(frame, next);
+        assert_eq!(releases.requests[&second].frame, Some(next));
+        assert!(releases.frames.contains_key(&frame));
+        let mut peer = Peer::default();
+        queue.dispatch_pending(&mut peer).unwrap();
+        assert_eq!(peer.done.len(), 1);
+        let (proxy, data) = peer.done.pop().unwrap();
+        let acknowledged = releases.take_frame(&proxy, &data).unwrap();
+        assert_eq!(
+            releases.outcomes(
+                data.id,
+                &acknowledged,
+                |_, _| None,
+                || releases.requests[&first].deadline - Duration::from_secs(1)
+            ),
+            [(first, api::InputReleaseOutcome::Released)]
+        );
+        assert!(releases.frames.contains_key(&next));
+    }
+
+    #[test]
+    fn retired_native_discards_queued_done_without_releasing_replacement() {
+        let (connection, mut queue, mut server, surface) = socket();
+        let qh = queue.handle();
+        let mut releases = Releases::default();
+        let mut owner = None;
+        let old = releases
+            .insert(request(api::Cancellation::default()), surface.clone())
+            .ok()
+            .unwrap();
+        let previous = releases.frame(&surface, true, &mut owner, &qh).unwrap();
+        releases.submitted(Some(previous), true);
+        surface.commit();
+        queue_done(
+            &connection,
+            &mut server,
+            &releases.frames[&previous].callback,
+        );
+        let retired = releases.frames[&previous].owner_retired.clone();
+        drop(owner.take()); // Native::drop takes this exclusive guard first.
+        assert!(retired.get());
+        let registry = connection.display().get_registry(&qh, ());
+        let compositor = registry.bind::<WlCompositor, _, _>(2, 1, &qh, ());
+        let replacement = compositor.create_surface(&qh, ());
+        let current = releases
+            .insert(request(api::Cancellation::default()), replacement.clone())
+            .ok()
+            .unwrap();
+        let next = releases.frame(&replacement, true, &mut owner, &qh).unwrap();
+        releases.submitted(Some(next), true);
+        assert!(next > previous);
+        assert!(!releases.frames.contains_key(&previous));
+        let mut peer = Peer::default();
+        queue.dispatch_pending(&mut peer).unwrap();
+        assert_eq!(peer.done.len(), 1);
+        let (proxy, data) = peer.done.pop().unwrap();
+        assert_eq!(data.id, previous);
+        assert!(releases.take_frame(&proxy, &data).is_none());
+        assert_eq!(releases.requests[&old].frame, Some(previous));
+        assert_eq!(releases.requests[&current].frame, Some(next));
+        replacement.commit();
+        let (proxy, data) = receive_done(
+            &connection,
+            &mut queue,
+            &mut server,
+            &releases.frames[&next],
+        );
+        let acknowledged = releases.take_frame(&proxy, &data).unwrap();
+        assert_eq!(
+            releases.outcomes(
+                data.id,
+                &acknowledged,
+                |_, _| None,
+                || releases.requests[&current].deadline - Duration::from_secs(1)
+            ),
+            [(current, api::InputReleaseOutcome::Released)]
+        );
+    }
+
+    #[test]
+    fn native_owner_teardown_reclaims_abandoned_capacity_without_done_and_accepts_delete_id() {
+        let (connection, mut queue, mut server, surface) = socket();
+        let qh = queue.handle();
+        let mut releases = Releases::default();
+        let mut owner = None;
+        let mut abandoned = Vec::new();
+        for _ in 0..CAPACITY {
+            let cancel = api::Cancellation::default();
+            let id = releases
+                .insert(request(cancel.clone()), surface.clone())
+                .ok()
+                .unwrap();
+            let frame = releases.frame(&surface, true, &mut owner, &qh).unwrap();
+            releases.submitted(Some(frame), true);
+            abandoned.push((frame, releases.frames[&frame].callback.clone()));
+            cancel.cancel();
+            assert!(
+                releases
+                    .requests
+                    .remove(&id)
+                    .unwrap()
+                    .request
+                    .finish(api::InputReleaseOutcome::Timeout)
+                    .is_none()
+            );
+        }
+        assert_eq!(releases.frames.len(), CAPACITY);
+        assert!(
+            releases
+                .insert(request(api::Cancellation::default()), surface.clone())
+                .is_err(),
+            "a live native cannot discard eight abandoned callbacks to admit more"
+        );
+        drop(owner.take());
+        assert!(abandoned.iter().all(|(_, callback)| !callback.is_alive()));
+        surface.destroy();
+        connection.flush().unwrap();
+        // Surface destruction may discard pending callbacks without Done. Their
+        // server delete_id bookkeeping must remain valid after local retirement.
+        for (_, callback) in &abandoned {
+            server.write_all(&1u32.to_ne_bytes()).unwrap();
+            server
+                .write_all(&((12u32 << 16) | 1).to_ne_bytes())
+                .unwrap();
+            server
+                .write_all(&callback.id().protocol_id().to_ne_bytes())
+                .unwrap();
+        }
+        server.write_all(&1u32.to_ne_bytes()).unwrap();
+        server
+            .write_all(&((12u32 << 16) | 1).to_ne_bytes())
+            .unwrap();
+        server
+            .write_all(&surface.id().protocol_id().to_ne_bytes())
+            .unwrap();
+        connection.prepare_read().unwrap().read().unwrap();
+        let mut peer = Peer::default();
+        queue.dispatch_pending(&mut peer).unwrap();
+        assert!(peer.done.is_empty());
+        assert!(connection.backend().last_error().is_none());
+        let registry = connection.display().get_registry(&qh, ());
+        let compositor = registry.bind::<WlCompositor, _, _>(2, 1, &qh, ());
+        let replacement = compositor.create_surface(&qh, ());
+        let current = releases
+            .insert(request(api::Cancellation::default()), replacement.clone())
+            .ok()
+            .unwrap();
+        let next = releases.frame(&replacement, true, &mut owner, &qh).unwrap();
+        assert_eq!(releases.frames.len(), 1);
+        assert!(next > abandoned.last().unwrap().0);
+        assert_eq!(releases.requests[&current].frame, Some(next));
+        for (id, callback) in abandoned {
+            assert!(
+                releases
+                    .take_frame(
+                        &callback,
+                        &FrameData {
+                            id,
+                            surface: surface.clone(),
+                        },
+                    )
+                    .is_none()
+            );
+        }
+        assert!(releases.frames.contains_key(&next));
+    }
+
     #[test]
     fn overdue_callback_cannot_release_even_if_timer_dispatch_is_later() {
         use std::cell::Cell;
         let (connection, mut queue, mut server, surface) = socket();
         let qh = queue.handle();
         let mut releases = Releases::default();
+        let mut owner = None;
         let id = releases
             .insert(request(api::Cancellation::default()), surface.clone())
             .ok()
             .unwrap();
-        let frame = releases.frame(&surface, true, &qh).unwrap();
+        let frame = releases.frame(&surface, true, &mut owner, &qh).unwrap();
         releases.submitted(Some(frame), true);
         surface.commit();
         let (proxy, data) = receive_done(

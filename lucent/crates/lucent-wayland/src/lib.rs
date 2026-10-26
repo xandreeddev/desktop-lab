@@ -72,6 +72,7 @@ enum RuntimeEvent<M> {
     Command(String, mpsc::SyncSender<String>),
 }
 struct Native<M> {
+    input_release_callbacks: Option<input_release::CallbackOwner>,
     renderer: Renderer,                      // Drop before layer.
     fractional: Option<fractional::Surface>, // Destroy extensions before role/surface.
     role: SurfaceRole,
@@ -90,6 +91,13 @@ struct Native<M> {
     history: handoff::SubmissionHistory,
     pacing: Option<pacing::Trace>,
     native_generation: Option<u64>, // Presentation-only identity; never reused.
+}
+impl<M> Drop for Native<M> {
+    fn drop(&mut self) {
+        // Retire only our tagged local callback proxies before fields drop the
+        // GPU, extensions and protocol role/surface, on every teardown path.
+        drop(self.input_release_callbacks.take());
+    }
 }
 #[derive(Clone, Copy)]
 struct PresentationState {
@@ -423,6 +431,7 @@ impl<A: Application> State<A> {
                     output.id().protocol_id()
                 ))?),
                 Native {
+                    input_release_callbacks: None,
                     renderer,
                     fractional: self
                         .fractional
@@ -821,6 +830,7 @@ impl<A: Application> State<A> {
                 self.surfaces.insert(
                     address,
                     Native {
+                        input_release_callbacks: None,
                         renderer,
                         fractional: self
                             .fractional
@@ -1072,6 +1082,7 @@ impl<A: Application> State<A> {
                             surface,
                             s.spec.keyboard == api::Keyboard::None
                                 && s.spec.pointer_input == api::PointerInput::None,
+                            &mut s.input_release_callbacks,
                             qh,
                         );
                     });
