@@ -11,6 +11,7 @@ use std::{
 };
 pub use wgpu::rwh as display_handle;
 use wgpu::{rwh::*, *};
+mod allocation;
 mod cache;
 mod extent;
 mod presentation;
@@ -26,6 +27,7 @@ mod raster;
 mod scene;
 #[cfg(test)]
 mod wrapped_bidi_tests;
+pub use allocation::{GpuAllocationSnapshot, GpuAllocationStats};
 pub use cache::CacheStats;
 use cache::ResourceCache;
 use extent::{PhysicalExtent, ReadbackLayout};
@@ -223,6 +225,17 @@ impl Gpu {
     /// Texture payload bytes exclude driver allocation overhead and surface buffers.
     pub fn cache_stats(&self) -> CacheStats {
         self.cache.borrow().stats()
+    }
+    /// Query allocator bookkeeping only when explicitly enabled by a diagnostic
+    /// caller. No GPU work is submitted, polled, waited for or released here.
+    /// The backend may temporarily allocate CPU report vectors; no labels or
+    /// offsets leave this aggregate. It is not total driver memory or RSS.
+    pub fn allocation_snapshot(&self, enabled: bool) -> GpuAllocationSnapshot {
+        allocation::snapshot(enabled, || {
+            self.device
+                .generate_allocator_report()
+                .map(allocation::AllocationTotals::from)
+        })
     }
     fn texture(
         &self,
