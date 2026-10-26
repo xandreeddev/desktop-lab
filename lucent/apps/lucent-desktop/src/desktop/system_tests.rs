@@ -2,11 +2,14 @@
 use super::{Desktop, Message};
 use crate::widgets;
 use lucent_api::{
-    Application, Component, DisplayOutput, DragEvent, Effects, OutputName, SurfaceAddress,
-    SurfaceInstance,
+    ActivationOutcome, Application, Component, DisplayOutput, DragEvent, Effects,
+    InputReleaseOutcome, Keyboard, OutputName, SurfaceAddress, SurfaceInstance, SurfaceSpec,
 };
-use lucent_domain::{DomainError, MonitorId, Placement, SystemSnapshot, WidgetLayout};
-use std::collections::BTreeSet;
+use lucent_domain::{
+    DomainError, MonitorId, Notification, NotificationSnapshot, NotificationTarget, Placement,
+    SystemSnapshot, WidgetLayout,
+};
+use std::collections::{BTreeMap, BTreeSet};
 
 fn desktop() -> Desktop {
     let mut app = Desktop::new(crate::test_adapters::adapters());
@@ -374,4 +377,433 @@ fn system_named_capture_updates_only_the_host_that_paints_system() {
         initial
     );
     assert!(monitor.widgets.preview_position("system").is_some());
+}
+
+// These assertions inspect requested client policy only. A widget with a
+// pending compositor callback can retain older committed input state; native
+// committed-state/focus observations are required to establish a handoff fix.
+fn widget_specs(app: &Desktop) -> Vec<SurfaceSpec> {
+    app.surfaces()
+        .into_iter()
+        .filter(|spec| widgets::catalog::find(spec.id).is_some())
+        .collect()
+}
+fn widget_keyboard(app: &Desktop) -> BTreeMap<SurfaceAddress, Keyboard> {
+    widget_specs(app)
+        .into_iter()
+        .map(|spec| (spec.address(), spec.keyboard))
+        .collect()
+}
+fn widget_host<'a>(app: &'a Desktop, monitor: Option<&str>) -> &'a widgets::Host {
+    match monitor {
+        Some(name) => &app.monitors.connected[&id(name)].widgets,
+        None => &app.widgets,
+    }
+}
+fn assert_suppressed_widgets(app: &Desktop, baseline: &[SurfaceSpec]) {
+    let expected: Vec<_> = baseline
+        .iter()
+        .cloned()
+        .map(|mut spec| {
+            spec.keyboard = Keyboard::None;
+            spec
+        })
+        .collect();
+    assert!(!expected.is_empty());
+    assert_eq!(widget_specs(app), expected, "only keyboard demand changes");
+}
+fn foreground_openers() -> Vec<(&'static str, Message)> {
+    vec![
+        ("dock", Message::Launcher(crate::launcher::Message::Toggle)),
+        ("audio", Message::Audio(crate::audio::Message::Open)),
+        (
+            "media-controls",
+            Message::Media(crate::media::Message::Open),
+        ),
+        (
+            "weather-controls",
+            Message::Weather(crate::weather::Message::Open),
+        ),
+        ("network", Message::Network(crate::network::Message::Open)),
+        (
+            "bluetooth",
+            Message::Bluetooth(crate::bluetooth::Message::Open),
+        ),
+        ("power", Message::Power(crate::power::Message::Open)),
+        (
+            "displays",
+            Message::Displays(crate::displays::Message::Open),
+        ),
+        ("tray", Message::Tray(crate::tray::Message::Open)),
+        (
+            "live-wallpaper",
+            Message::LiveWallpaper(crate::live_wallpaper::Message::Open),
+        ),
+        (
+            "notifications",
+            Message::Notifications(crate::notifications::Message::Show),
+        ),
+    ]
+}
+fn link_notification() -> Notification {
+    Notification {
+        id: 1,
+        revision: 1,
+        received_unix_ms: 1,
+        desktop_entry: None,
+        app: "Fixture".into(),
+        summary: "Fixture link".into(),
+        body: "<a href='https://example.test/details'>Details</a>".into(),
+        image: None,
+        actions: vec![],
+        critical: false,
+        resident: false,
+        transient: false,
+        timeout_ms: 0,
+    }
+}
+fn show_link_history(app: &mut Desktop) -> NotificationTarget {
+    let note = link_notification();
+    let target = note.target().unwrap();
+    app.update(
+        Message::Notifications(crate::notifications::Message::Snapshot(Ok(
+            NotificationSnapshot {
+                history: vec![note],
+                ..Default::default()
+            },
+        ))),
+        &mut Effects::default(),
+    );
+    app.update(
+        Message::Notifications(crate::notifications::Message::Show),
+        &mut Effects::default(),
+    );
+    target
+}
+fn begin_link(app: &mut Desktop, target: NotificationTarget) -> Effects<Message> {
+    let mut effects = Effects::default();
+    app.update(
+        Message::Notifications(crate::notifications::Message::OpenLink(
+            target,
+            "https://example.test/details".into(),
+        )),
+        &mut effects,
+    );
+    effects
+}
+
+#[test]
+fn widget_keyboard_defaults_preserve_controls_and_exclude_passive_content() {
+    for (widget, keyboard) in [
+        ("clock", Keyboard::None),
+        ("system", Keyboard::None),
+        ("notes", Keyboard::OnDemand),
+        ("calendar", Keyboard::OnDemand),
+        ("timer", Keyboard::OnDemand),
+        ("media", Keyboard::OnDemand),
+        ("weather", Keyboard::OnDemand),
+    ] {
+        let mut app = desktop();
+        app.settings.layout = layout(&[(widget, 64., 64.)]);
+        assert_eq!(
+            widget_keyboard(&app),
+            BTreeMap::from([(address(widget, None), keyboard)]),
+            "{widget}"
+        );
+    }
+}
+
+#[test]
+fn widget_keyboard_uses_every_merged_member_and_rechecks_after_hide() {
+    let mut app = desktop();
+    app.settings.layout = layout(&[("clock", 64., 64.), ("notes", 64., 64.)]);
+    let groups = app.widgets.surfaces(&app.settings.layout, app.viewport);
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].members, ["clock", "notes"]);
+    assert_eq!(
+        widget_keyboard(&app),
+        BTreeMap::from([(address("clock", None), Keyboard::OnDemand)])
+    );
+    app.update(
+        Message::Widgets(widgets::Message::Toggle("notes".into())),
+        &mut Effects::default(),
+    );
+    assert_eq!(
+        widget_keyboard(&app),
+        BTreeMap::from([(address("clock", None), Keyboard::None)])
+    );
+    app.settings.layout = layout(&[("clock", 64., 64.), ("system", 64., 64.)]);
+    assert_eq!(
+        widget_keyboard(&app),
+        BTreeMap::from([(address("clock", None), Keyboard::None)])
+    );
+}
+
+#[test]
+fn widget_keyboard_keeps_edit_controls_available_without_bypassing_foreground() {
+    let mut app = desktop();
+    app.settings.layout = layout(&[("clock", 64., 64.), ("system", 900., 64.)]);
+    app.update(
+        Message::Widgets(widgets::Message::Edit(true)),
+        &mut Effects::default(),
+    );
+    let editing = widget_specs(&app);
+    assert_eq!(editing.len(), 2);
+    assert!(
+        editing
+            .iter()
+            .all(|spec| spec.keyboard == Keyboard::OnDemand)
+    );
+    app.update(
+        Message::Audio(crate::audio::Message::Open),
+        &mut Effects::default(),
+    );
+    assert_suppressed_widgets(&app, &editing);
+    app.update(Message::DismissPanels, &mut Effects::default());
+    assert_eq!(widget_specs(&app), editing);
+    app.update(
+        Message::Widgets(widgets::Message::Edit(false)),
+        &mut Effects::default(),
+    );
+    assert!(
+        widget_specs(&app)
+            .iter()
+            .all(|spec| spec.keyboard == Keyboard::None)
+    );
+}
+
+#[test]
+fn widget_keyboard_every_foreground_panel_suppresses_the_legacy_host() {
+    for (role, opener) in foreground_openers() {
+        let mut app = desktop();
+        app.settings.layout = separated();
+        let baseline = widget_specs(&app);
+        assert_eq!(baseline.len(), 2);
+        app.update(opener, &mut Effects::default());
+        assert_eq!(app.panel_surface(), Some(role));
+        assert_suppressed_widgets(&app, &baseline);
+        app.update(Message::DismissPanels, &mut Effects::default());
+        assert!(app.panel_surface().is_none());
+        assert_eq!(widget_specs(&app), baseline);
+    }
+}
+
+#[test]
+fn widget_keyboard_foreground_suppresses_every_connected_monitor_group() {
+    for (role, opener) in foreground_openers() {
+        let mut app = desktop();
+        app.settings.layout = separated();
+        app.settings
+            .monitor_layouts
+            .insert(id("DP-2"), transitive());
+        connect(&mut app);
+        let baseline = widget_specs(&app);
+        assert_eq!(baseline.len(), 4);
+        assert!(baseline.iter().all(|spec| spec.instance.is_some()));
+        app.update(opener, &mut Effects::default());
+        assert_eq!(app.panel_surface(), Some(role));
+        assert_suppressed_widgets(&app, &baseline);
+        app.update(Message::DismissPanels, &mut Effects::default());
+        assert_eq!(widget_specs(&app), baseline);
+        app.update(
+            Message::Outputs(vec![output(Some("DP-2"), 2)]),
+            &mut Effects::default(),
+        );
+        assert_eq!(
+            widget_specs(&app),
+            baseline
+                .into_iter()
+                .filter(|spec| spec.instance.as_ref().unwrap().as_str() == "DP-2")
+                .collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn widget_keyboard_passive_toasts_do_not_suppress_notes() {
+    let mut app = desktop();
+    app.settings.layout = separated();
+    let baseline = widget_specs(&app);
+    app.update(
+        Message::Notifications(crate::notifications::Message::Snapshot(Ok(
+            NotificationSnapshot {
+                active: vec![link_notification()],
+                ..Default::default()
+            },
+        ))),
+        &mut Effects::default(),
+    );
+    assert!(app.notifications.visible());
+    assert!(app.panel_surface().is_none());
+    assert_eq!(widget_specs(&app), baseline);
+}
+
+#[test]
+fn widget_keyboard_foreground_changes_preserve_each_hosts_drag_capture() {
+    for monitor in [None, Some("DP-2")] {
+        let mut app = desktop();
+        app.settings.layout = separated();
+        if monitor.is_some() {
+            connect(&mut app);
+        }
+        drag(&mut app, monitor, "notes");
+        let preview = widget_host(&app, monitor).preview_position("notes");
+        assert!(preview.is_some());
+        assert!(widget_host(&app, monitor).grid_visible());
+        let frozen = widget_specs(&app);
+        app.update(
+            Message::Audio(crate::audio::Message::Open),
+            &mut Effects::default(),
+        );
+        assert_suppressed_widgets(&app, &frozen);
+        assert!(widget_host(&app, monitor).grid_visible());
+        assert_eq!(
+            widget_host(&app, monitor).preview_position("notes"),
+            preview
+        );
+        app.update(Message::DismissPanels, &mut Effects::default());
+        assert_eq!(widget_specs(&app), frozen);
+        assert!(widget_host(&app, monitor).grid_visible());
+        assert_eq!(
+            widget_host(&app, monitor).preview_position("notes"),
+            preview
+        );
+    }
+}
+
+#[test]
+fn widget_keyboard_history_suppression_spans_both_ack_orders_and_uri_dispatch() {
+    for release_first in [false, true] {
+        let mut app = desktop();
+        app.settings.layout = separated();
+        let baseline = widget_specs(&app);
+        let target = show_link_history(&mut app);
+        let mut effects = begin_link(&mut app, target);
+        let token = effects
+            .activation
+            .pop()
+            .unwrap()
+            .finish(ActivationOutcome::Unavailable);
+        let released = effects
+            .input_release
+            .pop()
+            .unwrap()
+            .finish(InputReleaseOutcome::Released)
+            .unwrap();
+        assert_suppressed_widgets(&app, &baseline);
+        let (first, second) = if release_first {
+            (released, token)
+        } else {
+            (token, released)
+        };
+        app.update(first, &mut effects);
+        assert!(effects.tasks.is_empty());
+        assert_suppressed_widgets(&app, &baseline);
+        app.update(second, &mut effects);
+        assert!(app.notifications.history_open());
+        assert!(app.notifications.yielding_input());
+        assert_eq!(effects.tasks.len(), 1);
+        assert_suppressed_widgets(&app, &baseline);
+        let task = effects.tasks.pop().unwrap();
+        assert_eq!(task.queue, crate::work::CONTROLS);
+        let done = task.run(); // Injected in-memory URI adapter only.
+        assert!(app.notifications.history_open());
+        assert_suppressed_widgets(&app, &baseline);
+        app.update(done, &mut effects);
+        assert!(!app.notifications.history_open());
+        assert_eq!(widget_specs(&app), baseline);
+    }
+}
+
+#[test]
+fn widget_keyboard_cancelled_link_cannot_override_a_new_foreground_panel() {
+    let mut app = desktop();
+    app.settings.layout = separated();
+    let baseline = widget_specs(&app);
+    let target = show_link_history(&mut app);
+    let mut effects = begin_link(&mut app, target);
+    let release = effects.input_release.pop().unwrap();
+    let token = effects
+        .activation
+        .pop()
+        .unwrap()
+        .finish(ActivationOutcome::Unavailable);
+    app.update(Message::Audio(crate::audio::Message::Open), &mut effects);
+    assert!(release.cancellation.cancelled());
+    assert!(release.finish(InputReleaseOutcome::Released).is_none());
+    app.update(token, &mut effects);
+    assert_eq!(app.panel_surface(), Some("audio"));
+    assert!(effects.tasks.is_empty());
+    assert_suppressed_widgets(&app, &baseline);
+    app.update(Message::DismissPanels, &mut effects);
+    assert_eq!(widget_specs(&app), baseline);
+}
+
+#[test]
+fn widget_keyboard_release_failure_keeps_history_suppression_and_skips_uri_dispatch() {
+    for outcome in [InputReleaseOutcome::Timeout, InputReleaseOutcome::Retired] {
+        let mut app = desktop();
+        app.settings.layout = separated();
+        let baseline = widget_specs(&app);
+        let target = show_link_history(&mut app);
+        let mut effects = begin_link(&mut app, target);
+        let token = effects
+            .activation
+            .pop()
+            .unwrap()
+            .finish(ActivationOutcome::Unavailable);
+        let failed = effects
+            .input_release
+            .pop()
+            .unwrap()
+            .finish(outcome)
+            .unwrap();
+        app.update(failed, &mut effects);
+        app.update(token, &mut effects);
+        assert!(app.notifications.history_open());
+        assert!(!app.notifications.yielding_input());
+        assert!(effects.tasks.is_empty());
+        assert_suppressed_widgets(&app, &baseline);
+    }
+}
+
+#[test]
+fn widget_keyboard_uri_adapter_failure_keeps_history_suppression() {
+    struct RejectedUri;
+    impl lucent_domain::UriPort for RejectedUri {
+        fn open(
+            &self,
+            _: &lucent_domain::ExternalUri,
+            _: lucent_domain::ApplicationLaunchContext,
+        ) -> lucent_domain::Result<()> {
+            Err(DomainError::Failed("Controlled URI failure".into()))
+        }
+    }
+    let mut adapters = crate::test_adapters::adapters();
+    adapters.uri = std::sync::Arc::new(RejectedUri);
+    let mut app = Desktop::new(adapters);
+    app.settings.layout = separated();
+    let baseline = widget_specs(&app);
+    let target = show_link_history(&mut app);
+    let mut effects = begin_link(&mut app, target);
+    let token = effects
+        .activation
+        .pop()
+        .unwrap()
+        .finish(ActivationOutcome::Unavailable);
+    let released = effects
+        .input_release
+        .pop()
+        .unwrap()
+        .finish(InputReleaseOutcome::Released)
+        .unwrap();
+    app.update(token, &mut effects);
+    app.update(released, &mut effects);
+    assert_eq!(effects.tasks.len(), 1);
+    let task = effects.tasks.pop().unwrap();
+    assert_eq!(task.queue, crate::work::CONTROLS);
+    app.update(task.run(), &mut effects);
+    assert!(app.notifications.history_open());
+    assert!(!app.notifications.yielding_input());
+    assert_suppressed_widgets(&app, &baseline);
 }

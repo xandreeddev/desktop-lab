@@ -90,6 +90,7 @@ fn widget_surface_specs(
     viewport: (f32, f32),
     instance: Option<SurfaceInstance>,
     output: Option<OutputName>,
+    keyboard_available: bool,
 ) -> Vec<SurfaceSpec> {
     host.surfaces(layout, viewport)
         .into_iter()
@@ -108,7 +109,17 @@ fn widget_surface_specs(
             width: source.rect.w.ceil() as u32,
             height: source.rect.h.ceil() as u32,
             exclusive_zone: -1,
-            keyboard: Keyboard::OnDemand,
+            // A native group can be named after a passive first member while
+            // also painting Notes or other keyboard-operable controls.
+            keyboard: if keyboard_available
+                && (host.editing()
+                    || source.members.iter().any(|id| {
+                        widgets::catalog::find(id).is_some_and(|entry| entry.keyboard_interactive)
+                    })) {
+                Keyboard::OnDemand
+            } else {
+                Keyboard::None
+            },
             visible: true,
             pointer_input: PointerInput::Content,
         })
@@ -2148,6 +2159,12 @@ impl api::Application for Desktop {
         ]
     }
     fn surfaces(&self) -> Vec<SurfaceSpec> {
+        // Use foreground lifetime, not current input ownership: notification
+        // history stays open while yielding input and dispatching a URI.
+        // This requests widget suppression; a matching native commit may still
+        // wait for that widget's frame callback or render retry. It does not
+        // acknowledge release of other surfaces or promise destination focus.
+        let widget_keyboard_available = self.panel_surface().is_none();
         let mut surfaces = vec![
             SurfaceSpec {
                 id: "weather-controls",
@@ -2523,6 +2540,7 @@ impl api::Application for Desktop {
                     monitor.viewport,
                     Some(monitor.instance.clone()),
                     Some(monitor.target.clone()),
+                    widget_keyboard_available,
                 ));
             }
             return surfaces;
@@ -2533,6 +2551,7 @@ impl api::Application for Desktop {
             self.viewport,
             None,
             None,
+            widget_keyboard_available,
         ));
         surfaces
     }
