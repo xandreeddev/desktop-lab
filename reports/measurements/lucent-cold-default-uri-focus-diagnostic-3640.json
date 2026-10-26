@@ -434,13 +434,54 @@
     "widget_policy_commit": "0a981631dca2283c3839f0187300d563f687ff37",
     "widget_policy_tests_authored": 11,
     "native_keyboard_diagnostic_tests_authored": 6,
-    "coherent_build_status": "not_yet_executed_at_this_checkpoint",
-    "cargo_test_status": "not_yet_executed_at_this_checkpoint",
+    "coherent_build_status": "coherent_arch_release_not_yet_executed_at_this_checkpoint",
+    "cargo_test_status": "remote_ubuntu_rust_ci_passed",
     "native_candidate_status": "not_yet_executed_at_this_checkpoint",
-    "source_checks": "Rustfmt/parser and diff checks only; authored test counts are not passing test results.",
+    "source_checks": "Local source preparation passed rustfmt/parser and diff checks. The separate exact-source Ubuntu Rust CI result below verifies compilation and tests; it is not an Arch release or VM acceptance result.",
     "widget_policy": "Suppress all widget keyboard demand while the existing root foreground lifetime is open, including notification input-release and URI dispatch; otherwise retain member-aware interactive OnDemand capability and existing edit controls. Passive Clock/System-only groups request None.",
     "diagnostic": "Read-only exact current Lucent-native keyboard observations and separate requested/committed input policies; no focus request, input injection or global seat-owner claim.",
-    "ordering_limit": "A requested widget None policy can remain uncommitted behind its own pending frame callback or render retry. A notification-only release acknowledgement does not acknowledge every other widget surface."
+    "ordering_limit": "A requested widget None policy can remain uncommitted behind its own pending frame callback or render retry. A notification-only release acknowledgement does not acknowledge every other widget surface.",
+    "remote_ci": {
+      "source_commit": "b2f54551dfbe3744762e04b06cc9abcdfd167eaa",
+      "run_id": 40411820911,
+      "run_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/40411820911",
+      "rust_job_id": 121884163923,
+      "rust_job_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/40411820911/job/121884163923",
+      "rust_job_result": "SUCCESS",
+      "runner_scope": "GitHub-hosted Ubuntu; workflow ubuntu-latest",
+      "private_full_log_sha256": "766c64164e319cc19a0bcb38a6fac4da36abef635d54cd3e87ef2b9751dc48e4",
+      "workspace_fmt_clippy_tests_passed": true,
+      "controlled_service_protocol_suites_passed": true,
+      "vulkan_visual_regressions_passed": true,
+      "visual_backend": "Vulkan with llvmpipe software rendering",
+      "widget_policy_tests_passed": [
+        "widget_keyboard_cancelled_link_cannot_override_a_new_foreground_panel",
+        "widget_keyboard_defaults_preserve_controls_and_exclude_passive_content",
+        "widget_keyboard_every_foreground_panel_suppresses_the_legacy_host",
+        "widget_keyboard_foreground_changes_preserve_each_hosts_drag_capture",
+        "widget_keyboard_foreground_suppresses_every_connected_monitor_group",
+        "widget_keyboard_history_suppression_spans_both_ack_orders_and_uri_dispatch",
+        "widget_keyboard_keeps_edit_controls_available_without_bypassing_foreground",
+        "widget_keyboard_passive_toasts_do_not_suppress_notes",
+        "widget_keyboard_release_failure_keeps_history_suppression_and_skips_uri_dispatch",
+        "widget_keyboard_uri_adapter_failure_keeps_history_suppression",
+        "widget_keyboard_uses_every_merged_member_and_rechecks_after_hide"
+      ],
+      "native_keyboard_diagnostic_tests_passed": [
+        "keyboard_inspection_resolves_exact_proxy_and_distinguishes_committed_policy",
+        "unknown_or_replaced_native_cannot_inherit_observed_focus_from_its_address",
+        "destroyed_proxy_and_reused_protocol_id_do_not_name_a_replacement",
+        "old_leave_and_other_keyboard_events_cannot_erase_current_native_observation",
+        "removed_keyboard_clears_only_client_observation_without_claiming_global_focus",
+        "focus_event_counts_become_unavailable_at_overflow_without_wrapping"
+      ],
+      "all_17_named_new_tests_individually_verified": true,
+      "coherent_arch_release_built": false,
+      "candidate_vm_deployed": false,
+      "candidate_native_tested": false,
+      "canonical_keyboard_fix_accepted": false,
+      "scope": "Exact-source remote Ubuntu compilation, workspace tests, controlled protocol suites and software Vulkan visuals. These results do not establish a coherent Arch release, candidate VM deployment or native keyboard acceptance."
+    }
   },
   "acceptance": {
     "canonical_pointer_route_passed": true,
@@ -464,7 +505,7 @@
     "Moving only the cursor to the same selected-link point while retaining Tab/Enter changes the diagnostic outcome: document focus and one trusted unmodified nonrepeat KeyA are observed. No browser focus/activation/click or forced shell hide is added. This changed input arrangement is diagnostic, not canonical acceptance.",
     "All nine named cleanup checks pass independently in each case. Cleanup does not turn the canonical keyboard feature failure into success.",
     "This controlled comparison supports an under-cursor widget hypothesis. Non-atomic geometry, requested input modes and active-window/document observations cannot identify the actual seat keyboard owner or establish the failure mechanism.",
-    "Source0a/b2 prepares a narrow member-aware widget suppression policy and read-only native keyboard diagnostics. Its 11 plus six authored tests have not been run at this checkpoint; no compiled/native fix is established.",
+    "Source0a/b2 prepares a narrow member-aware widget suppression policy and read-only native keyboard diagnostics. Exact b2 Ubuntu Rust CI run40411820911/job121884163923 succeeds, including workspace/protocol/software-Vulkan suites and individual passing log entries for all 11 widget-policy plus six diagnostic tests. Coherent Arch release, candidate VM deployment and native keyboard acceptance remain pending.",
     "Historical cold/warm results retain their original sources and outcomes. These runs establish no broader handler, hardware, resource-budget or animation acceptance."
   ]
 }

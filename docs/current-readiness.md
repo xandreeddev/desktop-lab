@@ -51,9 +51,12 @@ acceptance is explicitly false. All three cases pass their own nine cleanup
 checks. The comparison supports an under-cursor widget hypothesis, but the
 non-atomic geometry/requested-policy recorder exposes no actual seat owner and
 establishes no cause or production fix. Source `0a981631dca2`/`b2f54551dfbe` prepares
-member-aware widget suppression and read-only native keyboard diagnostics, with
-11 plus six authored tests. Only rustfmt/parser and diff checks have run at this
-checkpoint; candidate compilation/tests/native acceptance remain pending. See
+member-aware widget suppression and read-only native keyboard diagnostics. Exact
+b2 passes the Ubuntu [Rust job](https://github.com/xandreeddev/desktop-lab/actions/runs/40411820911/job/121884163923)
+in [CI run40411820911](https://github.com/xandreeddev/desktop-lab/actions/runs/40411820911):
+workspace/protocol/software-Vulkan suites and all 17 individually verified new
+tests pass. A coherent Arch release, candidate VM deployment and native keyboard
+acceptance remain pending. See
 [the activation guide](default-uri-activation.md#focus-geometry-and-cursor-only-diagnostic)
 for the requested-versus-committed ordering limitation. The seven-gap goal stays open.
 

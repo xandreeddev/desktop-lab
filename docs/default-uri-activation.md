@@ -247,9 +247,13 @@ Clock/System-only groups are passive outside layout editing. Candidate
 requested from committed input policies. A client observing no current keyboard
 surface does not identify the compositor's global keyboard owner.
 
-The candidates contain **11 widget-policy and six diagnostic tests authored**.
-At this checkpoint only rustfmt/parser and diff checks have run; compilation,
-those tests and candidate native acceptance remain pending. A widget's requested
+Exact `b2f54551dfbe` now passes the Ubuntu
+[Rust job](https://github.com/xandreeddev/desktop-lab/actions/runs/40411820911/job/121884163923)
+in [CI run40411820911](https://github.com/xandreeddev/desktop-lab/actions/runs/40411820911),
+including workspace checks, controlled service-protocol suites and software Vulkan
+visual regressions. All **11 widget-policy and six diagnostic tests** have
+individually verified passing log entries. A coherent Arch release, candidate VM
+deployment and native keyboard acceptance remain pending. A widget's requested
 `None` can still await its own frame callback or render retry. Notification release
-does not acknowledge every widget commit, so this policy is a candidate to test,
-with no unconditional focus or keyboard-fix claim.
+does not acknowledge every widget commit, so this policy retains no unconditional
+focus or keyboard-fix claim.
