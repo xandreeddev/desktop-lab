@@ -785,8 +785,10 @@ mod tests {
                 .finish(api::InputReleaseOutcome::Timeout),
             Some(api::InputReleaseOutcome::Timeout)
         );
-        let mut exhausted = Releases::default();
-        exhausted.next_request = u64::MAX;
+        let mut exhausted = Releases {
+            next_request: u64::MAX,
+            ..Default::default()
+        };
         assert!(
             exhausted
                 .insert(request(api::Cancellation::default()), surface)
