@@ -42,6 +42,21 @@ and a keyboard fix remain unestablished. The earlier
 [eb348 cold run](../reports/measurements/lucent-cold-default-uri-eb348.json) keeps
 its original outcome. This source 3640 deployment was an unmerged candidate at capture;
 the archive's original capture flags are unchanged.
+
+The later [focus investigation](../reports/measurements/lucent-cold-default-uri-focus-diagnostic-3640.json)
+on unchanged 3640 repeats canonical pointer success and keyboard failure. Moving
+only the cursor to the pointer route's link point while retaining Tab/Enter makes
+a separate diagnostic receive document focus and one trusted `KeyA`; canonical
+acceptance is explicitly false. All three cases pass their own nine cleanup
+checks. The comparison supports an under-cursor widget hypothesis, but the
+non-atomic geometry/requested-policy recorder exposes no actual seat owner and
+establishes no cause or production fix. Source `0a981631dca2`/`b2f54551dfbe` prepares
+member-aware widget suppression and read-only native keyboard diagnostics, with
+11 plus six authored tests. Only rustfmt/parser and diff checks have run at this
+checkpoint; candidate compilation/tests/native acceptance remain pending. See
+[the activation guide](default-uri-activation.md#focus-geometry-and-cursor-only-diagnostic)
+for the requested-versus-committed ordering limitation. The seven-gap goal stays open.
+
 These 118 candidate producers are separate from 9d42's published 117 inputs and
 the historical ca88/b3 catalogue's 116 inputs.
 
