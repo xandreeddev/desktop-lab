@@ -43,6 +43,21 @@ The domain contains the validated URI and launch context, with no Wayland,
 renderer, D-Bus or process types. The generic framework knows neither notification
 versions nor default-handler policy. Views contain no OS operations.
 
+### Who owns each step?
+
+| Owner | Responsibility | Implementation |
+| --- | --- | --- |
+| Desktop client | Select and revalidate the notification/link; own the history session and cancellation. | `notifications::Center` in `apps/lucent-desktop/src/notifications.rs` |
+| Framework API | Carry typed activation and input-release requests and completions. | `Effects::activation_token` and `Effects::after_input_release` in `crates/lucent-api/src/` |
+| Wayland backend | Capture the current native input event, submit the client's input policy with the buffer, and correlate its callback with the exact surface lifetime. | `crates/lucent-wayland/src/activation.rs`, `input_release.rs` and the normal rendering transaction in `lib.rs` |
+| Desktop client | Wait for both outcomes, then revalidate and schedule the opening use case. | `Center::dispatch_link_if_ready` |
+| Domain port | Declare the validated URI-opening contract and application launch context. | `UriPort` in `crates/lucent-domain/src/uri.rs` |
+| OS adapter | Resolve the default handler and launch it with the checked context. | `XdgUri` in `crates/lucent-services/src/applications.rs` |
+
+All paths in this table are relative to `lucent/`. The framework reports an input
+release outcome to the client; it does not call the URI adapter itself. This keeps
+notification policy in the client and operating-system work behind the domain port.
+
 An unavailable activation protocol, missing current input, timeout or rejection
 does not prohibit opening selected content. The opening gets an empty context
 and the compositor retains its normal focus policy. Token delivery, observed
@@ -83,6 +98,21 @@ requests and eight outstanding tagged callbacks bound retention, including callb
 whose cancelled or timed-out caller is gone. Old or failed submissions cannot
 acknowledge a newer request. A hidden or DPMS-disabled compositor can withhold frame
 callbacks; the effect times out without dispatching a handler.
+
+For a live native surface, cancelled or timed-out callbacks remain counted until
+their `Done` arrives. On native teardown, a private owner locally destroys only its
+tagged callback proxies before the renderer and surface role are dropped. A
+`wl_callback` has no destructor request; this uses the Wayland library's local
+object-destruction API and preserves server `delete_id` bookkeeping. Frame records
+share a retirement flag rather than owning the native surface's callback guard.
+An already queued valid `Done` survives protocol-proxy death; only explicit native
+retirement allows those records to be discarded. A late callback cannot release
+a replacement surface with the same logical name.
+
+The two-second limit is a deadline, not a promise that application code runs at an
+exact wall-clock instant. Completion and timeout messages are dispatched by the UI
+event loop. If that loop is delayed, delivery is delayed too; an overdue callback
+still cannot report `Released` when dispatch resumes.
 
 Passive toasts request `Keyboard::None` and keep `PointerInput::Content`, so their
 buttons and links remain clickable without requesting native keyboard ownership.

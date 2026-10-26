@@ -184,8 +184,9 @@ react to its own configuration; a stable ID is not automatically restarted.
 client-requested native layer input release before handing work to another app.
 The client requests keyboard and pointer `None`; the backend waits for the actual
 compositor frame callback for a successful post-admission submission on that exact
-native object. It returns a typed result within two seconds, bounds requests and
-outstanding callbacks to eight, and suppresses cancelled delivery. It never changes
+native object. It uses a two-second deadline: overdue callbacks cannot report
+`Released`, and completion runs when the event loop next dispatches. It bounds
+requests and outstanding callbacks to eight and suppresses cancelled delivery. It never changes
 focus, performs an extra surface commit, or promises scanout. Notification links
 use it alongside captured activation context; see [default URI activation](default-uri-activation.md).
 This new source capability and its tests still require compilation and fresh native
