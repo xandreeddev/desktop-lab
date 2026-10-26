@@ -1,5 +1,8 @@
 //! Live wallpaper preferences and media data; no codec, GPU or filesystem types.
-use crate::{DomainError, MonitorId, Result, StopSignal, Wallpaper};
+use crate::{
+    DomainError, MonitorId, Result, RetargetablePlaybackOptions, StopSignal, TargetedMediaFrame,
+    Wallpaper, WallpaperTargetPort,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -469,6 +472,25 @@ pub trait WallpaperPlaybackPort: Send + Sync {
         emit: &mut dyn FnMut(Result<MediaFrame>) -> bool,
         stop: Arc<dyn StopSignal>,
     );
+    /// One asset/producer lifetime with latest-only physical target updates.
+    /// Target revisions tag results; consumers reject stale in-flight frames.
+    /// Returning ends the decoder body. An unsupported adapter must report that
+    /// capability failure explicitly; it must never emulate retarget by play
+    /// cancellation/restart. Static play remains an independent existing API.
+    fn play_retargetable(
+        &self,
+        _asset: &LiveWallpaperAsset,
+        _options: RetargetablePlaybackOptions,
+        _targets: Arc<dyn WallpaperTargetPort>,
+        emit: &mut dyn FnMut(Result<TargetedMediaFrame>) -> bool,
+        stop: Arc<dyn StopSignal>,
+    ) {
+        if !stop.cancelled() {
+            emit(Err(DomainError::Unavailable(
+                "Retargetable wallpaper playback is unsupported".into(),
+            )));
+        }
+    }
     /// Read a local source without importing it or changing saved preferences.
     /// One caller-owned worker receives owned, straight-alpha RGBA frames at
     /// source cadence, looping until cancellation or a false callback result.

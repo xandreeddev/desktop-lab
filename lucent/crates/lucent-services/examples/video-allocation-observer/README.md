@@ -4,8 +4,8 @@ This example consumes `WallpaperPlaybackPort` directly. It uses an already
 prepared owned asset and never imports media, changes the desktop, or creates
 a renderer, GPU device, Wayland surface or application window. It runs three
 finite phases in one process: 1920×1080, 3840×2160, then 1920×1080 again.
-Each phase retains only its latest domain frame, or optionally the existing SDK
-shared image bridge. All pixel owners from the previous phase are dropped only
+By default, each phase retains only its latest domain frame, or optionally the
+existing SDK shared image bridge. All pixel owners from the previous phase are dropped only
 after its producer has observed cancellation and its exact worker has joined.
 
 No arguments prints an inert plan. `--run` reads at most 64 KiB of JSON from
@@ -24,7 +24,8 @@ private stdin. Supply the actual existing prepared descriptor, for example:
   },
   "phase_seconds": 10,
   "sdk_bridge": false,
-  "allocator_stats": false
+  "allocator_stats": false,
+  "retarget": false
 }
 ```
 
@@ -119,3 +120,25 @@ space, versus about 17 MiB after the first FHD phase. Accounted in-use grows onl
 free arena retention in the independent consumer, without identifying resident
 page owners, a codec leak or the desktop's full memory cost. Original desktop,
 media and owned-process cleanup checks pass. No allocator policy was changed.
+
+## One-play retarget comparison
+
+Set `"retarget": true` to select the separate one-worker capability described in
+[same-asset playback retargeting](../../../../../docs/wallpaper-retargeting.md).
+The default remains three separate static play calls. In retarget mode the
+physical target changes FHD → 4K → FHD through the injected latest-demand
+adapter. Stale revision results are rejected; one latest frame remains held
+until its valid replacement arrives. No desktop preferences or renderer change.
+
+There are three bounded process-memory points per target. Its observation
+period starts after a matching frame is observed, following at most five seconds
+of readiness work. These clocks and publication counts do not establish FPS or
+a speedup. Per-target memory includes a live decoder and must not be compared
+directly to the old mode's stopped-worker samples.
+
+Allocator statistics run only before the whole worker and after its final join
+and final latest drop: three whole-run snapshots, with none at intermediate
+target boundaries. The `retarget_phase` and `retarget_finished` rows are a new
+diagnostic schema. A new reviewed build and source-bound native runner are
+required; this source-only prototype is not a measured memory improvement and
+does not enable desktop integration.
