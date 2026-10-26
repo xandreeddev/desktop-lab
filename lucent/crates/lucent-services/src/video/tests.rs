@@ -12,7 +12,7 @@ fn dynamic_target_admission_refuses_initial_absence_reused_or_regressing_revisio
     let target = WallpaperPixelTarget::new(32, 24).unwrap();
     let initial = WallpaperTargetDemand {
         revision: WallpaperTargetRevision::new(2).unwrap(),
-        target,
+        target: Some(target),
     };
     let port = |values: Vec<Option<WallpaperTargetDemand>>| {
         Arc::new(TargetSequence(std::sync::Mutex::new(values.into())))
@@ -22,11 +22,11 @@ fn dynamic_target_admission_refuses_initial_absence_reused_or_regressing_revisio
     for invalid in [
         WallpaperTargetDemand {
             revision: WallpaperTargetRevision::initial(),
-            target,
+            target: Some(target),
         },
         WallpaperTargetDemand {
             revision: initial.revision,
-            target: WallpaperPixelTarget::new(64, 48).unwrap(),
+            target: Some(WallpaperPixelTarget::new(64, 48).unwrap()),
         },
     ] {
         let mut state = PlaybackTargets::new(port(vec![Some(initial), Some(invalid)])).unwrap();
@@ -41,8 +41,46 @@ fn dynamic_target_admission_refuses_initial_absence_reused_or_regressing_revisio
 }
 
 #[test]
+fn admitted_source_size_survives_contention_and_rejects_reused_source_cover_revisions() {
+    let source = WallpaperTargetDemand {
+        revision: WallpaperTargetRevision::initial(),
+        target: None,
+    };
+    let cover = source
+        .retarget(Some(WallpaperPixelTarget::new(32, 24).unwrap()))
+        .unwrap();
+    let restored = cover.retarget(None).unwrap();
+    let port = |values: Vec<Option<WallpaperTargetDemand>>| {
+        Arc::new(TargetSequence(std::sync::Mutex::new(values.into())))
+            as Arc<dyn WallpaperTargetPort>
+    };
+    let mut state = PlaybackTargets::new(port(vec![
+        Some(source),
+        None,
+        Some(cover),
+        None,
+        Some(restored),
+    ]))
+    .unwrap();
+    assert_eq!(state.current, source, "source-size is an initial admission");
+    for expected in [source, cover, cover, restored] {
+        state.refresh().unwrap();
+        assert_eq!(state.current, expected);
+    }
+    for (previous, target) in [(source, cover.target), (cover, source.target)] {
+        let reused = WallpaperTargetDemand {
+            revision: previous.revision,
+            target,
+        };
+        let mut state = PlaybackTargets::new(port(vec![Some(previous), Some(reused)])).unwrap();
+        assert!(state.refresh().is_err());
+        assert_eq!(state.current, previous);
+    }
+}
+
+#[test]
 fn dynamic_target_port_errors_preserve_the_last_admitted_demand() {
-    struct FailsAfterAdmission(std::sync::Mutex<bool>);
+    struct FailsAfterAdmission(std::sync::Mutex<bool>, Option<WallpaperPixelTarget>);
     impl WallpaperTargetPort for FailsAfterAdmission {
         fn try_latest(&self) -> Result<Option<WallpaperTargetDemand>> {
             let mut called = self.0.lock().unwrap();
@@ -52,18 +90,23 @@ fn dynamic_target_port_errors_preserve_the_last_admitted_demand() {
             *called = true;
             Ok(Some(WallpaperTargetDemand {
                 revision: WallpaperTargetRevision::initial(),
-                target: WallpaperPixelTarget::new(32, 24).unwrap(),
+                target: self.1,
             }))
         }
     }
-    let mut targets =
-        PlaybackTargets::new(Arc::new(FailsAfterAdmission(std::sync::Mutex::new(false)))).unwrap();
-    let admitted = targets.current;
-    assert!(matches!(
-        targets.refresh(),
-        Err(DomainError::Unavailable(_))
-    ));
-    assert_eq!(targets.current, admitted);
+    for target in [None, Some(WallpaperPixelTarget::new(32, 24).unwrap())] {
+        let mut targets = PlaybackTargets::new(Arc::new(FailsAfterAdmission(
+            std::sync::Mutex::new(false),
+            target,
+        )))
+        .unwrap();
+        let admitted = targets.current;
+        assert!(matches!(
+            targets.refresh(),
+            Err(DomainError::Unavailable(_))
+        ));
+        assert_eq!(targets.current, admitted);
+    }
 }
 
 #[test]
@@ -107,7 +150,7 @@ fn dynamic_alpha_and_paletted_demand_preserves_source_size_and_captured_revision
     let mut converter = None;
     let first = WallpaperTargetDemand {
         revision: WallpaperTargetRevision::initial(),
-        target: WallpaperPixelTarget::new(7, 5).unwrap(),
+        target: Some(WallpaperPixelTarget::new(7, 5).unwrap()),
     };
     let old = convert_live_target(&mut converter, &source, first, Duration::ZERO).unwrap();
     let original = old.frame.into_shared_rgba_with_aspect().2;
@@ -115,7 +158,7 @@ fn dynamic_alpha_and_paletted_demand_preserves_source_size_and_captured_revision
     let native = unsafe { converter.as_ref().unwrap().scaler.as_ptr() as usize };
     let second = WallpaperTargetDemand {
         revision: first.revision.checked_next().unwrap(),
-        target: WallpaperPixelTarget::new(14, 10).unwrap(),
+        target: Some(WallpaperPixelTarget::new(14, 10).unwrap()),
     };
     let next =
         convert_live_target(&mut converter, &source, second, Duration::from_millis(17)).unwrap();
@@ -129,27 +172,145 @@ fn dynamic_alpha_and_paletted_demand_preserves_source_size_and_captured_revision
     assert!(converter.as_ref().unwrap().pixels.is_none());
     assert_eq!(original.as_slice(), copy);
     assert_eq!(
-        conversion_dimensions(Pixel::PAL8, 14, 10, Some(first.target)).unwrap(),
+        conversion_dimensions(Pixel::PAL8, 14, 10, first.target).unwrap(),
         (14, 10)
     );
 }
 
 #[test]
+fn source_cover_source_keeps_alpha_pixels_native_and_stamps_every_demand() {
+    use ffmpeg::{format::Pixel, util::frame::video::Video};
+    let mut source = Video::new(Pixel::RGBA, 14, 10);
+    source.data_mut(0).fill(127);
+    let mut converter = None;
+    let mut held: Vec<Arc<Vec<u8>>> = Vec::new();
+    let mut native = None;
+    for (index, target) in [None, Some(WallpaperPixelTarget::new(7, 5).unwrap()), None]
+        .into_iter()
+        .enumerate()
+    {
+        let demand = WallpaperTargetDemand {
+            revision: WallpaperTargetRevision::new(index as u64 + 1).unwrap(),
+            target,
+        };
+        let timestamp = Duration::from_millis(index as u64 * 17);
+        let result = convert_live_target(&mut converter, &source, demand, timestamp).unwrap();
+        assert_eq!(result.revision, demand.revision);
+        assert_eq!(result.frame.dimensions(), (14, 10));
+        assert_eq!(result.frame.aspect_size(), (14, 10));
+        assert_eq!(result.frame.timestamp, timestamp);
+        let address = unsafe { converter.as_ref().unwrap().scaler.as_ptr() as usize };
+        assert_eq!(*native.get_or_insert(address), address);
+        assert!(converter.as_ref().unwrap().pixels.is_none());
+        assert_eq!(
+            conversion_dimensions(Pixel::PAL8, 14, 10, target).unwrap(),
+            (14, 10)
+        );
+        let pixels = result.frame.into_shared_rgba_with_aspect().2;
+        assert_eq!(pixels.as_slice(), &[127; 14 * 10 * 4]);
+        for previous in &held {
+            assert_eq!(previous.as_slice(), pixels.as_slice());
+        }
+        held.push(pixels);
+    }
+    drop(converter);
+    assert!(held.iter().all(|pixels| Arc::strong_count(pixels) == 1));
+}
+
+#[test]
+fn source_cover_source_retires_each_old_pool_and_preserves_held_native_pixels() {
+    use ffmpeg::{format::Pixel, util::frame::video::Video};
+    let mut source = Video::new(Pixel::YUV420P, 14, 10);
+    source.data_mut(0).fill(81);
+    source.data_mut(1).fill(90);
+    source.data_mut(2).fill(240);
+    let mut converter = None;
+    let mut held: Vec<(Arc<Vec<u8>>, Vec<u8>)> = Vec::new();
+    for (index, target) in [None, Some(WallpaperPixelTarget::new(7, 5).unwrap()), None]
+        .into_iter()
+        .enumerate()
+    {
+        let demand = WallpaperTargetDemand {
+            revision: WallpaperTargetRevision::new(index as u64 + 1).unwrap(),
+            target,
+        };
+        let result = convert_live_target(
+            &mut converter,
+            &source,
+            demand,
+            Duration::from_millis(index as u64 * 17),
+        )
+        .unwrap();
+        assert_eq!(
+            result.frame.dimensions(),
+            if target.is_some() { (7, 5) } else { (14, 10) }
+        );
+        assert_eq!(result.frame.aspect_size(), (14, 10));
+        for (previous, original) in &held {
+            assert_eq!(
+                Arc::strong_count(previous),
+                1,
+                "retired pool no longer owns pixels"
+            );
+            assert_eq!(previous.as_slice(), original);
+        }
+        let pixels = result.frame.into_shared_rgba_with_aspect().2;
+        assert_eq!(
+            Arc::strong_count(&pixels),
+            2,
+            "one current publication slot plus consumer"
+        );
+        held.push((pixels.clone(), pixels.as_slice().to_vec()));
+    }
+    assert_eq!(held[0].0.as_slice(), held[2].0.as_slice());
+    let weak: Vec<_> = held
+        .iter()
+        .map(|(pixels, _)| Arc::downgrade(pixels))
+        .collect();
+    drop(converter);
+    assert!(
+        held.iter()
+            .all(|(pixels, original)| Arc::strong_count(pixels) == 1
+                && pixels.as_slice() == original)
+    );
+    drop(held);
+    assert!(weak.iter().all(|pixels| pixels.upgrade().is_none()));
+}
+
+#[test]
 fn one_h264_cycle_retargets_conversion_without_replacing_decoder_source_or_timing() {
+    assert_h264_cycle_retarget(
+        Some(WallpaperPixelTarget::new(32, 24).unwrap()),
+        Some(WallpaperPixelTarget::new(64, 48).unwrap()),
+    );
+}
+
+#[test]
+fn one_h264_cycle_source_cover_source_preserves_native_owner_pixels_and_timing() {
+    assert_h264_cycle_retarget(None, Some(WallpaperPixelTarget::new(32, 24).unwrap()));
+}
+
+#[test]
+fn one_h264_cycle_cover_source_cover_preserves_native_owner_pixels_and_timing() {
+    assert_h264_cycle_retarget(Some(WallpaperPixelTarget::new(32, 24).unwrap()), None);
+}
+
+fn assert_h264_cycle_retarget(
+    first_target: Option<WallpaperPixelTarget>,
+    second_target: Option<WallpaperPixelTarget>,
+) {
     let root = Directory::new();
     let file = h264_fixture(&root.0);
     ffmpeg::init().unwrap();
-    let small = WallpaperPixelTarget::new(32, 24).unwrap();
-    let large = WallpaperPixelTarget::new(64, 48).unwrap();
     let mut references = Vec::new();
-    for target in [small, large] {
+    for target in [first_target, second_target] {
         let mut frames = Vec::new();
         decode(
             &file,
             PlaybackOptions {
                 fps: WallpaperFrameRate::Source,
                 looping: false,
-                target: Some(target),
+                target,
             },
             DecodePurpose::Poster,
             &mut |frame| {
@@ -161,7 +322,7 @@ fn one_h264_cycle_retargets_conversion_without_replacing_decoder_source_or_timin
         .unwrap();
         references.push(frames);
     }
-    let control = Arc::new(LatestWallpaperTargetAdapter::new(small));
+    let control = Arc::new(LatestWallpaperTargetAdapter::new(first_target));
     let mut targets = PlaybackTargets::new(control.clone()).unwrap();
     let mut session =
         DecoderSession::open(&file, DecodePurpose::LiveWallpaper, Arc::new(Never)).unwrap();
@@ -201,10 +362,10 @@ fn one_h264_cycle_retargets_conversion_without_replacing_decoder_source_or_timin
                     frames.push(frame_snapshot(frame));
                     revisions.push(captured.unwrap());
                     if frames.len() == 2 {
-                        revision = control.set(revision, large).unwrap().revision;
+                        revision = control.set(revision, second_target).unwrap().revision;
                     }
                     if frames.len() == 4 {
-                        revision = control.set(revision, small).unwrap().revision;
+                        revision = control.set(revision, first_target).unwrap().revision;
                     }
                     true
                 },
@@ -271,11 +432,18 @@ fn one_h264_cycle_retargets_conversion_without_replacing_decoder_source_or_timin
 
 #[test]
 fn dynamic_callback_cancellation_retires_pool_without_invalidating_held_pixels() {
+    assert_dynamic_callback_cancellation(Some(WallpaperPixelTarget::new(32, 24).unwrap()));
+}
+
+#[test]
+fn dynamic_source_size_callback_cancellation_retires_pool_without_invalidating_native_pixels() {
+    assert_dynamic_callback_cancellation(None);
+}
+
+fn assert_dynamic_callback_cancellation(target: Option<WallpaperPixelTarget>) {
     let root = Directory::new();
     let file = h264_fixture(&root.0);
-    let control = Arc::new(LatestWallpaperTargetAdapter::new(
-        WallpaperPixelTarget::new(32, 24).unwrap(),
-    ));
+    let control = Arc::new(LatestWallpaperTargetAdapter::new(target));
     let mut held = None;
     let mut calls = 0;
     decode_retargetable(
@@ -296,7 +464,8 @@ fn dynamic_callback_cancellation_retires_pool_without_invalidating_held_pixels()
     assert_eq!(calls, 1);
     let held = held.unwrap();
     assert_eq!(Arc::strong_count(&held), 1);
-    assert_eq!(held.len(), 32 * 24 * 4);
+    let (width, height) = target.map_or((64, 48), WallpaperPixelTarget::size);
+    assert_eq!(held.len(), width as usize * height as usize * 4);
 }
 
 #[test]

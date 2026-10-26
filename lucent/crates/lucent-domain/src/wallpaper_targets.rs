@@ -29,12 +29,29 @@ impl WallpaperTargetRevision {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WallpaperTargetDemand {
     pub revision: WallpaperTargetRevision,
-    pub target: WallpaperPixelTarget,
+    /// None explicitly requests source/native-size pixels, as PlaybackOptions
+    /// does. This is an admitted demand, not an absent port observation.
+    pub target: Option<WallpaperPixelTarget>,
+}
+impl WallpaperTargetDemand {
+    /// Equal demand keeps its revision. A changed source-size/cover demand
+    /// advances exactly once, or fails before replacing the previous value.
+    pub fn retarget(self, target: Option<WallpaperPixelTarget>) -> Result<Self> {
+        if self.target == target {
+            return Ok(self);
+        }
+        Ok(Self {
+            revision: self.revision.checked_next()?,
+            target,
+        })
+    }
 }
 
 /// The target port is the sole source of physical target demand. A read must
 /// not block. None means a snapshot is temporarily contended, not cancellation.
 /// Initial admission requires Some; later None retains the last admitted demand.
+/// Some(WallpaperTargetDemand { target: None, .. }) explicitly requests source
+/// pixels and remains distinct from that outer None observation.
 pub trait WallpaperTargetPort: Send + Sync {
     fn try_latest(&self) -> Result<Option<WallpaperTargetDemand>>;
 }
@@ -74,5 +91,39 @@ mod tests {
         let last = WallpaperTargetRevision::new(u64::MAX).unwrap();
         assert!(last.checked_next().is_err());
         assert_eq!(last.get(), u64::MAX);
+    }
+
+    #[test]
+    fn source_and_cover_transitions_advance_once_while_equal_demands_keep_their_revision() {
+        let source = WallpaperTargetDemand {
+            revision: WallpaperTargetRevision::initial(),
+            target: None,
+        };
+        assert_eq!(source.retarget(None).unwrap(), source);
+        let target = WallpaperPixelTarget::new(1920, 1080).unwrap();
+        let cover = source.retarget(Some(target)).unwrap();
+        assert_eq!(cover.target, Some(target));
+        assert_eq!(cover.revision, source.revision.checked_next().unwrap());
+        assert_eq!(cover.retarget(Some(target)).unwrap(), cover);
+        let restored = cover.retarget(None).unwrap();
+        assert_eq!(restored.target, None);
+        assert_eq!(restored.revision, cover.revision.checked_next().unwrap());
+        assert_eq!(restored.retarget(None).unwrap(), restored);
+    }
+
+    #[test]
+    fn source_and_cover_revision_exhaustion_preserves_the_previous_demand() {
+        let target = WallpaperPixelTarget::new(1920, 1080).unwrap();
+        for demand in [None, Some(target)] {
+            let previous = WallpaperTargetDemand {
+                revision: WallpaperTargetRevision::new(u64::MAX).unwrap(),
+                target: demand,
+            };
+            let changed = if demand.is_none() { Some(target) } else { None };
+            assert!(previous.retarget(changed).is_err());
+            assert_eq!(previous.target, demand);
+            assert_eq!(previous.revision.get(), u64::MAX);
+            assert_eq!(previous.retarget(demand).unwrap(), previous);
+        }
     }
 }

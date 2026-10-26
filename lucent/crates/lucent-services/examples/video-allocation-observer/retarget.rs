@@ -30,7 +30,7 @@ impl State {
     fn request(
         &mut self,
         control: &LatestWallpaperTargetAdapter,
-        target: WallpaperPixelTarget,
+        target: Option<WallpaperPixelTarget>,
     ) -> Check<()> {
         if let Some(error) = self.publications.error {
             return Err(error);
@@ -78,7 +78,7 @@ pub(super) fn observe(
     let mut whole = vec![samples.capture(Moment::BeforePlay, 0)];
     let target =
         WallpaperPixelTarget::new(PHASES[0].1, PHASES[0].2).map_err(|_| "invalid_target")?;
-    let control = Arc::new(LatestWallpaperTargetAdapter::new(target));
+    let control = Arc::new(LatestWallpaperTargetAdapter::new(Some(target)));
     let initial = control
         .try_latest()
         .map_err(|_| "target_control_failed")?
@@ -136,7 +136,10 @@ pub(super) fn observe(
                     .map_err(|_| "publication_state_unavailable")?
                     .request(
                         &control,
-                        WallpaperPixelTarget::new(width, height).map_err(|_| "invalid_target")?,
+                        Some(
+                            WallpaperPixelTarget::new(width, height)
+                                .map_err(|_| "invalid_target")?,
+                        ),
                     )?;
             }
             let ready_elapsed = loop {
@@ -318,7 +321,13 @@ mod tests {
                     if let Some(demand) = targets.try_latest().unwrap() {
                         let mut seen = self.seen.lock().unwrap();
                         if seen.last().is_none_or(|last| last.0 != demand.revision) {
-                            seen.push((demand.revision, demand.target.size()));
+                            seen.push((
+                                demand.revision,
+                                demand
+                                    .target
+                                    .expect("observer phase has a physical target")
+                                    .size(),
+                            ));
                         }
                         drop(seen);
                         if !emit(Ok(frame(demand.revision, Arc::new(vec![10, 20, 30, 255]))))
@@ -404,7 +413,7 @@ mod tests {
     #[test]
     fn stale_results_never_relabel_pixels_and_old_latest_retires_only_on_valid_replacement() {
         let control =
-            LatestWallpaperTargetAdapter::new(WallpaperPixelTarget::new(1920, 1080).unwrap());
+            LatestWallpaperTargetAdapter::new(Some(WallpaperPixelTarget::new(1920, 1080).unwrap()));
         let first = control.try_latest().unwrap().unwrap();
         let mut state = State {
             expected: first.revision,
@@ -415,7 +424,10 @@ mod tests {
         let old_weak = Arc::downgrade(&old);
         state.accept(frame(first.revision, old), None).unwrap();
         state
-            .request(&control, WallpaperPixelTarget::new(3840, 2160).unwrap())
+            .request(
+                &control,
+                Some(WallpaperPixelTarget::new(3840, 2160).unwrap()),
+            )
             .unwrap();
         assert_eq!(old_weak.strong_count(), 1);
         assert_eq!(state.publications.count, 0);
@@ -430,6 +442,58 @@ mod tests {
             .unwrap();
         assert!(old_weak.upgrade().is_none());
         assert_eq!(state.publications.count, 1);
+    }
+
+    #[test]
+    fn source_size_transitions_keep_last_good_reject_stale_frames_and_preserve_failure() {
+        let control = LatestWallpaperTargetAdapter::new(None);
+        let source = control.try_latest().unwrap().unwrap();
+        let mut state = State {
+            expected: source.revision,
+            publications: Publications::default(),
+            stale: 0,
+        };
+        let old = Arc::new(vec![1, 2, 3, 255]);
+        let old_weak = Arc::downgrade(&old);
+        state.accept(frame(source.revision, old), None).unwrap();
+        state
+            .request(
+                &control,
+                Some(WallpaperPixelTarget::new(1920, 1080).unwrap()),
+            )
+            .unwrap();
+        let covered = state.expected;
+        assert_eq!(old_weak.strong_count(), 1);
+        state.request(&control, None).unwrap();
+        let restored = state.expected;
+        assert!(restored > covered);
+        assert_eq!(control.try_latest().unwrap().unwrap().target, None);
+        assert_eq!(old_weak.strong_count(), 1);
+        for revision in [source.revision, covered] {
+            state
+                .accept(frame(revision, Arc::new(vec![4, 5, 6, 255])), None)
+                .unwrap();
+        }
+        assert_eq!(state.stale, 2);
+        assert_eq!(state.publications.count, 0);
+        assert_eq!(old_weak.strong_count(), 1);
+        let fresh = Arc::new(vec![7, 8, 9, 255]);
+        let fresh_weak = Arc::downgrade(&fresh);
+        state.accept(frame(restored, fresh), None).unwrap();
+        assert!(old_weak.upgrade().is_none());
+        let admitted = control.try_latest().unwrap();
+        state.publications.error = Some("playback_failed");
+        assert_eq!(
+            state.request(
+                &control,
+                Some(WallpaperPixelTarget::new(3840, 2160).unwrap())
+            ),
+            Err("playback_failed")
+        );
+        assert_eq!(state.expected, restored);
+        assert_eq!(control.try_latest().unwrap(), admitted);
+        assert_eq!(state.publications.error, Some("playback_failed"));
+        assert_eq!(fresh_weak.strong_count(), 1);
     }
 
     #[test]

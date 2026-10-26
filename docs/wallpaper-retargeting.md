@@ -2,14 +2,59 @@
 
 This is a separate library capability and an independent observer prototype.
 The desktop still uses the existing static `WallpaperPlaybackPort::play` API.
-The new source has not been compiled or measured; it makes no memory, cadence
-or improvement claim. Earlier observer measurements use different source.
+This full-demand source extension has not been compiled or measured; it makes
+no memory, cadence or improvement claim. Its authored tests and formatting/parser
+checks are separate from the parent 0bec hosted-CI result and earlier observer
+measurements.
 
 `RetargetablePlaybackOptions` contains only frame-rate and looping policy.
 `WallpaperTargetPort` supplies the sole physical target as a
-`WallpaperTargetDemand`: a checked `WallpaperPixelTarget` and a nonzero
+`WallpaperTargetDemand`: an optional checked `WallpaperPixelTarget` and a nonzero
 `WallpaperTargetRevision`. These are transient domain values, independent of
 monitor selection, saved preferences, Wayland and rendering.
+
+## Source-size demand and observation absence
+
+The inner `WallpaperTargetDemand.target` follows `PlaybackOptions.target`:
+`None` requests source/native-size pixels, and `Some(checked_target)` requests
+the existing physical-cover conversion. An admitted
+`Some(WallpaperTargetDemand { target: None, .. })` is a complete source-size
+snapshot. It is different from `WallpaperTargetPort::try_latest() == Ok(None)`,
+which means no snapshot was available because of temporary contention. Initial
+outer absence still fails admission; later outer absence keeps the previous
+demand. It never changes a fitted target to source size or cancels playback.
+
+The pure `WallpaperTargetDemand::retarget` transition preserves a revision for
+equal source-size or fitted demand, advances exactly once for either changed
+direction, and fails without mutation at revision exhaustion. The latest-target
+adapter performs compare-and-set under its own lock and delegates that policy
+to the domain value. Both source-size and fitted snapshots retain their last
+admitted value when a port refresh reports an error.
+
+Source → fitted → source and fitted → source → fitted transitions use the same
+admitted decoder/input/timing owner. Conversion receives the optional demand
+directly, so source size restores the existing native-size conversion rather
+than substituting a small or focused-display target. Only actual converted
+extent changes replace conversion scratch and the bounded publication pool.
+Alpha-capable/paletted formats retain native pixels in every mode; their demand
+revision still changes when the intent changes.
+
+Authored tests compare every decoded frame, timestamp and source aspect against
+static references in both transition directions, including reordered EOF frames,
+rewind and callback cancellation. Additional tests cover contention versus source
+admission, CAS/no-op/exhaustion, alpha pixels, retired pool ownership and a consumer
+retaining last-good pixels while rejecting stale frames and preserving terminal
+failure. These tests require hosted execution before being reported as passing.
+
+The observer CLI still runs its existing FHD → 4K → FHD sequence; this extension
+does not add a source-size native measurement or rewrite any frozen comparison
+runner/receipt. The full source/target semantics must be included in a separately
+bound native comparison before production integration. Startup unknown → FHD can
+affect retained allocations and is not excluded from the final resource objective.
+The desktop is unchanged. Its integration must keep producer generation, target
+revision and streamed-image revision separate, preserve last-good/error visibility,
+and await terminal `Ended` ownership before claiming non-overlapping replacement
+workers. No UI-thread join or memory improvement is established here.
 
 `LatestWallpaperTargetAdapter` implements that port in services. A control
 writer calls `set(expected_revision, target)`. A stale expected revision fails;
