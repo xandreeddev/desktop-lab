@@ -28,6 +28,7 @@ const PHASES: [(&str, u32, u32); 3] = [
     ("restored_fhd", 1920, 1080),
 ];
 type Check<T> = std::result::Result<T, &'static str>;
+mod retarget;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -39,6 +40,8 @@ struct Input {
     sdk_bridge: bool,
     #[serde(default)]
     allocator_stats: bool,
+    #[serde(default)]
+    retarget: bool,
 }
 
 fn local(path: &Path) -> bool {
@@ -449,6 +452,17 @@ fn observe(
     allocator_query: &mut dyn FnMut() -> Value,
     emit: &mut dyn FnMut(Value) -> Check<()>,
 ) -> Check<()> {
+    if request.retarget {
+        return retarget::observe(
+            adapter,
+            request,
+            duration,
+            join_timeout,
+            sample,
+            allocator_query,
+            emit,
+        );
+    }
     let mut samples = Samples {
         memory: sample,
         allocator: request.allocator_stats.then_some(allocator_query),

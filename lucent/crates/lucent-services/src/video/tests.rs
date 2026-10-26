@@ -1,5 +1,304 @@
 use super::*;
 
+struct TargetSequence(std::sync::Mutex<std::collections::VecDeque<Option<WallpaperTargetDemand>>>);
+impl WallpaperTargetPort for TargetSequence {
+    fn try_latest(&self) -> Result<Option<WallpaperTargetDemand>> {
+        Ok(self.0.lock().unwrap().pop_front().unwrap_or(None))
+    }
+}
+
+#[test]
+fn dynamic_target_admission_refuses_initial_absence_reused_or_regressing_revisions() {
+    let target = WallpaperPixelTarget::new(32, 24).unwrap();
+    let initial = WallpaperTargetDemand {
+        revision: WallpaperTargetRevision::new(2).unwrap(),
+        target,
+    };
+    let port = |values: Vec<Option<WallpaperTargetDemand>>| {
+        Arc::new(TargetSequence(std::sync::Mutex::new(values.into())))
+            as Arc<dyn WallpaperTargetPort>
+    };
+    assert!(PlaybackTargets::new(port(vec![None])).is_err());
+    for invalid in [
+        WallpaperTargetDemand {
+            revision: WallpaperTargetRevision::initial(),
+            target,
+        },
+        WallpaperTargetDemand {
+            revision: initial.revision,
+            target: WallpaperPixelTarget::new(64, 48).unwrap(),
+        },
+    ] {
+        let mut state = PlaybackTargets::new(port(vec![Some(initial), Some(invalid)])).unwrap();
+        assert!(state.refresh().is_err());
+        assert_eq!(state.current, initial);
+    }
+    let mut state = PlaybackTargets::new(port(vec![Some(initial), None, Some(initial)])).unwrap();
+    state.refresh().unwrap();
+    assert_eq!(state.current, initial);
+    state.refresh().unwrap();
+    assert_eq!(state.current, initial);
+}
+
+#[test]
+fn dynamic_target_port_errors_preserve_the_last_admitted_demand() {
+    struct FailsAfterAdmission(std::sync::Mutex<bool>);
+    impl WallpaperTargetPort for FailsAfterAdmission {
+        fn try_latest(&self) -> Result<Option<WallpaperTargetDemand>> {
+            let mut called = self.0.lock().unwrap();
+            if *called {
+                return Err(DomainError::Unavailable("Target source retired".into()));
+            }
+            *called = true;
+            Ok(Some(WallpaperTargetDemand {
+                revision: WallpaperTargetRevision::initial(),
+                target: WallpaperPixelTarget::new(32, 24).unwrap(),
+            }))
+        }
+    }
+    let mut targets =
+        PlaybackTargets::new(Arc::new(FailsAfterAdmission(std::sync::Mutex::new(false)))).unwrap();
+    let admitted = targets.current;
+    assert!(matches!(
+        targets.refresh(),
+        Err(DomainError::Unavailable(_))
+    ));
+    assert_eq!(targets.current, admitted);
+}
+
+#[test]
+fn absent_initial_target_fails_before_opening_a_decoder_or_delivering_pixels() {
+    let absent = Arc::new(TargetSequence(std::sync::Mutex::new(
+        [None].into_iter().collect(),
+    )));
+    assert!(matches!(
+        decode_retargetable(
+            Path::new("/unavailable/retarget-source.mp4"),
+            RetargetablePlaybackOptions::default(),
+            absent,
+            &mut |_| panic!("No frame can precede target admission"),
+            Arc::new(Never),
+        ),
+        Err(DomainError::Unavailable(_))
+    ));
+}
+
+#[test]
+fn converter_retirement_does_not_reclassify_a_later_missing_pts_or_new_source() {
+    let source = (64, 48, ffmpeg::format::Pixel::YUV420P);
+    let mut admitted = None;
+    let mut rewind = Some(0);
+    admit_decoded_source(source, Some(0), &mut admitted, &mut rewind).unwrap();
+    // Converter replacement never changes the source-admission fact.
+    admit_decoded_source(source, None, &mut admitted, &mut rewind).unwrap();
+    assert_eq!(rewind, Some(0));
+    assert!(admit_decoded_source((32, 24, source.2), Some(1), &mut admitted, &mut rewind).is_err());
+    assert_eq!(admitted, Some(source));
+    let mut prefix = None;
+    admit_decoded_source(source, None, &mut prefix, &mut rewind).unwrap();
+    assert_eq!(rewind, None);
+}
+
+#[test]
+fn dynamic_alpha_and_paletted_demand_preserves_source_size_and_captured_revision() {
+    use ffmpeg::{format::Pixel, util::frame::video::Video};
+    let mut source = Video::new(Pixel::RGBA, 14, 10);
+    source.data_mut(0).fill(127);
+    let mut converter = None;
+    let first = WallpaperTargetDemand {
+        revision: WallpaperTargetRevision::initial(),
+        target: WallpaperPixelTarget::new(7, 5).unwrap(),
+    };
+    let old = convert_live_target(&mut converter, &source, first, Duration::ZERO).unwrap();
+    let original = old.frame.into_shared_rgba_with_aspect().2;
+    let copy = original.as_slice().to_vec();
+    let native = unsafe { converter.as_ref().unwrap().scaler.as_ptr() as usize };
+    let second = WallpaperTargetDemand {
+        revision: first.revision.checked_next().unwrap(),
+        target: WallpaperPixelTarget::new(14, 10).unwrap(),
+    };
+    let next =
+        convert_live_target(&mut converter, &source, second, Duration::from_millis(17)).unwrap();
+    assert_eq!(next.revision, second.revision);
+    assert_eq!(next.frame.dimensions(), (14, 10));
+    assert_eq!(next.frame.aspect_size(), (14, 10));
+    assert_eq!(
+        unsafe { converter.as_ref().unwrap().scaler.as_ptr() as usize },
+        native
+    );
+    assert!(converter.as_ref().unwrap().pixels.is_none());
+    assert_eq!(original.as_slice(), copy);
+    assert_eq!(
+        conversion_dimensions(Pixel::PAL8, 14, 10, Some(first.target)).unwrap(),
+        (14, 10)
+    );
+}
+
+#[test]
+fn one_h264_cycle_retargets_conversion_without_replacing_decoder_source_or_timing() {
+    let root = Directory::new();
+    let file = h264_fixture(&root.0);
+    ffmpeg::init().unwrap();
+    let small = WallpaperPixelTarget::new(32, 24).unwrap();
+    let large = WallpaperPixelTarget::new(64, 48).unwrap();
+    let mut references = Vec::new();
+    for target in [small, large] {
+        let mut frames = Vec::new();
+        decode(
+            &file,
+            PlaybackOptions {
+                fps: WallpaperFrameRate::Source,
+                looping: false,
+                target: Some(target),
+            },
+            DecodePurpose::Poster,
+            &mut |frame| {
+                frames.push(frame_snapshot(frame));
+                true
+            },
+            Arc::new(Never),
+        )
+        .unwrap();
+        references.push(frames);
+    }
+    let control = Arc::new(LatestWallpaperTargetAdapter::new(small));
+    let mut targets = PlaybackTargets::new(control.clone()).unwrap();
+    let mut session =
+        DecoderSession::open(&file, DecodePurpose::LiveWallpaper, Arc::new(Never)).unwrap();
+    // SAFETY: Read addresses of still-owned native handles; never dereference.
+    let native = unsafe {
+        (
+            session.input.as_ptr() as usize,
+            session.decoder.as_ptr() as usize,
+        )
+    };
+    let origin = session.origin;
+    let deadline = Arc::as_ptr(&session.deadline);
+    let mut frames = Vec::new();
+    let mut revisions = Vec::new();
+    let mut old = None;
+    let mut revision = WallpaperTargetRevision::initial();
+    let policy = PlaybackOptions {
+        fps: WallpaperFrameRate::Source,
+        looping: true,
+        target: None,
+    };
+    assert!(
+        session
+            .cycle_controlled(
+                policy,
+                DecodePurpose::LiveWallpaper,
+                &mut |frame, captured| {
+                    let timestamp = frame.timestamp;
+                    let (width, height, pixels, aspect) = frame.into_shared_rgba_with_aspect();
+                    if old.is_none() {
+                        old = Some((pixels.clone(), pixels.as_slice().to_vec()));
+                    }
+                    let frame = MediaFrame::rgba_shared_with_aspect(
+                        width, height, pixels, aspect, timestamp,
+                    )
+                    .unwrap();
+                    frames.push(frame_snapshot(frame));
+                    revisions.push(captured.unwrap());
+                    if frames.len() == 2 {
+                        revision = control.set(revision, large).unwrap().revision;
+                    }
+                    if frames.len() == 4 {
+                        revision = control.set(revision, small).unwrap().revision;
+                    }
+                    true
+                },
+                &Never,
+                Some(&mut targets)
+            )
+            .unwrap()
+    );
+    assert_eq!(
+        frames.len(),
+        8,
+        "retargeting must preserve drained/reordered EOF frames"
+    );
+    for (index, actual) in frames.iter().enumerate() {
+        assert_eq!(
+            actual,
+            &references[usize::from((2..4).contains(&index))][index]
+        );
+        assert_eq!(
+            revisions[index].get(),
+            if index < 2 {
+                1
+            } else if index < 4 {
+                2
+            } else {
+                3
+            }
+        );
+    }
+    assert_eq!(
+        unsafe {
+            (
+                session.input.as_ptr() as usize,
+                session.decoder.as_ptr() as usize,
+            )
+        },
+        native
+    );
+    assert_eq!(session.origin, origin);
+    assert_eq!(Arc::as_ptr(&session.deadline), deadline);
+    assert_eq!(session_allocations(&session).0, native.0);
+    assert!(session.rewind(&Never));
+    let mut calls = 0;
+    assert!(
+        !session
+            .cycle_controlled(
+                policy,
+                DecodePurpose::LiveWallpaper,
+                &mut |_, captured| {
+                    calls += 1;
+                    assert_eq!(captured, Some(revision));
+                    false
+                },
+                &Never,
+                Some(&mut targets)
+            )
+            .unwrap()
+    );
+    assert_eq!(calls, 1);
+    let (held, copy) = old.unwrap();
+    drop(session);
+    assert_eq!(held.as_slice(), copy);
+}
+
+#[test]
+fn dynamic_callback_cancellation_retires_pool_without_invalidating_held_pixels() {
+    let root = Directory::new();
+    let file = h264_fixture(&root.0);
+    let control = Arc::new(LatestWallpaperTargetAdapter::new(
+        WallpaperPixelTarget::new(32, 24).unwrap(),
+    ));
+    let mut held = None;
+    let mut calls = 0;
+    decode_retargetable(
+        &file,
+        RetargetablePlaybackOptions {
+            fps: WallpaperFrameRate::Source,
+            looping: true,
+        },
+        control,
+        &mut |value| {
+            calls += 1;
+            held = Some(value.frame.into_shared_rgba_with_aspect().2);
+            false
+        },
+        Arc::new(Never),
+    )
+    .unwrap();
+    assert_eq!(calls, 1);
+    let held = held.unwrap();
+    assert_eq!(Arc::strong_count(&held), 1);
+    assert_eq!(held.len(), 32 * 24 * 4);
+}
+
 #[test]
 fn video_publication_pool_is_exclusive_to_proven_opaque_live_converters() {
     use ffmpeg::{format::Pixel, util::frame::video::Video};
