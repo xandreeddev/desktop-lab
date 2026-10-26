@@ -46,7 +46,14 @@
         "Keep persists only the accepted user-level configuration while preserving unrelated configuration; failed persistence retains recovery.",
         "Owned tests and native panel interaction verify Keep, Revert, timeout and failure recovery with exact final restoration."
       ],
-      "evidence": []
+      "evidence": [
+        {
+          "kind": "owned-native-virtual-display-transactions",
+          "path": "reports/measurements/lucent-native-two-output-displays-26d-nine.json",
+          "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+          "scope": "Nine virtual two-output Display workflows, including rotation, disable/re-enable, fractional Keep and pointer/keyboard Apply/Revert on a density1.25 panel. Guarded restoration and separate same-lifetime normal-OFF observation pass. No physical hotplug/sleep result."
+        }
+      ]
     },
     {
       "id": "performance-and-animation",
@@ -91,8 +98,15 @@
           "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
           "archive_manifest_sha256": "b7a1d92c4e0e186fca4e2e7e67523763c0c57bc4b91bd3ef18247c5b5cc996c9",
           "scope": "Locked/offline build of desktop/CLI/menu/lock/greeter/polkit plus international-text/input-method-peer/application-intent; all nine archived binary hashes verified. Built, not yet deployed or natively accepted."
+        },
+        {
+          "kind": "owned-native-input-method",
+          "path": "reports/measurements/lucent-international-text.json",
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "scope": "Five feature/five restoration checks with an identified owned mapped input-method peer: preedit ink/caret, commit/delete, multiline, masked-focus retirement and RTL navigation. No third-party IME or physical/cross-output acceptance."
         }
-      ]
+      ],
+      "current_scope": "The earlier release-build entry retains its not-yet-deployed capture-time scope. Later unchanged 8e was deployed and passed five owned IME/five restoration checks. Third-party IME and physical/cross-output acceptance remain open."
     },
     {
       "id": "application-integration",
@@ -128,12 +142,19 @@
           "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
           "archive_manifest_sha256": "b7a1d92c4e0e186fca4e2e7e67523763c0c57bc4b91bd3ef18247c5b5cc996c9",
           "scope": "Locked/offline build of desktop/CLI/menu/lock/greeter/polkit plus international-text/input-method-peer/application-intent; all nine archived binary hashes verified. Built, not yet deployed or natively accepted."
+        },
+        {
+          "kind": "cold-default-handler-native-result",
+          "path": "reports/measurements/lucent-cold-default-uri-eb348.json",
+          "source_commit": "eb3481f4c75da9e0783975ad9c3e920ad8833ce2",
+          "scope": "Cold pointer route passes; keyboard route reaches the exact document but fails browser focus/KeyA delivery. Both owned cleanups pass. Candidate 3640 has no native fix acceptance."
         }
-      ]
+      ],
+      "current_scope": "Historical build-only entries remain unchanged; later real-application/default-handler runs have their own source scopes. Cold eb348 keyboard failure remains unresolved by native evidence. Candidate 3640 completes its build/offscreen export, with deployment/handoff acceptance pending."
     },
     {
       "id": "real-world-validation",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "Exercise simultaneous native output input/layout, hotplug and output recreation, integer/fractional density and suspend/resume with preserved preferences.",
         "Exercise physical Bluetooth pairing/control and audio device/microphone/routing with explicit device authority and restored configuration.",
@@ -146,19 +167,101 @@
           "source_commit": "a7f41eccdcd8eca51e8e5ee878d8f489d8d4bde5",
           "guide": "docs/lucent-vulkan.md",
           "scope": "Later mount-anchored AMD native-context trial passes RADV RENOIR enumeration, secure login, actual hardware-adapter selection and advancing native frame counters across three seconds with preserved user/source/settings/media/critical files and monitor. Candidate retained. No measured FPS, source cadence, RSS, GPU memory/decoding, physical-output or newer 8e6d074b binary acceptance."
+        },
+        {
+          "kind": "owned-native-virtual-two-output",
+          "path": "reports/measurements/lucent-native-multi-output.json",
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "scope": "Sixteen checks on two simultaneous compositor outputs, one owned headless peer: 1x/2x/1.25x native panel input, held-button removal, same-name new global/generation and exact restoration. No physical cable/display, suspend, secure-output or cross-output text/clipboard acceptance."
+        },
+        {
+          "kind": "owned-native-virtual-display-transactions",
+          "path": "reports/measurements/lucent-native-two-output-displays-26d-nine.json",
+          "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+          "scope": "Nine virtual two-output Display workflows, including rotation, disable/re-enable, fractional Keep and pointer/keyboard Apply/Revert on a density1.25 panel. Guarded restoration and separate same-lifetime normal-OFF observation pass. No physical hotplug/sleep result."
+        },
+        {
+          "kind": "owned-native-virtual-bluetooth",
+          "path": "reports/measurements/lucent-bluetooth-rejection.json",
+          "source_commit": "3ff2aa3aeabe4c44eb56defa34ac161dd75c4493",
+          "scope": "Actual BlueZ/two software HCI controllers: comparison-code pairing/bonding, decline/Escape termination and unpaired Disconnect while the peer remains running. No physical keyboard/radio/profile, PIN-entry, incoming authorization or pending-profile acceptance."
+        },
+        {
+          "kind": "owned-native-virtual-audio",
+          "path": "reports/measurements/lucent-audio-panel.json",
+          "source_commit": "a2a46c89ff92245d2dde6688cae5c1813ad8b029",
+          "scope": "Native output/input defaults, volume/mute, playback/capture routing and reconnect/hot-removal recovery with owned silent/monitor devices and restored originals. No audible playback, physical microphone or hardware profile/port result."
+        },
+        {
+          "kind": "real-application-native-tray",
+          "path": "reports/measurements/lucent-native-third-party-tray-8e.json",
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "scope": "One genuine wired-only NetworkManager Applet: five item/menu/information-action checks, four cleanup and thirteen outside-worker preservation checks. Other apps/nested menus and physical radios/audio remain open."
+        },
+        {
+          "kind": "real-application-native-clipboard",
+          "path": "reports/measurements/lucent-native-gui-clipboard-2044.json",
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "scope": "Nine Chromium textarea/Notes actual keyboard-transfer checks and twelve restoration checks on one virtual output; both directions, replacement and multiline/combining/emoji/CJK/blank/trailing-line text pass. Other apps, rich content, delayed-provider/focus races and cross-output transfers remain open."
+        },
+        {
+          "kind": "owned-native-input-method",
+          "path": "reports/measurements/lucent-international-text.json",
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "scope": "Five feature/five restoration checks with an identified owned mapped input-method peer: preedit ink/caret, commit/delete, multiline, masked-focus retirement and RTL navigation. No third-party IME or physical/cross-output acceptance."
+        },
+        {
+          "kind": "read-only-suspend-prerequisites",
+          "path": "reports/measurements/lucent-suspend-prerequisites.json",
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "scope": "No suspend request issued. Deep/S3 prerequisites were not satisfied; observed s2idle availability does not establish actual sleep/wake or secure resume."
+        },
+        {
+          "kind": "read-only-host-services",
+          "path": "reports/measurements/lucent-host-service-observations-6f9.json",
+          "source_commit": "6f9e75d0477ae02809bf62bb6a9515894e1767f3",
+          "scope": "Four fifteen-second host observations and owned-unit completion. Counts establish no particular keyboard, key events, audible playback/capture, controls, changed-state delivery, hotplug or suspend. Power absence/unavailability remains ambiguous."
         }
+      ],
+      "remaining": [
+        "Physical simultaneous outputs and cable hotplug, real modes and preserved layout; owned headless peers cover virtual compositor behavior.",
+        "Actual admitted sleep/wake and secure resume; inspection is not execution. Physical sleep/power remains an operator test.",
+        "Selected physical Bluetooth keyboard/pairing/control and audible output/microphone/routing with restoration. A connected count identifies no keyboard; a keyboard exercises no audio profile.",
+        "Additional third-party tray apps/menus, third-party IMEs, other GUI clipboard apps, rich content, delayed-provider/focus races and cross-output text/clipboard.",
+        "Native revalidation bound to the actual deployed new source/binary/process and baseline. Historical 8e/26d passes do not accept candidate 3640."
       ]
     },
     {
       "id": "documentation-accuracy",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "Reconcile library and desktop guides, ownership map, skills and implementation ledger against latest source-specific evidence.",
         "Remove stale native-pending claims only where later evidence proves that same behavior; retain broader hardware, interoperability and security limits.",
         "Document new ports/adapters, initialization, registration, client flow, configuration, rollback and measured performance.",
         "Pass Astro checks, root and Pages builds/link validation; keep local LAN docs running and publish through protected-main merge CI."
       ],
-      "evidence": []
+      "evidence": [
+        {
+          "kind": "source-specific-published-delivery",
+          "source_commit": "ca88e3ef3ea511fb4e587f58fca8ca0b6d2fdb27",
+          "url": "https://github.com/xandreeddev/desktop-lab/actions/runs/40392718403",
+          "delivery_receipt_sha256": "968dc13fdc664c454dfb88ad8b9dbeba039d59bc62830e33cbca23c467446593",
+          "lan_receipt_sha256": "ba9a35a029ece4a85e305d051d581ada68317338257f4f43ff6d6e8795e981d8",
+          "scope": "Verified ca88 Pages and same-artifacttwenty HTTP checks LAN:three HTML pages/native manifest/PNG, b3c91fab capture source with 116 inputs/480 captures. Accepted 9d42 and this later reconciliation require their own final build/publication proof."
+        },
+        {
+          "kind": "source-specific-published-delivery",
+          "source_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+          "url": "https://github.com/xandreeddev/desktop-lab/actions/runs/40396627106",
+          "delivery_receipt_sha256": "bfb2cfab2dae89a1fac1e7423c71b51953463503c91ab8a3a1531c5df017cfc7",
+          "lan_receipt_sha256": "dbd81b2611a8ad809093f30518bf07d1b0fb5f79fa282943882b0bc3b65a335e",
+          "scope": "Named 9d42/PR114 Pages artifact/public bytes and same-artifact LAN checkpoint:4a capture source with 117 producers/480 captures. Publication predates this later reconciliation and candidate 3640; it proves no native device/control, deployment, focus fix or performance acceptance."
+        }
+      ],
+      "remaining": [
+        "Integrate staged framework/text/URI and ledger reconciliation, then run its own final Astro/root/Pages/link checks and protected-main delivery; prior ca88 delivery does not publish these edits.",
+        "Keep actual software, real-application and physical evidence separate, retaining failed trials and unaccepted performance targets as new results arrive."
+      ]
     }
   ],
   "invariants": [
@@ -168,5 +271,79 @@
     "One bounded heavy host job at a time; deploy with rollback and stable readiness checks.",
     "Commit and push working milestones; merge protected-main PRs only after exact final revision checks pass.",
     "Accessibility remains deferred by the user; text shaping and IME remain in scope."
-  ]
+  ],
+  "current_reconciliation": {
+    "observed_at_utc": "2026-10-26T20:36:09.765816+00:00",
+    "all_seven_requested_gaps_closed": false,
+    "accepted_main_source_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+    "accepted_main_pull_request": 114,
+    "accepted_main_delivery_verified_for_new_head": true,
+    "latest_verified_documentation_delivery": {
+      "source_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+      "pages_run": 40396627106,
+      "pages_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/40396627106",
+      "pages_status": "SUCCESS",
+      "delivery_receipt_sha256": "bfb2cfab2dae89a1fac1e7423c71b51953463503c91ab8a3a1531c5df017cfc7",
+      "archive_sha256": "3a7a7c5b24628c24cdcf96e69ca43bcbbd3af36a691a9004ac35b2241110702b",
+      "verified_html_pages": 3,
+      "verified_native_assets": 2,
+      "capture_source_commit": "4a0f932a7c82ac0459715007bdbd314d145a4ae4",
+      "rendering_producer_inputs": 117,
+      "native_catalogue_captures": 480,
+      "lan_http_checks_passed": 20,
+      "lan_receipt_sha256": "dbd81b2611a8ad809093f30518bf07d1b0fb5f79fa282943882b0bc3b65a335e",
+      "lan_output_manifest_sha256": "e547f085550b5969a410f15ae179148c869890cd60d8b818b1da67dca7ab6264",
+      "scope": "Named 9d42/PR114 Pages artifact/public bytes and same-artifact LAN checkpoint:4a capture source with 117 producers/480 captures. Publication predates this later reconciliation and candidate 3640; it proves no native device/control, deployment, focus fix or performance acceptance."
+    },
+    "input_release_candidate": {
+      "source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
+      "status_at_capture": "coherent_build_and_offscreen_catalogue_passed_native_handoff_pending",
+      "observed_at_utc": "2026-10-26T20:36:09.765816+00:00",
+      "coherent_build_stages_passed": 17,
+      "targeted_tests_passed": 823,
+      "build_receipt_sha256": "acb1c011d0364c0f49c695ee71bc9126b868fcb7b286683a00c5ac10bda7f3c2",
+      "release_manifest_sha256": "075b88c5adeb49de7f66ec330d0c6f9eeecf540cf928881a23572bccd4e77c10",
+      "terminal_build_success_confirmed_by_supervising_agent": true,
+      "native_offscreen_catalogue": {
+        "receipt_sha256": "f344076c9914a5973f52d13cc8ccd4ee27028392939d1696aa807ec42548c838",
+        "manifest_sha256": "5fb19c47c1ea3305b9ea3bf9d0b32cd30ba85ca6efcff3bb203d7d37eab0aeb5",
+        "production_inputs": 118,
+        "stories": 9,
+        "palettes": 5,
+        "captures": 480,
+        "all_pngs_byte_identical_to_actual_prior_radv_reference": true,
+        "scope": "Actual native offscreen AMD RADV export only; no Wayland input, keyboard handoff, FPS, RSS, allocator availability or physical-output acceptance."
+      },
+      "deployed_as_a_coherent_runtime": false,
+      "native_keyboard_handoff_fix_verified": false,
+      "capability": "Typed Effects::after_input_release waits for an exact native post-policy frame acknowledgement before URI dispatch; passive toasts request no keyboard input. The source build and offscreen export pass, but this runtime has not been deployed or natively accepted.",
+      "guides": [
+        "docs/default-uri-activation.md",
+        "docs/lucent-framework.md"
+      ],
+      "historical_cold_browser_report": "reports/measurements/lucent-cold-default-uri-eb348.json",
+      "historical_cold_browser_scope": "Archived eb348 passes the cold pointer route and fails keyboard focus/KeyA delivery, with owned cleanup complete. Those outcomes remain unchanged; candidate 3640 has no native fix result."
+    },
+    "history_policy": "Original acceptance and capture-time evidence entries remain unchanged. Later scoped results supersede blanket pending summaries only for the identified source/behavior. No older native result accepts a newer runtime.",
+    "historical_verified_documentation_delivery": [
+      {
+        "source_commit": "ca88e3ef3ea511fb4e587f58fca8ca0b6d2fdb27",
+        "pages_run": 40392718403,
+        "pages_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/40392718403",
+        "pages_status": "SUCCESS",
+        "delivery_receipt_sha256": "968dc13fdc664c454dfb88ad8b9dbeba039d59bc62830e33cbca23c467446593",
+        "archive_sha256": "1d24cf31aeac594ecca099b87c845bde94e77f1c4904831ad4ef1c0a834558fe",
+        "verified_html_pages": 3,
+        "verified_native_assets": 2,
+        "capture_source_commit": "b3c91fab62b6fb545255ff7762f7ad8af6573419",
+        "rendering_producer_inputs": 116,
+        "native_catalogue_captures": 480,
+        "lan_http_checks_passed": 20,
+        "lan_receipt_sha256": "ba9a35a029ece4a85e305d051d581ada68317338257f4f43ff6d6e8795e981d8",
+        "lan_output_manifest_sha256": "c770e6a22da52f58807da7c57a6373a695c31c52fdf479c918845ddbac802995",
+        "scope": "Named ca88 Pages artifact/public bytes and same-artifact LAN checkpoint. Accepted main has advanced to9d42/PR114; its publication and this later reconciliation require their own exact delivery proof. This does not establish native/device/performance acceptance."
+      }
+    ],
+    "last_evidence_update_utc": "2026-10-26T20:38:11.543917+00:00"
+  }
 }

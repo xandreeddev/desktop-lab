@@ -4,12 +4,12 @@
   "status": "in_progress",
   "completion_rule": "An item is verified only when its behavior, boundary checks, documentation and applicable native integration checks have evidence. Implemented without verification remains incomplete.",
   "current_rollup": {
-    "snapshot_source_commit": "9b52666ba39b2ea2718e72424c37dc8b341051e2",
-    "snapshot_date": "2026-10-24",
+    "snapshot_source_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+    "snapshot_date": "2026-10-26",
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted PR110/main9b526 core trees equal archived eb348. Its 15-stage786-test release deploys coherently; completed same-birth coldFHD\u21924K\u2192restored warmFHD intervals observe229.181/230.875,494.683/526.516 and435.063/435.063MiB mean/peak RSS. All tracingOFF and preservation/owner cleanup pass, but all three intervals remain host-pressure-ineligible. Warm memory remains elevated after current-frame/prepared payloads return near coldFHD values; no allocation cause, leak, CPU-reuse gain, FPS or budget accepted. Verified delivery is checkpoint9b526/Pages40049047514+sameartifact20HTTP LAN; no future-publication claim. Physical controls and broader application/IME acceptance remain open; allsevenfalse. A separately instrumented FHD birth observes59.842distinct prepared-revision advances/s,236.039/236.789MiB RSS and two final pending requests; normal/reference and instrumented runs remain host-ineligible. Driver restores original source/security/settings/allOFF, without causal memory/CPU gain or eligible60FPS/launcher-animation acceptance.",
+    "scope": "Accepted main 9d42/PR114 has verified Pages 40396627106 and twenty same-artifact LAN HTTP checks: three HTML pages, native manifest/PNG and 117 producer inputs/480 captures from 4a. Earlier ca88/b3/116 delivery remains historical. Neither checkpoint publishes this later reconciliation. Historical eb348/8e/26d native results retain their exact sources, failures and limits. Candidate 3640 passes 17 build stages, 823 targeted tests and an actual AMD RADV offscreen export of 118 producers/480 PNGs identical to the reference. At its capture it is not deployed and has no native keyboard-focus correction result. Physical controls and sleep, broader IME/tray/clipboard, eligible <=300 MiB resources and 60 FPS animations remain open; the full seven-gap goal is incomplete.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -909,15 +909,16 @@
       },
       {
         "id": "real-world-validation",
-        "status": "partial_owned_native_evidence",
+        "status": "partial_source_specific_native_physical_acceptance_open",
         "implemented": "Later source 6f9 passes four actual 15-second read-only HOST service observations (audio/Bluetooth/power/compositor) with exact built binary identities and collected owned units; see reports/measurements/lucent-host-service-observations-6f9.json. No controls/input are sent; audio cancellation is observed, power capability absence is ambiguous and state-change delivery is untested. Source-specific owned native Notes/clipboard, SNI/DBusMenu tray, single-output video density fit, live previews, System invalidation, virtual Bluetooth and other recorded workflows. Seven one-output native Display draft/Apply/Keep/Revert/deadline/EOF-recovery flows also pass with exact file preservation and explicit expected one-restart validation. Later a7f RADV hardware-path startup and three-second native frame advancement pass with anchored user/source/settings/media/critical-file and monitor preservation. The coherent 8e release is now deployed on retained RADV, and its normal 120-second resource interval passes preservation while failing host-pressure eligibility. A fresh 16-check coherent 8e run passes two simultaneous compositor outputs, one owned headless, at 1x/2x/1.25x with real panel clicks, held-button removal, same-name new native global/host generation and exact restoration; see reports/measurements/lucent-native-multi-output.json. A later 2044e54f native harness passes nine actual Chromium textarea/Notes keyboard clipboard checks and all twelve restoration checks on unchanged 8e, one virtual output; see reports/measurements/lucent-native-gui-clipboard-2044.json. A genuine wired-only NetworkManager Applet run on unchanged 8e passes five native bar/menu/information-action checks and four cleanup checks; a fresh outside-worker post-removal observation passes thirteen preservation checks, restoring all 964 original packages/reasons with five signed test packages absent. Other apps/menus, wireless/secret-agent, physical hardware, pixel quality and performance remain unverified. Later harness 86df4e5b on runtime 35ed passes four two-output Display draft/Apply/Revert/timeout/Keep flows with one owned headless peer, five positive owner-restoration checks and independent retirement/normal-OFF verification; see reports/measurements/lucent-native-two-output-displays.json. That historical four-flow run kept all panel input on the unchanged original 1x output. The later 1774fa87 harness on runtime 26d passes nine virtual Display workflows, including rotation, disable/re-enable and native pointer/keyboard interaction on the fractional peer panel, with guarded restoration and separate later normal-OFF verification; see reports/measurements/lucent-native-two-output-displays-26d-nine.json.",
-        "remaining": "Physical simultaneous monitors/cable hotplug, suspend/resume, secure-output changes, cross-output text/clipboard, physical Bluetooth/audio/power/radio controls and hardware behavior, additional third-party tray applications/menus and wireless/secret-agent workflows, other GUI clipboard applications, rich content and delayed-provider/focus-retirement races. The owned headless run establishes no blanket hardware, resource or 60 FPS claim."
+        "remaining": "Physical simultaneous monitor and cable hotplug, actual sleep/secure resume, physical Bluetooth keyboard/pairing/control and audible output/microphone/routing remain open. Third-party IME, more tray apps/menus, other GUI clipboard apps/rich content, delayed-provider/focus races and cross-output transfers need execution.6f9 counts are observations; older8e/26d passes do not accept candidate 3640.",
+        "evidence_matrix": "current_rollup.real_world_acceptance_matrix"
       },
       {
         "id": "documentation-accuracy",
-        "status": "source_specific_build_and_delivery_evidence_recorded",
-        "implemented": "Accepted PR107/main f5b6db0b has six-check/CLEAN merge, Pages 40035549254 and same-artifact LAN verification (3 HTML, manifest/PNG, 116 producers/480 captures, 20 LAN responses). New host observation evidence identifies separate consumer source 6f9; earlier reports/flags/eligibility/history are preserved.",
-        "remaining": "CI build and publication receipts are scoped to their named commits; later revisions require their own workflow evidence. Publication and read-only service observation do not close physical controls, broader interoperability, eligible performance or the seven-gap goal."
+        "status": "reconciled_source_evidence_new_revision_delivery_pending",
+        "implemented": "Named 9d42/PR114, Pages 40396627106 and LAN receipt dbd81b26 verify three HTML pages, native manifest/PNG, 117 producer inputs/480 captures from 4a and twenty HTTP responses. Earlier ca88/b3/116 delivery remains historical. The active checklist links 8e/26d virtual outputs, genuine tray/clipboard and owned IME evidence; Bluetooth separates software-HCI controls from physical/profile gaps. Candidate 3640 build/offscreen results retain their own source, without deployment/handoff acceptance.",
+        "remaining": "This reconciliation/staged guides and later accepted main need their own exact final checks, Astro/root/Pages/link build and protected-main delivery receipts. Prior publication proves only its named source. Physical/native/performance and the full goal remain open."
       }
     ],
     "scoped_native_evidence": [
@@ -1319,7 +1320,7 @@
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
-    "validation": "PR107 exact 5d8c116b passed six checks/CLEAN and merged normally as f5b6db0b at 2026-10-23T22:44:33Z. Pages 40035549254 and 20 LAN HTTP checks verify the exact artifact plus 116 producers/480 captures from 950f4d19. Earlier 774 Python/6.870s and catalogue 9/480/116 results belong to their recorded checkpoint; CI supplies subsequent site build/publication evidence. Standalone source 6f9 passes four audio-example tests, strict release Clippy and four binary builds; a later separate actual host run passes all four read-only observations. No new checks or native actions were performed by this documentation task. Added source-specific 4K evidence from actual begin/apply/finish receipts and independent restored-FHD/all-OFF observation; the sampler admission refusal and separate V1 coverage failure are preserved as failures. The V2 ordering fixture does not prove native success or the native failure cause.",
+    "validation": "This reconciliation reads source-specific reports, exact9d42 Pages/LAN receipts and actual3640 build/offscreen-export records; supervising agents confirm terminal success. The documentation task adds no native/device/VM action or Node/Cargo build. JSON/reference/history-preservation checks cover local edits; their own final build/publication remains pending.",
     "accepted_main_base_commit": "9b52666ba39b2ea2718e72424c37dc8b341051e2",
     "documentation_harness_base_commit": "c4eb922ca423dfbe255630e8717dc9cb2836a4c2",
     "runtime_compilation_source_commit": "eb3481f4c75da9e0783975ad9c3e920ad8833ce2",
@@ -1490,15 +1491,15 @@
       }
     ],
     "documentation_delivery": {
-      "accepted_main_commit": "9b52666ba39b2ea2718e72424c37dc8b341051e2",
-      "published_workflow_run": 40049047514,
+      "accepted_main_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+      "published_workflow_run": 40396627106,
       "published_workflow_status": "SUCCESS",
       "public_http_status": 200,
-      "current_published_source_links": "9b52666ba39b2ea2718e72424c37dc8b341051e2",
+      "current_published_source_links": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
       "current_publication_valid": true,
       "public_artifact_bytes_match": true,
-      "delivery_receipt_sha256": "a6afca9c5e8fb78bb1fceb07c396fd0bc272025f64ae9f490ba14e9157e89f23",
-      "archive_sha256": "aa1f1be96413974cae2bf17535e948347e9e7bd94a3745ed787eb44b1edd5923",
+      "delivery_receipt_sha256": "bfb2cfab2dae89a1fac1e7423c71b51953463503c91ab8a3a1531c5df017cfc7",
+      "archive_sha256": "3a7a7c5b24628c24cdcf96e69ca43bcbbd3af36a691a9004ac35b2241110702b",
       "verified_pages": [
         "docs/desktop/",
         "docs/library/",
@@ -1508,21 +1509,18 @@
         "component-lab/manifest.json",
         "component-lab/images/menu-ocean-populated-narrow-1x.png"
       ],
-      "rendering_producer_inputs_verified": 116,
+      "rendering_producer_inputs_verified": 117,
       "native_catalogue_captures_verified": 480,
-      "capture_source_commit": "b3c91fab62b6fb545255ff7762f7ad8af6573419",
-      "latest_verified_lan_source_commit": "9b52666ba39b2ea2718e72424c37dc8b341051e2",
+      "capture_source_commit": "4a0f932a7c82ac0459715007bdbd314d145a4ae4",
+      "latest_verified_lan_source_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
       "latest_verified_lan_http_checks_passed": 20,
-      "latest_verified_lan_receipt_sha256": "cfd351e9e13dd7e3987d25dbf9d2ad878ecfff60662ea4486ecd58f802157a1a",
-      "pr105_pages_verified": true,
-      "scope": "Verified named9b526 Pages40049047514 and sameartifact LAN20HTTP checkpoint:3HTML/manifest/PNG,116producers/480captures. Later revisions need their own CI delivery receipts; no expanded native/performance scope.",
-      "pr106_pages_verified": true,
-      "pr107_pages_verified": true,
+      "latest_verified_lan_receipt_sha256": "dbd81b2611a8ad809093f30518bf07d1b0fb5f79fa282943882b0bc3b65a335e",
+      "latest_verified_lan_output_manifest_sha256": "e547f085550b5969a410f15ae179148c869890cd60d8b818b1da67dca7ab6264",
       "verification_is_source_specific": true,
-      "pr108_pages_verified": true,
-      "pr110_pages_verified": true
+      "this_later_reconciliation_published": false,
+      "scope": "Named 9d42/PR114 Pages artifact/public-byte and same-artifact LAN checkpoint: 117 producer inputs/480 captures from 4a. This publication predates the later reconciliation and candidate 3640. It adds no native device/control, deployment, focus-fix or performance acceptance."
     },
-    "accepted_main_commit": "9b52666ba39b2ea2718e72424c37dc8b341051e2",
+    "accepted_main_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
     "current_vm_trial_source_commit": null,
     "current_vm_trial_performance_accepted": false,
     "historical_documentation_delivery_8ca": {
@@ -3008,7 +3006,184 @@
         "performance_accepted": false,
         "scope": "Bound-resource metadata from a separate process birth; not visible FPS, launcher animation, memory improvement or causal gain."
       }
-    }
+    },
+    "historical_rollup_snapshot_pr110_before_req6_req7_reconciliation": {
+      "snapshot_source_commit": "9b52666ba39b2ea2718e72424c37dc8b341051e2",
+      "snapshot_date": "2026-10-24",
+      "scope": "Accepted PR110/main9b526 core trees equal archived eb348. Its 15-stage786-test release deploys coherently; completed same-birth coldFHD\u21924K\u2192restored warmFHD intervals observe229.181/230.875,494.683/526.516 and435.063/435.063MiB mean/peak RSS. All tracingOFF and preservation/owner cleanup pass, but all three intervals remain host-pressure-ineligible. Warm memory remains elevated after current-frame/prepared payloads return near coldFHD values; no allocation cause, leak, CPU-reuse gain, FPS or budget accepted. Verified delivery is checkpoint9b526/Pages40049047514+sameartifact20HTTP LAN; no future-publication claim. Physical controls and broader application/IME acceptance remain open; allsevenfalse. A separately instrumented FHD birth observes59.842distinct prepared-revision advances/s,236.039/236.789MiB RSS and two final pending requests; normal/reference and instrumented runs remain host-ineligible. Driver restores original source/security/settings/allOFF, without causal memory/CPU gain or eligible60FPS/launcher-animation acceptance.",
+      "validation": "PR107 exact 5d8c116b passed six checks/CLEAN and merged normally as f5b6db0b at 2026-10-23T22:44:33Z. Pages 40035549254 and 20 LAN HTTP checks verify the exact artifact plus 116 producers/480 captures from 950f4d19. Earlier 774 Python/6.870s and catalogue 9/480/116 results belong to their recorded checkpoint; CI supplies subsequent site build/publication evidence. Standalone source 6f9 passes four audio-example tests, strict release Clippy and four binary builds; a later separate actual host run passes all four read-only observations. No new checks or native actions were performed by this documentation task. Added source-specific 4K evidence from actual begin/apply/finish receipts and independent restored-FHD/all-OFF observation; the sampler admission refusal and separate V1 coverage failure are preserved as failures. The V2 ordering fixture does not prove native success or the native failure cause.",
+      "documentation_delivery": {
+        "accepted_main_commit": "9b52666ba39b2ea2718e72424c37dc8b341051e2",
+        "published_workflow_run": 40049047514,
+        "published_workflow_status": "SUCCESS",
+        "public_http_status": 200,
+        "current_published_source_links": "9b52666ba39b2ea2718e72424c37dc8b341051e2",
+        "current_publication_valid": true,
+        "public_artifact_bytes_match": true,
+        "delivery_receipt_sha256": "a6afca9c5e8fb78bb1fceb07c396fd0bc272025f64ae9f490ba14e9157e89f23",
+        "archive_sha256": "aa1f1be96413974cae2bf17535e948347e9e7bd94a3745ed787eb44b1edd5923",
+        "verified_pages": [
+          "docs/desktop/",
+          "docs/library/",
+          "component-lab/"
+        ],
+        "verified_native_assets": [
+          "component-lab/manifest.json",
+          "component-lab/images/menu-ocean-populated-narrow-1x.png"
+        ],
+        "rendering_producer_inputs_verified": 116,
+        "native_catalogue_captures_verified": 480,
+        "capture_source_commit": "b3c91fab62b6fb545255ff7762f7ad8af6573419",
+        "latest_verified_lan_source_commit": "9b52666ba39b2ea2718e72424c37dc8b341051e2",
+        "latest_verified_lan_http_checks_passed": 20,
+        "latest_verified_lan_receipt_sha256": "cfd351e9e13dd7e3987d25dbf9d2ad878ecfff60662ea4486ecd58f802157a1a",
+        "pr105_pages_verified": true,
+        "scope": "Verified named9b526 Pages40049047514 and sameartifact LAN20HTTP checkpoint:3HTML/manifest/PNG,116producers/480captures. Later revisions need their own CI delivery receipts; no expanded native/performance scope.",
+        "pr106_pages_verified": true,
+        "pr107_pages_verified": true,
+        "verification_is_source_specific": true,
+        "pr108_pages_verified": true,
+        "pr110_pages_verified": true
+      },
+      "accepted_main_commit": "9b52666ba39b2ea2718e72424c37dc8b341051e2",
+      "accepted_main_merge": {
+        "pull_request": 110,
+        "merge_commit": "9b52666ba39b2ea2718e72424c37dc8b341051e2",
+        "exact_reviewed_head": "ab172b567b630d25d72f13043cd12b7e0ba16285",
+        "required_checks_passed": 6,
+        "mergeability": "CLEAN",
+        "normal_merge": true,
+        "merged_at": "2026-10-24T01:16:39Z",
+        "private_merge_receipt_sha256": "aa9747e89b05e474e1e0ab00eb12c079ad6991188162aa9b297055f5ed1e7a73"
+      }
+    },
+    "accepted_main_merge_scope": "The retained accepted_main_merge object describes the historical PR110 source-equivalence checkpoint. Current accepted and verified publication checkpoint is 9d42/PR114; capture-time raw merge/report flags stay unchanged.",
+    "input_release_candidate_3640": {
+      "source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
+      "status_at_capture": "coherent_build_and_offscreen_catalogue_passed_native_handoff_pending",
+      "observed_at_utc": "2026-10-26T20:36:09.765816+00:00",
+      "coherent_build_stages_passed": 17,
+      "targeted_tests_passed": 823,
+      "build_receipt_sha256": "acb1c011d0364c0f49c695ee71bc9126b868fcb7b286683a00c5ac10bda7f3c2",
+      "release_manifest_sha256": "075b88c5adeb49de7f66ec330d0c6f9eeecf540cf928881a23572bccd4e77c10",
+      "terminal_build_success_confirmed_by_supervising_agent": true,
+      "native_offscreen_catalogue": {
+        "receipt_sha256": "f344076c9914a5973f52d13cc8ccd4ee27028392939d1696aa807ec42548c838",
+        "manifest_sha256": "5fb19c47c1ea3305b9ea3bf9d0b32cd30ba85ca6efcff3bb203d7d37eab0aeb5",
+        "production_inputs": 118,
+        "stories": 9,
+        "palettes": 5,
+        "captures": 480,
+        "all_pngs_byte_identical_to_actual_prior_radv_reference": true,
+        "scope": "Actual native offscreen AMD RADV export only; no Wayland input, keyboard handoff, FPS, RSS, allocator availability or physical-output acceptance."
+      },
+      "deployed_as_a_coherent_runtime": false,
+      "native_keyboard_handoff_fix_verified": false,
+      "capability": "Typed Effects::after_input_release waits for an exact native post-policy frame acknowledgement before URI dispatch; passive toasts request no keyboard input. The source build and offscreen export pass, but this runtime has not been deployed or natively accepted.",
+      "guides": [
+        "docs/default-uri-activation.md",
+        "docs/lucent-framework.md"
+      ],
+      "historical_cold_browser_report": "reports/measurements/lucent-cold-default-uri-eb348.json",
+      "historical_cold_browser_scope": "Archived eb348 passes the cold pointer route and fails keyboard focus/KeyA delivery, with owned cleanup complete. Those outcomes remain unchanged; candidate 3640 has no native fix result."
+    },
+    "real_world_acceptance_matrix": {
+      "scope": "Historical source-specific native evidence, not reruns on later accepted main or candidate 3640. Counts do not establish controls/physical acceptance.",
+      "scoped_evidence": [
+        {
+          "kind": "owned-native-virtual-two-output",
+          "path": "reports/measurements/lucent-native-multi-output.json",
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "scope": "Sixteen checks on two simultaneous compositor outputs, one owned headless peer: 1x/2x/1.25x native panel input, held-button removal, same-name new global/generation and exact restoration. No physical cable/display, suspend, secure-output or cross-output text/clipboard acceptance."
+        },
+        {
+          "kind": "owned-native-virtual-display-transactions",
+          "path": "reports/measurements/lucent-native-two-output-displays-26d-nine.json",
+          "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
+          "scope": "Nine virtual two-output Display workflows, including rotation, disable/re-enable, fractional Keep and pointer/keyboard Apply/Revert on a density1.25 panel. Guarded restoration and separate same-lifetime normal-OFF observation pass. No physical hotplug/sleep result."
+        },
+        {
+          "kind": "owned-native-virtual-bluetooth",
+          "path": "reports/measurements/lucent-bluetooth-rejection.json",
+          "source_commit": "3ff2aa3aeabe4c44eb56defa34ac161dd75c4493",
+          "scope": "Actual BlueZ/two software HCI controllers: comparison-code pairing/bonding, decline/Escape termination and unpaired Disconnect while the peer remains running. No physical keyboard/radio/profile, PIN-entry, incoming authorization or pending-profile acceptance."
+        },
+        {
+          "kind": "owned-native-virtual-audio",
+          "path": "reports/measurements/lucent-audio-panel.json",
+          "source_commit": "a2a46c89ff92245d2dde6688cae5c1813ad8b029",
+          "scope": "Native output/input defaults, volume/mute, playback/capture routing and reconnect/hot-removal recovery with owned silent/monitor devices and restored originals. No audible playback, physical microphone or hardware profile/port result."
+        },
+        {
+          "kind": "real-application-native-tray",
+          "path": "reports/measurements/lucent-native-third-party-tray-8e.json",
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "scope": "One genuine wired-only NetworkManager Applet: five item/menu/information-action checks, four cleanup and thirteen outside-worker preservation checks. Other apps/nested menus and physical radios/audio remain open."
+        },
+        {
+          "kind": "real-application-native-clipboard",
+          "path": "reports/measurements/lucent-native-gui-clipboard-2044.json",
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "scope": "Nine Chromium textarea/Notes actual keyboard-transfer checks and twelve restoration checks on one virtual output; both directions, replacement and multiline/combining/emoji/CJK/blank/trailing-line text pass. Other apps, rich content, delayed-provider/focus races and cross-output transfers remain open."
+        },
+        {
+          "kind": "owned-native-input-method",
+          "path": "reports/measurements/lucent-international-text.json",
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "scope": "Five feature/five restoration checks with an identified owned mapped input-method peer: preedit ink/caret, commit/delete, multiline, masked-focus retirement and RTL navigation. No third-party IME or physical/cross-output acceptance."
+        },
+        {
+          "kind": "read-only-suspend-prerequisites",
+          "path": "reports/measurements/lucent-suspend-prerequisites.json",
+          "source_commit": "8e6d074bfcb30a0bcc0b371afddcd50c08993af0",
+          "scope": "No suspend request issued. Deep/S3 prerequisites were not satisfied; observed s2idle availability does not establish actual sleep/wake or secure resume."
+        },
+        {
+          "kind": "read-only-host-services",
+          "path": "reports/measurements/lucent-host-service-observations-6f9.json",
+          "source_commit": "6f9e75d0477ae02809bf62bb6a9515894e1767f3",
+          "scope": "Four fifteen-second host observations and owned-unit completion. Counts establish no particular keyboard, key events, audible playback/capture, controls, changed-state delivery, hotplug or suspend. Power absence/unavailability remains ambiguous."
+        }
+      ],
+      "physical_operator_acceptance_complete": false,
+      "suspend_resume_complete": false,
+      "third_party_ime_complete": false,
+      "broader_tray_clipboard_complete": false,
+      "fresh_candidate_native_acceptance_complete": false,
+      "next_test_scope": "After an exact new release deployment, bind virtual outputs, real GUI clipboard/tray and mapped-peer IME tests to that actual source/process/restoration baseline. Physical display/keyboard/audio and sleep need selected hardware/operator action; never automatically transfer the host radio or disconnect the sole keyboard as a VM test."
+    },
+    "historical_verified_documentation_delivery_ca88": {
+      "accepted_main_commit_at_delivery": "ca88e3ef3ea511fb4e587f58fca8ca0b6d2fdb27",
+      "accepted_main_commit_now": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+      "published_workflow_run": 40392718403,
+      "published_workflow_status": "SUCCESS",
+      "public_http_status": 200,
+      "current_published_source_links": "ca88e3ef3ea511fb4e587f58fca8ca0b6d2fdb27",
+      "current_publication_valid": true,
+      "public_artifact_bytes_match": true,
+      "delivery_receipt_sha256": "968dc13fdc664c454dfb88ad8b9dbeba039d59bc62830e33cbca23c467446593",
+      "archive_sha256": "1d24cf31aeac594ecca099b87c845bde94e77f1c4904831ad4ef1c0a834558fe",
+      "verified_pages": [
+        "docs/desktop/",
+        "docs/library/",
+        "component-lab/"
+      ],
+      "verified_native_assets": [
+        "component-lab/manifest.json",
+        "component-lab/images/menu-ocean-populated-narrow-1x.png"
+      ],
+      "rendering_producer_inputs_verified": 116,
+      "native_catalogue_captures_verified": 480,
+      "capture_source_commit": "b3c91fab62b6fb545255ff7762f7ad8af6573419",
+      "latest_verified_lan_source_commit": "ca88e3ef3ea511fb4e587f58fca8ca0b6d2fdb27",
+      "latest_verified_lan_http_checks_passed": 20,
+      "latest_verified_lan_receipt_sha256": "ba9a35a029ece4a85e305d051d581ada68317338257f4f43ff6d6e8795e981d8",
+      "latest_verified_lan_output_manifest_sha256": "c770e6a22da52f58807da7c57a6373a695c31c52fdf479c918845ddbac802995",
+      "new_accepted_head_publication_verified_at_this_checkpoint": false,
+      "verification_is_source_specific": true,
+      "scope": "Named ca88 Pages artifact/public bytes and same-artifact LAN checkpoint. Accepted main has advanced to9d42/PR114; its publication and this later reconciliation require their own exact delivery proof. This does not establish native/device/performance acceptance."
+    },
+    "source_identity_policy": "Retained coherent release/build/deployment, accepted_runtime_cohorts and accepted_main_merge fields describe their named historical checkpoints. Current verified delivery is documentation_delivery at 9d42; candidate 3640 has separate build/offscreen evidence and no deployed/native-handoff acceptance. No field here is a live VM observation."
   },
   "requirements": [
     {
