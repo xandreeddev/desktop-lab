@@ -507,5 +507,27 @@
     "This controlled comparison supports an under-cursor widget hypothesis. Non-atomic geometry, requested input modes and active-window/document observations cannot identify the actual seat keyboard owner or establish the failure mechanism.",
     "Source0a/b2 prepares a narrow member-aware widget suppression policy and read-only native keyboard diagnostics. Exact b2 Ubuntu Rust CI run40411820911/job121884163923 succeeds, including workspace/protocol/software-Vulkan suites and individual passing log entries for all 11 widget-policy plus six diagnostic tests. Coherent Arch release, candidate VM deployment and native keyboard acceptance remain pending.",
     "Historical cold/warm results retain their original sources and outcomes. These runs establish no broader handler, hardware, resource-budget or animation acceptance."
-  ]
+  ],
+  "merged_delivery_checkpoint": {
+    "accepted_main_commit": "912074f1678b67b789b75217ea253d40dd327e73",
+    "pull_request_url": "https://github.com/xandreeddev/desktop-lab/pull/115",
+    "normal_merge_receipt_sha256": "2fb06fde467185f01ec208b06e9c2b7924a273e2f0a460f5334c22e21f01ad17",
+    "pages_run_id": 40414422493,
+    "pages_run_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/40414422493",
+    "pages_result": "success",
+    "public_delivery_receipt_sha256": "695a4c42b0f018eaf0339d947bf2814c8c1440deb1437bea55a22c133e8e23ea",
+    "archive_sha256": "9140a92684251fcf99f88ee724432c0c245e6c215ffd21b29044feebda8e95ef",
+    "public_exact_artifact_html_checks_passed": 3,
+    "public_exact_artifact_manifest_and_png_checks_passed": 2,
+    "capture_source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
+    "rendering_inputs_verified": 118,
+    "native_catalogue_captures": 480,
+    "lan_same_artifact_receipt_sha256": "7f47d1a2d4c22760cdc8b337d65d581a2e4d424387dd73b659493042067833db",
+    "lan_output_manifest_sha256": "165a0cd6c505f77f9c4517045fe93b92aaec7f293f1ed9ad9bb0bddb1b5e2cd5",
+    "lan_exact_artifact_http_checks_passed": 20,
+    "lan_memory_high_mib": 64,
+    "lan_memory_max_mib": 128,
+    "scope": "Source b2 is merged through PR115 and exact main912 Pages/LAN delivery is verified. This delivery checkpoint does not publish the later focus-investigation reconciliation in this documentation branch and does not establish a coherent Arch release, candidate VM deployment or native keyboard acceptance.",
+    "delivery_establishes_native_candidate_acceptance": false
+  }
 }

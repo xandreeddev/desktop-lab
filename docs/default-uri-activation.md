@@ -257,3 +257,10 @@ deployment and native keyboard acceptance remain pending. A widget's requested
 `None` can still await its own frame callback or render retry. Notification release
 does not acknowledge every widget commit, so this policy retains no unconditional
 focus or keyboard-fix claim.
+
+The b2 changes are merged through [PR115](https://github.com/xandreeddev/desktop-lab/pull/115)
+as main `912074f1678b`. Its [Pages run40414422493](https://github.com/xandreeddev/desktop-lab/actions/runs/40414422493)
+and twenty same-artifact LAN checks verify publication, including source3640's
+118 producer inputs and 480 native catalogue captures. This named delivery
+checkpoint does not publish this later investigation/CI reconciliation or establish
+candidate VM deployment. See [current readiness](current-readiness.md).
