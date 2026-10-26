@@ -7,6 +7,13 @@ use lucent_services::video::LatestWallpaperTargetAdapter;
 
 const TARGET_READY_TIMEOUT: Duration = Duration::from_secs(5);
 
+fn admitted_ready_elapsed(ready: bool, elapsed: Duration) -> Check<Option<Duration>> {
+    if elapsed >= TARGET_READY_TIMEOUT {
+        return Err("target_not_observed");
+    }
+    Ok(ready.then_some(elapsed))
+}
+
 struct State {
     expected: WallpaperTargetRevision,
     publications: Publications,
@@ -132,16 +139,20 @@ pub(super) fn observe(
                         WallpaperPixelTarget::new(width, height).map_err(|_| "invalid_target")?,
                     )?;
             }
-            loop {
+            let ready_elapsed = loop {
                 let ready = {
                     let state = state.lock().map_err(|_| "publication_state_unavailable")?;
                     if let Some(error) = state.publications.error {
                         return Err(error);
                     }
-                    state.publications.count != 0
+                    let ready = state.publications.count != 0;
+                    // Validate a fresh clock after state/lock validation. A
+                    // publication observed after a delayed wake is not ready
+                    // within budget, even if it arrived before we got the lock.
+                    admitted_ready_elapsed(ready, requested.elapsed())?
                 };
-                if ready {
-                    break;
+                if let Some(elapsed) = ready {
+                    break elapsed;
                 }
                 if worker.is_finished() {
                     return Err("worker_ended_before_finite_observation");
@@ -149,14 +160,11 @@ pub(super) fn observe(
                 if stop.cancelled() {
                     return Err("retarget_sequence_cancelled");
                 }
-                if requested.elapsed() >= TARGET_READY_TIMEOUT {
-                    return Err("target_not_observed");
-                }
                 stop.wait(
                     SAMPLE_INTERVAL.min(TARGET_READY_TIMEOUT.saturating_sub(requested.elapsed())),
                 );
-            }
-            let ready_ms = requested.elapsed().as_millis();
+            };
+            let ready_ms = ready_elapsed.as_millis();
             points.push(point(&mut samples, "target_observed", started.elapsed()));
             stop.wait(duration);
             if worker.is_finished() {
@@ -228,6 +236,28 @@ mod tests {
     use super::*;
     use lucent_domain::{DomainError, Result, Wallpaper};
     use std::sync::atomic::AtomicUsize;
+
+    #[test]
+    fn readiness_admission_rejects_late_publications_and_keeps_the_validated_clock() {
+        let before = TARGET_READY_TIMEOUT - Duration::from_nanos(1);
+        assert_eq!(admitted_ready_elapsed(true, before), Ok(Some(before)));
+        assert_eq!(admitted_ready_elapsed(false, before), Ok(None));
+        assert_eq!(
+            admitted_ready_elapsed(true, Duration::ZERO),
+            Ok(Some(Duration::ZERO))
+        );
+        for elapsed in [
+            TARGET_READY_TIMEOUT,
+            TARGET_READY_TIMEOUT + Duration::from_nanos(1),
+        ] {
+            for ready in [false, true] {
+                assert_eq!(
+                    admitted_ready_elapsed(ready, elapsed),
+                    Err("target_not_observed")
+                );
+            }
+        }
+    }
 
     fn request() -> Input {
         input(
