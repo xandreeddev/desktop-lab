@@ -9,7 +9,7 @@
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted main 9d42/PR114 has verified Pages 40396627106 and twenty same-artifact LAN HTTP checks: three HTML pages, native manifest/PNG and 117 producer inputs/480 captures from 4a. Earlier ca88/b3/116 delivery remains historical. Neither checkpoint publishes this later reconciliation. Historical eb348/8e/26d native results retain their exact sources, failures and limits. Candidate 3640 passes 17 build stages, 823 targeted tests and an actual AMD RADV offscreen export of 118 producers/480 PNGs identical to the reference. At its capture it is not deployed and has no native keyboard-focus correction result. Physical controls and sleep, broader IME/tray/clipboard, eligible <=300 MiB resources and 60 FPS animations remain open; the full seven-gap goal is incomplete.",
+    "scope": "Accepted main 9d42 / PR114 has verified Pages 40396627106 and twenty same-artifact LAN checks with 117 producer inputs/480 captures from 4a. Those checkpoints do not publish this later reconciliation. Source 3640 passes 17 build stages and 823 targeted tests, an actual AMD RADV export with 118 producer inputs and 480 PNGs and coherent six-client/root-greeter candidate VM deployment with settings/user/security state preserved. Its canonical cold pointer route passes, but Tab/Enter still fails browser focus/trusted KeyA delivery after history/input/frame guards pass; all nine cleanup checks per route pass. The cause and keyboard fix remain unestablished. This is an unmerged candidate trial, with original archive flags unchanged. Historical eb348/8e/26d evidence retains exact sources and limitations. Physical controls/sleep, broader IME/tray/clipboard/applications, eligible memory at or below 300 MiB and source-rate or 60 FPS animation acceptance remain open; all seven gaps are not closed.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -635,9 +635,9 @@
       },
       {
         "id": "application-integration",
-        "status": "merged_scoped_real_application_native_verified",
-        "implemented": "Accepted main 6b50bd5e includes catalog/pins, ordinary activation, declared actions and Application bb304907 shipped in merged 8e: fresh input-bound context, explicit file/URI Open and expanded XDG parsing/observation. A later real Chromium run with the independent d1 consumer, now merged through PR89, and b6323e9 harness passes all nine feature checks, including observed first-launch focus, and all eight restoration checks; deployed desktop/CLI remain unchanged. The separate coherent 9b trial passes eleven native HTTP URI and nine restoration checks; pointer, socket and CLI Open each load two fresh exact HTTP targets while the declared Action retains local files. A later 4c harness on coherent 35ed passes 12 singular HTTP %u native feature and 9 restoration checks; pointer/socket/CLI Open each load exactly one fresh owned HTTP document, and the declared Action still loads two local documents. PR102/main 6e471005 now includes canonical UriPort.open(target, ApplicationLaunchContext), optional SDK app ID, revision-bound notification-link completion and shared-policy XdgUri forwarding. R9 harness 563781a2 on runtime 26d passes five scoped warm-browser default-route checks and all nine cleanup checks: temporary MIME selection, native pointer and Tab/Enter input with fresh context, exact one-document delivery and bounded notification expiry. Independent later normal-OFF facts verify the same desktop lifetime and unchanged 14 source/43 security entries. PR105/main 6322 accepts current-session history release. Later source 9eb with harness04432 passes five default-route checks/nine cleanup checks and both actual trusted document KeyA cases after natural notification-history close, without focus/hide intervention; the handler/browser remain controlled and already warm. PR106/main bdffd424 subsequently accepts the complete runtime code by exact Rust/design/configs/scripts tree equality with archived 9eb; this is not another native run.",
-        "remaining": "Natural history release and actual guest-key delivery now pass in the controlled warm-browser 9eb flow. Fresh-browser initial focus, direct Chromium token consumption, arbitrary handlers, external navigation, other applications and broader workflows remain unverified. Initial preparation counts, older route-only results and failed attempts retain their source/input/cleanup outcomes. This acceptance establishes no performance or hardware target.",
+        "status": "historical_native_paths_verified_current_cold_keyboard_failed",
+        "implemented": "Accepted main 6b50bd5e includes catalog/pins, ordinary activation, declared actions and Application bb304907 shipped in merged 8e: fresh input-bound context, explicit file/URI Open and expanded XDG parsing/observation. A later real Chromium run with the independent d1 consumer, now merged through PR89, and b6323e9 harness passes all nine feature checks, including observed first-launch focus, and all eight restoration checks; deployed desktop/CLI remain unchanged. The separate coherent 9b trial passes eleven native HTTP URI and nine restoration checks; pointer, socket and CLI Open each load two fresh exact HTTP targets while the declared Action retains local files. A later 4c harness on coherent 35ed passes 12 singular HTTP %u native feature and 9 restoration checks; pointer/socket/CLI Open each load exactly one fresh owned HTTP document, and the declared Action still loads two local documents. PR102/main 6e471005 now includes canonical UriPort.open(target, ApplicationLaunchContext), optional SDK app ID, revision-bound notification-link completion and shared-policy XdgUri forwarding. R9 harness 563781a2 on runtime 26d passes five scoped warm-browser default-route checks and all nine cleanup checks: temporary MIME selection, native pointer and Tab/Enter input with fresh context, exact one-document delivery and bounded notification expiry. Independent later normal-OFF facts verify the same desktop lifetime and unchanged 14 source/43 security entries. PR105/main 6322 accepts current-session history release. Later source 9eb with harness04432 passes five default-route checks/nine cleanup checks and both actual trusted document KeyA cases after natural notification-history close, without focus/hide intervention; the handler/browser remain controlled and already warm. PR106/main bdffd424 subsequently accepts the complete runtime code by exact Rust/design/configs/scripts tree equality with archived 9eb; this is not another native run. The later unmerged source 3640 adds the typed native input-release effect and passive-toast keyboard policy. Its build/protocol-client tests and coherent VM deployment pass, but the actual canonical cold trial passes pointer and fails keyboard focus/KeyA delivery.",
+        "remaining": "Historical controlled warm-browser 9eb natural release and trusted-key results retain their source scope. The actual cold source 3640 keyboard route still fails browser focus and trusted KeyA delivery despite passing the pre-key history/modal-release/frame-advance guards; both owned cleanups pass. Establish the cause and a verified fix, then broaden fresh handlers, direct token-consumption and real-application workflows. Cleanup, offscreen rendering and protocol tests establish no performance or hardware target.",
         "guides": [
           "docs/application-activation.md",
           "docs/application-catalog.md",
@@ -905,6 +905,17 @@
           "native_automatic_history_release_accepted": false,
           "native_browser_key_delivery_accepted": false,
           "scope": "Separate client source validation only. The recorded R9 route result used runtime26d and does not validate this later fix; the prior routes, failures, activewindow observations and cleanup scopes remain unchanged."
+        },
+        "latest_cold_default_handler_native_attempt": {
+          "source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
+          "report": "reports/measurements/lucent-cold-default-uri-3640.json",
+          "report_sha256": "602bf9bc5613fd20bdb6a22ce574215cc3fec4d9a12459202ca90761c1b293b3",
+          "overall_passed": false,
+          "pointer_route_passed": true,
+          "keyboard_route_passed": false,
+          "cleanup_checks_passed_each": 9,
+          "failure_cause_established": false,
+          "accepted_main_at_trial": false
         }
       },
       {
@@ -1317,13 +1328,30 @@
         "memory_target_accepted": false,
         "FPS_accepted": false,
         "scope": "Actual owned virtual 4K output setup/restoration, refused resource sampler and separate restored-FHD one-off counters. No completed 4K or new FHD timing interval, eligible memory result or FPS acceptance."
+      },
+      {
+        "feature": "notification-cold-default-handler-3640",
+        "production_source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
+        "report": "reports/measurements/lucent-cold-default-uri-3640.json",
+        "report_sha256": "602bf9bc5613fd20bdb6a22ce574215cc3fec4d9a12459202ca90761c1b293b3",
+        "controller_sha256": "c11b81d97eddd13ce111960fd394b6cd10fcfaf088b1bb65ade62a5128edfe04",
+        "coherent_deployment_verified": true,
+        "accepted_main_at_trial": false,
+        "pointer_route_passed": true,
+        "keyboard_route_passed": false,
+        "cleanup_checks_passed_each": 9,
+        "missing_keyboard_event_count": null,
+        "failure_cause_established": false,
+        "physical_hardware_accepted": false,
+        "performance_accepted": false,
+        "scope": "Actual source 3640 candidate cold/default route: pointer receives one trusted KeyA; keyboard reaches its exact document but fails focus/key delivery. Both final pre-key release/frame guards and all nine cleanup checks per case pass. No broader handler, hardware or performance acceptance."
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
-    "validation": "This reconciliation reads source-specific reports, exact9d42 Pages/LAN receipts and actual3640 build/offscreen-export records; supervising agents confirm terminal success. The documentation task adds no native/device/VM action or Node/Cargo build. JSON/reference/history-preservation checks cover local edits; their own final build/publication remains pending.",
+    "validation": "This reconciliation reads exact source3640 build, offscreen export, coherent deployment and cold pointer/keyboard receipts, plus the named9d42 Pages/LAN checkpoint. The current keyboard failure remains a failure, with null missing-event fields and successful cleanup recorded separately. This documentation change adds no native/device/VM action or Node/Cargo build. Local JSON, report-link, privacy and history-preservation checks cover these edits; final source CI, protected-main delivery and publication remain separate.",
     "accepted_main_base_commit": "9b52666ba39b2ea2718e72424c37dc8b341051e2",
     "documentation_harness_base_commit": "c4eb922ca423dfbe255630e8717dc9cb2836a4c2",
-    "runtime_compilation_source_commit": "eb3481f4c75da9e0783975ad9c3e920ad8833ce2",
+    "runtime_compilation_source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
     "historical_gpu_candidate_preservation_rejection": {
       "status": "hardware_initialization_observed_preservation_rejected_software_restored",
       "driver_install_rollback_verified": true,
@@ -1521,7 +1549,7 @@
       "scope": "Named 9d42/PR114 Pages artifact/public-byte and same-artifact LAN checkpoint: 117 producer inputs/480 captures from 4a. This publication predates the later reconciliation and candidate 3640. It adds no native device/control, deployment, focus-fix or performance acceptance."
     },
     "accepted_main_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
-    "current_vm_trial_source_commit": null,
+    "current_vm_trial_source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
     "current_vm_trial_performance_accepted": false,
     "historical_documentation_delivery_8ca": {
       "accepted_main_commit": "8ca4e82015ad07d77fe873c0dc827b6b82cc8164",
@@ -1888,7 +1916,7 @@
         "remaining": "Site checks, exact-head CI and publication for this newer CPU-shape/two-output follow-up remain separate gates. Four owned two-output Display flows now have source-specific native evidence; physical, secure-output, hotplug/suspend, fractional-panel input and pacing acceptance remain unverified. Continue source-specific updates after later merges; historical reports remain unchanged and a documentation edit executes no native test."
       }
     },
-    "current_vm_observation": "Not established by this documentation snapshot. Recorded deployment and recovery facts do not assert the current graphical session, process PID or live VM state.",
+    "current_vm_observation": "The latest recorded coherent candidate deployment and canonical cold-browser trial use source 3640. Pointer passes and keyboard focus/key delivery fails, with both cleanups complete. This is a dated source-specific record, not a live graphical-session or process-identity guarantee.",
     "recent_deliveries": [
       {
         "pull_request": 98,
@@ -3060,8 +3088,8 @@
     "accepted_main_merge_scope": "The retained accepted_main_merge object describes the historical PR110 source-equivalence checkpoint. Current accepted and verified publication checkpoint is 9d42/PR114; capture-time raw merge/report flags stay unchanged.",
     "input_release_candidate_3640": {
       "source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
-      "status_at_capture": "coherent_build_and_offscreen_catalogue_passed_native_handoff_pending",
-      "observed_at_utc": "2026-10-26T20:36:09.765816+00:00",
+      "status_at_capture": "coherent_deployed_cold_pointer_passed_keyboard_failed",
+      "observed_at_utc": "2026-10-26T21:36:25.415700+00:00",
       "coherent_build_stages_passed": 17,
       "targeted_tests_passed": 823,
       "build_receipt_sha256": "acb1c011d0364c0f49c695ee71bc9126b868fcb7b286683a00c5ac10bda7f3c2",
@@ -3077,15 +3105,55 @@
         "all_pngs_byte_identical_to_actual_prior_radv_reference": true,
         "scope": "Actual native offscreen AMD RADV export only; no Wayland input, keyboard handoff, FPS, RSS, allocator availability or physical-output acceptance."
       },
-      "deployed_as_a_coherent_runtime": false,
+      "deployed_as_a_coherent_runtime": true,
       "native_keyboard_handoff_fix_verified": false,
-      "capability": "Typed Effects::after_input_release waits for an exact native post-policy frame acknowledgement before URI dispatch; passive toasts request no keyboard input. The source build and offscreen export pass, but this runtime has not been deployed or natively accepted.",
+      "capability": "Typed Effects::after_input_release waits for an exact native post-policy frame acknowledgement before URI dispatch; passive toasts request no keyboard input. The 17-stage build with 823 targeted tests, offscreen export and coherent candidate VM deployment pass. The actual canonical cold pointer route passes, while Tab/Enter still fails browser focus and trusted KeyA delivery after the last history/input/frame guards pass. A keyboard fix and failure cause remain unestablished.",
       "guides": [
         "docs/default-uri-activation.md",
         "docs/lucent-framework.md"
       ],
       "historical_cold_browser_report": "reports/measurements/lucent-cold-default-uri-eb348.json",
-      "historical_cold_browser_scope": "Archived eb348 passes the cold pointer route and fails keyboard focus/KeyA delivery, with owned cleanup complete. Those outcomes remain unchanged; candidate 3640 has no native fix result."
+      "historical_cold_browser_scope": "Archived eb348 passes the cold pointer route and fails keyboard focus/KeyA delivery, with owned cleanup complete. Those outcomes remain unchanged; candidate 3640 has no native fix result.",
+      "pre_native_build_offscreen_checkpoint": {
+        "observed_at_utc": "2026-10-26T20:36:09.765816+00:00",
+        "status_at_capture": "coherent_build_and_offscreen_catalogue_passed_native_handoff_pending",
+        "deployed_as_a_coherent_runtime": false,
+        "native_keyboard_handoff_fix_verified": false,
+        "scope": "Original build/offscreen checkpoint before the later coherent deployment and cold trial; original archive classification flags remain unchanged."
+      },
+      "accepted_main_at_deployment": false,
+      "archive_capture_flags": {
+        "accepted_main": false,
+        "vm_deployed": false,
+        "native_activated": false
+      },
+      "coherent_runtime_deployment": {
+        "private_receipt_sha256": "26adec881d19b0774b969bdf868e2da6ad4e18487305faab450d8404c8b9bb13",
+        "success": true,
+        "accepted_main": false,
+        "managed_user_clients_verified": 6,
+        "root_greeter_verified": true,
+        "supervised_beyond_startup_deadline": true,
+        "user_state_preserved": true,
+        "secure_configuration_preserved": true,
+        "greetd_restarted": false,
+        "settings_or_theme_written": false,
+        "scope": "Actual deployment of the unmerged source 3640 candidate. Archive capture flags and historical cohorts are unchanged; deployment is separate from feature, hardware and performance acceptance."
+      },
+      "cold_default_handler_trial": {
+        "report": "reports/measurements/lucent-cold-default-uri-3640.json",
+        "report_sha256": "602bf9bc5613fd20bdb6a22ce574215cc3fec4d9a12459202ca90761c1b293b3",
+        "controller_sha256": "c11b81d97eddd13ce111960fd394b6cd10fcfaf088b1bb65ade62a5128edfe04",
+        "pointer_route_passed": true,
+        "keyboard_route_passed": false,
+        "both_cold_routes_passed": false,
+        "cleanup_checks_passed_per_case": 9,
+        "missing_keyboard_event_count": null,
+        "failure_phase": "browser_key_delivery_wait",
+        "failure_reason": "owned_browser_received_native_key_a",
+        "failure_cause_established": false,
+        "scope": "Separate original cold browser/profile per route. Pointer receives one trusted unmodified KeyA. Keyboard opens its exact document but has false browser-focus observation and no trusted-key receipt before bounded failure; the missing event and post-event fields remain null. Both owned cleanups pass."
+      }
     },
     "real_world_acceptance_matrix": {
       "scope": "Historical source-specific native evidence, not reruns on later accepted main or candidate 3640. Counts do not establish controls/physical acceptance.",
@@ -3183,7 +3251,8 @@
       "verification_is_source_specific": true,
       "scope": "Named ca88 Pages artifact/public bytes and same-artifact LAN checkpoint. Accepted main has advanced to9d42/PR114; its publication and this later reconciliation require their own exact delivery proof. This does not establish native/device/performance acceptance."
     },
-    "source_identity_policy": "Retained coherent release/build/deployment, accepted_runtime_cohorts and accepted_main_merge fields describe their named historical checkpoints. Current verified delivery is documentation_delivery at 9d42; candidate 3640 has separate build/offscreen evidence and no deployed/native-handoff acceptance. No field here is a live VM observation."
+    "source_identity_policy": "Retained coherent release/build/deployment, accepted_runtime_cohorts and accepted_main_merge fields describe their named historical checkpoints. Current verified delivery is documentation_delivery at 9d42; candidate 3640 has separate build/offscreen evidence and no deployed/native-handoff acceptance. No field here is a live VM observation.",
+    "historical_runtime_compilation_source_before_3640": "eb3481f4c75da9e0783975ad9c3e920ad8833ce2"
   },
   "requirements": [
     {

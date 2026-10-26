@@ -148,9 +148,16 @@
           "path": "reports/measurements/lucent-cold-default-uri-eb348.json",
           "source_commit": "eb3481f4c75da9e0783975ad9c3e920ad8833ce2",
           "scope": "Cold pointer route passes; keyboard route reaches the exact document but fails browser focus/KeyA delivery. Both owned cleanups pass. Candidate 3640 has no native fix acceptance."
+        },
+        {
+          "kind": "coherent-unmerged-runtime-and-cold-default-handler-native-result",
+          "path": "reports/measurements/lucent-cold-default-uri-3640.json",
+          "sha256": "602bf9bc5613fd20bdb6a22ce574215cc3fec4d9a12459202ca90761c1b293b3",
+          "source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
+          "scope": "Source 3640 completes 17 build stages and 823 targeted tests and coherent six-client/root-greeter VM deployment with state/security preservation. The actual canonical cold pointer route passes; the separate Tab/Enter route fails browser focus/trusted KeyA delivery. Last pre-key history/input/frame guards and all nine cleanup checks per route pass. This is no keyboard fix, accepted-main promotion, broader-handler or performance acceptance."
         }
       ],
-      "current_scope": "Historical build-only entries remain unchanged; later real-application/default-handler runs have their own source scopes. Cold eb348 keyboard failure remains unresolved by native evidence. Candidate 3640 completes its build/offscreen export, with deployment/handoff acceptance pending."
+      "current_scope": "Historical build-only and warm-route entries retain their original source scopes. The deployed unmerged source 3640 candidate passes the canonical cold pointer route but still fails keyboard focus/KeyA delivery. Missing keyboard event/post-event observations remain null; both cleanups pass. Protocol/client tests and coherent deployment establish no keyboard fix or failure cause. Broader real-application workflows remain open."
     },
     {
       "id": "real-world-validation",
@@ -228,7 +235,7 @@
         "Actual admitted sleep/wake and secure resume; inspection is not execution. Physical sleep/power remains an operator test.",
         "Selected physical Bluetooth keyboard/pairing/control and audible output/microphone/routing with restoration. A connected count identifies no keyboard; a keyboard exercises no audio profile.",
         "Additional third-party tray apps/menus, third-party IMEs, other GUI clipboard apps, rich content, delayed-provider/focus races and cross-output text/clipboard.",
-        "Native revalidation bound to the actual deployed new source/binary/process and baseline. Historical 8e/26d passes do not accept candidate 3640."
+        "Broader native revalidation bound to the actual deployed source/binary and baseline. Source 3640 has coherent deployment and a cold pointer pass, but its keyboard route fails; this accepts no unrelated feature or hardware workflow. Historical 8e/26d passes keep their own sources."
       ]
     },
     {
@@ -297,8 +304,8 @@
     },
     "input_release_candidate": {
       "source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
-      "status_at_capture": "coherent_build_and_offscreen_catalogue_passed_native_handoff_pending",
-      "observed_at_utc": "2026-10-26T20:36:09.765816+00:00",
+      "status_at_capture": "coherent_deployed_cold_pointer_passed_keyboard_failed",
+      "observed_at_utc": "2026-10-26T21:36:25.415700+00:00",
       "coherent_build_stages_passed": 17,
       "targeted_tests_passed": 823,
       "build_receipt_sha256": "acb1c011d0364c0f49c695ee71bc9126b868fcb7b286683a00c5ac10bda7f3c2",
@@ -314,15 +321,55 @@
         "all_pngs_byte_identical_to_actual_prior_radv_reference": true,
         "scope": "Actual native offscreen AMD RADV export only; no Wayland input, keyboard handoff, FPS, RSS, allocator availability or physical-output acceptance."
       },
-      "deployed_as_a_coherent_runtime": false,
+      "deployed_as_a_coherent_runtime": true,
       "native_keyboard_handoff_fix_verified": false,
-      "capability": "Typed Effects::after_input_release waits for an exact native post-policy frame acknowledgement before URI dispatch; passive toasts request no keyboard input. The source build and offscreen export pass, but this runtime has not been deployed or natively accepted.",
+      "capability": "Typed Effects::after_input_release waits for an exact native post-policy frame acknowledgement before URI dispatch; passive toasts request no keyboard input. The 17-stage build with 823 targeted tests, offscreen export and coherent candidate VM deployment pass. The actual canonical cold pointer route passes, while Tab/Enter still fails browser focus and trusted KeyA delivery after the last history/input/frame guards pass. A keyboard fix and failure cause remain unestablished.",
       "guides": [
         "docs/default-uri-activation.md",
         "docs/lucent-framework.md"
       ],
       "historical_cold_browser_report": "reports/measurements/lucent-cold-default-uri-eb348.json",
-      "historical_cold_browser_scope": "Archived eb348 passes the cold pointer route and fails keyboard focus/KeyA delivery, with owned cleanup complete. Those outcomes remain unchanged; candidate 3640 has no native fix result."
+      "historical_cold_browser_scope": "Archived eb348 passes the cold pointer route and fails keyboard focus/KeyA delivery, with owned cleanup complete. Those outcomes remain unchanged; candidate 3640 has no native fix result.",
+      "pre_native_build_offscreen_checkpoint": {
+        "observed_at_utc": "2026-10-26T20:36:09.765816+00:00",
+        "status_at_capture": "coherent_build_and_offscreen_catalogue_passed_native_handoff_pending",
+        "deployed_as_a_coherent_runtime": false,
+        "native_keyboard_handoff_fix_verified": false,
+        "scope": "Original build/offscreen checkpoint before the later coherent deployment and cold trial; original archive classification flags remain unchanged."
+      },
+      "accepted_main_at_deployment": false,
+      "archive_capture_flags": {
+        "accepted_main": false,
+        "vm_deployed": false,
+        "native_activated": false
+      },
+      "coherent_runtime_deployment": {
+        "private_receipt_sha256": "26adec881d19b0774b969bdf868e2da6ad4e18487305faab450d8404c8b9bb13",
+        "success": true,
+        "accepted_main": false,
+        "managed_user_clients_verified": 6,
+        "root_greeter_verified": true,
+        "supervised_beyond_startup_deadline": true,
+        "user_state_preserved": true,
+        "secure_configuration_preserved": true,
+        "greetd_restarted": false,
+        "settings_or_theme_written": false,
+        "scope": "Actual deployment of the unmerged source 3640 candidate. Archive capture flags and historical cohorts are unchanged; deployment is separate from feature, hardware and performance acceptance."
+      },
+      "cold_default_handler_trial": {
+        "report": "reports/measurements/lucent-cold-default-uri-3640.json",
+        "report_sha256": "602bf9bc5613fd20bdb6a22ce574215cc3fec4d9a12459202ca90761c1b293b3",
+        "controller_sha256": "c11b81d97eddd13ce111960fd394b6cd10fcfaf088b1bb65ade62a5128edfe04",
+        "pointer_route_passed": true,
+        "keyboard_route_passed": false,
+        "both_cold_routes_passed": false,
+        "cleanup_checks_passed_per_case": 9,
+        "missing_keyboard_event_count": null,
+        "failure_phase": "browser_key_delivery_wait",
+        "failure_reason": "owned_browser_received_native_key_a",
+        "failure_cause_established": false,
+        "scope": "Separate original cold browser/profile per route. Pointer receives one trusted unmodified KeyA. Keyboard opens its exact document but has false browser-focus observation and no trusted-key receipt before bounded failure; the missing event and post-event fields remain null. Both owned cleanups pass."
+      }
     },
     "history_policy": "Original acceptance and capture-time evidence entries remain unchanged. Later scoped results supersede blanket pending summaries only for the identified source/behavior. No older native result accepts a newer runtime.",
     "historical_verified_documentation_delivery": [
@@ -344,6 +391,6 @@
         "scope": "Named ca88 Pages artifact/public bytes and same-artifact LAN checkpoint. Accepted main has advanced to9d42/PR114; its publication and this later reconciliation require their own exact delivery proof. This does not establish native/device/performance acceptance."
       }
     ],
-    "last_evidence_update_utc": "2026-10-26T20:38:11.543917+00:00"
+    "last_evidence_update_utc": "2026-10-26T21:36:25.415700+00:00"
   }
 }

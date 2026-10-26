@@ -204,8 +204,12 @@ native object. It uses a two-second deadline: overdue callbacks cannot report
 requests and outstanding callbacks to eight and suppresses cancelled delivery. It never changes
 focus, performs an extra surface commit, or promises scanout. Notification links
 use it alongside captured activation context; see [default URI activation](default-uri-activation.md).
-This new source capability and its tests still require compilation and fresh native
-validation; older launcher results are not evidence for the new ordering.
+Source `3640bd86c6ec` compiles and passes the protocol/client regressions within
+its 823 targeted tests, then passes coherent VM deployment. Its
+[cold-browser report](../reports/measurements/lucent-cold-default-uri-3640.json)
+passes pointer handoff but still fails the separate keyboard route after the
+history/input-release guards pass. A callback acknowledgement establishes no
+destination focus or trusted-key guarantee; the keyboard defect remains open.
 
 Runtime ingress is a shared FIFO with capacity for 64 waiting messages from
 subscriptions, effect completions and local IPC. When full, background producers

@@ -123,11 +123,13 @@ ownership before a newly opened application maps. The compositor's global focus
 configuration is unchanged.
 
 This is a commit-processing acknowledgement, not a scanout, compositor focus,
-destination mapping or trusted keyboard-input guarantee. The source implementation
-and protocol/client tests are prepared for review; they have not been compiled or
-run at this checkpoint. A new coherent archive and fresh cold-browser pointer and
-Tab/Enter tests, including trusted document `KeyA`, remain required. Earlier native
-trial outcomes and their cleanup flags remain unchanged.
+destination mapping or trusted keyboard-input guarantee. Source `3640bd86c6ec`
+passes its coherent 17-stage build and 823 targeted tests, including the protocol
+and client regressions, and is coherently deployed as an unmerged VM candidate.
+Its [cold-browser trial](../reports/measurements/lucent-cold-default-uri-3640.json)
+passes pointer opening and trusted document `KeyA`, but the separate Tab/Enter
+route still fails browser focus and key delivery. The new ordering has no verified
+keyboard fix. Earlier native outcomes and cleanup flags remain unchanged.
 
 ## Separate cold-browser acceptance
 
@@ -137,11 +139,12 @@ profile and Chromium process birth. The second route cannot start unless the
 first feature checks and cleanup succeed. The maintained warm-browser harness
 and its blank control window retain their existing contract.
 
-This new harness is source-only. It pins the actual `eb3481f4` release manifest
-with digest `e48716b0…`; its default command performs no VM actions. `--run`
-also requires that exact manifest, a fresh desktop PID and the exact test VM
-UUID before contacting the VM. This preparation establishes no cold native
-pass, focus result or performance result.
+The repository harness retains its earlier `eb3481f4` preparation binding and
+performs no VM actions by default. Actual trials use separate immutable bindings
+to their deployed source, release manifest, fresh desktop identity and test VM.
+The archived eb348 run and the later source 3640 run below retain distinct
+controller hashes and outcomes. A binding or a prepared harness establishes no
+native pass or performance result by itself.
 
 Before native dispatch, the cold fixture pins an absent-profile startup
 declaration containing the one owned HTTP URI. It does not launch a blank
@@ -182,3 +185,28 @@ submission-advance guards pass before dispatch; all nine cleanup checks pass.
 Cold acceptance remains incomplete. Cleanup does not turn that feature failure
 into a pass, and no failure cause or production fix is established. Existing
 warm-route evidence keeps its original scope.
+
+## Recorded cold trial on 3640
+
+The [source 3640 report](../reports/measurements/lucent-cold-default-uri-3640.json)
+uses bound controller `c11b81d9` and coherent release manifest `075b88c5`.
+The six user clients and root greeter are verified after deployment; settings,
+user state and security configuration are preserved without restarting greetd.
+The archive's original classification flags remain unchanged, and this is an
+unmerged candidate deployment.
+
+| Route | Actual result | Cleanup |
+| --- | --- | --- |
+| Pointer | One exact cold document receives one trusted, unmodified, nonrepeat `KeyA`. | All nine named checks pass. |
+| Tab/Enter | The exact cold document opens, but the browser-focus observation is false and trusted `KeyA` delivery is not observed before the bounded wait fails. | All nine named checks pass. |
+
+Both routes pass the last pre-key guards for natural history closure, modal input
+release and native-frame advancement. The missing keyboard event count and
+post-event observation remain `null`. The failure is
+`browser_key_delivery_wait / owned_browser_received_native_key_a`; a successful
+cleanup does not change that result.
+
+Later read-only options and widget-policy observations occur after cleanup and
+do not establish the keyboard owner at failure time. The cause remains open.
+Protocol tests, deployment and the separate 118-input/480-image offscreen export
+do not establish a keyboard fix, broader handlers, hardware or performance.
