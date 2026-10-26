@@ -1,15 +1,20 @@
 # Multiline editing and Notes
 
-Source scope: accepted main `d00014509f13125fe4ccab3ce2e1fa3961a40dd3` includes the
-verified Display milestone. The implemented, unmerged Text cohort is
-`8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, including the soft-wrap bidi correction.
-Focused checks and [final CI](https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281)
-pass at this source: full workspace, six controlled service-protocol filters and
-all 832 Vulkan desktop cases. The coherent six-client/three-example release is
-built and archived, but has not been deployed. Native IME and interoperability
-acceptance remain pending. Earlier results retain their own source scope. See
-[current readiness](current-readiness.md) for the separate runtime, documentation
-and native-harness snapshots and remaining acceptance boundaries.
+Accepted main includes Text `8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, merged
+through [PR87](https://github.com/xandreeddev/desktop-lab/pull/87), including the
+soft-wrap bidi correction. Its [exact-source CI](https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281)
+passes the workspace, six controlled service-protocol filters and all 832 Vulkan
+desktop cases. The coherent `8e` release was deployed. Its later
+[owned mapped-peer IME run](../reports/measurements/lucent-international-text.json)
+passes five feature and five restoration checks; a separate
+[Chromium–Notes clipboard run](../reports/measurements/lucent-native-gui-clipboard-2044.json)
+passes nine interaction and twelve restoration checks on unchanged `8e`.
+
+These results cover identified sources and one virtual output, with independently
+recorded test peers and harnesses. They are not a current VM observation. Third-party
+IMEs, other clipboard applications, delayed transfer/focus races and physical or
+cross-output input remain open. Earlier failed runs and recoveries keep their
+original results. [Current readiness](current-readiness.md) separates those scopes.
 
 `Element::text_area` is an ordinary controlled editor. It reuses `TextEdit`,
 `TextSelection`, `TextFieldState`, `ScrollSpec` and the existing clipboard effects.
@@ -221,8 +226,16 @@ retains all sample summaries and their source revision. This is no before/after
 CPU comparison, desktop RSS measurement, GPU benchmark or proof of native 60 FPS.
 
 The historical Notes results above exercise the earlier kerning/grapheme path.
-The implemented, unmerged text cohort adds complex-script shaping, bidi visual
-stops, deterministic fallback and opt-in preedit/IME through the same controlled
-API; see [international text](text-shaping.md). Those source and controlled checks
-do not repeat native Notes acceptance or establish compositor IME interoperability.
-Platform accessibility remains deferred by the user.
+The accepted Text cohort adds complex-script shaping, bidi visual stops,
+deterministic fallback and opt-in preedit/IME through the same controlled API;
+see [international text](text-shaping.md). Its later owned mapped-peer run passes
+five feature and five restoration checks, including multiline composition and
+native RTL navigation. It does not repeat every earlier Notes case or establish
+third-party IMEs, broader pixel/scroll details or physical/cross-output behavior.
+
+A separate [Chromium–Notes suite](../reports/measurements/lucent-native-gui-clipboard-2044.json)
+passes nine interaction and twelve restoration checks on unchanged `8e`, using
+real keyboard copy/paste in both directions. It verifies selected-text replacement,
+multiline UTF-8, combining marks, emoji/CJK, blank lines and a trailing newline.
+Other applications, rich HTML/images and delayed-provider/focus-retirement races
+remain outside that run. Platform accessibility remains deferred by the user.

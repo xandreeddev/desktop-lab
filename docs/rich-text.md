@@ -1,15 +1,20 @@
 # Inline text: content, interaction and painting
 
-Source scope: accepted main `d00014509f13125fe4ccab3ce2e1fa3961a40dd3` includes the
-verified Display milestone. The implemented, unmerged Text cohort is
-`8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, including the soft-wrap bidi correction.
-Focused checks and [final CI](https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281)
-pass at this source: full workspace, six controlled service-protocol filters and
-all 832 Vulkan desktop cases. The coherent six-client/three-example release is
-built and archived, but has not been deployed. Native IME and interoperability
-acceptance remain pending. Earlier results retain their own source scope. See
-[current readiness](current-readiness.md) for the separate runtime, documentation
-and native-harness snapshots and remaining acceptance boundaries.
+Accepted main includes Text `8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, merged
+through [PR87](https://github.com/xandreeddev/desktop-lab/pull/87), including the
+soft-wrap bidi correction. Its [exact-source CI](https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281)
+passes the workspace, six controlled service-protocol filters and all 832 Vulkan
+desktop cases. The coherent `8e` release was deployed. Its later
+[owned mapped-peer IME run](../reports/measurements/lucent-international-text.json)
+passes five feature and five restoration checks; a separate
+[Chromium–Notes clipboard run](../reports/measurements/lucent-native-gui-clipboard-2044.json)
+passes nine interaction and twelve restoration checks on unchanged `8e`.
+
+These results cover identified sources and one virtual output, with independently
+recorded test peers and harnesses. They are not a current VM observation. Third-party
+IMEs, other clipboard applications, delayed transfer/focus races and physical or
+cross-output input remain open. Earlier failed runs and recoveries keep their
+original results. [Current readiness](current-readiness.md) separates those scopes.
 
 `Element::rich_text(Vec<TextSpan>)` is a framework control. It knows registered
 font indices, colors, underline and opaque action identities. It does not parse
@@ -37,10 +42,12 @@ underline, hover and focus tokens. The engine has no bold/italic naming policy.
 
 ## Layout and input
 
-The layout engine groups words across span boundaries and wraps using the same
-fontdue advances and pair kerning as plain text. Oversized words break at
-grapheme boundaries. Lines share a baseline across faces, retain explicit
-newlines and respect a maximum line count with ellipsis.
+The layout engine groups words across span boundaries and uses the shared text
+shaping path. ASCII retains its established advances and pair kerning; complex
+scripts use paragraph bidi resolution and script/font shaping across style and
+link boundaries. Oversized words break at grapheme boundaries. Lines share a
+baseline across faces, retain explicit newlines and respect a maximum line count
+with ellipsis.
 
 Each displayed line/run becomes ordinary `Paint::Text`; underlines and focus
 use ordinary shapes/outlines. A long body is split into line primitives, so its
@@ -75,7 +82,7 @@ selects genuine bold/italic static faces and semantic link colors. Plain bodies
 keep the existing text control and layout. A link captures the current content
 revision, requests fresh user activation, then validates that version and URI
 again before queuing an opening. Replacement, clear and a newer intent retire
-pending tokens and cancel an opening still waiting on the controls queue.
+the pending opening and cancel work still waiting on the controls queue.
 
 `ExternalUri` is a validated domain value for http, https, mailto and local file
 targets. `UriPort::open(target, context)` is the domain contract;
@@ -111,8 +118,14 @@ per-line paint, mapped callbacks, one keyboard target, disjoint pointer coverage
 and capture retirement. Pure/client tests cover parser limits, URI policy,
 literal arguments, current-version actions and saved-content links. Render
 references exercise bold/italic baselines, clipped links and visible keyboard
-focus at 1x/2x with both palettes. Real compositor input remains unverified;
-the unmerged text cohort implements whole-paragraph bidi and script/font shaping
-with shared style masks and bounded fallback. See [international text](text-shaping.md)
-for the implementation and controlled checks. Native compositor IME and wider
-application interoperability remain unverified; accessibility is user-deferred.
+focus at 1x/2x with both palettes. These checks alone do not prove native link
+input. Notification links and default-handler input have separate
+[source-specific evidence](default-uri-activation.md); the standalone rich-text
+example's interaction is not established by those client tests.
+
+The accepted Text cohort implements whole-paragraph bidi and script/font shaping
+with shared style masks and bounded fallback. [International text](text-shaping.md)
+records its five feature and five restoration checks with an owned mapped peer.
+That native example evidence does not establish every rich-text client, third-party
+IMEs, all scripts/layouts or physical/cross-output behavior. Accessibility remains
+user-deferred.
