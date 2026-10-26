@@ -57,6 +57,7 @@ mod input_method;
 mod input_release;
 mod ipc;
 mod keyboard;
+mod keyboard_focus;
 mod layer_commit;
 mod outputs;
 mod pacing;
@@ -148,6 +149,7 @@ struct State<A: Application> {
     keyboard_seat: Option<wl_seat::WlSeat>,
     pointer_seat: Option<wl_seat::WlSeat>,
     keyboard_surface: Option<api::SurfaceAddress>,
+    native_keyboard_focus: keyboard_focus::Observations,
     input_serial: Option<u32>,
     clipboard: clipboard::Clipboard<A::Message>,
     input_method: input_method::InputMethod,
@@ -298,6 +300,7 @@ fn run_inner<A: Application>(
         keyboard_seat: None,
         pointer_seat: None,
         keyboard_surface: None,
+        native_keyboard_focus: keyboard_focus::Observations::default(),
         input_serial: None,
         clipboard: clipboard::Clipboard::new(clipboard_manager),
         input_method: input_method::InputMethod::bind(&globals, &qh, !input_method_allowed),
@@ -497,8 +500,27 @@ impl<A: Application> State<A> {
             "scope":"Prepared image payloads reference current and retiring scenes; app caches excluded. Geometry and color values are requested payloads. gpu_allocator separately reports backend-managed live allocations and reserved blocks, not RSS, residency or total driver/GPU memory. Actual surface buffer counts remain unknown."
             })
         });
-        let surfaces = self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id.to_string(),"role":s.spec.id,"instance":s.spec.instance.as_ref().map(api::SurfaceInstance::as_str),"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"keyboard":match s.spec.keyboard { api::Keyboard::None=>"none", api::Keyboard::OnDemand=>"on-demand", api::Keyboard::Exclusive=>"exclusive" },"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"density":s.density().factor(),"buffer_scale":if s.fractional.is_some(){1}else{s.scale},"buffer_width":s.density().physical_size(s.width,s.height).ok().map(|size|size.0),"buffer_height":s.density().physical_size(s.width,s.height).ok().map(|size|size.1),"frames":s.history.frames,"native_frames":s.renderer.frames,"native_generation":s.native_generation,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.history.frame_times,"frame_profiles":s.history.profiles.json(),"frame_pacing":s.pacing.as_ref().map(pacing::Trace::json),"presentation":s.history.presentation.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>();
+        let keyboard_focus = self.native_keyboard_focus.inspect(
+            self.keyboard
+                .as_ref()
+                .is_some_and(|keyboard| keyboard.is_alive()),
+            self.surfaces
+                .iter()
+                .map(|(address, native)| keyboard_focus::CurrentNative {
+                    surface: native.role.wl_surface(),
+                    address,
+                    requested: native.spec.keyboard,
+                    committed: native.committed_spec.keyboard,
+                }),
+        );
+        let surfaces = self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id.to_string(),"role":s.spec.id,"instance":s.spec.instance.as_ref().map(api::SurfaceInstance::as_str),"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"keyboard":keyboard_focus::policy_name(s.spec.keyboard),"requested_keyboard":keyboard_focus::policy_name(s.spec.keyboard),"committed_keyboard":keyboard_focus::policy_name(s.committed_spec.keyboard),"actual_native_keyboard_focused":keyboard_focus.current_address==Some(id),"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"density":s.density().factor(),"buffer_scale":if s.fractional.is_some(){1}else{s.scale},"buffer_width":s.density().physical_size(s.width,s.height).ok().map(|size|size.0),"buffer_height":s.density().physical_size(s.width,s.height).ok().map(|size|size.1),"frames":s.history.frames,"native_frames":s.renderer.frames,"native_generation":s.native_generation,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.history.frame_times,"frame_profiles":s.history.profiles.json(),"frame_pacing":s.pacing.as_ref().map(pacing::Trace::json),"presentation":s.history.presentation.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>();
         let mut result = serde_json::json!({"profile_memory":profile_memory,"presentation_feedback":self.presentation.json(),"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":surfaces,"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)});
+        result["native_keyboard_focus"] = keyboard_focus.json;
+        result["native_keyboard_focus"]["routing_address_matches_observed_native"] = serde_json::json!(
+            keyboard_focus
+                .current_address
+                .map(|address| { self.keyboard_surface.as_ref() == Some(address) })
+        );
         result["frame_pacing"] = self.pacing.json();
         result["outputs"]=serde_json::json!(self.output_bindings.iter().map(|(info,_)|serde_json::json!({"global":info.global,"name":info.name.as_ref().map(api::OutputName::as_str),"logical_size":info.logical_size,"integer_scale":info.integer_scale})).collect::<Vec<_>>());
         result["retiring_native_surfaces"] = serde_json::json!(self.retiring.len());
@@ -1817,6 +1839,7 @@ impl<A: Application> SeatHandler for State<A> {
             self.activation.input = None;
             self.input_method_remove_seat(qh);
             k.release();
+            self.native_keyboard_focus.keyboard_removed();
             self.keyboard_surface = None;
             self.keyboard_seat = None;
             self.clipboard_cancel(qh, true);
@@ -2010,12 +2033,14 @@ impl<A: Application> KeyboardHandler for State<A> {
         &mut self,
         _: &Connection,
         qh: &QueueHandle<Self>,
-        _: &wl_keyboard::WlKeyboard,
+        keyboard: &wl_keyboard::WlKeyboard,
         surface: &wl_surface::WlSurface,
         _: u32,
         _: &[u32],
         _: &[Keysym],
     ) {
+        self.native_keyboard_focus
+            .enter(self.keyboard.as_ref() == Some(keyboard), surface);
         let Some(id) = self.id_for(surface) else {
             return;
         };
@@ -2032,10 +2057,12 @@ impl<A: Application> KeyboardHandler for State<A> {
         &mut self,
         _: &Connection,
         qh: &QueueHandle<Self>,
-        _: &wl_keyboard::WlKeyboard,
+        keyboard: &wl_keyboard::WlKeyboard,
         surface: &wl_surface::WlSurface,
         _: u32,
     ) {
+        self.native_keyboard_focus
+            .leave(self.keyboard.as_ref() == Some(keyboard), surface);
         let Some(id) = self.id_for(surface) else {
             return;
         };
