@@ -404,7 +404,9 @@ def notification_handoff(snapshot, before):
     require(all(surface[key] == before[key] for key in ('id', 'instance')),
             'notification_handoff_surface_identity_changed')
     policy = (surface['keyboard'], surface['pointer_input'])
-    if policy not in (('none', 'none'), ('on-demand', 'content')):
+    # Passive toasts retain pointer controls without keyboard ownership. A
+    # legacy on-demand toast is still eligible to reclaim compositor focus.
+    if policy not in (('none', 'none'), ('none', 'content')):
         return None
     require(type(surface['native_frames']) is int, 'notification_native_frame_advance_required')
     if surface['native_frames'] <= before['native_frames']:

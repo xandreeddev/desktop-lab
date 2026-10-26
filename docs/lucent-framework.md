@@ -134,12 +134,20 @@ to the child using `effects.delegate(|child_fx| child.update(message, child_fx),
 preserve hover and keyboard focus between views. The client owns state; the
 runtime delivers messages on one UI thread. It never mutates a view tree in place.
 
-Supported primitives: text, image, button, single-line input, slider, row, column, stack,
-grid and empty shape. `Length::{Fixed, Fill, Shrink}`, padding, gaps, alignment,
-absolute positioning within a stack, clipping, opacity, rounded corners and
-shadows cover the implemented clients. Rich text, selection/caret editing and
-IME protocols are not yet implemented. Registered font faces are chosen by index;
-layout and rendering use the same font metrics.
+Supported primitives include text, rich text, image, button, ordinary and masked
+single-line fields, multiline text areas, sliders, vertical scroll viewports,
+row, column, stack, grid and empty shape. `Length::{Fixed, Fill, Shrink}`, padding,
+gaps, alignment, absolute positioning within a stack, clipping, opacity, rounded
+corners and shadows cover the implemented clients.
+
+Ordinary editors use component-owned `TextFieldState` and relative `TextEdit`
+messages for selection, caret movement, bounded undo/redo and clipboard requests.
+Layout and painting share shaped glyphs, bidi runs and deterministic bundled font
+fallback. Primary application faces can still be selected by index. Wayland
+text-input-v3 supports preedit and commit for ordinary fields; masked fields opt
+out. See [text editing](text-editing.md), [rich text](rich-text.md),
+[multiline text](multiline-text.md) and [international text](text-shaping.md) for
+the APIs, source-specific tests and limits of the controlled native IME evidence.
 
 `SliderSpec::new(value, step)` validates a normalized value in `0..=1` and a
 positive finite step no greater than one; invalid input returns `None`.
@@ -159,8 +167,15 @@ level independent of any audio service. It does not change system volume.
 
 `lucent-ui` turns the track and thumb into ordinary shape paint commands, using
 the same padded track geometry for pointer mapping. The existing Vulkan renderer
-draws those shapes and the focus outline. Touch, accessibility announcements,
-vertical sliders and a general scroll container remain unfinished.
+draws those shapes and the focus outline. Touch and vertical sliders remain
+unfinished; accessibility work is user-deferred.
+
+`Element::scroll(spec, content, callback)` supplies a bounded vertical viewport.
+The client owns its offset; wheel input, scrollbar gestures and keyboard focus
+reveal emit `ScrollEvent`. Layout clamps the declared offset and clips both
+paint and hit testing to the viewport. Content keeps its own stable focus IDs.
+Give the viewport a fixed or fill height and its content an intrinsic or fixed
+height; the framework does not turn ordinary rows into a virtualized list.
 
 `vm/test-slider.py --binary lucent/target/debug/hello-layer` verifies the
 independent example with real guest pointer/keyboard input. Build with the guest
@@ -179,6 +194,22 @@ The runtime starts each stable ID once and cancels it when it disappears or the
 application exits. `Subscription::every` is a convenience for bounded periodic
 sources. A subscription whose parameters change must use a new ID or explicitly
 react to its own configuration; a stable ID is not automatically restarted.
+
+`Effects::after_input_release(address, cancellation, callback)` acknowledges a
+client-requested native layer input release before handing work to another app.
+The client requests keyboard and pointer `None`; the backend waits for the actual
+compositor frame callback for a successful post-admission submission on that exact
+native object. It uses a two-second deadline: overdue callbacks cannot report
+`Released`, and completion runs when the event loop next dispatches. It bounds
+requests and outstanding callbacks to eight and suppresses cancelled delivery. It never changes
+focus, performs an extra surface commit, or promises scanout. Notification links
+use it alongside captured activation context; see [default URI activation](default-uri-activation.md).
+Source `3640bd86c6ec` compiles and passes the protocol/client regressions within
+its 823 targeted tests, then passes coherent VM deployment. Its
+[cold-browser report](../reports/measurements/lucent-cold-default-uri-3640.json)
+passes pointer handoff but still fails the separate keyboard route after the
+history/input-release guards pass. A callback acknowledgement establishes no
+destination focus or trusted-key guarantee; the keyboard defect remains open.
 
 Runtime ingress is a shared FIFO with capacity for 64 waiting messages from
 subscriptions, effect completions and local IPC. When full, background producers

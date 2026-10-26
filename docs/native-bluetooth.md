@@ -14,8 +14,13 @@ That run exposed a signal-filter bug: external controller/device property change
 were not refreshing the panel. The rebuilt native adapter now passes external
 power changes and recovery without a restart or client polling. Installed
 compatibility entrypoints now open the native Rust child. Decline and unpaired
-Disconnect reach observed termination on the owned virtual controllers; physical
-device/profile interoperability remains unverified.
+Disconnect reach observed termination on the owned virtual controllers. These
+[software-HCI results](../reports/measurements/lucent-bluetooth-rejection.json)
+identify their original source; they accept no physical keyboard or radio/profile
+interoperability. The later [host observer](../reports/measurements/lucent-host-service-observations-6f9.json)
+reports counts without controls, pairing or key events; it identifies no
+particular paired keyboard. Native pending-profile cancellation, PIN/passkey
+entry, incoming authorization and physical-device tests remain open.
 
 ## Values, identity and policy
 
@@ -230,8 +235,10 @@ default-agent lifecycle, late answers, device removal and uncertain timeout
 connection cleanup. These are protocol fixtures, not radio interoperability.
 
 Physical controller/profile interoperability, native incoming-controller
-authorization, PIN/passkey entry, cancellation, suspend/resume and hotplug
-acceptance remain open. The
+authorization, PIN/passkey entry, pending-profile cancellation, suspend/resume and
+physical hotplug remain open. Explicit rejection/Escape termination already
+passes on owned software controllers; this is not blanket cancellation or
+physical-device acceptance. The
 larger control-center requirement remains in progress in
 [the implementation ledger](implementation-status.json).
 
@@ -298,9 +305,14 @@ handling. The panel includes device pair/connect/disconnect/trust, confirmed
 forgetting, explicit incoming-agent authority and
 native confirmation/entry/display/service prompts. The top-bar button and
 `lucent-cli bluetooth open|toggle|close` use this child. Inspector output excludes
-entered input and displayed codes. Radio controls are implemented; their native
-guest/controller acceptance, pending Connect cancellation UX, real-device/profile
-acceptance and broader power/tray services still need work. The complete control-center requirement remains open.
+entered input and displayed codes. Earlier software-HCI runs verify native radio
+power/discovery, comparison-code pairing/bonding, trust/removal and explicit
+rejection/closure. They do not accept every incoming-radio control: native
+pending-Connect cancellation, PIN/passkey entry, incoming/service authorization,
+physical keyboard/profile behavior, physical hotplug and suspend remain open.
+A keyboard exercises HID. Physical audio needs a selected output and microphone
+with audible playback/capture and routing checks. The complete
+control-center requirement remains open.
 
 ## Native panel checkpoint
 

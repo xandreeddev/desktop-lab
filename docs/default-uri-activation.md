@@ -19,15 +19,19 @@ The path is:
    For an unknown destination it omits optional `set_app_id`; it never invents an
    identity such as `xdg-open`. Secure-client opt-out, bounded pending requests,
    timeouts and one-use input ownership remain unchanged.
-4. On completion the client matches the operation generation and revalidates the
-   exact notification version and current content URI. A stale completion cannot
-   admit another opening or change a newer operation. Current content is checked
-   independently of the prepared view cache.
-5. The client converts the SDK outcome into the existing opaque
-   `ApplicationLaunchContext`, then schedules `UriPort::open(target, context)` on
-   the controls queue. Replacement, clear, a newer opening or client retirement
-   cancels work that has not started. An already-running OS operation cannot be
-   undone; its late completion cannot affect a newer intent.
+4. The client yields its own notification layer's keyboard and pointer input
+   while retaining the visible history. It requests
+   `Effects::after_input_release` for that exact surface and retains the checked
+   `ApplicationLaunchContext` until both the activation outcome and release
+   acknowledgement arrive. Their order does not matter. A failed release keeps
+   current history and restores its input with ordinary error feedback.
+5. Only after both completions does the client revalidate the operation,
+   notification revision, URI and initiating presentation, then schedule
+   `UriPort::open(target, context)` on the existing controls queue. Hide/reopen,
+   another foreground owner, replacement, clear or a newer opening cancels queued
+   handoff work. An already-running OS operation cannot be undone. Success
+   closes only the same initiating history session; a stale result cannot close
+   newer UI. Toast-origin work never owns a later history presentation.
 6. `XdgUri` sends one literal URI argument to `xdg-open` through the shared
    independent application-unit launch policy. The fresh token is passed through
    `XDG_ACTIVATION_TOKEN` by environment, never embedded in argv or inspector
@@ -38,6 +42,21 @@ The path is:
 The domain contains the validated URI and launch context, with no Wayland,
 renderer, D-Bus or process types. The generic framework knows neither notification
 versions nor default-handler policy. Views contain no OS operations.
+
+### Who owns each step?
+
+| Owner | Responsibility | Implementation |
+| --- | --- | --- |
+| Desktop client | Select and revalidate the notification/link; own the history session and cancellation. | `notifications::Center` in `apps/lucent-desktop/src/notifications.rs` |
+| Framework API | Carry typed activation and input-release requests and completions. | `Effects::activation_token` and `Effects::after_input_release` in `crates/lucent-api/src/` |
+| Wayland backend | Capture the current native input event, submit the client's input policy with the buffer, and correlate its callback with the exact surface lifetime. | `crates/lucent-wayland/src/activation.rs`, `input_release.rs` and the normal rendering transaction in `lib.rs` |
+| Desktop client | Wait for both outcomes, then revalidate and schedule the opening use case. | `Center::dispatch_link_if_ready` |
+| Domain port | Declare the validated URI-opening contract and application launch context. | `UriPort` in `crates/lucent-domain/src/uri.rs` |
+| OS adapter | Resolve the default handler and launch it with the checked context. | `XdgUri` in `crates/lucent-services/src/applications.rs` |
+
+All paths in this table are relative to `lucent/`. The framework reports an input
+release outcome to the client; it does not call the URI adapter itself. This keeps
+notification policy in the client and operating-system work behind the domain port.
 
 An unavailable activation protocol, missing current input, timeout or rejection
 does not prohibit opening selected content. The opening gets an empty context
@@ -61,6 +80,57 @@ not prove this default-handler path, physical focus behavior or direct native
 token consumption. Preparing this implementation or harness closes none of
 those native validation requirements by itself.
 
+## Native input-release acknowledgement
+
+The generic SDK effect requires the client to request `Keyboard::None` and
+`PointerInput::None` on an existing ordinary layer surface. The Wayland backend
+captures that exact native object. A private, never-reused callback tag is bound
+only to a successful buffer submission after barrier admission. The compositor's
+real `wl_surface.frame` callback for that submission acknowledges processing of
+the commit carrying those input policies. The ordinary pacing callback and render
+commit remain unchanged; no extra surface commit, blocking roundtrip, fixed delay
+or focus command is used. `FrameSubmitted` alone cannot complete this effect.
+
+The callback revalidates native lifetime and current requested/committed policies.
+Retirement, interactive supersession, unsupported/secure roles, busy admission and
+a two-second timeout are typed outcomes. Cancellation suppresses completion. Eight
+requests and eight outstanding tagged callbacks bound retention, including callbacks
+whose cancelled or timed-out caller is gone. Old or failed submissions cannot
+acknowledge a newer request. A hidden or DPMS-disabled compositor can withhold frame
+callbacks; the effect times out without dispatching a handler.
+
+For a live native surface, cancelled or timed-out callbacks remain counted until
+their `Done` arrives. On native teardown, a private owner locally destroys only its
+tagged callback proxies before the renderer and surface role are dropped. A
+`wl_callback` has no destructor request; this uses the Wayland library's local
+object-destruction API and preserves server `delete_id` bookkeeping. Frame records
+share a retirement flag rather than owning the native surface's callback guard.
+An already queued valid `Done` survives protocol-proxy death; only explicit native
+retirement allows those records to be discarded. A late callback cannot release
+a replacement surface with the same logical name.
+
+The two-second limit is a deadline, not a promise that application code runs at an
+exact wall-clock instant. Completion and timeout messages are dispatched by the UI
+event loop. If that loop is delayed, delivery is delayed too; an overdue callback
+still cannot report `Released` when dispatch resumes.
+
+Passive toasts request `Keyboard::None` and keep `PointerInput::Content`, so their
+buttons and links remain clickable without requesting native keyboard ownership.
+History requests exclusive keyboard input for navigation; yielding and exit paint
+disable both inputs. Successful handoff or an ordinary history close restores only
+passive pointer actions while a toast remains. It never restores toast keyboard
+ownership before a newly opened application maps. The compositor's global focus
+configuration is unchanged.
+
+This is a commit-processing acknowledgement, not a scanout, compositor focus,
+destination mapping or trusted keyboard-input guarantee. Source `3640bd86c6ec`
+passes its coherent 17-stage build and 823 targeted tests, including the protocol
+and client regressions, and is coherently deployed as an unmerged VM candidate.
+Its [cold-browser trial](../reports/measurements/lucent-cold-default-uri-3640.json)
+passes pointer opening and trusted document `KeyA`, but the separate Tab/Enter
+route still fails browser focus and key delivery. The new ordering has no verified
+keyboard fix. Earlier native outcomes and cleanup flags remain unchanged.
+
 ## Separate cold-browser acceptance
 
 `vm/test-cold-default-uri-notification.py` prepares two independent cold tests:
@@ -69,11 +139,12 @@ profile and Chromium process birth. The second route cannot start unless the
 first feature checks and cleanup succeed. The maintained warm-browser harness
 and its blank control window retain their existing contract.
 
-This new harness is source-only. It pins the actual `eb3481f4` release manifest
-with digest `e48716b0…`; its default command performs no VM actions. `--run`
-also requires that exact manifest, a fresh desktop PID and the exact test VM
-UUID before contacting the VM. This preparation establishes no cold native
-pass, focus result or performance result.
+The repository harness retains its earlier `eb3481f4` preparation binding and
+performs no VM actions by default. Actual trials use separate immutable bindings
+to their deployed source, release manifest, fresh desktop identity and test VM.
+The archived eb348 run and the later source 3640 run below retain distinct
+controller hashes and outcomes. A binding or a prepared harness establishes no
+native pass or performance result by itself.
 
 Before native dispatch, the cold fixture pins an absent-profile startup
 declaration containing the one owned HTTP URI. It does not launch a blank
@@ -114,3 +185,28 @@ submission-advance guards pass before dispatch; all nine cleanup checks pass.
 Cold acceptance remains incomplete. Cleanup does not turn that feature failure
 into a pass, and no failure cause or production fix is established. Existing
 warm-route evidence keeps its original scope.
+
+## Recorded cold trial on 3640
+
+The [source 3640 report](../reports/measurements/lucent-cold-default-uri-3640.json)
+uses bound controller `c11b81d9` and coherent release manifest `075b88c5`.
+The six user clients and root greeter are verified after deployment; settings,
+user state and security configuration are preserved without restarting greetd.
+The archive's original classification flags remain unchanged, and this is an
+unmerged candidate deployment.
+
+| Route | Actual result | Cleanup |
+| --- | --- | --- |
+| Pointer | One exact cold document receives one trusted, unmodified, nonrepeat `KeyA`. | All nine named checks pass. |
+| Tab/Enter | The exact cold document opens, but the browser-focus observation is false and trusted `KeyA` delivery is not observed before the bounded wait fails. | All nine named checks pass. |
+
+Both routes pass the last pre-key guards for natural history closure, modal input
+release and native-frame advancement. The missing keyboard event count and
+post-event observation remain `null`. The failure is
+`browser_key_delivery_wait / owned_browser_received_native_key_a`; a successful
+cleanup does not change that result.
+
+Later read-only options and widget-policy observations occur after cleanup and
+do not establish the keyboard owner at failure time. The cause remains open.
+Protocol tests, deployment and the separate 118-input/480-image offscreen export
+do not establish a keyboard fix, broader handlers, hardware or performance.

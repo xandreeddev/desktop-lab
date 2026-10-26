@@ -12,6 +12,9 @@ pub struct Definition {
     /// Horizontal default measured from the right edge when true.
     pub from_right: bool,
     pub position: (f32, f32),
+    /// The normal content contains keyboard-operable controls or a text field.
+    /// Layout editing adds its own controls independently of this capability.
+    pub keyboard_interactive: bool,
     render: for<'a> fn(&View<'a>, &ViewContext) -> Element<Message>,
 }
 
@@ -23,6 +26,7 @@ pub const WIDGETS: [Definition; 7] = [
         size: (size::calendar::WIDTH, size::calendar::HEIGHT),
         from_right: false,
         position: (layout::LEFT, layout::TOP),
+        keyboard_interactive: true,
         render: view::calendar,
     },
     Definition {
@@ -32,6 +36,7 @@ pub const WIDGETS: [Definition; 7] = [
         size: (size::clock::WIDTH, size::clock::HEIGHT),
         from_right: true,
         position: (layout::RIGHT_INSET, layout::CLOCK_TOP),
+        keyboard_interactive: false,
         render: view::clock,
     },
     Definition {
@@ -41,6 +46,7 @@ pub const WIDGETS: [Definition; 7] = [
         size: (size::weather::WIDTH, size::weather::HEIGHT),
         from_right: false,
         position: (layout::WEATHER_LEFT, layout::WEATHER_TOP),
+        keyboard_interactive: true,
         render: view::weather,
     },
     Definition {
@@ -50,6 +56,7 @@ pub const WIDGETS: [Definition; 7] = [
         size: (size::media::WIDTH, size::media::HEIGHT),
         from_right: true,
         position: (layout::RIGHT_INSET, layout::MEDIA_TOP),
+        keyboard_interactive: true,
         render: view::media,
     },
     Definition {
@@ -59,6 +66,7 @@ pub const WIDGETS: [Definition; 7] = [
         size: (size::system::WIDTH, size::system::HEIGHT),
         from_right: false,
         position: (layout::LEFT, layout::SYSTEM_TOP),
+        keyboard_interactive: false,
         render: view::system,
     },
     Definition {
@@ -68,6 +76,7 @@ pub const WIDGETS: [Definition; 7] = [
         size: (size::notes::WIDTH, size::notes::HEIGHT),
         from_right: false,
         position: (layout::SECOND_COLUMN, layout::TOP),
+        keyboard_interactive: true,
         render: view::notes,
     },
     Definition {
@@ -77,6 +86,7 @@ pub const WIDGETS: [Definition; 7] = [
         size: (size::timer::WIDTH, size::timer::HEIGHT),
         from_right: false,
         position: (layout::SECOND_COLUMN, layout::TIMER_TOP),
+        keyboard_interactive: true,
         render: view::timer,
     },
 ];

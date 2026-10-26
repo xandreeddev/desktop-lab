@@ -1,7 +1,9 @@
 //! A small declarative shell API. Public types contain no Wayland or GPU handles.
 mod activation;
 mod clipboard;
+mod input_release;
 pub use activation::{ActivationOutcome, ActivationRequest, ActivationToken};
+pub use input_release::{InputReleaseOutcome, InputReleaseRequest};
 mod density;
 mod output;
 mod surface;
@@ -989,6 +991,7 @@ pub struct Effects<M> {
     pub exit: bool,
     pub clipboard: Vec<ClipboardRequest<M>>,
     pub activation: Vec<ActivationRequest<M>>,
+    pub input_release: Vec<InputReleaseRequest<M>>,
 }
 impl<M> Default for Effects<M> {
     fn default() -> Self {
@@ -1001,6 +1004,7 @@ impl<M> Default for Effects<M> {
             exit: false,
             clipboard: vec![],
             activation: vec![],
+            input_release: vec![],
         }
     }
 }
@@ -1096,6 +1100,11 @@ impl<M> Effects<M> {
         for request in child.clipboard {
             let map = map.clone();
             self.clipboard
+                .push(request.map(move |message| map(message)));
+        }
+        for request in child.input_release {
+            let map = map.clone();
+            self.input_release
                 .push(request.map(move |message| map(message)));
         }
         for task in child.tasks {

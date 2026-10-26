@@ -27,6 +27,7 @@ pub enum Message {
     Invoke(NotificationTarget, String),
     OpenLink(NotificationTarget, String),
     LinkPrepared(u64, ActivationOutcome),
+    LinkInputReleased(u64, InputReleaseOutcome),
     LinkDone(u64, lucent_domain::Result<()>),
     Artwork(u64, crate::ports::Images),
     RetryArtwork,
@@ -42,10 +43,14 @@ pub enum Message {
 }
 struct LinkOpening {
     request: u64,
+    history_was_open: bool,
     history_session: Option<u64>,
     target: NotificationTarget,
     selected: ExternalUri,
     waiting_for_token: bool,
+    waiting_for_release: bool,
+    context: Option<lucent_domain::ApplicationLaunchContext>,
+    dispatched: bool,
     cancellation: Cancellation,
 }
 impl Drop for LinkOpening {
@@ -110,6 +115,18 @@ impl Center {
     pub fn history_closing(&self) -> bool {
         self.closing
     }
+    pub fn yielding_input(&self) -> bool {
+        self.link_opening.is_some()
+    }
+    pub fn cancel_link(&mut self) -> bool {
+        self.link_opening.take().is_some()
+    }
+    pub fn reject_link(&mut self, effects: &mut Effects<Message>) {
+        self.cancel_link();
+        self.error = true;
+        effects.redraw("notifications");
+        effects.redraw("bar");
+    }
     pub fn artwork_inspection(&self) -> serde_json::Value {
         self.artwork.inspect()
     }
@@ -120,6 +137,7 @@ impl Center {
         self.closing && !self.reveal.active(now)
     }
     fn set_open(&mut self, open: bool, now: f64) {
+        self.cancel_link();
         // Explicit presentation never reuses a lifetime that queued link work
         // could close. Exhaustion leaves history usable without auto-close.
         self.history_session = None;
@@ -169,6 +187,45 @@ impl Center {
                     .cloned(),
                 BodyBlock::Image { .. } => None,
             })
+    }
+    fn dispatch_link_if_ready(&mut self, e: &mut Effects<Message>) {
+        let Some(opening) = self.link_opening.as_ref().filter(|opening| {
+            !opening.waiting_for_token && !opening.waiting_for_release && !opening.dispatched
+        }) else {
+            return;
+        };
+        let current = self.history_open == opening.history_was_open
+            && self.history_session == opening.history_session
+            && self
+                .selected_link(opening.target, opening.selected.value())
+                .as_ref()
+                == Some(&opening.selected);
+        if !current {
+            self.cancel_link();
+            return;
+        }
+        let opening = self.link_opening.as_mut().unwrap();
+        let Some(context) = opening.context.take() else {
+            return;
+        };
+        opening.dispatched = true;
+        let request = opening.request;
+        let selected = opening.selected.clone();
+        let cancellation = opening.cancellation.clone();
+        let uri = self.uri.clone();
+        e.task_cancellable_on_with_failure(
+            crate::work::CONTROLS,
+            cancellation,
+            move || Message::LinkDone(request, uri.open(&selected, context)),
+            move |_| {
+                Message::LinkDone(
+                    request,
+                    Err(lucent_domain::DomainError::Failed(
+                        "Link could not be opened".into(),
+                    )),
+                )
+            },
+        );
     }
 }
 impl Component for Center {
@@ -358,6 +415,7 @@ impl Component for Center {
                 }
             }
             Message::OpenLink(target, key) => {
+                self.cancel_link();
                 // A history link opens its content URI; it never invokes the old
                 // sender. Capture this exact version before asynchronous token
                 // delivery; the target default application is not known here.
@@ -366,6 +424,7 @@ impl Component for Center {
                         self.next_link_request = request;
                         self.link_opening = Some(LinkOpening {
                             request,
+                            history_was_open: self.history_open,
                             history_session: if self.history_open {
                                 self.history_session
                             } else {
@@ -374,11 +433,19 @@ impl Component for Center {
                             target,
                             selected,
                             waiting_for_token: true,
+                            waiting_for_release: true,
+                            context: None,
+                            dispatched: false,
                             cancellation: Cancellation::default(),
                         });
                         e.activation_token(None, move |outcome| {
                             Message::LinkPrepared(request, outcome)
                         });
+                        e.after_input_release(
+                            SurfaceAddress::new("notifications"),
+                            self.link_opening.as_ref().unwrap().cancellation.clone(),
+                            move |outcome| Message::LinkInputReleased(request, outcome),
+                        );
                     } else {
                         self.link_opening = None;
                         self.error = true;
@@ -388,37 +455,28 @@ impl Component for Center {
                 }
             }
             Message::LinkPrepared(request, outcome) => {
-                let current = self
+                if let Some(opening) = self
                     .link_opening
                     .as_mut()
                     .filter(|opening| opening.request == request && opening.waiting_for_token)
-                    .map(|opening| {
-                        opening.waiting_for_token = false;
-                        (
-                            opening.target,
-                            opening.selected.clone(),
-                            opening.cancellation.clone(),
-                        )
-                    });
-                if let Some((target, selected, cancellation)) = current {
-                    if self.selected_link(target, selected.value()).as_ref() == Some(&selected) {
-                        let uri = self.uri.clone();
-                        let context = crate::application_requests::launch_context(outcome);
-                        e.task_cancellable_on_with_failure(
-                            crate::work::CONTROLS,
-                            cancellation,
-                            move || Message::LinkDone(request, uri.open(&selected, context)),
-                            move |_| {
-                                Message::LinkDone(
-                                    request,
-                                    Err(lucent_domain::DomainError::Failed(
-                                        "Link could not be opened".into(),
-                                    )),
-                                )
-                            },
-                        );
+                {
+                    opening.waiting_for_token = false;
+                    opening.context = Some(crate::application_requests::launch_context(outcome));
+                    self.dispatch_link_if_ready(e);
+                }
+            }
+            Message::LinkInputReleased(request, outcome) => {
+                if let Some(opening) = self
+                    .link_opening
+                    .as_mut()
+                    .filter(|opening| opening.request == request && opening.waiting_for_release)
+                {
+                    if outcome == InputReleaseOutcome::Released {
+                        opening.waiting_for_release = false;
+                        self.dispatch_link_if_ready(e);
                     } else {
-                        self.link_opening = None;
+                        self.cancel_link();
+                        self.error = true;
                     }
                 }
             }
@@ -426,7 +484,7 @@ impl Component for Center {
                 if self
                     .link_opening
                     .as_ref()
-                    .is_some_and(|opening| opening.request == request && !opening.waiting_for_token)
+                    .is_some_and(|opening| opening.request == request && opening.dispatched)
                 {
                     let opening = self.link_opening.take().unwrap();
                     self.error = result.is_err();

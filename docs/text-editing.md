@@ -1,15 +1,20 @@
 # Declarative text editing
 
-Source scope: accepted main `d00014509f13125fe4ccab3ce2e1fa3961a40dd3` includes the
-verified Display milestone. The implemented, unmerged Text cohort is
-`8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, including the soft-wrap bidi correction.
-Focused checks and [final CI](https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281)
-pass at this source: full workspace, six controlled service-protocol filters and
-all 832 Vulkan desktop cases. The coherent six-client/three-example release is
-built and archived, but has not been deployed. Native IME and interoperability
-acceptance remain pending. Earlier results retain their own source scope. See
-[current readiness](current-readiness.md) for the separate runtime, documentation
-and native-harness snapshots and remaining acceptance boundaries.
+Accepted main includes Text `8e6d074bfcb30a0bcc0b371afddcd50c08993af0`, merged
+through [PR87](https://github.com/xandreeddev/desktop-lab/pull/87), including the
+soft-wrap bidi correction. Its [exact-source CI](https://github.com/xandreeddev/desktop-lab/actions/runs/39313647281)
+passes the workspace, six controlled service-protocol filters and all 832 Vulkan
+desktop cases. The coherent `8e` release was deployed. Its later
+[owned mapped-peer IME run](../reports/measurements/lucent-international-text.json)
+passes five feature and five restoration checks; a separate
+[Chromium–Notes clipboard run](../reports/measurements/lucent-native-gui-clipboard-2044.json)
+passes nine interaction and twelve restoration checks on unchanged `8e`.
+
+These results cover identified sources and one virtual output, with independently
+recorded test peers and harnesses. They are not a current VM observation. Third-party
+IMEs, other clipboard applications, delayed transfer/focus races and physical or
+cross-output input remain open. Earlier failed runs and recoveries keep their
+original results. [Current readiness](current-readiness.md) separates those scopes.
 
 Ordinary text fields use a shared framework API rather than editing the last
 painted string in the input dispatcher. The component owns its value and a
@@ -65,8 +70,9 @@ Ordinary and masked controls consume the same translated SDK keys; masked
 controls retain count-only edits without clipboard or undo authority. Composed
 UTF-8 text from the existing keyboard adapter keeps its original contents.
 Keyboard translation alone does not implement compositor IME/preedit or complex-script
-shaping. The unmerged text cohort adds those separate framework/runtime paths; see
-[international text](text-shaping.md).
+shaping. The accepted Text cohort supplies those separate framework/runtime paths;
+see [international text](text-shaping.md) for their shared geometry and scoped
+native evidence.
 
 Extended graphemes use the maintained
 [Unicode segmentation implementation](https://docs.rs/unicode-segmentation/latest/unicode_segmentation/trait.UnicodeSegmentation.html).
@@ -128,8 +134,10 @@ replacement cancels obsolete capture. A field callback maps normally through
 
 Single-line edits remove incoming CR/LF. Existing line breaks are projected as
 spaces for display without changing the stored value. Multiline layout/editing
-is separate work. Selection uses the design system's primary role and component
-opacity token; physical text density and supersampling remain unchanged.
+uses the separate controlled `text_area` API described in
+[multiline editing](multiline-text.md). Selection uses the design system's primary
+role and component opacity token; physical text density and supersampling remain
+unchanged.
 
 ## Clients and boundaries
 
@@ -221,9 +229,14 @@ Run the independent example and test against a normal Wayland application:
 4. While a delayed transfer is pending, edit, close or change focus. The old
    reply must not change a newer field.
 
-Those native interoperability steps remain deferred. The current automated
-checks use pure client/model cases and owned local nonblocking pipes; they do
-not replace real compositor serial/selection acceptance.
+The pure client/model and owned nonblocking-pipe checks alone do not prove
+compositor serial/selection behavior. The later
+[Chromium–Notes suite](../reports/measurements/lucent-native-gui-clipboard-2044.json)
+verifies real keyboard copy/paste in both directions and selected-text replacement,
+with nine interaction and twelve restoration checks on unchanged `8e`. It covers
+multiline UTF-8, combining marks, emoji/CJK, blank lines and a trailing newline.
+Other applications, rich HTML/images, delayed-provider and focus-retirement races
+remain unverified by that run.
 
 ## Acceptance still open
 
@@ -251,20 +264,23 @@ the admission milestone fixes that guard and adds an engine-pointer regression.
 Corrected source `d2aed42199e` now passes the supported native subset with all
 restoration checks; see
 [the source-specific report](../reports/measurements/lucent-media-admission.json).
-The explicit Caps/binding skips, clipboard interoperability and physical
-acceptance remain open.
+The explicit Caps/binding skips, broader clipboard interoperability and physical
+acceptance remain open. The later scoped Chromium–Notes result above does not
+repeat every modifier case.
 
 The malformed/oversized stored-notes native restart check remains pending.
 Failed settings load can apply the default theme, so that check needs exact
 theme/login export restoration as well as the original JSON file.
 
-Accepted main retains the earlier kerning-based shaping path. The unmerged text
-cohort implements script shaping, visual bidi navigation, bounded fallback and
-opt-in text-input-v3 composition; [its guide](text-shaping.md) describes the shared
-source/caret/paint map and secure-client opt-out. Native compositor IME, delayed
-clipboard/focus races, third-party GUI clipboard and hardware acceptance remain
-open. Platform accessibility remains deferred by the user.
+The accepted Text cohort implements script shaping, visual bidi navigation,
+bounded fallback and opt-in text-input-v3 composition. [Its guide](text-shaping.md)
+describes the shared source/caret/paint map and secure-client opt-out. The owned
+mapped-peer run records native preedit ink/caret movement, commit/delete/history,
+masked-focus retirement, multiline composition and RTL navigation. This does not
+establish third-party IMEs, every script/layout, delayed clipboard/focus races or
+physical/cross-output behavior. Platform accessibility remains deferred by the user.
+
 The controlled multiline editor and Notes client are described in
-[multiline editing](multiline-text.md); their integrated and native acceptance
-remain separately recorded. Editing tests and
-synthetic Vulkan references cannot prove those features.
+[multiline editing](multiline-text.md). Their earlier Notes tests and the later
+Chromium–Notes clipboard suite retain separate sources and coverage; neither is
+implied by editing unit tests or synthetic Vulkan references alone.
