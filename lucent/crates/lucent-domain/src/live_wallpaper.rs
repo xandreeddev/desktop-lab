@@ -472,7 +472,7 @@ pub trait WallpaperPlaybackPort: Send + Sync {
         emit: &mut dyn FnMut(Result<MediaFrame>) -> bool,
         stop: Arc<dyn StopSignal>,
     );
-    /// One asset/producer lifetime with latest-only physical target updates.
+    /// One asset/producer lifetime with latest-only source-size/target updates.
     /// Target revisions tag results; consumers reject stale in-flight frames.
     /// Returning ends the decoder body. An unsupported adapter must report that
     /// capability failure explicitly; it must never emulate retarget by play

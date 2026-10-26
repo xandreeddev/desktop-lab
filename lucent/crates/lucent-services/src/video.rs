@@ -478,12 +478,12 @@ fn admit_decoded_source(
 fn live_converter_for_target(
     converter: &mut Option<FrameConverter>,
     frame: &ffmpeg::util::frame::video::Video,
-    target: WallpaperPixelTarget,
+    target: Option<WallpaperPixelTarget>,
 ) -> Result<()> {
     if let Some(old) = converter.as_ref() {
         old.validate(frame)?;
     }
-    let size = conversion_dimensions(frame.format(), frame.width(), frame.height(), Some(target))?;
+    let size = conversion_dimensions(frame.format(), frame.width(), frame.height(), target)?;
     if converter
         .as_ref()
         .is_some_and(|old| (old.scaler.output().width, old.scaler.output().height) != size)
@@ -493,7 +493,7 @@ fn live_converter_for_target(
         *converter = None;
     }
     if converter.is_none() {
-        *converter = Some(FrameConverter::new_live(frame, Some(target))?);
+        *converter = Some(FrameConverter::new_live(frame, target)?);
     }
     Ok(())
 }
