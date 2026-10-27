@@ -3,6 +3,11 @@
 use crate::video_frame::Yuv420Frame;
 use std::sync::{Arc, Weak};
 
+/// Immutable, already-decoded video planes for presentation. This descriptor
+/// does not decode, pace playback, choose physical output demand, or prepare
+/// minification levels. The current plane renderer uses one-level bilinear
+/// sampling; callers must arrange an appropriate fitted representation when
+/// reducing the image, including after a retained last-good frame is resized.
 #[derive(Clone, Debug)]
 pub struct VideoData {
     frame: Arc<Yuv420Frame>,

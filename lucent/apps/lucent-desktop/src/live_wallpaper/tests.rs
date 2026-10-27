@@ -2064,3 +2064,83 @@ fn native_plane_frames_keep_last_good_and_freeze_across_pause_fps_and_stale_wake
         held.cache_id()
     );
 }
+
+#[test]
+fn native_last_good_survives_smaller_or_shared_demand_when_replacement_fails() {
+    let adapter = Arc::new(NativePlanePlayback::default());
+    let mut controller = LiveWallpaper::new(adapter, crate::test_adapters::adapters().assets);
+    controller.enable_native_planes(true);
+    let settings = LiveWallpapers {
+        default: Some(setting("/fixture/native-last-good.mp4")),
+        ..Default::default()
+    };
+    let left = MonitorId::new("last-good-left").unwrap();
+    let right = MonitorId::new("last-good-right").unwrap();
+    let context = WallpaperPlaybackContext::default();
+    let mut targets = BTreeMap::from([(
+        LiveWallpaperTarget::Monitor(left.clone()),
+        pixel_target(16, 16),
+    )]);
+    controller.reconcile(
+        &settings,
+        std::slice::from_ref(&left),
+        true,
+        &context,
+        &targets,
+    );
+    deliver_current_subscription(&mut controller);
+    let first = controller
+        .presentation_source(Some(&left))
+        .unwrap()
+        .1
+        .cache_id();
+    // Reconciliation changes demand, not the immutable last-good publication.
+    // No worker is executed here: actual failed replacement must remain visible.
+    targets.insert(
+        LiveWallpaperTarget::Monitor(left.clone()),
+        pixel_target(1, 1),
+    );
+    controller.reconcile(
+        &settings,
+        std::slice::from_ref(&left),
+        true,
+        &context,
+        &targets,
+    );
+    for shared in [false, true] {
+        if shared {
+            targets.insert(
+                LiveWallpaperTarget::Monitor(right.clone()),
+                pixel_target(1, 1),
+            );
+            controller.reconcile(
+                &settings,
+                &[left.clone(), right.clone()],
+                true,
+                &context,
+                &targets,
+            );
+        }
+        let key = controller.routes[&LiveWallpaperTarget::Monitor(left.clone())]
+            .key
+            .clone();
+        let player = &controller.players[&key];
+        assert_eq!(player.native_planes, !shared);
+        let revision = player.revision;
+        player
+            .mailbox
+            .lock()
+            .unwrap()
+            .publish(Delivery::Error("replacement fixture failed".into()));
+        controller.update(Message::Wake(key, revision), &mut Effects::default());
+        let frame = controller.presentation_source(Some(&left)).unwrap().1;
+        assert_eq!(frame.cache_id(), first);
+        assert_eq!(frame.representation(), "yuv420");
+        let view: lucent_api::Element<()> = frame.element();
+        assert!(
+            matches!(view.kind, lucent_api::Kind::Video(_)),
+            "old native pixels are retained, not silently fitted or hidden"
+        );
+        assert!(controller.status().contains("replacement fixture failed"));
+    }
+}

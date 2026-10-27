@@ -384,6 +384,9 @@ impl<M> Element<M> {
     pub fn image(image: Arc<ImageData>) -> Self {
         Self::new(Kind::Image(image))
     }
+    /// Present immutable decoded planes with normal image geometry and clips.
+    /// This does not provide decoding, cadence or automatic minification/format
+    /// fallback; see [`VideoData`] for the current sampling contract.
     pub fn video(frame: Arc<VideoData>) -> Self {
         Self::new(Kind::Video(frame))
     }
