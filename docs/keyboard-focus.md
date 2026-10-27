@@ -144,3 +144,18 @@ performance acceptance are separate checks. In particular, the new source must
 pass immediate first-key delivery, an ordinary first outside click, canonical
 pointer and Tab/Enter URI opening, and secure-session regression tests before
 this focus fix is accepted.
+
+
+### Actual source qualification before native deployment
+
+Source `ba5b8a51f960` passes its full Ubuntu Rust, controlled service-protocol
+and software-Vulkan regression job in
+[CI40428709862](https://github.com/xandreeddev/desktop-lab/actions/runs/40428709862).
+The later [Arch40430392734 job](https://github.com/xandreeddev/desktop-lab/actions/runs/40430392734)
+passes all 17 qualification stages, 880 targeted tests and 94 required named
+regressions. Its subsequent fresh-memory admission refuses the catalogue export;
+no capture export or release archive is produced. The rejected sample was not
+recorded, so host pressure versus cgroup cache cannot be inferred from that run.
+This is successful source qualification inside a failed release workflow, not a
+native fix, new visual catalogue or VM deployment. A corrected packaging/export
+run must preserve the same memory gate.

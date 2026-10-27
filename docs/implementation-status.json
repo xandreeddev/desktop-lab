@@ -3302,7 +3302,40 @@
       "guide": "docs/keyboard-focus.md",
       "source_authored_targeted_test_expectation": 880,
       "native_fix_accepted": false,
-      "visual_export_pending": true
+      "visual_export_pending": true,
+      "actual_qualification": {
+        "run": 40430392734,
+        "workflow_head": "ac07aa5d7090c2869038f1d8001311a451c66940",
+        "stages_passed": 17,
+        "targeted_tests_passed": 880,
+        "required_names_passed": 94,
+        "whole_workflow_passed": false,
+        "failure": "fresh_remote_4500MiB_admission_required_before_export",
+        "refused_sample_available": false,
+        "export_started": false,
+        "release_archive_produced": false,
+        "native_fix_accepted": false,
+        "private_qualification_sha256": "da2b9092460fb69d52c7835c88553a3e3f133202d28bce4d064d0652590f9df9"
+      }
+    },
+    "isolated_decoder_retarget_f26": {
+      "backend_source": "1aebe2e3ffa88416791f122d9fbf01bb0f66f91f",
+      "tools_source": "f26f8a26b880eeb8ac01da9e57cb8a7cc4d76322",
+      "run": 40429866532,
+      "report": "reports/measurements/lucent-decoder-retarget-f26.json",
+      "report_sha256": "f1082bd40d59b0a809ec9ed9c787695654e9a99f704f49db51b1ded8a886cf1e",
+      "actual_test_counts": {
+        "domain": 37,
+        "video": 67,
+        "observer": 21,
+        "consumer": 15
+      },
+      "four_canonical_cases_qualified": true,
+      "known_target_warm_FHD_retarget_less_RSS_mib": 21.24,
+      "source_target_warm_FHD_retarget_more_RSS_mib": 40.13,
+      "general_memory_gain_proven": false,
+      "production_client_wiring_enabled": false,
+      "whole_shell_performance_accepted": false
     }
   },
   "requirements": [

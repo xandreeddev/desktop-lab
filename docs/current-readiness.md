@@ -169,6 +169,33 @@ I/O pressure and null targets. Separate driver/restore receipts verify original
 source/security/settings and return to normal profiling OFF. This adds no eligible
 60 FPS or causal CPU-reuse gain and leaves the original memory matrix unchanged.
 
+## Isolated decoder retarget experiment
+
+The [f26 hosted experiment](../reports/measurements/lucent-decoder-retarget-f26.json)
+compares reopening with one retargeted decoder, using the same genuine imported
+4K60 H.264 asset and backend source `1aebe2e3`. Actual source gates pass
+37 domain, 67 video and 21 observer tests, plus 15 experiment-consumer tests.
+Four fresh nonoverlapping processes pass the original PTS, aspect, revision,
+12-second phase and cancellation/join checks. Allocator snapshots are taken only
+while playback is stopped.
+
+| End-of-hold restored FHD RSS | Reopen | Retarget |
+| --- | ---: | ---: |
+| Cold FHD → 4K → FHD | 197.38 MiB | 176.13 MiB |
+| Source size → FHD → 4K → FHD | 229.21 MiB | 269.34 MiB |
+
+The result is mixed. After the final source-size frame is dropped, retarget still
+uses 8.98 MiB more RSS. Accounted in-use bytes are nearly equal, while its free
+arena total is 10.63 MiB higher. This is consistent with additional arena
+retention; it does not prove the complete allocation cause. The latest FHD frame
+capacity is exactly 8,294,400 bytes in both paths. Old-last-good and in-flight
+ownership are not separately instrumented.
+
+These are finite decoder-only observations on a hosted CPU, with no compositor,
+renderer or whole desktop. They establish functional one-worker retargeting but
+**no general memory improvement**, ≤300 MiB desktop acceptance or display FPS.
+Production target-only client wiring remains disabled pending further work.
+
 ## Read-only host service observations
 
 The [host observer report](../reports/measurements/lucent-host-service-observations-6f9.json)
