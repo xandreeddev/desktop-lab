@@ -1,0 +1,1 @@
+The focus-grab XML is vendored unchanged from `hyprwm/hyprland-protocols` at commit `cd1aba6bd78775825eb230b3a4274c48b6705eb7`, path `protocols/hyprland-focus-grab-v1.xml`. Its BSD 3-clause license is retained inside the XML. The optional native adapter generates client bindings at compile time; public SDK concepts remain independent of this protocol.
