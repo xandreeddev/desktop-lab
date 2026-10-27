@@ -379,6 +379,32 @@ class Pure(unittest.TestCase):
             with self.subTest(change=change),self.assertRaises(ValueError):
                 m.validate_diagnostics(values,canonical,'b'*64,'c'*64)
 
+    def test_every_actual_planned_child_name_passes_execution_admission_and_unsafe_names_never_start(self):
+        class Child:
+            pid=71
+            returncode=0
+            def communicate(self,*args,**kwargs):return b'{}',None
+        with tempfile.TemporaryDirectory() as temporary:
+            logs=Path(temporary)
+            planned=m.experiment_cases()
+            self.assertEqual(len(planned),6)
+            self.assertEqual([row[3] for row in planned],[None,None,None,None,2,4])
+            for name,_,_,_ in planned:
+                attempt={}
+                with patch.object(m.subprocess,'Popen',return_value=Child()) as process:
+                    self.assertEqual(m.execute_child(Path('/private/observer'),'--run',{}, {},logs,name,
+                        attempt,lambda:None,150),b'{}')
+                self.assertEqual(process.call_count,1)
+                self.assertEqual(attempt['name'],name)
+                self.assertTrue((logs/(name+'-native-stdout.log')).is_file())
+            for name in ('../escape','/absolute','nested/path','windows\\path','bad name','bad;command','uñicode','', 'a'*81):
+                with self.subTest(name=name),patch.object(m.subprocess,'Popen',side_effect=AssertionError('must not start')):
+                    with self.assertRaisesRegex(ValueError,'fixed_child_operation_required'):
+                        m.execute_child(Path('/private/observer'),'--run',{}, {},logs,name,{},lambda:None,150)
+            with patch.object(m.subprocess,'Popen',side_effect=AssertionError('must not start')):
+                with self.assertRaisesRegex(ValueError,'fixed_child_operation_required'):
+                    m.execute_child(Path('/private/observer'),'--shell',{}, {},logs,'safe-name',{},lambda:None,150)
+
     def test_build_copy_changes_only_explicit_consumer_target_and_files_with_original_lock(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);tools=root/'tools';tools.mkdir();source=root/'source';source.mkdir()

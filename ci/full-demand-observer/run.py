@@ -217,6 +217,13 @@ def matrix_cases():
     return expected
 
 
+def experiment_cases():
+    planned=[(sequence,mode,None) for sequence,mode in matrix_cases()]+[
+        ('source_and_targets','retarget',2),('source_and_targets','retarget',4)]
+    return [(sequence+'-'+mode if count is None else 'diagnostic-source-'+str(count),
+             sequence,mode,count) for sequence,mode,count in planned]
+
+
 def validate_matrix(cases, binary_sha256, input_sha256):
     expected = matrix_cases()
     need(len(cases) == len(expected)
@@ -391,7 +398,7 @@ def prepared_asset(value, state, source, source_sha256, frozen=False):
 
 
 def execute_child(binary, operation, request, env, logs, name, attempt, save, timeout):
-    need(operation in ('--prepare','--run') and re.fullmatch('[a-z_-]{1,80}',name), 'fixed_child_operation_required')
+    need(operation in ('--prepare','--run') and re.fullmatch('[a-z0-9_-]{1,80}',name), 'fixed_child_operation_required')
     payload = json.dumps(request).encode()
     need(0 < len(payload) <= 64*1024, 'bounded_child_input_required')
     (logs/(name+'-native-input.json')).write_bytes(payload)
@@ -591,10 +598,7 @@ def run(args):
     save()
     cases = []
     diagnostics = []
-    planned_cases=[(sequence,mode,None) for sequence,mode in matrix_cases()]+[
-        ('source_and_targets','retarget',2),('source_and_targets','retarget',4)]
-    for sequence,mode,stop_after in planned_cases:
-        name = sequence+'-'+mode if stop_after is None else 'diagnostic-source-'+str(stop_after)
+    for name,sequence,mode,stop_after in experiment_cases():
         admissions['before_'+name] = admit()
         need(digest(binary) == record['binary']['sha256'] and digest(media/'source.mp4') == record['input']['sha256'],
              'same_compiled_binary_and_input_required')

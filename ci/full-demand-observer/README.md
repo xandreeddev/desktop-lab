@@ -27,9 +27,14 @@ but 40.13 MiB higher in B. After B's final latest drop, retarget RSS was still
 8.98 MiB higher; accounted in-use bytes were nearly equal, with 10.63 MiB more
 free arena accounting. General memory improvement remains unproven.
 
-This diagnostic consumer has **18 authored Rust tests**; fifteen passed in f26,
-but the new prefix/ownership tests and this changed consumer are **not compiled
-or executed yet**. The Python driver has **24 pure/tempfile tests**, executable without Cargo,
+This diagnostic consumer's **18 Rust tests actually passed** in the
+[e10 attempt 2 job](https://github.com/xandreeddev/desktop-lab/actions/runs/40434562502/job/121962228185),
+as did the four canonical cases. The new prefixes did not start: the child-name
+allowlist rejected the generated numeric diagnostic suffix. That failed trial
+is preserved. The narrow correction admits digits in safe filename components;
+its regression invokes the real executor for every name from the actual case
+builder and still rejects traversal/unsafe names. This corrected driver has
+**not run off-host yet**. The Python driver has **25 pure/tempfile tests**, executable without Cargo,
 FFmpeg, GPU, network or VM access. `profile.json` keeps exact expected names,
 counts, the original source qualification's log digests and official links.
 The tools commit, built binary, archive and hosted artifact remain **unbound**
