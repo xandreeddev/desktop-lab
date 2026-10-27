@@ -125,12 +125,12 @@ class Pure(unittest.TestCase):
             with self.assertRaises(ValueError):m.test_summary(value,2,['first','second'])
 
     def test_frozen_actual_source_counts_and_names_remain_explicit_and_new_consumer_unexecuted(self):
-        self.assertEqual(m.PROFILE['test_counts'],{'domain':37,'video':67,'observer':21,'consumer':13})
+        self.assertEqual(m.PROFILE['test_counts'],{'domain':37,'video':67,'observer':21,'consumer':15})
         for key in ('domain','video','observer'):
             self.assertEqual(len(m.PROFILE['required_test_names'][key]),m.PROFILE['test_counts'][key])
         authored=re.findall(r'#\[test\]\s*fn\s+(\w+)',(HERE/'observer_tests.rs').read_text())
         self.assertEqual(m.PROFILE['consumer_test_names'],authored)
-        self.assertEqual(len(authored),13)
+        self.assertEqual(len(authored),15)
         self.assertIsNone(m.PROFILE['artifact_binding'])
         self.assertIsNone(m.PROFILE['tools_commit_binding'])
         self.assertEqual(m.PROFILE['source_qualification']['workflow_result'],'failure')
@@ -247,6 +247,72 @@ class Pure(unittest.TestCase):
             elif change=='missing':value.pop()
             else:value[0],value[2]=value[2],value[0]
             with self.subTest(change=change),self.assertRaises(ValueError):m.validate_matrix(value,'b'*64,'c'*64)
+
+    def test_prepare_result_requires_real_owned_metadata_copied_immutable_bytes_and_frozen_descriptor(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary).resolve();state=root/'state';state.mkdir()
+            original=root/'input.mp4';original.write_bytes(b'original encoded bytes');original.chmod(0o400)
+            owned=state/'media-123-1';owned.mkdir()
+            file=owned/'source.mp4';file.write_bytes(original.read_bytes());file.chmod(0o400)
+            poster=owned/'poster.png';poster.write_bytes(b'poster fixture');poster.chmod(0o400)
+            source={'name':'Generated 4K60','path':str(original)}
+            asset={'source':source,'path':str(file),'poster':{'name':source['name'],'path':str(poster)}}
+            value={'kind':'prepared_asset','asset':asset};metadata=owned/'asset.json'
+            with self.assertRaises(ValueError):m.prepared_asset(value,state,source,m.digest(original))
+            metadata.write_text(json.dumps(asset));metadata.chmod(0o600)
+            self.assertEqual(m.prepared_asset(value,state,source,m.digest(original))['asset'],asset)
+            with self.assertRaises(ValueError):m.prepared_asset(value,state,source,m.digest(original),frozen=True)
+            metadata.chmod(0o400)
+            frozen=m.prepared_asset(value,state,source,m.digest(original),frozen=True)
+            self.assertEqual(frozen['files']['source.mp4']['sha256'],m.digest(original))
+            for mutation in ('metadata','writable_source','changed_copy','foreign_source','not_copied'):
+                changed=copy.deepcopy(value)
+                if mutation=='metadata':metadata.chmod(0o600);metadata.write_text('{}');metadata.chmod(0o400)
+                elif mutation=='writable_source':file.chmod(0o600)
+                elif mutation=='changed_copy':file.chmod(0o600);file.write_bytes(b'changed');file.chmod(0o400)
+                elif mutation=='foreign_source':changed['asset']['source']['path']=str(root/'other.mp4')
+                else:
+                    file.chmod(0o600);file.unlink();file.hardlink_to(original)
+                with self.subTest(mutation=mutation),self.assertRaises(ValueError):
+                    m.prepared_asset(changed,state,source,m.digest(original),frozen=True)
+                metadata.chmod(0o600);metadata.write_text(json.dumps(asset));metadata.chmod(0o400)
+                file.unlink();file.write_bytes(original.read_bytes());file.chmod(0o400)
+
+    def test_child_result_stdout_status_and_input_are_durable_before_success_or_failure_gate(self):
+        class Child:
+            pid=71
+            def __init__(self,raw,code,timeout=False):
+                self.raw=raw;self.returncode=code;self.timeout=timeout;self.calls=0;self.killed=False
+            def communicate(self,*args,**kwargs):
+                self.calls+=1
+                if self.timeout and self.calls==1:raise m.subprocess.TimeoutExpired('private child',150)
+                return self.raw,None
+            def kill(self):self.killed=True;self.returncode=-9
+        failure=json.dumps({'kind':'failed','reason':'adapter_error','next_case_allowed':False}).encode()
+        with tempfile.TemporaryDirectory() as temporary:
+            logs=Path(temporary);attempt={};saved=[];raw=b'{"kind":"prepared_asset","asset":{}}'
+            with patch.object(m.subprocess,'Popen',return_value=Child(raw,0)):
+                self.assertEqual(m.execute_child(Path('/private/observer'),'--prepare',{}, {},logs,'prepare',attempt,
+                    lambda:saved.append(copy.deepcopy(attempt)),150),raw)
+            self.assertEqual(saved[-1]['child_exit_code'],0)
+            self.assertIsNone(saved[-1]['fixed_failure_reason'])
+        for raw,code,timeout in [(failure,1,False),(b'',0,False),(b'x'*(512*1024+1),0,False),(failure,1,True)]:
+            with tempfile.TemporaryDirectory() as temporary:
+                logs=Path(temporary);attempt={};saved=[];child=Child(raw,code,timeout)
+                request={'state':'/private/state','source':{'name':'Generated','path':'/private/input.mp4'}}
+                with patch.object(m.subprocess,'Popen',return_value=child) as popen,self.assertRaisesRegex(ValueError,'complete_bounded_observer_process_required'):
+                    m.execute_child(Path('/private/observer'),'--prepare',request,{},logs,'prepare',attempt,
+                                    lambda:saved.append(copy.deepcopy(attempt)),150)
+                self.assertEqual(popen.call_args.args[0],['/private/observer','--prepare'])
+                self.assertEqual(json.loads((logs/'prepare-native-input.json').read_bytes()),request)
+                self.assertEqual((logs/'prepare-native-stdout.log').read_bytes(),raw[:512*1024])
+                self.assertEqual(saved[-1]['child_exit_code'],-9 if timeout else code)
+                self.assertEqual(saved[-1]['stdout_bytes'],len(raw))
+                self.assertEqual(saved[-1]['stdout_truncated'],len(raw)>512*1024)
+                self.assertEqual(saved[-1]['timed_out'],timeout)
+                if raw==failure:self.assertEqual(saved[-1]['fixed_failure_reason'],'adapter_error')
+                self.assertGreaterEqual(len(saved),3)
+                self.assertEqual(child.killed,timeout)
 
     def test_build_copy_changes_only_explicit_consumer_target_and_files_with_original_lock(self):
         with tempfile.TemporaryDirectory() as temporary:

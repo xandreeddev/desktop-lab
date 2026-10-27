@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import tarfile
 import time
@@ -312,6 +313,79 @@ def validate_case(value, sequence, mode, pid, expected_pts):
     return value
 
 
+def prepared_asset(value, state, source, source_sha256, frozen=False):
+    need(type(value) is dict and set(value) == {'kind','asset'} and value['kind'] == 'prepared_asset',
+         'actual_prepare_port_result_required')
+    asset = value['asset']
+    need(type(asset) is dict and set(asset) == {'source','path','poster'}
+         and asset['source'] == source and type(asset['poster']) is dict
+         and set(asset['poster']) == {'name','path'}, 'exact_prepared_descriptor_required')
+    file = Path(asset['path']); directory = file.parent; metadata = directory/'asset.json'
+    need(state.resolve(strict=True) == state and directory.parent == state
+         and directory.name.startswith('media-') and file.name == 'source.mp4'
+         and Path(asset['poster']['path']) == directory/'poster.png'
+         and asset['poster']['name'] == source['name'], 'canonical_owned_prepare_result_required')
+    files = {}
+    for path,limit in [(file,256*1024**2),(directory/'poster.png',32*1024**2),(metadata,16*1024)]:
+        need(path.is_file() and not path.is_symlink() and path.resolve(strict=True) == path
+             and 0 < path.stat().st_size <= limit, 'bounded_regular_prepared_files_required')
+        mode = stat.S_IMODE(path.stat().st_mode)
+        need(mode & 0o022 == 0 and (path == metadata and not frozen or mode & 0o222 == 0),
+             'immutable_prepared_source_poster_and_frozen_metadata_required')
+        files[path.name] = {'bytes':path.stat().st_size,'sha256':digest(path),'mode':mode}
+    need(json.loads(metadata.read_bytes()) == asset and files['source.mp4']['sha256'] == source_sha256
+         and not file.samefile(Path(source['path'])), 'genuine_prepare_metadata_and_copied_source_required')
+    return {'asset':asset,'files':files}
+
+
+def execute_child(binary, operation, request, env, logs, name, attempt, save, timeout):
+    need(operation in ('--prepare','--run') and re.fullmatch('[a-z_-]{1,80}',name), 'fixed_child_operation_required')
+    payload = json.dumps(request).encode()
+    need(0 < len(payload) <= 64*1024, 'bounded_child_input_required')
+    (logs/(name+'-native-input.json')).write_bytes(payload)
+    attempt.update(name=name,operation=operation,status='starting',timed_out=False,
+                   host_process_started_monotonic_ns=time.monotonic_ns())
+    save()  # Input, prepared descriptor and the newest admission are durable.
+    stderr = logs/(name+'-native-stderr.log')
+    communication_error = None
+    with stderr.open('xb') as errors:
+        process = subprocess.Popen([str(binary),operation],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=errors,env=env)
+        try:
+            attempt.update(pid=process.pid,status='running')
+            save()
+            raw,_ = process.communicate(payload,timeout=timeout)
+        except subprocess.TimeoutExpired:
+            attempt['timed_out'] = True
+            process.kill()
+            raw,_ = process.communicate(timeout=10)
+        except BaseException as error:
+            communication_error = error
+            process.kill()
+            raw,_ = process.communicate(timeout=10)
+    retained = raw[:512*1024]
+    stdout = logs/(name+'-native-stdout.log')
+    stdout.write_bytes(retained)
+    attempt.update(status='communication_failed' if communication_error else 'completed',child_exit_code=process.returncode,
+        host_process_finished_monotonic_ns=time.monotonic_ns(),stdout_bytes=len(raw),
+        stdout_retained_bytes=len(retained),stdout_sha256=hashlib.sha256(raw).hexdigest(),
+        stdout_truncated=len(retained)!=len(raw),stderr_bytes=stderr.stat().st_size,
+        stderr_sha256=digest(stderr),fixed_failure_reason=None)
+    try:
+        failure = json.loads(retained)
+        if len(retained)==len(raw) and set(failure) == {'kind','reason','next_case_allowed'} and failure['kind']=='failed' \
+                and failure['next_case_allowed'] is False and re.fullmatch('[a-z_]{1,80}',failure['reason']):
+            attempt['fixed_failure_reason'] = failure['reason']
+    except (ValueError,TypeError):
+        pass
+    save()  # Never discard a failed child's status/stdout before this gate.
+    if communication_error is not None:
+        raise communication_error
+    need(not attempt['timed_out'] and process.returncode == 0 and 0 < len(raw) <= 512*1024,
+         'complete_bounded_observer_process_required')
+    need(stderr.stat().st_size <= 16*1024**2, 'bounded_native_stderr_required')
+    return raw
+
+
 def run(args):
     provenance = context(os.environ)
     source, work, envelope = args.source, args.work, args.envelope
@@ -352,7 +426,8 @@ def run(args):
               'backend_derivation': derivation, 'steps': [], 'admissions': admissions,
               'source_qualification': PROFILE['source_qualification'],
               'tools_file_sha256': staged_roster(package/'tools'),
-              'scope': PROFILE['scope'], 'rustc_verbose': version, 'passed': False, **SCOPE_FALSE}
+              'scope': PROFILE['scope'], 'rustc_verbose': version, 'passed': False,
+              'child_attempts': [], **SCOPE_FALSE}
 
     def save():
         (package / 'experiment.json').write_text(json.dumps(record, indent=2)+'\n')
@@ -426,7 +501,7 @@ def run(args):
             shutil.copy2(header,destination)
             record['FFmpeg_public_headers'][str(header.relative_to('/usr/include'))] = digest(header)
     need(0 < len(record['FFmpeg_public_headers']) <= 512, 'actual_FFmpeg_header_roster_required')
-    media = package/'state/media-generated'
+    media = package/'input'
     media.mkdir(parents=True)
     recipe = ['ffmpeg','-nostdin','-hide_banner','-loglevel','info','-filter_threads','1','-f','lavfi',
               '-i','testsrc2=size=3840x2160:rate=60','-frames:v','240','-an','-c:v','libx264',
@@ -434,51 +509,62 @@ def run(args):
               '-sc_threshold','0','-bf','3','-refs','3','-threads:v','2',str(media/'source.mp4')]
     admissions['before_encode'] = admit()
     stage('encode-generated-input', recipe, timeout=600)
-    stage('poster', ['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-threads','1','-i',str(media/'source.mp4'),
-                     '-frames:v','1','-vf','scale=320:180','-threads','1',str(media/'poster.png')], timeout=60)
     probe = json.loads(output(['ffprobe','-v','error','-select_streams','v:0','-show_entries',
         'stream=codec_name,width,height,pix_fmt,r_frame_rate,avg_frame_rate,sample_aspect_ratio,nb_frames,time_base:frame=best_effort_timestamp',
         '-of','json',str(media/'source.mp4')], timeout=60))
     pts = probe_frames(probe)
     (package/'ffprobe.json').write_text(json.dumps(probe,indent=2)+'\n')
-    record['input'] = {'path':'state/media-generated/source.mp4','sha256':digest(media/'source.mp4'),
+    record['input'] = {'path':'input/source.mp4','sha256':digest(media/'source.mp4'),
                        'bytes':(media/'source.mp4').stat().st_size,'recipe':recipe[:-1]+['<generated-source.mp4>'],
                        'recipe_scope':'Reproducible recipe, not a promise of byte-identical encoding across different FFmpeg/x264 builds.',
                        'normalized_pts_ns':pts,'ffprobe_sha256':digest(package/'ffprobe.json')}
     need(0 < record['input']['bytes'] <= 256*1024**2, 'bounded_actual_generated_input_required')
     for path in media.iterdir():
         path.chmod(0o400)
+    state = package/'state'
+    state.mkdir(mode=0o700)
+    original = {'name':'Generated 4K60','path':str(media/'source.mp4')}
+    admissions['before_prepare'] = admit()
+    importer = {}
+    record['child_attempts'].append(importer)
+    imported = execute_child(binary,'--prepare',{'state':str(state),'source':original},env,logs,
+                             'prepare',importer,save,150)
+    prepared_value = json.loads(imported)
+    prepared = prepared_asset(prepared_value,state,original,record['input']['sha256'])
+    # Native prepare owns metadata creation. Freeze its verified output once;
+    # later validation rejects changes instead of repairing writable storage.
+    (Path(prepared['asset']['path']).parent/'asset.json').chmod(0o400)
+    prepared = prepared_asset(prepared_value,state,original,record['input']['sha256'],frozen=True)
+    record['prepared'] = prepared
+    save()
     cases = []
     for sequence,mode in matrix_cases():
         name = sequence+'-'+mode
         admissions['before_'+name] = admit()
         need(digest(binary) == record['binary']['sha256'] and digest(media/'source.mp4') == record['input']['sha256'],
              'same_compiled_binary_and_input_required')
-        request = {'state':str(package/'state'),'asset':{'path':str(media/'source.mp4'),
-            'source':{'name':'Generated 4K60','path':str(media/'source.mp4')},
-            'poster':{'name':'Generated poster','path':str(media/'poster.png')}},
+        need(prepared_asset(prepared_value,state,original,record['input']['sha256'],frozen=True) == prepared,
+             'one_unchanged_genuine_prepared_asset_required')
+        request = {'state':str(state),'asset':prepared['asset'],
             'mode':mode,'sequence':sequence,'phase_seconds':12,'expected_pts_ns':pts}
-        stderr = logs/(name+'-native-stderr.log')
-        started = time.monotonic_ns()
-        with stderr.open('xb') as errors:
-            process = subprocess.Popen([str(binary),'--run'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=errors,env=env)
-            try:
-                raw,_ = process.communicate(json.dumps(request).encode(),timeout=150)
-            except BaseException:
-                process.kill()
-                process.wait(timeout=10)
-                raise
-        need(process.returncode == 0 and 0 < len(raw) <= 512*1024, 'complete_bounded_observer_process_required')
-        need(stderr.stat().st_size <= 16*1024**2, 'bounded_native_stderr_required')
-        value = validate_case(json.loads(raw),sequence,mode,process.pid,pts)
-        need(all(process.pid != prior['pid'] for prior in cases), 'four_fresh_observer_processes_required')
-        value.update({'host_process_started_monotonic_ns':started,'host_process_finished_monotonic_ns':time.monotonic_ns(),
+        attempt = {}
+        record['child_attempts'].append(attempt)
+        raw = execute_child(binary,'--run',request,env,logs,name,attempt,save,150)
+        value = validate_case(json.loads(raw),sequence,mode,attempt['pid'],pts)
+        need(attempt['pid'] != importer['pid'] and all(attempt['pid'] != prior['pid'] for prior in cases),
+             'four_fresh_observer_processes_required')
+        need(importer['host_process_finished_monotonic_ns'] < attempt['host_process_started_monotonic_ns'],
+             'importer_must_end_before_any_measured_process')
+        value.update({'host_process_started_monotonic_ns':attempt['host_process_started_monotonic_ns'],
+                      'host_process_finished_monotonic_ns':attempt['host_process_finished_monotonic_ns'],
                       'binary_sha256':digest(binary),'input_sha256':digest(media/'source.mp4'),
-                      'stderr_sha256':digest(stderr),'stderr_bytes':stderr.stat().st_size})
+                      'stderr_sha256':attempt['stderr_sha256'],'stderr_bytes':attempt['stderr_bytes']})
         (package/(name+'.json')).write_text(json.dumps(value,indent=2)+'\n')
         cases.append(value)
         save()
     validate_matrix(cases,record['binary']['sha256'],record['input']['sha256'])
+    need(prepared_asset(prepared_value,state,original,record['input']['sha256'],frozen=True) == prepared,
+         'final_prepared_asset_must_stay_unchanged')
     need(staged_roster(scratch) == roster, 'final_backend_source_changed')
     exact_source(source)
     need(digest(binary) == record['binary']['sha256'] and digest(media/'source.mp4') == record['input']['sha256'],

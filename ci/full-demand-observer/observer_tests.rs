@@ -94,6 +94,96 @@ fn sequence_is_explicitly_typed_and_cannot_silently_substitute_the_warm_source_m
 }
 
 #[test]
+fn importer_input_is_bounded_and_separates_original_source_from_owned_storage() {
+    let value = json!({"state":"/private/owned","source":{"name":"Generated 4K60","path":"/private/input/source.mp4"}});
+    assert!(preparation(&serde_json::to_vec(&value).unwrap()).is_ok());
+    for mutation in [
+        "inside_state",
+        "relative",
+        "parent",
+        "unknown",
+        "nested_unknown",
+    ] {
+        let mut changed = value.clone();
+        match mutation {
+            "inside_state" => {
+                changed["source"]["path"] = json!("/private/owned/media-generated/source.mp4")
+            }
+            "relative" => changed["source"]["path"] = json!("input/source.mp4"),
+            "parent" => changed["state"] = json!("/private/../owned"),
+            "unknown" => changed["skip_metadata"] = json!(true),
+            _ => changed["source"]["skip_validation"] = json!(true),
+        }
+        assert!(
+            preparation(&serde_json::to_vec(&changed).unwrap()).is_err(),
+            "{mutation}"
+        );
+    }
+    assert!(preparation(&vec![b' '; 65537]).is_err());
+    // Real prepare creates a unique media-* directory, not media-generated.
+    let mut observed = raw_input();
+    observed["asset"]["path"] = json!("/private/generated/media-123-1/source.mp4");
+    observed["asset"]["source"]["path"] = json!("/private/input/source.mp4");
+    observed["asset"]["poster"]["path"] = json!("/private/generated/media-123-1/poster.png");
+    assert!(input(&serde_json::to_vec(&observed).unwrap()).is_ok());
+}
+
+#[test]
+fn importer_invokes_prepare_once_and_never_synthesizes_an_asset_or_starts_playback() {
+    struct Importer {
+        calls: std::sync::atomic::AtomicU64,
+        fail: bool,
+    }
+    impl WallpaperPlaybackPort for Importer {
+        fn prepare(&self, source: &Wallpaper) -> lucent_domain::Result<LiveWallpaperAsset> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            if self.fail {
+                return Err(lucent_domain::DomainError::Unavailable(
+                    "private native error".into(),
+                ));
+            }
+            Ok(LiveWallpaperAsset {
+                source: source.clone(),
+                path: "/private/owned/media-123-1/source.mp4".into(),
+                poster: Wallpaper {
+                    name: source.name.clone(),
+                    path: "/private/owned/media-123-1/poster.png".into(),
+                },
+            })
+        }
+        fn play(
+            &self,
+            _: &LiveWallpaperAsset,
+            _: PlaybackOptions,
+            _: &mut dyn FnMut(lucent_domain::Result<MediaFrame>) -> bool,
+            _: Arc<dyn StopSignal>,
+        ) {
+            panic!("import process cannot start a measured worker");
+        }
+    }
+    let source = Wallpaper {
+        name: "Generated 4K60".into(),
+        path: "/private/input/source.mp4".into(),
+    };
+    for fail in [false, true] {
+        let importer = Importer {
+            calls: std::sync::atomic::AtomicU64::new(0),
+            fail,
+        };
+        let result = prepare_asset(&importer, &source);
+        assert_eq!(importer.calls.load(Ordering::SeqCst), 1);
+        if fail {
+            assert_eq!(result.err(), Some("asset_prepare_failed"));
+        } else {
+            let prepared = result.unwrap();
+            assert_eq!(prepared.source, source);
+            assert_eq!(prepared.path, "/private/owned/media-123-1/source.mp4");
+            assert_ne!(prepared.path, source.path);
+        }
+    }
+}
+
+#[test]
 fn readiness_accepts_before_five_seconds_and_rejects_ready_at_and_after_boundary() {
     assert_eq!(
         ready_elapsed(true, READY - Duration::from_nanos(1)),

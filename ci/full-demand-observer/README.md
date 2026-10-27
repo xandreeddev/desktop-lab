@@ -13,14 +13,22 @@ separate integration job with `Catalog omits a production rendering input`;
 the existing Component Lab provenance was not refreshed for the prototype.
 No native comparison or memory improvement follows from that Rust pass.
 
-This new consumer has **13 authored Rust tests, not yet compiled or executed**.
-The Python driver has **19 pure/tempfile tests**, executable without Cargo,
+The prior `d38` tools trial actually passed its 13 consumer tests and all
+37/67/21 source gates in Arch, then failed its first A-reopen process because
+the raw fixture skipped mandatory owned-asset import metadata. Its driver
+recorded `complete_bounded_observer_process_required` but discarded the actual
+child stdout/exit code. That failed trial and its original artifact digest
+remain recorded in `profile.json`; it supplies no accepted matrix observation.
+
+This corrected consumer has **15 authored Rust tests**: thirteen passed in that
+prior trial; the two importer tests and corrected consumer are **not compiled
+or executed yet**. The Python driver has **21 pure/tempfile tests**, executable without Cargo,
 FFmpeg, GPU, network or VM access. `profile.json` keeps exact expected names,
 counts, the original source qualification's log digests and official links.
 The tools commit, built binary, archive and hosted artifact remain **unbound**
 until a separately reviewed, actual owner push runs the workflow.
 
-## One backend, one consumer binary, four fresh processes
+## One backend, one consumer binary, four fresh measured processes
 
 The existing pinned observer accepts only its known-size FHD → 4K → FHD phases.
 This experiment therefore adds a separately identified example consumer rather
@@ -40,6 +48,19 @@ There are two separate comparisons. Both use the same release binary and
 immutable video, encoded once. Every case starts a new process with a distinct
 PID. The input has an explicit typed `sequence` and `mode`; no heuristic chooses
 a sequence from an observed target.
+
+The same binary first runs an explicit `--prepare` operation in a separate
+importer process. It calls the existing `WallpaperPlaybackPort::prepare` once,
+letting the backend create the owned source, poster and `asset.json`. The
+encoded original lives outside owned storage; the driver never synthesizes
+metadata. It verifies the returned descriptor against the actual metadata and
+copied immutable source bytes, then freezes the verified metadata and records
+all three file hashes. Every case gets that exact same descriptor; changes to
+its metadata, poster or source are rejected before each case and at completion.
+The importer must finish before all four distinct measured process lifetimes,
+and its PID cannot become a measured case. Its decoding/allocations therefore
+do not prewarm cold-FHD allocations in A's process. It is not a fifth matrix
+observation.
 
 **Matrix A, `known_targets`: cold FHD → 4K → restored FHD.** Its fresh process
 admits FHD before its first play, with no source-size/4K phase or previous frame
@@ -127,13 +148,13 @@ it does not launch a second unbounded Rust job in parallel; ordinary pushes to
 other branches and all pull requests keep their existing checks. This isolated
 tools branch is not a replacement for the prototype's failed integration gate.
 A new three-sample **4500 MiB** effective-availability admission is mandatory
-before build, encoding and **each** fresh-process case. A single downloaded,
+before build, encoding, preparation and **each** fresh-process case. A single downloaded,
 signed Arch transaction is frozen with database, archive and package hashes;
 the exact FFmpeg public headers and observer ELF metadata are retained. This
 supports provenance, not compatibility with an older VM FFmpeg installation.
 
 The eight Cargo stages are fetch, format, selected-library/example clippy,
-37-domain test gate, 67-video gate, 21-original-observer gate, 13-new-consumer
+37-domain test gate, 67-video gate, 21-original-observer gate, 15-new-consumer
 gate, and one release-observer build. There is no desktop release build, GPU
 test, deployment, guest baseline or native session in this workflow.
 
@@ -144,6 +165,12 @@ input and workflow provenance. The later GitHub upload artifact digest/ID must
 also be saved from the actual successful run and checked when downloading;
 the action's outer artifact digest and the inner tar digest are different
 identities. Never bind an archive merely because its expected filename exists.
+
+Every child attempt saves its bounded JSON input and newest admission before
+starting, then its PID, exit code, timeout state, bounded stdout, stderr hash
+and fixed failure reason before applying the existing complete-process gate.
+A failed child still prevents the next case; retaining diagnostics does not
+relax exit, output, native report, target, PTS, join or allocator validation.
 
 ## Review and execution boundary
 

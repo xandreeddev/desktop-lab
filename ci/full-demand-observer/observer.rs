@@ -2,7 +2,7 @@
 //! No renderer, compositor, session changes, allocator tuning or FPS claim.
 use lucent_domain::{
     LiveWallpaperAsset, PlaybackOptions, RetargetablePlaybackOptions, StopSignal,
-    TargetedMediaFrame, WallpaperFrameRate, WallpaperPixelTarget, WallpaperPlaybackPort,
+    TargetedMediaFrame, Wallpaper, WallpaperFrameRate, WallpaperPixelTarget, WallpaperPlaybackPort,
     WallpaperTargetPort, WallpaperTargetRevision,
 };
 use lucent_services::video::{LatestWallpaperTargetAdapter, NativeVideoWallpapers};
@@ -69,6 +69,45 @@ struct Input {
     /// Actual ffprobe best-effort PTS rescaled to the backend's Duration clock.
     expected_pts_ns: Vec<u64>,
 }
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Preparation {
+    state: PathBuf,
+    source: Wallpaper,
+}
+fn preparation(raw: &[u8]) -> Check<Preparation> {
+    if raw.is_empty() || raw.len() > 64 * 1024 {
+        return Err("bounded_input_required");
+    }
+    let value: Value = serde_json::from_slice(raw).map_err(|_| "invalid_prepare_input")?;
+    if !value["source"].as_object().is_some_and(|source| {
+        source.len() == 2 && source.contains_key("name") && source.contains_key("path")
+    }) {
+        return Err("invalid_prepare_input");
+    }
+    let value: Preparation = serde_json::from_value(value).map_err(|_| "invalid_prepare_input")?;
+    let source = Path::new(&value.source.path);
+    if !value.state.is_absolute()
+        || !source.is_absolute()
+        || source.starts_with(&value.state)
+        || value
+            .state
+            .components()
+            .chain(source.components())
+            .any(|part| matches!(part, Component::ParentDir))
+    {
+        return Err("invalid_prepare_input");
+    }
+    Ok(value)
+}
+fn prepare_asset(
+    adapter: &dyn WallpaperPlaybackPort,
+    source: &Wallpaper,
+) -> Check<LiveWallpaperAsset> {
+    // Only the real import port creates owned source/poster/metadata storage.
+    // This runs once in its own process, outside every measured case lifetime.
+    adapter.prepare(source).map_err(|_| "asset_prepare_failed")
+}
 fn input(raw: &[u8]) -> Check<Input> {
     if raw.is_empty() || raw.len() > 64 * 1024 {
         return Err("bounded_input_required");
@@ -102,7 +141,7 @@ fn input(raw: &[u8]) -> Check<Input> {
             directory.parent() == Some(value.state.as_path())
                 && directory
                     .file_name()
-                    .is_some_and(|name| name == "media-generated")
+                    .is_some_and(|name| name.to_string_lossy().starts_with("media-"))
                 && poster == directory.join("poster.png")
         })
         || value.expected_pts_ns.len() != 240
@@ -519,19 +558,39 @@ fn observe(adapter: Arc<dyn WallpaperPlaybackPort>, request: Input) -> Check<Val
     )
 }
 fn run() -> Check<()> {
-    match std::env::args().skip(1).collect::<Vec<_>>().as_slice() {
+    let prepare = match std::env::args().skip(1).collect::<Vec<_>>().as_slice() {
         [] => {
             println!("{}", json!({"prepared_only":true,"actions":false}));
             return Ok(());
         }
-        [arg] if arg == "--run" => (),
+        [arg] if arg == "--run" => false,
+        [arg] if arg == "--prepare" => true,
         _ => return Err("explicit_run_required"),
-    }
+    };
     let mut raw = Vec::new();
     io::stdin()
         .take(65537)
         .read_to_end(&mut raw)
         .map_err(|_| "input_unavailable")?;
+    if prepare {
+        let request = preparation(&raw)?;
+        for path in [request.state.as_path(), Path::new(&request.source.path)] {
+            if fs::canonicalize(path).ok().as_deref() != Some(path) {
+                return Err("canonical_input_required");
+            }
+        }
+        let adapter = NativeVideoWallpapers {
+            state: request.state.clone(),
+            library: request.state,
+        };
+        let asset = prepare_asset(&adapter, &request.source)?;
+        return writeln!(
+            io::stdout().lock(),
+            "{}",
+            json!({"kind":"prepared_asset","asset":asset})
+        )
+        .map_err(|_| "output_unavailable");
+    }
     let request = input(&raw)?;
     for path in [
         request.state.as_path(),

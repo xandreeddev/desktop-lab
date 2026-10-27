@@ -15,7 +15,7 @@
     "domain": 37,
     "video": 67,
     "observer": 21,
-    "consumer": 13
+    "consumer": 15
   },
   "required_test_names": {
     "domain": [
@@ -154,6 +154,8 @@
     "full_demand_sequence_admits_source_distinct_from_missing_snapshot_and_advances_exactly",
     "known_sequence_starts_with_cold_fhd_and_never_admits_source_sized_demand",
     "sequence_is_explicitly_typed_and_cannot_silently_substitute_the_warm_source_matrix",
+    "importer_input_is_bounded_and_separates_original_source_from_owned_storage",
+    "importer_invokes_prepare_once_and_never_synthesizes_an_asset_or_starts_playback",
     "readiness_accepts_before_five_seconds_and_rejects_ready_at_and_after_boundary",
     "input_requires_exact_generated_asset_phase_duration_and_actual_ordered_pts",
     "publication_checks_real_byte_extent_aspect_and_normalized_ffprobe_pts",
@@ -273,5 +275,28 @@
       "source_and_targets",
       "retarget"
     ]
-  ]
+  ],
+  "prior_tools_trial": {
+    "tools_commit": "d38e51ed70b5e2253c9126701e9ae3a250fc7fec",
+    "run_id": 40427343437,
+    "run_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/40427343437",
+    "workflow_result": "failure",
+    "actual_test_counts": {
+      "domain": 37,
+      "video": 67,
+      "observer": 21,
+      "consumer": 13
+    },
+    "failure_artifact_id": 12701180463,
+    "original_failure_zip_sha256": "1818d0443e15b9be5a7fd617c3d7364327f3305ada9055980193dc61e8304b53",
+    "first_attempted_case": [
+      "known_targets",
+      "reopen"
+    ],
+    "recorded_driver_reason": "complete_bounded_observer_process_required",
+    "child_exit_code_retained": false,
+    "child_fixed_stdout_reason_retained": false,
+    "accepted_matrix_observations": false,
+    "source_confirmed_fixture_fault": "Raw descriptor had no required import metadata; corrected importer is not executed yet."
+  }
 }
