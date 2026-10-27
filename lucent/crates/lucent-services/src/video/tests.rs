@@ -2540,3 +2540,94 @@ fn video_native_planes_untagged_or_alpha_fallback_preserves_existing_rgba_bytes_
         assert_eq!(native.len(), 3);
     }
 }
+
+#[test]
+fn video_native_planes_minification_returns_exact_existing_fitted_rgba() {
+    let root = Directory::new();
+    let file = tagged_h264_fixture(&root.0);
+    let adapter = NativeVideoWallpapers {
+        state: root.0.join("store"),
+        library: root.0.clone(),
+    };
+    let asset = adapter
+        .prepare(&Wallpaper {
+            path: file.to_string_lossy().into(),
+            name: "Minification fixture".into(),
+        })
+        .unwrap();
+    let target = Some(WallpaperPixelTarget::new(32, 24).unwrap());
+    let mut expected = Vec::new();
+    adapter.play(
+        &asset,
+        PlaybackOptions {
+            target,
+            looping: false,
+            ..Default::default()
+        },
+        &mut |value| {
+            expected.push(frame_snapshot(value.unwrap()));
+            true
+        },
+        Arc::new(Never),
+    );
+    let mut actual = Vec::new();
+    adapter.play_native(
+        &asset,
+        NativePlaybackOptions {
+            target,
+            looping: false,
+            ..Default::default()
+        },
+        &mut |value| {
+            let NativeMediaFrame::Rgba(frame) = value.unwrap() else {
+                panic!("one-level native sampling must not replace proper fit")
+            };
+            actual.push(frame_snapshot(frame));
+            true
+        },
+        Arc::new(Never),
+    );
+    assert_eq!(actual, expected);
+    assert_eq!(actual.len(), 8);
+    assert!(
+        actual
+            .iter()
+            .all(|row| row.1 == 32 && row.2 == 24 && row.4 == (64, 48))
+    );
+}
+#[test]
+fn video_native_planes_source_or_upscaled_cover_keeps_owned_source_planes() {
+    let root = Directory::new();
+    let file = tagged_h264_fixture(&root.0);
+    let adapter = NativeVideoWallpapers {
+        state: root.0.join("store"),
+        library: root.0.clone(),
+    };
+    let asset = adapter
+        .prepare(&Wallpaper {
+            path: file.to_string_lossy().into(),
+            name: "Native cover fixture".into(),
+        })
+        .unwrap();
+    for target in [None, Some(WallpaperPixelTarget::new(128, 96).unwrap())] {
+        let mut count = 0;
+        adapter.play_native(
+            &asset,
+            NativePlaybackOptions {
+                target,
+                looping: false,
+                ..Default::default()
+            },
+            &mut |value| {
+                let NativeMediaFrame::Yuv420 { frame, .. } = value.unwrap() else {
+                    panic!("source or upscale has no minification requirement")
+                };
+                assert_eq!(frame.dimensions(), (64, 48));
+                count += 1;
+                false
+            },
+            Arc::new(Never),
+        );
+        assert_eq!(count, 1);
+    }
+}

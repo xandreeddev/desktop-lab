@@ -35,6 +35,8 @@ jobs:
       - uses: actions/checkout@v4
       - run: python3 scripts/generate-design-tokens.py --check
       - run: python3 scripts/generate-app-icons.py --check
+      - name: Check domain and framework dependency boundaries
+        run: python3 -B -I -m unittest discover -s tests -p test_architecture.py -v
       - run: python3 scripts/check-component-lab.py
       - run: python3 -m unittest discover -s tests -v
       - run: shellcheck scripts/*.sh configs/lucid/*.sh
@@ -93,6 +95,7 @@ jobs:
           export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name '*lvp*' -print -quit)"
           test -n "$VK_DRIVER_FILES"
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render video_planes_gpu_ -- --ignored --nocapture --test-threads=1
+          cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render video_scene_gpu_ -- --ignored --nocapture --test-threads=1
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render frozen_stream_snapshot_keeps_pixels -- --ignored --nocapture
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render trace_reports_final_bound_alias -- --ignored --nocapture
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-render international_style_masks -- --ignored --nocapture

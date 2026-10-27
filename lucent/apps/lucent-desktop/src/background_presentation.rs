@@ -1,7 +1,11 @@
 //! Transient wallpaper presentation. Selection, decoding and persistence stay
 //! with their existing owners; this child borrows already prepared images.
-use lucent_api::{Color, Element, ImageData, Motion};
+use crate::presentation_frame::PresentationFrame;
+#[cfg(test)]
+use lucent_api::ImageData;
+use lucent_api::{Color, Element, Motion};
 use lucent_design::motion;
+#[cfg(test)]
 use std::sync::Arc;
 
 /// Content identity comes from the selected immutable asset, never a video's
@@ -14,7 +18,7 @@ pub enum Source {
 
 struct Current {
     source: Source,
-    image: Arc<ImageData>,
+    image: PresentationFrame,
 }
 
 enum Reveal {
@@ -41,7 +45,7 @@ impl Reveal {
 
 pub struct BackgroundPresentation {
     current: Option<Current>,
-    outgoing: Option<Arc<ImageData>>,
+    outgoing: Option<PresentationFrame>,
     reveal: Reveal,
 }
 
@@ -59,10 +63,19 @@ impl BackgroundPresentation {
     /// Admit prepared pixels for the current selection. A missing candidate
     /// retains the last good presentation while decoding/export is pending.
     /// Returns whether the root should invalidate this exact background.
+    #[cfg(test)]
     pub fn reconcile(
         &mut self,
         source: Option<Source>,
         image: Option<Arc<ImageData>>,
+        now: f64,
+    ) -> bool {
+        self.reconcile_frame(source, image.map(PresentationFrame::from), now)
+    }
+    pub fn reconcile_frame(
+        &mut self,
+        source: Option<Source>,
+        image: Option<PresentationFrame>,
         now: f64,
     ) -> bool {
         let (Some(source), Some(image)) = (source, image) else {
@@ -103,7 +116,7 @@ impl BackgroundPresentation {
             // A different output may still consume this live stream. Give the
             // frozen outgoing frame independent GPU identity without copying
             // its immutable CPU pixels or making the UI prepare mip levels.
-            self.outgoing = Some(Arc::new(outgoing.snapshot()));
+            self.outgoing = Some(outgoing.snapshot());
             self.reveal = Reveal::AwaitingSubmission { selected_at: now };
         }
         self.current = Some(Current { source, image });
@@ -115,7 +128,7 @@ impl BackgroundPresentation {
         let Some(current) = &self.current else {
             return background;
         };
-        let image = |image: &Arc<ImageData>| Element::image(image.clone()).cover().fill();
+        let image = |image: &PresentationFrame| image.element().cover().fill();
         let mut layers = Vec::with_capacity(3);
         // The cover image spans this surface. Omit the solid underlay only
         // when the bottom image proves full coverage; transparent media and
@@ -200,7 +213,7 @@ impl BackgroundPresentation {
     }
 }
 
-fn same_stream(a: &ImageData, b: &ImageData) -> bool {
+fn same_stream(a: &PresentationFrame, b: &PresentationFrame) -> bool {
     match (a.stream_revision(), b.stream_revision()) {
         (Some((a, _)), Some((b, _))) => a == b,
         _ => false,
@@ -704,9 +717,69 @@ mod tests {
         let outgoing = presentation.outgoing.as_ref().unwrap();
         assert!(outgoing.stream_revision().is_none());
         assert_eq!(outgoing.cache_id(), first.cache_id());
-        assert_eq!(outgoing.pixels().as_ptr(), first.pixels().as_ptr());
+        assert_eq!(
+            outgoing.as_image().unwrap().pixels().as_ptr(),
+            first.pixels().as_ptr()
+        );
         let second = stream.frame_rgba(1, 1, vec![0, 200, 0, 255]).unwrap();
         assert_ne!(outgoing.cache_id(), second.cache_id());
-        assert_eq!(outgoing.pixels(), [200, 0, 0, 255]);
+        assert_eq!(outgoing.as_image().unwrap().pixels(), [200, 0, 0, 255]);
+    }
+}
+
+#[cfg(test)]
+mod native_frame_tests {
+    use super::*;
+    use lucent_api::{
+        ImageStream, Kind,
+        video_frame::{Bt709, Bytes, ChromaSiting, Plane, Range, Transfer, Yuv420Frame},
+    };
+    fn native(stream: &ImageStream, value: u8) -> PresentationFrame {
+        let p = |v| Plane::new(Bytes::from(vec![v]), 1, 1, 1).unwrap();
+        let frame = Yuv420Frame::new(
+            1,
+            1,
+            [p(value), p(128), p(128)],
+            Bt709 {
+                range: Range::Full,
+                transfer: Transfer::Srgb,
+                chroma: ChromaSiting::Left,
+            },
+        )
+        .unwrap();
+        Arc::new(stream.frame_yuv420(frame).unwrap()).into()
+    }
+    #[test]
+    fn native_background_updates_without_restarting_reveal_and_freezes_only_on_source_change() {
+        let stream = ImageStream::new();
+        let first = native(&stream, 30);
+        let second = native(&stream, 80);
+        let mut presentation = BackgroundPresentation::default();
+        assert!(presentation.reconcile_frame(Some(Source::Live("first".into())), Some(first), 0.));
+        assert!(presentation.reconcile_frame(
+            Some(Source::Live("first".into())),
+            Some(second.clone()),
+            1.
+        ));
+        assert!(!presentation.active(1.));
+        assert!(presentation.outgoing.is_none());
+        let view: Element<()> = presentation.view(1., Color::hex(0));
+        assert!(matches!(&view.children[0].kind, Kind::Video(_)));
+        let image = Arc::new(ImageData::from_rgba("next", 1, 1, vec![20, 40, 60, 255]).unwrap());
+        presentation.reconcile_frame(Some(Source::Static("next".into())), Some(image.into()), 2.);
+        let old = presentation.outgoing.as_ref().unwrap();
+        assert_eq!(old.cache_id(), second.cache_id());
+        assert!(old.stream_revision().is_none());
+        assert_eq!(old.representation(), "yuv420");
+        let view: Element<()> = presentation.view(2., Color::hex(0));
+        assert!(matches!(&view.children[0].kind, Kind::Video(_)));
+        assert_eq!(
+            view.children.last().unwrap().style.diagonal_reveal,
+            Some(0.)
+        );
+        assert!(presentation.presented(2., 3.));
+        assert!(presentation.active(3.));
+        assert_eq!(presentation.inspect()["retained_images"], 2);
+        assert_eq!(presentation.inspect()["retained_frame_bytes"], 7);
     }
 }

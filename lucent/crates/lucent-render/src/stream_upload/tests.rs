@@ -225,7 +225,7 @@ fn stream_upload_abandoned_prepare_keeps_revision_lifetime_and_pixels() {
         pending.revision(&texture),
         newer.stream_revision().unwrap().1
     );
-    assert!(texture.image_lifetime.borrow().as_ref().unwrap().is_alive());
+    assert!(texture.lifetime.borrow().as_ref().unwrap().is_alive());
     drop(pending);
     assert_eq!(texture.revision.get(), first.stream_revision().unwrap().1);
     assert_solid(

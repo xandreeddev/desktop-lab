@@ -14,11 +14,13 @@ use wgpu::{rwh::*, *};
 mod allocation;
 mod cache;
 mod extent;
+mod planes;
 mod presentation;
 mod profiling;
 mod stream_trace;
 mod stream_upload;
 mod video_planes;
+mod video_scene;
 pub use profiling::{PaintProfile, RenderProfile, ResourceProfile};
 pub use stream_trace::StreamTrace;
 pub use video_planes::{PlanarPainter, PlanarUploadStats};
@@ -39,20 +41,45 @@ struct TextureResource {
     group: BindGroup,
     width: f32,
     height: f32,
-    _texture: Texture,
+    storage: TextureStorage,
     revision: Cell<u64>,
     stream_id: Cell<Option<u64>>,
-    image_lifetime: RefCell<Option<lucent_api::ImageLifetime>>,
+    lifetime: RefCell<Option<ResourceLifetime>>,
     bytes: u64,
     /// Logical left bearing for text masks; ordinary image resources use zero.
     text_origin_x: f32,
 }
+enum TextureStorage {
+    Image(Texture),
+    Video(planes::PlaneResources),
+}
+enum ResourceLifetime {
+    Image(lucent_api::ImageLifetime),
+    Video(lucent_api::VideoLifetime),
+}
+impl ResourceLifetime {
+    fn is_alive(&self) -> bool {
+        match self {
+            Self::Image(value) => value.is_alive(),
+            Self::Video(value) => value.is_alive(),
+        }
+    }
+}
 impl TextureResource {
     fn reusable(&self) -> bool {
-        self.image_lifetime
+        self.lifetime
             .borrow()
             .as_ref()
-            .is_none_or(lucent_api::ImageLifetime::is_alive)
+            .is_none_or(ResourceLifetime::is_alive)
+    }
+    fn is_video(&self) -> bool {
+        matches!(&self.storage, TextureStorage::Video(_))
+    }
+    fn image_texture(&self) -> &Texture {
+        match &self.storage {
+            TextureStorage::Image(texture) => texture,
+            TextureStorage::Video(_) => unreachable!("native resource in RGBA upload"),
+        }
     }
 }
 /// One GPU device is shared by all native surfaces in an application.
@@ -62,6 +89,7 @@ pub struct Gpu {
     device: Device,
     queue: Queue,
     pipeline: RenderPipeline,
+    video_pipeline: RefCell<Option<video_scene::Pipeline>>,
     texture_layout: BindGroupLayout,
     frame_layout: BindGroupLayout,
     sampler: Sampler,
@@ -71,6 +99,58 @@ pub struct Gpu {
     white: RefCell<Option<Rc<TextureResource>>>,
     device_failure: Arc<Mutex<Option<String>>>,
     pub adapter_description: String,
+}
+fn scene_pipeline(
+    device: &Device,
+    texture_layout: &BindGroupLayout,
+    frame_layout: &BindGroupLayout,
+    module: &ShaderModule,
+) -> RenderPipeline {
+    let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        label: None,
+        bind_group_layouts: &[Some(texture_layout), Some(frame_layout)],
+        immediate_size: 0,
+    });
+    let attributes = vertex_attr_array![0=>Float32x4,1=>Float32x4,2=>Float32x4,3=>Float32x4,4=>Float32x4,5=>Float32x4];
+    let constants = [(
+        "SHADOW_OUTSET",
+        f64::from(lucent_api::Shadow::blur_outset(1.)),
+    )];
+    device.create_render_pipeline(&RenderPipelineDescriptor {
+        label: Some("framework primitives"),
+        layout: Some(&layout),
+        vertex: VertexState {
+            module,
+            entry_point: Some("vs"),
+            compilation_options: PipelineCompilationOptions {
+                constants: &constants,
+                ..Default::default()
+            },
+            buffers: &[Some(VertexBufferLayout {
+                array_stride: scene::INSTANCE_BYTES,
+                step_mode: VertexStepMode::Instance,
+                attributes: &attributes,
+            })],
+        },
+        primitive: Default::default(),
+        depth_stencil: None,
+        multisample: Default::default(),
+        fragment: Some(FragmentState {
+            module,
+            entry_point: Some("fs"),
+            compilation_options: PipelineCompilationOptions {
+                constants: &constants,
+                ..Default::default()
+            },
+            targets: &[Some(ColorTargetState {
+                format: TextureFormat::Bgra8Unorm,
+                blend: Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING),
+                write_mask: ColorWrites::ALL,
+            })],
+        }),
+        multiview_mask: None,
+        cache: None,
+    })
 }
 impl Gpu {
     pub fn new(
@@ -161,58 +241,20 @@ impl Gpu {
             mipmap_filter: MipmapFilterMode::Linear,
             ..Default::default()
         });
-        let module = device.create_shader_module(include_wgsl!("present.wgsl"));
-        let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[Some(&texture_layout), Some(&frame_layout)],
-            immediate_size: 0,
+        let module = device.create_shader_module(ShaderModuleDescriptor {
+            label: Some("framework scene"),
+            source: ShaderSource::Wgsl(
+                concat!(include_str!("present.wgsl"), include_str!("scene.wgsl")).into(),
+            ),
         });
-        let attributes = vertex_attr_array![0=>Float32x4,1=>Float32x4,2=>Float32x4,3=>Float32x4,4=>Float32x4,5=>Float32x4];
-        let constants = [(
-            "SHADOW_OUTSET",
-            f64::from(lucent_api::Shadow::blur_outset(1.)),
-        )];
-        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("framework primitives"),
-            layout: Some(&layout),
-            vertex: VertexState {
-                module: &module,
-                entry_point: Some("vs"),
-                compilation_options: PipelineCompilationOptions {
-                    constants: &constants,
-                    ..Default::default()
-                },
-                buffers: &[Some(VertexBufferLayout {
-                    array_stride: scene::INSTANCE_BYTES,
-                    step_mode: VertexStepMode::Instance,
-                    attributes: &attributes,
-                })],
-            },
-            primitive: Default::default(),
-            depth_stencil: None,
-            multisample: Default::default(),
-            fragment: Some(FragmentState {
-                module: &module,
-                entry_point: Some("fs"),
-                compilation_options: PipelineCompilationOptions {
-                    constants: &constants,
-                    ..Default::default()
-                },
-                targets: &[Some(ColorTargetState {
-                    format: TextureFormat::Bgra8Unorm,
-                    blend: Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING),
-                    write_mask: ColorWrites::ALL,
-                })],
-            }),
-            multiview_mask: None,
-            cache: None,
-        });
+        let pipeline = scene_pipeline(&device, &texture_layout, &frame_layout, &module);
         Ok(Rc::new(Self {
             instance,
             adapter,
             device,
             queue,
             pipeline,
+            video_pipeline: RefCell::new(None),
             texture_layout,
             frame_layout,
             sampler,
@@ -306,10 +348,10 @@ impl Gpu {
             group,
             width: width as f32,
             height: height as f32,
-            _texture: texture,
+            storage: TextureStorage::Image(texture),
             revision: Cell::new(0),
             stream_id: Cell::new(None),
-            image_lifetime: RefCell::new(None),
+            lifetime: RefCell::new(None),
             bytes: levels.iter().map(|level| level.pixels.len() as u64).sum(),
             text_origin_x: 0.,
         });
@@ -366,7 +408,7 @@ impl Gpu {
             profile.image_misses += 1;
         }
         let texture = self.texture(data.levels(), data.format(), profile, enabled);
-        *texture.image_lifetime.borrow_mut() = Some(data.lifetime());
+        *texture.lifetime.borrow_mut() = Some(ResourceLifetime::Image(data.lifetime()));
         if let Some((id, revision)) = streamed {
             texture.stream_id.set(Some(id));
             texture.revision.set(revision);
@@ -456,6 +498,7 @@ struct PreparedScene {
     textures: Vec<Rc<TextureResource>>,
     geometry: scene::Geometry,
     stream_updates: stream_upload::StreamUpdates,
+    video_updates: video_scene::Updates,
 }
 struct ValidatedScene<'a> {
     width: u32,
@@ -566,6 +609,13 @@ impl Canvas {
             ..
         } = *validated;
         let scale = density.factor();
+        let mut video_updates = video_scene::Updates::default();
+        video_updates.reserve(
+            paint
+                .iter()
+                .filter(|p| matches!(p, Paint::Video { .. }))
+                .count(),
+        )?;
         let mut stream_updates = stream_upload::StreamUpdates::default();
         stream_updates.reserve(
             paint
@@ -653,6 +703,28 @@ impl Canvas {
                         &mut stream_updates,
                     ),
                 ),
+                Paint::Video {
+                    rect,
+                    clip,
+                    data,
+                    radius,
+                    opacity,
+                    tint,
+                    ..
+                } => (
+                    *rect,
+                    clip,
+                    tint.alpha(tint.3 * *opacity),
+                    *radius,
+                    1.,
+                    0.,
+                    self.gpu.video(
+                        data,
+                        &mut profile.resources,
+                        self.profiling,
+                        &mut video_updates,
+                    ),
+                ),
                 Paint::Text {
                     rect,
                     clip,
@@ -731,7 +803,7 @@ impl Canvas {
                 );
             }
             let uv = match primitive {
-                Paint::Image { uv, .. } => *uv,
+                Paint::Image { uv, .. } | Paint::Video { uv, .. } => *uv,
                 _ => Rect::new(0., 0., 1., 1.),
             };
             let bounds = clip.bounds;
@@ -772,6 +844,7 @@ impl Canvas {
             textures,
             geometry,
             stream_updates,
+            video_updates,
         })
     }
     /// Draw a scene to a compatible BGRA8 target from this canvas's device.
@@ -814,6 +887,7 @@ impl Canvas {
             textures,
             geometry,
             stream_updates,
+            video_updates,
         } = match self.prepare(&validated, &mut profile) {
             Ok(prepared) => prepared,
             Err(error) => {
@@ -872,10 +946,13 @@ impl Canvas {
         .collect();
         self.gpu.queue.write_buffer(&self.viewport, 0, &view_bytes);
         let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
-        let upload_started = profiling::start(self.profiling && !stream_updates.is_empty());
+        let upload_started = profiling::start(
+            self.profiling && (!stream_updates.is_empty() || !video_updates.is_empty()),
+        );
         let mut pool = self.gpu.stream_uploads.borrow_mut();
         let mut uploads = pool.begin(&self.gpu.device, !stream_updates.is_empty());
-        let uploaded_bytes = stream_updates.encode(&self.gpu, &mut uploads, &mut encoder);
+        let uploaded_bytes = stream_updates.encode(&self.gpu, &mut uploads, &mut encoder)
+            + video_updates.encode(&self.gpu);
         if self.profiling {
             profile.resources.texture_upload += profiling::elapsed(upload_started);
             profile.resources.texture_upload_bytes += uploaded_bytes;
@@ -883,6 +960,7 @@ impl Canvas {
         profile.prepare = validated.validation + profiling::elapsed(started);
         let started = profiling::start(self.profiling);
         {
+            let native_pipeline = self.gpu.video_pipeline.borrow();
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view,
@@ -895,10 +973,23 @@ impl Canvas {
                 })],
                 ..Default::default()
             });
-            pass.set_pipeline(&self.gpu.pipeline);
             pass.set_vertex_buffer(0, self.instances.slice(..));
-            pass.set_bind_group(1, &self.frame_group, &[]);
+            let mut current_pipeline = None;
             for (i, texture) in textures.iter().enumerate() {
+                let native = texture.is_video();
+                if current_pipeline != Some(native) {
+                    let pipeline = if native {
+                        &native_pipeline
+                            .as_ref()
+                            .expect("native scene prepared its pipeline")
+                            .pipeline
+                    } else {
+                        &self.gpu.pipeline
+                    };
+                    pass.set_pipeline(pipeline);
+                    pass.set_bind_group(1, &self.frame_group, &[]);
+                    current_pipeline = Some(native);
+                }
                 pass.set_bind_group(0, &texture.group, &[]);
                 pass.draw(0..6, i as u32..i as u32 + 1);
             }
@@ -912,6 +1003,7 @@ impl Canvas {
         drop(uploads);
         drop(pool);
         stream_updates.commit();
+        video_updates.commit();
         profile.submit = profiling::elapsed(started);
         let started = profiling::start(self.profiling);
         // Keep each surface's current scene resident, including while other

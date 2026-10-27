@@ -1,5 +1,5 @@
 //! Opt-in native video delivery. No codec/GPU/OS handles cross this boundary.
-use crate::{DomainError, MediaFrame, Result, WallpaperFrameRate};
+use crate::{DomainError, MediaFrame, Result, WallpaperFrameRate, WallpaperPixelTarget};
 pub use lucent_video_frame as video_frame;
 use std::time::Duration;
 pub use video_frame::Yuv420Frame;
@@ -8,12 +8,17 @@ pub use video_frame::Yuv420Frame;
 pub struct NativePlaybackOptions {
     pub fps: WallpaperFrameRate,
     pub looping: bool,
+    /// Source-size planes are admitted only when this actual cover demand does
+    /// not require minification. Otherwise preserve the existing fitted RGBA.
+    /// None explicitly requests source size, not unknown desktop geometry.
+    pub target: Option<WallpaperPixelTarget>,
 }
 impl Default for NativePlaybackOptions {
     fn default() -> Self {
         Self {
             fps: WallpaperFrameRate::Source,
             looping: true,
+            target: None,
         }
     }
 }
@@ -105,6 +110,7 @@ mod tests {
             NativePlaybackOptions {
                 fps: WallpaperFrameRate::Capped(WallpaperFps::new(60).unwrap()),
                 looping: false,
+                target: Some(WallpaperPixelTarget::new(64, 48).unwrap()),
             },
             &mut |value| {
                 let frame = value.unwrap();
@@ -120,7 +126,10 @@ mod tests {
         );
         assert_eq!(seen, 1);
         let options = adapter.0.lock().unwrap().unwrap();
-        assert!(options.target.is_none());
+        assert_eq!(
+            options.target,
+            Some(WallpaperPixelTarget::new(64, 48).unwrap())
+        );
         assert!(!options.looping);
         assert_eq!(
             options.fps,

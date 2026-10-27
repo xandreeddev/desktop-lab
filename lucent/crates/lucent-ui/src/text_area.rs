@@ -1145,7 +1145,8 @@ mod tests {
                         | Paint::Shape { rect, clip, .. }
                         | Paint::Shadow { rect, clip, .. }
                         | Paint::Text { rect, clip, .. }
-                        | Paint::Image { rect, clip, .. } => (rect, &clip.bounds),
+                        | Paint::Image { rect, clip, .. }
+                        | Paint::Video { rect, clip, .. } => (rect, &clip.bounds),
                     };
                     for bounds in [rect, clip] {
                         assert!(

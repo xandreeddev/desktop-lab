@@ -302,7 +302,7 @@ impl WallpaperPlaybackPort for NativeVideoWallpapers {
                 PlaybackOptions {
                     fps: options.fps,
                     looping: options.looping,
-                    target: None,
+                    target: options.target,
                 },
                 DecodePurpose::NativePlanes,
                 &mut |frame, _| emit(Ok(frame)),
@@ -963,28 +963,37 @@ impl DecoderSession {
                     return Ok(false);
                 }
                 if matches!(purpose, DecodePurpose::NativePlanes) {
-                    match native_planes::admit(frame)? {
-                        native_planes::Admission::Native(planes, publication) => {
-                            *converter = None;
-                            delivered = true;
-                            if !emit(
-                                NativeMediaFrame::Yuv420 {
-                                    frame: planes,
-                                    timestamp,
-                                    publication,
-                                },
-                                None,
-                            ) {
-                                return Ok(false);
+                    let source_size = (frame.width(), frame.height());
+                    let native_size = options
+                        .target
+                        .map(|target| target.cover_size(source_size.0, source_size.1))
+                        .transpose()?;
+                    // This one-level plane renderer must never replace the
+                    // existing fitted RGBA path when actual cover needs reduction.
+                    if native_size.is_none_or(|size| size == source_size) {
+                        match native_planes::admit(frame)? {
+                            native_planes::Admission::Native(planes, publication) => {
+                                *converter = None;
+                                delivered = true;
+                                if !emit(
+                                    NativeMediaFrame::Yuv420 {
+                                        frame: planes,
+                                        timestamp,
+                                        publication,
+                                    },
+                                    None,
+                                ) {
+                                    return Ok(false);
+                                }
+                                continue;
                             }
-                            continue;
+                            native_planes::Admission::Rgba(source) => frame = source,
                         }
-                        native_planes::Admission::Rgba(source) => frame = source,
                     }
-                    // Unknown/alpha/unsupported metadata keeps the established
-                    // source-size software conversion. No guessed color tags.
+                    // Unknown/alpha/unsupported metadata and minification keep
+                    // established software fitting; no guessed color or filters.
                     if converter.is_none() {
-                        *converter = Some(FrameConverter::new_live(&frame, None)?);
+                        *converter = Some(FrameConverter::new_live(&frame, options.target)?);
                     }
                 }
                 let (converted, revision) = if let Some(targets) = targets.as_deref_mut() {

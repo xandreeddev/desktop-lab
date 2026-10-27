@@ -74,6 +74,23 @@ fn color(color: Color) -> Result<(), Error> {
     }
     Ok(())
 }
+fn sampled_image(
+    uv: Rect,
+    radius: f32,
+    opacity: f32,
+    tint: Color,
+    size: (u32, u32),
+    limit: u32,
+) -> Result<Color, Error> {
+    positive(radius)?;
+    positive(opacity)?;
+    rect(uv)?;
+    color(tint)?;
+    if size.0 > limit || size.1 > limit {
+        return Err("image exceeds device texture dimension limit".into());
+    }
+    Ok(tint.alpha(tint.3 * opacity))
+}
 
 pub(super) fn validate(
     paint: &[Paint],
@@ -135,18 +152,38 @@ pub(super) fn validate(
                     radius,
                     opacity,
                     tint,
-                } => {
-                    positive(*radius)?;
-                    positive(*opacity)?;
-                    rect(*uv)?;
-                    if data.width() > limits.max_texture_dimension_2d
-                        || data.height() > limits.max_texture_dimension_2d
-                    {
-                        return Err("image exceeds device texture dimension limit".into());
-                    }
-                    color(*tint)?;
-                    (*bounds, clip, tint.alpha(tint.3 * *opacity))
-                }
+                } => (
+                    *bounds,
+                    clip,
+                    sampled_image(
+                        *uv,
+                        *radius,
+                        *opacity,
+                        *tint,
+                        (data.width(), data.height()),
+                        limits.max_texture_dimension_2d,
+                    )?,
+                ),
+                Paint::Video {
+                    rect: bounds,
+                    clip,
+                    data,
+                    uv,
+                    radius,
+                    opacity,
+                    tint,
+                } => (
+                    *bounds,
+                    clip,
+                    sampled_image(
+                        *uv,
+                        *radius,
+                        *opacity,
+                        *tint,
+                        (data.width(), data.height()),
+                        limits.max_texture_dimension_2d,
+                    )?,
+                ),
                 Paint::Text {
                     rect,
                     clip,

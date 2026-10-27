@@ -1,6 +1,7 @@
 //! Playback coordinator and bounded presentation handoff. The root owns saved
 //! preferences; this child owns pending import, active producers and panel state.
 use crate::ports::AssetPort;
+use crate::presentation_frame::PresentationFrame;
 use lucent_api::{
     Cancellation, Effects, ImageData, ImageStream, Subscription, TextEdit, TextFieldState,
 };
@@ -71,7 +72,7 @@ pub struct SaveState<'a> {
     pub writable: bool,
 }
 enum Delivery {
-    Frame(Arc<ImageData>),
+    Frame(PresentationFrame),
     Error(String),
 }
 #[derive(Default)]
@@ -107,8 +108,9 @@ struct Player {
     fps: WallpaperFrameRate,
     target: Option<WallpaperPixelTarget>,
     mailbox: Arc<Mutex<Mailbox>>,
-    frame: Option<Arc<ImageData>>,
+    frame: Option<PresentationFrame>,
     running: bool,
+    native_planes: bool,
     error: String,
 }
 struct Route {
@@ -116,14 +118,10 @@ struct Route {
     pause: Option<WallpaperPauseReason>,
     /// A static GPU identity is essential when another output still updates
     /// the shared stream texture. Pixels remain shared immutable storage.
-    held: Option<Arc<ImageData>>,
+    held: Option<PresentationFrame>,
 }
-fn frozen_frame(frame: &Arc<ImageData>) -> Arc<ImageData> {
-    if frame.stream_revision().is_some() {
-        Arc::new(frame.snapshot())
-    } else {
-        frame.clone()
-    }
+fn frozen_frame(frame: &PresentationFrame) -> PresentationFrame {
+    frame.snapshot()
 }
 struct Import {
     revision: u64,
@@ -145,6 +143,7 @@ pub struct LiveWallpaper {
     awaiting_first_frame: Option<f64>,
     first_frame_submitted: bool,
     source_frame_profiling: bool,
+    native_planes: bool,
     importing: Option<Import>,
     revision: u64,
     players: BTreeMap<String, Player>,
@@ -182,6 +181,7 @@ impl LiveWallpaper {
             awaiting_first_frame: None,
             first_frame_submitted: false,
             source_frame_profiling: false,
+            native_planes: false,
             importing: None,
             revision: 0,
             players: BTreeMap::new(),
@@ -209,12 +209,21 @@ impl LiveWallpaper {
                 .source_frames = enabled.then(frame_trace::SourceFrames::default);
         }
     }
+    /// Default/legacy RGBA observation. Native presentation uses the typed
+    /// presentation_source below, never an empty or fabricated RGBA buffer.
     #[cfg(test)]
     pub fn frame(&self, monitor: Option<&MonitorId>) -> Option<&Arc<ImageData>> {
         self.frame_source(monitor).map(|(_, frame)| frame)
     }
-    /// Selected asset identity paired with the actual prepared frame.
+    #[cfg(test)]
     pub fn frame_source(&self, monitor: Option<&MonitorId>) -> Option<(&str, &Arc<ImageData>)> {
+        self.presentation_source(monitor)
+            .and_then(|(source, frame)| frame.as_image().map(|image| (source, image)))
+    }
+    pub fn presentation_source(
+        &self,
+        monitor: Option<&MonitorId>,
+    ) -> Option<(&str, &PresentationFrame)> {
         let target = monitor
             .cloned()
             .map_or(LiveWallpaperTarget::Default, LiveWallpaperTarget::Monitor);
@@ -224,6 +233,11 @@ impl LiveWallpaper {
             player.asset.path.as_str(),
             route.held.as_ref().or(player.frame.as_ref())?,
         ))
+    }
+    /// Composition-root experimental policy. Mixed/shared/unknown outputs keep
+    /// fitted RGBA; enable before the normal host reconciliation starts.
+    pub fn enable_native_planes(&mut self, enabled: bool) {
+        self.native_planes = enabled;
     }
     pub fn reconcile(
         &mut self,
@@ -244,7 +258,12 @@ impl LiveWallpaper {
         };
         let mut wanted: BTreeMap<
             String,
-            (LiveWallpaperSettings, bool, Option<WallpaperPixelTarget>),
+            (
+                LiveWallpaperSettings,
+                bool,
+                Option<WallpaperPixelTarget>,
+                usize,
+            ),
         > = BTreeMap::new();
         let mut routes = BTreeMap::new();
         let mut seeds = BTreeMap::new();
@@ -278,7 +297,8 @@ impl LiveWallpaper {
                 // Covered outputs retain their own frozen presentation frame.
                 wanted
                     .entry(key)
-                    .and_modify(|(_, running, target)| {
+                    .and_modify(|(_, running, target, count)| {
+                        *count += 1;
                         *running |= pause.is_none();
                         // Each connected consumer, including a paused output,
                         // must retain cover density. Unknown geometry keeps
@@ -292,7 +312,7 @@ impl LiveWallpaper {
                             _ => None,
                         };
                     })
-                    .or_insert((setting.clone(), pause.is_none(), pixels));
+                    .or_insert((setting.clone(), pause.is_none(), pixels, 1));
             }
         }
         // A changed FPS/pause profile retires its producer identity, but keeps
@@ -309,13 +329,19 @@ impl LiveWallpaper {
             .collect();
         self.players.retain(|key, _| wanted.contains_key(key));
         self.routes = routes;
-        for (key, (setting, running, target)) in wanted.into_iter().take(4) {
+        for (key, (setting, running, target, count)) in wanted.into_iter().take(4) {
+            let native_planes =
+                self.native_planes && outputs_known && count == 1 && target.is_some();
             if let Some(player) = self.players.get_mut(&key) {
-                if player.running != running || player.target != target {
+                if player.running != running
+                    || player.target != target
+                    || player.native_planes != native_planes
+                {
                     self.revision = self.revision.wrapping_add(1);
                     player.revision = self.revision;
                     player.running = running;
                     player.target = target;
+                    player.native_planes = native_planes;
                     player.error.clear();
                     player.mailbox =
                         Arc::new(Mutex::new(Mailbox::traced(self.source_frame_profiling)));
@@ -326,7 +352,12 @@ impl LiveWallpaper {
                     .get(&key)
                     .cloned()
                     .or_else(|| last_frames.get(&setting.asset.path).cloned())
-                    .or_else(|| self.prepared.get(&setting.asset.path).cloned());
+                    .or_else(|| {
+                        self.prepared
+                            .get(&setting.asset.path)
+                            .cloned()
+                            .map(PresentationFrame::from)
+                    });
                 self.players.insert(
                     key,
                     Player {
@@ -337,6 +368,7 @@ impl LiveWallpaper {
                         mailbox: Arc::new(Mutex::new(Mailbox::traced(self.source_frame_profiling))),
                         frame,
                         running,
+                        native_planes,
                         error: String::new(),
                     },
                 );
@@ -367,6 +399,7 @@ impl LiveWallpaper {
                 let fps = player.fps;
                 let target = player.target;
                 let running = player.running;
+                let native_planes = player.native_planes;
                 let source_frame_profiling = self.source_frame_profiling;
                 Subscription::stream(format!("live-wallpaper:{revision}"), move |out, cancel| {
                     let stream = ImageStream::new();
@@ -388,48 +421,76 @@ impl LiveWallpaper {
                         // Delivery remains bounded and never carries pixels in
                         // a runtime message. This finite worker retires on Wake.
                         publish(match assets.background(&asset.poster.path, None) {
-                            Ok(image) => Delivery::Frame(image),
+                            Ok(image) => Delivery::Frame(image.into()),
                             Err(error) => Delivery::Error(error.to_string()),
                         });
                         return;
                     }
-                    adapter.play(
-                        &asset,
-                        PlaybackOptions {
-                            fps,
-                            looping: true,
-                            target,
-                        },
-                        &mut |result| {
-                            if stop.cancelled() {
-                                return false;
-                            }
-                            let delivery = match result.and_then(|frame| {
-                                let timestamp = frame.timestamp;
-                                let (w, h, bytes, aspect) = frame.into_shared_rgba_with_aspect();
-                                let image = stream
-                                    .frame_rgba_shared_with_aspect(w, h, bytes, aspect)
-                                    .map_err(|e| DomainError::Failed(e.to_string()))?;
-                                if source_frame_profiling
-                                    && let Some(trace) = mailbox
-                                        .lock()
-                                        .unwrap_or_else(|p| p.into_inner())
-                                        .source_frames
-                                        .as_mut()
-                                    && let Some(identity) = image.stream_revision()
-                                {
-                                    trace.record(revision, identity, timestamp);
+                    let mut deliver = |result: Result<NativeMediaFrame>| {
+                        if stop.cancelled() {
+                            return false;
+                        }
+                        let delivery = match result.and_then(|frame| {
+                            let timestamp = frame.timestamp();
+                            let image: PresentationFrame = match frame {
+                                NativeMediaFrame::Rgba(frame) => {
+                                    let (w, h, bytes, aspect) =
+                                        frame.into_shared_rgba_with_aspect();
+                                    Arc::new(
+                                        stream
+                                            .frame_rgba_shared_with_aspect(w, h, bytes, aspect)
+                                            .map_err(|e| DomainError::Failed(e.to_string()))?,
+                                    )
+                                    .into()
                                 }
-                                Ok(Arc::new(image))
-                            }) {
-                                Ok(image) => Delivery::Frame(image),
-                                Err(error) => Delivery::Error(error.to_string()),
+                                NativeMediaFrame::Yuv420 { frame, .. } => Arc::new(
+                                    stream
+                                        .frame_yuv420(frame)
+                                        .map_err(|e| DomainError::Failed(e.to_string()))?,
+                                )
+                                .into(),
                             };
-                            publish(delivery);
-                            !stop.cancelled()
-                        },
-                        stop.clone(),
-                    );
+                            if source_frame_profiling
+                                && let Some(trace) = mailbox
+                                    .lock()
+                                    .unwrap_or_else(|p| p.into_inner())
+                                    .source_frames
+                                    .as_mut()
+                                && let Some(identity) = image.stream_revision()
+                            {
+                                trace.record(revision, identity, timestamp);
+                            }
+                            Ok(image)
+                        }) {
+                            Ok(frame) => Delivery::Frame(frame),
+                            Err(error) => Delivery::Error(error.to_string()),
+                        };
+                        publish(delivery);
+                        !stop.cancelled()
+                    };
+                    if native_planes {
+                        adapter.play_native(
+                            &asset,
+                            NativePlaybackOptions {
+                                fps,
+                                looping: true,
+                                target,
+                            },
+                            &mut deliver,
+                            stop.clone(),
+                        );
+                    } else {
+                        adapter.play(
+                            &asset,
+                            PlaybackOptions {
+                                fps,
+                                looping: true,
+                                target,
+                            },
+                            &mut |value| deliver(value.map(NativeMediaFrame::Rgba)),
+                            stop.clone(),
+                        );
+                    }
                 })
             })
             .collect();
@@ -974,15 +1035,29 @@ impl LiveWallpaper {
         }
     }
     pub fn inspect(&self) -> serde_json::Value {
-        let retained = crate::previews::usage(
-            self.players
-                .values()
-                .filter_map(|player| player.frame.as_ref())
-                .chain(self.routes.values().filter_map(|route| route.held.as_ref())),
-        );
-        serde_json::json!({"open":self.open,"awaiting_first_frame":self.awaiting_first_frame.is_some(),"importing":self.importing.is_some(),"library_loading":self.library_loading,"library_count":self.library.len(),"library_error":self.library_error,"selection":self.selection,"preview":self.preview.inspect(),"players":self.players.len(),"running":self.players.values().filter(|p|p.running&&p.error.is_empty()).count(),"retained_frame_bytes":retained.bytes,"producers":self.players.values().map(|player| {
+        let frames: Vec<_> = self
+            .players
+            .values()
+            .filter_map(|player| player.frame.as_ref())
+            .chain(self.routes.values().filter_map(|route| route.held.as_ref()))
+            .collect();
+        let rgba = crate::previews::usage(frames.iter().filter_map(|frame| frame.as_image()));
+        let mut plane_views = BTreeMap::new();
+        for frame in &frames {
+            if let PresentationFrame::Video(data) = frame {
+                for plane in data.frame().planes() {
+                    plane_views.insert(
+                        (plane.bytes().as_ptr() as usize, plane.bytes().len()),
+                        plane.bytes().len(),
+                    );
+                }
+            }
+        }
+        // Logical retained published views, not underlying AVBuffer capacity/RSS.
+        let retained_bytes = rgba.bytes + plane_views.values().sum::<usize>();
+        serde_json::json!({"open":self.open,"awaiting_first_frame":self.awaiting_first_frame.is_some(),"importing":self.importing.is_some(),"library_loading":self.library_loading,"library_count":self.library.len(),"library_error":self.library_error,"selection":self.selection,"preview":self.preview.inspect(),"players":self.players.len(),"running":self.players.values().filter(|p|p.running&&p.error.is_empty()).count(),"retained_frame_bytes":retained_bytes,"native_planes_opt_in":self.native_planes,"producers":self.players.values().map(|player| {
             let source_frames=player.mailbox.lock().unwrap_or_else(|p|p.into_inner()).source_frames.as_ref().map(frame_trace::SourceFrames::json);
-            serde_json::json!({"revision":player.revision,"running":player.running,"target":player.target.map(WallpaperPixelTarget::size),"frame_size":player.frame.as_ref().map(|frame|(frame.width(),frame.height())),"source_aspect":player.frame.as_ref().map(|frame|frame.aspect_size()),"source_frames":source_frames})
+            serde_json::json!({"revision":player.revision,"running":player.running,"native_requested":player.native_planes,"representation":player.frame.as_ref().map(PresentationFrame::representation),"target":player.target.map(WallpaperPixelTarget::size),"frame_size":player.frame.as_ref().map(|frame|(frame.width(),frame.height())),"source_aspect":player.frame.as_ref().map(|frame|frame.aspect_size()),"source_frames":source_frames})
         }).collect::<Vec<_>>(),"error":self.status(),"outputs":self.routes.iter().map(|(target,route)| serde_json::json!({"monitor":target.monitor().map(MonitorId::as_str),"pause_reason":route.pause})).collect::<Vec<_>>()})
     }
 }

@@ -498,20 +498,23 @@ impl Desktop {
                 .live_wallpapers
                 .selected(&target)
                 .is_some_and(|profile| profile.enabled);
-            let live = self.live_wallpaper.frame_source(monitor.as_ref());
+            let live = self.live_wallpaper.presentation_source(monitor.as_ref());
             let (source, image) = match live {
                 Some((path, frame)) => (Some(Source::Live(path.to_owned())), Some(frame.clone())),
                 None if live_selected => (None, None),
                 None => (
                     Some(Source::Static(self.wallpaper.asset_path().to_owned())),
-                    self.wallpaper.background.clone(),
+                    self.wallpaper
+                        .background
+                        .clone()
+                        .map(crate::presentation_frame::PresentationFrame::from),
                 ),
             };
             let (_, presentation) = self
                 .backgrounds
                 .entry(instance.clone())
                 .or_insert_with(|| (generation, Default::default()));
-            if presentation.reconcile(source, image, effects.now) {
+            if presentation.reconcile_frame(source, image, effects.now) {
                 effects.redraw_surface(SurfaceAddress {
                     role: "background",
                     instance,

@@ -146,14 +146,16 @@ impl ImageStream {
         };
         self.prepared_frame(width, height, pixels, aspect_size, opaque)
     }
-    fn prepared_frame(
+    /// Prepare checked, immutable native video planes without CPU RGBA
+    /// conversion. The caller owns decode/timing; this descriptor owns no GPU.
+    pub fn frame_yuv420(
         &self,
-        width: u32,
-        height: u32,
-        pixels: Arc<Vec<u8>>,
-        aspect_size: (u32, u32),
-        opaque: bool,
-    ) -> Result<ImageData, ImageError> {
+        frame: crate::video_frame::Yuv420Frame,
+    ) -> Result<crate::VideoData, ImageError> {
+        let (id, stream) = self.next_frame_identity()?;
+        Ok(crate::VideoData::prepared(frame, id, stream))
+    }
+    fn next_frame_identity(&self) -> Result<(u64, (u64, u64)), ImageError> {
         let revision = self
             .0
             .revision
@@ -162,14 +164,28 @@ impl ImageStream {
             })
             .map_err(|_| ImageError("Image stream revision exhausted"))?
             + 1;
+        Ok((
+            NEXT_IMAGE.fetch_add(1, Ordering::Relaxed),
+            (self.0.id, revision),
+        ))
+    }
+    fn prepared_frame(
+        &self,
+        width: u32,
+        height: u32,
+        pixels: Arc<Vec<u8>>,
+        aspect_size: (u32, u32),
+        opaque: bool,
+    ) -> Result<ImageData, ImageError> {
+        let (id, stream) = self.next_frame_identity()?;
         Ok(ImageData {
             key: "streamed-image".into(),
             aspect_size,
             prepared: Arc::new(Prepared {
-                id: NEXT_IMAGE.fetch_add(1, Ordering::Relaxed),
+                id,
                 format: ImageFormat::PremultipliedRgba8,
                 opaque,
-                stream: Some((self.0.id, revision)),
+                stream: Some(stream),
                 levels: vec![ImageLevel {
                     width,
                     height,

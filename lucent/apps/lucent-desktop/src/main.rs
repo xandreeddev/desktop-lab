@@ -22,6 +22,7 @@ mod persistence;
 mod platform;
 mod ports;
 mod power;
+mod presentation_frame;
 mod previews;
 mod shell_layout;
 mod tray;
@@ -39,6 +40,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return lucent_services::displays::run_guard().map_err(Into::into);
     }
     let mut desktop = Desktop::new(platform::desktop_adapters());
+    // Experimental composition policy, disabled for ordinary sessions. Services
+    // stay injected and views never inspect environment or open media files.
+    desktop.live_wallpaper.enable_native_planes(
+        std::env::var_os("LUCENT_NATIVE_VIDEO_PLANES").is_some_and(|value| value == "1"),
+    );
     desktop.live_wallpaper.enable_frame_tracing(
         std::env::var_os("LUCENT_PROFILE_PRESENTATION").is_some_and(|value| value == "1"),
     );
