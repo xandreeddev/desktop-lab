@@ -207,18 +207,46 @@ def sample(value, stopped):
         allocator(value['allocator'])
 
 
-def validate_case(value, mode, pid, expected_pts):
-    keys = {'kind', 'mode', 'pid', 'phases', 'play_calls', 'exact_worker_joins',
+def matrix_cases():
+    expected = [('known_targets','reopen'),('known_targets','retarget'),
+                ('source_and_targets','reopen'),('source_and_targets','retarget')]
+    need(PROFILE['case_order'] == [list(row) for row in expected]
+         and set(PROFILE['sequences']) == {'known_targets','source_and_targets'},
+         'four_explicit_known_and_source_cases_required')
+    return expected
+
+
+def validate_matrix(cases, binary_sha256, input_sha256):
+    expected = matrix_cases()
+    need(len(cases) == len(expected)
+         and [(row['sequence'],row['mode']) for row in cases] == expected,
+         'both_complete_sequence_comparisons_required')
+    need(all(type(row['pid']) is int and row['pid'] > 1 for row in cases)
+         and len({row['pid'] for row in cases}) == 4, 'four_distinct_fresh_processes_required')
+    need(all(row['binary_sha256'] == binary_sha256 and row['input_sha256'] == input_sha256 for row in cases),
+         'one_identical_compiled_binary_and_encoded_input_required')
+    need(all(type(row[key]) is int and row[key] > 0 for row in cases for key in
+             ('host_process_started_monotonic_ns','host_process_finished_monotonic_ns'))
+         and all(row['host_process_started_monotonic_ns'] < row['host_process_finished_monotonic_ns'] for row in cases)
+         and all(a['host_process_finished_monotonic_ns'] < b['host_process_started_monotonic_ns']
+                 for a,b in zip(cases,cases[1:])), 'four_process_nonoverlap_required')
+
+
+def validate_case(value, sequence, mode, pid, expected_pts):
+    need(sequence in PROFILE['sequences'] and mode in ('reopen','retarget'), 'known_typed_case_required')
+    planned = PROFILE['sequences'][sequence]
+    keys = {'kind', 'mode', 'sequence', 'pid', 'phases', 'play_calls', 'exact_worker_joins',
             'stopped_allocator_observations', 'final_latest_capacity_before_drop',
             'consumer_held_pixel_capacity_after_drop', 'renderer_used', 'fps_measured',
             'whole_shell_memory_accepted', 'native_presentation_accepted'}
     need(type(value) is dict and set(value) == keys and value['kind'] == 'full_demand_observation'
-         and value['mode'] == mode and value['pid'] == pid and type(pid) is int and pid > 1,
+         and value['mode'] == mode and value['sequence'] == sequence
+         and value['pid'] == pid and type(pid) is int and pid > 1,
          'exact_fresh_process_case_required')
     need(all(value[key] is False for key in ('renderer_used', 'fps_measured', 'whole_shell_memory_accepted', 'native_presentation_accepted'))
          and type(value['consumer_held_pixel_capacity_after_drop']) is int
          and value['consumer_held_pixel_capacity_after_drop'] == 0, 'backend_only_scope_required')
-    expected_workers = 1 if mode == 'retarget' else 5
+    expected_workers = 1 if mode == 'retarget' else len(planned)
     need(type(value['play_calls']) is int and value['play_calls'] == expected_workers
          and len(value['exact_worker_joins']) == expected_workers,
          'exact_play_and_join_count_required')
@@ -228,13 +256,13 @@ def validate_case(value, mode, pid, expected_pts):
                  ('stop_requested', 'watch_joined', 'cancellation_observed'))
              and type(row['join_elapsed_ms']) is int and 0 <= row['join_elapsed_ms'] < 10000,
              'each_exact_worker_must_cancel_and_join_before_replacement')
-    need(len(value['phases']) == 5, 'five_source_cover_phases_required')
+    need(len(value['phases']) == len(planned), 'exact_sequence_phase_count_required')
     phase_keys = {'phase', 'revision', 'requested_size', 'worker_ordinal', 'target_ready_elapsed_ms',
         'phase_observed_ms', 'phase_request_clock_ms', 'publications', 'first_size', 'last_size', 'rgba_bytes',
         'aspect_size', 'maximum_capacity_bytes', 'latest_capacity_bytes', 'first_pts_ns', 'last_pts_ns',
         'observed_loop_wraps_total', 'stale_publications_total', 'all_admitted_pts_match_ffprobe', 'memory_samples'}
     clocks = []
-    for index, (row, (label, target)) in enumerate(zip(value['phases'], PROFILE['phases']), 1):
+    for index, (row, (label, target)) in enumerate(zip(value['phases'], planned), 1):
         size = target or [3840, 2160]
         extent = size[0] * size[1] * 4
         need(set(row) == phase_keys and row['phase'] == label and type(row['revision']) is int and row['revision'] == index
@@ -277,8 +305,10 @@ def validate_case(value, mode, pid, expected_pts):
          and points[1]['elapsed_ms'] <= points[2]['elapsed_ms']
          and points[1]['elapsed_ms'] >= value['phases'][-1]['memory_samples'][-1]['elapsed_ms'],
          'stopped_allocator_clock_must_follow_final_active_observation')
+    final_size = planned[-1][1] or [3840,2160]
     need(type(value['final_latest_capacity_before_drop']) is int
-         and value['final_latest_capacity_before_drop'] >= 3840*2160*4, 'final_source_storage_required')
+         and value['final_latest_capacity_before_drop'] >= final_size[0]*final_size[1]*4,
+         'final_sequence_storage_required')
     return value
 
 
@@ -419,15 +449,16 @@ def run(args):
     for path in media.iterdir():
         path.chmod(0o400)
     cases = []
-    for mode in ('reopen','retarget'):
-        admissions['before_'+mode] = admit()
+    for sequence,mode in matrix_cases():
+        name = sequence+'-'+mode
+        admissions['before_'+name] = admit()
         need(digest(binary) == record['binary']['sha256'] and digest(media/'source.mp4') == record['input']['sha256'],
              'same_compiled_binary_and_input_required')
         request = {'state':str(package/'state'),'asset':{'path':str(media/'source.mp4'),
             'source':{'name':'Generated 4K60','path':str(media/'source.mp4')},
             'poster':{'name':'Generated poster','path':str(media/'poster.png')}},
-            'mode':mode,'phase_seconds':12,'expected_pts_ns':pts}
-        stderr = logs/(mode+'-native-stderr.log')
+            'mode':mode,'sequence':sequence,'phase_seconds':12,'expected_pts_ns':pts}
+        stderr = logs/(name+'-native-stderr.log')
         started = time.monotonic_ns()
         with stderr.open('xb') as errors:
             process = subprocess.Popen([str(binary),'--run'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=errors,env=env)
@@ -439,16 +470,15 @@ def run(args):
                 raise
         need(process.returncode == 0 and 0 < len(raw) <= 512*1024, 'complete_bounded_observer_process_required')
         need(stderr.stat().st_size <= 16*1024**2, 'bounded_native_stderr_required')
-        value = validate_case(json.loads(raw),mode,process.pid,pts)
-        need(not cases or process.pid != cases[0]['pid'], 'two_fresh_observer_processes_required')
+        value = validate_case(json.loads(raw),sequence,mode,process.pid,pts)
+        need(all(process.pid != prior['pid'] for prior in cases), 'four_fresh_observer_processes_required')
         value.update({'host_process_started_monotonic_ns':started,'host_process_finished_monotonic_ns':time.monotonic_ns(),
                       'binary_sha256':digest(binary),'input_sha256':digest(media/'source.mp4'),
                       'stderr_sha256':digest(stderr),'stderr_bytes':stderr.stat().st_size})
-        (package/(mode+'.json')).write_text(json.dumps(value,indent=2)+'\n')
+        (package/(name+'.json')).write_text(json.dumps(value,indent=2)+'\n')
         cases.append(value)
         save()
-    need(cases[0]['host_process_finished_monotonic_ns'] < cases[1]['host_process_started_monotonic_ns'],
-         'process_nonoverlap_required')
+    validate_matrix(cases,record['binary']['sha256'],record['input']['sha256'])
     need(staged_roster(scratch) == roster, 'final_backend_source_changed')
     exact_source(source)
     need(digest(binary) == record['binary']['sha256'] and digest(media/'source.mp4') == record['input']['sha256'],
@@ -457,10 +487,11 @@ def run(args):
          'FFmpeg_build_and_experiment_headers_must_stay_exact')
     need(output(['pacman','-Q']) == (dependency_source/'installed-packages.txt').read_text().strip(), 'final_packages_changed')
     record['final_budget'] = resource_snapshot()
-    record['cases'] = [{'mode':row['mode'],'pid':row['pid'],'path':row['mode']+'.json',
-                        'sha256':digest(package/(row['mode']+'.json'))} for row in cases]
+    record['cases'] = [{'mode':row['mode'],'sequence':row['sequence'],'pid':row['pid'],
+                        'path':row['sequence']+'-'+row['mode']+'.json',
+                        'sha256':digest(package/(row['sequence']+'-'+row['mode']+'.json'))} for row in cases]
     record['passed'] = True
-    record['mechanism_scope'] = 'Two finite fresh-process backend observations; publication counts are not presentation FPS. No claimed memory improvement threshold.'
+    record['mechanism_scope'] = 'Two sequences in four finite fresh-process backend observations; publication counts are not presentation FPS. No claimed memory improvement threshold.'
     save()
     envelope.mkdir(mode=0o700)
     archive = envelope/'observer-experiment.tar'

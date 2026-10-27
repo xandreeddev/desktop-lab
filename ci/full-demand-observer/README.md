@@ -13,14 +13,14 @@ separate integration job with `Catalog omits a production rendering input`;
 the existing Component Lab provenance was not refreshed for the prototype.
 No native comparison or memory improvement follows from that Rust pass.
 
-This new consumer has **11 authored Rust tests, not yet compiled or executed**.
-The Python driver has **16 pure/tempfile tests**, executable without Cargo,
+This new consumer has **13 authored Rust tests, not yet compiled or executed**.
+The Python driver has **19 pure/tempfile tests**, executable without Cargo,
 FFmpeg, GPU, network or VM access. `profile.json` keeps exact expected names,
 counts, the original source qualification's log digests and official links.
 The tools commit, built binary, archive and hosted artifact remain **unbound**
 until a separately reviewed, actual owner push runs the workflow.
 
-## One backend, one consumer binary, two fresh processes
+## One backend, one consumer binary, four fresh processes
 
 The existing pinned observer accepts only its known-size FHD → 4K → FHD phases.
 This experiment therefore adds a separately identified example consumer rather
@@ -36,7 +36,25 @@ commit identities are recorded; this derivative is not called an unmodified
 `1a` observer. No different backend library, decoder option or allocator policy
 is built for either mode.
 
-Both cases execute the same release binary and immutable generated input:
+There are two separate comparisons. Both use the same release binary and
+immutable video, encoded once. Every case starts a new process with a distinct
+PID. The input has an explicit typed `sequence` and `mode`; no heuristic chooses
+a sequence from an observed target.
+
+**Matrix A, `known_targets`: cold FHD → 4K → restored FHD.** Its fresh process
+admits FHD before its first play, with no source-size/4K phase or previous frame
+in that process. This is the comparison for cold-FHD versus warmed-FHD retained
+allocations that motivated the desktop investigation.
+
+| Revision | Demand | Expected decoded RGBA extent |
+| --- | --- | --- |
+| 1 | Cover FHD | 1920 × 1080 |
+| 2 | Cover 4K | 3840 × 2160 |
+| 3 | Cover FHD | 1920 × 1080 |
+
+**Matrix B, `source_and_targets`: Source → FHD → 4K → FHD → Source.** Its FHD
+phases are already warm after a 4K source-size publication. This checks full
+target semantics and cannot substitute for Matrix A's cold-FHD comparison.
 
 | Revision | Demand | Expected decoded RGBA extent |
 | --- | --- | --- |
@@ -52,9 +70,10 @@ exactly once; the backend's separate source tests cover equal-demand no-ops,
 stale/same-revision changes, contention, exhaustion, alpha-safe conversion,
 held pixel ownership and FFmpeg timing/EOF/cancellation.
 
-In the **reopen control**, the exact old worker must cancel and join before the
-next worker starts: five play calls, five joins. In **retarget**, one play call
-and one worker own all five demands, with one final cancel/join. Both consumers
+In each **reopen control**, the exact old worker must cancel and join before the
+next worker starts: three play calls/joins for A, five for B. Each **retarget**
+case uses one play call and one worker across its sequence, with one final
+cancel/join. Both consumers
 retain last-good pixels until replacement and reject mismatched revisions;
 phase metric resets do not relabel old storage. The control resets its observed
 source clock when a new decoder starts; that reset is not counted as an EOF
@@ -75,13 +94,17 @@ First/last PTS, actual phase clocks, loop wraps, stale publications, storage
 capacity and process RSS are observations; publication counts are **not FPS**.
 For the control, target readiness starts after the old worker's join; its
 separate join duration and before-target clock retain that preceding cost.
-The fixed case order is reopen then retarget, once each. These two observations
-are not a repeated, randomized performance benchmark.
+The fixed case order is A-reopen, A-retarget, B-reopen, B-retarget, once each.
+All four process lifetimes must be ordered and nonoverlapping, and each record
+must bind the same binary/input hashes. These observations are not a repeated,
+randomized performance benchmark.
 
 The final frame is still held at the first after-join allocator snapshot, then
 explicitly dropped. There are **exactly three stopped-only mallinfo2 snapshots
 per process**: before play, after final exact join with latest held, and after
-latest drop. During-target samples contain no allocator statistics. These
+latest drop. Matrix A ends with FHD storage held; B ends with source-size
+storage held. There are twelve allocator snapshots across the four processes.
+During-target samples contain no allocator statistics. These
 glibc counters describe accounting, including free arenas and direct mappings;
 they do not by themselves identify Rust object ownership or resident pages.
 No trimming, allocator tuning, preload, cache dropping or host policy change
@@ -110,7 +133,7 @@ the exact FFmpeg public headers and observer ELF metadata are retained. This
 supports provenance, not compatibility with an older VM FFmpeg installation.
 
 The eight Cargo stages are fetch, format, selected-library/example clippy,
-37-domain test gate, 67-video gate, 21-original-observer gate, 11-new-consumer
+37-domain test gate, 67-video gate, 21-original-observer gate, 13-new-consumer
 gate, and one release-observer build. There is no desktop release build, GPU
 test, deployment, guest baseline or native session in this workflow.
 
@@ -137,7 +160,8 @@ document. After review, the owner can authorize a normal push of the exact
 tools commit to the prepared branch; the driver then accepts only that actual
 hosted context and separately checked-out backend SHA.
 
-If it later passes, compare per-target RSS and stopped allocator scopes using
+If it later passes, compare cold-FHD, 4K and restored-FHD RSS within Matrix A,
+then the separately labeled Source transitions in B, and the stopped allocator scopes using
 the actual records, not only a peak or a count of published frames. Preserve
 failed trials. A lower observer RSS is not whole-shell ≤300 MiB acceptance,
 VM/physical-display acceptance, source-frame presentation at 60 Hz, or a reason

@@ -6,7 +6,7 @@ use lucent_domain::{
     WallpaperTargetPort, WallpaperTargetRevision,
 };
 use lucent_services::video::{LatestWallpaperTargetAdapter, NativeVideoWallpapers};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     fs,
@@ -24,7 +24,13 @@ mod accounting;
 type Check<T> = Result<T, &'static str>;
 const READY: Duration = Duration::from_secs(5);
 const JOIN: Duration = Duration::from_secs(10);
-const PHASES: [(&str, Option<(u32, u32)>); 5] = [
+type Phase = (&'static str, Option<(u32, u32)>);
+const KNOWN_PHASES: [Phase; 3] = [
+    ("first_fhd", Some((1920, 1080))),
+    ("four_k", Some((3840, 2160))),
+    ("restored_fhd", Some((1920, 1080))),
+];
+const SOURCE_PHASES: [Phase; 5] = [
     ("initial_source", None),
     ("first_fhd", Some((1920, 1080))),
     ("four_k", Some((3840, 2160))),
@@ -32,11 +38,25 @@ const PHASES: [(&str, Option<(u32, u32)>); 5] = [
     ("restored_source", None),
 ];
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 enum Mode {
     Reopen,
     Retarget,
+}
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum Sequence {
+    KnownTargets,
+    SourceAndTargets,
+}
+impl Sequence {
+    fn phases(self) -> &'static [Phase] {
+        match self {
+            Self::KnownTargets => &KNOWN_PHASES,
+            Self::SourceAndTargets => &SOURCE_PHASES,
+        }
+    }
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -44,6 +64,7 @@ struct Input {
     state: PathBuf,
     asset: LiveWallpaperAsset,
     mode: Mode,
+    sequence: Sequence,
     phase_seconds: u64,
     /// Actual ffprobe best-effort PTS rescaled to the backend's Duration clock.
     expected_pts_ns: Vec<u64>,
@@ -173,10 +194,10 @@ struct State {
     observed_loop_wraps: u64,
 }
 impl State {
-    fn new(expected_pts_ns: Arc<Vec<u64>>) -> Self {
+    fn new(expected_pts_ns: Arc<Vec<u64>>, size: (u32, u32)) -> Self {
         Self {
             expected: WallpaperTargetRevision::initial(),
-            size: (3840, 2160),
+            size,
             latest: None,
             metrics: Metrics::default(),
             stale: 0,
@@ -378,15 +399,20 @@ fn point(label: &str, started: Instant, stopped: bool) -> Value {
 fn observe(adapter: Arc<dyn WallpaperPlaybackPort>, request: Input) -> Check<Value> {
     let started = Instant::now();
     let mut stopped = vec![point("before_play", started, true)];
-    let control = Arc::new(LatestWallpaperTargetAdapter::new(None));
-    let state = Arc::new(Mutex::new(State::new(Arc::new(request.expected_pts_ns))));
+    let planned = request.sequence.phases();
+    let initial = planned[0].1;
+    let control = Arc::new(LatestWallpaperTargetAdapter::new(target(initial)?));
+    let state = Arc::new(Mutex::new(State::new(
+        Arc::new(request.expected_pts_ns),
+        initial.unwrap_or((3840, 2160)),
+    )));
     let mut owner: Option<Worker> = None;
     let mut starts = 0u64;
     let mut joins = Vec::new();
     // All errors pass through exact-current-worker cancellation and join.
     let result: Check<Vec<Value>> = (|| {
         let mut phases = Vec::new();
-        for (index, (label, demand)) in PHASES.into_iter().enumerate() {
+        for (index, &(label, demand)) in planned.iter().enumerate() {
             let before = point("before_target", started, false);
             if request.mode == Mode::Reopen
                 && let Some(worker) = owner.take()
@@ -476,12 +502,16 @@ fn observe(adapter: Arc<dyn WallpaperPlaybackPort>, request: Input) -> Check<Val
     let held = state.latest.as_ref().map(|latest| latest.capacity);
     state.latest = None;
     stopped.push(point("after_latest_dropped", started, true));
-    let expected = if request.mode == Mode::Retarget { 1 } else { 5 };
+    let expected = if request.mode == Mode::Retarget {
+        1
+    } else {
+        planned.len() as u64
+    };
     if starts != expected || joins.len() != expected as usize || state.observed_loop_wraps == 0 {
         return Err("lifecycle_or_loop_observation_failed");
     }
     Ok(
-        json!({"kind":"full_demand_observation","mode":if request.mode==Mode::Retarget {"retarget"} else {"reopen"},
+        json!({"kind":"full_demand_observation","mode":request.mode,"sequence":request.sequence,
         "pid":std::process::id(),"phases":phases,"play_calls":starts,"exact_worker_joins":joins,
         "stopped_allocator_observations":stopped,"final_latest_capacity_before_drop":held,
         "consumer_held_pixel_capacity_after_drop":0,"renderer_used":false,"fps_measured":false,

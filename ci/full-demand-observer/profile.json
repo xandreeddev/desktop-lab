@@ -15,7 +15,7 @@
     "domain": 37,
     "video": 67,
     "observer": 21,
-    "consumer": 11
+    "consumer": 13
   },
   "required_test_names": {
     "domain": [
@@ -152,6 +152,8 @@
   },
   "consumer_test_names": [
     "full_demand_sequence_admits_source_distinct_from_missing_snapshot_and_advances_exactly",
+    "known_sequence_starts_with_cold_fhd_and_never_admits_source_sized_demand",
+    "sequence_is_explicitly_typed_and_cannot_silently_substitute_the_warm_source_matrix",
     "readiness_accepts_before_five_seconds_and_rejects_ready_at_and_after_boundary",
     "input_requires_exact_generated_asset_phase_duration_and_actual_ordered_pts",
     "publication_checks_real_byte_extent_aspect_and_normalized_ffprobe_pts",
@@ -175,37 +177,6 @@
     "integration_log_sha256": "37e3484babc4e1111b306b13e330600e0420e9c3f6a4495161041c37e508cbfe"
   },
   "phase_seconds": 12,
-  "phases": [
-    [
-      "initial_source",
-      null
-    ],
-    [
-      "first_fhd",
-      [
-        1920,
-        1080
-      ]
-    ],
-    [
-      "four_k",
-      [
-        3840,
-        2160
-      ]
-    ],
-    [
-      "restored_fhd",
-      [
-        1920,
-        1080
-      ]
-    ],
-    [
-      "restored_source",
-      null
-    ]
-  ],
   "recipe": {
     "frames": 240,
     "source_filter": "testsrc2=size=3840x2160:rate=60",
@@ -228,5 +199,79 @@
   },
   "artifact_binding": null,
   "tools_commit_binding": null,
-  "scope": "Isolated hosted FFmpeg/backend mechanism experiment. No VM, compositor, GPU presentation, whole-shell RSS, physical hardware or production acceptance."
+  "scope": "Isolated hosted FFmpeg/backend mechanism experiment. No VM, compositor, GPU presentation, whole-shell RSS, physical hardware or production acceptance.",
+  "sequences": {
+    "known_targets": [
+      [
+        "first_fhd",
+        [
+          1920,
+          1080
+        ]
+      ],
+      [
+        "four_k",
+        [
+          3840,
+          2160
+        ]
+      ],
+      [
+        "restored_fhd",
+        [
+          1920,
+          1080
+        ]
+      ]
+    ],
+    "source_and_targets": [
+      [
+        "initial_source",
+        null
+      ],
+      [
+        "first_fhd",
+        [
+          1920,
+          1080
+        ]
+      ],
+      [
+        "four_k",
+        [
+          3840,
+          2160
+        ]
+      ],
+      [
+        "restored_fhd",
+        [
+          1920,
+          1080
+        ]
+      ],
+      [
+        "restored_source",
+        null
+      ]
+    ]
+  },
+  "case_order": [
+    [
+      "known_targets",
+      "reopen"
+    ],
+    [
+      "known_targets",
+      "retarget"
+    ],
+    [
+      "source_and_targets",
+      "reopen"
+    ],
+    [
+      "source_and_targets",
+      "retarget"
+    ]
+  ]
 }

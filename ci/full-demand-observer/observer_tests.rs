@@ -2,9 +2,7 @@ use super::*;
 use lucent_domain::MediaFrame;
 
 fn state() -> State {
-    let mut state = State::new(Arc::new(vec![0, 1_000_000_000]));
-    state.size = (1, 1);
-    state
+    State::new(Arc::new(vec![0, 1_000_000_000]), (1, 1))
 }
 fn frame(revision: u64, pts: u64, size: (u32, u32), aspect: (u32, u32)) -> TargetedMediaFrame {
     TargetedMediaFrame {
@@ -24,7 +22,7 @@ fn raw_input() -> Value {
         "path":"/private/generated/media-generated/source.mp4",
         "source":{"name":"Generated","path":"/private/generated/media-generated/source.mp4"},
         "poster":{"name":"Generated","path":"/private/generated/media-generated/poster.png"}},
-        "mode":"retarget","phase_seconds":12,
+        "mode":"retarget","sequence":"source_and_targets","phase_seconds":12,
         "expected_pts_ns":(0..240).map(|index| index*16_666_667u64).collect::<Vec<_>>()})
 }
 
@@ -34,7 +32,12 @@ fn full_demand_sequence_admits_source_distinct_from_missing_snapshot_and_advance
     let initial = control.try_latest().unwrap().unwrap();
     assert_eq!(initial.target, None);
     let mut revision = initial.revision;
-    for (index, (_, demand)) in PHASES.into_iter().enumerate().skip(1) {
+    for (index, &(_, demand)) in Sequence::SourceAndTargets
+        .phases()
+        .iter()
+        .enumerate()
+        .skip(1)
+    {
         let value = control.set(revision, target(demand).unwrap()).unwrap();
         assert_eq!(value.revision.get(), index as u64 + 1);
         assert_eq!(value.target, target(demand).unwrap());
@@ -42,6 +45,52 @@ fn full_demand_sequence_admits_source_distinct_from_missing_snapshot_and_advance
         revision = value.revision;
     }
     assert_eq!(revision.get(), 5);
+}
+
+#[test]
+fn known_sequence_starts_with_cold_fhd_and_never_admits_source_sized_demand() {
+    let phases = Sequence::KnownTargets.phases();
+    assert_eq!(phases.len(), 3);
+    assert_eq!(phases[0], ("first_fhd", Some((1920, 1080))));
+    assert_eq!(phases[2], ("restored_fhd", Some((1920, 1080))));
+    let control = LatestWallpaperTargetAdapter::new(target(phases[0].1).unwrap());
+    let initial = control.try_latest().unwrap().unwrap();
+    let state = State::new(Arc::new(vec![0]), phases[0].1.unwrap());
+    assert_eq!(state.size, (1920, 1080));
+    assert!(state.latest.is_none());
+    assert_eq!(state.metrics.count, 0);
+    assert_eq!(initial.target.unwrap().size(), (1920, 1080));
+    let mut revision = initial.revision;
+    for (index, &(_, demand)) in phases.iter().enumerate().skip(1) {
+        let admitted = control.set(revision, target(demand).unwrap()).unwrap();
+        assert!(admitted.target.is_some());
+        assert_eq!(admitted.revision.get(), index as u64 + 1);
+        revision = admitted.revision;
+    }
+    assert_eq!(revision.get(), 3);
+}
+
+#[test]
+fn sequence_is_explicitly_typed_and_cannot_silently_substitute_the_warm_source_matrix() {
+    for (name, expected) in [
+        ("known_targets", Sequence::KnownTargets),
+        ("source_and_targets", Sequence::SourceAndTargets),
+    ] {
+        let mut value = raw_input();
+        value["sequence"] = json!(name);
+        let admitted = input(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert_eq!(admitted.sequence, expected);
+        assert_eq!(
+            serde_json::to_value(admitted.sequence).unwrap(),
+            json!(name)
+        );
+    }
+    let mut absent = raw_input();
+    absent.as_object_mut().unwrap().remove("sequence");
+    assert!(input(&serde_json::to_vec(&absent).unwrap()).is_err());
+    let mut unknown = raw_input();
+    unknown["sequence"] = json!("guess_from_target");
+    assert!(input(&serde_json::to_vec(&unknown).unwrap()).is_err());
 }
 
 #[test]

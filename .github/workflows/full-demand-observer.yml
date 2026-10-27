@@ -86,7 +86,7 @@ jobs:
       - name: Pure experiment-tool regression checks
         run: python3 -m unittest discover -s tools/ci/full-demand-observer -p tests.py -v
 
-      - name: Qualify one observer and run two finite fresh-process cases
+      - name: Qualify one observer and run four finite fresh-process cases
         timeout-minutes: 70
         run: |
           python3 tools/ci/full-demand-observer/run.py --run \
