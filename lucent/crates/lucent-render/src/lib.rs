@@ -1220,16 +1220,16 @@ mod resource_tests {
         });
         let view = texture.create_view(&Default::default());
         let read = |canvas: &Canvas| {
-            canvas
-                .readback(
-                    &texture,
-                    PhysicalExtent::new(16, 16, 1, 8192)
-                        .unwrap()
-                        .readback(4096)
-                        .unwrap(),
-                    Vec::with_capacity(16 * 16 * 4),
-                )
-                .unwrap()
+            readback_rgba(
+                &canvas.gpu,
+                &texture,
+                PhysicalExtent::new(16, 16, 1, 8192)
+                    .unwrap()
+                    .readback(4096)
+                    .unwrap(),
+                Vec::with_capacity(16 * 16 * 4),
+            )
+            .unwrap()
         };
         canvas
             .paint(&view, 16, 16, 1, &[image("current", 1, [255, 0, 0, 255])])
