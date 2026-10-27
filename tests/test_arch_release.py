@@ -3,6 +3,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -62,6 +63,7 @@ class ArchReleaseEvidence(unittest.TestCase):
         (root/'memory.max').write_text(str(maximum))
         (root/'memory.current').write_text(str(current))
         (root/'memory.swap.max').write_text(swap)
+        (root/'memory.stat').write_text('anon 268435456\nfile 805306368\n')
         (root/'meminfo').write_text('MemAvailable: 12582912 kB\n')
 
     def test_remote_budget_uses_effective_cgroup_memory_and_no_swap(self):
@@ -71,10 +73,16 @@ class ArchReleaseEvidence(unittest.TestCase):
             value = release.resource_snapshot(root, root/'meminfo')
             self.assertEqual(value['effective_available_mib'], 9*1024)
             self.assertEqual(value['memory_swap_max_bytes'], 0)
+            self.assertEqual(value['memory_stat_anon_bytes'], 268435456)
+            self.assertEqual(value['memory_stat_file_bytes'], 805306368)
             self.assertFalse(value['local_host_policy_changed'])
             (root/'memory.swap.max').write_text('10737418240')
             with self.assertRaisesRegex(RuntimeError, 'swap'):
                 release.resource_snapshot(root, root/'meminfo')
+            self.resource_files(root, current=10*1024**3 + 1)
+            saturated = release.resource_snapshot(root, root/'meminfo')
+            self.assertEqual(saturated['effective_available_mib'], 0)
+            self.assertEqual(saturated['memory_current_bytes'], 10*1024**3 + 1)
 
     def test_budget_refuses_unbounded_or_different_cpu_memory(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -192,6 +200,94 @@ class ArchReleaseEvidence(unittest.TestCase):
             with patch.object(release, 'resource_snapshot', side_effect=[{'effective_available_mib': n} for n in [5000, 4499, 6000]]):
                 with self.assertRaisesRegex(RuntimeError, '4500'):
                     release.admit_memory()
+
+    def test_refused_admission_sample_is_persisted_before_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'memory.log'
+            samples = [dict(host_available_mib=8000, memory_current_bytes=current,
+                            memory_max_bytes=10737418240, memory_stat_anon_bytes=100,
+                            memory_stat_file_bytes=200, effective_available_mib=available)
+                       for current, available in [(10, 7000), (20, 4499)]]
+            with patch.object(release, 'resource_snapshot', side_effect=samples), patch.object(release.time, 'sleep'):
+                with self.assertRaisesRegex(RuntimeError, '4500'):
+                    release.admit_memory(lambda index, sample: release.log_memory_sample(path, 'capture', index, sample))
+            saved = [json.loads(line) for line in path.read_text().splitlines()]
+            self.assertEqual(saved, [{'phase': 'capture', 'sample_index': index, 'snapshot': sample}
+                                     for index, sample in enumerate(samples)])
+            self.assertEqual(saved[-1]['snapshot']['effective_available_mib'], 4499)
+
+    def private_target_fixture(self, root):
+        temporary = root/'runner'; temporary.mkdir()
+        protected = [root/name for name in ('source', 'output', 'envelope', 'cargo-home')]
+        for path in protected:
+            path.mkdir(); (path/'preserve').write_bytes(path.name.encode())
+        return temporary/'lucent-target-focus', temporary, protected
+
+    def test_cleanup_removes_only_fresh_target_and_preserves_copies_and_registry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target, temporary, protected = self.private_target_fixture(root)
+            authority = release.PrivateCargoTarget(target, temporary, protected)
+            (target/'release').mkdir(); (target/'release/temporary').write_bytes(b'compiled bytes')
+            # Cargo output may contain a link; descriptor-safe rmtree must only
+            # unlink it, leaving its unrelated source/registry target intact.
+            (target/'registry-link').symlink_to(protected[-1], target_is_directory=True)
+            out = protected[1]
+            row = {'path': 'preserve', 'bytes': len(b'output'), 'sha256': release.digest(out/'preserve')}
+            before = release.verify_copies(out, [row])
+            receipt = authority.remove()
+            self.assertEqual(before, release.verify_copies(out, [row]))
+            self.assertFalse(target.exists())
+            self.assertTrue(receipt['removed'])
+            self.assertTrue(all((path/'preserve').read_bytes() == path.name.encode() for path in protected))
+            with self.assertRaises(RuntimeError):
+                authority.remove()
+
+    def test_cleanup_refuses_replaced_root_directory_or_symlink(self):
+        for replacement in ('directory', 'symlink'):
+            with self.subTest(replacement=replacement), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                target, temporary, protected = self.private_target_fixture(root)
+                authority = release.PrivateCargoTarget(target, temporary, protected)
+                target.rename(temporary/'original-target')
+                if replacement == 'directory':
+                    target.mkdir(); (target/'foreign').write_bytes(b'foreign')
+                else:
+                    target.symlink_to(protected[0], target_is_directory=True)
+                try:
+                    with self.assertRaisesRegex(RuntimeError, 'identity'):
+                        authority.remove()
+                    self.assertTrue((temporary/'original-target').is_dir())
+                    self.assertEqual((protected[0]/'preserve').read_bytes(), b'source')
+                    if replacement == 'directory':
+                        self.assertEqual((target/'foreign').read_bytes(), b'foreign')
+                finally:
+                    os.close(authority.parent_fd)
+
+    def test_cleanup_authority_refuses_existing_wrong_named_or_protected_targets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target, temporary, protected = self.private_target_fixture(root)
+            for candidate in (protected[0], temporary/'different-name'):
+                with self.assertRaisesRegex(RuntimeError, 'fresh_exact'):
+                    release.PrivateCargoTarget(candidate, temporary, protected)
+            for forbidden in (target, temporary, target/'registry'):
+                with self.assertRaisesRegex(RuntimeError, 'fresh_exact'):
+                    release.PrivateCargoTarget(target, temporary, [*protected, forbidden])
+                self.assertFalse(target.exists())
+            target.mkdir()
+            with self.assertRaisesRegex(RuntimeError, 'fresh_exact'):
+                release.PrivateCargoTarget(target, temporary, protected)
+
+    def test_changed_copied_payload_refuses_cleanup_eligibility(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            (out/'client').write_bytes(b'original')
+            row = {'path': 'client', 'bytes': 8, 'sha256': release.digest(out/'client')}
+            release.verify_copies(out, [row])
+            (out/'client').write_bytes(b'modified')
+            with self.assertRaisesRegex(RuntimeError, 'copied_release_bytes'):
+                release.verify_copies(out, [row])
 
     def catalog_fixture(self, root):
         source, catalog = root/'source', root/'catalog'

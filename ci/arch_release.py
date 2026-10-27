@@ -12,6 +12,7 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -69,13 +70,17 @@ def resource_snapshot(cgroup=Path('/sys/fs/cgroup'), meminfo=Path('/proc/meminfo
     current = (cgroup / 'memory.current').read_text().strip()
     swap = (cgroup / 'memory.swap.max').read_text().strip()
     require(maximum.isdecimal() and current.isdecimal() and int(maximum) == PROFILE['memory_max_bytes']
-            and 0 <= int(current) < int(maximum), 'actual_remote_memory_cgroup_required')
+            and 0 <= int(current), 'actual_remote_memory_cgroup_required')
     require(swap == '0', 'remote_swap_must_not_expand_memory_budget')
+    memory_stat = dict(line.split() for line in (cgroup / 'memory.stat').read_text().splitlines())
+    require(all(memory_stat.get(name, '').isdecimal() for name in ('anon', 'file')),
+            'actual_remote_anon_and_file_memory_required')
     available = next(int(line.split()[1]) // 1024 for line in meminfo.read_text().splitlines()
                      if line.startswith('MemAvailable:'))
-    effective = min(available, (int(maximum) - int(current)) // 1024**2)
+    effective = min(available, max(0, (int(maximum) - int(current)) // 1024**2))
     return {'cpu_max': ' '.join(cpu), 'memory_max_bytes': int(maximum), 'memory_current_bytes': int(current),
             'memory_swap_max_bytes': 0, 'host_available_mib': available, 'effective_available_mib': effective,
+            'memory_stat_anon_bytes': int(memory_stat['anon']), 'memory_stat_file_bytes': int(memory_stat['file']),
             'build_location': 'github-hosted-Arch-container', 'local_host_policy_changed': False}
 
 
@@ -148,15 +153,76 @@ def ffmpeg_headers(include=Path('/usr/include')):
     return rows
 
 
-def admit_memory():
+def admit_memory(observe=None):
     samples = []
-    for _ in range(3):
+    for index in range(3):
         sample = resource_snapshot()
+        if observe is not None:
+            observe(index, sample)
         require(sample['effective_available_mib'] >= PROFILE['admission_floor_mib'],
                 'fresh_remote_4500MiB_admission_required')
         samples.append(sample['effective_available_mib'])
         time.sleep(1)
     return samples
+
+
+def log_memory_sample(path, phase, index, sample):
+    with path.open('a') as stream:
+        stream.write(json.dumps({'phase': phase, 'sample_index': index, 'snapshot': sample}) + '\n')
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+class PrivateCargoTarget:
+    """Authority for only this job's newly created, exact private Cargo target."""
+    def __init__(self, target, runner_temp, protected):
+        require(shutil.rmtree.avoids_symlink_attacks and target.is_absolute()
+                and runner_temp.is_absolute() and runner_temp.resolve(strict=True) == runner_temp
+                and target == runner_temp / 'lucent-target-focus'
+                and not os.path.lexists(target)
+                and all(not target.is_relative_to(path) and not path.is_relative_to(target) for path in protected),
+                'fresh_exact_private_Cargo_target_required')
+        self.path = target
+        self.parent_fd = os.open(runner_temp, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            self.parent_identity = self.identity(os.fstat(self.parent_fd))
+            os.mkdir(target.name, mode=0o700, dir_fd=self.parent_fd)
+            created = os.stat(target.name, dir_fd=self.parent_fd, follow_symlinks=False)
+            require(stat.S_ISDIR(created.st_mode) and created.st_uid == os.getuid()
+                    and stat.S_IMODE(created.st_mode) == 0o700, 'owned_private_Cargo_target_required')
+            self.created_identity = self.identity(created)
+        except BaseException:
+            os.close(self.parent_fd)
+            raise
+        self.removed = False
+
+    @staticmethod
+    def identity(value):
+        return (value.st_dev, value.st_ino, value.st_uid, value.st_mode)
+
+    def remove(self):
+        require(not self.removed and self.path.resolve(strict=True) == self.path
+                and self.identity(os.fstat(self.parent_fd)) == self.parent_identity
+                and self.identity(self.path.parent.stat()) == self.parent_identity
+                and self.identity(os.stat(self.path.name, dir_fd=self.parent_fd, follow_symlinks=False))
+                == self.created_identity, 'original_owned_Cargo_target_identity_required')
+        shutil.rmtree(self.path.name, dir_fd=self.parent_fd)
+        require(not os.path.lexists(self.path), 'private_Cargo_target_cleanup_required')
+        os.close(self.parent_fd)
+        self.removed = True
+        return {'path': str(self.path), 'device': self.created_identity[0],
+                'inode': self.created_identity[1], 'owner_uid': self.created_identity[2],
+                'removed': True, 'scope': 'Only this job-created private Cargo target; no registry/source/output or global caches.'}
+
+
+def verify_copies(directory, rows):
+    verified = {}
+    for row in rows:
+        path = regular_member(directory, row['path'])
+        require(path.stat().st_size == row['bytes'] and digest(path) == row['sha256'],
+                'copied_release_bytes_must_survive_target_cleanup')
+        verified[row['path']] = row['sha256']
+    return verified
 
 
 def regular_member(root, name):
@@ -248,11 +314,26 @@ def build(args):
                 'RUSTC_WORKSPACE_WRAPPER', 'CARGO_BUILD_TARGET')) and not any(
                 name.startswith(('CARGO_PROFILE_', 'CARGO_TARGET_')) and name != 'CARGO_TARGET_DIR' for name in os.environ),
             'unreviewed_Cargo_overrides_forbidden')
-    samples = admit_memory()
-    budget = resource_snapshot()
     require(shutil.disk_usage(out.parent).free >= 6 * 1024**3, 'remote_disk_capacity_required')
     out.mkdir(mode=0o700)
     (out / 'logs').mkdir(mode=0o700)
+    memory_log = out / 'logs/memory-admission.log'
+    memory_log.touch(mode=0o600, exist_ok=False)
+    record = None
+
+    def memory_sample(phase, index, sample):
+        # This durable log exists before the first admission or build record.
+        # In particular a refused sample is written before its require runs.
+        log_memory_sample(memory_log, phase, index, sample)
+        if record is not None:
+            record['memory_admission_evidence'] = {'path': 'logs/memory-admission.log', 'sha256': digest(memory_log)}
+            save()
+
+    samples = admit_memory(lambda index, sample: memory_sample('initial-admission', index, sample))
+    budget = resource_snapshot()
+    cargo_home = Path(os.environ.get('CARGO_HOME', str(Path.home() / '.cargo'))).resolve()
+    owned_target = PrivateCargoTarget(target, Path(os.environ['RUNNER_TEMP']),
+                                     [source, out, args.envelope, cargo_home])
     env = os.environ.copy()
     env.update(CARGO_TARGET_DIR=str(target), CARGO_BUILD_JOBS=str(PROFILE['cpu_limit']), CARGO_INCREMENTAL='0',
                CARGO_TERM_COLOR='never', LC_ALL='C')
@@ -288,6 +369,7 @@ def build(args):
         'baseline_source_commit': PROFILE['baseline_source_commit'],
         'baseline_manifest_kind': PROFILE['baseline_manifest_kind'],
         'baseline_remote_raw_manifest_sha256': PROFILE['baseline_remote_raw_manifest_sha256'],
+        'memory_admission_evidence': {'path': 'logs/memory-admission.log', 'sha256': digest(memory_log)},
         'budget': budget, 'admission_available_mib': samples, 'source_working_tree_changed': False,
         'build_location': 'github-hosted-Arch-container', 'provenance': context,
         'container_image': PROFILE['container_image'], 'container_dated_tag': PROFILE['container_dated_tag'],
@@ -393,9 +475,24 @@ def build(args):
         licenses[name] = copy(original, 'licenses/' + Path(name).name)
     record['license_files'] = licenses
 
+    # Every release payload is already hash-copied. The remaining Cargo target
+    # belongs only to this job and is no longer needed for export or packaging.
+    copied = [*binaries.values(), *support.values(), *examples.values(), record['standalone_lab'], *licenses.values()]
+    copies_before = verify_copies(out, copied)
+    before_cleanup = resource_snapshot()
+    memory_sample('target-cleanup-before', 0, before_cleanup)
+    cleanup = owned_target.remove()
+    copies_after = verify_copies(out, copied)
+    require(copies_before == copies_after, 'all_copied_release_hashes_unchanged_after_cleanup')
+    after_cleanup = resource_snapshot()
+    memory_sample('target-cleanup-after', 0, after_cleanup)
+    record['private_target_cleanup'] = dict(cleanup, before=before_cleanup, after=after_cleanup,
+                                             copied_files_sha256=copies_after)
+    save()
+
     # Capture with this actual Lab while its compile-time source directory still
     # exists. A copied/imported Lab cannot find those producers merely via cwd.
-    capture_samples = admit_memory()
+    capture_samples = admit_memory(lambda index, sample: memory_sample('component-lab-admission', index, sample))
     exact_source(source)
     catalog = out / 'component-lab'
     export_log = out / 'logs/component-lab-export.log'
