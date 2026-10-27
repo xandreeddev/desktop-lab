@@ -128,8 +128,10 @@ passes its coherent 17-stage build and 823 targeted tests, including the protoco
 and client regressions, and is coherently deployed as an unmerged VM candidate.
 Its [cold-browser trial](../reports/measurements/lucent-cold-default-uri-3640.json)
 passes pointer opening and trusted document `KeyA`, but the separate Tab/Enter
-route still fails browser focus and key delivery. The new ordering has no verified
-keyboard fix. Earlier native outcomes and cleanup flags remain unchanged.
+route still fails browser focus and key delivery. That source's input-release
+ordering alone has no verified keyboard fix. The later ba5 result below accepts
+the original cold routes after explicit widget-demand ownership; earlier native
+outcomes and cleanup flags remain unchanged.
 
 ## Separate cold-browser acceptance
 
@@ -264,3 +266,50 @@ and twenty same-artifact LAN checks verify publication, including source3640's
 118 producer inputs and 480 native catalogue captures. This named delivery
 checkpoint does not publish this later investigation/CI reconciliation or establish
 candidate VM deployment. See [current readiness](current-readiness.md).
+
+
+## Actual b2 native observation and proposed focus ownership
+
+The [b2 native report](../reports/measurements/lucent-cold-default-uri-b2.json)
+adds actual native keyboard observation to the original independent pointer and
+Tab/Enter routes. Pointer passes. Keyboard still fails, and both cases pass all
+nine cleanup checks. During history, Clock and Calendar both request and commit
+`None`. After history closes, `OnDemand` returns; the keyboard route observes
+Clock as the current Lucent native keyboard owner while the browser document
+lacks focus. These client observations are not an atomic global seat-owner query.
+They establish the observed reacquisition; they do not establish every compositor
+ordering detail.
+
+The new [keyboard-focus guide](keyboard-focus.md) follows the proposed correction:
+capability alone creates no widget demand, a genuine prepared control press
+creates exact member/output intent, and the optional native backend acknowledges
+one-shot acquisition only after real Enter and teardown synchronization. Closing
+history does not recreate widget demand. This focus API leaves URI-opening policy
+in `UriPort` and notification lifetime policy in the client. The original
+canonical URI checks now pass as recorded below. First-click, outside-click and
+secure-session checks retain their separate acceptance requirements.
+
+## Original canonical cold trial on ba5
+
+The [ba5 native report](../reports/measurements/lucent-cold-default-uri-ba5.json)
+records the original pointer and Tab/Enter routes against the coherently deployed
+ba5 release. Each route starts a separate cold owned Chromium birth through the
+real temporary default handler. Each opens its exact declared document and
+receives exactly one trusted, unmodified, nonrepeat `KeyA`; all three feature
+checks and all nine cleanup checks pass in each case. Keyboard navigation sends
+two Tab events before Enter. No forced compositor focus, browser prewarming,
+extra browser click, hiding or diagnostic cursor reposition is used.
+
+The sampled Clock and Calendar policies stay requested and committed `None`
+after history closes. At browser-map and before/after the key, the owned document
+reports focus and the Lucent observer has no current own-client Native. These
+are sequential read-only client/DOM observations: an absent Lucent observation
+does not identify the compositor's global keyboard owner. Direct input-release
+callback timing is unavailable. When the notification surface is absent, the
+reported native-frame advancement remains `null` rather than becoming zero.
+
+This closes the recorded cold-handler keyboard case on one 1920×1080 scale-1
+virtual output. It does not establish direct protocol-token consumption,
+arbitrary handlers, first-click Notes or outside-click acquisition, lock/login,
+physical hardware, memory targets or animation performance. Earlier b2, 3640 and
+eb348 failures remain historical; the cursor-only diagnostic remains a diagnostic.

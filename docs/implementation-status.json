@@ -4,12 +4,12 @@
   "status": "in_progress",
   "completion_rule": "An item is verified only when its behavior, boundary checks, documentation and applicable native integration checks have evidence. Implemented without verification remains incomplete.",
   "current_rollup": {
-    "snapshot_source_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
-    "snapshot_date": "2026-10-26",
+    "snapshot_source_commit": "c3007cc5cefc5faab36f751a28542898ecefac0d",
+    "snapshot_date": "2026-10-27",
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted main 9d42 / PR114 has verified Pages 40396627106 and twenty same-artifact LAN checks with 117 producer inputs/480 captures from 4a. Those checkpoints do not publish this later reconciliation. Source 3640 passes 17 build stages and 823 targeted tests, an actual AMD RADV export with 118 producer inputs and 480 PNGs and coherent six-client/root-greeter candidate VM deployment with settings/user/security state preserved. Its canonical cold pointer route passes, but Tab/Enter still fails browser focus/trusted KeyA delivery after history/input/frame guards pass; all nine cleanup checks per route pass. The cause and keyboard fix remain unestablished. This is an unmerged candidate trial, with original archive flags unchanged. Historical eb348/8e/26d evidence retains exact sources and limitations. Physical controls/sleep, broader IME/tray/clipboard/applications, eligible memory at or below 300 MiB and source-rate or 60 FPS animation acceptance remain open; all seven gaps are not closed.",
+    "scope": "Accepted main c300/PR116 and its published118-input source3640 catalogue remain the delivery checkpoint. Unmerged PR117 sourceba5 has hosted17-stage/880-test qualification,121-input/480-capture CPU software-Vulkan export and coherent candidate deployment. Original canonical cold URI pointer and Tab/Enter pass. Immediate first Notes key fails in separate V7 held-button and V8 completed-click cases despite later logical/native focus; all nine restorations pass per case. V3 passes six scoped native lock/PAM/retained-exit and preservation checks. V1/V2 failures remain unchanged; no login/pixel/suspend, broader application, memory or FPS acceptance follows.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -635,9 +635,9 @@
       },
       {
         "id": "application-integration",
-        "status": "historical_native_paths_verified_current_cold_keyboard_failed",
-        "implemented": "Accepted main 6b50bd5e includes catalog/pins, ordinary activation, declared actions and Application bb304907 shipped in merged 8e: fresh input-bound context, explicit file/URI Open and expanded XDG parsing/observation. A later real Chromium run with the independent d1 consumer, now merged through PR89, and b6323e9 harness passes all nine feature checks, including observed first-launch focus, and all eight restoration checks; deployed desktop/CLI remain unchanged. The separate coherent 9b trial passes eleven native HTTP URI and nine restoration checks; pointer, socket and CLI Open each load two fresh exact HTTP targets while the declared Action retains local files. A later 4c harness on coherent 35ed passes 12 singular HTTP %u native feature and 9 restoration checks; pointer/socket/CLI Open each load exactly one fresh owned HTTP document, and the declared Action still loads two local documents. PR102/main 6e471005 now includes canonical UriPort.open(target, ApplicationLaunchContext), optional SDK app ID, revision-bound notification-link completion and shared-policy XdgUri forwarding. R9 harness 563781a2 on runtime 26d passes five scoped warm-browser default-route checks and all nine cleanup checks: temporary MIME selection, native pointer and Tab/Enter input with fresh context, exact one-document delivery and bounded notification expiry. Independent later normal-OFF facts verify the same desktop lifetime and unchanged 14 source/43 security entries. PR105/main 6322 accepts current-session history release. Later source 9eb with harness04432 passes five default-route checks/nine cleanup checks and both actual trusted document KeyA cases after natural notification-history close, without focus/hide intervention; the handler/browser remain controlled and already warm. PR106/main bdffd424 subsequently accepts the complete runtime code by exact Rust/design/configs/scripts tree equality with archived 9eb; this is not another native run. The later unmerged source 3640 adds the typed native input-release effect and passive-toast keyboard policy. Its build/protocol-client tests and coherent VM deployment pass, but the actual canonical cold trial passes pointer and fails keyboard focus/KeyA delivery.",
-        "remaining": "Historical controlled warm-browser 9eb natural release and trusted-key results retain their source scope. The actual cold source 3640 keyboard route still fails browser focus and trusted KeyA delivery despite passing the pre-key history/modal-release/frame-advance guards; both owned cleanups pass. Establish the cause and a verified fix, then broaden fresh handlers, direct token-consumption and real-application workflows. Cleanup, offscreen rendering and protocol tests establish no performance or hardware target.",
+        "status": "scoped_ba5_canonical_cold_URI_native_passed_broader_workflows_pending",
+        "implemented": "Accepted main 6b50bd5e includes catalog/pins, ordinary activation, declared actions and Application bb304907 shipped in merged 8e: fresh input-bound context, explicit file/URI Open and expanded XDG parsing/observation. A later real Chromium run with the independent d1 consumer, now merged through PR89, and b6323e9 harness passes all nine feature checks, including observed first-launch focus, and all eight restoration checks; deployed desktop/CLI remain unchanged. The separate coherent 9b trial passes eleven native HTTP URI and nine restoration checks; pointer, socket and CLI Open each load two fresh exact HTTP targets while the declared Action retains local files. A later 4c harness on coherent 35ed passes 12 singular HTTP %u native feature and 9 restoration checks; pointer/socket/CLI Open each load exactly one fresh owned HTTP document, and the declared Action still loads two local documents. PR102/main 6e471005 now includes canonical UriPort.open(target, ApplicationLaunchContext), optional SDK app ID, revision-bound notification-link completion and shared-policy XdgUri forwarding. R9 harness 563781a2 on runtime 26d passes five scoped warm-browser default-route checks and all nine cleanup checks: temporary MIME selection, native pointer and Tab/Enter input with fresh context, exact one-document delivery and bounded notification expiry. Independent later normal-OFF facts verify the same desktop lifetime and unchanged 14 source/43 security entries. PR105/main 6322 accepts current-session history release. Later source 9eb with harness04432 passes five default-route checks/nine cleanup checks and both actual trusted document KeyA cases after natural notification-history close, without focus/hide intervention; the handler/browser remain controlled and already warm. PR106/main bdffd424 subsequently accepts the complete runtime code by exact Rust/design/configs/scripts tree equality with archived 9eb; this is not another native run. The later unmerged source 3640 adds the typed native input-release effect and passive-toast keyboard policy. Its build/protocol-client tests and coherent VM deployment pass, but the actual canonical cold trial passes pointer and fails keyboard focus/KeyA delivery. The separate coherent ba5 trial passes both original canonical cold pointer and Tab/Enter routes: three feature checks, one trusted unmodified nonrepeat document KeyA and all nine cleanup checks per case, without forced focus or cursor workaround.",
+        "remaining": "Broaden real handlers/applications and direct protocol-token consumption. Inline-widget first-click/outside-click and secure-session regression are separate from this accepted controlled cold URI workflow. Earlier failed-source and warm-handler outcomes remain unchanged; cleanup and source qualification accept no hardware or performance target.",
         "guides": [
           "docs/application-activation.md",
           "docs/application-catalog.md",
@@ -907,6 +907,24 @@
           "scope": "Separate client source validation only. The recorded R9 route result used runtime26d and does not validate this later fix; the prior routes, failures, activewindow observations and cleanup scopes remain unchanged."
         },
         "latest_cold_default_handler_native_attempt": {
+          "source_commit": "b2f54551dfbe3744762e04b06cc9abcdfd167eaa",
+          "report": "reports/measurements/lucent-cold-default-uri-b2.json",
+          "overall_passed": false,
+          "pointer_route_passed": true,
+          "keyboard_route_passed": false,
+          "cleanup_checks_passed_each": 9,
+          "scope": "Historical completed b2 trial; ba5 native focus acceptance is pending."
+        },
+        "current_focus_candidate": {
+          "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+          "report": "reports/measurements/lucent-keyboard-intent-ba5-release.json",
+          "coherent_deployment_verified": true,
+          "source_tests_passed": 880,
+          "canonical_native_pointer_or_keyboard_on_candidate_accepted": false,
+          "first_Notes_feature_result": null,
+          "remaining": "Immediate Notes key, ordinary first outside click, reacquisition, canonical cold pointer/TabEnter and secure-session regressions."
+        },
+        "historical_cold_default_handler_native_attempt_3640": {
           "source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
           "report": "reports/measurements/lucent-cold-default-uri-3640.json",
           "report_sha256": "602bf9bc5613fd20bdb6a22ce574215cc3fec4d9a12459202ca90761c1b293b3",
@@ -916,6 +934,23 @@
           "cleanup_checks_passed_each": 9,
           "failure_cause_established": false,
           "accepted_main_at_trial": false
+        },
+        "latest_canonical_cold_URI_trial": {
+          "report": "reports/measurements/lucent-cold-default-uri-ba5.json",
+          "report_sha256": "4b3fe0b80081ee8421f9a9f7aa248a161c4846c842cfa519375833bac0d76ad3",
+          "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+          "manifest_sha256": "0e1291f46312057a6c9b349148868ad770b9b07c848fdd901ca4b01e32050b4d",
+          "desktop_sha256": "633960b90c1d08b84e4b53c85e3ccf9e63b1e091a8ab6f6b2a406296c4b916a5",
+          "deployment_receipt_sha256": "289ea9d6fe54adc8d792fd89676b0d2e4591e67a05c8f79a3afe43fb685cddbc",
+          "pointer_route_passed": true,
+          "keyboard_route_passed": true,
+          "feature_checks_per_case": 3,
+          "cleanup_checks_per_case": 9,
+          "trusted_nonrepeat_KeyA_events_per_case": 1,
+          "global_seat_owner_observed": false,
+          "direct_protocol_token_consumption_established": false,
+          "broader_widget_secure_hardware_or_performance_acceptance": false,
+          "accepted_main_at_capture": false
         }
       },
       {
@@ -929,7 +964,15 @@
         "id": "documentation-accuracy",
         "status": "reconciled_source_evidence_new_revision_delivery_pending",
         "implemented": "Named 9d42/PR114, Pages 40396627106 and LAN receipt dbd81b26 verify three HTML pages, native manifest/PNG, 117 producer inputs/480 captures from 4a and twenty HTTP responses. Earlier ca88/b3/116 delivery remains historical. The active checklist links 8e/26d virtual outputs, genuine tray/clipboard and owned IME evidence; Bluetooth separates software-HCI controls from physical/profile gaps. Candidate 3640 build/offscreen results retain their own source, without deployment/handoff acceptance.",
-        "remaining": "This reconciliation/staged guides and later accepted main need their own exact final checks, Astro/root/Pages/link build and protected-main delivery receipts. Prior publication proves only its named source. Physical/native/performance and the full goal remain open."
+        "remaining": "This reconciliation/staged guides and later accepted main need their own exact final checks, Astro/root/Pages/link build and protected-main delivery receipts. Prior publication proves only its named source. Physical/native/performance and the full goal remain open.",
+        "latest_reconciliation": {
+          "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+          "report": "reports/measurements/lucent-keyboard-intent-ba5-release.json",
+          "actual_source_and_deployment_recorded": true,
+          "actual121_480_catalog_committed": true,
+          "new_revision_CI_and_Pages_verified": false,
+          "scope": "Keeps accepted-main delivery, candidate release, offscreen export and native/performance results separate."
+        }
       }
     ],
     "scoped_native_evidence": [
@@ -1345,13 +1388,46 @@
         "physical_hardware_accepted": false,
         "performance_accepted": false,
         "scope": "Actual source 3640 candidate cold/default route: pointer receives one trusted KeyA; keyboard reaches its exact document but fails focus/key delivery. Both final pre-key release/frame guards and all nine cleanup checks per case pass. No broader handler, hardware or performance acceptance."
+      },
+      {
+        "milestone": "ba5-original-canonical-cold-default-URI-accepted",
+        "status": "both_original_routes_and_each_owned_cleanup_passed",
+        "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+        "report": "reports/measurements/lucent-cold-default-uri-ba5.json",
+        "report_sha256": "4b3fe0b80081ee8421f9a9f7aa248a161c4846c842cfa519375833bac0d76ad3",
+        "summary": {
+          "report": "reports/measurements/lucent-cold-default-uri-ba5.json",
+          "report_sha256": "4b3fe0b80081ee8421f9a9f7aa248a161c4846c842cfa519375833bac0d76ad3",
+          "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+          "manifest_sha256": "0e1291f46312057a6c9b349148868ad770b9b07c848fdd901ca4b01e32050b4d",
+          "desktop_sha256": "633960b90c1d08b84e4b53c85e3ccf9e63b1e091a8ab6f6b2a406296c4b916a5",
+          "deployment_receipt_sha256": "289ea9d6fe54adc8d792fd89676b0d2e4591e67a05c8f79a3afe43fb685cddbc",
+          "pointer_route_passed": true,
+          "keyboard_route_passed": true,
+          "feature_checks_per_case": 3,
+          "cleanup_checks_per_case": 9,
+          "trusted_nonrepeat_KeyA_events_per_case": 1,
+          "global_seat_owner_observed": false,
+          "direct_protocol_token_consumption_established": false,
+          "broader_widget_secure_hardware_or_performance_acceptance": false,
+          "accepted_main_at_capture": false
+        },
+        "historical_b2_keyboard_failure_unchanged": true,
+        "mixed_f26_performance_result_unchanged": true,
+        "pending": [
+          "immediate first Notes key and first outside-click native trial",
+          "secure lock/login regression",
+          "broader handlers and direct protocol token consumption",
+          "eligible desktop resources and source-rate/animation performance",
+          "protected-main and exact Pages delivery"
+        ]
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
-    "validation": "This reconciliation reads exact source3640 build, offscreen export, coherent deployment and cold pointer/keyboard receipts, plus the named9d42 Pages/LAN checkpoint. The current keyboard failure remains a failure, with null missing-event fields and successful cleanup recorded separately. This documentation change adds no native/device/VM action or Node/Cargo build. Local JSON, report-link, privacy and history-preservation checks cover these edits; final source CI, protected-main delivery and publication remain separate.",
+    "validation": "Actual corrected hosted949/run40433468095 passes17stages/880tests/94required names, fresh3x4500MiB capture admission and121/480 offscreen CPU-Vulkan validation. All10 target ELF imports resolve; concrete134-header review leaves only5version literals. V8 coherent deployment verifies all6user clients/root greeter and state/security preservation. FirstNotes harness stops before typing with0feature checks and9restoration passes; no focus outcome is inferred. Current docs/catalogue need their own exact-headCI/Pages delivery. Historical b2 keyboardFAIL, failed ac07 export and mixed f26 resource results remain unchanged.",
     "accepted_main_base_commit": "9b52666ba39b2ea2718e72424c37dc8b341051e2",
     "documentation_harness_base_commit": "c4eb922ca423dfbe255630e8717dc9cb2836a4c2",
-    "runtime_compilation_source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
+    "runtime_compilation_source_commit": "d77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb",
     "historical_gpu_candidate_preservation_rejection": {
       "status": "hardware_initialization_observed_preservation_rejected_software_restored",
       "driver_install_rollback_verified": true,
@@ -1393,23 +1469,32 @@
       "scope": "This trial remains actual older-a7f guest hardware-path liveness, without sustained FPS, cadence, animation/RSS/GPU-memory/hardware-decoding acceptance. Later coherent 8e deployment and its host-pressure-ineligible resource observation are recorded separately; the prior rejection remains unchanged."
     },
     "coherent_release_build": {
-      "source_commit": "eb3481f4c75da9e0783975ad9c3e920ad8833ce2",
-      "manifest_sha256": "e48716b0d7b797292032fec62e3c19219f39184b75221e3249b85633e3812183",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "raw_manifest_sha256": "c3417f557490b0d348dcc7446f881095c13f7e03d9fe0dcbcfa35f2c812e4788",
+      "localized_manifest_sha256": "0e1291f46312057a6c9b349148868ad770b9b07c848fdd901ca4b01e32050b4d",
       "passed": true,
-      "completed_stages": 15,
-      "targeted_tests_passed": 786,
+      "completed_stages": 17,
+      "targeted_tests_passed": 880,
+      "required_named_regressions_passed": 94,
+      "hosted_run": 40433468095,
+      "workflow_head": "949cc8c954f3de70e91b59c5926b992dad545838",
       "archive_classification_at_build": {
         "accepted_main": false,
         "vm_deployed": false,
-        "native_activated": false
+        "native_activated": false,
+        "runtime_ABI_accepted": false
       },
-      "source_code_equivalent_to_accepted_main": true,
-      "private_build_receipt_sha256": "6bed8454b64bbcb9513500eea075ee51c0b7ea2ae3955f5ce0f4022234bda170"
+      "source_code_equivalent_to_accepted_main": false,
+      "report": "reports/measurements/lucent-keyboard-intent-ba5-release.json",
+      "report_sha256": "a043c857208559e253154e129e26b817043b68347dd1bbc02e6d94f33b0d45c5",
+      "report_snapshot_commit": "8266efb669d5776f09f43fc288f637cf24a920b2",
+      "scope": "Actual hosted release and source qualification; original capture-time flags stay unchanged after the separate candidate deployment."
     },
     "coherent_runtime_deployment": {
-      "source_commit": "eb3481f4c75da9e0783975ad9c3e920ad8833ce2",
-      "report": "reports/measurements/lucent-output-resource-matrix-eb348.json",
-      "private_receipt_sha256": "1ec5728696604a528b496d9675249d777c2d7868aaf968aa7c0de33858ff98b2",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "manifest_sha256": "0e1291f46312057a6c9b349148868ad770b9b07c848fdd901ca4b01e32050b4d",
+      "report": "reports/measurements/lucent-keyboard-intent-ba5-release.json",
+      "private_receipt_sha256": "289ea9d6fe54adc8d792fd89676b0d2e4591e67a05c8f79a3afe43fb685cddbc",
       "success": true,
       "managed_user_clients_verified": 6,
       "root_greeter_verified": true,
@@ -1419,8 +1504,10 @@
       "secure_configuration_preserved": true,
       "greetd_restarted": false,
       "settings_or_theme_written": false,
-      "current_source_equivalent_to_accepted_main": true,
-      "scope": "Source-specific coherent deployment, separate from measured workflows or staging-only examples."
+      "current_source_equivalent_to_accepted_main": false,
+      "native_focus_or_performance_accepted": false,
+      "fallback_source_commit": "b2f54551dfbe3744762e04b06cc9abcdfd167eaa",
+      "scope": "Coherent candidate deployment and security/configuration preservation only; no actual lock/login or focus/FPS acceptance."
     },
     "accepted_main_merge": {
       "pull_request": 110,
@@ -1519,37 +1606,21 @@
       }
     ],
     "documentation_delivery": {
-      "accepted_main_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
-      "published_workflow_run": 40396627106,
+      "accepted_main_commit": "c3007cc5cefc5faab36f751a28542898ecefac0d",
+      "published_workflow_run": 40418504442,
       "published_workflow_status": "SUCCESS",
-      "public_http_status": 200,
-      "current_published_source_links": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
-      "current_publication_valid": true,
       "public_artifact_bytes_match": true,
-      "delivery_receipt_sha256": "bfb2cfab2dae89a1fac1e7423c71b51953463503c91ab8a3a1531c5df017cfc7",
-      "archive_sha256": "3a7a7c5b24628c24cdcf96e69ca43bcbbd3af36a691a9004ac35b2241110702b",
-      "verified_pages": [
-        "docs/desktop/",
-        "docs/library/",
-        "component-lab/"
-      ],
-      "verified_native_assets": [
-        "component-lab/manifest.json",
-        "component-lab/images/menu-ocean-populated-narrow-1x.png"
-      ],
-      "rendering_producer_inputs_verified": 117,
+      "delivery_receipt_sha256": "75c4da355aa9975fc25f87ca96ccdde9fdfdc89dd55ac3c4682e00895919c8f3",
+      "archive_sha256": "3f11260ebb62733833ba32286575ff0bd3c69c147cfe748ef86b9af9d8101b87",
+      "rendering_producer_inputs_verified": 118,
       "native_catalogue_captures_verified": 480,
-      "capture_source_commit": "4a0f932a7c82ac0459715007bdbd314d145a4ae4",
-      "latest_verified_lan_source_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+      "capture_source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
       "latest_verified_lan_http_checks_passed": 20,
-      "latest_verified_lan_receipt_sha256": "dbd81b2611a8ad809093f30518bf07d1b0fb5f79fa282943882b0bc3b65a335e",
-      "latest_verified_lan_output_manifest_sha256": "e547f085550b5969a410f15ae179148c869890cd60d8b818b1da67dca7ab6264",
-      "verification_is_source_specific": true,
-      "this_later_reconciliation_published": false,
-      "scope": "Named 9d42/PR114 Pages artifact/public-byte and same-artifact LAN checkpoint: 117 producer inputs/480 captures from 4a. This publication predates the later reconciliation and candidate 3640. It adds no native device/control, deployment, focus-fix or performance acceptance."
+      "latest_verified_lan_receipt_sha256": "3af175696ab1bdd3789a98fc44612c807920fe80ba9197c724b2714928bdbbb0",
+      "scope": "Source-specific accepted-main delivery; new focus source/captures are not yet published."
     },
-    "accepted_main_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
-    "current_vm_trial_source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
+    "accepted_main_commit": "c3007cc5cefc5faab36f751a28542898ecefac0d",
+    "current_vm_trial_source_commit": "d77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb",
     "current_vm_trial_performance_accepted": false,
     "historical_documentation_delivery_8ca": {
       "accepted_main_commit": "8ca4e82015ad07d77fe873c0dc827b6b82cc8164",
@@ -1916,7 +1987,7 @@
         "remaining": "Site checks, exact-head CI and publication for this newer CPU-shape/two-output follow-up remain separate gates. Four owned two-output Display flows now have source-specific native evidence; physical, secure-output, hotplug/suspend, fractional-panel input and pacing acceptance remain unverified. Continue source-specific updates after later merges; historical reports remain unchanged and a documentation edit executes no native test."
       }
     },
-    "current_vm_observation": "The latest recorded coherent candidate deployment and canonical cold-browser trial use source 3640. Pointer passes and keyboard focus/key delivery fails, with both cleanups complete. This is a dated source-specific record, not a live graphical-session or process-identity guarantee.",
+    "current_vm_observation": "The dated ba5 canonical URI trial records both original routes and each nine-check cleanup passing on its bound normal desktop lifetime. Subsequent Notes cleanup may intentionally restart that process; this evidence does not assert a live PID/session or replace fresh native bindings.",
     "recent_deliveries": [
       {
         "pull_request": 98,
@@ -2035,7 +2106,24 @@
       "scope": "Independent local-state Lab, one prepared 1280x800/1x output, AMD Vulkan. Events/focus/submissions are measured separately from values/pixels/timing. Whole owned unit and exact dead socket retire; runtime lock inode remains. Existing shell/settings/wallpaper/output/focus/cursor are preserved. No production desktop service adapter is exercised.",
       "native_harness_source_file": "vm/test-component-lab.py",
       "native_harness_source_file_sha256": "a8cf098d12715e54ba5b966d19dcfb496e3bd70e93d81bfe60ed2555bcdbc377",
-      "harness_identity_scope": "Recorded executed helper bytes correspond to the file at efeaf6d1; this does not relabel the separately identified native Lab binary as a build of that commit."
+      "harness_identity_scope": "Recorded executed helper bytes correspond to the file at efeaf6d1; this does not relabel the separately identified native Lab binary as a build of that commit.",
+      "latest_offscreen_catalog": {
+        "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+        "rendering_producer_inputs": 121,
+        "captures": 480,
+        "stories": 9,
+        "palettes": 5,
+        "adapter": "llvmpipe CPU Vulkan",
+        "actual_manifest_sha256": "8b168eb75057e90b19362d7c7170fb6abf8cea384e4d74196903425ea364c2ad",
+        "committed_catalogue_revision": "d0e863f37fc053edf9c1c6788264cc557052880f",
+        "all480_file_hashes_changed_from_prior_RADV": true,
+        "paired_pixel_samples": 18,
+        "manual_visual_pairs": 4,
+        "native_retested_by_export": false,
+        "publication_verified": false,
+        "report": "reports/measurements/lucent-keyboard-intent-ba5-release.json",
+        "scope": "New actual same-source software-Vulkan captures. Original native Lab feature results remain historical; no all480pixel/native/performance parity claim."
+      }
     },
     "runtime_candidate_26d": {
       "source_commit": "26d03adf476af44c97fb7dcdbfb75cbdc2112770",
@@ -3085,7 +3173,7 @@
         "private_merge_receipt_sha256": "aa9747e89b05e474e1e0ab00eb12c079ad6991188162aa9b297055f5ed1e7a73"
       }
     },
-    "accepted_main_merge_scope": "The retained accepted_main_merge object describes the historical PR110 source-equivalence checkpoint. Current accepted and verified publication checkpoint is 9d42/PR114; capture-time raw merge/report flags stay unchanged.",
+    "accepted_main_merge_scope": "Retained accepted_main_merge describes historical PR110. Current verified delivery checkpoint is c300/PR116; raw earlier merge and capture flags remain historical.",
     "input_release_candidate_3640": {
       "source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
       "status_at_capture": "coherent_deployed_cold_pointer_passed_keyboard_failed",
@@ -3251,8 +3339,393 @@
       "verification_is_source_specific": true,
       "scope": "Named ca88 Pages artifact/public bytes and same-artifact LAN checkpoint. Accepted main has advanced to9d42/PR114; its publication and this later reconciliation require their own exact delivery proof. This does not establish native/device/performance acceptance."
     },
-    "source_identity_policy": "Retained coherent release/build/deployment, accepted_runtime_cohorts and accepted_main_merge fields describe their named historical checkpoints. Current verified delivery is documentation_delivery at 9d42; candidate 3640 has separate build/offscreen evidence and no deployed/native-handoff acceptance. No field here is a live VM observation.",
-    "historical_runtime_compilation_source_before_3640": "eb3481f4c75da9e0783975ad9c3e920ad8833ce2"
+    "source_identity_policy": "Historical coherent_release_build/coherent_runtime_deployment/accepted_runtime_cohorts/accepted_main_merge retain their named sources. Latest b2 qualification/deployment/native trial is explicit in runtime_candidate_b2; current verified site delivery is c300, with source3640 component captures. Separately built/deployed d77 is the latest recorded VM trial; its native input handoff remains unresolved. PR117 still carries ba5 source and captures; d77 results do not accept or rewrite those earlier trials.",
+    "historical_runtime_compilation_source_before_3640": "eb3481f4c75da9e0783975ad9c3e920ad8833ce2",
+    "historical_rollup_checkpoint_before_b2_native": {
+      "snapshot_source_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+      "snapshot_date": "2026-10-26",
+      "scope": "Accepted main 9d42 / PR114 has verified Pages 40396627106 and twenty same-artifact LAN checks with 117 producer inputs/480 captures from 4a. Those checkpoints do not publish this later reconciliation. Source 3640 passes 17 build stages and 823 targeted tests, an actual AMD RADV export with 118 producer inputs and 480 PNGs and coherent six-client/root-greeter candidate VM deployment with settings/user/security state preserved. Its canonical cold pointer route passes, but Tab/Enter still fails browser focus/trusted KeyA delivery after history/input/frame guards pass; all nine cleanup checks per route pass. The cause and keyboard fix remain unestablished. This is an unmerged candidate trial, with original archive flags unchanged. Historical eb348/8e/26d evidence retains exact sources and limitations. Physical controls/sleep, broader IME/tray/clipboard/applications, eligible memory at or below 300 MiB and source-rate or 60 FPS animation acceptance remain open; all seven gaps are not closed.",
+      "validation": "This reconciliation reads exact source3640 build, offscreen export, coherent deployment and cold pointer/keyboard receipts, plus the named9d42 Pages/LAN checkpoint. The current keyboard failure remains a failure, with null missing-event fields and successful cleanup recorded separately. This documentation change adds no native/device/VM action or Node/Cargo build. Local JSON, report-link, privacy and history-preservation checks cover these edits; final source CI, protected-main delivery and publication remain separate.",
+      "accepted_main_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+      "runtime_compilation_source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
+      "current_vm_trial_source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
+      "current_vm_observation": "The latest recorded coherent candidate deployment and canonical cold-browser trial use source 3640. Pointer passes and keyboard focus/key delivery fails, with both cleanups complete. This is a dated source-specific record, not a live graphical-session or process-identity guarantee.",
+      "documentation_delivery": {
+        "accepted_main_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+        "published_workflow_run": 40396627106,
+        "published_workflow_status": "SUCCESS",
+        "public_http_status": 200,
+        "current_published_source_links": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+        "current_publication_valid": true,
+        "public_artifact_bytes_match": true,
+        "delivery_receipt_sha256": "bfb2cfab2dae89a1fac1e7423c71b51953463503c91ab8a3a1531c5df017cfc7",
+        "archive_sha256": "3a7a7c5b24628c24cdcf96e69ca43bcbbd3af36a691a9004ac35b2241110702b",
+        "verified_pages": [
+          "docs/desktop/",
+          "docs/library/",
+          "component-lab/"
+        ],
+        "verified_native_assets": [
+          "component-lab/manifest.json",
+          "component-lab/images/menu-ocean-populated-narrow-1x.png"
+        ],
+        "rendering_producer_inputs_verified": 117,
+        "native_catalogue_captures_verified": 480,
+        "capture_source_commit": "4a0f932a7c82ac0459715007bdbd314d145a4ae4",
+        "latest_verified_lan_source_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+        "latest_verified_lan_http_checks_passed": 20,
+        "latest_verified_lan_receipt_sha256": "dbd81b2611a8ad809093f30518bf07d1b0fb5f79fa282943882b0bc3b65a335e",
+        "latest_verified_lan_output_manifest_sha256": "e547f085550b5969a410f15ae179148c869890cd60d8b818b1da67dca7ab6264",
+        "verification_is_source_specific": true,
+        "this_later_reconciliation_published": false,
+        "scope": "Named 9d42/PR114 Pages artifact/public-byte and same-artifact LAN checkpoint: 117 producer inputs/480 captures from 4a. This publication predates the later reconciliation and candidate 3640. It adds no native device/control, deployment, focus-fix or performance acceptance."
+      }
+    },
+    "runtime_candidate_b2": {
+      "source_commit": "b2f54551dfbe3744762e04b06cc9abcdfd167eaa",
+      "hosted_build_run": 40415443527,
+      "qualification_stages_passed": 17,
+      "targeted_tests_passed": 840,
+      "target_elf_consumers_compatible": 10,
+      "manifest_sha256": "ba2a89b036ad00fde7fca82cce9a1647ab91247e2b59a90874bf87f587fb48b2",
+      "coherent_user_clients_verified": 6,
+      "root_greeter_verified": true,
+      "greetd_restarted": false,
+      "settings_or_theme_written": false,
+      "user_security_state_preserved": true,
+      "native_report": "reports/measurements/lucent-cold-default-uri-b2.json",
+      "native_report_sha256": "6a3f14d05b69fe0b361117b84b3dae411adb4e7401b60bb9dc3e357d2173a767",
+      "canonical_pointer_passed": true,
+      "canonical_keyboard_passed": false,
+      "cleanup_checks_passed_each": 9,
+      "performance_accepted": false
+    },
+    "proposed_keyboard_focus_intent": {
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "pr": 117,
+      "guide": "docs/keyboard-focus.md",
+      "source_authored_targeted_test_expectation": 880,
+      "native_fix_accepted": false,
+      "visual_export_pending": false,
+      "status": "canonical_URI_and_scoped_lock_passed_first_Notes_key_failed",
+      "report": "reports/measurements/lucent-keyboard-intent-ba5-release.json",
+      "report_sha256": "334a25e7c8d747e424911d600682a348bf458332b5dfe104487df6091d0fc433",
+      "historical_failed_export_40430392734": {
+        "run": 40430392734,
+        "workflow_head": "ac07aa5d7090c2869038f1d8001311a451c66940",
+        "stages_passed": 17,
+        "targeted_tests_passed": 880,
+        "required_names_passed": 94,
+        "whole_workflow_passed": false,
+        "failure": "fresh_remote_4500MiB_admission_required_before_export",
+        "refused_sample_available": false,
+        "export_started": false,
+        "release_archive_produced": false,
+        "native_fix_accepted": false,
+        "private_qualification_sha256": "da2b9092460fb69d52c7835c88553a3e3f133202d28bce4d064d0652590f9df9"
+      },
+      "actual_qualification": {
+        "run": 40433468095,
+        "workflow_head": "949cc8c954f3de70e91b59c5926b992dad545838",
+        "stages_passed": 17,
+        "targeted_tests_passed": 880,
+        "required_names_passed": 94,
+        "whole_workflow_passed": true,
+        "export_started": true,
+        "release_archive_produced": true,
+        "native_fix_accepted": false
+      },
+      "actual_component_catalog": {
+        "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+        "stories": 9,
+        "palettes": 5,
+        "captures": 480,
+        "rendering_inputs": 121,
+        "backend": "Vulkan",
+        "adapter": "llvmpipe",
+        "device_type": "Cpu",
+        "LLVM_version": "23.1.3",
+        "Mesa_version": "26.2.5-arch1.1",
+        "export_seconds": 5.195773642999939,
+        "strict_checker_passed": true,
+        "manifest_sha256": "8b168eb75057e90b19362d7c7170fb6abf8cea384e4d74196903425ea364c2ad",
+        "standalone_lab_sha256": "e3ba40f645c03fe0ccb7c873fda8e30e9db39ab82793929a05534df5a0530835",
+        "promotion_commit": "d0e863f37fc053edf9c1c6788264cc557052880f",
+        "catalogue_git_tree": "88b05f01146530ae4394c0353fdbbae7fffde6f8",
+        "PNG_hashes_changed": 480,
+        "PNG_hashes_identical": 0,
+        "sampled_pixel_comparison": {
+          "paired_examples": 18,
+          "stories": 9,
+          "densities": [
+            1,
+            2
+          ],
+          "palette": "dark",
+          "viewport": "regular",
+          "maximum_normalized_peak_error": 0.00784314,
+          "approximately_8bit_channel_steps": 2,
+          "manual_visual_pairs_reviewed": 4,
+          "visible_layout_caret_or_clipping_regression_observed": false,
+          "all480_decoded_pixel_parity_established": false
+        },
+        "actual_CPU_software_export": true,
+        "RADV_capture_claimed": false,
+        "Wayland_compositor_tested_by_export": false,
+        "VM_native_or_physical_GPU_performance_accepted_by_export": false,
+        "publication_of_this_revision_verified": false,
+        "prior_RADV_source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9"
+      },
+      "actual_deployment": {
+        "success": true,
+        "managed_user_clients_verified": 6,
+        "root_greeter_verified": true,
+        "supervised_beyond_initial_startup_deadline": true,
+        "user_state_preserved": true,
+        "secure_configuration_preserved": true,
+        "greetd_restarted": false,
+        "settings_or_theme_written": false,
+        "fresh_readonly_normal_proof_recorded": true,
+        "normal_profiling_flags_off_at_that_checkpoint": true,
+        "ongoing_live_session_state_guaranteed": false,
+        "fallback_source_commit": "b2f54551dfbe3744762e04b06cc9abcdfd167eaa",
+        "fallback_release_manifest_sha256": "ba2a89b036ad00fde7fca82cce9a1647ab91247e2b59a90874bf87f587fb48b2",
+        "scope": "Coherent candidate installation and a dated normal-state checkpoint; no new lock/login interaction, native focus fix or performance acceptance.",
+        "normal_checkpoint_later_retired_by_expected_Notes_cleanup": true
+      },
+      "first_Notes_attempt": {
+        "status": "harness_failed_before_typing",
+        "failure_class": "bounded_command_failed",
+        "feature_checks_executed": 0,
+        "actual_key_attempt": false,
+        "restoration_checks_passed": 9,
+        "original_settings_source_exports_and_cursor_restored": true,
+        "guarded_normal_restart_and35second_supervision_verified": true,
+        "focus_feature_result": null,
+        "fresh_later_normal_proof_required_before_next_trial": true,
+        "scope": "A pre-input controller failure is not evidence that focus acquisition passed or failed."
+      },
+      "pending_acceptance": {
+        "immediate_first_Notes_key": "failed_in_separate_V7_and_V8_native_trials",
+        "first_same_workspace_outside_click_and_key": "pending",
+        "Notes_reacquisition_and_caret_visuals": "pending",
+        "canonical_cold_URI_pointer_and_Tab_Enter_on_ba5": "passed_in_original_canonical_native_trial",
+        "lock_and_login_security_regression": "scoped_native_lock_PAM_exit_passed_login_pixels_and_other_secure_regressions_pending",
+        "eligible_normal_RSS_at_or_below300MiB": "pending",
+        "eligible_source_rate_or60FPS_and_launcher_animation": "pending",
+        "physical_devices_and_broader_applications": "pending"
+      },
+      "canonical_cold_URI_native_fix_accepted": true,
+      "native_fix_acceptance_scope": "Only the original controlled pointer/TabEnter cold URI routes on one FHD virtual output; broader acquisition and secure-session checks remain separate.",
+      "canonical_cold_URI_trial": {
+        "report": "reports/measurements/lucent-cold-default-uri-ba5.json",
+        "report_sha256": "4b3fe0b80081ee8421f9a9f7aa248a161c4846c842cfa519375833bac0d76ad3",
+        "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+        "manifest_sha256": "0e1291f46312057a6c9b349148868ad770b9b07c848fdd901ca4b01e32050b4d",
+        "desktop_sha256": "633960b90c1d08b84e4b53c85e3ccf9e63b1e091a8ab6f6b2a406296c4b916a5",
+        "deployment_receipt_sha256": "289ea9d6fe54adc8d792fd89676b0d2e4591e67a05c8f79a3afe43fb685cddbc",
+        "pointer_route_passed": true,
+        "keyboard_route_passed": true,
+        "feature_checks_per_case": 3,
+        "cleanup_checks_per_case": 9,
+        "trusted_nonrepeat_KeyA_events_per_case": 1,
+        "global_seat_owner_observed": false,
+        "direct_protocol_token_consumption_established": false,
+        "broader_widget_secure_hardware_or_performance_acceptance": false,
+        "accepted_main_at_capture": false
+      },
+      "first_key_native_trial": {
+        "report": "reports/measurements/lucent-widget-first-key-ba5.json",
+        "report_sha256": "a95916d4d1cb4082984475378ca27157bac68a021979b0ce4a60efc3f0582828",
+        "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+        "status": "corrected_native_first_key_delivery_failed",
+        "host_down_to_key_transport_ms": 31.62471897667274,
+        "Notes_logical_and_native_focus_observed_after_input": true,
+        "controlled_browser_received_first_trusted_KeyA": true,
+        "Notes_insert_observed": false,
+        "restoration_checks_passed": 9,
+        "outside_click_and_reacquisition_attempted": false,
+        "actual_input_dispatch_timing_available": false,
+        "control_flush_candidate_native_verified": false
+      },
+      "native_lock_trial": {
+        "report": "reports/measurements/lucent-native-lock-ba5.json",
+        "report_sha256": "af160b848c92e1d0a9453be672656f2b1e8f5c21e39df97db5fb078c103b9f61",
+        "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+        "whole_trial_passed": false,
+        "native_lock_and_authenticated_unlock_observed": true,
+        "exit_status_assertion_failed": true,
+        "native_exit_status": null,
+        "later_same_runtime_files_security_and_playback_preserved": true
+      }
+    },
+    "isolated_decoder_retarget_f26": {
+      "backend_source": "1aebe2e3ffa88416791f122d9fbf01bb0f66f91f",
+      "tools_source": "f26f8a26b880eeb8ac01da9e57cb8a7cc4d76322",
+      "run": 40429866532,
+      "report": "reports/measurements/lucent-decoder-retarget-f26.json",
+      "report_sha256": "f1082bd40d59b0a809ec9ed9c787695654e9a99f704f49db51b1ded8a886cf1e",
+      "actual_test_counts": {
+        "domain": 37,
+        "video": 67,
+        "observer": 21,
+        "consumer": 15
+      },
+      "four_canonical_cases_qualified": true,
+      "known_target_warm_FHD_retarget_less_RSS_mib": 21.24,
+      "source_target_warm_FHD_retarget_more_RSS_mib": 40.13,
+      "general_memory_gain_proven": false,
+      "production_client_wiring_enabled": false,
+      "whole_shell_performance_accepted": false
+    },
+    "historical_rollup_checkpoint_before_ba5": {
+      "snapshot_source_commit": "c3007cc5cefc5faab36f751a28542898ecefac0d",
+      "snapshot_date": "2026-10-27",
+      "scope": "Accepted main c300/PR116 has verified Pages40418504442 and twenty same-artifact LAN checks with118 source3640 producers/480captures. A separate coherent b2 Arch build/deployment and canonical native input trial are now recorded. New focus acquisition remains unaccepted.",
+      "validation": "Actual hosted b2 qualification17stages/840tests, concrete target ELF/header compatibility and coherent deployment pass. Canonical pointer passes, Tab/Enter fails, nine cleanup checks pass each. New one-shot focus source needs actual release, visual export and native tests. Earlier capture flags/results remain historical.",
+      "runtime_compilation_source_commit": "b2f54551dfbe3744762e04b06cc9abcdfd167eaa",
+      "current_vm_trial_source_commit": "b2f54551dfbe3744762e04b06cc9abcdfd167eaa",
+      "current_vm_observation": "Latest recorded b2 coherent release is normal profiling OFF. Actual canonical pointer succeeds while Tab/Enter fails; native Clock focus is observed after history closes despite prior committed None. Both cleanups pass. This dated source-specific record is not an ongoing live-session guarantee.",
+      "coherent_release_build": {
+        "source_commit": "eb3481f4c75da9e0783975ad9c3e920ad8833ce2",
+        "manifest_sha256": "e48716b0d7b797292032fec62e3c19219f39184b75221e3249b85633e3812183",
+        "passed": true,
+        "completed_stages": 15,
+        "targeted_tests_passed": 786,
+        "archive_classification_at_build": {
+          "accepted_main": false,
+          "vm_deployed": false,
+          "native_activated": false
+        },
+        "source_code_equivalent_to_accepted_main": true,
+        "private_build_receipt_sha256": "6bed8454b64bbcb9513500eea075ee51c0b7ea2ae3955f5ce0f4022234bda170"
+      },
+      "coherent_runtime_deployment": {
+        "source_commit": "eb3481f4c75da9e0783975ad9c3e920ad8833ce2",
+        "report": "reports/measurements/lucent-output-resource-matrix-eb348.json",
+        "private_receipt_sha256": "1ec5728696604a528b496d9675249d777c2d7868aaf968aa7c0de33858ff98b2",
+        "success": true,
+        "managed_user_clients_verified": 6,
+        "root_greeter_verified": true,
+        "acceptance_examples_staged_only": 3,
+        "supervised_beyond_startup_deadline": true,
+        "user_state_preserved": true,
+        "secure_configuration_preserved": true,
+        "greetd_restarted": false,
+        "settings_or_theme_written": false,
+        "current_source_equivalent_to_accepted_main": true,
+        "scope": "Source-specific coherent deployment, separate from measured workflows or staging-only examples."
+      },
+      "proposed_keyboard_focus_intent": {
+        "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+        "pr": 117,
+        "guide": "docs/keyboard-focus.md",
+        "source_authored_targeted_test_expectation": 880,
+        "native_fix_accepted": false,
+        "visual_export_pending": true,
+        "actual_qualification": {
+          "run": 40430392734,
+          "workflow_head": "ac07aa5d7090c2869038f1d8001311a451c66940",
+          "stages_passed": 17,
+          "targeted_tests_passed": 880,
+          "required_names_passed": 94,
+          "whole_workflow_passed": false,
+          "failure": "fresh_remote_4500MiB_admission_required_before_export",
+          "refused_sample_available": false,
+          "export_started": false,
+          "release_archive_produced": false,
+          "native_fix_accepted": false,
+          "private_qualification_sha256": "da2b9092460fb69d52c7835c88553a3e3f133202d28bce4d064d0652590f9df9"
+        }
+      }
+    },
+    "pending_documentation_delivery_pr117": {
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "pull_request": 117,
+      "rendering_inputs": 121,
+      "captures": 480,
+      "capture_source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "catalogue_commit": "d0e863f37fc053edf9c1c6788264cc557052880f",
+      "exact_head_CI_passed": false,
+      "published": false,
+      "scope": "Candidate report and actual capture refresh; source/build/deployment are distinct from protected-main and Pages delivery."
+    },
+    "ba5_completed_click_V8": {
+      "report": "reports/measurements/lucent-widget-completed-click-ba5.json",
+      "report_sha256": "9cc6005267544dd4c8a8b33ef7741b148ef9ac949a521ea955a61d7062e34465",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "first_key_delivery_passed": false,
+      "gesture_contract": "completed-click-then-immediate-key",
+      "host_down_to_key_transport_ms": 66.63447699975222,
+      "Notes_logical_and_native_focus_observed_after_input": true,
+      "owned_browser_received_first_trusted_KeyA": true,
+      "Notes_insert_observed": false,
+      "restoration_checks_passed": 9,
+      "outside_click_and_reacquisition_attempted": false,
+      "actual_input_dispatch_timing_available": false,
+      "native_control_flush_fix_accepted": false,
+      "V7_held_button_result_unchanged": true
+    },
+    "ba5_native_lock_V3": {
+      "report": "reports/measurements/lucent-native-lock-ba5-v3.json",
+      "report_sha256": "c39c4a2d1b8d87935b809b95388858832b6f557132024c51806e2c18e50cd1b9",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "whole_trial_passed": true,
+      "checks_passed": 6,
+      "same_connection_new_locked_ACK_and_one_PAM_unlock": true,
+      "retained_same_invocation_exited_normally": true,
+      "exit_status": 0,
+      "reference_released": true,
+      "same_runtime_files_security_playback_idle_and_geometry_preserved": true,
+      "login_pixels_suspend_hardware_or_performance_accepted": false,
+      "V1_and_V2_failures_unchanged": true
+    },
+    "candidate_keyboard_control_flush": {
+      "source_commit": "d77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb",
+      "report": "reports/measurements/lucent-keyboard-control-flush-d77.json",
+      "report_sha256": "2af4c21b30f012b4f99b097349831360a805a47d7cdffa253634d680fac3d838",
+      "status": "coherent_deployment_and_canonical_URI_passed_widget_handoff_unresolved_test_transport_problem_observed",
+      "hosted_release_run": 40448216820,
+      "actual_qualification_stages": 17,
+      "actual_targeted_tests": 885,
+      "actual_required_named_tests": 99,
+      "actual_producer_inputs": 121,
+      "actual_PNGs": 480,
+      "static_ELF_consumers_passed": 10,
+      "native_focus_fix_accepted": false,
+      "guest_input_order_measured": false,
+      "failure_cause_established": false,
+      "canonical_URI_and_lock_on_this_source": "original_canonical_pointer_and_TabEnter_passed;lock_not_executed",
+      "all9restoration_per_native_trial": true,
+      "reacquisition": "unattempted",
+      "eligible_memory_and_source_rate_pacing": "pending",
+      "code_promoted_into_PR117": false,
+      "component_catalogue_promoted": false,
+      "accepted_main": false,
+      "canonical_cold_URI": {
+        "report": "reports/measurements/lucent-cold-default-uri-d77.json",
+        "report_sha256": "5bcebe0e218e118a5fd7861330c85dc6e4419a0c1297c672e46ba0aaefcbb0d1",
+        "both_original_routes_passed": true,
+        "feature_checks_per_case": 3,
+        "cleanup_checks_per_case": 9,
+        "trusted_unmodified_nonrepeat_KeyA_per_case": 1
+      },
+      "input_order_diagnostic": {
+        "report": "reports/measurements/lucent-widget-input-order-d77.json",
+        "report_sha256": "8727381070ebfe8681ace45481d7b36c76954adf3d020bbfee1f28986edd28eb",
+        "guest_outside_key_precedes_mouse_DOWN_ms": 4.332,
+        "outside_browser_pointer_target_reached": false,
+        "first_Notes_key_and_undo_passed": true,
+        "observer_FDs_closed": true,
+        "restoration_passed": 8,
+        "restoration_total": 9,
+        "original_cursor_restored": false,
+        "original_cursor_not_persisted": true,
+        "focus_cause_established": false,
+        "earlier_guest_order_inferred": false,
+        "next": "correct_input_transport_then_retest;no_product_focus_patch_from_this_trace"
+      }
+    }
   },
   "requirements": [
     {
@@ -5226,6 +5699,113 @@
         "Cross-output keyboard/text/clipboard, arbitrary applications and broader workspace routing.",
         "Presentation/scanout FPS, distinct video-frame cadence, animation smoothness, GPU memory and normal RSS targets. Submission counters are not presentation FPS."
       ]
+    },
+    {
+      "milestone": "explicit-widget-keyboard-intent-ba5-release",
+      "status": "source_qualified_software_catalog_exported_candidate_deployed_native_acceptance_pending",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "pull_request": 117,
+      "report": "reports/measurements/lucent-keyboard-intent-ba5-release.json",
+      "report_sha256": "a043c857208559e253154e129e26b817043b68347dd1bbc02e6d94f33b0d45c5",
+      "report_snapshot_commit": "8266efb669d5776f09f43fc288f637cf24a920b2",
+      "checks": {
+        "hosted_stages": 17,
+        "targeted_tests": 880,
+        "required_named_regressions": 94,
+        "offscreen_captures": 480,
+        "rendering_inputs": 121,
+        "ELF_consumers_static_imports_resolve": 10,
+        "managed_user_clients_verified": 6,
+        "root_greeter_verified": true
+      },
+      "pending": [
+        "immediate first Notes key and outside click",
+        "canonical cold URI keyboard focus",
+        "secure lock/login regression",
+        "eligible desktop resources and source-rate/60FPS animations",
+        "protected-main and Pages delivery"
+      ],
+      "historical_b2_keyboard_failure_unchanged": true,
+      "mixed_f26_performance_result_unchanged": true
+    },
+    {
+      "milestone": "ba5-original-canonical-cold-default-URI-accepted",
+      "status": "both_original_routes_and_each_owned_cleanup_passed",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "report": "reports/measurements/lucent-cold-default-uri-ba5.json",
+      "report_sha256": "4b3fe0b80081ee8421f9a9f7aa248a161c4846c842cfa519375833bac0d76ad3",
+      "summary": {
+        "report": "reports/measurements/lucent-cold-default-uri-ba5.json",
+        "report_sha256": "4b3fe0b80081ee8421f9a9f7aa248a161c4846c842cfa519375833bac0d76ad3",
+        "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+        "manifest_sha256": "0e1291f46312057a6c9b349148868ad770b9b07c848fdd901ca4b01e32050b4d",
+        "desktop_sha256": "633960b90c1d08b84e4b53c85e3ccf9e63b1e091a8ab6f6b2a406296c4b916a5",
+        "deployment_receipt_sha256": "289ea9d6fe54adc8d792fd89676b0d2e4591e67a05c8f79a3afe43fb685cddbc",
+        "pointer_route_passed": true,
+        "keyboard_route_passed": true,
+        "feature_checks_per_case": 3,
+        "cleanup_checks_per_case": 9,
+        "trusted_nonrepeat_KeyA_events_per_case": 1,
+        "global_seat_owner_observed": false,
+        "direct_protocol_token_consumption_established": false,
+        "broader_widget_secure_hardware_or_performance_acceptance": false,
+        "accepted_main_at_capture": false
+      },
+      "historical_b2_keyboard_failure_unchanged": true,
+      "mixed_f26_performance_result_unchanged": true,
+      "pending": [
+        "immediate first Notes key and first outside-click native trial",
+        "secure lock/login regression",
+        "broader handlers and direct protocol token consumption",
+        "eligible desktop resources and source-rate/animation performance",
+        "protected-main and exact Pages delivery"
+      ]
+    },
+    {
+      "milestone": "ba5-completed-click-first-key-native-result",
+      "status": "first_key_delivery_failed_cleanup_passed",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "report": "reports/measurements/lucent-widget-completed-click-ba5.json",
+      "report_sha256": "9cc6005267544dd4c8a8b33ef7741b148ef9ac949a521ea955a61d7062e34465",
+      "summary": {
+        "report": "reports/measurements/lucent-widget-completed-click-ba5.json",
+        "report_sha256": "9cc6005267544dd4c8a8b33ef7741b148ef9ac949a521ea955a61d7062e34465",
+        "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+        "first_key_delivery_passed": false,
+        "gesture_contract": "completed-click-then-immediate-key",
+        "host_down_to_key_transport_ms": 66.63447699975222,
+        "Notes_logical_and_native_focus_observed_after_input": true,
+        "owned_browser_received_first_trusted_KeyA": true,
+        "Notes_insert_observed": false,
+        "restoration_checks_passed": 9,
+        "outside_click_and_reacquisition_attempted": false,
+        "actual_input_dispatch_timing_available": false,
+        "native_control_flush_fix_accepted": false,
+        "V7_held_button_result_unchanged": true
+      },
+      "old_failures_unchanged": true
+    },
+    {
+      "milestone": "ba5-native-lock-PAM-retained-exit",
+      "status": "six_scoped_native_checks_passed",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "report": "reports/measurements/lucent-native-lock-ba5-v3.json",
+      "report_sha256": "c39c4a2d1b8d87935b809b95388858832b6f557132024c51806e2c18e50cd1b9",
+      "summary": {
+        "report": "reports/measurements/lucent-native-lock-ba5-v3.json",
+        "report_sha256": "c39c4a2d1b8d87935b809b95388858832b6f557132024c51806e2c18e50cd1b9",
+        "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+        "whole_trial_passed": true,
+        "checks_passed": 6,
+        "same_connection_new_locked_ACK_and_one_PAM_unlock": true,
+        "retained_same_invocation_exited_normally": true,
+        "exit_status": 0,
+        "reference_released": true,
+        "same_runtime_files_security_playback_idle_and_geometry_preserved": true,
+        "login_pixels_suspend_hardware_or_performance_accepted": false,
+        "V1_and_V2_failures_unchanged": true
+      },
+      "old_failures_unchanged": true
     }
   ],
   "performance_targets": {

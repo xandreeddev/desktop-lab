@@ -1,6 +1,8 @@
 //! Layout, hit testing and retained interaction state for declarative components.
+mod focus_presentation;
 mod overlay;
 mod pointer;
+mod press_observation;
 use lucent_api::*;
 pub use overlay::OverlayScene;
 mod scroll;
@@ -72,6 +74,7 @@ pub struct Hit<M> {
     pub secondary_click: Option<M>,
     pub middle_click: Option<M>,
     pub wheel: Option<WheelCallback<M>>,
+    pub pointer_press: Option<PointerPressCallback<M>>,
     pub submit: Option<M>,
     pub hover: Option<M>,
     pub input: Option<InputCallback<M>>,
@@ -370,6 +373,7 @@ impl Layout {
             None => clip,
         };
         let paint_start = scene.paint.len();
+        let hit_start = scene.hits.len();
         let own_clip = if e.style.clip {
             clip.with_rounded(rect, e.style.radius)
         } else {
@@ -550,6 +554,7 @@ impl Layout {
                 secondary_click: e.secondary_click.clone(),
                 middle_click: e.middle_click.clone(),
                 wheel: e.wheel.clone(),
+                pointer_press: None,
                 submit: e.submit.clone(),
                 hover: e.hover.clone(),
                 input: e.input.clone(),
@@ -618,7 +623,7 @@ impl Layout {
                         .inner,
                 ),
                 alpha,
-                interaction.focus.as_deref() == Some(&id),
+                interaction.keyboard_active && interaction.focus.as_deref() == Some(&id),
                 self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]),
                 interaction,
                 &id,
@@ -671,7 +676,7 @@ impl Layout {
                     color: fg,
                     align: Align::Start,
                 });
-                if interaction.focus.as_deref() == Some(&id) {
+                if interaction.keyboard_active && interaction.focus.as_deref() == Some(&id) {
                     let font = self.fonts.get(e.style.font_face).unwrap_or(&self.fonts[0]);
                     let line = text::run_metrics(font, &value, e.style.font_size, None);
                     let top = inner.y + (inner.h - line.height).max(0.) / 2.;
@@ -844,7 +849,8 @@ impl Layout {
                     .enumerate()
                     .any(|(i, child)| contains_focus(child, focus, &format!("{path}/{i}")))
         }
-        let focused = interaction.focus_visible
+        let focused = interaction.keyboard_active
+            && interaction.focus_visible
             && interaction.focus.as_deref().is_some_and(|focus| {
                 focus == id || (e.style.focus_within && contains_focus(e, focus, path))
             });
@@ -856,6 +862,13 @@ impl Layout {
                 color: e.style.focus_color.alpha(e.style.focus_color.3 * alpha),
                 width: e.style.focus_width,
             });
+        }
+        // Descendants have already installed their closer observers. Attach
+        // this observer only to existing hits, without changing input coverage.
+        if let Some(observer) = &e.pointer_press {
+            for hit in &mut scene.hits[hit_start..] {
+                hit.pointer_press.get_or_insert_with(|| observer.clone());
+            }
         }
         if !e.style.paint {
             scene.paint.truncate(paint_start);
@@ -912,6 +925,7 @@ pub struct Interaction<M> {
     pub focus: Option<String>,
     pub hovered: Option<String>,
     pub focus_visible: bool,
+    keyboard_active: bool,
     press: Option<Press<M>>,
     alternate_press: Option<pointer::AlternatePress<M>>,
     hover_transition: Transition,
@@ -931,6 +945,9 @@ impl<M> Default for Interaction<M> {
             focus: None,
             hovered: None,
             focus_visible: false,
+            // Standalone/offscreen runners historically model an active input
+            // context. Native runners explicitly initialize this gate false.
+            keyboard_active: true,
             hover_transition: Transition::default(),
             press: None,
             alternate_press: None,
@@ -1766,6 +1783,7 @@ mod tests {
             secondary_click: None,
             middle_click: None,
             wheel: None,
+            pointer_press: None,
             submit: None,
             input: None,
             edit: None,
@@ -1855,6 +1873,7 @@ mod tests {
             secondary_click: None,
             middle_click: None,
             wheel: None,
+            pointer_press: None,
             submit: None,
             input: Some(Arc::new(|s: String| s)),
             edit: None,
@@ -1914,6 +1933,7 @@ mod tests {
             secondary_click: None,
             middle_click: None,
             wheel: None,
+            pointer_press: None,
             submit: None,
             input: None,
             edit: None,

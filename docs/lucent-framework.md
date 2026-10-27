@@ -209,7 +209,12 @@ its 823 targeted tests, then passes coherent VM deployment. Its
 [cold-browser report](../reports/measurements/lucent-cold-default-uri-3640.json)
 passes pointer handoff but still fails the separate keyboard route after the
 history/input-release guards pass. A callback acknowledgement establishes no
-destination focus or trusted-key guarantee; the keyboard defect remains open.
+destination focus or trusted-key guarantee. A later [source ba5 canonical trial](../reports/measurements/lucent-cold-default-uri-ba5.json)
+passes both original cold routes and trusted nonrepeat document `KeyA` with full
+owned cleanup after explicit widget-demand ownership is introduced. That scoped
+result does not strengthen the `after_input_release` API into a destination-focus
+guarantee; inline-widget acquisition and secure-session behavior have separate
+acceptance requirements.
 
 Runtime ingress is a shared FIFO with capacity for 64 waiting messages from
 subscriptions, effect completions and local IPC. When full, background producers
@@ -455,8 +460,13 @@ selection. Buttons support Tab / Shift+Tab traversal and Enter / Space activatio
 lets a composite input field draw the focus outline around all its contents.
 `tab_stop(false)` lets composite clients own keyboard navigation. `Theme::apply`
 provides semantic focus color, outline width and caret width. Text, placeholder
-and caret share the renderer's line metrics. A long input scrolls to keep its
-end caret visible. General caret movement and IME are still future work.
+and caret share the renderer's line metrics. Ordinary fields support caret and
+selection editing, shaped/bidirectional text, font fallback and opted-in native
+IME; see [text shaping](text-shaping.md) for source-specific acceptance. Logical
+field focus is separate from native keyboard ownership. The proposed
+[one-shot focus path](keyboard-focus.md) gates native caret/focus painting and
+keeps widget capability separate from explicit user demand; its new native
+interaction checks remain pending.
 
 The launcher owns Tab / Shift+Tab to cycle Apps → Commands → Wallpapers → Themes
 → Widgets. Arrows change selection, Enter activates it, Escape closes. This is

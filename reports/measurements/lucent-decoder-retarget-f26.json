@@ -1,0 +1,482 @@
+{
+  "schema_version": 1,
+  "scope": "Isolated CPU decoder mechanism comparison on a GitHub-hosted Arch container; finite 12-second phases, no renderer/compositor/VM or full-desktop acceptance",
+  "backend_commit": "1aebe2e3ffa88416791f122d9fbf01bb0f66f91f",
+  "tools_commit": "f26f8a26b880eeb8ac01da9e57cb8a7cc4d76322",
+  "run_id": 40429866532,
+  "original_zip_sha256": "de1b83dc59ea4d7519d3d14e033973112a11877eabfdff9ea0c5d3c64a6fbabd",
+  "qualified_receipt_sha256": "48b7ff83f39f79357785ec9a255db445f7d6bf786d31c71863025f932979706e",
+  "actual_test_counts": {
+    "domain": 37,
+    "video": 67,
+    "observer": 21,
+    "consumer": 15
+  },
+  "canonical_cases_qualified": 4,
+  "same_binary_input_and_genuine_prepared_asset_verified": true,
+  "genuine_import_in_separate_process": true,
+  "case_processes_fresh_and_nonoverlapping": true,
+  "phases_seconds": 12,
+  "allocator_observation_scope": "Only before playback, after worker cancellation/join with latest held, and after latest dropped. Never queried during playback.",
+  "cases": [
+    {
+      "sequence": "known_targets",
+      "mode": "reopen",
+      "play_calls": 3,
+      "joins": 3,
+      "phases": [
+        {
+          "phase": "first_fhd",
+          "revision": 1,
+          "size": [
+            1920,
+            1080
+          ],
+          "ready_ms": 60,
+          "observed_ms": 12008,
+          "publications": 722,
+          "rgba_bytes": 8294400,
+          "latest_capacity_bytes": 8294400,
+          "rss_last_kib": 179656,
+          "rss_min_kib": 177412,
+          "rss_max_kib": 179656,
+          "first_pts_ns": 0,
+          "last_pts_ns": 33333333,
+          "loop_wraps_total": 3,
+          "stale_total": 0
+        },
+        {
+          "phase": "four_k",
+          "revision": 2,
+          "size": [
+            3840,
+            2160
+          ],
+          "ready_ms": 50,
+          "observed_ms": 12008,
+          "publications": 722,
+          "rgba_bytes": 33177600,
+          "latest_capacity_bytes": 33177600,
+          "rss_last_kib": 280704,
+          "rss_min_kib": 280320,
+          "rss_max_kib": 280704,
+          "first_pts_ns": 0,
+          "last_pts_ns": 33333333,
+          "loop_wraps_total": 6,
+          "stale_total": 0
+        },
+        {
+          "phase": "restored_fhd",
+          "revision": 3,
+          "size": [
+            1920,
+            1080
+          ],
+          "ready_ms": 50,
+          "observed_ms": 12008,
+          "publications": 723,
+          "rgba_bytes": 8294400,
+          "latest_capacity_bytes": 8294400,
+          "rss_last_kib": 202112,
+          "rss_min_kib": 201724,
+          "rss_max_kib": 202112,
+          "first_pts_ns": 0,
+          "last_pts_ns": 33333333,
+          "loop_wraps_total": 9,
+          "stale_total": 0
+        }
+      ],
+      "stopped": [
+        {
+          "moment": "before_play",
+          "rss_kib": 25756,
+          "arena_free_bytes": 124640,
+          "accounted_in_use_bytes": 276768,
+          "direct_mmap_bytes": 0
+        },
+        {
+          "moment": "after_join_latest_held",
+          "rss_kib": 195216,
+          "arena_free_bytes": 154442448,
+          "accounted_in_use_bytes": 8840496,
+          "direct_mmap_bytes": 0
+        },
+        {
+          "moment": "after_latest_dropped",
+          "rss_kib": 195216,
+          "arena_free_bytes": 162736272,
+          "accounted_in_use_bytes": 546672,
+          "direct_mmap_bytes": 0
+        }
+      ]
+    },
+    {
+      "sequence": "known_targets",
+      "mode": "retarget",
+      "play_calls": 1,
+      "joins": 1,
+      "phases": [
+        {
+          "phase": "first_fhd",
+          "revision": 1,
+          "size": [
+            1920,
+            1080
+          ],
+          "ready_ms": 70,
+          "observed_ms": 12007,
+          "publications": 721,
+          "rgba_bytes": 8294400,
+          "latest_capacity_bytes": 8294400,
+          "rss_last_kib": 179928,
+          "rss_min_kib": 177776,
+          "rss_max_kib": 179928,
+          "first_pts_ns": 0,
+          "last_pts_ns": 33333333,
+          "loop_wraps_total": 3,
+          "stale_total": 0
+        },
+        {
+          "phase": "four_k",
+          "revision": 2,
+          "size": [
+            3840,
+            2160
+          ],
+          "ready_ms": 20,
+          "observed_ms": 12008,
+          "publications": 721,
+          "rgba_bytes": 33177600,
+          "latest_capacity_bytes": 33177600,
+          "rss_last_kib": 254852,
+          "rss_min_kib": 254848,
+          "rss_max_kib": 277556,
+          "first_pts_ns": 66666667,
+          "last_pts_ns": 66666667,
+          "loop_wraps_total": 6,
+          "stale_total": 1
+        },
+        {
+          "phase": "restored_fhd",
+          "revision": 3,
+          "size": [
+            1920,
+            1080
+          ],
+          "ready_ms": 20,
+          "observed_ms": 12008,
+          "publications": 720,
+          "rgba_bytes": 8294400,
+          "latest_capacity_bytes": 8294400,
+          "rss_last_kib": 180360,
+          "rss_min_kib": 180184,
+          "rss_max_kib": 180360,
+          "first_pts_ns": 100000000,
+          "last_pts_ns": 100000000,
+          "loop_wraps_total": 9,
+          "stale_total": 2
+        }
+      ],
+      "stopped": [
+        {
+          "moment": "before_play",
+          "rss_kib": 25928,
+          "arena_free_bytes": 124640,
+          "accounted_in_use_bytes": 276768,
+          "direct_mmap_bytes": 0
+        },
+        {
+          "moment": "after_join_latest_held",
+          "rss_kib": 173592,
+          "arena_free_bytes": 132469152,
+          "accounted_in_use_bytes": 8838752,
+          "direct_mmap_bytes": 0
+        },
+        {
+          "moment": "after_latest_dropped",
+          "rss_kib": 173592,
+          "arena_free_bytes": 140762928,
+          "accounted_in_use_bytes": 544976,
+          "direct_mmap_bytes": 0
+        }
+      ]
+    },
+    {
+      "sequence": "source_and_targets",
+      "mode": "reopen",
+      "play_calls": 5,
+      "joins": 5,
+      "phases": [
+        {
+          "phase": "initial_source",
+          "revision": 1,
+          "size": [
+            3840,
+            2160
+          ],
+          "ready_ms": 60,
+          "observed_ms": 12009,
+          "publications": 722,
+          "rgba_bytes": 33177600,
+          "latest_capacity_bytes": 33177600,
+          "rss_last_kib": 252312,
+          "rss_min_kib": 250120,
+          "rss_max_kib": 252312,
+          "first_pts_ns": 0,
+          "last_pts_ns": 33333333,
+          "loop_wraps_total": 3,
+          "stale_total": 0
+        },
+        {
+          "phase": "first_fhd",
+          "revision": 2,
+          "size": [
+            1920,
+            1080
+          ],
+          "ready_ms": 50,
+          "observed_ms": 12008,
+          "publications": 719,
+          "rgba_bytes": 8294400,
+          "latest_capacity_bytes": 8294400,
+          "rss_last_kib": 202100,
+          "rss_min_kib": 201172,
+          "rss_max_kib": 202100,
+          "first_pts_ns": 0,
+          "last_pts_ns": 0,
+          "loop_wraps_total": 6,
+          "stale_total": 0
+        },
+        {
+          "phase": "four_k",
+          "revision": 3,
+          "size": [
+            3840,
+            2160
+          ],
+          "ready_ms": 50,
+          "observed_ms": 12008,
+          "publications": 723,
+          "rgba_bytes": 33177600,
+          "latest_capacity_bytes": 33177600,
+          "rss_last_kib": 299436,
+          "rss_min_kib": 299048,
+          "rss_max_kib": 299436,
+          "first_pts_ns": 0,
+          "last_pts_ns": 33333333,
+          "loop_wraps_total": 9,
+          "stale_total": 0
+        },
+        {
+          "phase": "restored_fhd",
+          "revision": 4,
+          "size": [
+            1920,
+            1080
+          ],
+          "ready_ms": 50,
+          "observed_ms": 12008,
+          "publications": 722,
+          "rgba_bytes": 8294400,
+          "latest_capacity_bytes": 8294400,
+          "rss_last_kib": 234708,
+          "rss_min_kib": 234328,
+          "rss_max_kib": 234708,
+          "first_pts_ns": 0,
+          "last_pts_ns": 33333333,
+          "loop_wraps_total": 12,
+          "stale_total": 0
+        },
+        {
+          "phase": "restored_source",
+          "revision": 5,
+          "size": [
+            3840,
+            2160
+          ],
+          "ready_ms": 50,
+          "observed_ms": 12008,
+          "publications": 723,
+          "rgba_bytes": 33177600,
+          "latest_capacity_bytes": 33177600,
+          "rss_last_kib": 299608,
+          "rss_min_kib": 299224,
+          "rss_max_kib": 299608,
+          "first_pts_ns": 0,
+          "last_pts_ns": 33333333,
+          "loop_wraps_total": 15,
+          "stale_total": 0
+        }
+      ],
+      "stopped": [
+        {
+          "moment": "before_play",
+          "rss_kib": 26024,
+          "arena_free_bytes": 124640,
+          "accounted_in_use_bytes": 276768,
+          "direct_mmap_bytes": 0
+        },
+        {
+          "moment": "after_join_latest_held",
+          "rss_kib": 292712,
+          "arena_free_bytes": 229368176,
+          "accounted_in_use_bytes": 33889936,
+          "direct_mmap_bytes": 0
+        },
+        {
+          "moment": "after_latest_dropped",
+          "rss_kib": 227908,
+          "arena_free_bytes": 196185984,
+          "accounted_in_use_bytes": 712832,
+          "direct_mmap_bytes": 0
+        }
+      ]
+    },
+    {
+      "sequence": "source_and_targets",
+      "mode": "retarget",
+      "play_calls": 1,
+      "joins": 1,
+      "phases": [
+        {
+          "phase": "initial_source",
+          "revision": 1,
+          "size": [
+            3840,
+            2160
+          ],
+          "ready_ms": 60,
+          "observed_ms": 12008,
+          "publications": 721,
+          "rgba_bytes": 33177600,
+          "latest_capacity_bytes": 33177600,
+          "rss_last_kib": 250392,
+          "rss_min_kib": 248200,
+          "rss_max_kib": 250392,
+          "first_pts_ns": 0,
+          "last_pts_ns": 33333333,
+          "loop_wraps_total": 3,
+          "stale_total": 0
+        },
+        {
+          "phase": "first_fhd",
+          "revision": 2,
+          "size": [
+            1920,
+            1080
+          ],
+          "ready_ms": 10,
+          "observed_ms": 12008,
+          "publications": 721,
+          "rgba_bytes": 8294400,
+          "latest_capacity_bytes": 8294400,
+          "rss_last_kib": 178312,
+          "rss_min_kib": 177948,
+          "rss_max_kib": 178312,
+          "first_pts_ns": 50000000,
+          "last_pts_ns": 50000000,
+          "loop_wraps_total": 6,
+          "stale_total": 0
+        },
+        {
+          "phase": "four_k",
+          "revision": 3,
+          "size": [
+            3840,
+            2160
+          ],
+          "ready_ms": 30,
+          "observed_ms": 12009,
+          "publications": 722,
+          "rgba_bytes": 33177600,
+          "latest_capacity_bytes": 33177600,
+          "rss_last_kib": 275600,
+          "rss_min_kib": 275596,
+          "rss_max_kib": 275600,
+          "first_pts_ns": 83333333,
+          "last_pts_ns": 100000000,
+          "loop_wraps_total": 9,
+          "stale_total": 1
+        },
+        {
+          "phase": "restored_fhd",
+          "revision": 4,
+          "size": [
+            1920,
+            1080
+          ],
+          "ready_ms": 20,
+          "observed_ms": 12008,
+          "publications": 721,
+          "rgba_bytes": 8294400,
+          "latest_capacity_bytes": 8294400,
+          "rss_last_kib": 275804,
+          "rss_min_kib": 275676,
+          "rss_max_kib": 275804,
+          "first_pts_ns": 116666667,
+          "last_pts_ns": 116666667,
+          "loop_wraps_total": 12,
+          "stale_total": 1
+        },
+        {
+          "phase": "restored_source",
+          "revision": 5,
+          "size": [
+            3840,
+            2160
+          ],
+          "ready_ms": 20,
+          "observed_ms": 12008,
+          "publications": 721,
+          "rgba_bytes": 33177600,
+          "latest_capacity_bytes": 33177600,
+          "rss_last_kib": 308616,
+          "rss_min_kib": 308612,
+          "rss_max_kib": 308616,
+          "first_pts_ns": 150000000,
+          "last_pts_ns": 150000000,
+          "loop_wraps_total": 15,
+          "stale_total": 2
+        }
+      ],
+      "stopped": [
+        {
+          "moment": "before_play",
+          "rss_kib": 26012,
+          "arena_free_bytes": 124640,
+          "accounted_in_use_bytes": 276768,
+          "direct_mmap_bytes": 0
+        },
+        {
+          "moment": "after_join_latest_held",
+          "rss_kib": 301912,
+          "arena_free_bytes": 240512848,
+          "accounted_in_use_bytes": 33886384,
+          "direct_mmap_bytes": 0
+        },
+        {
+          "moment": "after_latest_dropped",
+          "rss_kib": 237108,
+          "arena_free_bytes": 207330608,
+          "accounted_in_use_bytes": 709328,
+          "direct_mmap_bytes": 0
+        }
+      ]
+    }
+  ],
+  "interpretation": [
+    "The known-target FHD/4K/FHD endpoint uses 21.24 MiB less RSS with one retargeted worker than with reopening.",
+    "The Source/FHD/4K/FHD endpoint uses 40.13 MiB more RSS with one retargeted worker; the final source-size endpoint is also worse.",
+    "After dropping the final Source frame, retarget RSS remains 8.98 MiB higher, while accounted in-use bytes are nearly equal and free arena bytes are 10.63 MiB higher. This is consistent with extra arena retention, not proof of leaked live pixel owners.",
+    "No general memory improvement is established; production client target wiring is not enabled by these observations."
+  ],
+  "limitations": [
+    "These are last/min/max RSS samples for finite isolated phases, not 120-second whole-shell measurements.",
+    "Only latest-frame capacity is instrumented; old-last-good and in-flight frame ownership are not separately measured.",
+    "Publications/PTS/loop validation do not establish display FPS or physical presentation.",
+    "Allocator counters overlap other memory scopes and do not form an additive RSS ledger."
+  ],
+  "whole_shell_memory_target_accepted": false,
+  "native_presentation_accepted": false,
+  "general_memory_improvement_established": false
+}

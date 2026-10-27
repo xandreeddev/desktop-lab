@@ -3,7 +3,8 @@ use super::{Desktop, Message};
 use crate::widgets;
 use lucent_api::{
     ActivationOutcome, Application, Component, DisplayOutput, DragEvent, Effects,
-    InputReleaseOutcome, Keyboard, OutputName, SurfaceAddress, SurfaceInstance, SurfaceSpec,
+    InputReleaseOutcome, Keyboard, KeyboardFocusChange, KeyboardFocusOutcome, MouseButton,
+    NativeSurfaceToken, OutputName, PointerPress, SurfaceAddress, SurfaceInstance, SurfaceSpec,
 };
 use lucent_domain::{
     DomainError, MonitorId, Notification, NotificationSnapshot, NotificationTarget, Placement,
@@ -379,9 +380,9 @@ fn system_named_capture_updates_only_the_host_that_paints_system() {
     assert!(monitor.widgets.preview_position("system").is_some());
 }
 
-// These assertions inspect requested client policy only. A widget with a
-// pending compositor callback can retain older committed input state; native
-// committed-state/focus observations are required to establish a handoff fix.
+// These assertions establish client intent, request cancellation and routing.
+// Native first-click/immediate-key and same-click outside delivery require the
+// compositor trial; constructing an effect is not a focus acknowledgement.
 fn widget_specs(app: &Desktop) -> Vec<SurfaceSpec> {
     app.surfaces()
         .into_iter()
@@ -399,6 +400,30 @@ fn widget_host<'a>(app: &'a Desktop, monitor: Option<&str>) -> &'a widgets::Host
         Some(name) => &app.monitors.connected[&id(name)].widgets,
         None => &app.widgets,
     }
+}
+fn press_member(
+    app: &mut Desktop,
+    monitor: Option<&str>,
+    member: &str,
+    focusable: bool,
+) -> Effects<Message> {
+    let message = Message::Widgets(widgets::Message::PressMember(
+        member.into(),
+        PointerPress {
+            button: MouseButton::Primary,
+            keyboard_focusable: focusable,
+        },
+    ));
+    let message = match monitor {
+        Some(name) => Message::OnMonitor(
+            app.monitors.connected[&id(name)].route(&id(name)),
+            Box::new(message),
+        ),
+        None => message,
+    };
+    let mut effects = Effects::default();
+    app.update(message, &mut effects);
+    effects
 }
 fn assert_suppressed_widgets(app: &Desktop, baseline: &[SurfaceSpec]) {
     let expected: Vec<_> = baseline
@@ -494,45 +519,66 @@ fn begin_link(app: &mut Desktop, target: NotificationTarget) -> Effects<Message>
 
 #[test]
 fn widget_keyboard_defaults_preserve_controls_and_exclude_passive_content() {
-    for (widget, keyboard) in [
-        ("clock", Keyboard::None),
-        ("system", Keyboard::None),
-        ("notes", Keyboard::OnDemand),
-        ("calendar", Keyboard::OnDemand),
-        ("timer", Keyboard::OnDemand),
-        ("media", Keyboard::OnDemand),
-        ("weather", Keyboard::OnDemand),
-    ] {
+    for definition in widgets::catalog::WIDGETS.iter() {
+        let widget = definition.id;
         let mut app = desktop();
         app.settings.layout = layout(&[(widget, 64., 64.)]);
         assert_eq!(
             widget_keyboard(&app),
-            BTreeMap::from([(address(widget, None), keyboard)]),
+            BTreeMap::from([(address(widget, None), Keyboard::None)]),
+            "capability is not intent: {widget}"
+        );
+        let effects = press_member(&mut app, None, widget, definition.keyboard_interactive);
+        assert_eq!(
+            effects.keyboard_focus.len(),
+            usize::from(definition.keyboard_interactive)
+        );
+        assert_eq!(
+            widget_keyboard(&app),
+            BTreeMap::from([(
+                address(widget, None),
+                if definition.keyboard_interactive {
+                    Keyboard::OnDemand
+                } else {
+                    Keyboard::None
+                }
+            )]),
             "{widget}"
         );
     }
 }
 
 #[test]
-fn widget_keyboard_uses_every_merged_member_and_rechecks_after_hide() {
+fn widget_keyboard_uses_pressed_merged_member_and_rechecks_after_hide() {
     let mut app = desktop();
     app.settings.layout = layout(&[("clock", 64., 64.), ("notes", 64., 64.)]);
     let groups = app.widgets.surfaces(&app.settings.layout, app.viewport);
     assert_eq!(groups.len(), 1);
     assert_eq!(groups[0].members, ["clock", "notes"]);
+    let effects = press_member(&mut app, None, "notes", true);
+    assert_eq!(effects.keyboard_focus.len(), 1);
     assert_eq!(
         widget_keyboard(&app),
         BTreeMap::from([(address("clock", None), Keyboard::OnDemand)])
     );
-    app.update(
-        Message::Widgets(widgets::Message::Toggle("notes".into())),
-        &mut Effects::default(),
+    // Same native group, different actual member: a passive clock press clears
+    // Notes instead of borrowing its retained component focus or capability.
+    assert!(
+        press_member(&mut app, None, "clock", false)
+            .keyboard_focus
+            .is_empty()
     );
     assert_eq!(
         widget_keyboard(&app),
         BTreeMap::from([(address("clock", None), Keyboard::None)])
     );
-    app.settings.layout = layout(&[("clock", 64., 64.), ("system", 64., 64.)]);
+    let mut effects = press_member(&mut app, None, "notes", true);
+    let request = effects.keyboard_focus.pop().unwrap();
+    app.update(
+        Message::Widgets(widgets::Message::Toggle("notes".into())),
+        &mut Effects::default(),
+    );
+    assert!(request.cancellation.cancelled());
     assert_eq!(
         widget_keyboard(&app),
         BTreeMap::from([(address("clock", None), Keyboard::None)])
@@ -547,29 +593,39 @@ fn widget_keyboard_keeps_edit_controls_available_without_bypassing_foreground() 
         Message::Widgets(widgets::Message::Edit(true)),
         &mut Effects::default(),
     );
-    let editing = widget_specs(&app);
-    assert_eq!(editing.len(), 2);
-    assert!(
-        editing
-            .iter()
-            .all(|spec| spec.keyboard == Keyboard::OnDemand)
-    );
-    app.update(
-        Message::Audio(crate::audio::Message::Open),
-        &mut Effects::default(),
-    );
-    assert_suppressed_widgets(&app, &editing);
-    app.update(Message::DismissPanels, &mut Effects::default());
-    assert_eq!(widget_specs(&app), editing);
-    app.update(
-        Message::Widgets(widgets::Message::Edit(false)),
-        &mut Effects::default(),
-    );
     assert!(
         widget_specs(&app)
             .iter()
             .all(|spec| spec.keyboard == Keyboard::None)
     );
+    let mut effects = press_member(&mut app, None, "clock", true);
+    assert_eq!(effects.keyboard_focus.len(), 1);
+    let cancel = effects.keyboard_focus.pop().unwrap().cancellation;
+    let editing = widget_specs(&app);
+    assert_eq!(
+        editing
+            .iter()
+            .filter(|spec| spec.keyboard == Keyboard::OnDemand)
+            .count(),
+        1
+    );
+    app.update(
+        Message::Widgets(widgets::Message::SizeStep("clock".into(), 1)),
+        &mut Effects::default(),
+    );
+    assert!(
+        !cancel.cancelled(),
+        "keyboard edit action retains explicit ownership"
+    );
+    let editing = widget_specs(&app);
+    app.update(
+        Message::Audio(crate::audio::Message::Open),
+        &mut Effects::default(),
+    );
+    assert!(cancel.cancelled());
+    assert_suppressed_widgets(&app, &editing);
+    app.update(Message::DismissPanels, &mut Effects::default());
+    assert_suppressed_widgets(&app, &editing);
 }
 
 #[test]
@@ -577,6 +633,7 @@ fn widget_keyboard_every_foreground_panel_suppresses_the_legacy_host() {
     for (role, opener) in foreground_openers() {
         let mut app = desktop();
         app.settings.layout = separated();
+        press_member(&mut app, None, "notes", true);
         let baseline = widget_specs(&app);
         assert_eq!(baseline.len(), 2);
         app.update(opener, &mut Effects::default());
@@ -584,7 +641,7 @@ fn widget_keyboard_every_foreground_panel_suppresses_the_legacy_host() {
         assert_suppressed_widgets(&app, &baseline);
         app.update(Message::DismissPanels, &mut Effects::default());
         assert!(app.panel_surface().is_none());
-        assert_eq!(widget_specs(&app), baseline);
+        assert_suppressed_widgets(&app, &baseline);
     }
 }
 
@@ -597,6 +654,7 @@ fn widget_keyboard_foreground_suppresses_every_connected_monitor_group() {
             .monitor_layouts
             .insert(id("DP-2"), transitive());
         connect(&mut app);
+        press_member(&mut app, Some("DP-2"), "notes", true);
         let baseline = widget_specs(&app);
         assert_eq!(baseline.len(), 4);
         assert!(baseline.iter().all(|spec| spec.instance.is_some()));
@@ -604,7 +662,7 @@ fn widget_keyboard_foreground_suppresses_every_connected_monitor_group() {
         assert_eq!(app.panel_surface(), Some(role));
         assert_suppressed_widgets(&app, &baseline);
         app.update(Message::DismissPanels, &mut Effects::default());
-        assert_eq!(widget_specs(&app), baseline);
+        assert_suppressed_widgets(&app, &baseline);
         app.update(
             Message::Outputs(vec![output(Some("DP-2"), 2)]),
             &mut Effects::default(),
@@ -614,6 +672,10 @@ fn widget_keyboard_foreground_suppresses_every_connected_monitor_group() {
             baseline
                 .into_iter()
                 .filter(|spec| spec.instance.as_ref().unwrap().as_str() == "DP-2")
+                .map(|mut spec| {
+                    spec.keyboard = Keyboard::None;
+                    spec
+                })
                 .collect::<Vec<_>>()
         );
     }
@@ -623,6 +685,7 @@ fn widget_keyboard_foreground_suppresses_every_connected_monitor_group() {
 fn widget_keyboard_passive_toasts_do_not_suppress_notes() {
     let mut app = desktop();
     app.settings.layout = separated();
+    press_member(&mut app, None, "notes", true);
     let baseline = widget_specs(&app);
     app.update(
         Message::Notifications(crate::notifications::Message::Snapshot(Ok(
@@ -676,6 +739,7 @@ fn widget_keyboard_history_suppression_spans_both_ack_orders_and_uri_dispatch() 
     for release_first in [false, true] {
         let mut app = desktop();
         app.settings.layout = separated();
+        press_member(&mut app, None, "notes", true);
         let baseline = widget_specs(&app);
         let target = show_link_history(&mut app);
         let mut effects = begin_link(&mut app, target);
@@ -711,7 +775,7 @@ fn widget_keyboard_history_suppression_spans_both_ack_orders_and_uri_dispatch() 
         assert_suppressed_widgets(&app, &baseline);
         app.update(done, &mut effects);
         assert!(!app.notifications.history_open());
-        assert_eq!(widget_specs(&app), baseline);
+        assert_suppressed_widgets(&app, &baseline);
     }
 }
 
@@ -719,6 +783,7 @@ fn widget_keyboard_history_suppression_spans_both_ack_orders_and_uri_dispatch() 
 fn widget_keyboard_cancelled_link_cannot_override_a_new_foreground_panel() {
     let mut app = desktop();
     app.settings.layout = separated();
+    press_member(&mut app, None, "notes", true);
     let baseline = widget_specs(&app);
     let target = show_link_history(&mut app);
     let mut effects = begin_link(&mut app, target);
@@ -736,7 +801,7 @@ fn widget_keyboard_cancelled_link_cannot_override_a_new_foreground_panel() {
     assert!(effects.tasks.is_empty());
     assert_suppressed_widgets(&app, &baseline);
     app.update(Message::DismissPanels, &mut effects);
-    assert_eq!(widget_specs(&app), baseline);
+    assert_suppressed_widgets(&app, &baseline);
 }
 
 #[test]
@@ -744,6 +809,7 @@ fn widget_keyboard_release_failure_keeps_history_suppression_and_skips_uri_dispa
     for outcome in [InputReleaseOutcome::Timeout, InputReleaseOutcome::Retired] {
         let mut app = desktop();
         app.settings.layout = separated();
+        press_member(&mut app, None, "notes", true);
         let baseline = widget_specs(&app);
         let target = show_link_history(&mut app);
         let mut effects = begin_link(&mut app, target);
@@ -783,6 +849,7 @@ fn widget_keyboard_uri_adapter_failure_keeps_history_suppression() {
     adapters.uri = std::sync::Arc::new(RejectedUri);
     let mut app = Desktop::new(adapters);
     app.settings.layout = separated();
+    press_member(&mut app, None, "notes", true);
     let baseline = widget_specs(&app);
     let target = show_link_history(&mut app);
     let mut effects = begin_link(&mut app, target);
@@ -806,4 +873,175 @@ fn widget_keyboard_uri_adapter_failure_keeps_history_suppression() {
     assert!(app.notifications.history_open());
     assert!(!app.notifications.yielding_input());
     assert_suppressed_widgets(&app, &baseline);
+}
+
+#[test]
+fn widget_keyboard_foreground_cancels_queued_focus_ack_without_rearming_on_close() {
+    let mut app = desktop();
+    app.settings.layout = separated();
+    let mut effects = press_member(&mut app, None, "notes", true);
+    let request = effects.keyboard_focus.pop().unwrap();
+    let cancel = request.cancellation.clone();
+    let queued = request
+        .finish(KeyboardFocusOutcome::Focused(NativeSurfaceToken::new()))
+        .unwrap();
+    app.update(Message::Audio(crate::audio::Message::Open), &mut effects);
+    assert!(cancel.cancelled());
+    app.update(queued, &mut effects);
+    app.update(Message::DismissPanels, &mut effects);
+    assert!(
+        widget_specs(&app)
+            .iter()
+            .all(|spec| spec.keyboard == Keyboard::None)
+    );
+}
+
+#[test]
+fn widget_keyboard_loss_requires_acknowledged_exact_native_lifetime() {
+    let mut app = desktop();
+    app.settings.layout = separated();
+    let mut effects = press_member(&mut app, None, "notes", true);
+    let old = NativeSurfaceToken::new();
+    let native = NativeSurfaceToken::new();
+    for change in [KeyboardFocusChange::Left, KeyboardFocusChange::Retired] {
+        let event = lucent_api::Event::KeyboardFocus {
+            surface: "notes",
+            native: old.clone(),
+            change,
+        };
+        app.update(app.event(event).unwrap(), &mut effects);
+        assert_eq!(
+            widget_keyboard(&app)[&address("notes", None)],
+            Keyboard::OnDemand
+        );
+    }
+    let focused = effects
+        .keyboard_focus
+        .pop()
+        .unwrap()
+        .finish(KeyboardFocusOutcome::Focused(native.clone()))
+        .unwrap();
+    app.update(focused, &mut effects);
+    let event = lucent_api::Event::KeyboardFocus {
+        surface: "notes",
+        native,
+        change: KeyboardFocusChange::Left,
+    };
+    app.update(app.event(event).unwrap(), &mut effects);
+    assert!(
+        widget_specs(&app)
+            .iter()
+            .all(|spec| spec.keyboard == Keyboard::None)
+    );
+}
+
+#[test]
+fn widget_keyboard_latest_output_press_replaces_owner_and_retired_route_cannot_rearm() {
+    let mut app = desktop();
+    app.settings.layout = separated();
+    connect(&mut app);
+    let mut first = press_member(&mut app, Some("DP-1"), "notes", true);
+    let first = first.keyboard_focus.pop().unwrap();
+    let mut second = press_member(&mut app, Some("DP-2"), "notes", true);
+    assert!(first.cancellation.cancelled());
+    assert_eq!(
+        widget_specs(&app)
+            .iter()
+            .filter(|spec| spec.keyboard == Keyboard::OnDemand)
+            .map(SurfaceSpec::address)
+            .collect::<Vec<_>>(),
+        vec![address("notes", Some("DP-2"))]
+    );
+    let request = second.keyboard_focus.pop().unwrap();
+    let cancellation = request.cancellation.clone();
+    let queued = request
+        .finish(KeyboardFocusOutcome::Focused(NativeSurfaceToken::new()))
+        .unwrap();
+    app.update(
+        Message::Outputs(vec![output(Some("DP-1"), 1)]),
+        &mut Effects::default(),
+    );
+    assert!(cancellation.cancelled());
+    app.update(queued, &mut Effects::default());
+    assert!(
+        widget_specs(&app)
+            .iter()
+            .all(|spec| spec.keyboard == Keyboard::None)
+    );
+}
+
+#[test]
+fn widget_keyboard_unavailable_request_is_visible_and_never_leaves_eligibility_armed() {
+    let mut app = desktop();
+    app.settings.layout = separated();
+    let mut effects = press_member(&mut app, None, "notes", true);
+    let failure = effects
+        .keyboard_focus
+        .pop()
+        .unwrap()
+        .finish(KeyboardFocusOutcome::Unavailable)
+        .unwrap();
+    app.update(failure, &mut effects);
+    assert!(app.error.contains("compositor"));
+    assert!(
+        widget_specs(&app)
+            .iter()
+            .all(|spec| spec.keyboard == Keyboard::None)
+    );
+}
+
+#[test]
+fn widget_keyboard_delivered_first_notes_edit_keeps_intent_and_programmatic_controls_do_not_arm() {
+    let mut app = desktop();
+    app.settings.layout = separated();
+    app.settings.notes.clear();
+    let mut effects = press_member(&mut app, None, "notes", true);
+    app.update(
+        Message::Widgets(widgets::Message::EditNotes(lucent_api::TextEdit::Insert(
+            "a".into(),
+        ))),
+        &mut effects,
+    );
+    assert_eq!(app.settings.notes, "a");
+    assert_eq!(
+        widget_keyboard(&app)[&address("notes", None)],
+        Keyboard::OnDemand
+    );
+    assert_eq!(effects.keyboard_focus.len(), 1);
+    app.update(Message::Audio(crate::audio::Message::Open), &mut effects);
+    app.update(Message::DismissPanels, &mut effects);
+    for message in [
+        widgets::Message::Month(1),
+        widgets::Message::TimerToggle,
+        widgets::Message::TimerReset,
+    ] {
+        app.update(Message::Widgets(message), &mut effects);
+        assert!(
+            widget_specs(&app)
+                .iter()
+                .all(|spec| spec.keyboard == Keyboard::None)
+        );
+    }
+    // This is controlled message ordering, not proof that a native compositor
+    // delivered the first physical key; that remains an integration requirement.
+}
+
+#[test]
+fn widget_keyboard_named_output_transition_cancels_dormant_legacy_intent() {
+    let mut app = desktop();
+    app.settings.layout = separated();
+    let mut effects = press_member(&mut app, None, "notes", true);
+    let request = effects.keyboard_focus.pop().unwrap();
+    connect(&mut app);
+    assert!(request.cancellation.cancelled());
+    app.update(
+        Message::Outputs(vec![output(None, 99)]),
+        &mut Effects::default(),
+    );
+    assert!(app.monitors.legacy());
+    assert!(
+        widget_specs(&app)
+            .iter()
+            .all(|spec| spec.keyboard == Keyboard::None)
+    );
 }

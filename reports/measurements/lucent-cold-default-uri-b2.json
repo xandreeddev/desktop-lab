@@ -1,0 +1,384 @@
+{
+  "schema_version": 1,
+  "scope": "canonical native cold default-URI trial on source b2; sanitized read-only focus diagnostic checkpoints",
+  "source_commit": "b2f54551dfbe3744762e04b06cc9abcdfd167eaa",
+  "desktop_binary_sha256": "8a076c744be2016e23bb5d033656af1eb23e243f6abbeecc7616cd1336c50d41",
+  "release_manifest_sha256": "ba2a89b036ad00fde7fca82cce9a1647ab91247e2b59a90874bf87f587fb48b2",
+  "deployment_receipt_sha256": "442708667fbb701b86ad7303f8b34dee33417d3055b7bdbccd8d13c3a2fc41b8",
+  "build": {
+    "hosted_run": 40415443527,
+    "stages_passed": 17,
+    "targeted_tests_passed": 840,
+    "static_target_elf_compatibility_passed": 10,
+    "not_performance_acceptance": true
+  },
+  "cases": [
+    {
+      "case": "pointer",
+      "original_report_sha256": "947ad73f12106a970f5fe792403258045b793b1319cdda11480c34512af6f9c3",
+      "feature_accepted": true,
+      "success_including_cleanup": true,
+      "checks": {
+        "temporary_real_mime_default_selected": true,
+        "pointer_fresh_token_default_route_exact_document": true,
+        "pointer_notification_absent_after_expiry_window": true
+      },
+      "cleanup": {
+        "browser_and_original_entry_retired": true,
+        "notifications_absent_after_expiry_window": true,
+        "default_mime_restored": true,
+        "default_entry_restored": true,
+        "notification_history_closed": true,
+        "configuration_guardian_retired": true,
+        "canonical_browser_and_entry_retired": true,
+        "original_http_watchdog_retired": true,
+        "caller_state_and_cursor_preserved": true
+      },
+      "focus_checkpoints": [
+        {
+          "checkpoint": "after_group_setup",
+          "notification_history_open": true,
+          "native_resolution": "current-native",
+          "current_lucent_role": "notifications",
+          "native_enter_count": 3,
+          "native_leave_count": 2,
+          "document_available": false,
+          "document_has_focus": null,
+          "observed_policies": [
+            {
+              "role": "calendar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "notifications",
+              "requested_keyboard": "exclusive",
+              "committed_keyboard": "exclusive",
+              "actual_native_keyboard_focused": true
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        },
+        {
+          "checkpoint": "before_uri_dispatch",
+          "notification_history_open": true,
+          "native_resolution": "current-native",
+          "current_lucent_role": "notifications",
+          "native_enter_count": 3,
+          "native_leave_count": 2,
+          "document_available": false,
+          "document_has_focus": null,
+          "observed_policies": [
+            {
+              "role": "calendar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "notifications",
+              "requested_keyboard": "exclusive",
+              "committed_keyboard": "exclusive",
+              "actual_native_keyboard_focused": true
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        },
+        {
+          "checkpoint": "browser_mapped",
+          "notification_history_open": false,
+          "native_resolution": "no-client-focus-observed",
+          "current_lucent_role": null,
+          "native_enter_count": 3,
+          "native_leave_count": 3,
+          "document_available": true,
+          "document_has_focus": true,
+          "observed_policies": [
+            {
+              "role": "calendar",
+              "requested_keyboard": "on-demand",
+              "committed_keyboard": "on-demand",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "on-demand",
+              "committed_keyboard": "on-demand",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "notifications",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        },
+        {
+          "checkpoint": "before_key_a",
+          "notification_history_open": false,
+          "native_resolution": "no-client-focus-observed",
+          "current_lucent_role": null,
+          "native_enter_count": 3,
+          "native_leave_count": 3,
+          "document_available": true,
+          "document_has_focus": true,
+          "observed_policies": [
+            {
+              "role": "calendar",
+              "requested_keyboard": "on-demand",
+              "committed_keyboard": "on-demand",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "on-demand",
+              "committed_keyboard": "on-demand",
+              "actual_native_keyboard_focused": false
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        },
+        {
+          "checkpoint": "after_key_a",
+          "notification_history_open": false,
+          "native_resolution": "no-client-focus-observed",
+          "current_lucent_role": null,
+          "native_enter_count": 3,
+          "native_leave_count": 3,
+          "document_available": true,
+          "document_has_focus": true,
+          "observed_policies": [
+            {
+              "role": "calendar",
+              "requested_keyboard": "on-demand",
+              "committed_keyboard": "on-demand",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "on-demand",
+              "committed_keyboard": "on-demand",
+              "actual_native_keyboard_focused": false
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        }
+      ],
+      "native_trusted_key_accepted": true
+    },
+    {
+      "case": "keyboard",
+      "original_report_sha256": "bded3f3e821a5f97cf4f3d3023c9d18e8758650deea11907c0c80eef6cdc3b36",
+      "feature_accepted": false,
+      "success_including_cleanup": false,
+      "checks": {
+        "temporary_real_mime_default_selected": true
+      },
+      "cleanup": {
+        "browser_and_original_entry_retired": true,
+        "notifications_absent_after_expiry_window": true,
+        "default_mime_restored": true,
+        "default_entry_restored": true,
+        "notification_history_closed": true,
+        "configuration_guardian_retired": true,
+        "canonical_browser_and_entry_retired": true,
+        "original_http_watchdog_retired": true,
+        "caller_state_and_cursor_preserved": true
+      },
+      "focus_checkpoints": [
+        {
+          "checkpoint": "after_group_setup",
+          "notification_history_open": true,
+          "native_resolution": "current-native",
+          "current_lucent_role": "notifications",
+          "native_enter_count": 4,
+          "native_leave_count": 3,
+          "document_available": false,
+          "document_has_focus": null,
+          "observed_policies": [
+            {
+              "role": "calendar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "notifications",
+              "requested_keyboard": "exclusive",
+              "committed_keyboard": "exclusive",
+              "actual_native_keyboard_focused": true
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        },
+        {
+          "checkpoint": "before_uri_dispatch",
+          "notification_history_open": true,
+          "native_resolution": "current-native",
+          "current_lucent_role": "notifications",
+          "native_enter_count": 4,
+          "native_leave_count": 3,
+          "document_available": false,
+          "document_has_focus": null,
+          "observed_policies": [
+            {
+              "role": "calendar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "notifications",
+              "requested_keyboard": "exclusive",
+              "committed_keyboard": "exclusive",
+              "actual_native_keyboard_focused": true
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        },
+        {
+          "checkpoint": "browser_mapped",
+          "notification_history_open": false,
+          "native_resolution": "current-native",
+          "current_lucent_role": "clock",
+          "native_enter_count": 5,
+          "native_leave_count": 4,
+          "document_available": true,
+          "document_has_focus": false,
+          "observed_policies": [
+            {
+              "role": "calendar",
+              "requested_keyboard": "on-demand",
+              "committed_keyboard": "on-demand",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "on-demand",
+              "committed_keyboard": "on-demand",
+              "actual_native_keyboard_focused": true
+            },
+            {
+              "role": "notifications",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        },
+        {
+          "checkpoint": "before_key_a",
+          "notification_history_open": false,
+          "native_resolution": "current-native",
+          "current_lucent_role": "clock",
+          "native_enter_count": 5,
+          "native_leave_count": 4,
+          "document_available": true,
+          "document_has_focus": false,
+          "observed_policies": [
+            {
+              "role": "calendar",
+              "requested_keyboard": "on-demand",
+              "committed_keyboard": "on-demand",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "on-demand",
+              "committed_keyboard": "on-demand",
+              "actual_native_keyboard_focused": true
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        },
+        {
+          "checkpoint": "after_key_a",
+          "notification_history_open": false,
+          "native_resolution": "current-native",
+          "current_lucent_role": "clock",
+          "native_enter_count": 5,
+          "native_leave_count": 4,
+          "document_available": true,
+          "document_has_focus": false,
+          "observed_policies": [
+            {
+              "role": "calendar",
+              "requested_keyboard": "on-demand",
+              "committed_keyboard": "on-demand",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "on-demand",
+              "committed_keyboard": "on-demand",
+              "actual_native_keyboard_focused": true
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        }
+      ],
+      "native_trusted_key_accepted": false,
+      "failure": {
+        "scope": "native_default_uri_acceptance",
+        "phase": "browser_key_delivery_wait",
+        "fixed_reason": "owned_browser_received_native_key_a"
+      }
+    }
+  ],
+  "interpretation": [
+    "During history, Clock and Calendar requested and committed None. After history closed, their OnDemand eligibility returned.",
+    "The keyboard route observed current Clock native focus while the real browser document lacked focus; the pointer route observed no Lucent client focus and browser document focus.",
+    "This establishes the current client native owner, not the compositor global seat owner or atomic ordering across snapshots.",
+    "Source-only one-shot focus acquisition and demand changes require fresh compilation and native acceptance; no fix is accepted here."
+  ],
+  "privacy": "No credentials, URI, browser profile, output identifier, native object identity, input text, hostname or raw snapshots included.",
+  "performance_accepted": false
+}

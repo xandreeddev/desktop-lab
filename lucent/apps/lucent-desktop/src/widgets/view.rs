@@ -145,6 +145,7 @@ impl View<'_> {
             }
         }
         let drag_id = id.to_owned();
+        let press_id = id.to_owned();
         Element::stack(children)
             .size(size.0, size.1 + editor_height)
             .at(pos.0, pos.1)
@@ -156,6 +157,7 @@ impl View<'_> {
             .radius(radius::WIDGET)
             .clip()
             .shadow()
+            .on_pointer_press(move |press| Message::PressMember(press_id.clone(), press))
             .on_drag(move |drag| Message::Move(drag_id.clone(), drag))
             .id(format!("widget-{id}"))
     }
