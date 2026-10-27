@@ -4,5 +4,6 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 [dependencies]
+lucent-video-frame = { path = "../lucent-video-frame" }
 unicode-segmentation = "1.13.3"
 

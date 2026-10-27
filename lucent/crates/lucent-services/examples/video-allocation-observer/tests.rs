@@ -78,6 +78,19 @@ fn input_is_bounded_known_schema_and_allows_legitimate_local_names() {
 #[test]
 fn allocator_statistics_require_a_boolean_opt_in_and_default_to_disabled() {
     assert!(!request().allocator_stats);
+    assert!(!request().retarget);
+    let mut retarget = descriptor();
+    retarget["retarget"] = json!(true);
+    assert!(
+        input(&serde_json::to_vec(&retarget).unwrap())
+            .unwrap()
+            .retarget
+    );
+    retarget["retarget"] = json!("true");
+    assert_eq!(
+        input(&serde_json::to_vec(&retarget).unwrap()).err(),
+        Some("invalid_input")
+    );
     for enabled in [false, true] {
         let mut value = descriptor();
         value["allocator_stats"] = json!(enabled);

@@ -61,6 +61,15 @@ pub enum Paint {
         opacity: f32,
         tint: Color,
     },
+    Video {
+        rect: Rect,
+        uv: Rect,
+        clip: Clip,
+        data: Arc<VideoData>,
+        radius: f32,
+        opacity: f32,
+        tint: Color,
+    },
 }
 #[derive(Clone)]
 pub struct Hit<M> {
@@ -269,7 +278,7 @@ impl Layout {
                 )
                 .height,
             ),
-            Kind::Image(_) => (32., 32.),
+            Kind::Image(_) | Kind::Video(_) => (32., 32.),
             Kind::Slider(_) => (160., e.style.slider.thumb_diameter),
             Kind::Row => (
                 children.iter().map(|c| c.0).sum::<f32>() + gaps,
@@ -713,6 +722,19 @@ impl Layout {
                 let (width, height) = data.aspect_size();
                 let (rect, uv) = image_geometry(inner, width, height, e.style.image_fit);
                 scene.paint.push(Paint::Image {
+                    rect,
+                    uv,
+                    clip: own_clip.intersect(inner),
+                    data: data.clone(),
+                    radius: e.style.radius,
+                    opacity: alpha,
+                    tint: e.style.image_tint,
+                });
+            }
+            Kind::Video(data) => {
+                let (width, height) = data.aspect_size();
+                let (rect, uv) = image_geometry(inner, width, height, e.style.image_fit);
+                scene.paint.push(Paint::Video {
                     rect,
                     uv,
                     clip: own_clip.intersect(inner),
@@ -1957,5 +1979,72 @@ mod tests {
         assert_eq!(i.press(&scene, 20., 20.), None);
         assert_eq!(i.motion(&scene, 40., 20., 0.), vec![2]);
         assert_eq!(i.release(40., 20.), Some(3));
+    }
+}
+
+#[cfg(test)]
+mod native_video_layout_tests {
+    use super::*;
+    use lucent_api::{
+        ImageStream,
+        video_frame::{Bt709, Bytes, ChromaSiting, Plane, Range, Transfer, Yuv420Frame},
+    };
+    #[test]
+    fn video_uses_image_cover_contain_clip_radius_opacity_and_tint_geometry() {
+        let y = Plane::new(Bytes::from(vec![128; 65 * 37]), 65, 37, 65).unwrap();
+        let uv = Plane::new(Bytes::from(vec![128; 33 * 19]), 33, 19, 33).unwrap();
+        let frame = Yuv420Frame::new(
+            65,
+            37,
+            [y, uv.clone(), uv],
+            Bt709 {
+                range: Range::Full,
+                transfer: Transfer::Srgb,
+                chroma: ChromaSiting::Center,
+            },
+        )
+        .unwrap();
+        let video = Arc::new(ImageStream::new().frame_yuv420(frame).unwrap());
+        let image =
+            Arc::new(ImageData::from_rgba("comparison", 65, 37, vec![128; 65 * 37 * 4]).unwrap());
+        let layout = Layout::new(Arc::new(vec![]));
+        for fit in [ImageFit::Cover, ImageFit::Contain] {
+            let mut a = Element::<()>::image(image.clone()).size(23., 17.);
+            let mut b = Element::<()>::video(video.clone()).size(23., 17.);
+            for node in [&mut a, &mut b] {
+                node.style.image_fit = fit;
+                node.style.radius = 3.;
+                node.style.opacity = 0.7;
+                node.style.image_tint = Color::hex(0x507090);
+            }
+            let a = layout.build(&a, 23., 17., &Interaction::default(), 0.);
+            let b = layout.build(&b, 23., 17., &Interaction::default(), 0.);
+            let Paint::Image {
+                rect: ar,
+                uv: au,
+                clip: ac,
+                radius: aa,
+                opacity: ao,
+                tint: at,
+                ..
+            } = &a.paint[0]
+            else {
+                panic!("image primitive")
+            };
+            let Paint::Video {
+                rect: br,
+                uv: bu,
+                clip: bc,
+                radius: ba,
+                opacity: bo,
+                tint: bt,
+                ..
+            } = &b.paint[0]
+            else {
+                panic!("video primitive")
+            };
+            assert_eq!((ar, au, ac, aa, ao, at), (br, bu, bc, ba, bo, bt));
+            assert_eq!(a.regions, b.regions);
+        }
     }
 }

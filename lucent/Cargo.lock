@@ -371,6 +371,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
 
 [[package]]
+name = "bytes"
+version = "1.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
+
+[[package]]
 name = "calloop"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1373,6 +1379,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 name = "lucent-api"
 version = "0.1.0"
 dependencies = [
+ "lucent-video-frame",
  "unicode-segmentation",
 ]
 
@@ -1432,6 +1439,7 @@ dependencies = [
 name = "lucent-domain"
 version = "0.1.0"
 dependencies = [
+ "lucent-video-frame",
  "serde",
  "zeroize",
 ]
@@ -1549,6 +1557,13 @@ name = "lucent-usecases"
 version = "0.1.0"
 dependencies = [
  "lucent-domain",
+]
+
+[[package]]
+name = "lucent-video-frame"
+version = "0.1.0"
+dependencies = [
+ "bytes",
 ]
 
 [[package]]
@@ -1684,6 +1699,16 @@ dependencies = [
  "indexmap",
  "rustc-hash 1.1.0",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "native-video-planes"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "lucent-domain",
+ "lucent-render",
+ "lucent-services",
 ]
 
 [[package]]

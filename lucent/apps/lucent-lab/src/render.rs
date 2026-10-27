@@ -84,6 +84,7 @@ fn sources(root: &Path) -> Result<BTreeMap<String, String>, Box<dyn Error>> {
         "lucent/crates/lucent-render/src",
         "lucent/crates/lucent-domain/src",
         "lucent/crates/lucent-usecases/src",
+        "lucent/crates/lucent-video-frame/src",
         "lucent/crates/lucent-ui/assets",
     ] {
         visit(root, Path::new(source), &mut result)?;
@@ -101,6 +102,7 @@ fn sources(root: &Path) -> Result<BTreeMap<String, String>, Box<dyn Error>> {
         "lucent/crates/lucent-render/Cargo.toml",
         "lucent/crates/lucent-domain/Cargo.toml",
         "lucent/crates/lucent-usecases/Cargo.toml",
+        "lucent/crates/lucent-video-frame/Cargo.toml",
         "lucent/apps/lucent-desktop/assets/LucentSans.ttf",
         "lucent/apps/lucent-desktop/assets/LucentDisplay.ttf",
     ] {
@@ -263,6 +265,25 @@ mod tests {
             }
         }
         assert_eq!(count, 480);
+    }
+
+    #[test]
+    fn export_fingerprints_neutral_video_values_and_their_dependency_manifest() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .canonicalize()
+            .unwrap();
+        let inputs = sources(&root).unwrap();
+        for path in [
+            "lucent/crates/lucent-video-frame/src/lib.rs",
+            "lucent/crates/lucent-video-frame/Cargo.toml",
+        ] {
+            assert_eq!(
+                inputs.get(path),
+                Some(&sha256(&root.join(path)).unwrap()),
+                "indirect public video values must invalidate captures"
+            );
+        }
     }
 
     #[test]

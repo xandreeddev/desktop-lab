@@ -16,9 +16,12 @@ use std::{
 const SOURCE_BYTES: u64 = 512 * 1024 * 1024;
 const LIBRARY_RESULTS: usize = 32;
 const LIBRARY_ENTRIES: usize = 1024;
+mod native_planes;
 mod pixels;
 mod preview;
 mod store;
+mod targets;
+pub use targets::LatestWallpaperTargetAdapter;
 static NEXT: AtomicU64 = AtomicU64::new(1);
 static INIT: OnceLock<bool> = OnceLock::new();
 #[derive(Clone)]
@@ -263,6 +266,56 @@ impl WallpaperPlaybackPort for NativeVideoWallpapers {
             emit(Err(error));
         }
     }
+    fn play_retargetable(
+        &self,
+        asset: &LiveWallpaperAsset,
+        options: RetargetablePlaybackOptions,
+        targets: Arc<dyn WallpaperTargetPort>,
+        emit: &mut dyn FnMut(Result<TargetedMediaFrame>) -> bool,
+        stop: Arc<dyn StopSignal>,
+    ) {
+        let result = self.owned(asset).and_then(|()| {
+            decode_retargetable(
+                Path::new(&asset.path),
+                options,
+                targets,
+                &mut |frame| emit(Ok(frame)),
+                stop.clone(),
+            )
+        });
+        if let Err(error) = result
+            && !stop.cancelled()
+        {
+            emit(Err(error));
+        }
+    }
+    fn play_native(
+        &self,
+        asset: &LiveWallpaperAsset,
+        options: NativePlaybackOptions,
+        emit: &mut dyn FnMut(Result<NativeMediaFrame>) -> bool,
+        stop: Arc<dyn StopSignal>,
+    ) {
+        let result = self.owned(asset).and_then(|()| {
+            decode_output(
+                Path::new(&asset.path),
+                PlaybackOptions {
+                    fps: options.fps,
+                    looping: options.looping,
+                    target: options.target,
+                },
+                DecodePurpose::NativePlanes,
+                &mut |frame, _| emit(Ok(frame)),
+                stop.clone(),
+                None,
+            )
+        });
+        if let Err(error) = result
+            && !stop.cancelled()
+        {
+            emit(Err(error));
+        }
+    }
 }
 fn dimensions(width: u32, height: u32) -> Result<()> {
     if width == 0
@@ -425,18 +478,82 @@ impl FrameConverter {
         )
     }
 }
+
+fn admit_decoded_source(
+    shape: (u32, u32, ffmpeg::format::Pixel),
+    timestamp: Option<i64>,
+    admitted: &mut Option<(u32, u32, ffmpeg::format::Pixel)>,
+    rewind_at: &mut Option<i64>,
+) -> Result<()> {
+    dimensions(shape.0, shape.1)?;
+    if let Some(original) = admitted {
+        if *original != shape {
+            return Err(DomainError::Invalid(
+                "Video changes dimensions or pixel format during playback".into(),
+            ));
+        }
+    } else {
+        // A missing first decoded PTS can be an unseekable prefix. This fact
+        // belongs to the source admission, never to a replaceable converter.
+        if timestamp.is_none() {
+            *rewind_at = None;
+        }
+        *admitted = Some(shape);
+    }
+    Ok(())
+}
+
+fn live_converter_for_target(
+    converter: &mut Option<FrameConverter>,
+    frame: &ffmpeg::util::frame::video::Video,
+    target: Option<WallpaperPixelTarget>,
+) -> Result<()> {
+    if let Some(old) = converter.as_ref() {
+        old.validate(frame)?;
+    }
+    let size = conversion_dimensions(frame.format(), frame.width(), frame.height(), target)?;
+    if converter
+        .as_ref()
+        .is_some_and(|old| (old.scaler.output().width, old.scaler.output().height) != size)
+    {
+        // Drop only size-dependent scratch/pool ownership before replacement.
+        // Shared published pixels remain valid until their final owner drops.
+        *converter = None;
+    }
+    if converter.is_none() {
+        *converter = Some(FrameConverter::new_live(frame, target)?);
+    }
+    Ok(())
+}
+fn convert_live_target(
+    converter: &mut Option<FrameConverter>,
+    frame: &ffmpeg::util::frame::video::Video,
+    demand: WallpaperTargetDemand,
+    timestamp: Duration,
+) -> Result<TargetedMediaFrame> {
+    live_converter_for_target(converter, frame, demand.target)?;
+    Ok(TargetedMediaFrame {
+        revision: demand.revision,
+        frame: converter
+            .as_mut()
+            .ok_or_else(failed)?
+            .convert(frame, timestamp)?,
+    })
+}
 /// Adapter-local decoder policy. Poster extraction and read-only previews keep
 /// their serial decoder even when the underlying source uses H.264.
 #[derive(Clone, Copy)]
 enum DecodePurpose {
     Poster,
     LiveWallpaper,
+    NativePlanes,
     Preview(WallpaperPreviewOptions),
 }
 impl DecodePurpose {
     fn threading(self, codec: ffmpeg::codec::Id) -> ffmpeg::codec::threading::Config {
         use ffmpeg::codec::threading::{Config, Type};
-        let parallel = matches!(self, Self::LiveWallpaper) && codec == ffmpeg::codec::Id::H264;
+        let parallel = matches!(self, Self::LiveWallpaper | Self::NativePlanes)
+            && codec == ffmpeg::codec::Id::H264;
         let mut config = Config::count(if parallel { 2 } else { 1 });
         // A count alone leaves FFmpeg's threading kind at None. Restrict the
         // measured frame-threading trial to live H.264; other codecs stay serial.
@@ -478,6 +595,109 @@ fn decode_inner(
     emit: &mut dyn FnMut(MediaFrame) -> bool,
     stop: Arc<dyn StopSignal>,
 ) -> Result<()> {
+    decode_controlled(
+        path,
+        options,
+        purpose,
+        &mut |frame, _| emit(frame),
+        stop,
+        None,
+    )
+}
+
+struct PlaybackTargets {
+    port: Arc<dyn WallpaperTargetPort>,
+    current: WallpaperTargetDemand,
+}
+impl PlaybackTargets {
+    fn new(port: Arc<dyn WallpaperTargetPort>) -> Result<Self> {
+        let current = port.try_latest()?.ok_or_else(|| {
+            DomainError::Unavailable("Initial wallpaper target is unavailable".into())
+        })?;
+        Ok(Self { port, current })
+    }
+    fn refresh(&mut self) -> Result<()> {
+        if let Some(next) = self.port.try_latest()? {
+            if next.revision < self.current.revision
+                || (next.revision == self.current.revision && next.target != self.current.target)
+            {
+                return Err(DomainError::Invalid(
+                    "Wallpaper target revision regressed or was reused".into(),
+                ));
+            }
+            self.current = next;
+        }
+        Ok(())
+    }
+}
+
+fn decode_retargetable(
+    path: &Path,
+    options: RetargetablePlaybackOptions,
+    targets: Arc<dyn WallpaperTargetPort>,
+    emit: &mut dyn FnMut(TargetedMediaFrame) -> bool,
+    stop: Arc<dyn StopSignal>,
+) -> Result<()> {
+    let targets = PlaybackTargets::new(targets)?;
+    let mut invalid_identity = false;
+    decode_controlled(
+        path,
+        PlaybackOptions {
+            fps: options.fps,
+            looping: options.looping,
+            target: None,
+        },
+        DecodePurpose::LiveWallpaper,
+        &mut |frame, revision| {
+            if let Some(revision) = revision {
+                emit(TargetedMediaFrame { revision, frame })
+            } else {
+                invalid_identity = true;
+                false
+            }
+        },
+        stop,
+        Some(targets),
+    )?;
+    if invalid_identity {
+        return Err(failed());
+    }
+    Ok(())
+}
+
+fn decode_controlled(
+    path: &Path,
+    options: PlaybackOptions,
+    purpose: DecodePurpose,
+    emit: &mut dyn FnMut(MediaFrame, Option<WallpaperTargetRevision>) -> bool,
+    stop: Arc<dyn StopSignal>,
+    targets: Option<PlaybackTargets>,
+) -> Result<()> {
+    let mut invalid = false;
+    decode_output(
+        path,
+        options,
+        purpose,
+        &mut |frame, revision| match frame.into_rgba() {
+            Ok(frame) => emit(frame, revision),
+            Err(_) => {
+                invalid = true;
+                false
+            }
+        },
+        stop,
+        targets,
+    )?;
+    if invalid { Err(failed()) } else { Ok(()) }
+}
+fn decode_output(
+    path: &Path,
+    options: PlaybackOptions,
+    purpose: DecodePurpose,
+    emit: &mut dyn FnMut(NativeMediaFrame, Option<WallpaperTargetRevision>) -> bool,
+    stop: Arc<dyn StopSignal>,
+    mut targets: Option<PlaybackTargets>,
+) -> Result<()> {
     if !*INIT.get_or_init(|| {
         ffmpeg::util::log::set_level(ffmpeg::util::log::Level::Quiet);
         ffmpeg::init().is_ok()
@@ -494,10 +714,8 @@ fn decode_inner(
             session = Some(DecoderSession::open(path, purpose, stop.clone())?);
         }
         let active = session.as_mut().ok_or_else(failed)?;
-        if !active.cycle(options, purpose, emit, stop.as_ref())?
-            || stop.cancelled()
-            || !options.looping
-        {
+        let keep = active.cycle_output(options, purpose, emit, stop.as_ref(), targets.as_mut())?;
+        if !keep || stop.cancelled() || !options.looping {
             return Ok(());
         }
         if active.rewind(stop.as_ref()) {
@@ -516,6 +734,9 @@ struct DecoderSession {
     input: ffmpeg::format::context::Input,
     decoder: ffmpeg::decoder::Video,
     converter: Option<FrameConverter>,
+    // Independent from converter lifetime: retargeting must not reinterpret a
+    // later missing timestamp as the first decoded prefix or admit a new source.
+    decoded_source: Option<(u32, u32, ffmpeg::format::Pixel)>,
     index: usize,
     time_base: ffmpeg::Rational,
     rate: f64,
@@ -573,8 +794,10 @@ impl DecoderSession {
                 .ok_or_else(failed)?;
             let context = ffmpeg::codec::context::Context::from_parameters(stream.parameters())
                 .map_err(|_| failed())?;
-            let reuse = matches!(purpose, DecodePurpose::LiveWallpaper)
-                && context.id() == ffmpeg::codec::Id::H264;
+            let reuse = matches!(
+                purpose,
+                DecodePurpose::LiveWallpaper | DecodePurpose::NativePlanes
+            ) && context.id() == ffmpeg::codec::Id::H264;
             (
                 stream.index(),
                 stream.time_base(),
@@ -596,6 +819,7 @@ impl DecoderSession {
             input,
             decoder,
             converter: None,
+            decoded_source: None,
             index,
             time_base,
             rate,
@@ -627,6 +851,7 @@ impl DecoderSession {
 
     /// Returns false only when delivery/cancellation retires the body. EOF is
     /// fully drained and the final source hold completes before a loop rewind.
+    #[cfg(test)]
     fn cycle(
         &mut self,
         options: PlaybackOptions,
@@ -634,10 +859,47 @@ impl DecoderSession {
         emit: &mut dyn FnMut(MediaFrame) -> bool,
         stop: &dyn StopSignal,
     ) -> Result<bool> {
+        self.cycle_controlled(options, purpose, &mut |frame, _| emit(frame), stop, None)
+    }
+
+    #[cfg(test)]
+    fn cycle_controlled(
+        &mut self,
+        options: PlaybackOptions,
+        purpose: DecodePurpose,
+        emit: &mut dyn FnMut(MediaFrame, Option<WallpaperTargetRevision>) -> bool,
+        stop: &dyn StopSignal,
+        targets: Option<&mut PlaybackTargets>,
+    ) -> Result<bool> {
+        let mut invalid = false;
+        let keep = self.cycle_output(
+            options,
+            purpose,
+            &mut |frame, revision| match frame.into_rgba() {
+                Ok(frame) => emit(frame, revision),
+                Err(_) => {
+                    invalid = true;
+                    false
+                }
+            },
+            stop,
+            targets,
+        )?;
+        if invalid { Err(failed()) } else { Ok(keep) }
+    }
+    fn cycle_output(
+        &mut self,
+        options: PlaybackOptions,
+        purpose: DecodePurpose,
+        emit: &mut dyn FnMut(NativeMediaFrame, Option<WallpaperTargetRevision>) -> bool,
+        stop: &dyn StopSignal,
+        mut targets: Option<&mut PlaybackTargets>,
+    ) -> Result<bool> {
         let Self {
             input,
             decoder,
             converter,
+            decoded_source,
             index,
             time_base,
             rate,
@@ -664,26 +926,29 @@ impl DecoderSession {
                 if stop.cancelled() {
                     return Ok(false);
                 }
-                if converter.is_none() {
-                    // A demuxer may report start_time=0 while initial decoded
-                    // frames have no PTS. Seeking to that later known timestamp
-                    // need not reproduce this prefix; retain the old reopen
-                    // path rather than guessing away any source frames.
-                    if frame.timestamp().is_none() {
-                        *rewind_at = None;
-                    }
+                admit_decoded_source(
+                    (frame.width(), frame.height(), frame.format()),
+                    frame.timestamp(),
+                    decoded_source,
+                    rewind_at,
+                )?;
+                if converter.is_none()
+                    && targets.is_none()
+                    && !matches!(purpose, DecodePurpose::NativePlanes)
+                {
                     *converter = Some(match purpose {
                         DecodePurpose::Preview(preview) => {
                             FrameConverter::new_sized(&frame, None, Some(preview))?
                         }
                         DecodePurpose::Poster => FrameConverter::new(&frame, options.target)?,
-                        DecodePurpose::LiveWallpaper => {
+                        DecodePurpose::LiveWallpaper | DecodePurpose::NativePlanes => {
                             FrameConverter::new_live(&frame, options.target)?
                         }
                     });
                 }
-                let converter = converter.as_mut().ok_or_else(failed)?;
-                converter.validate(&frame)?;
+                if let Some(converter) = converter.as_ref() {
+                    converter.validate(&frame)?;
+                }
                 let (timestamp, hold) =
                     timeline.frame(frame.timestamp(), frame.packet().duration)?;
                 end_time = end_time.max(timestamp.saturating_add(hold));
@@ -697,8 +962,55 @@ impl DecoderSession {
                 if stop.cancelled() {
                     return Ok(false);
                 }
+                if matches!(purpose, DecodePurpose::NativePlanes) {
+                    let source_size = (frame.width(), frame.height());
+                    let native_size = options
+                        .target
+                        .map(|target| target.cover_size(source_size.0, source_size.1))
+                        .transpose()?;
+                    // This one-level plane renderer must never replace the
+                    // existing fitted RGBA path when actual cover needs reduction.
+                    if native_size.is_none_or(|size| size == source_size) {
+                        match native_planes::admit(frame)? {
+                            native_planes::Admission::Native(planes, publication) => {
+                                *converter = None;
+                                delivered = true;
+                                if !emit(
+                                    NativeMediaFrame::Yuv420 {
+                                        frame: planes,
+                                        timestamp,
+                                        publication,
+                                    },
+                                    None,
+                                ) {
+                                    return Ok(false);
+                                }
+                                continue;
+                            }
+                            native_planes::Admission::Rgba(source) => frame = source,
+                        }
+                    }
+                    // Unknown/alpha/unsupported metadata and minification keep
+                    // established software fitting; no guessed color or filters.
+                    if converter.is_none() {
+                        *converter = Some(FrameConverter::new_live(&frame, options.target)?);
+                    }
+                }
+                let (converted, revision) = if let Some(targets) = targets.as_deref_mut() {
+                    targets.refresh()?;
+                    let value = convert_live_target(converter, &frame, targets.current, timestamp)?;
+                    (value.frame, Some(value.revision))
+                } else {
+                    (
+                        converter
+                            .as_mut()
+                            .ok_or_else(failed)?
+                            .convert(&frame, timestamp)?,
+                        None,
+                    )
+                };
                 delivered = true;
-                if !emit(converter.convert(&frame, timestamp)?) {
+                if !emit(NativeMediaFrame::Rgba(converted), revision) {
                     return Ok(false);
                 }
             }

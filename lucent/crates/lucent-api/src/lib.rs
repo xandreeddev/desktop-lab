@@ -37,11 +37,15 @@ pub use image::{
     ImageData, ImageError, ImageFormat, ImageLevel, ImageLifetime, ImageStream, reduce_alpha,
     reduce_premultiplied,
 };
+/// Neutral immutable video planes; codecs and GPU resources stay in adapters.
+pub use lucent_video_frame as video_frame;
+mod video;
 use std::{
     collections::BTreeSet,
     sync::{Arc, Condvar, Mutex},
     time::Duration,
 };
+pub use video::{VideoData, VideoLifetime};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Rect {
@@ -259,6 +263,7 @@ pub enum Kind {
     Text(String),
     RichText(Vec<TextSpan>),
     Image(Arc<ImageData>),
+    Video(Arc<VideoData>),
     Input {
         value: String,
         placeholder: String,
@@ -378,6 +383,12 @@ impl<M> Element<M> {
     }
     pub fn image(image: Arc<ImageData>) -> Self {
         Self::new(Kind::Image(image))
+    }
+    /// Present immutable decoded planes with normal image geometry and clips.
+    /// This does not provide decoding, cadence or automatic minification/format
+    /// fallback; see [`VideoData`] for the current sampling contract.
+    pub fn video(frame: Arc<VideoData>) -> Self {
+        Self::new(Kind::Video(frame))
     }
     pub fn row(children: Vec<Self>) -> Self {
         let mut e = Self::new(Kind::Row);

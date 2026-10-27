@@ -12,6 +12,8 @@ mod ports;
 pub use ports::*;
 mod media;
 pub use media::*;
+mod native_video;
+pub use native_video::*;
 
 mod audio;
 pub use audio::*;
@@ -51,6 +53,8 @@ pub use values::*;
 
 mod live_wallpaper;
 pub use live_wallpaper::*;
+mod wallpaper_targets;
+pub use wallpaper_targets::*;
 
 mod displays;
 pub use displays::*;

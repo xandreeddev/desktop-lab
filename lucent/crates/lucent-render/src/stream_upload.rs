@@ -113,7 +113,7 @@ impl StreamUpdates {
             if !uploads.copy(encoder, &update.texture, data) {
                 gpu.queue.write_texture(
                     TexelCopyTextureInfo {
-                        texture: &update.texture._texture,
+                        texture: update.texture.image_texture(),
                         mip_level: 0,
                         origin: Origin3d::ZERO,
                         aspect: TextureAspect::All,
@@ -138,7 +138,8 @@ impl StreamUpdates {
     pub(super) fn commit(self) {
         for update in self.0 {
             update.texture.revision.set(update.revision);
-            *update.texture.image_lifetime.borrow_mut() = Some(update.data.lifetime());
+            *update.texture.lifetime.borrow_mut() =
+                Some(super::ResourceLifetime::Image(update.data.lifetime()));
         }
     }
 }
@@ -354,7 +355,7 @@ impl Submission<'_> {
                 },
             },
             TexelCopyTextureInfo {
-                texture: &texture._texture,
+                texture: texture.image_texture(),
                 mip_level: 0,
                 origin: Origin3d::ZERO,
                 aspect: TextureAspect::All,
