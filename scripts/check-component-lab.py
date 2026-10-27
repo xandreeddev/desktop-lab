@@ -68,13 +68,15 @@ def validate(root=ROOT, catalog=None):
     producer_directories = ('lucent/apps/lucent-lab', 'lucent/apps/lucent-menu',
                             'lucent/crates/lucent-api', 'lucent/crates/lucent-design',
                             'lucent/crates/lucent-ui', 'lucent/crates/lucent-render',
-                            'lucent/crates/lucent-domain', 'lucent/crates/lucent-usecases')
+                            'lucent/crates/lucent-domain', 'lucent/crates/lucent-usecases',
+                            'lucent/crates/lucent-video-frame')
     required.add('lucent/Cargo.toml')
     required.update(directory + '/Cargo.toml' for directory in producer_directories)
     for directory in ('lucent/apps/lucent-lab/src', 'lucent/apps/lucent-menu/src',
                       'lucent/crates/lucent-api/src', 'lucent/crates/lucent-design/src',
                       'lucent/crates/lucent-ui/src', 'lucent/crates/lucent-render/src',
-                      'lucent/crates/lucent-domain/src', 'lucent/crates/lucent-usecases/src'):
+                      'lucent/crates/lucent-domain/src', 'lucent/crates/lucent-usecases/src',
+                      'lucent/crates/lucent-video-frame/src'):
         required.update(p.relative_to(root).as_posix() for p in (root / directory).rglob('*')
                         if p.is_file() and p.suffix in ('.rs', '.wgsl'))
     required.update(p.relative_to(root).as_posix()

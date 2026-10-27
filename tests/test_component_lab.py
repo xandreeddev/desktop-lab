@@ -31,12 +31,13 @@ class CatalogIntegrity(unittest.TestCase):
                  'lucent/crates/lucent-design/src/lib.rs', 'lucent/crates/lucent-design/src/tokens.rs',
                  'lucent/crates/lucent-api/src/lib.rs', 'lucent/crates/lucent-ui/src/lib.rs',
                  'lucent/crates/lucent-render/src/lib.rs', 'lucent/apps/lucent-menu/src/lib.rs',
-                 'lucent/apps/lucent-lab/src/lib.rs',
+                 'lucent/apps/lucent-lab/src/lib.rs', 'lucent/crates/lucent-video-frame/src/lib.rs',
                  'lucent/apps/lucent-desktop/assets/LucentSans.ttf',
                  'lucent/apps/lucent-desktop/assets/LucentDisplay.ttf',
                  *(f'lucent/{directory}/Cargo.toml' for directory in (
                      'apps/lucent-lab', 'apps/lucent-menu', 'crates/lucent-api', 'crates/lucent-design',
-                     'crates/lucent-ui', 'crates/lucent-render', 'crates/lucent-domain', 'crates/lucent-usecases')))
+                     'crates/lucent-ui', 'crates/lucent-render', 'crates/lucent-domain', 'crates/lucent-usecases',
+                     'crates/lucent-video-frame')))
         for path in paths:
             self.put(path, b'fixture source\n')
         self.put('design/tokens.json', json.dumps({'radius': {'control': {'$value': 12}}}).encode())
@@ -84,6 +85,22 @@ class CatalogIntegrity(unittest.TestCase):
     def test_new_nested_producer_module_cannot_be_omitted(self):
         self.put('lucent/crates/lucent-ui/src/new_module.rs', b'new producer')
         with self.assertRaisesRegex(ValueError, 'omits a production'):
+            CHECK.validate(self.root)
+
+    def test_neutral_video_sources_and_manifest_cannot_be_omitted(self):
+        for path in ('lucent/crates/lucent-video-frame/src/lib.rs',
+                     'lucent/crates/lucent-video-frame/Cargo.toml'):
+            with self.subTest(path=path):
+                original = self.data['renderer']['inputs'].pop(path)
+                self.save()
+                with self.assertRaisesRegex(ValueError, 'omits a production'):
+                    CHECK.validate(self.root)
+                self.data['renderer']['inputs'][path] = original
+        self.save()
+
+    def test_changed_neutral_video_value_requires_new_captures(self):
+        self.put('lucent/crates/lucent-video-frame/src/lib.rs', b'changed plane layout contract')
+        with self.assertRaisesRegex(ValueError, 'Stale native capture input'):
             CHECK.validate(self.root)
 
     def test_pixel_hash_and_density_are_checked(self):
