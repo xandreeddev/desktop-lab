@@ -25,27 +25,27 @@ class ArchReleaseEvidence(unittest.TestCase):
             self.assertEqual(release.main(), 0)
         value = json.loads(output.getvalue())
         self.assertFalse(value['actions'])
-        self.assertEqual(value['source_commit'], 'ba5b8a51f960e07507520a77534d1eccbce9e40c')
-        self.assertEqual((value['planned_stages'], value['planned_tests']), (17, 880))
+        self.assertEqual(value['source_commit'], 'd77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb')
+        self.assertEqual((value['planned_stages'], value['planned_tests']), (17, 885))
 
     def test_profile_preserves_nine_binary_and_support_example_rosters(self):
         profile = release.PROFILE
         self.assertEqual((len(profile['managed_executables']), len(profile['acceptance_executables']),
                           len(profile['support_files']), len(profile['example_sources'])), (6, 3, 29, 5))
-        self.assertEqual(sum(profile['expected_test_counts'].values()), 880)
-        self.assertEqual(profile['expected_test_counts']['lucent-wayland-tests'], 115)
+        self.assertEqual(sum(profile['expected_test_counts'].values()), 885)
+        self.assertEqual(profile['expected_test_counts']['lucent-wayland-tests'], 120)
         self.assertEqual(profile['expected_test_counts']['desktop-tests'], 404)
         self.assertEqual(len([name for name in profile['required_test_names']['desktop-tests']
                               if name.startswith('widget_keyboard_')]), 17)
         self.assertEqual(profile['rust_release'], '1.99.0')
-        self.assertEqual(profile['baseline_manifest_sha256'], 'ba2a89b036ad00fde7fca82cce9a1647ab91247e2b59a90874bf87f587fb48b2')
+        self.assertEqual(profile['baseline_manifest_sha256'], '0e1291f46312057a6c9b349148868ad770b9b07c848fdd901ca4b01e32050b4d')
         self.assertEqual(profile['baseline_manifest_kind'], 'localized-hosted-artifact-import')
         self.assertNotEqual(profile['baseline_remote_raw_manifest_sha256'], profile['baseline_manifest_sha256'])
 
     def context(self):
         return dict(GITHUB_ACTIONS='true', GITHUB_REPOSITORY='xandreeddev/desktop-lab',
                     GITHUB_ACTOR='xandreeddev', GITHUB_TRIGGERING_ACTOR='xandreeddev',
-                    GITHUB_EVENT_NAME='push', GITHUB_REF='refs/heads/ci/lucent-arch-release-focus',
+                    GITHUB_EVENT_NAME='push', GITHUB_REF='refs/heads/ci/lucent-arch-release-control-flush',
                     GITHUB_SHA='a'*40, LUCENT_WORKFLOW_SHA='a'*40, GITHUB_RUN_ID='123',
                     GITHUB_RUN_ATTEMPT='1', LUCENT_CI_IMAGE=release.PROFILE['container_image'])
 
@@ -166,6 +166,19 @@ class ArchReleaseEvidence(unittest.TestCase):
                           '0bc60c14d27f9079e0d1d9d706f91e67ad7da585f3b7f34ff7186a376c0285b4'})
         self.assertEqual((profile['component_lab']['captures'], profile['component_lab']['producer_inputs']), (480, 121))
 
+    def test_control_flush_regressions_all_require_individually_successful_log_records(self):
+        selected = ['control_flush_attempts_success_once_without_an_ownership_receipt', 'control_flush_defers_would_block_without_retrying_or_waiting', 'control_flush_preserves_fatal_io_errors', 'control_flush_preserves_protocol_failure', 'control_flush_sends_complete_acquisition_before_peer_dispatch']
+        required = release.PROFILE['required_test_names']['lucent-wayland-tests']
+        self.assertTrue(set(selected) <= set(required))
+        self.assertEqual(sum(len(v) for v in release.PROFILE['required_test_names'].values()), 99)
+        self.assertEqual(len(required), len(set(required)))
+        text = ''.join('test module::' + name + ' ... ok\n' for name in required)
+        text += 'test result: ok. 120 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0s\n'
+        self.assertEqual(release.test_summary(text, 120, required, True)['tests_passed'], 120)
+        for name in selected:
+            with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, 'named'):
+                release.test_summary(text.replace(name + ' ... ok', name + ' ... ignored'), 120, required, True)
+
     def test_success_envelope_is_exact_two_regular_root_files_and_refuses_reuse(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -190,7 +203,7 @@ class ArchReleaseEvidence(unittest.TestCase):
         self.assertIn('path: ${{ runner.temp }}/arch-diagnostics\n', workflow)
         self.assertNotIn('path: |', workflow)
         self.assertIn('--memory 10g --memory-swap 10g', workflow)
-        self.assertIn('ref: ba5b8a51f960e07507520a77534d1eccbce9e40c', workflow)
+        self.assertIn('ref: d77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb', workflow)
 
     def test_fresh_three_sample_admission_refuses_any_low_sample(self):
         with patch.object(release.time, 'sleep') as sleep:

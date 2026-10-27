@@ -1,14 +1,14 @@
-name: keyboard-intent Arch release
+name: keyboard-control flush Arch release
 
 on:
   push:
-    branches: [ci/lucent-arch-release-focus]
+    branches: [ci/lucent-arch-release-control-flush]
 
 permissions:
   contents: read
 
 concurrency:
-  group: arch-release-focus-${{ github.ref }}
+  group: arch-release-control-flush-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -76,7 +76,7 @@ jobs:
       - name: Checkout exact reviewed application source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ba5b8a51f960e07507520a77534d1eccbce9e40c
+          ref: d77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb
           path: source
           persist-credentials: false
           fetch-depth: 1

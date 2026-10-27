@@ -1,15 +1,15 @@
 {
-  "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
-  "source_tree": "7a0a016ae3b19462a14a564816251c22c531dbd7",
-  "baseline_manifest_sha256": "ba2a89b036ad00fde7fca82cce9a1647ab91247e2b59a90874bf87f587fb48b2",
-  "baseline_source_commit": "b2f54551dfbe3744762e04b06cc9abcdfd167eaa",
+  "source_commit": "d77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb",
+  "source_tree": "329482756f90770fea2a3ebee8c85753f098f829",
+  "baseline_manifest_sha256": "0e1291f46312057a6c9b349148868ad770b9b07c848fdd901ca4b01e32050b4d",
+  "baseline_source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
   "container_image": "docker.io/library/archlinux@sha256:2acfa2683d458b7803b7aa4ee3c139d2ba6922cd84666fcb7496a3a02fcc4c83",
   "container_dated_tag": "base-devel-20261018.0.612668",
   "rust_release": "1.99.0",
   "rust_commit": "b940084d7eb6a299eb4bfeb8e34901bc051e7ac4",
   "repository": "xandreeddev/desktop-lab",
   "actor": "xandreeddev",
-  "branch": "ci/lucent-arch-release-focus",
+  "branch": "ci/lucent-arch-release-control-flush",
   "cpu_limit": 3,
   "memory_max_bytes": 10737418240,
   "admission_floor_mib": 4500,
@@ -17,7 +17,7 @@
     "lucent-domain-tests": 34,
     "lucent-api-tests": 84,
     "lucent-ui-tests": 121,
-    "lucent-wayland-tests": 115,
+    "lucent-wayland-tests": 120,
     "desktop-tests": 404,
     "video-tests": 49,
     "application-adapter-tests": 46,
@@ -64,7 +64,12 @@
       "queued_valid_done_survives_proxy_death_but_reused_ids_and_native_replacements_do_not_match",
       "request_identifiers_never_wrap_or_reuse",
       "secure_unsupported_missing_keyboard_and_unpresented_targets_do_not_acquire",
-      "withdrawing_keyboard_retains_integer_scale_and_full_input_region"
+      "withdrawing_keyboard_retains_integer_scale_and_full_input_region",
+      "control_flush_attempts_success_once_without_an_ownership_receipt",
+      "control_flush_defers_would_block_without_retrying_or_waiting",
+      "control_flush_preserves_fatal_io_errors",
+      "control_flush_preserves_protocol_failure",
+      "control_flush_sends_complete_acquisition_before_peer_dispatch"
     ],
     "desktop-tests": [
       "changed_note_and_invalid_new_link_retire_waiting_release_and_checked_context",
@@ -222,9 +227,9 @@
     "lucent/examples/application-intent/Cargo.toml": "d86b717aaad927544c2efd7c330355058a20496404e5ff7b241bfe8a5d8c86a7",
     "lucent/examples/application-intent/src/main.rs": "e550a0c287c586586579bc0f4b4152afa4206ca1e99ebbee00fecd2618552257"
   },
-  "scope": "Coherent hosted Arch release of the pinned keyboard-intent source, plus freshly rendered headless Component Lab captures. Actual software Vulkan only; runtime ABI, VM/native acceptance and performance remain separate.",
+  "scope": "Coherent hosted Arch release of the pinned generic keyboard-control flush candidate, plus freshly rendered headless Component Lab captures. Actual software Vulkan only; runtime ABI, VM/native first-key acceptance and performance remain separate.",
   "baseline_manifest_kind": "localized-hosted-artifact-import",
-  "baseline_remote_raw_manifest_sha256": "9d9d11c4b24dccd2368461305c6c19417eccd546f65accf45b5925e49495310b",
+  "baseline_remote_raw_manifest_sha256": "c3417f557490b0d348dcc7446f881095c13f7e03d9fe0dcbcfa35f2c812e4788",
   "license_files": {
     "lucent/crates/lucent-wayland/protocols/hyprland-focus-grab-v1.xml": "0bc60c14d27f9079e0d1d9d706f91e67ad7da585f3b7f34ff7186a376c0285b4"
   },

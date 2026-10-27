@@ -441,9 +441,9 @@ def build(args):
         'lucent-session', 'lucent-polkit', 'international-text', 'application-intent', 'lucent-lab') for part in ['-p', p]]])
     run('allocation-tests', ['test', *RELEASE, '-p', 'lucent-render', '--lib', 'allocation::tests::', '--', '--nocapture', '--test-threads=1'], 3)
     run('video-allocation-example-tests', ['test', *RELEASE, '-p', 'lucent-services', '--example', 'video-allocation-observer', '--', '--nocapture', '--test-threads=1'], 14)
-    require(sum(PROFILE['expected_test_counts'].values()) == 880 and len(record['steps']) == 17
-            and sum(s.get('tests_passed', 0) for s in record['steps']) == 880,
-            'all17_stages_and880_actual_tests_required')
+    require(sum(PROFILE['expected_test_counts'].values()) == 885 and len(record['steps']) == 17
+            and sum(s.get('tests_passed', 0) for s in record['steps']) == 885,
+            'all17_stages_and885_actual_tests_required')
 
     def copy(original, relative, executable=False):
         destination = out / relative
