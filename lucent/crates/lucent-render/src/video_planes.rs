@@ -23,7 +23,6 @@ pub struct PlanarPainter {
     gpu: Rc<Gpu>,
     pipeline: RenderPipeline,
     layout: BindGroupLayout,
-    sampler: Sampler,
     uniform: Buffer,
     textures: Option<Textures>,
     stats: PlanarUploadStats,
@@ -35,31 +34,23 @@ impl PlanarPainter {
                 binding,
                 visibility: ShaderStages::FRAGMENT,
                 ty: BindingType::Texture {
-                    sample_type: TextureSampleType::Float { filterable: true },
+                    sample_type: TextureSampleType::Float { filterable: false },
                     view_dimension: TextureViewDimension::D2,
                     multisampled: false,
                 },
                 count: None,
             })
             .collect();
-        entries.extend([
-            BindGroupLayoutEntry {
-                binding: 3,
-                visibility: ShaderStages::FRAGMENT,
-                ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                count: None,
+        entries.push(BindGroupLayoutEntry {
+            binding: 3,
+            visibility: ShaderStages::FRAGMENT,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: BufferSize::new(32),
             },
-            BindGroupLayoutEntry {
-                binding: 4,
-                visibility: ShaderStages::FRAGMENT,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: BufferSize::new(32),
-                },
-                count: None,
-            },
-        ]);
+            count: None,
+        });
         let layout = gpu
             .device
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
@@ -109,17 +100,10 @@ impl PlanarPainter {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let sampler = gpu.device.create_sampler(&SamplerDescriptor {
-            label: Some("video linear clamp"),
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Linear,
-            ..Default::default()
-        });
         Self {
             gpu,
             pipeline,
             layout,
-            sampler,
             uniform,
             textures: None,
             stats: Default::default(),
@@ -176,10 +160,6 @@ impl PlanarPainter {
                     },
                     BindGroupEntry {
                         binding: 3,
-                        resource: BindingResource::Sampler(&self.sampler),
-                    },
-                    BindGroupEntry {
-                        binding: 4,
                         resource: self.uniform.as_entire_binding(),
                     },
                 ],

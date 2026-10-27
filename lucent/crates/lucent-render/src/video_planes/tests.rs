@@ -119,7 +119,9 @@ fn assert_pixels(frame: &Yuv420Frame, actual: &[u8], width: u32, height: u32) {
             for channel in 0..4 {
                 assert!(
                     actual[begin + channel].abs_diff(expected[channel]) <= 1,
-                    "pixel ({x},{y}) channel {channel}: actual {:?}, independent expected {expected:?}",
+                    "source {:?}, output {width}x{height}, {:?}, pixel ({x},{y}) channel {channel}: actual {:?}, independent expected {expected:?}",
+                    frame.dimensions(),
+                    frame.color(),
                     &actual[begin..begin + 4]
                 );
             }
