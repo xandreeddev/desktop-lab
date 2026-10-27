@@ -51,7 +51,7 @@ struct TextureResource {
 }
 enum TextureStorage {
     Image(Texture),
-    Video(planes::PlaneResources),
+    Video(Box<planes::PlaneResources>),
 }
 enum ResourceLifetime {
     Image(lucent_api::ImageLifetime),

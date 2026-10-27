@@ -87,14 +87,15 @@ impl Gpu {
             || format!("video:{}", data.cache_id()),
             |(id, _)| format!("video-stream:{id}"),
         );
-        if let Some(texture) = self.cache.borrow_mut().get(&key) {
-            if texture.width == data.width() as f32 && texture.height == data.height() as f32 {
-                let revision = streamed.map_or(1, |(_, revision)| revision);
-                if updates.revision(&texture) != revision {
-                    updates.defer(&texture, data, revision);
-                }
-                return texture;
+        if let Some(texture) = self.cache.borrow_mut().get(&key)
+            && texture.width == data.width() as f32
+            && texture.height == data.height() as f32
+        {
+            let revision = streamed.map_or(1, |(_, revision)| revision);
+            if updates.revision(&texture) != revision {
+                updates.defer(&texture, data, revision);
             }
+            return texture;
         }
         if enabled {
             profile.image_misses += 1;
@@ -107,7 +108,7 @@ impl Gpu {
             group: planes.group.clone(),
             width: data.width() as f32,
             height: data.height() as f32,
-            storage: TextureStorage::Video(planes),
+            storage: TextureStorage::Video(Box::new(planes)),
             revision: Cell::new(0),
             stream_id: Cell::new(streamed.map(|(id, _)| id)),
             lifetime: RefCell::new(Some(ResourceLifetime::Video(data.lifetime()))),
