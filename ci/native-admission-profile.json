@@ -1,0 +1,17 @@
+{
+  "source_commit": "9d3667b658ffac682bd291106613c076528810aa",
+  "source_tree": "13aadf4a569a47e941c16726ca0e13feb4d6b67f",
+  "source_base": "1c1dfae474929fab60d6c300326e6959d1fae77c",
+  "failed_original_run": 40459098835,
+  "failed_original_tools_commit": "2419ba805c753191efb5bdac0835fc86624fe714",
+  "repository": "xandreeddev/desktop-lab",
+  "actor": "xandreeddev",
+  "branch": "ci/lucent-native-admission-arch",
+  "schema_test": "video::native_planes::tests::native_diagnostic_reports_unknown_sar_and_only_bounded_metadata",
+  "fixtures": [
+    "video::tests::video_native_planes_real_port_drains_tagged_h264_eof_and_preserves_retained_pixels",
+    "video::tests::video_native_planes_rewinds_one_session_without_rgba_scratch_and_honors_callback_cancel",
+    "video::tests::video_native_planes_source_or_upscaled_cover_keeps_owned_source_planes"
+  ],
+  "scope": "Test-only actual decoded-first-frame metadata and existing strict admission decisions; diagnostic may collect existing failing fixtures and never represents production/native/performance acceptance."
+}

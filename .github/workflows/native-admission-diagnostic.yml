@@ -1,0 +1,116 @@
+name: native admission metadata diagnostic
+
+on:
+  push:
+    branches: [ci/lucent-native-admission-arch]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-admission-metadata-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native-admission-diagnostic:
+    if: >-
+      github.repository == 'xandreeddev/desktop-lab' &&
+      github.actor == 'xandreeddev' && github.triggering_actor == 'xandreeddev'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    container:
+      image: docker.io/library/archlinux@sha256:2acfa2683d458b7803b7aa4ee3c139d2ba6922cd84666fcb7496a3a02fcc4c83
+      options: --cpus 3 --memory 10g --memory-swap 10g --pids-limit 1024
+    defaults:
+      run:
+        shell: bash --noprofile --norc -euo pipefail {0}
+    env:
+      LUCENT_WORKFLOW_SHA: ${{ github.workflow_sha }}
+      RUSTUP_TOOLCHAIN: 1.99.0
+      CARGO_TERM_COLOR: never
+    steps:
+      - name: Admit remote budget and freeze one signed Arch package transaction
+        timeout-minutes: 15
+        run: |
+          proof="$RUNNER_TEMP/arch-dependencies"
+          mkdir -p "$proof/cache" "$proof/databases"
+          test "$(cat /sys/fs/cgroup/memory.max)" = 10737418240
+          test "$(cat /sys/fs/cgroup/cpu.max)" = '300000 100000'
+          test "$(cat /sys/fs/cgroup/memory.swap.max)" = 0
+          for sample in 1 2 3; do
+            host_mib=$(awk '/^MemAvailable:/ {print int($2 / 1024)}' /proc/meminfo)
+            current=$(cat /sys/fs/cgroup/memory.current)
+            remaining_mib=$(( (10737418240 - current) / 1048576 ))
+            effective=$host_mib
+            if (( remaining_mib < effective )); then effective=$remaining_mib; fi
+            test "$effective" -ge 4500
+            printf '%s\n' "$effective" >> "$proof/bootstrap-admission.txt"
+            sleep 1
+          done
+          packages=(base-devel git python rustup clang llvm pkgconf wayland libxkbcommon pam polkit libpulse ffmpeg vulkan-icd-loader vulkan-swrast vulkan-tools dbus fontconfig ttf-dejavu noto-fonts zstd)
+          # Download once, then install from the same frozen sync databases.
+          # The default required package signature policy is retained.
+          pacman-conf SigLevel > "$proof/signature-policy.txt"
+          grep -qw PackageRequired "$proof/signature-policy.txt"
+          pacman -Syuw --noconfirm --cachedir "$proof/cache" "${packages[@]}" > "$proof/download.log" 2>&1
+          sha256sum /var/lib/pacman/sync/*.db > "$proof/databases.sha256"
+          cp /var/lib/pacman/sync/*.db "$proof/databases/"
+          pacman -Sup --print-format '%l' "${packages[@]}" > "$proof/resolved-urls.txt"
+          find "$proof/cache" -type f -name '*.pkg.tar.*' ! -name '*.sig' -print0 | sort -z | xargs -0 -r sha256sum > "$proof/archives.sha256"
+          test -s "$proof/archives.sha256"
+          pacman -Su --noconfirm --cachedir "$proof/cache" "${packages[@]}" > "$proof/install.log" 2>&1
+          sha256sum --check "$proof/databases.sha256"
+          sha256sum --check "$proof/archives.sha256"
+          pacman -Q > "$proof/installed-packages.txt"
+
+      - name: Checkout reviewed workflow tools
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          path: tools
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Checkout exact test-only metadata source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: 9d3667b658ffac682bd291106613c076528810aa
+          path: source
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install exact Rust toolchain
+        timeout-minutes: 10
+        run: rustup toolchain install 1.99.0 --profile minimal
+
+      - name: Collect one schema test and three existing strict fixture outcomes
+        timeout-minutes: 40
+        run: |
+          python3 tools/ci/native_admission_diagnostic.py --run \
+            --source-directory "$GITHUB_WORKSPACE/source" \
+            --target-directory "$RUNNER_TEMP/native-admission-target" \
+            --output "$RUNNER_TEMP/native-admission-diagnostics" \
+            --dependencies "$RUNNER_TEMP/arch-dependencies"
+
+      - name: Preserve bounded signed dependency evidence
+        if: always()
+        run: |
+          diagnostics="$RUNNER_TEMP/native-admission-diagnostics"
+          mkdir -p "$diagnostics"
+          for name in signature-policy.txt databases.sha256 archives.sha256 installed-packages.txt bootstrap-admission.txt; do
+            task_file="$RUNNER_TEMP/arch-dependencies/$name"
+            if test -f "$task_file" && ! test -L "$task_file"; then
+              test "$(stat --format=%s -- "$task_file")" -le 1048576
+              cp -- "$task_file" "$diagnostics/$name"
+            fi
+          done
+
+      - name: Retain diagnostic outcomes without release qualification
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-admission-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/native-admission-diagnostics
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: false
