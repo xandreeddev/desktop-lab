@@ -3,9 +3,9 @@
 use super::*;
 use lucent_domain::video_frame::{Bt709, Bytes, ChromaSiting, Plane, Range, Transfer, Yuv420Frame};
 
-struct ReferencedFrame(ffmpeg::frame::Video);
+struct DecodedFrameOwner(ffmpeg::frame::Video);
 struct PackedOwner {
-    frame: Arc<ReferencedFrame>,
+    frame: Arc<DecodedFrameOwner>,
     plane: usize,
     length: usize,
 }
@@ -13,9 +13,9 @@ impl AsRef<[u8]> for PackedOwner {
     fn as_ref(&self) -> &[u8] {
         // SAFETY: admit validates a reference-counted AVBuffer containing this
         // span. A packed span consists ONLY of initialized decoded samples,
-        // with no row gaps. The private AVFrame owns references to its buffers,
-        // is never mutated, and remains alive through this owner. Decoder reuse
-        // must retain the referenced buffer rather than mutate this publication.
+        // with no row gaps. Admission CONSUMES the only Rust Video handle and
+        // moves it into this private immutable owner. No caller retains a safe
+        // data_mut path. FFmpeg decoder reuse must respect its AVBufferRefs.
         unsafe {
             std::slice::from_raw_parts((*self.frame.0.as_ptr()).data[self.plane], self.length)
         }
@@ -49,19 +49,23 @@ fn color(frame: &ffmpeg::frame::Video) -> Option<Bt709> {
         chroma,
     })
 }
-/// Only fully admitted progressive, explicit-metadata 8-bit YUV420 is native.
-/// None means capability fallback, not a fabricated color/default assumption.
-pub(super) fn admit(
-    source: &ffmpeg::frame::Video,
-) -> Result<Option<(Yuv420Frame, PlanePublication)>> {
+pub(super) enum Admission {
+    Native(Yuv420Frame, PlanePublication),
+    Rgba(ffmpeg::frame::Video),
+}
+/// Admission consumes the mutable decoder-frame handle. Returning immutable
+/// views while retaining a caller's Video would be unsound: ffmpeg-next's SAFE
+/// data_mut does not perform COW. Unsupported capability returns the SAME owned
+/// frame for RGBA conversion, without cloning or guessing color metadata.
+pub(super) fn admit(source: ffmpeg::frame::Video) -> Result<Admission> {
     if source.format() != ffmpeg::format::Pixel::YUV420P
         || source.is_interlaced()
         || source.aspect_ratio() != ffmpeg::Rational(1, 1)
     {
-        return Ok(None);
+        return Ok(Admission::Rgba(source));
     }
-    let Some(color) = color(source) else {
-        return Ok(None);
+    let Some(color) = color(&source) else {
+        return Ok(Admission::Rgba(source));
     };
     use ffmpeg::util::frame::side_data::Type;
     if [
@@ -73,7 +77,7 @@ pub(super) fn admit(
     .iter()
     .any(|kind| source.side_data(*kind).is_some())
     {
-        return Ok(None);
+        return Ok(Admission::Rgba(source));
     }
     dimensions(source.width(), source.height())?;
     // SAFETY: source is an owned frame returned by the decoder (or an initialized
@@ -87,7 +91,7 @@ pub(super) fn admit(
         || source.is_corrupt()
         || raw.buf[0].is_null()
     {
-        return Ok(None);
+        return Ok(Admission::Rgba(source));
     }
     let sizes = [
         (source.width(), source.height()),
@@ -96,7 +100,7 @@ pub(super) fn admit(
     ];
     for (index, (width, height)) in sizes.into_iter().enumerate() {
         if raw.linesize[index] <= 0 {
-            return Ok(None);
+            return Ok(Admission::Rgba(source));
         }
         let stride = raw.linesize[index] as usize;
         if stride < width as usize {
@@ -111,7 +115,7 @@ pub(super) fn admit(
         let buffer =
             unsafe { ffmpeg::ffi::av_frame_get_plane_buffer(source.as_ptr(), index as i32) };
         if buffer.is_null() || raw.data[index].is_null() {
-            return Ok(None);
+            return Ok(Admission::Rgba(source));
         }
         let buffer = unsafe { &*buffer };
         let offset = (raw.data[index] as usize)
@@ -121,16 +125,11 @@ pub(super) fn admit(
             return Err(failed());
         }
     }
-    let mut retained = ffmpeg::frame::Video::empty();
-    // SAFETY: destination is newly allocated/unreferenced. Source has real
-    // AVBufferRefs, so av_frame_ref references data rather than copying it.
-    // Video::clone is deliberately NOT used: ffmpeg-next implements it as copy.
-    if unsafe { retained.as_ptr().is_null() }
-        || unsafe { ffmpeg::ffi::av_frame_ref(retained.as_mut_ptr(), source.as_ptr()) } < 0
-    {
-        return Err(failed());
-    }
-    let owner = Arc::new(ReferencedFrame(retained));
+    let (width, height) = (source.width(), source.height());
+    // Move the existing, reference-counted decoded AVFrame into its private
+    // immutable owner. av_frame_ref would leave a mutable alias in a borrowed
+    // caller; Video::clone would deep-copy pixels. Neither is needed here.
+    let owner = Arc::new(DecodedFrameOwner(source));
     let mut planes = Vec::with_capacity(3);
     let mut publication = PlanePublication::default();
     for (index, (width, height)) in sizes.into_iter().enumerate() {
@@ -164,14 +163,20 @@ pub(super) fn admit(
         );
     }
     let planes: [Plane; 3] = planes.try_into().map_err(|_| failed())?;
-    let frame = Yuv420Frame::new(source.width(), source.height(), planes, color)
+    let frame = Yuv420Frame::new(width, height, planes, color)
         .map_err(|e| DomainError::Invalid(e.to_string()))?;
-    Ok(Some((frame, publication)))
+    Ok(Admission::Native(frame, publication))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn native(source: ffmpeg::frame::Video) -> (Yuv420Frame, PlanePublication) {
+        match admit(source).unwrap() {
+            Admission::Native(frame, publication) => (frame, publication),
+            Admission::Rgba(_) => panic!("known fixture must admit native ownership"),
+        }
+    }
     fn initialized(width: u32, height: u32) -> ffmpeg::frame::Video {
         let mut frame = ffmpeg::frame::Video::new(ffmpeg::format::Pixel::YUV420P, width, height);
         frame.set_color_space(ffmpeg::color::Space::BT709);
@@ -207,23 +212,22 @@ mod tests {
         frame
     }
     #[test]
-    fn native_packed_yuv_uses_references_and_survives_source_drop() {
+    fn native_packed_yuv_moves_the_only_rust_frame_owner_and_survives_adapter_return() {
         let source = initialized(64, 4);
         let pointers = unsafe { (*source.as_ptr()).data };
-        let (frame, stats) = admit(&source).unwrap().unwrap();
+        let (frame, stats) = native(source);
         assert_eq!(stats.copied_bytes, 0);
         assert_eq!(stats.referenced_bytes, 64 * 4 * 3 / 2);
         for (plane, pointer) in frame.planes().iter().zip(pointers) {
             assert_eq!(plane.bytes().as_ptr(), pointer as *const u8);
         }
-        drop(source);
         assert_eq!(frame.planes()[0].row(3).unwrap(), &[64; 64]);
         assert_eq!(frame.planes()[2].row(1).unwrap(), &[192; 32]);
     }
     #[test]
     fn native_odd_padded_rows_copy_only_initialized_visible_samples() {
         let source = initialized(5, 3);
-        let (frame, stats) = admit(&source).unwrap().unwrap();
+        let (frame, stats) = native(source);
         assert_eq!(stats.referenced_bytes, 0);
         assert_eq!(stats.copied_bytes, 27);
         assert_eq!(frame.byte_len(), 27);
@@ -233,44 +237,50 @@ mod tests {
         }
     }
     #[test]
-    fn native_frame_reference_prevents_later_writes_from_mutating_publication() {
-        let mut source = initialized(64, 4);
-        let (frame, _) = admit(&source).unwrap().unwrap();
-        // The retained AVFrame must make FFmpeg allocate writable storage for
-        // the producer, rather than modify the already published visible bytes.
-        unsafe {
-            assert_eq!(ffmpeg::ffi::av_frame_make_writable(source.as_mut_ptr()), 0);
-            std::ptr::write_bytes((*source.as_mut_ptr()).data[0], 220, 64);
-        }
-        assert_eq!(frame.planes()[0].row(0).unwrap(), &[64; 64]);
+    fn native_consumed_owner_leaves_only_immutable_views_until_the_last_clone_drops() {
+        let (frame, _) = native(initialized(64, 4));
+        let first = frame.planes()[0].bytes().clone();
+        let last = first.clone();
+        assert_eq!(first.as_ptr(), last.as_ptr());
+        drop(frame);
+        assert_eq!(first.as_ref(), &[64; 64 * 4]);
+        drop(first);
+        assert_eq!(last.as_ref(), &[64; 64 * 4]);
+        // There is deliberately no mutable Video handle left: admission moved
+        // it, and neither the domain value nor Bytes exposes the private owner.
     }
     #[test]
     fn native_unknown_tags_alpha_crop_or_negative_stride_keep_capability_fallback() {
         let mut source = initialized(64, 4);
         source.set_color_space(ffmpeg::color::Space::Unspecified);
-        assert!(admit(&source).unwrap().is_none());
+        let original = unsafe { (source.as_ptr(), (*source.as_ptr()).data) };
+        let Admission::Rgba(recovered) = admit(source).unwrap() else {
+            panic!("unknown metadata must return the owned source");
+        };
+        assert_eq!(unsafe { recovered.as_ptr() }, original.0);
+        assert_eq!(unsafe { (*recovered.as_ptr()).data }, original.1);
         let mut source = initialized(64, 4);
         unsafe {
             (*source.as_mut_ptr()).crop_left = 1;
         }
-        assert!(admit(&source).unwrap().is_none());
+        assert!(matches!(admit(source).unwrap(), Admission::Rgba(_)));
         let mut source = initialized(64, 4);
         unsafe {
             (*source.as_mut_ptr()).linesize[0] = -64;
         }
-        assert!(admit(&source).unwrap().is_none());
+        assert!(matches!(admit(source).unwrap(), Admission::Rgba(_)));
         let rgba = ffmpeg::frame::Video::new(ffmpeg::format::Pixel::RGBA, 4, 4);
-        assert!(admit(&rgba).unwrap().is_none());
+        assert!(matches!(admit(rgba).unwrap(), Admission::Rgba(_)));
     }
     #[test]
     fn native_plane_bounds_are_rejected_before_a_slice_is_constructed() {
         let mut source = initialized(64, 4);
         unsafe {
-            let original = (*source.as_ptr()).data[0];
             let buffer = ffmpeg::ffi::av_frame_get_plane_buffer(source.as_ptr(), 0);
             (*source.as_mut_ptr()).data[0] = (*buffer).data.add((*buffer).size - 1);
-            assert!(admit(&source).is_err());
-            (*source.as_mut_ptr()).data[0] = original;
+            // AVFrame release owns the unchanged AVBufferRef; it never frees
+            // this deliberately invalid visible-data pointer independently.
+            assert!(admit(source).is_err());
         }
     }
 }

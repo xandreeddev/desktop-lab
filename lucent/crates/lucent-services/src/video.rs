@@ -963,20 +963,23 @@ impl DecoderSession {
                     return Ok(false);
                 }
                 if matches!(purpose, DecodePurpose::NativePlanes) {
-                    if let Some((planes, publication)) = native_planes::admit(&frame)? {
-                        *converter = None;
-                        delivered = true;
-                        if !emit(
-                            NativeMediaFrame::Yuv420 {
-                                frame: planes,
-                                timestamp,
-                                publication,
-                            },
-                            None,
-                        ) {
-                            return Ok(false);
+                    match native_planes::admit(frame)? {
+                        native_planes::Admission::Native(planes, publication) => {
+                            *converter = None;
+                            delivered = true;
+                            if !emit(
+                                NativeMediaFrame::Yuv420 {
+                                    frame: planes,
+                                    timestamp,
+                                    publication,
+                                },
+                                None,
+                            ) {
+                                return Ok(false);
+                            }
+                            continue;
                         }
-                        continue;
+                        native_planes::Admission::Rgba(source) => frame = source,
                     }
                     // Unknown/alpha/unsupported metadata keeps the established
                     // source-size software conversion. No guessed color tags.
