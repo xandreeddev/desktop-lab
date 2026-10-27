@@ -3684,7 +3684,7 @@
       "source_commit": "d77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb",
       "report": "reports/measurements/lucent-keyboard-control-flush-d77.json",
       "report_sha256": "2af4c21b30f012b4f99b097349831360a805a47d7cdffa253634d680fac3d838",
-      "status": "coherent_deployment_passed_completed_first_Notes_key_passed_outside_key_failed",
+      "status": "coherent_deployment_and_canonical_URI_passed_widget_handoff_unresolved_test_transport_problem_observed",
       "hosted_release_run": 40448216820,
       "actual_qualification_stages": 17,
       "actual_targeted_tests": 885,
@@ -3709,6 +3709,21 @@
         "feature_checks_per_case": 3,
         "cleanup_checks_per_case": 9,
         "trusted_unmodified_nonrepeat_KeyA_per_case": 1
+      },
+      "input_order_diagnostic": {
+        "report": "reports/measurements/lucent-widget-input-order-d77.json",
+        "report_sha256": "8727381070ebfe8681ace45481d7b36c76954adf3d020bbfee1f28986edd28eb",
+        "guest_outside_key_precedes_mouse_DOWN_ms": 4.332,
+        "outside_browser_pointer_target_reached": false,
+        "first_Notes_key_and_undo_passed": true,
+        "observer_FDs_closed": true,
+        "restoration_passed": 8,
+        "restoration_total": 9,
+        "original_cursor_restored": false,
+        "original_cursor_not_persisted": true,
+        "focus_cause_established": false,
+        "earlier_guest_order_inferred": false,
+        "next": "correct_input_transport_then_retest;no_product_focus_patch_from_this_trace"
       }
     }
   },

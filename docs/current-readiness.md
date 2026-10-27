@@ -34,6 +34,19 @@ the same normal desktop lifetime and uses independent cold browser births. This
 new execution accepts that controlled handoff; no widget focus fix, lock/login
 regression or performance acceptance is inherited from the earlier source.
 
+The subsequent [closed V10 input-order diagnostic](../reports/measurements/lucent-widget-input-order-d77.json)
+shows the guest receiving the outside KeyA **4.332 ms before** the tablet press,
+despite the host sending click commands first. The cursor also remains at the
+previous Notes point, so the intended browser target is not reached. The first
+Notes key arrives 33.278 ms after its guest press and ordinary undo passes. The
+observer closes both descriptors with balanced complete packets and no drop.
+Eight restoration checks pass; cursor restoration fails because the owned move
+was not confirmed. The normal desktop/settings are restored, but the original
+cursor point was not persisted and no later cursor recovery is claimed. This
+case establishes a test-transport problem, not a Lucent focus failure. Correct
+physical-pointer preparation and guest delivery ordering need a separate trial;
+compositor processing and earlier trials' guest order remain unknown.
+
 The earlier coherent VM release is source **ba5b8a51f960**, built by
 [hosted Arch run40433468095](https://github.com/xandreeddev/desktop-lab/actions/runs/40433468095).
 Its **17 qualification stages, 880 targeted tests and 94 required named
