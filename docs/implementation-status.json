@@ -4,12 +4,12 @@
   "status": "in_progress",
   "completion_rule": "An item is verified only when its behavior, boundary checks, documentation and applicable native integration checks have evidence. Implemented without verification remains incomplete.",
   "current_rollup": {
-    "snapshot_source_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
-    "snapshot_date": "2026-10-26",
+    "snapshot_source_commit": "c3007cc5cefc5faab36f751a28542898ecefac0d",
+    "snapshot_date": "2026-10-27",
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted main 9d42 / PR114 has verified Pages 40396627106 and twenty same-artifact LAN checks with 117 producer inputs/480 captures from 4a. Those checkpoints do not publish this later reconciliation. Source 3640 passes 17 build stages and 823 targeted tests, an actual AMD RADV export with 118 producer inputs and 480 PNGs and coherent six-client/root-greeter candidate VM deployment with settings/user/security state preserved. Its canonical cold pointer route passes, but Tab/Enter still fails browser focus/trusted KeyA delivery after history/input/frame guards pass; all nine cleanup checks per route pass. The cause and keyboard fix remain unestablished. This is an unmerged candidate trial, with original archive flags unchanged. Historical eb348/8e/26d evidence retains exact sources and limitations. Physical controls/sleep, broader IME/tray/clipboard/applications, eligible memory at or below 300 MiB and source-rate or 60 FPS animation acceptance remain open; all seven gaps are not closed.",
+    "scope": "Accepted main c300/PR116 has verified Pages40418504442 and twenty same-artifact LAN checks with118 source3640 producers/480captures. A separate coherent b2 Arch build/deployment and canonical native input trial are now recorded. New focus acquisition remains unaccepted.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -1348,10 +1348,10 @@
       }
     ],
     "deferred_scope": "Accessibility remains deferred by the user; international text and the seven requested gaps are not deferred.",
-    "validation": "This reconciliation reads exact source3640 build, offscreen export, coherent deployment and cold pointer/keyboard receipts, plus the named9d42 Pages/LAN checkpoint. The current keyboard failure remains a failure, with null missing-event fields and successful cleanup recorded separately. This documentation change adds no native/device/VM action or Node/Cargo build. Local JSON, report-link, privacy and history-preservation checks cover these edits; final source CI, protected-main delivery and publication remain separate.",
+    "validation": "Actual hosted b2 qualification17stages/840tests, concrete target ELF/header compatibility and coherent deployment pass. Canonical pointer passes, Tab/Enter fails, nine cleanup checks pass each. New one-shot focus source needs actual release, visual export and native tests. Earlier capture flags/results remain historical.",
     "accepted_main_base_commit": "9b52666ba39b2ea2718e72424c37dc8b341051e2",
     "documentation_harness_base_commit": "c4eb922ca423dfbe255630e8717dc9cb2836a4c2",
-    "runtime_compilation_source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
+    "runtime_compilation_source_commit": "b2f54551dfbe3744762e04b06cc9abcdfd167eaa",
     "historical_gpu_candidate_preservation_rejection": {
       "status": "hardware_initialization_observed_preservation_rejected_software_restored",
       "driver_install_rollback_verified": true,
@@ -1519,37 +1519,21 @@
       }
     ],
     "documentation_delivery": {
-      "accepted_main_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
-      "published_workflow_run": 40396627106,
+      "accepted_main_commit": "c3007cc5cefc5faab36f751a28542898ecefac0d",
+      "published_workflow_run": 40418504442,
       "published_workflow_status": "SUCCESS",
-      "public_http_status": 200,
-      "current_published_source_links": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
-      "current_publication_valid": true,
       "public_artifact_bytes_match": true,
-      "delivery_receipt_sha256": "bfb2cfab2dae89a1fac1e7423c71b51953463503c91ab8a3a1531c5df017cfc7",
-      "archive_sha256": "3a7a7c5b24628c24cdcf96e69ca43bcbbd3af36a691a9004ac35b2241110702b",
-      "verified_pages": [
-        "docs/desktop/",
-        "docs/library/",
-        "component-lab/"
-      ],
-      "verified_native_assets": [
-        "component-lab/manifest.json",
-        "component-lab/images/menu-ocean-populated-narrow-1x.png"
-      ],
-      "rendering_producer_inputs_verified": 117,
+      "delivery_receipt_sha256": "75c4da355aa9975fc25f87ca96ccdde9fdfdc89dd55ac3c4682e00895919c8f3",
+      "archive_sha256": "3f11260ebb62733833ba32286575ff0bd3c69c147cfe748ef86b9af9d8101b87",
+      "rendering_producer_inputs_verified": 118,
       "native_catalogue_captures_verified": 480,
-      "capture_source_commit": "4a0f932a7c82ac0459715007bdbd314d145a4ae4",
-      "latest_verified_lan_source_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+      "capture_source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
       "latest_verified_lan_http_checks_passed": 20,
-      "latest_verified_lan_receipt_sha256": "dbd81b2611a8ad809093f30518bf07d1b0fb5f79fa282943882b0bc3b65a335e",
-      "latest_verified_lan_output_manifest_sha256": "e547f085550b5969a410f15ae179148c869890cd60d8b818b1da67dca7ab6264",
-      "verification_is_source_specific": true,
-      "this_later_reconciliation_published": false,
-      "scope": "Named 9d42/PR114 Pages artifact/public-byte and same-artifact LAN checkpoint: 117 producer inputs/480 captures from 4a. This publication predates the later reconciliation and candidate 3640. It adds no native device/control, deployment, focus-fix or performance acceptance."
+      "latest_verified_lan_receipt_sha256": "3af175696ab1bdd3789a98fc44612c807920fe80ba9197c724b2714928bdbbb0",
+      "scope": "Source-specific accepted-main delivery; new focus source/captures are not yet published."
     },
-    "accepted_main_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
-    "current_vm_trial_source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
+    "accepted_main_commit": "c3007cc5cefc5faab36f751a28542898ecefac0d",
+    "current_vm_trial_source_commit": "b2f54551dfbe3744762e04b06cc9abcdfd167eaa",
     "current_vm_trial_performance_accepted": false,
     "historical_documentation_delivery_8ca": {
       "accepted_main_commit": "8ca4e82015ad07d77fe873c0dc827b6b82cc8164",
@@ -1916,7 +1900,7 @@
         "remaining": "Site checks, exact-head CI and publication for this newer CPU-shape/two-output follow-up remain separate gates. Four owned two-output Display flows now have source-specific native evidence; physical, secure-output, hotplug/suspend, fractional-panel input and pacing acceptance remain unverified. Continue source-specific updates after later merges; historical reports remain unchanged and a documentation edit executes no native test."
       }
     },
-    "current_vm_observation": "The latest recorded coherent candidate deployment and canonical cold-browser trial use source 3640. Pointer passes and keyboard focus/key delivery fails, with both cleanups complete. This is a dated source-specific record, not a live graphical-session or process-identity guarantee.",
+    "current_vm_observation": "Latest recorded b2 coherent release is normal profiling OFF. Actual canonical pointer succeeds while Tab/Enter fails; native Clock focus is observed after history closes despite prior committed None. Both cleanups pass. This dated source-specific record is not an ongoing live-session guarantee.",
     "recent_deliveries": [
       {
         "pull_request": 98,
@@ -3085,7 +3069,7 @@
         "private_merge_receipt_sha256": "aa9747e89b05e474e1e0ab00eb12c079ad6991188162aa9b297055f5ed1e7a73"
       }
     },
-    "accepted_main_merge_scope": "The retained accepted_main_merge object describes the historical PR110 source-equivalence checkpoint. Current accepted and verified publication checkpoint is 9d42/PR114; capture-time raw merge/report flags stay unchanged.",
+    "accepted_main_merge_scope": "Retained accepted_main_merge describes historical PR110. Current verified delivery checkpoint is c300/PR116; raw earlier merge and capture flags remain historical.",
     "input_release_candidate_3640": {
       "source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
       "status_at_capture": "coherent_deployed_cold_pointer_passed_keyboard_failed",
@@ -3251,8 +3235,75 @@
       "verification_is_source_specific": true,
       "scope": "Named ca88 Pages artifact/public bytes and same-artifact LAN checkpoint. Accepted main has advanced to9d42/PR114; its publication and this later reconciliation require their own exact delivery proof. This does not establish native/device/performance acceptance."
     },
-    "source_identity_policy": "Retained coherent release/build/deployment, accepted_runtime_cohorts and accepted_main_merge fields describe their named historical checkpoints. Current verified delivery is documentation_delivery at 9d42; candidate 3640 has separate build/offscreen evidence and no deployed/native-handoff acceptance. No field here is a live VM observation.",
-    "historical_runtime_compilation_source_before_3640": "eb3481f4c75da9e0783975ad9c3e920ad8833ce2"
+    "source_identity_policy": "Historical coherent_release_build/coherent_runtime_deployment/accepted_runtime_cohorts/accepted_main_merge retain their named sources. Latest b2 qualification/deployment/native trial is explicit in runtime_candidate_b2; current verified site delivery is c300, with source3640 component captures.",
+    "historical_runtime_compilation_source_before_3640": "eb3481f4c75da9e0783975ad9c3e920ad8833ce2",
+    "historical_rollup_checkpoint_before_b2_native": {
+      "snapshot_source_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+      "snapshot_date": "2026-10-26",
+      "scope": "Accepted main 9d42 / PR114 has verified Pages 40396627106 and twenty same-artifact LAN checks with 117 producer inputs/480 captures from 4a. Those checkpoints do not publish this later reconciliation. Source 3640 passes 17 build stages and 823 targeted tests, an actual AMD RADV export with 118 producer inputs and 480 PNGs and coherent six-client/root-greeter candidate VM deployment with settings/user/security state preserved. Its canonical cold pointer route passes, but Tab/Enter still fails browser focus/trusted KeyA delivery after history/input/frame guards pass; all nine cleanup checks per route pass. The cause and keyboard fix remain unestablished. This is an unmerged candidate trial, with original archive flags unchanged. Historical eb348/8e/26d evidence retains exact sources and limitations. Physical controls/sleep, broader IME/tray/clipboard/applications, eligible memory at or below 300 MiB and source-rate or 60 FPS animation acceptance remain open; all seven gaps are not closed.",
+      "validation": "This reconciliation reads exact source3640 build, offscreen export, coherent deployment and cold pointer/keyboard receipts, plus the named9d42 Pages/LAN checkpoint. The current keyboard failure remains a failure, with null missing-event fields and successful cleanup recorded separately. This documentation change adds no native/device/VM action or Node/Cargo build. Local JSON, report-link, privacy and history-preservation checks cover these edits; final source CI, protected-main delivery and publication remain separate.",
+      "accepted_main_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+      "runtime_compilation_source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
+      "current_vm_trial_source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
+      "current_vm_observation": "The latest recorded coherent candidate deployment and canonical cold-browser trial use source 3640. Pointer passes and keyboard focus/key delivery fails, with both cleanups complete. This is a dated source-specific record, not a live graphical-session or process-identity guarantee.",
+      "documentation_delivery": {
+        "accepted_main_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+        "published_workflow_run": 40396627106,
+        "published_workflow_status": "SUCCESS",
+        "public_http_status": 200,
+        "current_published_source_links": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+        "current_publication_valid": true,
+        "public_artifact_bytes_match": true,
+        "delivery_receipt_sha256": "bfb2cfab2dae89a1fac1e7423c71b51953463503c91ab8a3a1531c5df017cfc7",
+        "archive_sha256": "3a7a7c5b24628c24cdcf96e69ca43bcbbd3af36a691a9004ac35b2241110702b",
+        "verified_pages": [
+          "docs/desktop/",
+          "docs/library/",
+          "component-lab/"
+        ],
+        "verified_native_assets": [
+          "component-lab/manifest.json",
+          "component-lab/images/menu-ocean-populated-narrow-1x.png"
+        ],
+        "rendering_producer_inputs_verified": 117,
+        "native_catalogue_captures_verified": 480,
+        "capture_source_commit": "4a0f932a7c82ac0459715007bdbd314d145a4ae4",
+        "latest_verified_lan_source_commit": "9d42c20ec255e96d2bfd0f6bf5ef57d6bc8bad24",
+        "latest_verified_lan_http_checks_passed": 20,
+        "latest_verified_lan_receipt_sha256": "dbd81b2611a8ad809093f30518bf07d1b0fb5f79fa282943882b0bc3b65a335e",
+        "latest_verified_lan_output_manifest_sha256": "e547f085550b5969a410f15ae179148c869890cd60d8b818b1da67dca7ab6264",
+        "verification_is_source_specific": true,
+        "this_later_reconciliation_published": false,
+        "scope": "Named 9d42/PR114 Pages artifact/public-byte and same-artifact LAN checkpoint: 117 producer inputs/480 captures from 4a. This publication predates the later reconciliation and candidate 3640. It adds no native device/control, deployment, focus-fix or performance acceptance."
+      }
+    },
+    "runtime_candidate_b2": {
+      "source_commit": "b2f54551dfbe3744762e04b06cc9abcdfd167eaa",
+      "hosted_build_run": 40415443527,
+      "qualification_stages_passed": 17,
+      "targeted_tests_passed": 840,
+      "target_elf_consumers_compatible": 10,
+      "manifest_sha256": "ba2a89b036ad00fde7fca82cce9a1647ab91247e2b59a90874bf87f587fb48b2",
+      "coherent_user_clients_verified": 6,
+      "root_greeter_verified": true,
+      "greetd_restarted": false,
+      "settings_or_theme_written": false,
+      "user_security_state_preserved": true,
+      "native_report": "reports/measurements/lucent-cold-default-uri-b2.json",
+      "native_report_sha256": "6a3f14d05b69fe0b361117b84b3dae411adb4e7401b60bb9dc3e357d2173a767",
+      "canonical_pointer_passed": true,
+      "canonical_keyboard_passed": false,
+      "cleanup_checks_passed_each": 9,
+      "performance_accepted": false
+    },
+    "proposed_keyboard_focus_intent": {
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "pr": 117,
+      "guide": "docs/keyboard-focus.md",
+      "source_authored_targeted_test_expectation": 880,
+      "native_fix_accepted": false,
+      "visual_export_pending": true
+    }
   },
   "requirements": [
     {
