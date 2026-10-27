@@ -109,13 +109,9 @@ fn widget_surface_specs(
             width: source.rect.w.ceil() as u32,
             height: source.rect.h.ceil() as u32,
             exclusive_zone: -1,
-            // A native group can be named after a passive first member while
-            // also painting Notes or other keyboard-operable controls.
-            keyboard: if keyboard_available
-                && (host.editing()
-                    || source.members.iter().any(|id| {
-                        widgets::catalog::find(id).is_some_and(|entry| entry.keyboard_interactive)
-                    })) {
+            // Capability remains catalog metadata. A passive sibling sharing
+            // this native group never grants another member keyboard ownership.
+            keyboard: if keyboard_available && host.keyboard_requested(&source, instance.as_ref()) {
                 Keyboard::OnDemand
             } else {
                 Keyboard::None
@@ -939,12 +935,56 @@ impl Desktop {
         let selected = self.monitors.active.clone();
         self.update_widgets_on(selected.as_ref(), message, effects);
     }
+    fn clear_widget_keyboard_demand(&mut self, effects: &mut Effects<Message>) {
+        let mut changed = self.widgets.clear_keyboard_demand();
+        for monitor in self.monitors.connected.values_mut() {
+            changed |= monitor.widgets.clear_keyboard_demand();
+        }
+        if changed {
+            effects.redraw("widgets");
+        }
+    }
+    fn reconcile_widget_keyboard_demand(&mut self, effects: &mut Effects<Message>) {
+        if self.panel_surface().is_some() {
+            self.clear_widget_keyboard_demand(effects);
+            return;
+        }
+        let mut changed = if self.monitors.legacy() {
+            self.widgets
+                .reconcile_keyboard(&self.settings.layout, self.viewport, None)
+        } else {
+            // The dormant fallback Host must not retain intent across a later
+            // transition back from named outputs to legacy native surfaces.
+            self.widgets.clear_keyboard_demand()
+        };
+        for (id, monitor) in &mut self.monitors.connected {
+            let layout = self
+                .settings
+                .monitor_layouts
+                .get(id)
+                .unwrap_or(&self.settings.layout);
+            changed |= monitor.widgets.reconcile_keyboard(
+                layout,
+                monitor.viewport,
+                Some(&monitor.instance),
+            );
+        }
+        if changed {
+            effects.redraw("widgets");
+        }
+    }
     fn update_widgets_on(
         &mut self,
         id: Option<&MonitorId>,
         message: widgets::Message,
         effects: &mut Effects<Message>,
     ) {
+        // A new physical member press replaces ownership across every output,
+        // even if the pressed member is passive or shares another native group.
+        if matches!(&message, widgets::Message::PressMember(_, press) if press.button == MouseButton::Primary)
+        {
+            self.clear_widget_keyboard_demand(effects);
+        }
         if let (Some(id), widgets::Message::Tick(now)) = (id, &message) {
             let layout = self
                 .settings
@@ -1410,6 +1450,8 @@ impl Component for Desktop {
                             widgets::Message::EditNotes(TextEdit::ClipboardReply(..))
                                 | widgets::Message::Tick(_)
                                 | widgets::Message::CancelDrags
+                                | widgets::Message::KeyboardResolved(..)
+                                | widgets::Message::KeyboardNative(..)
                         ) {
                             self.explicitly_select_monitor(&route.id, effects);
                         }
@@ -2065,9 +2107,14 @@ impl Component for Desktop {
                 }),
         );
         self.refresh_previews(effects);
+        self.reconcile_widget_keyboard_demand(effects);
     }
 }
 impl api::Application for Desktop {
+    fn keyboard_focus_requests_enabled(&self) -> bool {
+        true
+    }
+
     fn input_method_enabled(&self) -> bool {
         true
     }
@@ -2159,11 +2206,9 @@ impl api::Application for Desktop {
         ]
     }
     fn surfaces(&self) -> Vec<SurfaceSpec> {
-        // Use foreground lifetime, not current input ownership: notification
-        // history stays open while yielding input and dispatching a URI.
-        // This requests widget suppression; a matching native commit may still
-        // wait for that widget's frame callback or render retry. It does not
-        // acknowledge release of other surfaces or promise destination focus.
+        // Foreground ownership also clears transient demand during update.
+        // Closing a panel only permits a future physical press; it cannot
+        // resurrect keyboard eligibility from a widget's catalog capability.
         let widget_keyboard_available = self.panel_surface().is_none();
         let mut surfaces = vec![
             SurfaceSpec {
@@ -2763,6 +2808,7 @@ impl api::Application for Desktop {
         let role = match native_event {
             Event::PointerInside { surface, .. }
             | Event::PointerButton { surface, .. }
+            | Event::KeyboardFocus { surface, .. }
             | Event::FrameSubmitted { surface, .. }
             | Event::Resize { surface, .. }
             | Event::Key { surface, .. }
@@ -2784,6 +2830,13 @@ impl api::Application for Desktop {
             };
         }
         match event {
+            Event::KeyboardFocus {
+                surface,
+                native,
+                change,
+            } if widgets::catalog::find(surface).is_some() => Some(Message::Widgets(
+                widgets::Message::KeyboardNative(native, change),
+            )),
             Event::Key {
                 surface: "weather-controls",
                 key: Key::Escape,
@@ -2817,6 +2870,13 @@ impl api::Application for Desktop {
                         .surfaces(self.widget_layout(Some(&route.id)), monitor.viewport)
                 };
                 let message = match *event {
+                    Event::KeyboardFocus {
+                        surface,
+                        native,
+                        change,
+                    } if widgets::catalog::find(surface).is_some() => Some(Message::Widgets(
+                        widgets::Message::KeyboardNative(native, change),
+                    )),
                     Event::PointerInside {
                         surface: "bar",
                         inside: true,

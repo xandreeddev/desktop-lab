@@ -1,6 +1,7 @@
 //! Layout, hit testing and retained interaction state for declarative components.
 mod overlay;
 mod pointer;
+mod press_observation;
 use lucent_api::*;
 pub use overlay::OverlayScene;
 mod scroll;
@@ -72,6 +73,7 @@ pub struct Hit<M> {
     pub secondary_click: Option<M>,
     pub middle_click: Option<M>,
     pub wheel: Option<WheelCallback<M>>,
+    pub pointer_press: Option<PointerPressCallback<M>>,
     pub submit: Option<M>,
     pub hover: Option<M>,
     pub input: Option<InputCallback<M>>,
@@ -370,6 +372,7 @@ impl Layout {
             None => clip,
         };
         let paint_start = scene.paint.len();
+        let hit_start = scene.hits.len();
         let own_clip = if e.style.clip {
             clip.with_rounded(rect, e.style.radius)
         } else {
@@ -550,6 +553,7 @@ impl Layout {
                 secondary_click: e.secondary_click.clone(),
                 middle_click: e.middle_click.clone(),
                 wheel: e.wheel.clone(),
+                pointer_press: None,
                 submit: e.submit.clone(),
                 hover: e.hover.clone(),
                 input: e.input.clone(),
@@ -856,6 +860,13 @@ impl Layout {
                 color: e.style.focus_color.alpha(e.style.focus_color.3 * alpha),
                 width: e.style.focus_width,
             });
+        }
+        // Descendants have already installed their closer observers. Attach
+        // this observer only to existing hits, without changing input coverage.
+        if let Some(observer) = &e.pointer_press {
+            for hit in &mut scene.hits[hit_start..] {
+                hit.pointer_press.get_or_insert_with(|| observer.clone());
+            }
         }
         if !e.style.paint {
             scene.paint.truncate(paint_start);
@@ -1766,6 +1777,7 @@ mod tests {
             secondary_click: None,
             middle_click: None,
             wheel: None,
+            pointer_press: None,
             submit: None,
             input: None,
             edit: None,
@@ -1855,6 +1867,7 @@ mod tests {
             secondary_click: None,
             middle_click: None,
             wheel: None,
+            pointer_press: None,
             submit: None,
             input: Some(Arc::new(|s: String| s)),
             edit: None,
@@ -1914,6 +1927,7 @@ mod tests {
             secondary_click: None,
             middle_click: None,
             wheel: None,
+            pointer_press: None,
             submit: None,
             input: None,
             edit: None,

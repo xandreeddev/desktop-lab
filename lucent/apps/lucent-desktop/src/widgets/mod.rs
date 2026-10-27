@@ -1,7 +1,9 @@
 //! Widget interaction belongs to this child; persistence and OS actions return
 //! as intents to the composition root. Views only borrow snapshots and artwork.
 pub mod catalog;
+mod keyboard_demand;
 mod sizing;
+pub use keyboard_demand::RequestId as KeyboardRequestId;
 pub mod surfaces;
 mod view;
 use lucent_api::{ClipboardTarget, DragEvent, Effects, ScrollEvent, TextEdit, TextFieldState};
@@ -22,6 +24,13 @@ pub enum Message {
     SizeStep(String, i32),
     Edit(bool),
     Press,
+    /// The exact member and prepared target come from the SDK press observer.
+    PressMember(String, lucent_api::PointerPress),
+    KeyboardResolved(KeyboardRequestId, lucent_api::KeyboardFocusOutcome),
+    KeyboardNative(
+        lucent_api::NativeSurfaceToken,
+        lucent_api::KeyboardFocusChange,
+    ),
     EditNotes(TextEdit),
     ScrollNotes(ScrollEvent),
     RetrySave,
@@ -62,6 +71,7 @@ enum Drag {
     Cancelled,
 }
 pub struct Host {
+    keyboard: keyboard_demand::Demand,
     drags: BTreeMap<String, Drag>,
     resizer: sizing::Resizer,
     captured_surfaces: Option<Vec<surfaces::Surface>>,
@@ -73,6 +83,7 @@ pub struct Host {
 impl Default for Host {
     fn default() -> Self {
         Self {
+            keyboard: keyboard_demand::Demand::default(),
             drags: BTreeMap::new(),
             resizer: sizing::Resizer::default(),
             captured_surfaces: None,
@@ -84,6 +95,37 @@ impl Default for Host {
     }
 }
 impl Host {
+    pub fn clear_keyboard_demand(&mut self) -> bool {
+        self.keyboard.clear()
+    }
+    pub fn keyboard_requested(
+        &self,
+        source: &surfaces::Surface,
+        instance: Option<&lucent_api::SurfaceInstance>,
+    ) -> bool {
+        let mut address = lucent_api::SurfaceAddress::new(source.id);
+        address.instance = instance.cloned();
+        self.keyboard.matches(&address, &source.members)
+    }
+    pub fn reconcile_keyboard(
+        &mut self,
+        settings: &WidgetLayout,
+        viewport: (f32, f32),
+        instance: Option<&lucent_api::SurfaceInstance>,
+    ) -> bool {
+        if !self.keyboard.present() {
+            return false;
+        }
+        if !self
+            .surfaces(settings, viewport)
+            .iter()
+            .any(|source| self.keyboard_requested(source, instance))
+        {
+            self.keyboard.clear()
+        } else {
+            false
+        }
+    }
     pub fn grid_visible(&self) -> bool {
         self.resizer.active()
             || self
@@ -150,6 +192,10 @@ impl Host {
         }
     }
     pub(crate) fn cancel_interactions(&mut self) {
+        self.keyboard.clear();
+        self.cancel_pointer_interactions();
+    }
+    fn cancel_pointer_interactions(&mut self) {
         self.resizer.cancel();
         for drag in self.drags.values_mut() {
             *drag = Drag::Cancelled;
@@ -297,7 +343,7 @@ impl Host {
                 }
             }
             Message::Size(id, size) => {
-                self.cancel_interactions();
+                self.cancel_pointer_interactions();
                 let result = self.resizer.set(&id, size, settings, input.viewport);
                 if !self.grid_visible() {
                     self.captured_surfaces = None;
@@ -314,7 +360,7 @@ impl Host {
                     && catalog::find(&id).is_some()
                     && settings.visible_widgets.contains(&id)
                 {
-                    self.cancel_interactions();
+                    self.cancel_pointer_interactions();
                 }
                 let result = self.resizer.step(&id, delta, settings, input.viewport);
                 if !self.grid_visible() {
@@ -332,6 +378,39 @@ impl Host {
                 self.resizer.edit(enabled);
                 effects.redraw("widgets");
                 effects.redraw("dock");
+                None
+            }
+            Message::PressMember(id, press) => {
+                if press.button != lucent_api::MouseButton::Primary {
+                    return None;
+                }
+                self.keyboard.clear();
+                let definition = catalog::find(&id)?;
+                if !press.keyboard_focusable || !(definition.keyboard_interactive || self.editing())
+                {
+                    return None;
+                }
+                let source = self
+                    .surfaces(settings, input.viewport)
+                    .into_iter()
+                    .find(|source| source.members.contains(&definition.id))?;
+                let mut target = lucent_api::SurfaceAddress::new(source.id);
+                target.instance = input.instance.clone();
+                self.keyboard.begin(definition.id, target, effects);
+                effects.redraw("widgets");
+                None
+            }
+            Message::KeyboardResolved(request, outcome) => {
+                let error = self.keyboard.resolve(&request, outcome);
+                effects.redraw("widgets");
+                error.map(|error| {
+                    Intent::Error(lucent_domain::DomainError::Unavailable(error.into()))
+                })
+            }
+            Message::KeyboardNative(native, change) => {
+                if self.keyboard.observe(&native, change) {
+                    effects.redraw("widgets");
+                }
                 None
             }
             Message::Press => {
