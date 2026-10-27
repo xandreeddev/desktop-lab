@@ -27,8 +27,12 @@ but the following key reaches Notes. All nine restorations pass in each of the
 three trials. Reacquisition remains unattempted. Host command order does not prove
 guest delivery order across the VM's USB tablet and PS/2 keyboard; that chronology
 and the failure cause remain unmeasured. A finite read-only guest-input diagnostic
-is being prepared. No focus fix, lock/login regression, canonical URI handoff or
-performance acceptance is inherited from the earlier source.
+is being prepared. The later [original canonical d77 URI trial](../reports/measurements/lucent-cold-default-uri-d77.json)
+passes both pointer and Tab/Enter routes, including one trusted unmodified
+nonrepeat KeyA and all three feature/nine cleanup checks per route. It preserves
+the same normal desktop lifetime and uses independent cold browser births. This
+new execution accepts that controlled handoff; no widget focus fix, lock/login
+regression or performance acceptance is inherited from the earlier source.
 
 The earlier coherent VM release is source **ba5b8a51f960**, built by
 [hosted Arch run40433468095](https://github.com/xandreeddev/desktop-lab/actions/runs/40433468095).

@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "source_commit": "d77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb",
+  "manifest_sha256": "b25ac061d3fe334299f61d7d120d489d03975036ed477fc797caca4ba7ab0a06",
+  "desktop_sha256": "ed2166062a55676897bc745b3cea956e8276b4ae5f9a6019dce4aa1f4c5a70b5",
+  "host_controller_sha256": "e1212b5562b7652568605bef0caae05bbda631ef28a2284ec765dbe2fd57b15a",
+  "accepted_main_at_capture": false,
+  "status": "both_original_canonical_cold_routes_passed",
+  "scope": "One 1920x1080 scale-1 virtual output. Separate fresh owned browser births through the real temporary default handler; original pointer and Tab/Enter gestures, trusted keyboard input and full cleanup. This is a separately executed d77 result, not inherited from ba5.",
+  "cases": [
+    {
+      "case": "pointer",
+      "original_private_report_sha256": "e732aaeae99cffec9cba30092b868bdd52dc16007f1a2c97240f0065cbebc729",
+      "canonical_native_accepted": true,
+      "feature_checks": {
+        "temporary_real_mime_default_selected": true,
+        "pointer_fresh_token_default_route_exact_document": true,
+        "pointer_notification_absent_after_expiry_window": true
+      },
+      "feature_checks_passed": 3,
+      "trusted_unmodified_nonrepeat_KeyA_count": 1,
+      "observer_armed_with_zero_events": true,
+      "pre_dispatch_release": {
+        "history_closed": true,
+        "inspected_modal_input_released": true,
+        "native_frames_advanced": null,
+        "surface_absent": true,
+        "notification_policy": "absent"
+      },
+      "post_event_release": {
+        "history_closed": true,
+        "inspected_modal_input_released": true,
+        "native_frames_advanced": null,
+        "surface_absent": true,
+        "notification_policy": "absent"
+      },
+      "cleanup": {
+        "browser_and_original_entry_retired": true,
+        "notifications_absent_after_expiry_window": true,
+        "default_mime_restored": true,
+        "default_entry_restored": true,
+        "notification_history_closed": true,
+        "configuration_guardian_retired": true,
+        "canonical_browser_and_entry_retired": true,
+        "original_http_watchdog_retired": true,
+        "caller_state_and_cursor_preserved": true
+      },
+      "cleanup_checks_passed": 9
+    },
+    {
+      "case": "keyboard",
+      "original_private_report_sha256": "a06d5157da88305dfddbf77895c0cfd3310804eadf47e779ae9d5ee9165703d8",
+      "canonical_native_accepted": true,
+      "feature_checks": {
+        "temporary_real_mime_default_selected": true,
+        "keyboard_fresh_token_default_route_exact_document": true,
+        "keyboard_notification_absent_after_expiry_window": true
+      },
+      "feature_checks_passed": 3,
+      "trusted_unmodified_nonrepeat_KeyA_count": 1,
+      "observer_armed_with_zero_events": true,
+      "pre_dispatch_release": {
+        "history_closed": true,
+        "inspected_modal_input_released": true,
+        "native_frames_advanced": null,
+        "surface_absent": true,
+        "notification_policy": "absent"
+      },
+      "post_event_release": {
+        "history_closed": true,
+        "inspected_modal_input_released": true,
+        "native_frames_advanced": null,
+        "surface_absent": true,
+        "notification_policy": "absent"
+      },
+      "cleanup": {
+        "browser_and_original_entry_retired": true,
+        "notifications_absent_after_expiry_window": true,
+        "default_mime_restored": true,
+        "default_entry_restored": true,
+        "notification_history_closed": true,
+        "configuration_guardian_retired": true,
+        "canonical_browser_and_entry_retired": true,
+        "original_http_watchdog_retired": true,
+        "caller_state_and_cursor_preserved": true
+      },
+      "cleanup_checks_passed": 9
+    }
+  ],
+  "acceptance": {
+    "pointer": true,
+    "Tab_Enter": true,
+    "original_steps_unchanged": true,
+    "forced_focus": false,
+    "browser_prewarmed": false,
+    "diagnostic_cursor_workaround": false,
+    "same_normal_desktop_lifetime_preserved": true,
+    "widget_first_key_outside_or_reacquisition": false,
+    "direct_protocol_token_consumption": false,
+    "secure_lock_or_login": false,
+    "physical_hardware": false,
+    "eligible_memory_or_source_rate_pacing": false
+  },
+  "privacy": {
+    "raw_Notes_text_images_credentials_URI_profile_paths_process_ids_native_ids_argv_environment_and_exact_epochs_published": false
+  }
+}

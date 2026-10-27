@@ -3695,13 +3695,21 @@
       "native_focus_fix_accepted": false,
       "guest_input_order_measured": false,
       "failure_cause_established": false,
-      "canonical_URI_and_lock_on_this_source": "not_executed",
+      "canonical_URI_and_lock_on_this_source": "original_canonical_pointer_and_TabEnter_passed;lock_not_executed",
       "all9restoration_per_native_trial": true,
       "reacquisition": "unattempted",
       "eligible_memory_and_source_rate_pacing": "pending",
       "code_promoted_into_PR117": false,
       "component_catalogue_promoted": false,
-      "accepted_main": false
+      "accepted_main": false,
+      "canonical_cold_URI": {
+        "report": "reports/measurements/lucent-cold-default-uri-d77.json",
+        "report_sha256": "5bcebe0e218e118a5fd7861330c85dc6e4419a0c1297c672e46ba0aaefcbb0d1",
+        "both_original_routes_passed": true,
+        "feature_checks_per_case": 3,
+        "cleanup_checks_per_case": 9,
+        "trusted_unmodified_nonrepeat_KeyA_per_case": 1
+      }
     }
   },
   "requirements": [
