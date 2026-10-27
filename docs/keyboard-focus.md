@@ -1,8 +1,9 @@
 # Keyboard focus: intent, native ownership and painting
 
 A text box can remember its caret while another application receives the
-keyboard. Lucent keeps those facts separate. This guide follows the proposed
-one-shot focus API in source `ba5b8a51f960`; native acceptance is pending.
+keyboard. Lucent keeps those facts separate. This guide follows the implemented
+one-shot focus API in compiled and deployed candidate `ba5b8a51f960`.
+Native interaction acceptance is pending.
 
 ## Four different states
 
@@ -146,7 +147,7 @@ pointer and Tab/Enter URI opening, and secure-session regression tests before
 this focus fix is accepted.
 
 
-### Actual source qualification before native deployment
+### Source qualification and coherent candidate deployment
 
 Source `ba5b8a51f960` passes its full Ubuntu Rust, controlled service-protocol
 and software-Vulkan regression job in
@@ -156,6 +157,27 @@ passes all 17 qualification stages, 880 targeted tests and 94 required named
 regressions. Its subsequent fresh-memory admission refuses the catalogue export;
 no capture export or release archive is produced. The rejected sample was not
 recorded, so host pressure versus cgroup cache cannot be inferred from that run.
-This is successful source qualification inside a failed release workflow, not a
-native fix, new visual catalogue or VM deployment. A corrected packaging/export
-run must preserve the same memory gate.
+That failed workflow remains a historical result; it produced neither a native
+fix nor a new catalogue or deployment.
+
+The corrected [Arch40433468095 run](https://github.com/xandreeddev/desktop-lab/actions/runs/40433468095)
+passes the same 17 stages, 880 tests and 94 named regressions. After verifying
+all copied payload hashes, it removes only its freshly owned private Cargo
+target. Recorded effective available memory rises from 3,795 to 6,402 MiB;
+three fresh capture admissions pass at 6,402 MiB with the unchanged 4,500 MiB
+floor. These are hosted build facts, not desktop memory acceptance or proof of
+the earlier unrecorded failure cause.
+
+The actual llvmpipe CPU-Vulkan export passes strict validation of 121 producers
+and 480 captures. Concrete target ELF/header review and coherent six-client/
+root-greeter deployment also pass, with settings/security preserved and no
+greetd restart. The [source-specific release report](../reports/measurements/lucent-keyboard-intent-ba5-release.json)
+keeps original archive flags separate from the later deployment receipt.
+
+The first Notes controller attempt fails before any typing or feature check;
+all nine restoration checks pass, including its expected guarded restart.
+This is a harness failure, not a passed or failed native focus result. A fresh
+normal identity must be bound before another attempt. Immediate first-key,
+first outside-click, reacquisition, cold URI handoff and secure-session
+regressions remain pending. Source tests, offscreen pictures and installation
+alone do not accept those interactions.

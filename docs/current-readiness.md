@@ -10,23 +10,44 @@ same-artifact LAN HTTP checks pass with the 64/128 MiB static-server limits.
 These are delivery checks, not native keyboard or performance acceptance.
 Earlier 912/PR115, 9d42/PR114 and ca88 checkpoints remain historical.
 
-The current coherent VM release is source **b2f54551dfbe**, built by
-[hosted Arch run40415443527](https://github.com/xandreeddev/desktop-lab/actions/runs/40415443527).
-Its 17 qualification stages and 840 targeted tests pass. All ten ELF consumers
-pass static compatibility against the target provider closure; the concrete
-FFmpeg public-header comparison differs only in version literals. Deployment
-verifies all six user clients and the root greeter, preserves settings/security,
-and does not restart greetd. This deployment is separate from the older source
-3640 component captures.
+The latest recorded coherent VM release is source **ba5b8a51f960**, built by
+[hosted Arch run40433468095](https://github.com/xandreeddev/desktop-lab/actions/runs/40433468095).
+Its **17 qualification stages, 880 targeted tests and 94 required named
+regressions pass**. All ten ELF consumers pass static import compatibility;
+the separate review of 134 FFmpeg public headers finds 129 identical files and
+five version-literal changes, with no unresolved header/layout issue for this
+trial. Deployment verifies all six user clients and the root greeter beyond
+the startup deadline, preserves settings/security and does not restart greetd
+or write settings/themes. The verified b2 cohort remains the rollback baseline.
+See the [sanitized release report](../reports/measurements/lucent-keyboard-intent-ba5-release.json).
 
-The [actual b2 cold-browser trial](../reports/measurements/lucent-cold-default-uri-b2.json)
+The same build produces a fresh **CPU software-Vulkan** catalogue: llvmpipe,
+121 producer inputs, nine stories, five palettes and 480 PNGs. The committed
+catalogue preserves the actual ba5 manifest. All 480 PNG hashes differ from the
+older RADV captures; 18 paired examples across all nine stories at 1×/2× show a
+maximum normalized peak error of about 2/255. Four visual pairs show no visible
+layout, caret or clipping regression. This sampled comparison does not establish
+all-480 decoded-pixel parity, native GPU behavior or performance. PR117 carries
+these captures; their new Pages publication is not yet verified.
+
+The first Notes controller attempt stops before typing with a bounded-command
+harness failure and no feature checks. All nine restoration checks pass,
+including guarded settings/source restoration and a 35-second normal restart.
+Its earlier normal process is intentionally retired; a fresh identity must be
+bound for the next test. **Immediate Notes input, first outside-click delivery,
+canonical cold URI handoff, lock/login regression, eligible memory and FPS
+acceptance remain pending.** Deployment and offscreen captures do not accept
+the focus fix.
+
+The historical [actual b2 cold-browser trial](../reports/measurements/lucent-cold-default-uri-b2.json)
 passes canonical pointer opening and trusted document input, while Tab/Enter
 still fails browser focus/key delivery. All nine cleanup checks pass in each
 case. The new native observer sees Clock regain keyboard focus after history
 closes; Clock/Calendar had committed `None` during history and subsequently
-restored `OnDemand`. The proposed [explicit widget-focus implementation](keyboard-focus.md)
-separates capability, demand and native ownership. Its fresh native checks and
-visual export are pending; it is not an accepted fix.
+restored `OnDemand`. The candidate [explicit widget-focus implementation](keyboard-focus.md)
+separates capability, demand and native ownership. Its source qualification,
+visual export and coherent candidate deployment now pass; fresh native focus
+checks remain pending, so it is not an accepted fix.
 
 Archived resource and earlier feature observations below retain `eb3481f4` and
 their other named sources. At the earlier [PR110](https://github.com/xandreeddev/desktop-lab/pull/110)
@@ -79,8 +100,9 @@ for the requested-versus-committed ordering limitation. The seven-gap goal stays
 
 The 118 source3640 capture inputs are published at the c300 delivery checkpoint,
 separate from historical 9d42's 117 inputs and ca88/b3's 116 inputs. The b2 runtime
-was deployed in a separate verified transaction; publishing captures did not
-perform that deployment.
+was deployed in a separate verified transaction. PR117 now commits the actual
+ba5 catalogue with 121 inputs; its deployment is another separately verified
+transaction. Publishing captures does not perform either deployment.
 
 The recent changes add:
 
