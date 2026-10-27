@@ -4,6 +4,7 @@ use super::*;
 use smithay_client_toolkit::registry::RegistryHandler;
 use wayland_client::{
     Dispatch,
+    backend::WaylandError,
     globals::GlobalList,
     protocol::wl_callback::{self, WlCallback},
 };
@@ -28,6 +29,16 @@ use wire::{
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 const INTERFACE: &str = "hyprland_focus_grab_manager_v1";
+
+/// Try once after an entire ordered control transaction. Backpressure belongs
+/// to the normal Wayland source's next flush; it is neither an acknowledgement
+/// nor a reason to wait, retry here, or claim keyboard ownership.
+fn flush_control(flush: impl FnOnce() -> Result<(), WaylandError>) -> Result<(), WaylandError> {
+    match flush() {
+        Err(WaylandError::Io(error)) if error.kind() == std::io::ErrorKind::WouldBlock => Ok(()),
+        result => result,
+    }
+}
 
 pub(super) struct Origin {
     pub address: api::SurfaceAddress,
@@ -241,6 +252,17 @@ fn already_owned(
 }
 
 impl<A: Application> State<A> {
+    fn flush_focus_control(&mut self) {
+        if let Err(error) = flush_control(|| self.connection.flush()) {
+            // Invalidate pending receipts before another already-queued native
+            // event can complete them on a failed connection. The existing
+            // runtime failure path still owns shutdown and surface teardown.
+            self.focus_request_end(api::KeyboardFocusOutcome::Unavailable, false);
+            self.error = Some(error.to_string());
+            self.exit = true;
+        }
+    }
+
     pub(super) fn focus_requests_pending_for(&self, address: &api::SurfaceAddress) -> bool {
         self.focus_requests
             .pending
@@ -443,6 +465,9 @@ impl<A: Application> State<A> {
         // The keyboard-only role commit above precedes this request on the same
         // Wayland connection; acquiring never depends on an own frame callback.
         grab.commit();
+        // Do not leave this already-complete transaction behind unrelated
+        // callbacks/layout work while WaylandSource drains its pending queue.
+        self.flush_focus_control();
     }
 
     pub(super) fn focus_request_end(
@@ -571,6 +596,9 @@ impl<A: Application> State<A> {
             phase: Phase::Retaining(callback),
             ..pending
         });
+        // Destroy and the following sync must travel together, after the
+        // receipt is installed. Flush success itself never reports Focused.
+        self.flush_focus_control();
     }
 
     pub(super) fn focus_request_lifecycle(
@@ -702,6 +730,51 @@ mod tests {
         EventQueue,
         protocol::{wl_compositor::WlCompositor, wl_registry::WlRegistry},
     };
+    #[test]
+    fn control_flush_attempts_success_once_without_an_ownership_receipt() {
+        let calls = std::cell::Cell::new(0);
+        assert!(
+            flush_control(|| {
+                calls.set(calls.get() + 1);
+                Ok(())
+            })
+            .is_ok()
+        );
+        assert_eq!(calls.get(), 1);
+    }
+    #[test]
+    fn control_flush_defers_would_block_without_retrying_or_waiting() {
+        let calls = std::cell::Cell::new(0);
+        assert!(
+            flush_control(|| {
+                calls.set(calls.get() + 1);
+                Err(WaylandError::Io(std::io::ErrorKind::WouldBlock.into()))
+            })
+            .is_ok()
+        );
+        assert_eq!(calls.get(), 1);
+    }
+    #[test]
+    fn control_flush_preserves_fatal_io_errors() {
+        let result = flush_control(|| Err(WaylandError::Io(std::io::ErrorKind::BrokenPipe.into())));
+        assert!(matches!(result, Err(WaylandError::Io(error))
+            if error.kind() == std::io::ErrorKind::BrokenPipe));
+    }
+    #[test]
+    fn control_flush_preserves_protocol_failure() {
+        let result = flush_control(|| {
+            Err(WaylandError::Protocol(
+                wayland_client::backend::protocol::ProtocolError {
+                    code: 1,
+                    object_id: 1,
+                    object_interface: "wl_display".into(),
+                    message: "test refusal".into(),
+                },
+            ))
+        });
+        assert!(matches!(result, Err(WaylandError::Protocol(error))
+            if error.code == 1 && error.object_interface == "wl_display"));
+    }
     fn valid() -> Admission {
         Admission {
             secure: false,
@@ -1160,7 +1233,9 @@ mod tests {
         grab.commit();
         let grab_id = grab.id().protocol_id();
         let _sync = begin_retention(&connection, &qh, grab, SyncData { id: 1, native });
-        connection.flush().unwrap();
+        // Use the production control flush, without running an event source or
+        // dispatching a callback. The server must already see teardown + sync.
+        flush_control(|| connection.flush()).unwrap();
         let mut observed = vec![];
         loop {
             let mut header = [0u8; 8];
@@ -1187,6 +1262,47 @@ mod tests {
             observed,
             [("grab", 0), ("grab", 2), ("grab", 3), ("display", 0)]
         );
+    }
+    #[test]
+    fn control_flush_sends_complete_acquisition_before_peer_dispatch() {
+        let (connection, queue, mut server, compositor, _) = wire_socket();
+        let qh = queue.handle();
+        let registry = connection.display().get_registry(&qh, ());
+        let manager = registry.bind::<HyprlandFocusGrabManagerV1, _, _>(3, 1, &qh, ());
+        let surface = compositor.create_surface(&qh, ());
+        let grab = manager.create_grab(
+            &qh,
+            GrabData {
+                id: 1,
+                native: api::NativeSurfaceToken::new(),
+            },
+        );
+        surface.commit();
+        grab.add_surface(&surface);
+        grab.commit();
+        flush_control(|| connection.flush()).unwrap();
+        let mut observed = vec![];
+        loop {
+            let mut header = [0u8; 8];
+            server.read_exact(&mut header).unwrap();
+            let object = u32::from_ne_bytes(header[..4].try_into().unwrap());
+            let word = u32::from_ne_bytes(header[4..].try_into().unwrap());
+            let opcode = word as u16;
+            let mut payload = vec![0; (word >> 16) as usize - 8];
+            server.read_exact(&mut payload).unwrap();
+            if object == surface.id().protocol_id() {
+                assert_eq!(opcode, 6, "Only the queued surface commit is allowed");
+                observed.push(("surface", opcode));
+            }
+            if object == grab.id().protocol_id() {
+                observed.push(("grab", opcode));
+                if opcode == 2 {
+                    break;
+                }
+            }
+        }
+        assert_eq!(observed, [("surface", 6), ("grab", 0), ("grab", 2)]);
+        // No Enter/Done was injected or dispatched: flushing is transport only.
     }
     #[test]
     fn owned_sync_teardown_retires_proxy_and_accepts_later_delete_id() {
