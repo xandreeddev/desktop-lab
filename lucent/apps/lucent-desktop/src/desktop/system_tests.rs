@@ -1045,3 +1045,83 @@ fn widget_keyboard_named_output_transition_cancels_dormant_legacy_intent() {
             .all(|spec| spec.keyboard == Keyboard::None)
     );
 }
+
+#[test]
+fn desktop_requalifies_retired_native_current_while_new_asset_has_no_frame() {
+    use crate::background_presentation::{BackgroundPresentation, Source};
+    use crate::presentation_frame::PresentationFrame;
+    use lucent_api::{
+        Color, Element, ImageData, ImageStream,
+        video_frame::{Bt709, Bytes, ChromaSiting, Plane, Range, Transfer, Yuv420Frame},
+    };
+    use lucent_domain::{LiveWallpaperAsset, LiveWallpaperSettings, Wallpaper};
+    use std::sync::Arc;
+    let mut app = desktop();
+    app.live_wallpaper.enable_native_planes(true);
+    let poster = Arc::new(
+        ImageData::from_rgba("retired-native-poster", 2, 2, [90, 20, 10, 255].repeat(4)).unwrap(),
+    );
+    let y = Plane::new(Bytes::from(vec![160; 16]), 4, 4, 4).unwrap();
+    let uv = Plane::new(Bytes::from(vec![128; 4]), 2, 2, 2).unwrap();
+    let planes = Yuv420Frame::new(
+        4,
+        4,
+        [y, uv.clone(), uv],
+        Bt709 {
+            range: Range::Full,
+            transfer: Transfer::Srgb,
+            chroma: ChromaSiting::Left,
+        },
+    )
+    .unwrap();
+    let frame = PresentationFrame::native(
+        Arc::new(ImageStream::new().frame_yuv420(planes).unwrap()),
+        poster.clone(),
+    );
+    let mut presentation = BackgroundPresentation::default();
+    presentation.reconcile_frame(Some(Source::Live("retired".into())), Some(frame), 0.);
+    app.backgrounds.insert(None, (0, presentation));
+    let source = Wallpaper {
+        path: "/fixture/pending.mp4".into(),
+        name: "Pending source".into(),
+    };
+    app.settings.live_wallpapers.default = Some(LiveWallpaperSettings {
+        asset: LiveWallpaperAsset {
+            source: source.clone(),
+            path: source.path,
+            poster: Wallpaper {
+                path: "/fixture/pending.png".into(),
+                name: "Pending poster".into(),
+            },
+        },
+        fps: Default::default(),
+        paused: false,
+        enabled: true,
+    });
+    app.update(Message::Ignore, &mut Effects::default());
+    let view: Element<()> = app.backgrounds[&None].1.view(1., Color::hex(0));
+    let scene = lucent_ui::Layout::new(Arc::new(vec![])).build(
+        &view,
+        8.,
+        8.,
+        &lucent_ui::Interaction::default(),
+        1.,
+    );
+    let images: Vec<_> = scene
+        .paint
+        .iter()
+        .filter_map(|paint| match paint {
+            lucent_ui::Paint::Image { data, .. } => Some(data),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(images.len(), 1);
+    assert_eq!(images[0].cache_id(), poster.cache_id());
+    assert!(
+        scene
+            .paint
+            .iter()
+            .all(|paint| !matches!(paint, lucent_ui::Paint::Video { .. }))
+    );
+    assert_eq!(app.live_wallpaper.status(), "Preparing live wallpaper…");
+}

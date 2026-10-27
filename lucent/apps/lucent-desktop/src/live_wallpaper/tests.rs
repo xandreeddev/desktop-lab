@@ -1806,6 +1806,9 @@ struct NativePlanePlayback {
     calls: Mutex<Vec<(bool, Option<WallpaperPixelTarget>)>>,
     marker: std::sync::atomic::AtomicU8,
 }
+fn native_poster() -> Arc<ImageData> {
+    Arc::new(ImageData::from_rgba("native-safe-poster", 2, 2, [90, 20, 10, 255].repeat(4)).unwrap())
+}
 fn neutral_planes(marker: u8) -> lucent_api::video_frame::Yuv420Frame {
     use lucent_api::video_frame::{
         Bt709, Bytes, ChromaSiting, Plane, Range, Transfer, Yuv420Frame,
@@ -1870,8 +1873,7 @@ impl WallpaperPlaybackPort for NativePlanePlayback {
 #[test]
 fn native_plane_opt_in_keeps_default_unknown_and_shared_routes_on_rgba() {
     let adapter = Arc::new(NativePlanePlayback::default());
-    let mut controller =
-        LiveWallpaper::new(adapter.clone(), crate::test_adapters::adapters().assets);
+    let mut controller = LiveWallpaper::new(adapter.clone(), Arc::new(Posters(native_poster())));
     let settings = LiveWallpapers {
         default: Some(setting("/fixture/native.mp4")),
         ..Default::default()
@@ -1982,7 +1984,7 @@ fn native_plane_opt_in_keeps_default_unknown_and_shared_routes_on_rgba() {
 #[test]
 fn native_plane_frames_keep_last_good_and_freeze_across_pause_fps_and_stale_wakes() {
     let adapter = Arc::new(NativePlanePlayback::default());
-    let mut controller = LiveWallpaper::new(adapter, crate::test_adapters::adapters().assets);
+    let mut controller = LiveWallpaper::new(adapter, Arc::new(Posters(native_poster())));
     controller.enable_native_planes(true);
     let mut settings = LiveWallpapers {
         default: Some(setting("/fixture/native-pause.mp4")),
@@ -2039,7 +2041,8 @@ fn native_plane_frames_keep_last_good_and_freeze_across_pause_fps_and_stale_wake
             .cache_id(),
         held.cache_id()
     );
-    let PresentationFrame::Video(data) = controller.presentation_source(Some(&id)).unwrap().1
+    let PresentationFrame::Video { data, .. } =
+        controller.presentation_source(Some(&id)).unwrap().1
     else {
         panic!("native frozen frame lost")
     };
@@ -2065,17 +2068,137 @@ fn native_plane_frames_keep_last_good_and_freeze_across_pause_fps_and_stale_wake
     );
 }
 
+fn assert_rgba_presentation(controller: &LiveWallpaper, id: &MonitorId, poster: &ImageData) {
+    let frame = controller.presentation_source(Some(id)).unwrap().1;
+    assert_eq!(frame.cache_id(), poster.cache_id());
+    let view: lucent_api::Element<()> = frame.element().fill();
+    let scene = lucent_ui::Layout::new(Arc::new(vec![])).build(
+        &view,
+        8.,
+        8.,
+        &lucent_ui::Interaction::default(),
+        0.,
+    );
+    let lucent_ui::Paint::Image { data, .. } = &scene.paint[0] else {
+        panic!("current paint must use the prepared RGBA handoff")
+    };
+    assert_eq!(data.cache_id(), poster.cache_id());
+    assert_eq!(data.pixels(), poster.pixels());
+}
 #[test]
-fn native_last_good_survives_smaller_or_shared_demand_when_replacement_fails() {
-    let adapter = Arc::new(NativePlanePlayback::default());
-    let mut controller = LiveWallpaper::new(adapter, crate::test_adapters::adapters().assets);
+fn native_geometry_changes_paint_same_asset_rgba_during_pending_or_failed_replacement() {
+    for case in [
+        "smaller",
+        "shared",
+        "unobserved",
+        "withdrawn",
+        "paused-smaller",
+        "paused-withdrawn",
+        "paused-shared",
+    ] {
+        let adapter = Arc::new(NativePlanePlayback::default());
+        let poster = native_poster();
+        let mut controller = LiveWallpaper::new(adapter, Arc::new(Posters(poster.clone())));
+        controller.enable_native_planes(true);
+        let mut settings = LiveWallpapers {
+            default: Some(setting("/fixture/native-safe.mp4")),
+            ..Default::default()
+        };
+        let left = MonitorId::new("safe-left").unwrap();
+        let right = MonitorId::new("safe-right").unwrap();
+        let mut monitors = vec![left.clone()];
+        let context = WallpaperPlaybackContext::default();
+        let mut targets = BTreeMap::from([(
+            LiveWallpaperTarget::Monitor(left.clone()),
+            pixel_target(16, 16),
+        )]);
+        controller.reconcile(&settings, &monitors, true, &context, &targets);
+        deliver_current_subscription(&mut controller);
+        assert_eq!(
+            controller
+                .presentation_source(Some(&left))
+                .unwrap()
+                .1
+                .representation(),
+            "yuv420"
+        );
+        let old = controller.subscriptions().pop().unwrap();
+        if case.starts_with("paused-") {
+            settings.default.as_mut().unwrap().paused = true;
+        }
+        if case.ends_with("smaller") {
+            targets.insert(
+                LiveWallpaperTarget::Monitor(left.clone()),
+                pixel_target(1, 1),
+            );
+        }
+        if case.ends_with("shared") {
+            monitors.push(right.clone());
+            targets.insert(LiveWallpaperTarget::Monitor(right), pixel_target(16, 16));
+        }
+        if case.ends_with("withdrawn") {
+            targets.clear();
+        }
+        controller.reconcile(
+            &settings,
+            &monitors,
+            case != "unobserved",
+            &context,
+            &targets,
+        );
+        assert_rgba_presentation(&controller, &left, &poster);
+        assert_eq!(
+            controller.selected_status(&settings, &LiveWallpaperTarget::Monitor(left.clone())),
+            if case.starts_with("paused-") {
+                "Paused"
+            } else {
+                "Preparing live wallpaper…"
+            }
+        );
+        let key = controller.routes[&LiveWallpaperTarget::Monitor(left.clone())]
+            .key
+            .clone();
+        let player = &controller.players[&key];
+        let revision = player.revision;
+        player
+            .mailbox
+            .lock()
+            .unwrap()
+            .publish(Delivery::Error("replacement fixture failed".into()));
+        let mut failed = Effects::default();
+        controller.update(Message::Wake(key, revision), &mut failed);
+        assert!(
+            failed.redraw.contains("live-wallpaper"),
+            "failure status must invalidate its visible panel"
+        );
+        assert!(
+            controller.status().contains("replacement fixture failed"),
+            "{case}"
+        );
+        assert_rgba_presentation(&controller, &left, &poster);
+        deliver_subscription(&mut controller, old);
+        assert_rgba_presentation(&controller, &left, &poster);
+        if case.starts_with("paused-") {
+            settings.default.as_mut().unwrap().fps =
+                WallpaperFrameRate::Capped(WallpaperFps::new(60).unwrap());
+            controller.reconcile(&settings, &monitors, true, &context, &targets);
+            assert_rgba_presentation(&controller, &left, &poster);
+        }
+    }
+}
+#[test]
+fn native_poster_survives_latest_frame_coalescing_before_one_generation_wake() {
+    let poster = native_poster();
+    let mut controller = LiveWallpaper::new(
+        Arc::new(NativePlanePlayback::default()),
+        Arc::new(Posters(poster.clone())),
+    );
     controller.enable_native_planes(true);
     let settings = LiveWallpapers {
-        default: Some(setting("/fixture/native-last-good.mp4")),
+        default: Some(setting("/fixture/coalesced.mp4")),
         ..Default::default()
     };
-    let left = MonitorId::new("last-good-left").unwrap();
-    let right = MonitorId::new("last-good-right").unwrap();
+    let left = MonitorId::new("coalesced-left").unwrap();
     let context = WallpaperPlaybackContext::default();
     let mut targets = BTreeMap::from([(
         LiveWallpaperTarget::Monitor(left.clone()),
@@ -2088,18 +2211,31 @@ fn native_last_good_survives_smaller_or_shared_demand_when_replacement_fails() {
         &context,
         &targets,
     );
-    deliver_current_subscription(&mut controller);
-    let first = controller
-        .presentation_source(Some(&left))
-        .unwrap()
-        .1
-        .cache_id();
-    // Reconciliation changes demand, not the immutable last-good publication.
-    // No worker is executed here: actual failed replacement must remain visible.
-    targets.insert(
-        LiveWallpaperTarget::Monitor(left.clone()),
-        pixel_target(1, 1),
-    );
+    let key = controller.routes[&LiveWallpaperTarget::Monitor(left.clone())]
+        .key
+        .clone();
+    let player = &controller.players[&key];
+    let revision = player.revision;
+    let stream = ImageStream::new();
+    {
+        let mut mailbox = player.mailbox.lock().unwrap();
+        assert!(mailbox.publish_poster(&player.asset.path, revision, poster.clone()));
+        for marker in 0..100 {
+            let data = Arc::new(stream.frame_yuv420(neutral_planes(marker)).unwrap());
+            assert!(!mailbox.publish(Delivery::Frame(PresentationFrame::native(
+                data,
+                poster.clone()
+            ))));
+        }
+    }
+    controller.update(Message::Wake(key, revision), &mut Effects::default());
+    let PresentationFrame::Video { data, .. } =
+        controller.presentation_source(Some(&left)).unwrap().1
+    else {
+        panic!("latest native frame missing")
+    };
+    assert_eq!(data.frame().planes()[0].row(0).unwrap(), &[99, 99]);
+    targets.clear();
     controller.reconcile(
         &settings,
         std::slice::from_ref(&left),
@@ -2107,40 +2243,125 @@ fn native_last_good_survives_smaller_or_shared_demand_when_replacement_fails() {
         &context,
         &targets,
     );
-    for shared in [false, true] {
-        if shared {
-            targets.insert(
-                LiveWallpaperTarget::Monitor(right.clone()),
-                pixel_target(1, 1),
-            );
-            controller.reconcile(
-                &settings,
-                &[left.clone(), right.clone()],
-                true,
-                &context,
-                &targets,
-            );
-        }
-        let key = controller.routes[&LiveWallpaperTarget::Monitor(left.clone())]
-            .key
-            .clone();
-        let player = &controller.players[&key];
-        assert_eq!(player.native_planes, !shared);
-        let revision = player.revision;
-        player
+    assert_rgba_presentation(&controller, &left, &poster);
+}
+#[test]
+fn native_poster_authority_rejects_other_assets_old_generations_and_retired_sources() {
+    let poster = native_poster();
+    let mut controller = LiveWallpaper::new(
+        Arc::new(NativePlanePlayback::default()),
+        Arc::new(Posters(poster.clone())),
+    );
+    controller.enable_native_planes(true);
+    let mut settings = LiveWallpapers {
+        default: Some(setting("/fixture/first.mp4")),
+        ..Default::default()
+    };
+    let left = MonitorId::new("poster-authority").unwrap();
+    let context = WallpaperPlaybackContext::default();
+    let targets = BTreeMap::from([(
+        LiveWallpaperTarget::Monitor(left.clone()),
+        pixel_target(16, 16),
+    )]);
+    controller.reconcile(
+        &settings,
+        std::slice::from_ref(&left),
+        true,
+        &context,
+        &targets,
+    );
+    let key = controller.routes[&LiveWallpaperTarget::Monitor(left.clone())]
+        .key
+        .clone();
+    let revision = controller.players[&key].revision;
+    for (asset, tag) in [
+        ("/fixture/other.mp4", revision),
+        ("/fixture/first.mp4", revision + 1),
+    ] {
+        controller.players[&key]
             .mailbox
             .lock()
             .unwrap()
-            .publish(Delivery::Error("replacement fixture failed".into()));
-        controller.update(Message::Wake(key, revision), &mut Effects::default());
-        let frame = controller.presentation_source(Some(&left)).unwrap().1;
-        assert_eq!(frame.cache_id(), first);
-        assert_eq!(frame.representation(), "yuv420");
-        let view: lucent_api::Element<()> = frame.element();
-        assert!(
-            matches!(view.kind, lucent_api::Kind::Video(_)),
-            "old native pixels are retained, not silently fitted or hidden"
+            .publish_poster(asset, tag, poster.clone());
+        controller.update(
+            Message::Wake(key.clone(), revision),
+            &mut Effects::default(),
         );
-        assert!(controller.status().contains("replacement fixture failed"));
+        assert!(controller.players[&key].rgba_poster.is_none());
+        assert!(controller.presentation_source(Some(&left)).is_none());
     }
+    let old = controller.subscriptions().pop().unwrap();
+    settings.default = Some(setting("/fixture/second.mp4"));
+    controller.reconcile(
+        &settings,
+        std::slice::from_ref(&left),
+        true,
+        &context,
+        &targets,
+    );
+    deliver_subscription(&mut controller, old);
+    assert!(
+        controller.presentation_source(Some(&left)).is_none(),
+        "old source worker cannot admit its fallback into a new asset"
+    );
+    assert!(controller.players.values().all(|p| p.rgba_poster.is_none()));
+}
+
+struct MissingNativePoster;
+impl AssetPort for MissingNativePoster {
+    fn initial(&self) -> BTreeMap<String, Arc<ImageData>> {
+        BTreeMap::new()
+    }
+    fn application_icons(&self, _: &[Application]) -> crate::ports::Images {
+        vec![]
+    }
+    fn thumbnail(&self, _: &str) -> Result<Arc<ImageData>> {
+        Err(DomainError::Unavailable("missing fixture poster".into()))
+    }
+    fn preview(&self, image: &ImageData) -> Arc<ImageData> {
+        Arc::new(image.clone())
+    }
+    fn background(
+        &self,
+        _: &str,
+        _: Option<crate::ports::BackgroundTarget>,
+    ) -> Result<Arc<ImageData>> {
+        Err(DomainError::Unavailable("missing fixture poster".into()))
+    }
+}
+#[test]
+fn native_poster_failure_uses_existing_rgba_playback_without_admitting_native_pixels() {
+    let adapter = Arc::new(NativePlanePlayback::default());
+    let mut controller = LiveWallpaper::new(adapter.clone(), Arc::new(MissingNativePoster));
+    controller.enable_native_planes(true);
+    let settings = LiveWallpapers {
+        default: Some(setting("/fixture/missing-poster.mp4")),
+        ..Default::default()
+    };
+    let left = MonitorId::new("missing-poster").unwrap();
+    let context = WallpaperPlaybackContext::default();
+    let targets = BTreeMap::from([(
+        LiveWallpaperTarget::Monitor(left.clone()),
+        pixel_target(16, 16),
+    )]);
+    controller.reconcile(
+        &settings,
+        std::slice::from_ref(&left),
+        true,
+        &context,
+        &targets,
+    );
+    deliver_current_subscription(&mut controller);
+    assert_eq!(
+        controller
+            .presentation_source(Some(&left))
+            .unwrap()
+            .1
+            .representation(),
+        "rgba"
+    );
+    assert_eq!(
+        adapter.calls.lock().unwrap().as_slice(),
+        &[(false, Some(pixel_target(16, 16)))]
+    );
 }

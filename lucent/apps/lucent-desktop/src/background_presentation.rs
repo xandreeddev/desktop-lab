@@ -123,6 +123,26 @@ impl BackgroundPresentation {
         true
     }
 
+    /// Requalify both retained layers against current output demand, even when
+    /// no new source frame arrives. This only selects their prepared fallback.
+    pub fn constrain_native(
+        &mut self,
+        target: Option<lucent_domain::WallpaperPixelTarget>,
+    ) -> bool {
+        let mut changed = false;
+        for frame in self
+            .current
+            .iter_mut()
+            .map(|current| &mut current.image)
+            .chain(self.outgoing.iter_mut())
+        {
+            let selected = frame.select_for_target(target);
+            changed |= selected.cache_id() != frame.cache_id();
+            *frame = selected;
+        }
+        changed
+    }
+
     pub fn view<M>(&self, now: f64, fallback: Color) -> Element<M> {
         let background = Element::empty().fill().background(fallback);
         let Some(current) = &self.current else {
@@ -747,7 +767,10 @@ mod native_frame_tests {
             },
         )
         .unwrap();
-        Arc::new(stream.frame_yuv420(frame).unwrap()).into()
+        PresentationFrame::native(
+            Arc::new(stream.frame_yuv420(frame).unwrap()),
+            Arc::new(ImageData::from_rgba("native-fallback", 1, 1, vec![90, 20, 10, 255]).unwrap()),
+        )
     }
     #[test]
     fn native_background_updates_without_restarting_reveal_and_freezes_only_on_source_change() {
@@ -780,6 +803,115 @@ mod native_frame_tests {
         assert!(presentation.presented(2., 3.));
         assert!(presentation.active(3.));
         assert_eq!(presentation.inspect()["retained_images"], 2);
-        assert_eq!(presentation.inspect()["retained_frame_bytes"], 7);
+        assert_eq!(presentation.inspect()["retained_frame_bytes"], 11);
+    }
+    fn native_with_poster(poster: Arc<ImageData>) -> PresentationFrame {
+        let y = Plane::new(Bytes::from(vec![160; 16]), 4, 4, 4).unwrap();
+        let uv = Plane::new(Bytes::from(vec![128; 4]), 2, 2, 2).unwrap();
+        let frame = Yuv420Frame::new(
+            4,
+            4,
+            [y, uv.clone(), uv],
+            Bt709 {
+                range: Range::Full,
+                transfer: Transfer::Srgb,
+                chroma: ChromaSiting::Left,
+            },
+        )
+        .unwrap();
+        PresentationFrame::native(
+            Arc::new(ImageStream::new().frame_yuv420(frame).unwrap()),
+            poster,
+        )
+    }
+    fn poster() -> Arc<ImageData> {
+        Arc::new(
+            ImageData::from_rgba("retained-native-poster", 2, 2, [90, 20, 10, 255].repeat(4))
+                .unwrap(),
+        )
+    }
+    fn assert_only_rgba_paint(presentation: &BackgroundPresentation) {
+        let view: Element<()> = presentation.view(2., Color::hex(0));
+        let scene = lucent_ui::Layout::new(Arc::new(vec![])).build(
+            &view,
+            8.,
+            8.,
+            &lucent_ui::Interaction::default(),
+            2.,
+        );
+        assert!(
+            scene
+                .paint
+                .iter()
+                .any(|paint| matches!(paint, lucent_ui::Paint::Image { .. }))
+        );
+        assert!(
+            scene
+                .paint
+                .iter()
+                .all(|paint| !matches!(paint, lucent_ui::Paint::Video { .. }))
+        );
+    }
+    #[test]
+    fn retained_native_current_uses_own_rgba_when_geometry_changes_without_incoming() {
+        for target in [
+            None,
+            Some(lucent_domain::WallpaperPixelTarget::new(2, 2).unwrap()),
+        ] {
+            let poster = poster();
+            let mut presentation = BackgroundPresentation::default();
+            presentation.reconcile_frame(
+                Some(Source::Live("retired".into())),
+                Some(native_with_poster(poster.clone())),
+                0.,
+            );
+            assert!(!presentation.constrain_native(Some(
+                lucent_domain::WallpaperPixelTarget::new(8, 8).unwrap()
+            )));
+            assert!(presentation.constrain_native(target));
+            assert!(
+                !presentation.reconcile_frame(None, None, 1.),
+                "missing incoming keeps already-qualified visible content"
+            );
+            assert_eq!(
+                presentation.current.as_ref().unwrap().image.cache_id(),
+                poster.cache_id()
+            );
+            assert_only_rgba_paint(&presentation);
+            assert!(
+                !presentation.constrain_native(target),
+                "fallback selection is idempotent"
+            );
+        }
+    }
+    #[test]
+    fn retained_native_outgoing_uses_own_rgba_without_restarting_diagonal_reveal() {
+        for target in [
+            None,
+            Some(lucent_domain::WallpaperPixelTarget::new(2, 2).unwrap()),
+        ] {
+            let poster = poster();
+            let mut presentation = BackgroundPresentation::default();
+            presentation.reconcile_frame(
+                Some(Source::Live("old".into())),
+                Some(native_with_poster(poster.clone())),
+                0.,
+            );
+            let next = Arc::new(ImageData::from_rgba("next", 1, 1, vec![20, 40, 60, 255]).unwrap());
+            presentation.reconcile_frame(Some(Source::Static("new".into())), Some(next.into()), 1.);
+            assert!(presentation.constrain_native(target));
+            assert_eq!(
+                presentation.outgoing.as_ref().unwrap().cache_id(),
+                poster.cache_id()
+            );
+            assert!(matches!(
+                presentation.reveal,
+                Reveal::AwaitingSubmission { selected_at } if selected_at==1.
+            ));
+            assert_only_rgba_paint(&presentation);
+            assert!(presentation.presented(1., 2.));
+            assert_eq!(presentation.reveal.value(2.), 0.);
+            assert_eq!(presentation.reveal.value(2. + motion::WALLPAPER_REVEAL), 1.);
+        }
     }
 }

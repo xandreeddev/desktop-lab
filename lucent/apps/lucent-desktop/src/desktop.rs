@@ -498,6 +498,9 @@ impl Desktop {
                 .live_wallpapers
                 .selected(&target)
                 .is_some_and(|profile| profile.enabled);
+            let native_target = self
+                .live_wallpaper
+                .native_presentation_target(monitor.as_ref());
             let live = self.live_wallpaper.presentation_source(monitor.as_ref());
             let (source, image) = match live {
                 Some((path, frame)) => (Some(Source::Live(path.to_owned())), Some(frame.clone())),
@@ -514,7 +517,9 @@ impl Desktop {
                 .backgrounds
                 .entry(instance.clone())
                 .or_insert_with(|| (generation, Default::default()));
-            if presentation.reconcile_frame(source, image, effects.now) {
+            let constrained = presentation.constrain_native(native_target);
+            let admitted = presentation.reconcile_frame(source, image, effects.now);
+            if constrained || admitted {
                 effects.redraw_surface(SurfaceAddress {
                     role: "background",
                     instance,

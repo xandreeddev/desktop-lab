@@ -75,9 +75,17 @@ enum Delivery {
     Frame(PresentationFrame),
     Error(String),
 }
+struct PreparedPoster {
+    asset: String,
+    revision: u64,
+    image: Arc<ImageData>,
+}
 #[derive(Default)]
 struct Mailbox {
     latest: Option<Delivery>,
+    /// One worker-prepared same-asset RGBA poster, independent of replaceable
+    /// video frames so latest-frame coalescing cannot discard the safe handoff.
+    poster: Option<PreparedPoster>,
     notified: bool,
     source_frames: Option<frame_trace::SourceFrames>,
 }
@@ -90,6 +98,17 @@ impl Mailbox {
     }
     fn publish(&mut self, item: Delivery) -> bool {
         self.latest = Some(item);
+        self.notify()
+    }
+    fn publish_poster(&mut self, asset: &str, revision: u64, image: Arc<ImageData>) -> bool {
+        self.poster = Some(PreparedPoster {
+            asset: asset.into(),
+            revision,
+            image,
+        });
+        self.notify()
+    }
+    fn notify(&mut self) -> bool {
         if self.notified {
             false
         } else {
@@ -109,9 +128,29 @@ struct Player {
     target: Option<WallpaperPixelTarget>,
     mailbox: Arc<Mutex<Mailbox>>,
     frame: Option<PresentationFrame>,
+    /// Only Image variants are stored here, prepared through AssetPort. Keep
+    /// this same-asset static/mipped image while native frames may be retained.
+    rgba_poster: Option<PresentationFrame>,
     running: bool,
+    awaiting_frame: bool,
     native_planes: bool,
     error: String,
+}
+impl Player {
+    fn presentation<'a>(&'a self, frame: &'a PresentationFrame) -> Option<&'a PresentationFrame> {
+        if matches!(frame, PresentationFrame::Video { .. })
+            && (!self.native_planes
+                || self.target.is_none_or(|target| {
+                    !target
+                        .cover_size(frame.width(), frame.height())
+                        .is_ok_and(|size| size == (frame.width(), frame.height()))
+                }))
+        {
+            self.rgba_poster.as_ref()
+        } else {
+            Some(frame)
+        }
+    }
 }
 struct Route {
     key: String,
@@ -231,8 +270,27 @@ impl LiveWallpaper {
         let player = self.players.get(&route.key)?;
         Some((
             player.asset.path.as_str(),
-            route.held.as_ref().or(player.frame.as_ref())?,
+            player.presentation(
+                route
+                    .held
+                    .as_ref()
+                    .or(player.frame.as_ref())
+                    .or(player.rgba_poster.as_ref())?,
+            )?,
         ))
+    }
+    /// Current route admission for independently retained background layers.
+    /// A missing/retired producer is unknown and must not authorize native paint.
+    pub fn native_presentation_target(
+        &self,
+        monitor: Option<&MonitorId>,
+    ) -> Option<WallpaperPixelTarget> {
+        let target = monitor
+            .cloned()
+            .map_or(LiveWallpaperTarget::Default, LiveWallpaperTarget::Monitor);
+        let route = self.routes.get(&target)?;
+        let player = self.players.get(&route.key)?;
+        player.native_planes.then_some(player.target).flatten()
     }
     /// Composition-root experimental policy. Mixed/shared/unknown outputs keep
     /// fitted RGBA; enable before the normal host reconciliation starts.
@@ -327,6 +385,16 @@ impl LiveWallpaper {
                     .map(|frame| (player.asset.path.clone(), frame.clone()))
             })
             .collect();
+        let last_posters: BTreeMap<_, _> = self
+            .players
+            .values()
+            .filter_map(|player| {
+                player
+                    .rgba_poster
+                    .as_ref()
+                    .map(|poster| (player.asset.path.clone(), poster.clone()))
+            })
+            .collect();
         self.players.retain(|key, _| wanted.contains_key(key));
         self.routes = routes;
         for (key, (setting, running, target, count)) in wanted.into_iter().take(4) {
@@ -340,6 +408,7 @@ impl LiveWallpaper {
                     self.revision = self.revision.wrapping_add(1);
                     player.revision = self.revision;
                     player.running = running;
+                    player.awaiting_frame = true;
                     player.target = target;
                     player.native_planes = native_planes;
                     player.error.clear();
@@ -358,6 +427,12 @@ impl LiveWallpaper {
                             .cloned()
                             .map(PresentationFrame::from)
                     });
+                let rgba_poster = last_posters.get(&setting.asset.path).cloned().or_else(|| {
+                    native_planes
+                        .then(|| self.prepared.get(&setting.asset.path).cloned())
+                        .flatten()
+                        .map(PresentationFrame::from)
+                });
                 self.players.insert(
                     key,
                     Player {
@@ -367,7 +442,9 @@ impl LiveWallpaper {
                         target,
                         mailbox: Arc::new(Mutex::new(Mailbox::traced(self.source_frame_profiling))),
                         frame,
+                        rgba_poster,
                         running,
+                        awaiting_frame: true,
                         native_planes,
                         error: String::new(),
                     },
@@ -400,10 +477,18 @@ impl LiveWallpaper {
                 let target = player.target;
                 let running = player.running;
                 let native_planes = player.native_planes;
+                let prepared_poster = player
+                    .rgba_poster
+                    .as_ref()
+                    .and_then(PresentationFrame::as_image)
+                    .cloned();
                 let source_frame_profiling = self.source_frame_profiling;
                 Subscription::stream(format!("live-wallpaper:{revision}"), move |out, cancel| {
                     let stream = ImageStream::new();
                     let stop = Arc::new(PlaybackStopAdapter(cancel));
+                    if stop.cancelled() {
+                        return;
+                    }
                     let publish = |delivery| {
                         if stop.cancelled() {
                             return;
@@ -426,6 +511,32 @@ impl LiveWallpaper {
                         });
                         return;
                     }
+                    // Native pixels are admitted only after this worker has a
+                    // same-asset static RGBA fallback. If poster preparation
+                    // fails, use the existing fitted RGBA decoder instead.
+                    let native_poster = if native_planes {
+                        match prepared_poster
+                            .map(Ok)
+                            .unwrap_or_else(|| assets.background(&asset.poster.path, None))
+                        {
+                            Ok(image) => {
+                                if stop.cancelled() {
+                                    return;
+                                }
+                                let notify = mailbox
+                                    .lock()
+                                    .unwrap_or_else(|p| p.into_inner())
+                                    .publish_poster(&asset.path, revision, image.clone());
+                                if notify {
+                                    out.send(Message::Wake(key.clone(), revision));
+                                }
+                                Some(image)
+                            }
+                            Err(_) => None,
+                        }
+                    } else {
+                        None
+                    };
                     let mut deliver = |result: Result<NativeMediaFrame>| {
                         if stop.cancelled() {
                             return false;
@@ -443,12 +554,21 @@ impl LiveWallpaper {
                                     )
                                     .into()
                                 }
-                                NativeMediaFrame::Yuv420 { frame, .. } => Arc::new(
-                                    stream
-                                        .frame_yuv420(frame)
-                                        .map_err(|e| DomainError::Failed(e.to_string()))?,
-                                )
-                                .into(),
+                                NativeMediaFrame::Yuv420 { frame, .. } => {
+                                    PresentationFrame::native(
+                                        Arc::new(
+                                            stream
+                                                .frame_yuv420(frame)
+                                                .map_err(|e| DomainError::Failed(e.to_string()))?,
+                                        ),
+                                        native_poster.clone().ok_or_else(|| {
+                                            DomainError::Failed(
+                                                "Native delivery has no prepared RGBA handoff"
+                                                    .into(),
+                                            )
+                                        })?,
+                                    )
+                                }
                             };
                             if source_frame_profiling
                                 && let Some(trace) = mailbox
@@ -468,7 +588,7 @@ impl LiveWallpaper {
                         publish(delivery);
                         !stop.cancelled()
                     };
-                    if native_planes {
+                    if native_poster.is_some() {
                         adapter.play_native(
                             &asset,
                             NativePlaybackOptions {
@@ -773,13 +893,30 @@ impl LiveWallpaper {
                 if let Some(player) = self.players.get_mut(&key)
                     && player.revision == revision
                 {
-                    let item = player
-                        .mailbox
-                        .lock()
-                        .unwrap_or_else(|p| p.into_inner())
-                        .take();
+                    let (poster, item) = {
+                        let mut mailbox = player.mailbox.lock().unwrap_or_else(|p| p.into_inner());
+                        (mailbox.poster.take(), mailbox.take())
+                    };
+                    let poster = poster.filter(|poster| {
+                        poster.asset == player.asset.path && poster.revision == revision
+                    });
+                    let poster_changed = poster.is_some();
+                    if let Some(poster) = poster {
+                        player.rgba_poster = Some(poster.image.into());
+                    }
                     match item {
                         Some(Delivery::Frame(image)) => {
+                            if matches!(&image, PresentationFrame::Video { .. })
+                                && player.rgba_poster.is_none()
+                            {
+                                player.awaiting_frame = false;
+                                player.error = "Native frame has no prepared RGBA handoff".into();
+                                return None;
+                            }
+                            if self.native_planes && player.awaiting_frame {
+                                effects.redraw("live-wallpaper");
+                            }
+                            player.awaiting_frame = false;
                             player.frame = Some(image.clone());
                             return Some(Intent::FrameChanged(
                                 self.routes
@@ -798,8 +935,23 @@ impl LiveWallpaper {
                                     .collect(),
                             ));
                         }
-                        Some(Delivery::Error(error)) => player.error = error,
+                        Some(Delivery::Error(error)) => {
+                            if self.native_planes {
+                                effects.redraw("live-wallpaper");
+                            }
+                            player.awaiting_frame = false;
+                            player.error = error;
+                        }
                         None => {}
+                    }
+                    if poster_changed {
+                        return Some(Intent::FrameChanged(
+                            self.routes
+                                .iter()
+                                .filter(|(_, route)| route.key == key)
+                                .map(|(target, _)| target.clone())
+                                .collect(),
+                        ));
                     }
                 }
             }
@@ -836,6 +988,7 @@ impl LiveWallpaper {
                 {
                     self.revision = self.revision.wrapping_add(1);
                     player.revision = self.revision;
+                    player.awaiting_frame = true;
                     player.error.clear();
                     player.mailbox =
                         Arc::new(Mutex::new(Mailbox::traced(self.source_frame_profiling)));
@@ -849,6 +1002,7 @@ impl LiveWallpaper {
                     .values_mut()
                     .find(|player| player.revision == revision)
                 {
+                    player.awaiting_frame = false;
                     player.error = reason;
                 }
             }
@@ -1008,7 +1162,9 @@ impl LiveWallpaper {
                     WallpaperPauseReason::Fullscreen => "Paused behind a fullscreen app",
                 };
             }
-            return if player.running {
+            return if self.native_planes && player.awaiting_frame && player.running {
+                "Preparing live wallpaper…"
+            } else if player.running {
                 "Playing"
             } else {
                 "Suspended"
@@ -1026,6 +1182,9 @@ impl LiveWallpaper {
             &self.error
         } else if let Some(player) = self.players.values().find(|p| !p.error.is_empty()) {
             &player.error
+        } else if self.native_planes && self.players.values().any(|p| p.running && p.awaiting_frame)
+        {
+            "Preparing live wallpaper…"
         } else if self.players.values().any(|p| p.running) {
             "Playing · bounded latest-frame delivery"
         } else if !self.players.is_empty() {
@@ -1038,13 +1197,13 @@ impl LiveWallpaper {
         let frames: Vec<_> = self
             .players
             .values()
-            .filter_map(|player| player.frame.as_ref())
+            .flat_map(|player| player.frame.iter().chain(player.rgba_poster.iter()))
             .chain(self.routes.values().filter_map(|route| route.held.as_ref()))
             .collect();
         let rgba = crate::previews::usage(frames.iter().filter_map(|frame| frame.as_image()));
         let mut plane_views = BTreeMap::new();
         for frame in &frames {
-            if let PresentationFrame::Video(data) = frame {
+            if let PresentationFrame::Video { data, .. } = frame {
                 for plane in data.frame().planes() {
                     plane_views.insert(
                         (plane.bytes().as_ptr() as usize, plane.bytes().len()),
@@ -1057,7 +1216,7 @@ impl LiveWallpaper {
         let retained_bytes = rgba.bytes + plane_views.values().sum::<usize>();
         serde_json::json!({"open":self.open,"awaiting_first_frame":self.awaiting_first_frame.is_some(),"importing":self.importing.is_some(),"library_loading":self.library_loading,"library_count":self.library.len(),"library_error":self.library_error,"selection":self.selection,"preview":self.preview.inspect(),"players":self.players.len(),"running":self.players.values().filter(|p|p.running&&p.error.is_empty()).count(),"retained_frame_bytes":retained_bytes,"native_planes_opt_in":self.native_planes,"producers":self.players.values().map(|player| {
             let source_frames=player.mailbox.lock().unwrap_or_else(|p|p.into_inner()).source_frames.as_ref().map(frame_trace::SourceFrames::json);
-            serde_json::json!({"revision":player.revision,"running":player.running,"native_requested":player.native_planes,"representation":player.frame.as_ref().map(PresentationFrame::representation),"target":player.target.map(WallpaperPixelTarget::size),"frame_size":player.frame.as_ref().map(|frame|(frame.width(),frame.height())),"source_aspect":player.frame.as_ref().map(|frame|frame.aspect_size()),"source_frames":source_frames})
+            serde_json::json!({"revision":player.revision,"running":player.running,"native_requested":player.native_planes,"awaiting_frame":player.awaiting_frame,"representation":player.frame.as_ref().map(PresentationFrame::representation),"target":player.target.map(WallpaperPixelTarget::size),"frame_size":player.frame.as_ref().map(|frame|(frame.width(),frame.height())),"source_aspect":player.frame.as_ref().map(|frame|frame.aspect_size()),"source_frames":source_frames})
         }).collect::<Vec<_>>(),"error":self.status(),"outputs":self.routes.iter().map(|(target,route)| serde_json::json!({"monitor":target.monitor().map(MonitorId::as_str),"pause_reason":route.pause})).collect::<Vec<_>>()})
     }
 }
