@@ -16,6 +16,7 @@ use std::{
 const SOURCE_BYTES: u64 = 512 * 1024 * 1024;
 const LIBRARY_RESULTS: usize = 32;
 const LIBRARY_ENTRIES: usize = 1024;
+mod native_planes;
 mod pixels;
 mod preview;
 mod store;
@@ -288,6 +289,33 @@ impl WallpaperPlaybackPort for NativeVideoWallpapers {
             emit(Err(error));
         }
     }
+    fn play_native(
+        &self,
+        asset: &LiveWallpaperAsset,
+        options: NativePlaybackOptions,
+        emit: &mut dyn FnMut(Result<NativeMediaFrame>) -> bool,
+        stop: Arc<dyn StopSignal>,
+    ) {
+        let result = self.owned(asset).and_then(|()| {
+            decode_output(
+                Path::new(&asset.path),
+                PlaybackOptions {
+                    fps: options.fps,
+                    looping: options.looping,
+                    target: None,
+                },
+                DecodePurpose::NativePlanes,
+                &mut |frame, _| emit(Ok(frame)),
+                stop.clone(),
+                None,
+            )
+        });
+        if let Err(error) = result
+            && !stop.cancelled()
+        {
+            emit(Err(error));
+        }
+    }
 }
 fn dimensions(width: u32, height: u32) -> Result<()> {
     if width == 0
@@ -518,12 +546,14 @@ fn convert_live_target(
 enum DecodePurpose {
     Poster,
     LiveWallpaper,
+    NativePlanes,
     Preview(WallpaperPreviewOptions),
 }
 impl DecodePurpose {
     fn threading(self, codec: ffmpeg::codec::Id) -> ffmpeg::codec::threading::Config {
         use ffmpeg::codec::threading::{Config, Type};
-        let parallel = matches!(self, Self::LiveWallpaper) && codec == ffmpeg::codec::Id::H264;
+        let parallel = matches!(self, Self::LiveWallpaper | Self::NativePlanes)
+            && codec == ffmpeg::codec::Id::H264;
         let mut config = Config::count(if parallel { 2 } else { 1 });
         // A count alone leaves FFmpeg's threading kind at None. Restrict the
         // measured frame-threading trial to live H.264; other codecs stay serial.
@@ -641,6 +671,31 @@ fn decode_controlled(
     purpose: DecodePurpose,
     emit: &mut dyn FnMut(MediaFrame, Option<WallpaperTargetRevision>) -> bool,
     stop: Arc<dyn StopSignal>,
+    targets: Option<PlaybackTargets>,
+) -> Result<()> {
+    let mut invalid = false;
+    decode_output(
+        path,
+        options,
+        purpose,
+        &mut |frame, revision| match frame.into_rgba() {
+            Ok(frame) => emit(frame, revision),
+            Err(_) => {
+                invalid = true;
+                false
+            }
+        },
+        stop,
+        targets,
+    )?;
+    if invalid { Err(failed()) } else { Ok(()) }
+}
+fn decode_output(
+    path: &Path,
+    options: PlaybackOptions,
+    purpose: DecodePurpose,
+    emit: &mut dyn FnMut(NativeMediaFrame, Option<WallpaperTargetRevision>) -> bool,
+    stop: Arc<dyn StopSignal>,
     mut targets: Option<PlaybackTargets>,
 ) -> Result<()> {
     if !*INIT.get_or_init(|| {
@@ -659,17 +714,7 @@ fn decode_controlled(
             session = Some(DecoderSession::open(path, purpose, stop.clone())?);
         }
         let active = session.as_mut().ok_or_else(failed)?;
-        let keep = match targets.as_mut() {
-            Some(targets) => {
-                active.cycle_controlled(options, purpose, emit, stop.as_ref(), Some(targets))?
-            }
-            None => active.cycle(
-                options,
-                purpose,
-                &mut |frame| emit(frame, None),
-                stop.as_ref(),
-            )?,
-        };
+        let keep = active.cycle_output(options, purpose, emit, stop.as_ref(), targets.as_mut())?;
         if !keep || stop.cancelled() || !options.looping {
             return Ok(());
         }
@@ -749,8 +794,10 @@ impl DecoderSession {
                 .ok_or_else(failed)?;
             let context = ffmpeg::codec::context::Context::from_parameters(stream.parameters())
                 .map_err(|_| failed())?;
-            let reuse = matches!(purpose, DecodePurpose::LiveWallpaper)
-                && context.id() == ffmpeg::codec::Id::H264;
+            let reuse = matches!(
+                purpose,
+                DecodePurpose::LiveWallpaper | DecodePurpose::NativePlanes
+            ) && context.id() == ffmpeg::codec::Id::H264;
             (
                 stream.index(),
                 stream.time_base(),
@@ -804,6 +851,7 @@ impl DecoderSession {
 
     /// Returns false only when delivery/cancellation retires the body. EOF is
     /// fully drained and the final source hold completes before a loop rewind.
+    #[cfg(test)]
     fn cycle(
         &mut self,
         options: PlaybackOptions,
@@ -814,11 +862,36 @@ impl DecoderSession {
         self.cycle_controlled(options, purpose, &mut |frame, _| emit(frame), stop, None)
     }
 
+    #[cfg(test)]
     fn cycle_controlled(
         &mut self,
         options: PlaybackOptions,
         purpose: DecodePurpose,
         emit: &mut dyn FnMut(MediaFrame, Option<WallpaperTargetRevision>) -> bool,
+        stop: &dyn StopSignal,
+        targets: Option<&mut PlaybackTargets>,
+    ) -> Result<bool> {
+        let mut invalid = false;
+        let keep = self.cycle_output(
+            options,
+            purpose,
+            &mut |frame, revision| match frame.into_rgba() {
+                Ok(frame) => emit(frame, revision),
+                Err(_) => {
+                    invalid = true;
+                    false
+                }
+            },
+            stop,
+            targets,
+        )?;
+        if invalid { Err(failed()) } else { Ok(keep) }
+    }
+    fn cycle_output(
+        &mut self,
+        options: PlaybackOptions,
+        purpose: DecodePurpose,
+        emit: &mut dyn FnMut(NativeMediaFrame, Option<WallpaperTargetRevision>) -> bool,
         stop: &dyn StopSignal,
         mut targets: Option<&mut PlaybackTargets>,
     ) -> Result<bool> {
@@ -859,13 +932,16 @@ impl DecoderSession {
                     decoded_source,
                     rewind_at,
                 )?;
-                if converter.is_none() && targets.is_none() {
+                if converter.is_none()
+                    && targets.is_none()
+                    && !matches!(purpose, DecodePurpose::NativePlanes)
+                {
                     *converter = Some(match purpose {
                         DecodePurpose::Preview(preview) => {
                             FrameConverter::new_sized(&frame, None, Some(preview))?
                         }
                         DecodePurpose::Poster => FrameConverter::new(&frame, options.target)?,
-                        DecodePurpose::LiveWallpaper => {
+                        DecodePurpose::LiveWallpaper | DecodePurpose::NativePlanes => {
                             FrameConverter::new_live(&frame, options.target)?
                         }
                     });
@@ -886,6 +962,28 @@ impl DecoderSession {
                 if stop.cancelled() {
                     return Ok(false);
                 }
+                if matches!(purpose, DecodePurpose::NativePlanes) {
+                    if let Some((planes, publication)) = native_planes::admit(&frame)? {
+                        *converter = None;
+                        delivered = true;
+                        if !emit(
+                            NativeMediaFrame::Yuv420 {
+                                frame: planes,
+                                timestamp,
+                                publication,
+                            },
+                            None,
+                        ) {
+                            return Ok(false);
+                        }
+                        continue;
+                    }
+                    // Unknown/alpha/unsupported metadata keeps the established
+                    // source-size software conversion. No guessed color tags.
+                    if converter.is_none() {
+                        *converter = Some(FrameConverter::new_live(&frame, None)?);
+                    }
+                }
                 let (converted, revision) = if let Some(targets) = targets.as_deref_mut() {
                     targets.refresh()?;
                     let value = convert_live_target(converter, &frame, targets.current, timestamp)?;
@@ -900,7 +998,7 @@ impl DecoderSession {
                     )
                 };
                 delivered = true;
-                if !emit(converted, revision) {
+                if !emit(NativeMediaFrame::Rgba(converted), revision) {
                     return Ok(false);
                 }
             }

@@ -18,8 +18,10 @@ mod presentation;
 mod profiling;
 mod stream_trace;
 mod stream_upload;
+mod video_planes;
 pub use profiling::{PaintProfile, RenderProfile, ResourceProfile};
 pub use stream_trace::StreamTrace;
+pub use video_planes::{PlanarPainter, PlanarUploadStats};
 mod fallback;
 #[cfg(all(test, target_os = "linux"))]
 mod font_resources;
@@ -977,59 +979,59 @@ impl Canvas {
             view_formats: &[],
         });
         self.paint_validated(&texture.create_view(&Default::default()), validated)?;
-        self.readback(&texture, readback, rgba)
+        readback_rgba(&self.gpu, &texture, readback, rgba)
     }
-    fn readback(
-        &self,
-        texture: &Texture,
-        readback: ReadbackLayout,
-        mut rgba: Vec<u8>,
-    ) -> Result<Vec<u8>, Error> {
-        let extent = texture.size();
-        let buffer = self.gpu.device.create_buffer(&BufferDescriptor {
-            label: Some("visual snapshot readback"),
-            size: readback.buffer_bytes,
-            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
-        encoder.copy_texture_to_buffer(
-            TexelCopyTextureInfo {
-                texture,
-                mip_level: 0,
-                origin: Origin3d::ZERO,
-                aspect: TextureAspect::All,
+}
+fn readback_rgba(
+    gpu: &Gpu,
+    texture: &Texture,
+    readback: ReadbackLayout,
+    mut rgba: Vec<u8>,
+) -> Result<Vec<u8>, Error> {
+    let extent = texture.size();
+    let buffer = gpu.device.create_buffer(&BufferDescriptor {
+        label: Some("visual snapshot readback"),
+        size: readback.buffer_bytes,
+        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let mut encoder = gpu.device.create_command_encoder(&Default::default());
+    encoder.copy_texture_to_buffer(
+        TexelCopyTextureInfo {
+            texture,
+            mip_level: 0,
+            origin: Origin3d::ZERO,
+            aspect: TextureAspect::All,
+        },
+        TexelCopyBufferInfo {
+            buffer: &buffer,
+            layout: TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(readback.stride),
+                rows_per_image: Some(extent.height),
             },
-            TexelCopyBufferInfo {
-                buffer: &buffer,
-                layout: TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(readback.stride),
-                    rows_per_image: Some(extent.height),
-                },
-            },
-            extent,
-        );
-        self.gpu.queue.submit([encoder.finish()]);
-        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
-        buffer.slice(..).map_async(MapMode::Read, move |result| {
-            let _ = sender.send(result);
-        });
-        self.gpu.device.poll(PollType::Wait {
-            submission_index: None,
-            timeout: Some(std::time::Duration::from_secs(10)),
-        })?;
-        receiver.recv_timeout(std::time::Duration::from_secs(10))??;
-        let mapped = buffer.slice(..).get_mapped_range()?;
-        for row in mapped.chunks_exact(readback.stride as usize) {
-            for pixel in row[..readback.row_bytes].as_chunks::<4>().0 {
-                rgba.extend_from_slice(&[pixel[2], pixel[1], pixel[0], pixel[3]]);
-            }
+        },
+        extent,
+    );
+    gpu.queue.submit([encoder.finish()]);
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    buffer.slice(..).map_async(MapMode::Read, move |result| {
+        let _ = sender.send(result);
+    });
+    gpu.device.poll(PollType::Wait {
+        submission_index: None,
+        timeout: Some(std::time::Duration::from_secs(10)),
+    })?;
+    receiver.recv_timeout(std::time::Duration::from_secs(10))??;
+    let mapped = buffer.slice(..).get_mapped_range()?;
+    for row in mapped.chunks_exact(readback.stride as usize) {
+        for pixel in row[..readback.row_bytes].as_chunks::<4>().0 {
+            rgba.extend_from_slice(&[pixel[2], pixel[1], pixel[0], pixel[3]]);
         }
-        drop(mapped);
-        buffer.unmap();
-        Ok(rgba)
     }
+    drop(mapped);
+    buffer.unmap();
+    Ok(rgba)
 }
 impl Drop for Canvas {
     fn drop(&mut self) {

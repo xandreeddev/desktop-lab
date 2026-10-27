@@ -472,6 +472,27 @@ pub trait WallpaperPlaybackPort: Send + Sync {
         emit: &mut dyn FnMut(Result<MediaFrame>) -> bool,
         stop: Arc<dyn StopSignal>,
     );
+    /// Explicit source-size native capability. Existing clients keep using
+    /// `play`; unknown/unsupported formats preserve its RGBA software path.
+    /// Physical presentation scaling belongs to the native-frame consumer.
+    fn play_native(
+        &self,
+        asset: &LiveWallpaperAsset,
+        options: crate::NativePlaybackOptions,
+        emit: &mut dyn FnMut(Result<crate::NativeMediaFrame>) -> bool,
+        stop: Arc<dyn StopSignal>,
+    ) {
+        self.play(
+            asset,
+            PlaybackOptions {
+                fps: options.fps,
+                looping: options.looping,
+                target: None,
+            },
+            &mut |value| emit(value.map(crate::NativeMediaFrame::Rgba)),
+            stop,
+        );
+    }
     /// One asset/producer lifetime with latest-only source-size/target updates.
     /// Target revisions tag results; consumers reject stale in-flight frames.
     /// Returning ends the decoder body. An unsupported adapter must report that

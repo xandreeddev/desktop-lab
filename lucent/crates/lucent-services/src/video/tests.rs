@@ -687,6 +687,7 @@ fn video_frame_threading_is_exclusive_to_live_h264() {
         DecodePurpose::Poster,
         DecodePurpose::Preview(WallpaperPreviewOptions::new(64, 48).unwrap()),
         DecodePurpose::LiveWallpaper,
+        DecodePurpose::NativePlanes,
     ] {
         for codec in [
             Id::H264,
@@ -698,7 +699,10 @@ fn video_frame_threading_is_exclusive_to_live_h264() {
             Id::GIF,
         ] {
             let config = purpose.threading(codec);
-            let parallel = matches!(purpose, DecodePurpose::LiveWallpaper) && codec == Id::H264;
+            let parallel = matches!(
+                purpose,
+                DecodePurpose::LiveWallpaper | DecodePurpose::NativePlanes
+            ) && codec == Id::H264;
             assert_eq!(config.kind, if parallel { Type::Frame } else { Type::None });
             assert_eq!(config.count, if parallel { 2 } else { 1 });
         }
@@ -2335,5 +2339,204 @@ fn video_native_reused_conversion_preserves_retained_frame_bytes_and_odd_row_str
                 "later conversion must not mutate a retained frame or copy row padding"
             );
         }
+    }
+}
+
+fn tagged_h264_fixture(root: &Path) -> PathBuf {
+    h264_fixture_with_options(
+        root,
+        "tagged-bt709.mp4",
+        &[
+            "-colorspace",
+            "bt709",
+            "-color_primaries",
+            "bt709",
+            "-color_trc",
+            "bt709",
+            "-color_range",
+            "tv",
+            "-chroma_sample_location",
+            "left",
+            "-vf",
+            "setsar=1",
+        ],
+    )
+}
+#[test]
+fn video_native_planes_real_port_drains_tagged_h264_eof_and_preserves_retained_pixels() {
+    let root = Directory::new();
+    let file = tagged_h264_fixture(&root.0);
+    let adapter = NativeVideoWallpapers {
+        state: root.0.join("store"),
+        library: root.0.clone(),
+    };
+    let asset = adapter
+        .prepare(&Wallpaper {
+            path: file.to_string_lossy().into(),
+            name: "Tagged fixture".into(),
+        })
+        .unwrap();
+    let mut retained = None;
+    let mut original = Vec::new();
+    let mut times = Vec::new();
+    adapter.play_native(
+        &asset,
+        NativePlaybackOptions {
+            looping: false,
+            ..Default::default()
+        },
+        &mut |value| {
+            let NativeMediaFrame::Yuv420 {
+                frame,
+                timestamp,
+                publication,
+            } = value.unwrap()
+            else {
+                panic!("explicit BT709 fixture fell back")
+            };
+            assert_eq!(frame.dimensions(), (64, 48));
+            assert_eq!(frame.byte_len(), 64 * 48 * 3 / 2);
+            assert_eq!(
+                publication.referenced_bytes + publication.copied_bytes,
+                frame.byte_len()
+            );
+            if retained.is_none() {
+                original = frame.planes().iter().map(|p| p.bytes().to_vec()).collect();
+                retained = Some(frame.clone());
+            }
+            times.push(timestamp);
+            true
+        },
+        Arc::new(Never),
+    );
+    assert_eq!(
+        times,
+        (0..8)
+            .map(|i| Duration::from_millis(i * 100))
+            .collect::<Vec<_>>()
+    );
+    drop(adapter);
+    for (plane, expected) in retained.unwrap().planes().iter().zip(original) {
+        assert_eq!(plane.bytes().as_ref(), expected);
+    }
+}
+#[test]
+fn video_native_planes_rewinds_one_session_without_rgba_scratch_and_honors_callback_cancel() {
+    ffmpeg::init().unwrap();
+    let root = Directory::new();
+    let file = tagged_h264_fixture(&root.0);
+    let mut session =
+        DecoderSession::open(&file, DecodePurpose::NativePlanes, Arc::new(Never)).unwrap();
+    let first_context = unsafe { session.decoder.as_ptr() };
+    for _ in 0..2 {
+        let mut times = Vec::new();
+        assert!(
+            session
+                .cycle_output(
+                    PlaybackOptions {
+                        looping: true,
+                        ..Default::default()
+                    },
+                    DecodePurpose::NativePlanes,
+                    &mut |value, revision| {
+                        assert!(revision.is_none());
+                        assert!(matches!(&value, NativeMediaFrame::Yuv420 { .. }));
+                        times.push(value.timestamp());
+                        true
+                    },
+                    &Never,
+                    None
+                )
+                .unwrap()
+        );
+        assert_eq!(times.len(), 8);
+        assert_eq!(times[0], Duration::ZERO);
+        assert!(
+            session.converter.is_none(),
+            "admitted native frames must never allocate the RGBA converter/pool"
+        );
+        assert!(session.rewind(&Never));
+        assert_eq!(unsafe { session.decoder.as_ptr() }, first_context);
+    }
+    let mut count = 0;
+    assert!(
+        !session
+            .cycle_output(
+                PlaybackOptions::default(),
+                DecodePurpose::NativePlanes,
+                &mut |value, _| {
+                    assert!(matches!(&value, NativeMediaFrame::Yuv420 { .. }));
+                    count += 1;
+                    false
+                },
+                &Never,
+                None
+            )
+            .unwrap()
+    );
+    assert_eq!(count, 1);
+    assert!(session.converter.is_none());
+    let stopped = Stop(AtomicBool::new(true));
+    let mut called = false;
+    decode_output(
+        &file,
+        PlaybackOptions::default(),
+        DecodePurpose::NativePlanes,
+        &mut |_, _| {
+            called = true;
+            false
+        },
+        Arc::new(stopped),
+        None,
+    )
+    .unwrap();
+    assert!(!called);
+}
+#[test]
+fn video_native_planes_untagged_or_alpha_fallback_preserves_existing_rgba_bytes_and_timing() {
+    for extension in ["mp4", "gif"] {
+        let root = Directory::new();
+        let file = fixture(&root.0, extension);
+        let adapter = NativeVideoWallpapers {
+            state: root.0.join("store"),
+            library: root.0.clone(),
+        };
+        let asset = adapter
+            .prepare(&Wallpaper {
+                path: file.to_string_lossy().into(),
+                name: "Fallback fixture".into(),
+            })
+            .unwrap();
+        let mut normal = Vec::new();
+        adapter.play(
+            &asset,
+            PlaybackOptions {
+                looping: false,
+                ..Default::default()
+            },
+            &mut |value| {
+                normal.push(frame_snapshot(value.unwrap()));
+                true
+            },
+            Arc::new(Never),
+        );
+        let mut native = Vec::new();
+        adapter.play_native(
+            &asset,
+            NativePlaybackOptions {
+                looping: false,
+                ..Default::default()
+            },
+            &mut |value| {
+                let NativeMediaFrame::Rgba(frame) = value.unwrap() else {
+                    panic!("unsupported metadata/alpha must retain RGBA")
+                };
+                native.push(frame_snapshot(frame));
+                true
+            },
+            Arc::new(Never),
+        );
+        assert_eq!(native, normal);
+        assert_eq!(native.len(), 3);
     }
 }

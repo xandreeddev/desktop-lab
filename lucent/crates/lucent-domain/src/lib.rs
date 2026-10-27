@@ -12,6 +12,8 @@ mod ports;
 pub use ports::*;
 mod media;
 pub use media::*;
+mod native_video;
+pub use native_video::*;
 
 mod audio;
 pub use audio::*;

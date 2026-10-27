@@ -37,6 +37,8 @@ pub use image::{
     ImageData, ImageError, ImageFormat, ImageLevel, ImageLifetime, ImageStream, reduce_alpha,
     reduce_premultiplied,
 };
+/// Neutral immutable video planes; codecs and GPU resources stay in adapters.
+pub use lucent_video_frame as video_frame;
 use std::{
     collections::BTreeSet,
     sync::{Arc, Condvar, Mutex},
