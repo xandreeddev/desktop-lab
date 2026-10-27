@@ -11,6 +11,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 KINDS = ('dependencies', 'build-dependencies', 'dev-dependencies')
+NEUTRAL_VIDEO = 'lucent-video-frame'
 
 
 def dependency_names(manifest, workspace):
@@ -50,7 +51,69 @@ def sources(directory, excluded=()):
     return [p for p in directory.rglob('*.rs') if p.relative_to(directory).as_posix() not in excluded]
 
 
+def neutral_video_violations(manifest, workspace, graph, texts, automatic_build=False):
+    """An explicit pure-value role, not an exemption for arbitrary libraries.
+
+    The dependency resolver covers aliases and every target/build/dev table.
+    Source checks are deliberately conservative lexical guards, not a Rust
+    semantic analyzer. This DTO crate needs neither platform imports nor a
+    build/proc-macro execution hook.
+    """
+    errors = []
+    if set(dependency_names(manifest, workspace)) != {'bytes'}:
+        errors.append('only_external_bytes_dependency')
+    if reachable(graph, NEUTRAL_VIDEO):
+        errors.append('no_indirect_workspace_dependencies')
+    if automatic_build or manifest['package'].get('build', False) is not False:
+        errors.append('no_build_script')
+    if manifest.get('lib', {}).get('proc-macro', False):
+        errors.append('no_proc_macro')
+    std_modules = r'(?:process|fs|net|os|env|thread|io)'
+    patterns = (
+        r'\bstd\s*::\s*' + std_modules + r'\b',
+        r'\buse\s+std\s*::\s*\{[^;]*\b' + std_modules + r'\b',
+        r'\b(?:use|extern\s+crate)\s+std\s+as\b',
+        r'\blucent_(?!video_frame\b)\w+\b',
+        r'\b(?:wgpu|wayland_client|smithay_client_toolkit|ffmpeg_next|libc|gtk|gtk4|qml|qt_core)\b',
+    )
+    for name, text in texts.items():
+        if any(re.search(pattern, text) for pattern in patterns):
+            errors.append('no_platform_render_client_service_import:' + name)
+    return errors
+
+
 class BoundaryGuardFixtures(unittest.TestCase):
+    def test_neutral_video_role_accepts_only_owned_value_bytes(self):
+        manifest = tomllib.loads('[package]\nname="lucent-video-frame"\n[dependencies]\nbytes="1"')
+        graph = {NEUTRAL_VIDEO: {'bytes'}}
+        self.assertEqual(neutral_video_violations(manifest, {}, graph,
+            {'src/lib.rs': 'pub use bytes::Bytes; use std::fmt;'}), [])
+
+    def test_neutral_video_role_rejects_platform_aliases_in_every_dependency_kind_and_target(self):
+        workspace = {'dependencies': {'hidden': {'package': 'lucent-services', 'path': '../lucent-services'}}}
+        for scope in ('dependencies', 'build-dependencies', 'dev-dependencies',
+                      "target.'cfg(target_os = \"other\")'.dependencies",
+                      "target.'cfg(unix)'.build-dependencies", "target.'cfg(unix)'.dev-dependencies"):
+            with self.subTest(scope=scope):
+                manifest = tomllib.loads('[package]\nname="lucent-video-frame"\n'
+                    '[dependencies]\nbytes="1"\n' + ('hidden={workspace=true}\n' if scope == 'dependencies'
+                    else '[' + scope + ']\nhidden={workspace=true}\n'))
+                graph = {NEUTRAL_VIDEO: set(dependency_names(manifest, workspace)), 'lucent-services': set()}
+                self.assertIn('only_external_bytes_dependency',
+                              neutral_video_violations(manifest, workspace, graph, {'src/lib.rs': ''}))
+
+    def test_neutral_video_role_rejects_io_grouped_imports_build_hooks_and_hidden_workspace_bytes(self):
+        manifest = tomllib.loads('[package]\nname="lucent-video-frame"\n[dependencies]\nbytes="1"')
+        graph = {NEUTRAL_VIDEO: {'bytes'}}
+        for text in ('use std::fs;', 'use std::{sync::Arc, process::Command};',
+                     'use std as platform;', 'use lucent_render::Gpu;', 'use ffmpeg_next as codec;'):
+            with self.subTest(text=text):
+                self.assertTrue(neutral_video_violations(manifest, {}, graph, {'src/nested.rs': text}))
+        self.assertIn('no_build_script', neutral_video_violations(manifest, {}, graph, {}, automatic_build=True))
+        hooked = {**manifest, 'package': {**manifest['package'], 'build': '../platform.rs'}}
+        self.assertIn('no_build_script', neutral_video_violations(hooked, {}, graph, {}))
+        shadowed = {NEUTRAL_VIDEO: {'bytes'}, 'bytes': {'lucent-render'}, 'lucent-render': set()}
+        self.assertIn('no_indirect_workspace_dependencies', neutral_video_violations(manifest, {}, shadowed, {}))
     def test_resolves_renamed_workspace_target_build_and_dev_dependencies(self):
         workspace = tomllib.loads('''
 [dependencies]
@@ -100,17 +163,30 @@ class Boundaries(unittest.TestCase):
                 pattern = r'\s*::\s*'.join(map(re.escape, token.split('::')))
                 self.assertIsNone(re.search(pattern, text), f'{path.relative_to(ROOT)} imports {token}')
 
+    def assert_neutral_video_role(self):
+        directory = ROOT / 'lucent/crates' / NEUTRAL_VIDEO
+        manifest = tomllib.loads((directory / 'Cargo.toml').read_text())
+        workspace = tomllib.loads((ROOT / 'lucent/Cargo.toml').read_text())['workspace']
+        texts = {p.relative_to(directory).as_posix(): p.read_text() for p in sources(directory)}
+        self.assertEqual(neutral_video_violations(manifest, workspace, self.graph, texts,
+                                               automatic_build=(directory / 'build.rs').exists()), [])
+
+    def test_neutral_video_values_do_not_smuggle_platform_or_rendering_dependencies(self):
+        self.assert_neutral_video_role()
+
     def test_domain_and_usecases_do_not_depend_on_platform_or_rendering(self):
-        self.assertLessEqual(self.graph['lucent-domain'], {'serde', 'zeroize'})
+        self.assert_neutral_video_role()
+        self.assertLessEqual(self.graph['lucent-domain'], {'serde', 'zeroize', NEUTRAL_VIDEO})
         self.assertEqual(self.graph['lucent-usecases'], {'lucent-domain'})
         for crate in ('lucent-domain', 'lucent-usecases'):
             self.assert_no_platform_operations(sources(ROOT / 'lucent/crates' / crate / 'src'))
 
     def test_framework_has_no_indirect_client_service_or_design_dependencies(self):
+        self.assert_neutral_video_role()
         framework = {'lucent-api', 'lucent-ui', 'lucent-wayland', 'lucent-render'}
         for name in framework:
-            self.assertLessEqual(reachable(self.graph, name), framework, name)
-        self.assertEqual(reachable(self.graph, 'lucent-usecases'), {'lucent-domain'})
+            self.assertLessEqual(reachable(self.graph, name), framework | {NEUTRAL_VIDEO}, name)
+        self.assertEqual(reachable(self.graph, 'lucent-usecases'), {'lucent-domain', NEUTRAL_VIDEO})
 
     def test_component_policy_does_not_choose_production_adapters(self):
         self.assert_no_platform_operations(sources(ROOT / 'lucent/apps/lucent-desktop/src',
