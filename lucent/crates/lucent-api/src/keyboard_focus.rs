@@ -40,6 +40,9 @@ pub enum KeyboardFocusOutcome {
     /// Actual Enter was observed for the exact admitted native lifetime. This
     /// does not establish global compositor focus after later events.
     Focused(NativeSurfaceToken),
+    /// The native backend observed Enter, but its own temporary acquisition
+    /// teardown did not retain focus through its bounded synchronization.
+    NotRetained,
     Unavailable,
     Rejected,
     Retired,
@@ -89,7 +92,8 @@ impl<M: 'static> Effects<M> {
     /// behavior rather than holding a persistent pointer/keyboard restriction.
     ///
     /// Cancellation applies to the pending request only. Focused acknowledges
-    /// the exact native Enter, never merely a protocol commit, and does not
+    /// the exact native Enter retained through the backend's own bounded
+    /// acquisition teardown, never merely a protocol commit, and does not
     /// promise continued ownership: normal KeyboardFocus loss events remain
     /// authoritative. The client requests None when its intent ends. Immediate
     /// first-key and outside-click delivery require compositor integration tests;

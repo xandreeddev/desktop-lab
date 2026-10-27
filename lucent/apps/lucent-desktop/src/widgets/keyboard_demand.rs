@@ -85,6 +85,9 @@ impl Demand {
                     KeyboardFocusOutcome::Unavailable => {
                         Some("This compositor cannot focus widget controls")
                     }
+                    KeyboardFocusOutcome::NotRetained => {
+                        Some("The compositor did not retain widget keyboard focus")
+                    }
                     KeyboardFocusOutcome::Rejected => Some("The widget focus request was rejected"),
                     KeyboardFocusOutcome::Timeout => {
                         Some("The widget did not receive keyboard focus")
@@ -169,6 +172,7 @@ mod tests {
     fn every_request_failure_and_host_drop_cancel_owned_request() {
         for outcome in [
             KeyboardFocusOutcome::Unavailable,
+            KeyboardFocusOutcome::NotRetained,
             KeyboardFocusOutcome::Rejected,
             KeyboardFocusOutcome::Retired,
             KeyboardFocusOutcome::Superseded,
