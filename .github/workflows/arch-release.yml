@@ -1,14 +1,14 @@
-name: source-b2 Arch release
+name: keyboard-intent Arch release
 
 on:
   push:
-    branches: [ci/lucent-arch-release-b2]
+    branches: [ci/lucent-arch-release-focus]
 
 permissions:
   contents: read
 
 concurrency:
-  group: arch-release-b2-${{ github.ref }}
+  group: arch-release-focus-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -76,7 +76,7 @@ jobs:
       - name: Checkout exact reviewed application source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: b2f54551dfbe3744762e04b06cc9abcdfd167eaa
+          ref: ba5b8a51f960e07507520a77534d1eccbce9e40c
           path: source
           persist-credentials: false
           fetch-depth: 1
@@ -85,39 +85,52 @@ jobs:
         timeout-minutes: 10
         run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
 
-      - name: Run coherent source-b2 seventeen-stage release qualification
+      - name: Run seventeen-stage release qualification and fresh software Component Lab export
         timeout-minutes: 90
         run: |
           python3 tools/ci/arch_release.py --run \
             --source-directory "$GITHUB_WORKSPACE/source" \
-            --target-directory "$RUNNER_TEMP/lucent-target-b2" \
-            --output "$RUNNER_TEMP/arch-artifacts/lucent-b2" \
-            --dependency-evidence "$RUNNER_TEMP/arch-dependencies"
+            --target-directory "$RUNNER_TEMP/lucent-target-focus" \
+            --output "$RUNNER_TEMP/arch-artifacts/lucent-focus" \
+            --dependency-evidence "$RUNNER_TEMP/arch-dependencies" \
+            --envelope "$RUNNER_TEMP/arch-release-envelope"
 
       - name: Retain coherent archive and portable receipt
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: lucent-arch-b2-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/arch-artifacts/lucent-b2.tar.zst
-            ${{ runner.temp }}/arch-artifacts/artifact-receipt.json
+          name: lucent-arch-focus-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/arch-release-envelope
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
           overwrite: false
 
+      - name: Collect bounded diagnostics into one container-native directory
+        if: failure()
+        run: |
+          diagnostics="$RUNNER_TEMP/arch-diagnostics"
+          mkdir -m 700 "$diagnostics"
+          for task_file in \
+            "$RUNNER_TEMP/arch-artifacts/lucent-focus/build.json" \
+            "$RUNNER_TEMP/arch-artifacts/lucent-focus/logs/"*.log \
+            "$RUNNER_TEMP/arch-artifacts/lucent-focus/dependency-fetch.log" \
+            "$RUNNER_TEMP/arch-dependencies/download.log" \
+            "$RUNNER_TEMP/arch-dependencies/install.log"; do
+            if test -f "$task_file" && ! test -L "$task_file"; then
+              task_bytes=$(stat --format=%s -- "$task_file")
+              if test "$task_bytes" -le 16777216; then
+                cp -- "$task_file" "$diagnostics/${task_file##*/}"
+              fi
+            fi
+          done
+
       - name: Retain bounded build diagnostics when qualification fails
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: lucent-arch-b2-failed-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/arch-artifacts/lucent-b2/build.json
-            ${{ runner.temp }}/arch-artifacts/lucent-b2/logs/*.log
-            ${{ runner.temp }}/arch-artifacts/lucent-b2/dependency-fetch.log
-            ${{ runner.temp }}/arch-dependencies/download.log
-            ${{ runner.temp }}/arch-dependencies/install.log
+          name: lucent-arch-focus-failed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/arch-diagnostics
           if-no-files-found: warn
           retention-days: 1
           overwrite: false

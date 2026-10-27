@@ -9,7 +9,7 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import shutil
 import subprocess
@@ -148,6 +148,88 @@ def ffmpeg_headers(include=Path('/usr/include')):
     return rows
 
 
+def admit_memory():
+    samples = []
+    for _ in range(3):
+        sample = resource_snapshot()
+        require(sample['effective_available_mib'] >= PROFILE['admission_floor_mib'],
+                'fresh_remote_4500MiB_admission_required')
+        samples.append(sample['effective_available_mib'])
+        time.sleep(1)
+    return samples
+
+
+def regular_member(root, name):
+    require(isinstance(name, str), 'canonical_relative_member_required')
+    member = PurePosixPath(name)
+    require(member.as_posix() == name and not member.is_absolute()
+            and member.parts and '..' not in member.parts, 'canonical_relative_member_required')
+    path = root / name
+    require(path.resolve(strict=True) == path and path.is_file() and not path.is_symlink(),
+            'regular_member_required')
+    return path
+
+
+def component_lab_evidence(source, catalog, summary, log_text, lab):
+    expected = PROFILE['component_lab']
+    require(summary == {'stories': expected['stories'], 'captures': expected['captures'],
+                       'palettes': expected['palettes'], 'source_commit': PROFILE['source_commit'],
+                       'rendering_inputs': expected['producer_inputs']}, 'actual_complete_component_lab_matrix_required')
+    path = regular_member(catalog, 'manifest.json')
+    require(path.stat().st_size <= 4 * 1024**2, 'bounded_component_lab_manifest_required')
+    manifest = json.loads(path.read_text())
+    renderer = manifest['renderer']
+    require(renderer['engine'] == 'lucent-render' and renderer['scope'] == expected['renderer_scope']
+            and renderer['source_commit'] == PROFILE['source_commit'], 'new_component_lab_source_and_renderer_required')
+    require(len(manifest['stories']) == expected['stories'] and len(manifest['palettes']) == expected['palettes'],
+            'complete_component_lab_story_palette_inventory_required')
+    inputs = renderer['inputs']
+    require(isinstance(inputs, dict) and len(inputs) == expected['producer_inputs'], 'complete_current_producer_inventory_required')
+    for name, sha in inputs.items():
+        require(re.fullmatch('[0-9a-f]{64}', sha) and digest(regular_member(source, name)) == sha,
+                'actual_current_component_producer_fingerprint_required')
+    images = {}
+    for story in manifest['stories']:
+        for variant in story['variants']:
+            image = variant['image']
+            name = image['path']
+            require(name.startswith('images/') and name.endswith('.png') and name not in images,
+                    'unique_component_capture_required')
+            png = regular_member(catalog, name)
+            require(0 < png.stat().st_size <= 16 * 1024**2 and digest(png) == image['sha256'],
+                    'actual_component_capture_hash_required')
+            images[name] = {'bytes': png.stat().st_size, 'sha256': image['sha256']}
+    actual = {str(path.relative_to(catalog)) for path in (catalog / 'images').rglob('*') if path.is_file()}
+    require(len(images) == expected['captures'] and actual == set(images), 'exact_complete_component_capture_inventory_required')
+    adapters = [line for line in log_text.splitlines() if line.startswith('lucent GPU: ')]
+    require(len(adapters) == 1 and len(adapters[0]) <= 4096 and 'llvmpipe' in adapters[0].lower()
+            and 'backend: Vulkan' in adapters[0] and 'device_type: Cpu' in adapters[0],
+            'actual_component_lab_software_Vulkan_adapter_required')
+    return {'source_commit': PROFILE['source_commit'], 'source_tree': PROFILE['source_tree'],
+            'catalog_path': 'component-lab', 'manifest_path': 'component-lab/manifest.json',
+            'manifest_sha256': digest(path), 'standalone_lab_sha256': lab['sha256'],
+            'producer_inputs': inputs, 'captures': images, 'matrix': summary,
+            'adapter_description': adapters[0].removeprefix('lucent GPU: '),
+            'build_location': 'github-hosted-Arch-container', 'software_Vulkan': True,
+            'Wayland_compositor_tested': False, 'VM_native_accepted': False, 'performance_accepted': False,
+            'cross_driver_pixel_identity_required': False,
+            'scope': 'Fresh headless CPU software Vulkan capture from this actual source and Lab binary; not a Wayland or physical-GPU acceptance report.'}
+
+
+def envelope(package, receipt, destination):
+    require(destination.is_absolute() and not destination.exists()
+            and destination.parent.resolve(strict=True) == destination.parent,
+            'fresh_canonical_envelope_directory_required')
+    require(package.is_file() and not package.is_symlink() and package.name == receipt['archive']
+            and digest(package) == receipt['archive_sha256'], 'actual_archive_for_envelope_required')
+    destination.mkdir(mode=0o700)
+    shutil.copy2(package, destination / package.name)
+    (destination / 'artifact-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+    require(digest(destination / package.name) == receipt['archive_sha256']
+            and {path.name for path in destination.iterdir()} == {package.name, 'artifact-receipt.json'},
+            'exact_two_file_success_envelope_required')
+
+
 def build(args):
     source, target, out = args.source_directory, args.target_directory, args.output
     context = hosted_context(os.environ)
@@ -158,18 +240,15 @@ def build(args):
     for path in (Path(__file__), PROFILE_PATH):
         committed = subprocess.check_output(['git', 'show', context['GITHUB_SHA'] + ':' + str(path.relative_to(tools))], cwd=tools, timeout=30)
         require(hashlib.sha256(committed).hexdigest() == digest(path), 'committed_workflow_tools_required')
-    require(all(path.is_absolute() for path in (target, out)) and not target.exists() and not out.exists()
-            and not target.is_relative_to(source) and not out.is_relative_to(source), 'fresh_separate_target_and_archive_required')
+    require(all(path.is_absolute() for path in (target, out, args.envelope))
+            and not target.exists() and not out.exists() and not args.envelope.exists()
+            and all(not path.is_relative_to(source) for path in (target, out, args.envelope))
+            and not args.envelope.is_relative_to(out), 'fresh_separate_target_and_archive_required')
     require(not any(name in os.environ for name in ('RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'RUSTC_WRAPPER',
                 'RUSTC_WORKSPACE_WRAPPER', 'CARGO_BUILD_TARGET')) and not any(
                 name.startswith(('CARGO_PROFILE_', 'CARGO_TARGET_')) and name != 'CARGO_TARGET_DIR' for name in os.environ),
             'unreviewed_Cargo_overrides_forbidden')
-    samples = []
-    for _ in range(3):
-        sample = resource_snapshot()
-        require(sample['effective_available_mib'] >= PROFILE['admission_floor_mib'], 'fresh_remote_4500MiB_admission_required')
-        samples.append(sample['effective_available_mib'])
-        time.sleep(1)
+    samples = admit_memory()
     budget = resource_snapshot()
     require(shutil.disk_usage(out.parent).free >= 6 * 1024**3, 'remote_disk_capacity_required')
     out.mkdir(mode=0o700)
@@ -177,6 +256,11 @@ def build(args):
     env = os.environ.copy()
     env.update(CARGO_TARGET_DIR=str(target), CARGO_BUILD_JOBS=str(PROFILE['cpu_limit']), CARGO_INCREMENTAL='0',
                CARGO_TERM_COLOR='never', LC_ALL='C')
+    runtime = out.parent / 'lucent-focus-headless-runtime'
+    runtime.mkdir(mode=0o700)
+    env['XDG_RUNTIME_DIR'] = str(runtime)
+    for name in ('WAYLAND_DISPLAY', 'DISPLAY', 'XDG_ACTIVATION_TOKEN', 'DESKTOP_STARTUP_ID'):
+        env.pop(name, None)
     version = output(['rustc', '--version', '--verbose'], source, env)
     require('release: ' + PROFILE['rust_release'] + '\n' in version + '\n'
             and 'commit-hash: ' + PROFILE['rust_commit'] + '\n' in version + '\n'
@@ -201,6 +285,9 @@ def build(args):
         shutil.copy2(Path('/usr/include') / name, destination)
     record = {'source_commit': PROFILE['source_commit'], 'source_tree': PROFILE['source_tree'],
         'baseline_manifest_sha256': PROFILE['baseline_manifest_sha256'], 'passed': False, 'steps': [],
+        'baseline_source_commit': PROFILE['baseline_source_commit'],
+        'baseline_manifest_kind': PROFILE['baseline_manifest_kind'],
+        'baseline_remote_raw_manifest_sha256': PROFILE['baseline_remote_raw_manifest_sha256'],
         'budget': budget, 'admission_available_mib': samples, 'source_working_tree_changed': False,
         'build_location': 'github-hosted-Arch-container', 'provenance': context,
         'container_image': PROFILE['container_image'], 'container_dated_tag': PROFILE['container_dated_tag'],
@@ -211,7 +298,7 @@ def build(args):
         'FFmpeg_public_header_sha256': headers,
         'FFmpeg_ABI_scope': 'Actual bindgen headers are archived for comparison. Same SONAME and function imports alone do not prove struct/enum/layout compatibility with older target headers.',
         'runtime_ABI_accepted': False, 'native_activated': False, 'accepted_main': False, 'vm_deployed': False,
-        'review_status': 'Source-b2 hosted build; native delivery and accepted runtime status are separate.',
+        'review_status': 'Pinned keyboard-intent hosted build; native delivery and accepted runtime status are separate.',
         'scope': PROFILE['scope']}
 
     def save():
@@ -272,8 +359,9 @@ def build(args):
         'lucent-session', 'lucent-polkit', 'international-text', 'application-intent', 'lucent-lab') for part in ['-p', p]]])
     run('allocation-tests', ['test', *RELEASE, '-p', 'lucent-render', '--lib', 'allocation::tests::', '--', '--nocapture', '--test-threads=1'], 3)
     run('video-allocation-example-tests', ['test', *RELEASE, '-p', 'lucent-services', '--example', 'video-allocation-observer', '--', '--nocapture', '--test-threads=1'], 14)
-    require(len(record['steps']) == 17 and sum(s.get('tests_passed', 0) for s in record['steps']) == 840,
-            'all17_stages_and840_actual_tests_required')
+    require(sum(PROFILE['expected_test_counts'].values()) == 880 and len(record['steps']) == 17
+            and sum(s.get('tests_passed', 0) for s in record['steps']) == 880,
+            'all17_stages_and880_actual_tests_required')
 
     def copy(original, relative, executable=False):
         destination = out / relative
@@ -298,6 +386,55 @@ def build(args):
     record['support_and_example_changes_from_baseline'] = changes
     record['standalone_lab'] = copy(target / 'release/lucent-lab', 'standalone-lab/lucent-lab', True)
     record['standalone_lab']['scope'] = 'Same-source standalone component client; no toolkit/runtime or native acceptance claim.'
+    licenses = {}
+    for name, expected in PROFILE['license_files'].items():
+        original = regular_member(source, name)
+        require(digest(original) == expected, 'pinned_license_source_required')
+        licenses[name] = copy(original, 'licenses/' + Path(name).name)
+    record['license_files'] = licenses
+
+    # Capture with this actual Lab while its compile-time source directory still
+    # exists. A copied/imported Lab cannot find those producers merely via cwd.
+    capture_samples = admit_memory()
+    exact_source(source)
+    catalog = out / 'component-lab'
+    export_log = out / 'logs/component-lab-export.log'
+    started = time.monotonic()
+    print(json.dumps({'phase': 'component-lab-export', 'source': PROFILE['source_commit']}), flush=True)
+    with export_log.open('x') as stream:
+        try:
+            export_code = subprocess.run([str(out / record['standalone_lab']['path']), '--render', str(catalog),
+                '--source-commit', PROFILE['source_commit']], cwd=source, env=env,
+                stdout=stream, stderr=subprocess.STDOUT,
+                timeout=PROFILE['component_lab']['export_timeout_seconds']).returncode
+        except subprocess.TimeoutExpired:
+            export_code = 124
+    capture_run = {'exit': export_code, 'seconds': time.monotonic() - started,
+                   'log_path': 'logs/' + export_log.name, 'log_sha256': digest(export_log),
+                   'admission_available_mib': capture_samples, 'supplementary_not_a_Rust_test_stage': True}
+    record['component_lab_export'] = capture_run
+    save()
+    require(export_code == 0 and export_log.stat().st_size <= 16 * 1024**2, 'actual_component_lab_export_required')
+    checker_log = out / 'logs/component-lab-check.log'
+    with checker_log.open('x') as stream:
+        check_code = subprocess.run(['python3', PROFILE['component_lab']['checker_source'], '--root', str(source),
+            '--catalog', str(catalog)], cwd=source, env=env, stdout=stream, stderr=subprocess.STDOUT,
+            timeout=PROFILE['component_lab']['checker_timeout_seconds']).returncode
+    require(check_code == 0 and checker_log.stat().st_size <= 1024**2, 'actual_component_lab_checker_required')
+    summary = json.loads(checker_log.read_text())
+    capture = component_lab_evidence(source, catalog, summary, export_log.read_text(), record['standalone_lab'])
+    capture.update(export=capture_run, checker={'exit': check_code, 'path': 'logs/' + checker_log.name,
+        'sha256': digest(checker_log), 'source_path': PROFILE['component_lab']['checker_source'],
+        'source_sha256': digest(source / PROFILE['component_lab']['checker_source'])},
+        software_Vulkan_ICD={'path': str(icds[0]), 'sha256': digest(icds[0])})
+    capture_path = out / 'component-lab-evidence.json'
+    capture_path.write_text(json.dumps(capture, indent=2) + '\n')
+    record['component_lab_export'] = {'path': capture_path.name, 'sha256': digest(capture_path),
+        'matrix': summary, 'manifest_sha256': capture['manifest_sha256'],
+        'standalone_lab_sha256': record['standalone_lab']['sha256'], 'build_location': record['build_location'],
+        'software_Vulkan': True, 'VM_native_accepted': False, 'Wayland_compositor_tested': False}
+    exact_source(source)
+    save()
     (out / 'abi/ELF').mkdir(parents=True, exist_ok=True)
     record['ELF_metadata'] = {}
     for name, item in {**binaries, 'lucent-lab': record['standalone_lab']}.items():
@@ -317,6 +454,10 @@ def build(args):
         'baseline_manifest_sha256': PROFILE['baseline_manifest_sha256'], 'binaries': binaries, 'support_files': support,
         'example_sources': examples, 'managed_executables': PROFILE['managed_executables'],
         'acceptance_executables': PROFILE['acceptance_executables'],
+        'license_files': licenses, 'component_lab_export': record['component_lab_export'],
+        'baseline_source_commit': PROFILE['baseline_source_commit'],
+        'baseline_manifest_kind': PROFILE['baseline_manifest_kind'],
+        'baseline_remote_raw_manifest_sha256': PROFILE['baseline_remote_raw_manifest_sha256'],
         'focused_local_gate': {'path': 'build.json', 'sha256': digest(out / 'build.json'),
                                'scope': 'Schema-compatible gate record; actual build_location is off-host, never local/systemd.'},
         'source_working_tree_changed': False, 'build_location': record['build_location'], 'provenance': context,
@@ -343,6 +484,7 @@ def build(args):
                'manifest_sha256': digest(out / 'manifest.json'), 'build_sha256': digest(out / 'build.json'),
                'runtime_ABI_accepted': False, 'native_activated': False, 'accepted_main': False}
     (out.parent / 'artifact-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+    envelope(package, receipt, args.envelope)
     print(json.dumps(receipt))
 
 
@@ -353,13 +495,15 @@ def main():
     parser.add_argument('--target-directory', type=Path)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--dependency-evidence', type=Path)
+    parser.add_argument('--envelope', type=Path)
     args = parser.parse_args()
     if not args.run:
         print(json.dumps({'prepared_only': True, 'actions': False, 'source_commit': PROFILE['source_commit'],
                           'planned_stages': 17, 'planned_tests': sum(PROFILE['expected_test_counts'].values()),
                           'image': PROFILE['container_image'], 'runtime_ABI_accepted': False, 'native_activated': False}))
         return 0
-    require(all(value is not None for value in (args.source_directory, args.target_directory, args.output, args.dependency_evidence)),
+    require(all(value is not None for value in (args.source_directory, args.target_directory, args.output,
+                args.dependency_evidence, args.envelope)),
             'explicit_hosted_build_paths_required')
     build(args)
     return 0

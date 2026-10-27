@@ -1,24 +1,24 @@
 {
-  "source_commit": "b2f54551dfbe3744762e04b06cc9abcdfd167eaa",
-  "source_tree": "a12a69db33aeaedf42bd9f66939556d626fa6ba9",
-  "baseline_manifest_sha256": "075b88c5adeb49de7f66ec330d0c6f9eeecf540cf928881a23572bccd4e77c10",
-  "baseline_source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
+  "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+  "source_tree": "7a0a016ae3b19462a14a564816251c22c531dbd7",
+  "baseline_manifest_sha256": "ba2a89b036ad00fde7fca82cce9a1647ab91247e2b59a90874bf87f587fb48b2",
+  "baseline_source_commit": "b2f54551dfbe3744762e04b06cc9abcdfd167eaa",
   "container_image": "docker.io/library/archlinux@sha256:2acfa2683d458b7803b7aa4ee3c139d2ba6922cd84666fcb7496a3a02fcc4c83",
   "container_dated_tag": "base-devel-20261018.0.612668",
   "rust_release": "1.99.0",
   "rust_commit": "b940084d7eb6a299eb4bfeb8e34901bc051e7ac4",
   "repository": "xandreeddev/desktop-lab",
   "actor": "xandreeddev",
-  "branch": "ci/lucent-arch-release-b2",
+  "branch": "ci/lucent-arch-release-focus",
   "cpu_limit": 3,
   "memory_max_bytes": 10737418240,
   "admission_floor_mib": 4500,
   "expected_test_counts": {
     "lucent-domain-tests": 34,
-    "lucent-api-tests": 82,
-    "lucent-ui-tests": 110,
-    "lucent-wayland-tests": 99,
-    "desktop-tests": 393,
+    "lucent-api-tests": 84,
+    "lucent-ui-tests": 121,
+    "lucent-wayland-tests": 115,
+    "desktop-tests": 404,
     "video-tests": 49,
     "application-adapter-tests": 46,
     "upload-pure-tests": 2,
@@ -29,7 +29,9 @@
   },
   "required_test_names": {
     "lucent-api-tests": [
-      "delegation_preserves_target_cancellation_and_one_typed_completion"
+      "delegation_preserves_target_cancellation_and_one_typed_completion",
+      "delegated_focus_request_retains_target_token_and_cancellation",
+      "native_tokens_identify_lifetimes_without_aliasing_replacements"
     ],
     "lucent-wayland-tests": [
       "cancelled_timed_out_and_abandoned_frames_remain_bounded_without_identity_reuse",
@@ -46,7 +48,23 @@
       "destroyed_proxy_and_reused_protocol_id_do_not_name_a_replacement",
       "old_leave_and_other_keyboard_events_cannot_erase_current_native_observation",
       "removed_keyboard_clears_only_client_observation_without_claiming_global_focus",
-      "focus_event_counts_become_unavailable_at_overflow_without_wrapping"
+      "focus_event_counts_become_unavailable_at_overflow_without_wrapping",
+      "a_leave_before_sync_is_not_retained_and_cannot_arm_late",
+      "already_owned_noop_excludes_control_promotion_and_pending_none",
+      "another_native_enter_before_sync_cannot_retain_the_previous_routing_address",
+      "automatic_role_axes_and_fractional_viewport_are_preserved_independently",
+      "cancellation_before_sync_dispatch_suppresses_completion",
+      "control_plan_keeps_presented_geometry_and_regions_after_another_image_retry",
+      "internal_grab_destroy_precedes_sync_and_adds_no_surface_or_frame_request",
+      "native_interaction_starts_inactive_without_discarding_component_focus",
+      "no_successful_image_cannot_authorize_a_control_commit",
+      "only_current_prepared_press_with_keyboard_capability_can_admit",
+      "owned_sync_teardown_retires_proxy_and_accepts_later_delete_id",
+      "queued_sync_done_completes_before_a_following_real_leave_in_one_dispatch_batch",
+      "queued_valid_done_survives_proxy_death_but_reused_ids_and_native_replacements_do_not_match",
+      "request_identifiers_never_wrap_or_reuse",
+      "secure_unsupported_missing_keyboard_and_unpresented_targets_do_not_acquire",
+      "withdrawing_keyboard_retains_integer_scale_and_full_input_region"
     ],
     "desktop-tests": [
       "changed_note_and_invalid_new_link_retire_waiting_release_and_checked_context",
@@ -60,7 +78,6 @@
       "toast_link_does_not_release_an_existing_unrelated_foreground_owner",
       "toast_pending_handoff_retires_when_another_panel_takes_foreground",
       "widget_keyboard_defaults_preserve_controls_and_exclude_passive_content",
-      "widget_keyboard_uses_every_merged_member_and_rechecks_after_hide",
       "widget_keyboard_keeps_edit_controls_available_without_bypassing_foreground",
       "widget_keyboard_every_foreground_panel_suppresses_the_legacy_host",
       "widget_keyboard_foreground_suppresses_every_connected_monitor_group",
@@ -69,7 +86,19 @@
       "widget_keyboard_history_suppression_spans_both_ack_orders_and_uri_dispatch",
       "widget_keyboard_cancelled_link_cannot_override_a_new_foreground_panel",
       "widget_keyboard_release_failure_keeps_history_suppression_and_skips_uri_dispatch",
-      "widget_keyboard_uri_adapter_failure_keeps_history_suppression"
+      "widget_keyboard_uri_adapter_failure_keeps_history_suppression",
+      "capability_and_foreground_close_do_not_create_keyboard_demand",
+      "demand_is_scoped_to_exact_output_and_member_group",
+      "every_request_failure_and_host_drop_cancel_owned_request",
+      "pending_demand_ignores_prior_leave_and_waits_for_exact_focus_ack",
+      "stale_acknowledgement_and_unrelated_native_loss_cannot_change_new_demand",
+      "widget_keyboard_delivered_first_notes_edit_keeps_intent_and_programmatic_controls_do_not_arm",
+      "widget_keyboard_foreground_cancels_queued_focus_ack_without_rearming_on_close",
+      "widget_keyboard_latest_output_press_replaces_owner_and_retired_route_cannot_rearm",
+      "widget_keyboard_loss_requires_acknowledged_exact_native_lifetime",
+      "widget_keyboard_named_output_transition_cancels_dormant_legacy_intent",
+      "widget_keyboard_unavailable_request_is_visible_and_never_leaves_eligibility_armed",
+      "widget_keyboard_uses_pressed_merged_member_and_rechecks_after_hide"
     ],
     "allocation-tests": [
       "disabled_snapshot_never_queries_the_backend",
@@ -91,6 +120,19 @@
       "optional_sdk_bridge_shares_opaque_storage_and_preserves_shared_alpha_owner",
       "stdout_failure_stops_after_joined_phase_without_allocating_next_watch",
       "unsupported_allocator_observation_is_explicit_and_never_polled_during_play"
+    ],
+    "lucent-ui-tests": [
+      "covered_target_and_rounded_clips_share_ordinary_press_selection",
+      "inactive_composition_has_no_caret_or_underlines_and_creates_no_idle_deadline",
+      "keyboard_activation_does_not_invent_a_physical_press",
+      "mapped_press_observer_preserves_typed_owner_and_button",
+      "multiline_caret_is_inactive_without_losing_ordinary_editor_hit_geometry",
+      "native_leave_hides_caret_and_outline_but_retains_logical_selection_and_scroll",
+      "nearest_press_observer_uses_pressed_hit_instead_of_previous_keyboard_focus",
+      "nested_press_observer_runs_once_and_never_expands_input_regions",
+      "offscreen_default_keeps_existing_active_focus_fixtures_explicit",
+      "popover_outside_dismissal_does_not_arm_underlying_observer",
+      "press_observer_precedes_text_selection_action"
     ]
   },
   "managed_executables": [
@@ -180,5 +222,21 @@
     "lucent/examples/application-intent/Cargo.toml": "d86b717aaad927544c2efd7c330355058a20496404e5ff7b241bfe8a5d8c86a7",
     "lucent/examples/application-intent/src/main.rs": "e550a0c287c586586579bc0f4b4152afa4206ca1e99ebbee00fecd2618552257"
   },
-  "scope": "Source-b2 coherent hosted Arch build only. Runtime ABI compatibility, delivery, native acceptance and performance are separate."
+  "scope": "Coherent hosted Arch release of the pinned keyboard-intent source, plus freshly rendered headless Component Lab captures. Actual software Vulkan only; runtime ABI, VM/native acceptance and performance remain separate.",
+  "baseline_manifest_kind": "localized-hosted-artifact-import",
+  "baseline_remote_raw_manifest_sha256": "9d9d11c4b24dccd2368461305c6c19417eccd546f65accf45b5925e49495310b",
+  "license_files": {
+    "lucent/crates/lucent-wayland/protocols/hyprland-focus-grab-v1.xml": "0bc60c14d27f9079e0d1d9d706f91e67ad7da585f3b7f34ff7186a376c0285b4"
+  },
+  "component_lab": {
+    "stories": 9,
+    "captures": 480,
+    "palettes": 5,
+    "producer_inputs": 121,
+    "export_timeout_seconds": 720,
+    "checker_timeout_seconds": 60,
+    "checker_source": "scripts/check-component-lab.py",
+    "renderer_scope": "offscreen-native",
+    "collection_scope": "github-hosted-Arch CPU software Vulkan, no Wayland compositor or VM"
+  }
 }
