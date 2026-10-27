@@ -25,27 +25,27 @@ class ArchReleaseEvidence(unittest.TestCase):
             self.assertEqual(release.main(), 0)
         value = json.loads(output.getvalue())
         self.assertFalse(value['actions'])
-        self.assertEqual(value['source_commit'], 'd77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb')
-        self.assertEqual((value['planned_stages'], value['planned_tests']), (17, 885))
+        self.assertEqual(value['source_commit'], '1c1dfae474929fab60d6c300326e6959d1fae77c')
+        self.assertEqual((value['planned_stages'], value['planned_tests']), (21, 952))
 
     def test_profile_preserves_nine_binary_and_support_example_rosters(self):
         profile = release.PROFILE
         self.assertEqual((len(profile['managed_executables']), len(profile['acceptance_executables']),
                           len(profile['support_files']), len(profile['example_sources'])), (6, 3, 29, 5))
-        self.assertEqual(sum(profile['expected_test_counts'].values()), 885)
+        self.assertEqual(sum(profile['expected_test_counts'].values()), 952)
         self.assertEqual(profile['expected_test_counts']['lucent-wayland-tests'], 120)
-        self.assertEqual(profile['expected_test_counts']['desktop-tests'], 404)
+        self.assertEqual(profile['expected_test_counts']['desktop-tests'], 414)
         self.assertEqual(len([name for name in profile['required_test_names']['desktop-tests']
-                              if name.startswith('widget_keyboard_')]), 17)
+                              if name.rsplit('::', 1)[-1].startswith('widget_keyboard_')]), 17)
         self.assertEqual(profile['rust_release'], '1.99.0')
-        self.assertEqual(profile['baseline_manifest_sha256'], '0e1291f46312057a6c9b349148868ad770b9b07c848fdd901ca4b01e32050b4d')
+        self.assertEqual(profile['baseline_manifest_sha256'], 'b25ac061d3fe334299f61d7d120d489d03975036ed477fc797caca4ba7ab0a06')
         self.assertEqual(profile['baseline_manifest_kind'], 'localized-hosted-artifact-import')
         self.assertNotEqual(profile['baseline_remote_raw_manifest_sha256'], profile['baseline_manifest_sha256'])
 
     def context(self):
         return dict(GITHUB_ACTIONS='true', GITHUB_REPOSITORY='xandreeddev/desktop-lab',
                     GITHUB_ACTOR='xandreeddev', GITHUB_TRIGGERING_ACTOR='xandreeddev',
-                    GITHUB_EVENT_NAME='push', GITHUB_REF='refs/heads/ci/lucent-arch-release-control-flush',
+                    GITHUB_EVENT_NAME='push', GITHUB_REF='refs/heads/ci/lucent-arch-release-video-focus',
                     GITHUB_SHA='a'*40, LUCENT_WORKFLOW_SHA='a'*40, GITHUB_RUN_ID='123',
                     GITHUB_RUN_ATTEMPT='1', LUCENT_CI_IMAGE=release.PROFILE['container_image'])
 
@@ -99,26 +99,26 @@ class ArchReleaseEvidence(unittest.TestCase):
 
     def test_summary_requires_actual_passed_names_and_exact_nonempty_count(self):
         text = 'test module::required ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0s\n'
-        value = release.test_summary(text, 1, ['required'], True)
+        value = release.test_summary(text, 1, ['module::required'], True)
         self.assertEqual(value['tests_passed'], 1)
-        self.assertEqual(value['required_test_names_verified'], ['required'])
+        self.assertEqual(value['required_test_names_verified'], ['module::required'])
         for changed in (text.replace('... ok', '... ignored'), text.replace('1 passed', '2 passed'),
                         text.replace('0 failed', '1 failed'), text + text):
             with self.assertRaises(RuntimeError):
-                release.test_summary(changed, 1, ['required'], True)
+                release.test_summary(changed, 1, ['module::required'], True)
 
     def test_nocapture_caught_panic_can_have_separate_final_ok(self):
         text = ('test module::required ... \nthread panicked as expected\nok\n'
                 'test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0s\n')
-        self.assertEqual(release.test_summary(text, 1, ['required'])['tests_passed'], 1)
+        self.assertEqual(release.test_summary(text, 1, ['module::required'])['tests_passed'], 1)
         with self.assertRaises(RuntimeError):
-            release.test_summary(text, 1, ['required'], True)
+            release.test_summary(text, 1, ['module::required'], True)
 
     def test_names_from_other_or_ignored_tests_cannot_satisfy_requirement(self):
         text = ('test module::required ... ignored\ntest module::other ... ok\n'
                 'test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0s\n')
         with self.assertRaisesRegex(RuntimeError, 'named'):
-            release.test_summary(text, 1, ['required'])
+            release.test_summary(text, 1, ['module::required'])
 
     def test_freshness_rejects_local_release_payload_but_keeps_registry_dependencies(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -155,29 +155,101 @@ class ArchReleaseEvidence(unittest.TestCase):
     def test_all_new_focus_gate_inventories_and_license_are_explicit(self):
         profile = release.PROFILE
         self.assertEqual((profile['expected_test_counts']['lucent-api-tests'],
-                          profile['expected_test_counts']['lucent-ui-tests']), (84, 121))
+                          profile['expected_test_counts']['lucent-ui-tests']), (86, 122))
         self.assertIn('queued_sync_done_completes_before_a_following_real_leave_in_one_dispatch_batch',
-                      profile['required_test_names']['lucent-wayland-tests'])
+                      {name.rsplit('::',1)[-1] for name in profile['required_test_names']['lucent-wayland-tests']})
         self.assertIn('native_interaction_starts_inactive_without_discarding_component_focus',
-                      profile['required_test_names']['lucent-wayland-tests'])
+                      {name.rsplit('::',1)[-1] for name in profile['required_test_names']['lucent-wayland-tests']})
         self.assertIn('widget_keyboard_unavailable_request_is_visible_and_never_leaves_eligibility_armed',
-                      profile['required_test_names']['desktop-tests'])
+                      {name.rsplit('::',1)[-1] for name in profile['required_test_names']['desktop-tests']})
         self.assertEqual(profile['license_files'], {'lucent/crates/lucent-wayland/protocols/hyprland-focus-grab-v1.xml':
                           '0bc60c14d27f9079e0d1d9d706f91e67ad7da585f3b7f34ff7186a376c0285b4'})
-        self.assertEqual((profile['component_lab']['captures'], profile['component_lab']['producer_inputs']), (480, 121))
+        self.assertEqual((profile['component_lab']['captures'], profile['component_lab']['producer_inputs']), (480, 134))
 
     def test_control_flush_regressions_all_require_individually_successful_log_records(self):
         selected = ['control_flush_attempts_success_once_without_an_ownership_receipt', 'control_flush_defers_would_block_without_retrying_or_waiting', 'control_flush_preserves_fatal_io_errors', 'control_flush_preserves_protocol_failure', 'control_flush_sends_complete_acquisition_before_peer_dispatch']
         required = release.PROFILE['required_test_names']['lucent-wayland-tests']
-        self.assertTrue(set(selected) <= set(required))
-        self.assertEqual(sum(len(v) for v in release.PROFILE['required_test_names'].values()), 99)
+        self.assertTrue(set(selected) <= {name.rsplit('::',1)[-1] for name in required})
+        self.assertEqual(sum(len(v) for v in release.PROFILE['required_test_names'].values()), 952)
         self.assertEqual(len(required), len(set(required)))
-        text = ''.join('test module::' + name + ' ... ok\n' for name in required)
+        text = ''.join('test ' + name + ' ... ok\n' for name in required)
         text += 'test result: ok. 120 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0s\n'
         self.assertEqual(release.test_summary(text, 120, required, True)['tests_passed'], 120)
         for name in selected:
             with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, 'named'):
                 release.test_summary(text.replace(name + ' ... ok', name + ' ... ignored'), 120, required, True)
+
+    def test_every_combined_stage_has_an_exact_full_name_inventory(self):
+        profile = release.PROFILE
+        self.assertEqual(len(profile['expected_stage_order']), 21)
+        self.assertEqual(len(set(profile['expected_stage_order'])), 21)
+        self.assertEqual((profile['expected_payload_origins'], profile['expected_memory_rows']), (45, 8))
+        self.assertEqual(profile['compiled_inventory_provenance']['inventory_artifact_id'], 12712792584)
+        for stage, count in profile['expected_test_counts'].items():
+            names = profile['required_test_names'][stage]
+            self.assertEqual(len(names), count)
+            self.assertEqual(len(set(names)), count)
+        self.assertEqual({stage: profile['expected_test_counts'][stage] for stage in (
+            'video-frame-tests', 'video-plane-vulkan-tests', 'video-scene-vulkan-tests',
+            'native-video-example-tests', 'video-tests', 'video-allocation-example-tests')}, {
+                'video-frame-tests': 7, 'video-plane-vulkan-tests': 3, 'video-scene-vulkan-tests': 3,
+                'native-video-example-tests': 1, 'video-tests': 77, 'video-allocation-example-tests': 21})
+        self.assertIn('lucent-video-frame', profile['expected_workspace_package_targets'])
+        self.assertEqual(len(profile['expected_workspace_package_targets']), 34)
+
+    def test_same_leaf_different_namespace_extra_or_duplicate_names_do_not_qualify(self):
+        summary = 'test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0s\n'
+        for prefix in ['test wrong::required ... ok\n',
+                       'test module::required ... ok\ntest module::required ... ok\n',
+                       'test module::required ... ok\ntest module::extra ... ok\n']:
+            with self.subTest(prefix=prefix), self.assertRaises(RuntimeError):
+                release.test_summary(prefix + summary, 1, ['module::required'])
+
+    def test_stage_completion_refuses_reordering_missing_or_relabelled_gates(self):
+        rows = [dict(name=name, exit=0, **({'tests_passed': release.PROFILE['expected_test_counts'][name]}
+                if name in release.PROFILE['expected_test_counts'] else {}))
+                for name in release.PROFILE['expected_stage_order']]
+        release.completed_stage_inventory(rows)
+        swapped = copy.deepcopy(rows); swapped[4], swapped[5] = swapped[5], swapped[4]
+        renamed = copy.deepcopy(rows); renamed[4]['name'] = 'unreviewed-gate'
+        failed = copy.deepcopy(rows); failed[4]['exit'] = 1
+        wrong_count = copy.deepcopy(rows); wrong_count[4]['tests_passed'] += 1
+        for changed in (rows[:-1], swapped, renamed, failed, wrong_count):
+            with self.assertRaisesRegex(RuntimeError, '21_stages'):
+                release.completed_stage_inventory(changed)
+
+    def test_workspace_inventory_requires_neutral_package_and_every_actual_target(self):
+        source = Path('/fixture/source')
+        metadata = {'workspace_members': ['neutral', 'app'], 'packages': [
+            {'id': 'neutral', 'name': 'lucent-video-frame', 'manifest_path': str(source/'lucent/crates/lucent-video-frame/Cargo.toml'),
+             'targets': [{'name': 'lucent_video_frame', 'kind': ['lib']}]},
+            {'id': 'app', 'name': 'app', 'manifest_path': str(source/'lucent/apps/app/Cargo.toml'),
+             'targets': [{'name': 'app', 'kind': ['bin']}, {'name': 'extra', 'kind': ['bin']}]}]}
+        expected = {'lucent-video-frame': ['lucent_video_frame'], 'app': ['app', 'extra']}
+        with patch.dict(release.PROFILE, expected_workspace_package_targets=expected):
+            packages, targets = release.workspace_inventory(metadata, source)
+            self.assertEqual(packages, ['app', 'lucent-video-frame'])
+            self.assertEqual(targets, ['app', 'extra', 'lucent_video_frame'])
+            missing = copy.deepcopy(metadata); missing['packages'].pop(0)
+            target = copy.deepcopy(metadata); target['packages'][1]['targets'].pop()
+            outside = copy.deepcopy(metadata); outside['packages'][0]['manifest_path'] = '/outside/Cargo.toml'
+            for changed in (missing, target, outside):
+                with self.assertRaises(RuntimeError):
+                    release.workspace_inventory(changed, source)
+
+    def test_exact_eight_memory_rows_preserve_admission_and_cleanup_observations(self):
+        phases = [('initial-admission', i) for i in range(3)] + [
+            ('target-cleanup-before', 0), ('target-cleanup-after', 0)] + [
+            ('component-lab-admission', i) for i in range(3)]
+        rows = [dict(phase=phase, sample_index=index, snapshot={'fixture': True}) for phase, index in phases]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'memory.log'
+            path.write_text(''.join(json.dumps(row)+'\n' for row in rows))
+            self.assertEqual(release.completed_memory_rows(path), 8)
+            for changed in (rows[:-1], rows + rows[:1], list(reversed(rows))):
+                path.write_text(''.join(json.dumps(row)+'\n' for row in changed))
+                with self.assertRaisesRegex(RuntimeError, 'eight'):
+                    release.completed_memory_rows(path)
 
     def test_success_envelope_is_exact_two_regular_root_files_and_refuses_reuse(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -203,7 +275,17 @@ class ArchReleaseEvidence(unittest.TestCase):
         self.assertIn('path: ${{ runner.temp }}/arch-diagnostics\n', workflow)
         self.assertNotIn('path: |', workflow)
         self.assertIn('--memory 10g --memory-swap 10g', workflow)
-        self.assertIn('ref: d77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb', workflow)
+        self.assertIn('ref: 1c1dfae474929fab60d6c300326e6959d1fae77c', workflow)
+
+    def test_only_the_dedicated_tools_push_skips_unrelated_standard_builds(self):
+        workflow = (ROOT/'.github/workflows/check.yml').read_text()
+        self.assertIn('branches-ignore: [ci/lucent-arch-release-video-focus]', workflow)
+        self.assertIn('  pull_request:', workflow)
+        self.assertNotIn('branches-ignore: [main]', workflow)
+        build = (ROOT/'ci/arch_release.py').read_text()
+        self.assertNotIn('stream_upload_cpu_stage_diagnostic_1080p', build)
+        self.assertIn("run('video-frame-tests'", build)
+        self.assertIn("run('native-video-example-tests'", build)
 
     def test_fresh_three_sample_admission_refuses_any_low_sample(self):
         with patch.object(release.time, 'sleep') as sleep:
@@ -234,7 +316,7 @@ class ArchReleaseEvidence(unittest.TestCase):
         protected = [root/name for name in ('source', 'output', 'envelope', 'cargo-home')]
         for path in protected:
             path.mkdir(); (path/'preserve').write_bytes(path.name.encode())
-        return temporary/'lucent-target-focus', temporary, protected
+        return temporary/'lucent-target-video-focus', temporary, protected
 
     def test_cleanup_removes_only_fresh_target_and_preserves_copies_and_registry(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -315,7 +397,8 @@ class ArchReleaseEvidence(unittest.TestCase):
                     'palettes': [{}], 'stories': [{'variants': [{'image': {'path': 'images/one.png',
                      'sha256': release.digest(png)}}]}]}
         (catalog/'manifest.json').write_text(json.dumps(manifest))
-        expected = dict(release.PROFILE['component_lab'], stories=1, captures=1, palettes=1, producer_inputs=1)
+        expected = dict(release.PROFILE['component_lab'], stories=1, captures=1, palettes=1, producer_inputs=1,
+                        producer_sha256=manifest['renderer']['inputs'].copy())
         return source, catalog, matrix, manifest, expected
 
     def test_component_export_records_current_producers_and_truthful_software_scope(self):
@@ -353,6 +436,16 @@ class ArchReleaseEvidence(unittest.TestCase):
                 (catalog/'images/extra.png').write_bytes(b'extra')
                 with self.assertRaisesRegex(RuntimeError, 'capture_inventory'):
                     release.component_lab_evidence(source, catalog, matrix, adapter, {'sha256': 'a'*64})
+
+    def test_component_export_refuses_replaced_producer_at_the_same_count(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source, catalog, matrix, manifest, expected = self.catalog_fixture(Path(directory))
+            (source/'other.rs').write_text('other actual source')
+            manifest['renderer']['inputs'] = {'other.rs': release.digest(source/'other.rs')}
+            (catalog/'manifest.json').write_text(json.dumps(manifest))
+            with patch.dict(release.PROFILE, component_lab=expected), self.assertRaisesRegex(RuntimeError, 'producer_inventory'):
+                release.component_lab_evidence(source, catalog, matrix,
+                    'lucent GPU: AdapterInfo { name: "llvmpipe", device_type: Cpu, backend: Vulkan }\n', {'sha256': 'a'*64})
 
     def test_component_export_rejects_native_gpu_claim_or_unbound_backend(self):
         with tempfile.TemporaryDirectory() as directory:

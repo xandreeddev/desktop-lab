@@ -1,5 +1,8 @@
 name: checks
-on: [push, pull_request]
+on:
+  push:
+    branches-ignore: [ci/lucent-arch-release-video-focus]
+  pull_request:
 permissions:
   contents: read
 concurrency:

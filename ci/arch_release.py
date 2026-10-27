@@ -99,11 +99,44 @@ def test_summary(text, expected, required=(), full=False):
         # With test-threads=1, nocapture output may sit between the name and
         # its standalone final ok (e.g. a deliberately caught panic).
         if re.search(r'^\s*ok\s*$', block, re.M):
-            seen.add(match[1].rsplit('::', 1)[-1])
-    require(set(required).issubset(seen), 'required_named_tests_must_actually_pass')
+            require(match[1] not in seen, 'duplicate_successful_test_names_forbidden')
+            seen.add(match[1])
+    require(required and len(required) == len(set(required)) == expected
+            and set(required) == seen, 'exact_required_named_tests_must_actually_pass')
     return {'tests_passed': expected, 'test_counts': dict(zip(
         ('passed', 'failed', 'ignored', 'measured', 'filtered_out'), map(int, summaries[0]))),
         'required_test_names_verified': list(required)}
+
+
+def workspace_inventory(metadata, source):
+    local = [p for p in metadata['packages'] if Path(p['manifest_path']).is_relative_to(source / 'lucent')]
+    require({p['id'] for p in local} == set(metadata['workspace_members']), 'complete_current_workspace_members_required')
+    actual = {p['name']: sorted(t['name'] for t in p['targets'] if 'custom-build' not in t['kind']) for p in local}
+    require(len(actual) == len(local) and actual == PROFILE['expected_workspace_package_targets'],
+            'exact_compiled_workspace_package_targets_required')
+    return sorted(actual), sorted({name for names in actual.values() for name in names})
+
+
+def completed_stage_inventory(rows):
+    counts = PROFILE['expected_test_counts']
+    require(len(PROFILE['expected_stage_order']) == len(set(PROFILE['expected_stage_order'])) == 21
+            and sum(counts.values()) == PROFILE['expected_targeted_test_total'] == 952
+            and [row['name'] for row in rows] == PROFILE['expected_stage_order']
+            and all(row['exit'] == 0 for row in rows)
+            and all(row.get('tests_passed') == counts[row['name']] for row in rows if row['name'] in counts)
+            and sum(row.get('tests_passed', 0) for row in rows) == 952,
+            'exact21_stages_and952_actual_tests_required')
+
+
+def completed_memory_rows(path):
+    rows = [json.loads(line) for line in path.read_text().splitlines()]
+    expected = [('initial-admission', i) for i in range(3)] + [
+        ('target-cleanup-before', 0), ('target-cleanup-after', 0)] + [
+        ('component-lab-admission', i) for i in range(3)]
+    require(len(rows) == PROFILE['expected_memory_rows'] == 8
+            and [(row['phase'], row['sample_index']) for row in rows] == expected,
+            'exact_eight_actual_memory_observations_required')
+    return len(rows)
 
 
 def release_freshness(target, packages, targets):
@@ -178,7 +211,7 @@ class PrivateCargoTarget:
     def __init__(self, target, runner_temp, protected):
         require(shutil.rmtree.avoids_symlink_attacks and target.is_absolute()
                 and runner_temp.is_absolute() and runner_temp.resolve(strict=True) == runner_temp
-                and target == runner_temp / 'lucent-target-focus'
+                and target == runner_temp / 'lucent-target-video-focus'
                 and not os.path.lexists(target)
                 and all(not target.is_relative_to(path) and not path.is_relative_to(target) for path in protected),
                 'fresh_exact_private_Cargo_target_required')
@@ -250,7 +283,8 @@ def component_lab_evidence(source, catalog, summary, log_text, lab):
     require(len(manifest['stories']) == expected['stories'] and len(manifest['palettes']) == expected['palettes'],
             'complete_component_lab_story_palette_inventory_required')
     inputs = renderer['inputs']
-    require(isinstance(inputs, dict) and len(inputs) == expected['producer_inputs'], 'complete_current_producer_inventory_required')
+    require(isinstance(inputs, dict) and len(inputs) == expected['producer_inputs']
+            and inputs == expected['producer_sha256'], 'complete_current_producer_inventory_required')
     for name, sha in inputs.items():
         require(re.fullmatch('[0-9a-f]{64}', sha) and digest(regular_member(source, name)) == sha,
                 'actual_current_component_producer_fingerprint_required')
@@ -337,7 +371,7 @@ def build(args):
     env = os.environ.copy()
     env.update(CARGO_TARGET_DIR=str(target), CARGO_BUILD_JOBS=str(PROFILE['cpu_limit']), CARGO_INCREMENTAL='0',
                CARGO_TERM_COLOR='never', LC_ALL='C')
-    runtime = out.parent / 'lucent-focus-headless-runtime'
+    runtime = out.parent / 'lucent-video-focus-headless-runtime'
     runtime.mkdir(mode=0o700)
     env['XDG_RUNTIME_DIR'] = str(runtime)
     for name in ('WAYLAND_DISPLAY', 'DISPLAY', 'XDG_ACTIVATION_TOKEN', 'DESKTOP_STARTUP_ID'):
@@ -380,7 +414,7 @@ def build(args):
         'FFmpeg_public_header_sha256': headers,
         'FFmpeg_ABI_scope': 'Actual bindgen headers are archived for comparison. Same SONAME and function imports alone do not prove struct/enum/layout compatibility with older target headers.',
         'runtime_ABI_accepted': False, 'native_activated': False, 'accepted_main': False, 'vm_deployed': False,
-        'review_status': 'Pinned keyboard-intent hosted build; native delivery and accepted runtime status are separate.',
+        'review_status': 'Pinned combined native video/focus hosted build; native delivery, quality, performance and accepted runtime status are separate.',
         'scope': PROFILE['scope']}
 
     def save():
@@ -413,10 +447,7 @@ def build(args):
     record['dependency_fetch_sha256'] = digest(out / 'dependency-fetch.log')
     run('fmt', ['fmt', *MANIFEST, '--all', '--check'])
     metadata = json.loads(output(['cargo', 'metadata', *MANIFEST, '--offline', '--locked', '--no-deps', '--format-version', '1'], source, env, 60))
-    local = [p for p in metadata['packages'] if Path(p['manifest_path']).is_relative_to(source / 'lucent')]
-    packages = sorted({p['name'] for p in local})
-    targets = sorted({t['name'] for p in local for t in p['targets'] if 'custom-build' not in t['kind']})
-    require(len(packages) >= 20 and targets, 'complete_workspace_inventory_required')
+    packages, targets = workspace_inventory(metadata, source)
     record['cleaned_workspace_packages'] = packages
     clean = ['clean', *MANIFEST, '--offline', '--locked', *[part for p in packages for part in ['-p', p]]]
     run('clean-local-dev', [*clean, '--profile', 'dev'])
@@ -425,25 +456,28 @@ def build(args):
     save()
     run('workspace-clippy', ['clippy', *RELEASE, '--workspace', '--all-targets', '--', '-D', 'warnings'])
     counts = PROFILE['expected_test_counts']
+    run('video-frame-tests', ['test', *RELEASE, '-p', 'lucent-video-frame', '--lib', '--', '--nocapture', '--test-threads=1'], counts['video-frame-tests'])
     for package in ('lucent-domain', 'lucent-api', 'lucent-ui', 'lucent-wayland'):
         run(package + '-tests', ['test', *RELEASE, '-p', package, '--lib', '--', '--nocapture', '--test-threads=1'], counts[package + '-tests'])
     run('desktop-tests', ['test', *RELEASE, '-p', 'lucent-desktop', '--bin', 'lucent-desktop', '--', '--nocapture', '--test-threads=1'], counts['desktop-tests'])
     for gate, selected in (('video-tests', 'video::'), ('application-adapter-tests', 'applications::')):
         run(gate, ['test', *RELEASE, '-p', 'lucent-services', '--lib', selected, '--', '--nocapture', '--test-threads=1'], counts[gate])
     render = ['test', *RELEASE, '-p', 'lucent-render', '--lib', 'stream_upload::tests::']
-    run('upload-pure-tests', [*render, '--', '--skip', 'stream_upload_cpu_stage_diagnostic_1080p', '--show-output', '--test-threads=1'], 2)
-    run('upload-vulkan-tests', [*render, '--', '--ignored', '--skip', 'stream_upload_cpu_stage_diagnostic_1080p', '--show-output', '--test-threads=1'], 7)
+    run('upload-pure-tests', [*render, '--', '--show-output', '--test-threads=1'], counts['upload-pure-tests'])
+    run('upload-vulkan-tests', [*render, '--', '--ignored', '--show-output', '--test-threads=1'], counts['upload-vulkan-tests'])
     record['vulkan_upload_tests'] = 'seven_actual_remote_software_driver_checks_passed'
+    for gate, selected in [('video-plane-vulkan-tests', 'video_planes::tests::video_planes_gpu_'),
+                           ('video-scene-vulkan-tests', 'video_scene::tests::video_scene_gpu_')]:
+        run(gate, ['test', *RELEASE, '-p', 'lucent-render', '--lib', selected, '--', '--ignored', '--nocapture', '--test-threads=1'], counts[gate])
     run('desktop-bar-pixels-tests', ['test', *RELEASE, '-p', 'lucent-desktop', '--bin', 'lucent-desktop',
-        'bar_handoff_carriers_keep_identical_pixels', '--', '--ignored', '--nocapture', '--test-threads=1'], 1)
+        'bar_handoff_carriers_keep_identical_pixels', '--', '--ignored', '--nocapture', '--test-threads=1'], counts['desktop-bar-pixels-tests'])
     record['bar_pixels_tests'] = 'one_actual_remote_software_driver_check_passed'
     run('release', ['build', *RELEASE, *[part for p in ('lucent-desktop', 'lucent-cli', 'lucent-menu',
         'lucent-session', 'lucent-polkit', 'international-text', 'application-intent', 'lucent-lab') for part in ['-p', p]]])
-    run('allocation-tests', ['test', *RELEASE, '-p', 'lucent-render', '--lib', 'allocation::tests::', '--', '--nocapture', '--test-threads=1'], 3)
-    run('video-allocation-example-tests', ['test', *RELEASE, '-p', 'lucent-services', '--example', 'video-allocation-observer', '--', '--nocapture', '--test-threads=1'], 14)
-    require(sum(PROFILE['expected_test_counts'].values()) == 885 and len(record['steps']) == 17
-            and sum(s.get('tests_passed', 0) for s in record['steps']) == 885,
-            'all17_stages_and885_actual_tests_required')
+    run('allocation-tests', ['test', *RELEASE, '-p', 'lucent-render', '--lib', 'allocation::tests::', '--', '--nocapture', '--test-threads=1'], counts['allocation-tests'])
+    run('video-allocation-example-tests', ['test', *RELEASE, '-p', 'lucent-services', '--example', 'video-allocation-observer', '--', '--nocapture', '--test-threads=1'], counts['video-allocation-example-tests'])
+    run('native-video-example-tests', ['test', *RELEASE, '-p', 'native-video-planes', '--bin', 'native-video-planes', '--', '--nocapture', '--test-threads=1'], counts['native-video-example-tests'])
+    completed_stage_inventory(record['steps'])
 
     def copy(original, relative, executable=False):
         destination = out / relative
@@ -478,6 +512,7 @@ def build(args):
     # Every release payload is already hash-copied. The remaining Cargo target
     # belongs only to this job and is no longer needed for export or packaging.
     copied = [*binaries.values(), *support.values(), *examples.values(), record['standalone_lab'], *licenses.values()]
+    require(len(copied) == PROFILE['expected_payload_origins'] == 45, 'exact45_release_payload_origins_required')
     copies_before = verify_copies(out, copied)
     before_cleanup = resource_snapshot()
     memory_sample('target-cleanup-before', 0, before_cleanup)
@@ -544,6 +579,7 @@ def build(args):
     require(ffmpeg_headers() == headers and output(['pacman', '-Q']) ==
             (args.dependency_evidence / 'installed-packages.txt').read_text().strip(),
             'build_headers_and_package_transaction_must_stay_unchanged')
+    record['memory_observation_rows'] = completed_memory_rows(memory_log)
     record['passed'] = True
     exact_source(source)
     save()
@@ -596,7 +632,7 @@ def main():
     args = parser.parse_args()
     if not args.run:
         print(json.dumps({'prepared_only': True, 'actions': False, 'source_commit': PROFILE['source_commit'],
-                          'planned_stages': 17, 'planned_tests': sum(PROFILE['expected_test_counts'].values()),
+                          'planned_stages': len(PROFILE['expected_stage_order']), 'planned_tests': sum(PROFILE['expected_test_counts'].values()),
                           'image': PROFILE['container_image'], 'runtime_ABI_accepted': False, 'native_activated': False}))
         return 0
     require(all(value is not None for value in (args.source_directory, args.target_directory, args.output,
