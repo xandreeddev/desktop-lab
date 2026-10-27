@@ -161,11 +161,11 @@
     "results_unchanged": true
   },
   "pending_acceptance": {
-    "immediate_first_Notes_key": "pending",
+    "immediate_first_Notes_key": "failed_in_corrected_V7_native_trial",
     "first_same_workspace_outside_click_and_key": "pending",
     "Notes_reacquisition_and_caret_visuals": "pending",
-    "canonical_cold_URI_pointer_and_Tab_Enter_on_ba5": "pending",
-    "lock_and_login_security_regression": "pending",
+    "canonical_cold_URI_pointer_and_Tab_Enter_on_ba5": "passed_in_separate_original_canonical_native_trial",
+    "lock_and_login_security_regression": "native_cycle_observed_exit_status_assertion_failed_login_and_pixels_unaccepted",
     "eligible_normal_RSS_at_or_below300MiB": "pending",
     "eligible_source_rate_or60FPS_and_launcher_animation": "pending",
     "physical_devices_and_broader_applications": "pending"
@@ -196,5 +196,42 @@
     "focus_feature_result": null,
     "fresh_later_normal_proof_required_before_next_trial": true,
     "scope": "A pre-input controller failure is not evidence that focus acquisition passed or failed."
+  },
+  "later_canonical_cold_URI_trial": {
+    "report": "reports/measurements/lucent-cold-default-uri-ba5.json",
+    "report_sha256": "4b3fe0b80081ee8421f9a9f7aa248a161c4846c842cfa519375833bac0d76ad3",
+    "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+    "pointer_route_passed": true,
+    "keyboard_route_passed": true,
+    "trusted_nonrepeat_KeyA_events_per_case": 1,
+    "feature_checks_passed_per_case": 3,
+    "cleanup_checks_passed_per_case": 9,
+    "original_controller_steps_preserved": true,
+    "accepted_main_at_trial": false,
+    "scope": "One FHD virtual output and controlled real default Chromium handler. No direct token-consumption, inline-widget, secure-session, physical or performance acceptance."
+  },
+  "later_first_Notes_key_trial": {
+    "report": "reports/measurements/lucent-widget-first-key-ba5.json",
+    "report_sha256": "a95916d4d1cb4082984475378ca27157bac68a021979b0ce4a60efc3f0582828",
+    "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+    "status": "corrected_native_first_key_delivery_failed",
+    "host_down_to_key_transport_ms": 31.62471897667274,
+    "Notes_logical_and_native_focus_observed_after_input": true,
+    "controlled_browser_received_first_trusted_KeyA": true,
+    "Notes_insert_observed": false,
+    "restoration_checks_passed": 9,
+    "outside_click_and_reacquisition_attempted": false,
+    "actual_input_dispatch_timing_available": false,
+    "control_flush_candidate_native_verified": false
+  },
+  "later_native_lock_trial": {
+    "report": "reports/measurements/lucent-native-lock-ba5.json",
+    "report_sha256": "af160b848c92e1d0a9453be672656f2b1e8f5c21e39df97db5fb078c103b9f61",
+    "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+    "whole_trial_passed": false,
+    "native_lock_and_authenticated_unlock_observed": true,
+    "exit_status_assertion_failed": true,
+    "native_exit_status": null,
+    "later_same_runtime_files_security_and_playback_preserved": true
   }
 }

@@ -3,7 +3,8 @@
 A text box can remember its caret while another application receives the
 keyboard. Lucent keeps those facts separate. This guide follows the implemented
 one-shot focus API in compiled and deployed candidate `ba5b8a51f960`.
-Native interaction acceptance is pending.
+The original canonical cold URI interaction now passes in its recorded scope;
+inline-widget and secure-session acceptance remain separate.
 
 ## Four different states
 
@@ -177,7 +178,37 @@ keeps original archive flags separate from the later deployment receipt.
 The first Notes controller attempt fails before any typing or feature check;
 all nine restoration checks pass, including its expected guarded restart.
 This is a harness failure, not a passed or failed native focus result. A fresh
-normal identity must be bound before another attempt. Immediate first-key,
-first outside-click, reacquisition, cold URI handoff and secure-session
-regressions remain pending. Source tests, offscreen pictures and installation
-alone do not accept those interactions.
+normal identity must be bound before another attempt. Later V4–V6 failures retain
+their original outcomes and cleanup results; their combined down/up QMP call did
+not publish a pressed USB report.
+A separately rebound original [canonical cold URI trial](../reports/measurements/lucent-cold-default-uri-ba5.json)
+now passes both pointer and Tab/Enter routes. Each fresh owned document receives
+one trusted, unmodified, nonrepeat `KeyA`; each case passes all three feature and
+nine cleanup checks, without forced focus, prewarming or a cursor workaround.
+That closes only this controlled URI workflow on one FHD virtual output.
+Source tests, offscreen pictures and installation alone do not accept interactions;
+first-click widget and secure-session results require their own evidence.
+
+### Corrected pointer transport and first-key timing
+
+The [V7 native trial](../reports/measurements/lucent-widget-first-key-ba5.json)
+sends DOWN and UP in separate QMP synchronizations, with `KeyA` immediately after
+DOWN and balanced UP before diagnostic reads. There is no focus command, wait or
+retry. Notes gains logical focus and one native Enter with requested/committed
+`OnDemand`, but the first trusted nonrepeat key reaches the owned browser and
+Notes remains unchanged. The host down-to-key transport interval is 31.625 ms.
+All nine restoration checks pass; outside-click and reacquisition are unattempted.
+
+These sequential checkpoints do not measure callback entry, socket flush, server
+processing or the exact Enter/KeyA dispatch order. Missing timing, keyboard-active
+state and completed request outcomes remain unavailable. The proposed nonblocking
+flush of the complete native control transaction removes a possible queue-drain
+delay; it grants no focus and is not a verified fix. A newly compiled runtime and
+the corrected native trial are required. The original cold URI workflow remains
+accepted in its separate recorded scope.
+
+The [ba5 lock trial](../reports/measurements/lucent-native-lock-ba5.json) separately
+observes secure acknowledgement, the exact native locker and one authenticated
+unlock. Its exit-status assertion fails, so it is not an overall regression
+pass. Later read-only preservation succeeds. The secure runtime remains opted
+out of the ordinary layer-surface acquisition API.
