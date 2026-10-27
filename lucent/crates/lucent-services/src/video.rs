@@ -912,6 +912,8 @@ impl DecoderSession {
         let started = Instant::now();
         let mut delivered = false;
         let mut end_time = Duration::ZERO;
+        #[cfg(test)]
+        let mut reported_native_first = false;
         let mut frames = |decoder: &mut ffmpeg::decoder::Video| -> Result<bool> {
             loop {
                 let mut frame = ffmpeg::util::frame::video::Video::empty();
@@ -925,6 +927,11 @@ impl DecoderSession {
                 }
                 if stop.cancelled() {
                     return Ok(false);
+                }
+                #[cfg(test)]
+                if matches!(purpose, DecodePurpose::NativePlanes) && !reported_native_first {
+                    native_planes::diagnostic::emit(&frame, "decoded-first-frame", None);
+                    reported_native_first = true;
                 }
                 admit_decoded_source(
                     (frame.width(), frame.height(), frame.format()),

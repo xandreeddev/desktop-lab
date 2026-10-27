@@ -3,6 +3,9 @@
 use super::*;
 use lucent_domain::video_frame::{Bt709, Bytes, ChromaSiting, Plane, Range, Transfer, Yuv420Frame};
 
+#[cfg(test)]
+pub(super) mod diagnostic;
+
 struct DecodedFrameOwner(ffmpeg::frame::Video);
 struct PackedOwner {
     frame: Arc<DecodedFrameOwner>,
@@ -62,9 +65,13 @@ pub(super) fn admit(source: ffmpeg::frame::Video) -> Result<Admission> {
         || source.is_interlaced()
         || source.aspect_ratio() != ffmpeg::Rational(1, 1)
     {
+        #[cfg(test)]
+        diagnostic::emit(&source, "admission-rejected", Some("format-interlace-sar"));
         return Ok(Admission::Rgba(source));
     }
     let Some(color) = color(&source) else {
+        #[cfg(test)]
+        diagnostic::emit(&source, "admission-rejected", Some("color"));
         return Ok(Admission::Rgba(source));
     };
     use ffmpeg::util::frame::side_data::Type;
@@ -77,6 +84,8 @@ pub(super) fn admit(source: ffmpeg::frame::Video) -> Result<Admission> {
     .iter()
     .any(|kind| source.side_data(*kind).is_some())
     {
+        #[cfg(test)]
+        diagnostic::emit(&source, "admission-rejected", Some("blocked-side-data"));
         return Ok(Admission::Rgba(source));
     }
     dimensions(source.width(), source.height())?;
@@ -91,6 +100,8 @@ pub(super) fn admit(source: ffmpeg::frame::Video) -> Result<Admission> {
         || source.is_corrupt()
         || raw.buf[0].is_null()
     {
+        #[cfg(test)]
+        diagnostic::emit(&source, "admission-rejected", Some("crop-errors-buffer"));
         return Ok(Admission::Rgba(source));
     }
     let sizes = [
@@ -100,6 +111,8 @@ pub(super) fn admit(source: ffmpeg::frame::Video) -> Result<Admission> {
     ];
     for (index, (width, height)) in sizes.into_iter().enumerate() {
         if raw.linesize[index] <= 0 {
+            #[cfg(test)]
+            diagnostic::emit(&source, "admission-rejected", Some("nonpositive-stride"));
             return Ok(Admission::Rgba(source));
         }
         let stride = raw.linesize[index] as usize;
@@ -115,6 +128,8 @@ pub(super) fn admit(source: ffmpeg::frame::Video) -> Result<Admission> {
         let buffer =
             unsafe { ffmpeg::ffi::av_frame_get_plane_buffer(source.as_ptr(), index as i32) };
         if buffer.is_null() || raw.data[index].is_null() {
+            #[cfg(test)]
+            diagnostic::emit(&source, "admission-rejected", Some("plane-owner"));
             return Ok(Admission::Rgba(source));
         }
         let buffer = unsafe { &*buffer };
@@ -125,6 +140,8 @@ pub(super) fn admit(source: ffmpeg::frame::Video) -> Result<Admission> {
             return Err(failed());
         }
     }
+    #[cfg(test)]
+    diagnostic::emit(&source, "admission-accepted", None);
     let (width, height) = (source.width(), source.height());
     // Move the existing, reference-counted decoded AVFrame into its private
     // immutable owner. av_frame_ref would leave a mutable alias in a borrowed
@@ -211,6 +228,31 @@ mod tests {
         }
         frame
     }
+    #[test]
+    fn native_diagnostic_reports_unknown_sar_and_only_bounded_metadata() {
+        let mut source = initialized(5, 3);
+        unsafe {
+            (*source.as_mut_ptr()).sample_aspect_ratio = ffmpeg::ffi::AVRational { num: 0, den: 1 };
+        }
+        source
+            .new_side_data(ffmpeg::util::frame::side_data::Type::IccProfile, 4)
+            .unwrap();
+        let value =
+            diagnostic::snapshot(&source, "admission-rejected", Some("format-interlace-sar"));
+        assert_eq!(value["raw_sar"], serde_json::json!([0, 1]));
+        assert_eq!(value["mapped_sar"], serde_json::json!([0, 1]));
+        assert_eq!(value["checks"]["square_sar"], false);
+        assert_eq!(value["checks"]["yuv420p"], true);
+        assert_eq!(value["blocked_side_data"]["icc_profile"], true);
+        assert_eq!(value["side_data_kind_ids"].as_array().unwrap().len(), 1);
+        assert!(value.to_string().len() < 16384);
+        for key in [
+            "pointer", "address", "path", "pixels", "payload", "metadata",
+        ] {
+            assert!(!value.as_object().unwrap().contains_key(key));
+        }
+    }
+
     #[test]
     fn native_packed_yuv_moves_the_only_rust_frame_owner_and_survives_adapter_return() {
         let source = initialized(64, 4);
