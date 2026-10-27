@@ -1,0 +1,134 @@
+name: source-1a full-demand decoder experiment
+
+on:
+  push:
+    branches: [ci/lucent-full-demand-observer]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-demand-observer-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  observer:
+    if: >-
+      github.repository == 'xandreeddev/desktop-lab' &&
+      github.actor == 'xandreeddev' && github.triggering_actor == 'xandreeddev'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    container:
+      # Same official Arch Linux/amd64 base-devel image as reviewed b2 builder.
+      image: docker.io/library/archlinux@sha256:2acfa2683d458b7803b7aa4ee3c139d2ba6922cd84666fcb7496a3a02fcc4c83
+      options: --cpus 3 --memory 10g --memory-swap 10g --pids-limit 1024
+    defaults:
+      run:
+        shell: bash --noprofile --norc -euo pipefail {0}
+    env:
+      LUCENT_CI_IMAGE: docker.io/library/archlinux@sha256:2acfa2683d458b7803b7aa4ee3c139d2ba6922cd84666fcb7496a3a02fcc4c83
+      LUCENT_WORKFLOW_SHA: ${{ github.workflow_sha }}
+      RUSTUP_TOOLCHAIN: 1.99.0
+      CARGO_TERM_COLOR: never
+    steps:
+      - name: Admit remote budget and freeze one signed Arch transaction
+        timeout-minutes: 15
+        run: |
+          proof="$RUNNER_TEMP/observer-dependencies"
+          mkdir -p "$proof/cache" "$proof/databases"
+          test "$(cat /sys/fs/cgroup/memory.max)" = 10737418240
+          test "$(cat /sys/fs/cgroup/cpu.max)" = '300000 100000'
+          test "$(cat /sys/fs/cgroup/memory.swap.max)" = 0
+          for sample in 1 2 3; do
+            host_mib=$(awk '/^MemAvailable:/ {print int($2 / 1024)}' /proc/meminfo)
+            current=$(cat /sys/fs/cgroup/memory.current)
+            remaining_mib=$(( (10737418240 - current) / 1048576 ))
+            effective=$host_mib
+            if (( remaining_mib < effective )); then effective=$remaining_mib; fi
+            test "$effective" -ge 4500
+            printf '%s\n' "$effective" >> "$proof/bootstrap-admission.txt"
+            sleep 1
+          done
+          packages=(base-devel git python rustup clang llvm pkgconf wayland libxkbcommon pam polkit libpulse ffmpeg zstd)
+          pacman-conf SigLevel > "$proof/signature-policy.txt"
+          grep -qw PackageRequired "$proof/signature-policy.txt"
+          pacman -Syuw --noconfirm --cachedir "$proof/cache" "${packages[@]}" > "$proof/download.log" 2>&1
+          sha256sum /var/lib/pacman/sync/*.db > "$proof/databases.sha256"
+          cp /var/lib/pacman/sync/*.db "$proof/databases/"
+          pacman -Sup --print-format '%l' "${packages[@]}" > "$proof/resolved-urls.txt"
+          find "$proof/cache" -type f -name '*.pkg.tar.*' ! -name '*.sig' -print0 | sort -z | xargs -0 -r sha256sum > "$proof/archives.sha256"
+          test -s "$proof/archives.sha256"
+          pacman -Su --noconfirm --cachedir "$proof/cache" "${packages[@]}" > "$proof/install.log" 2>&1
+          sha256sum --check "$proof/databases.sha256"
+          sha256sum --check "$proof/archives.sha256"
+          pacman -Q > "$proof/installed-packages.txt"
+
+      - name: Checkout reviewed experiment tools
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          path: tools
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Checkout exact backend source with passing hosted Rust qualification
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: 1aebe2e3ffa88416791f122d9fbf01bb0f66f91f
+          path: source
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install exact Rust toolchain
+        timeout-minutes: 10
+        run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
+
+      - name: Pure experiment-tool regression checks
+        run: python3 -m unittest discover -s tools/ci/full-demand-observer -p tests.py -v
+
+      - name: Qualify one observer and run two finite fresh-process cases
+        timeout-minutes: 70
+        run: |
+          python3 tools/ci/full-demand-observer/run.py --run \
+            --source "$GITHUB_WORKSPACE/source" \
+            --work "$RUNNER_TEMP/full-demand-observer-work" \
+            --envelope "$RUNNER_TEMP/full-demand-observer-envelope" \
+            --dependencies "$RUNNER_TEMP/observer-dependencies"
+
+      - name: Retain ONE dedicated artifact envelope directory
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: full-demand-observer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/full-demand-observer-envelope/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: false
+
+      - name: Collect bounded failure diagnostics in their own directory
+        if: failure()
+        run: |
+          diagnostics="$RUNNER_TEMP/full-demand-observer-diagnostics"
+          mkdir -p "$diagnostics"
+          if test -f "$RUNNER_TEMP/full-demand-observer-work/package/experiment.json"; then
+            cp "$RUNNER_TEMP/full-demand-observer-work/package/experiment.json" "$diagnostics/"
+          fi
+          if test -d "$RUNNER_TEMP/full-demand-observer-work/package/logs"; then
+            cp -r "$RUNNER_TEMP/full-demand-observer-work/package/logs" "$diagnostics/"
+          fi
+          for log in download install; do
+            if test -f "$RUNNER_TEMP/observer-dependencies/$log.log"; then
+              cp "$RUNNER_TEMP/observer-dependencies/$log.log" "$diagnostics/dependency-$log.log"
+            fi
+          done
+
+      - name: Retain failure evidence without a successful artifact claim
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: full-demand-observer-failed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/full-demand-observer-diagnostics/
+          if-no-files-found: warn
+          retention-days: 1
+          overwrite: false

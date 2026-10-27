@@ -1,5 +1,9 @@
 name: checks
-on: [push, pull_request]
+on:
+  push:
+    # Isolated, owner-only observer experiment has its own bounded runner.
+    branches-ignore: [ci/lucent-full-demand-observer]
+  pull_request:
 permissions:
   contents: read
 concurrency:
