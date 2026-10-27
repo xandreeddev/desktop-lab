@@ -184,6 +184,106 @@ fn importer_invokes_prepare_once_and_never_synthesizes_an_asset_or_starts_playba
 }
 
 #[test]
+fn diagnostic_prefixes_are_explicit_and_never_shorten_a_canonical_case() {
+    let canonical = input(&serde_json::to_vec(&raw_input()).unwrap()).unwrap();
+    assert!(canonical.diagnostic_stop_after.is_none());
+    assert_eq!(canonical.phases().len(), 5);
+    for count in [2, 4] {
+        let mut raw = raw_input();
+        raw["diagnostic_stop_after"] = json!(count);
+        let admitted = input(&serde_json::to_vec(&raw).unwrap()).unwrap();
+        assert_eq!(admitted.phases().len(), count);
+        assert_eq!(admitted.phases().last().unwrap().1, Some((1920, 1080)));
+        raw["mode"] = json!("reopen");
+        assert!(input(&serde_json::to_vec(&raw).unwrap()).is_err());
+        raw["mode"] = json!("retarget");
+        raw["sequence"] = json!("known_targets");
+        assert!(input(&serde_json::to_vec(&raw).unwrap()).is_err());
+    }
+    for invalid in [
+        json!(0),
+        json!(1),
+        json!(3),
+        json!(5),
+        json!(99),
+        json!(true),
+    ] {
+        let mut raw = raw_input();
+        raw["diagnostic_stop_after"] = invalid;
+        assert!(input(&serde_json::to_vec(&raw).unwrap()).is_err());
+    }
+}
+
+#[test]
+fn ownership_snapshots_distinguish_old_latest_and_callback_without_pixel_references() {
+    let mut state = state();
+    state.accept(frame(1, 0, (1, 1), (3840, 2160))).unwrap();
+    let strong = Arc::strong_count(&state.latest.as_ref().unwrap()._pixels);
+    let weak = Arc::weak_count(&state.latest.as_ref().unwrap()._pixels);
+    let current = state.ownership("target_observed", Duration::ZERO).unwrap();
+    assert_eq!(current["current_bytes"], 4);
+    assert_eq!(current["old_last_good_bytes"], 0);
+    assert_eq!(
+        Arc::strong_count(&state.latest.as_ref().unwrap()._pixels),
+        strong
+    );
+    assert_eq!(
+        Arc::weak_count(&state.latest.as_ref().unwrap()._pixels),
+        weak
+    );
+    state
+        .request(WallpaperTargetRevision::new(2).unwrap(), (2, 1))
+        .unwrap();
+    let old = state.ownership("after_request", Duration::ZERO).unwrap();
+    assert_eq!(old["latest_revision"], 1);
+    assert_eq!(old["current_bytes"], 0);
+    assert_eq!(old["old_last_good_bytes"], 4);
+    let callback = state.callback_frame.clone(); // Metadata Arc, never pixels.
+    let incoming = frame(2, 1_000_000_000, (2, 1), (3840, 2160));
+    let footprint = CallbackGuard::enter(&callback, Some(&incoming)).unwrap();
+    let pending = state.ownership("after_request", Duration::ZERO).unwrap();
+    assert_eq!(pending["callback_inflight_revision"], 2);
+    assert_eq!(pending["callback_inflight_bytes"], 8);
+    state.accept(incoming).unwrap();
+    drop(footprint);
+    let current = state.ownership("end_target", Duration::ZERO).unwrap();
+    assert_eq!(current["latest_revision"], 2);
+    assert_eq!(current["current_bytes"], 8);
+    assert_eq!(current["old_last_good_bytes"], 0);
+    assert_eq!(current["callback_inflight_bytes"], 0);
+    assert_eq!(
+        Arc::strong_count(&state.latest.as_ref().unwrap()._pixels),
+        1
+    );
+    assert_eq!(Arc::weak_count(&state.latest.as_ref().unwrap()._pixels), 0);
+}
+
+#[test]
+fn callback_footprint_clears_for_stale_error_and_unwind_without_retaining_pixels() {
+    let mut state = state();
+    state
+        .request(WallpaperTargetRevision::new(2).unwrap(), (1, 1))
+        .unwrap();
+    let callback = state.callback_frame.clone();
+    let stale = frame(1, 0, (1, 1), (3840, 2160));
+    let guard = CallbackGuard::enter(&callback, Some(&stale)).unwrap();
+    state.accept(stale).unwrap();
+    drop(guard);
+    assert_eq!(state.stale, 1);
+    assert!(callback.lock().unwrap().is_none());
+    let error = CallbackGuard::enter(&callback, None).unwrap();
+    drop(error);
+    assert!(callback.lock().unwrap().is_none());
+    let value = frame(2, 0, (1, 1), (3840, 2160));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _guard = CallbackGuard::enter(&callback, Some(&value)).unwrap();
+        panic!("injected metadata scope failure");
+    }));
+    assert!(result.is_err());
+    assert!(callback.lock().unwrap().is_none());
+}
+
+#[test]
 fn readiness_accepts_before_five_seconds_and_rejects_ready_at_and_after_boundary() {
     assert_eq!(
         ready_elapsed(true, READY - Duration::from_nanos(1)),

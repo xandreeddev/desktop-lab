@@ -32,13 +32,22 @@ def memory(moment, elapsed=0, stopped=False):
     return value
 
 
-def case(mode='retarget',pid=41,sequence='source_and_targets'):
+def case(mode='retarget',pid=41,sequence='source_and_targets',diagnostic_stop_after=None):
     phases = []
     planned=m.PROFILE['sequences'][sequence]
+    if diagnostic_stop_after is not None:planned=planned[:diagnostic_stop_after]
     for revision,(label,target) in enumerate(planned,1):
         size = target or [3840,2160]
         extent = size[0]*size[1]*4
         start = (revision-1)*13000
+        old_size=(planned[revision-2][1] or [3840,2160]) if revision>1 else None
+        old_bytes=old_size[0]*old_size[1]*4 if old_size else 0
+        ownership=[{'moment':moment,'elapsed_ms':start+offset,'expected_revision':revision,
+            'latest_revision':(revision-1 or None) if moment=='after_request' else revision,
+            'current_bytes':0 if moment=='after_request' else extent,
+            'old_last_good_bytes':old_bytes if moment=='after_request' else 0,
+            'callback_inflight_revision':None,'callback_inflight_bytes':0} for moment,offset in
+            [('after_request',0),('target_observed',100),('end_target',12100)]]
         phases.append({'phase':label,'revision':revision,'requested_size':target,
             'worker_ordinal':1 if mode=='retarget' else revision,
             'target_ready_elapsed_ms':100,'phase_observed_ms':12000,'phase_request_clock_ms':start,
@@ -46,17 +55,18 @@ def case(mode='retarget',pid=41,sequence='source_and_targets'):
             'aspect_size':[3840,2160],'maximum_capacity_bytes':extent,'latest_capacity_bytes':extent,
             'first_pts_ns':0,'last_pts_ns':1000,'observed_loop_wraps_total':revision,
             'stale_publications_total':0,'all_admitted_pts_match_ffprobe':True,
-            'memory_samples':[memory('before_target',start),memory('target_observed',start+100),
+            'pixel_ownership':ownership,'memory_samples':[memory('before_target',start),memory('target_observed',start+100),
                               memory('during_target',start+12100)]})
     count = 1 if mode=='retarget' else len(planned)
     final_size=planned[-1][1] or [3840,2160]
-    return {'kind':'full_demand_observation','mode':mode,'sequence':sequence,'pid':pid,'phases':phases,'play_calls':count,
+    return {'kind':'full_demand_observation','mode':mode,'sequence':sequence,'diagnostic_stop_after':diagnostic_stop_after,
+        'pid':pid,'phases':phases,'play_calls':count,
         'exact_worker_joins':[{'worker_ordinal':ordinal,'stop_requested':True,'watch_joined':True,
                               'cancellation_observed':True,'join_elapsed_ms':1} for ordinal in range(1,count+1)],
         'stopped_allocator_observations':[memory('before_play',0,True),
             memory('after_join_latest_held',len(planned)*13000,True),memory('after_latest_dropped',len(planned)*13000+1,True)],
         'final_latest_capacity_before_drop':final_size[0]*final_size[1]*4,'consumer_held_pixel_capacity_after_drop':0,
-        'renderer_used':False,'fps_measured':False,'whole_shell_memory_accepted':False,
+        'callback_inflight_after_join_bytes':0,'renderer_used':False,'fps_measured':False,'whole_shell_memory_accepted':False,
         'native_presentation_accepted':False}
 
 
@@ -125,12 +135,12 @@ class Pure(unittest.TestCase):
             with self.assertRaises(ValueError):m.test_summary(value,2,['first','second'])
 
     def test_frozen_actual_source_counts_and_names_remain_explicit_and_new_consumer_unexecuted(self):
-        self.assertEqual(m.PROFILE['test_counts'],{'domain':37,'video':67,'observer':21,'consumer':15})
+        self.assertEqual(m.PROFILE['test_counts'],{'domain':37,'video':67,'observer':21,'consumer':18})
         for key in ('domain','video','observer'):
             self.assertEqual(len(m.PROFILE['required_test_names'][key]),m.PROFILE['test_counts'][key])
         authored=re.findall(r'#\[test\]\s*fn\s+(\w+)',(HERE/'observer_tests.rs').read_text())
         self.assertEqual(m.PROFILE['consumer_test_names'],authored)
-        self.assertEqual(len(authored),15)
+        self.assertEqual(len(authored),18)
         self.assertIsNone(m.PROFILE['artifact_binding'])
         self.assertIsNone(m.PROFILE['tools_commit_binding'])
         self.assertEqual(m.PROFILE['source_qualification']['workflow_result'],'failure')
@@ -313,6 +323,61 @@ class Pure(unittest.TestCase):
                 if raw==failure:self.assertEqual(saved[-1]['fixed_failure_reason'],'adapter_error')
                 self.assertGreaterEqual(len(saved),3)
                 self.assertEqual(child.killed,timeout)
+
+    def test_diagnostic_prefixes_have_exact_FHD_endpoints_and_cannot_pass_canonical_gates(self):
+        for count in (2,4):
+            value=case(diagnostic_stop_after=count)
+            m.validate_case(value,'source_and_targets','retarget',41,[0,1000],count)
+            self.assertEqual(value['phases'][-1]['last_size'],[1920,1080])
+            self.assertEqual(value['final_latest_capacity_before_drop'],8294400)
+            self.assertEqual(value['play_calls'],1);self.assertEqual(len(value['exact_worker_joins']),1)
+            self.assertEqual(len(value['stopped_allocator_observations']),3)
+            with self.assertRaises(ValueError):m.validate_case(value,'source_and_targets','retarget',41,[0,1000])
+            for invalid in (1,3,5,True):
+                with self.assertRaises(ValueError):m.validate_case(value,'source_and_targets','retarget',41,[0,1000],invalid)
+
+    def test_pixel_ownership_distinguishes_last_good_and_current_without_extra_reference_fields(self):
+        value=case();points=value['phases'][1]['pixel_ownership']
+        self.assertEqual(points[0]['old_last_good_bytes'],33177600)
+        self.assertEqual(points[1]['current_bytes'],8294400)
+        points[0]['callback_inflight_revision']=1;points[0]['callback_inflight_bytes']=33177600
+        m.validate_case(value,'source_and_targets','retarget',41,[0,1000])
+        for change in ('current','old','revision','callback','after_join','weak_tracking'):
+            changed=copy.deepcopy(value)
+            point=changed['phases'][1]['pixel_ownership'][1]
+            if change=='current':point['current_bytes']=33177600
+            elif change=='old':point['old_last_good_bytes']=33177600
+            elif change=='revision':point['latest_revision']=1
+            elif change=='callback':point['callback_inflight_revision']=2;point['callback_inflight_bytes']=33177600
+            elif change=='after_join':changed['callback_inflight_after_join_bytes']=8294400
+            else:point['pixel_weak_refs']=1
+            with self.subTest(change=change),self.assertRaises(ValueError):
+                m.validate_case(changed,'source_and_targets','retarget',41,[0,1000])
+
+    def test_diagnostics_are_fresh_separate_processes_and_never_replace_any_of_the_four_cases(self):
+        canonical=[];diagnostics=[]
+        for index,(sequence,mode) in enumerate(m.matrix_cases()):
+            value=case(mode,pid=41+index,sequence=sequence)
+            value.update(binary_sha256='b'*64,input_sha256='c'*64,
+                         host_process_started_monotonic_ns=index*1000+1,host_process_finished_monotonic_ns=index*1000+900)
+            canonical.append(value)
+        for index,count in enumerate((2,4),4):
+            value=case(pid=41+index,diagnostic_stop_after=count)
+            value.update(binary_sha256='b'*64,input_sha256='c'*64,
+                         host_process_started_monotonic_ns=index*1000+1,host_process_finished_monotonic_ns=index*1000+900)
+            diagnostics.append(value)
+        m.validate_matrix(canonical,'b'*64,'c'*64)
+        m.validate_diagnostics(diagnostics,canonical,'b'*64,'c'*64)
+        substituted=copy.deepcopy(canonical);substituted[-1]=diagnostics[-1]
+        with self.assertRaises(ValueError):m.validate_matrix(substituted,'b'*64,'c'*64)
+        for change in ('pid','overlap','source','missing'):
+            values=copy.deepcopy(diagnostics)
+            if change=='pid':values[1]['pid']=canonical[0]['pid']
+            elif change=='overlap':values[0]['host_process_started_monotonic_ns']=canonical[-1]['host_process_finished_monotonic_ns']
+            elif change=='source':values[0]['input_sha256']='d'*64
+            else:values.pop()
+            with self.subTest(change=change),self.assertRaises(ValueError):
+                m.validate_diagnostics(values,canonical,'b'*64,'c'*64)
 
     def test_build_copy_changes_only_explicit_consumer_target_and_files_with_original_lock(self):
         with tempfile.TemporaryDirectory() as temporary:

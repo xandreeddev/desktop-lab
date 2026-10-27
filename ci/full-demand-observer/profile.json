@@ -15,7 +15,7 @@
     "domain": 37,
     "video": 67,
     "observer": 21,
-    "consumer": 15
+    "consumer": 18
   },
   "required_test_names": {
     "domain": [
@@ -156,6 +156,9 @@
     "sequence_is_explicitly_typed_and_cannot_silently_substitute_the_warm_source_matrix",
     "importer_input_is_bounded_and_separates_original_source_from_owned_storage",
     "importer_invokes_prepare_once_and_never_synthesizes_an_asset_or_starts_playback",
+    "diagnostic_prefixes_are_explicit_and_never_shorten_a_canonical_case",
+    "ownership_snapshots_distinguish_old_latest_and_callback_without_pixel_references",
+    "callback_footprint_clears_for_stale_error_and_unwind_without_retaining_pixels",
     "readiness_accepts_before_five_seconds_and_rejects_ready_at_and_after_boundary",
     "input_requires_exact_generated_asset_phase_duration_and_actual_ordered_pts",
     "publication_checks_real_byte_extent_aspect_and_normalized_ffprobe_pts",
@@ -298,5 +301,40 @@
     "child_fixed_stdout_reason_retained": false,
     "accepted_matrix_observations": false,
     "source_confirmed_fixture_fault": "Raw descriptor had no required import metadata; corrected importer is not executed yet."
+  },
+  "diagnostic_prefixes": [
+    [
+      "source_and_targets",
+      "retarget",
+      2
+    ],
+    [
+      "source_and_targets",
+      "retarget",
+      4
+    ]
+  ],
+  "prior_successful_experiment": {
+    "tools_commit": "f26f8a26b880eeb8ac01da9e57cb8a7cc4d76322",
+    "run_id": 40429866532,
+    "run_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/40429866532",
+    "workflow_result": "success",
+    "actual_test_counts": {
+      "domain": 37,
+      "video": 67,
+      "observer": 21,
+      "consumer": 15
+    },
+    "artifact_id": 12702175341,
+    "original_zip_sha256": "de1b83dc59ea4d7519d3d14e033973112a11877eabfdff9ea0c5d3c64a6fbabd",
+    "inner_archive_sha256": "967fd809520d24001ac80552c8e83309725fe954d175cb21d25aca28bad324ff",
+    "known_restored_fhd_retarget_minus_reopen_mib": -21.2421875,
+    "source_path_restored_fhd_retarget_minus_reopen_mib": 40.1328125,
+    "source_path_after_drop_retarget_minus_reopen_mib": 8.984375,
+    "glibc_version": "2.44",
+    "ffmpeg_version": "n9.0.2",
+    "effective_encoder_keyint_min": 61,
+    "general_memory_improvement_established": false,
+    "whole_shell_or_VM_accepted": false
   }
 }

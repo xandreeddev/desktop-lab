@@ -65,9 +65,17 @@ struct Input {
     asset: LiveWallpaperAsset,
     mode: Mode,
     sequence: Sequence,
+    #[serde(default)]
+    diagnostic_stop_after: Option<usize>,
     phase_seconds: u64,
     /// Actual ffprobe best-effort PTS rescaled to the backend's Duration clock.
     expected_pts_ns: Vec<u64>,
+}
+impl Input {
+    fn phases(&self) -> &'static [Phase] {
+        let full = self.sequence.phases();
+        &full[..self.diagnostic_stop_after.unwrap_or(full.len())]
+    }
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -133,7 +141,11 @@ fn input(raw: &[u8]) -> Check<Input> {
                 .components()
                 .any(|part| matches!(part, Component::ParentDir))
     };
-    if value.phase_seconds != 12
+    if value.diagnostic_stop_after.is_some_and(|count| {
+        value.sequence != Sequence::SourceAndTargets
+            || value.mode != Mode::Retarget
+            || !matches!(count, 2 | 4)
+    }) || value.phase_seconds != 12
         || !local(&value.state)
         || !local(file)
         || !local(poster)
@@ -218,8 +230,40 @@ struct Metrics {
     max_capacity: usize,
 }
 struct Latest {
+    revision: WallpaperTargetRevision,
     _pixels: Arc<Vec<u8>>,
     capacity: usize,
+}
+#[derive(Clone, Copy)]
+struct CallbackFrame {
+    revision: WallpaperTargetRevision,
+    bytes: usize,
+}
+/// Metadata only: no strong/weak pixel references or copied pixel storage.
+struct CallbackGuard<'a>(&'a Mutex<Option<CallbackFrame>>);
+impl<'a> CallbackGuard<'a> {
+    fn enter(
+        slot: &'a Mutex<Option<CallbackFrame>>,
+        frame: Option<&TargetedMediaFrame>,
+    ) -> Check<Self> {
+        let footprint = frame.map(|value| {
+            let (width, height) = value.frame.dimensions();
+            // MediaFrame admission guarantees this exact RGBA byte length.
+            CallbackFrame {
+                revision: value.revision,
+                bytes: width as usize * height as usize * 4,
+            }
+        });
+        *slot.lock().map_err(|_| "callback_footprint_unavailable")? = footprint;
+        Ok(Self(slot))
+    }
+}
+impl Drop for CallbackGuard<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut slot) = self.0.lock() {
+            *slot = None;
+        }
+    }
 }
 struct State {
     expected: WallpaperTargetRevision,
@@ -231,6 +275,7 @@ struct State {
     expected_pts_ns: Arc<Vec<u64>>,
     previous_pts_ns: Option<u128>,
     observed_loop_wraps: u64,
+    callback_frame: Arc<Mutex<Option<CallbackFrame>>>,
 }
 impl State {
     fn new(expected_pts_ns: Arc<Vec<u64>>, size: (u32, u32)) -> Self {
@@ -244,6 +289,7 @@ impl State {
             expected_pts_ns,
             previous_pts_ns: None,
             observed_loop_wraps: 0,
+            callback_frame: Arc::new(Mutex::new(None)),
         }
     }
     fn request(&mut self, revision: WallpaperTargetRevision, size: (u32, u32)) -> Check<()> {
@@ -296,10 +342,33 @@ impl State {
         m.rgba_bytes = bytes;
         m.max_capacity = m.max_capacity.max(pixels.capacity());
         self.latest = Some(Latest {
+            revision: value.revision,
             capacity: pixels.capacity(),
             _pixels: pixels,
         });
         Ok(())
+    }
+    fn ownership(&self, moment: &'static str, elapsed: Duration) -> Check<Value> {
+        let callback = *self
+            .callback_frame
+            .lock()
+            .map_err(|_| "callback_footprint_unavailable")?;
+        let current = self
+            .latest
+            .as_ref()
+            .filter(|latest| latest.revision == self.expected);
+        let old = self
+            .latest
+            .as_ref()
+            .filter(|latest| latest.revision != self.expected);
+        Ok(
+            json!({"moment":moment,"elapsed_ms":elapsed.as_millis(),"expected_revision":self.expected.get(),
+            "latest_revision":self.latest.as_ref().map(|latest|latest.revision.get()),
+            "current_bytes":current.map_or(0,|latest|latest._pixels.len()),
+            "old_last_good_bytes":old.map_or(0,|latest|latest._pixels.len()),
+            "callback_inflight_revision":callback.map(|value|value.revision.get()),
+            "callback_inflight_bytes":callback.map_or(0,|value|value.bytes)}),
+        )
     }
 }
 
@@ -321,12 +390,21 @@ fn spawn(
         .map_err(|_| "target_control_failed")?
         .ok_or("initial_target_unavailable")?;
     let stop = Arc::new(Stop::new());
+    let callback_frame = state
+        .lock()
+        .map_err(|_| "state_unavailable")?
+        .callback_frame
+        .clone();
     let cancelled = stop.clone();
     let handle = thread::spawn(move || {
         let mut receive = |value: lucent_domain::Result<TargetedMediaFrame>| {
             if cancelled.cancelled() {
                 return false;
             }
+            let Ok(footprint) = CallbackGuard::enter(&callback_frame, value.as_ref().ok()) else {
+                cancelled.cancel();
+                return false;
+            };
             let Ok(mut state) = state.lock() else {
                 cancelled.cancel();
                 return false;
@@ -334,6 +412,9 @@ fn spawn(
             let result = value
                 .map_err(|_| "adapter_error")
                 .and_then(|value| state.accept(value));
+            // Clear while holding state, so snapshots cannot double-count an
+            // admitted latest frame as a callback still awaiting that lock.
+            drop(footprint);
             if let Err(error) = result {
                 state.error = Some(error);
                 cancelled.cancel();
@@ -438,7 +519,7 @@ fn point(label: &str, started: Instant, stopped: bool) -> Value {
 fn observe(adapter: Arc<dyn WallpaperPlaybackPort>, request: Input) -> Check<Value> {
     let started = Instant::now();
     let mut stopped = vec![point("before_play", started, true)];
-    let planned = request.sequence.phases();
+    let planned = request.phases();
     let initial = planned[0].1;
     let control = Arc::new(LatestWallpaperTargetAdapter::new(target(initial)?));
     let state = Arc::new(Mutex::new(State::new(
@@ -467,13 +548,16 @@ fn observe(adapter: Arc<dyn WallpaperPlaybackPort>, request: Input) -> Check<Val
             }
             let requested = Instant::now();
             let request_clock_ms = started.elapsed().as_millis();
-            if index != 0 {
+            let requested_ownership = {
                 let mut state = state.lock().map_err(|_| "state_unavailable")?;
-                let next = control
-                    .set(state.expected, target(demand)?)
-                    .map_err(|_| "target_control_failed")?;
-                state.request(next.revision, demand.unwrap_or((3840, 2160)))?;
-            }
+                if index != 0 {
+                    let next = control
+                        .set(state.expected, target(demand)?)
+                        .map_err(|_| "target_control_failed")?;
+                    state.request(next.revision, demand.unwrap_or((3840, 2160)))?;
+                }
+                state.ownership("after_request", started.elapsed())?
+            };
             if owner.is_none() {
                 starts += 1;
                 owner = Some(spawn(
@@ -486,16 +570,22 @@ fn observe(adapter: Arc<dyn WallpaperPlaybackPort>, request: Input) -> Check<Val
                 )?);
             }
             let worker = owner.as_ref().ok_or("worker_owner_missing")?;
-            let elapsed = loop {
+            let (elapsed, ready_ownership) = loop {
                 let ready = {
                     let state = state.lock().map_err(|_| "state_unavailable")?;
                     if let Some(error) = state.error {
                         return Err(error);
                     }
                     ready_elapsed(state.metrics.count != 0, requested.elapsed())?
+                        .map(|elapsed| {
+                            state
+                                .ownership("target_observed", started.elapsed())
+                                .map(|ownership| (elapsed, ownership))
+                        })
+                        .transpose()?
                 };
-                if let Some(elapsed) = ready {
-                    break elapsed;
+                if let Some(observed) = ready {
+                    break observed;
                 }
                 if worker.handle.is_finished() || worker.stop.cancelled() {
                     return Err("worker_ended_early");
@@ -525,7 +615,8 @@ fn observe(adapter: Arc<dyn WallpaperPlaybackPort>, request: Input) -> Check<Val
                 "latest_capacity_bytes":state.latest.as_ref().map(|latest| latest.capacity),
                 "first_pts_ns":m.first_pts_ns,"last_pts_ns":m.last_pts_ns,
                 "observed_loop_wraps_total":state.observed_loop_wraps,"stale_publications_total":state.stale,
-                "all_admitted_pts_match_ffprobe":true,"memory_samples":samples}));
+                "all_admitted_pts_match_ffprobe":true,"memory_samples":samples,
+                "pixel_ownership":[requested_ownership,ready_ownership,state.ownership("end_target",started.elapsed())?]}));
         }
         Ok(phases)
     })();
@@ -536,6 +627,14 @@ fn observe(adapter: Arc<dyn WallpaperPlaybackPort>, request: Input) -> Check<Val
     let mut state = state.lock().map_err(|_| "state_unavailable")?;
     if let Some(error) = state.error {
         return Err(error);
+    }
+    if state
+        .callback_frame
+        .lock()
+        .map_err(|_| "callback_footprint_unavailable")?
+        .is_some()
+    {
+        return Err("callback_frame_after_join");
     }
     stopped.push(point("after_join_latest_held", started, true));
     let held = state.latest.as_ref().map(|latest| latest.capacity);
@@ -551,9 +650,11 @@ fn observe(adapter: Arc<dyn WallpaperPlaybackPort>, request: Input) -> Check<Val
     }
     Ok(
         json!({"kind":"full_demand_observation","mode":request.mode,"sequence":request.sequence,
+        "diagnostic_stop_after":request.diagnostic_stop_after,
         "pid":std::process::id(),"phases":phases,"play_calls":starts,"exact_worker_joins":joins,
         "stopped_allocator_observations":stopped,"final_latest_capacity_before_drop":held,
         "consumer_held_pixel_capacity_after_drop":0,"renderer_used":false,"fps_measured":false,
+        "callback_inflight_after_join_bytes":0,
         "whole_shell_memory_accepted":false,"native_presentation_accepted":false}),
     )
 }

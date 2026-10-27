@@ -20,9 +20,16 @@ recorded `complete_bounded_observer_process_required` but discarded the actual
 child stdout/exit code. That failed trial and its original artifact digest
 remain recorded in `profile.json`; it supplies no accepted matrix observation.
 
-This corrected consumer has **15 authored Rust tests**: thirteen passed in that
-prior trial; the two importer tests and corrected consumer are **not compiled
-or executed yet**. The Python driver has **21 pure/tempfile tests**, executable without Cargo,
+The later [f26 trial](https://github.com/xandreeddev/desktop-lab/actions/runs/40429866532)
+actually passed all 37/67/21 source gates, 15 consumer tests and all four cases.
+Its result was mixed: restored FHD RSS was 21.24 MiB lower for retarget in A,
+but 40.13 MiB higher in B. After B's final latest drop, retarget RSS was still
+8.98 MiB higher; accounted in-use bytes were nearly equal, with 10.63 MiB more
+free arena accounting. General memory improvement remains unproven.
+
+This diagnostic consumer has **18 authored Rust tests**; fifteen passed in f26,
+but the new prefix/ownership tests and this changed consumer are **not compiled
+or executed yet**. The Python driver has **24 pure/tempfile tests**, executable without Cargo,
 FFmpeg, GPU, network or VM access. `profile.json` keeps exact expected names,
 counts, the original source qualification's log digests and official links.
 The tools commit, built binary, archive and hosted artifact remain **unbound**
@@ -120,11 +127,49 @@ All four process lifetimes must be ordered and nonoverlapping, and each record
 must bind the same binary/input hashes. These observations are not a repeated,
 randomized performance benchmark.
 
+## Two additional, separately labeled diagnostic prefixes
+
+The original four canonical cases and all their gates remain mandatory. Only
+after they qualify, two more fresh retarget processes run **Source → FHD** and
+**Source → FHD → 4K → FHD**, retaining the same 12-second holds and exactly three
+stopped-only allocator snapshots per process. The explicit optional
+`diagnostic_stop_after` accepts only 2 or 4 for Source/retarget; its default
+cannot shorten a canonical case. Prefix records cannot satisfy the canonical
+matrix, and use separate filenames/report entries. All six cases share one
+binary/input/prepared asset, have distinct PIDs and fresh admission. The
+importer is a seventh, separate process. No allocator policy changes.
+
+Each phase additionally captures pixel ownership after demand admission, at
+readiness and at the observation end. The actual latest revision and byte
+length distinguish a current frame from the old last-good frame. A metadata
+guard records one adapter-callback frame's admitted RGBA byte length/revision
+before it waits for the state lock, then clears before the accepted latest
+becomes visible. Exact join requires that guard to be empty. This scope
+excludes FFmpeg's decoder/SWS/internal storage and unpublished conversion work.
+There are no extra pixel Arc/Weak references or pixel copies: Weak references
+would themselves prevent the existing pool's `Arc::get_mut` reuse. These
+snapshots are not atomic accounting of the whole process.
+
+Compare the first and second FHD endpoints while alive, after exact worker join
+with the identical FHD frame held, then after latest drop. This distinguishes
+some live-context cost from post-stop arena retention. It does not, alone,
+identify every native allocation or prove the following hypothesis.
+
+One hypothesis is that releasing initial 33,177,600-byte source buffers changes
+glibc's adaptive mmap threshold, influencing later roughly 31.64 MiB RGB/SWS
+allocations. Earlier [upstream glibc 2.42 allocator source](https://github.com/bminor/glibc/blob/glibc-2.42/malloc/malloc.c)
+updates the threshold when eligible mapped chunks are freed, with a default
+64-bit upper bound near 32 MiB. The tested runtime was glibc 2.44: its exact
+threshold was not observed and that earlier source is context, not proof about
+this run. No tunables, trimming, madvise or global allocator replacement are
+introduced to test it.
+
 The final frame is still held at the first after-join allocator snapshot, then
 explicitly dropped. There are **exactly three stopped-only mallinfo2 snapshots
 per process**: before play, after final exact join with latest held, and after
 latest drop. Matrix A ends with FHD storage held; B ends with source-size
-storage held. There are twelve allocator snapshots across the four processes.
+storage held. There are twelve allocator snapshots across the four canonical
+processes, plus six in the separately reported diagnostic prefixes.
 During-target samples contain no allocator statistics. These
 glibc counters describe accounting, including free arenas and direct mappings;
 they do not by themselves identify Rust object ownership or resident pages.
@@ -140,6 +185,9 @@ thread. The exact command, actual encoder/version output, ffprobe metadata,
 source bytes and SHA-256 are retained. This is a reproducible recipe, not a
 promise that different FFmpeg/x264 builds produce identical encoded bytes.
 It is a generated opaque signal, not a representative wallpaper corpus.
+The command requests `keyint_min=120`; f26's actual x264 log reported 61.
+Retain the effective encoder options rather than assuming every requested
+option remains unchanged internally.
 
 The prepared workflow pins the official Arch image, Rust 1.99.0 and owner-only
 branch push. It uses one runner/container with **3 CPU, 10 GiB and no swap**.
@@ -154,7 +202,7 @@ the exact FFmpeg public headers and observer ELF metadata are retained. This
 supports provenance, not compatibility with an older VM FFmpeg installation.
 
 The eight Cargo stages are fetch, format, selected-library/example clippy,
-37-domain test gate, 67-video gate, 21-original-observer gate, 15-new-consumer
+37-domain test gate, 67-video gate, 21-original-observer gate, 18-new-consumer
 gate, and one release-observer build. There is no desktop release build, GPU
 test, deployment, guest baseline or native session in this workflow.
 
