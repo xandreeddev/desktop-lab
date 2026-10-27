@@ -10,7 +10,27 @@ same-artifact LAN HTTP checks pass with the 64/128 MiB static-server limits.
 These are delivery checks, not native keyboard or performance acceptance.
 Earlier 912/PR115, 9d42/PR114 and ca88 checkpoints remain historical.
 
-The latest recorded coherent VM release is source **ba5b8a51f960**, built by
+The latest recorded coherent VM release is source **d77f3d0b2caf**, built by
+[hosted Arch run40448216820](https://github.com/xandreeddev/desktop-lab/actions/runs/40448216820).
+It passes 17 qualification stages, 885 targeted tests and 99 required named
+regressions, fresh software-Vulkan export and static compatibility for all ten
+ELF consumers. The independent ABI review and coherent six-client/root-greeter
+deployment pass without restarting greetd or writing settings/themes. Its
+[sanitized source-specific report](../reports/measurements/lucent-keyboard-control-flush-d77.json)
+keeps this installation separate from accepted main and PR117's ba5 source.
+
+The d77 input results are mixed. The held-button case still sends the first key
+to the browser. A completed click delivers the first key to Notes, with native
+focus, a visible caret and ordinary undo. The corrected complete-flow trial then
+fails the outside handoff: the browser receives trusted pointer down/up/click,
+but the following key reaches Notes. All nine restorations pass in each of the
+three trials. Reacquisition remains unattempted. Host command order does not prove
+guest delivery order across the VM's USB tablet and PS/2 keyboard; that chronology
+and the failure cause remain unmeasured. A finite read-only guest-input diagnostic
+is being prepared. No focus fix, lock/login regression, canonical URI handoff or
+performance acceptance is inherited from the earlier source.
+
+The earlier coherent VM release is source **ba5b8a51f960**, built by
 [hosted Arch run40433468095](https://github.com/xandreeddev/desktop-lab/actions/runs/40433468095).
 Its **17 qualification stages, 880 targeted tests and 94 required named
 regressions pass**. All ten ELF consumers pass static import compatibility;
@@ -51,8 +71,9 @@ completes the click before sending KeyA and also fails: Notes gains logical/nati
 focus, while the owned browser receives the first key. Its host down-to-key
 interval is 66.634 ms, including release transport; all nine restorations pass.
 The V7 held-button result remains unchanged. No outside-click or reacquisition
-result is accepted. The control-flush candidate has no deployed native first-key
-acceptance. Eligible memory and FPS acceptance remain separate.
+result is accepted. The later d77 candidate and its mixed native results are recorded above;
+whole-flow keyboard acceptance remains open. Eligible memory and FPS acceptance
+remain separate.
 
 The [separate native lock trial](../reports/measurements/lucent-native-lock-ba5.json)
 observes a new compositor acknowledgement, the exact native locker, wallpaper
