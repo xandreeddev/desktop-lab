@@ -46,18 +46,31 @@ owned browser. The host down-to-key transport interval is 31.625 ms; guest
 callback and request timing were not measured. All nine restoration checks pass.
 Outside-click and reacquisition were not attempted. Earlier V4–V6 failures remain
 recorded, but their combined down/up QMP call did not publish a pressed USB
-report. A proposed nonblocking control flush still needs compilation and native
-acceptance. Lock/login regression, eligible memory and FPS acceptance remain
-separate.
+report. The later [V8 trial](../reports/measurements/lucent-widget-completed-click-ba5.json)
+completes the click before sending KeyA and also fails: Notes gains logical/native
+focus, while the owned browser receives the first key. Its host down-to-key
+interval is 66.634 ms, including release transport; all nine restorations pass.
+The V7 held-button result remains unchanged. No outside-click or reacquisition
+result is accepted. The control-flush candidate has no deployed native first-key
+acceptance. Eligible memory and FPS acceptance remain separate.
 
 The [separate native lock trial](../reports/measurements/lucent-native-lock-ba5.json)
 observes a new compositor acknowledgement, the exact native locker, wallpaper
 pause and one ordinary authenticated unlock. Its exit-status assertion fails;
 the later systemd code is zero and the native exit status remains unavailable.
 A separate read-only check verifies the same normal desktop, unchanged file and
-security fingerprints, restored playback and all tracing OFF. This does not
-retroactively pass the original test or establish lock/login pixels, suspend or
-performance.
+security fingerprints, restored playback and all tracing OFF. The original failed
+result remains unchanged.
+
+The new [V3 lock/PAM regression](../reports/measurements/lucent-native-lock-ba5-v3.json)
+passes all six checks. A private unit reference retains the exact native
+invocation through normal exit, with exit status0 and positive execution history.
+The same notifier connection observes lock acknowledgement and unlock; the
+reference is released, and the normal runtime, files, security, playback, idle
+policy and geometry remain unchanged. An intervening V2 preflight fails before
+any lock or password because an empty initial InvocationID was misread. Both
+earlier failures remain recorded. This scoped pass does not establish login,
+secure-client pixels, suspend, physical hardware or performance.
 
 The historical [actual b2 cold-browser trial](../reports/measurements/lucent-cold-default-uri-b2.json)
 passes canonical pointer opening and trusted document input, while Tab/Enter

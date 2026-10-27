@@ -439,6 +439,36 @@
       "exit_status_assertion_failed": true,
       "native_exit_status": null,
       "later_same_runtime_files_security_and_playback_preserved": true
+    },
+    "keyboard_focus_intent_ba5_completed_click_V8": {
+      "report": "reports/measurements/lucent-widget-completed-click-ba5.json",
+      "report_sha256": "9cc6005267544dd4c8a8b33ef7741b148ef9ac949a521ea955a61d7062e34465",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "first_key_delivery_passed": false,
+      "gesture_contract": "completed-click-then-immediate-key",
+      "host_down_to_key_transport_ms": 66.63447699975222,
+      "Notes_logical_and_native_focus_observed_after_input": true,
+      "owned_browser_received_first_trusted_KeyA": true,
+      "Notes_insert_observed": false,
+      "restoration_checks_passed": 9,
+      "outside_click_and_reacquisition_attempted": false,
+      "actual_input_dispatch_timing_available": false,
+      "native_control_flush_fix_accepted": false,
+      "V7_held_button_result_unchanged": true
+    },
+    "keyboard_focus_intent_ba5_native_lock_V3": {
+      "report": "reports/measurements/lucent-native-lock-ba5-v3.json",
+      "report_sha256": "c39c4a2d1b8d87935b809b95388858832b6f557132024c51806e2c18e50cd1b9",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "whole_trial_passed": true,
+      "checks_passed": 6,
+      "same_connection_new_locked_ACK_and_one_PAM_unlock": true,
+      "retained_same_invocation_exited_normally": true,
+      "exit_status": 0,
+      "reference_released": true,
+      "same_runtime_files_security_playback_idle_and_geometry_preserved": true,
+      "login_pixels_suspend_hardware_or_performance_accepted": false,
+      "V1_and_V2_failures_unchanged": true
     }
   }
 }

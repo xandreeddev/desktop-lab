@@ -9,7 +9,7 @@
     "status": "in_progress",
     "all_seven_requested_gaps_closed": false,
     "guide": "docs/current-readiness.md",
-    "scope": "Accepted main c300/PR116 and its published118-input source3640 catalogue remain the delivery checkpoint. Unmerged PR117 sourceba5 now has actual hosted17-stage/880-test qualification,121-input/480-capture CPU software-Vulkan export, concrete target compatibility review and coherent candidate VM deployment. Native focus, lock/login, eligible resource/FPS and broader physical/application acceptance remain pending. The corrected V7 first Notes key fails at a31.625ms host transport gap: Notes gains logical/native focus but the owned browser receives KeyA; all nine restorations pass. The native lock/PAM cycle is observed, but its exit-status assertion fails; separate read-only checks preserve the same runtime, files, security and playback. No blanket focus, secure-session, memory or FPS acceptance follows.",
+    "scope": "Accepted main c300/PR116 and its published118-input source3640 catalogue remain the delivery checkpoint. Unmerged PR117 sourceba5 has hosted17-stage/880-test qualification,121-input/480-capture CPU software-Vulkan export and coherent candidate deployment. Original canonical cold URI pointer and Tab/Enter pass. Immediate first Notes key fails in separate V7 held-button and V8 completed-click cases despite later logical/native focus; all nine restorations pass per case. V3 passes six scoped native lock/PAM/retained-exit and preservation checks. V1/V2 failures remain unchanged; no login/pixel/suspend, broader application, memory or FPS acceptance follows.",
     "history_policy": "Requirements, chronological progress and evidence below retain their original source, result and limitations. A later scoped result can supersede an earlier pending summary without rewriting the historical record. This rollup does not repeat older native tests on the snapshot binary.",
     "evidence_definitions": {
       "implemented": "Production code path exists; no complete behavior or acceptance claim follows from that label alone.",
@@ -3407,9 +3407,9 @@
       "source_authored_targeted_test_expectation": 880,
       "native_fix_accepted": false,
       "visual_export_pending": false,
-      "status": "canonical_URI_passed_first_Notes_key_failed_lock_exit_status_unverified",
+      "status": "canonical_URI_and_scoped_lock_passed_first_Notes_key_failed",
       "report": "reports/measurements/lucent-keyboard-intent-ba5-release.json",
-      "report_sha256": "6478fafb873245d88130ad9bc68c06810e41e1103823a0a251343aae97d6b0c0",
+      "report_sha256": "334a25e7c8d747e424911d600682a348bf458332b5dfe104487df6091d0fc433",
       "historical_failed_export_40430392734": {
         "run": 40430392734,
         "workflow_head": "ac07aa5d7090c2869038f1d8001311a451c66940",
@@ -3506,11 +3506,11 @@
         "scope": "A pre-input controller failure is not evidence that focus acquisition passed or failed."
       },
       "pending_acceptance": {
-        "immediate_first_Notes_key": "pending",
+        "immediate_first_Notes_key": "failed_in_separate_V7_and_V8_native_trials",
         "first_same_workspace_outside_click_and_key": "pending",
         "Notes_reacquisition_and_caret_visuals": "pending",
-        "canonical_cold_URI_pointer_and_Tab_Enter_on_ba5": "pending",
-        "lock_and_login_security_regression": "pending",
+        "canonical_cold_URI_pointer_and_Tab_Enter_on_ba5": "passed_in_original_canonical_native_trial",
+        "lock_and_login_security_regression": "scoped_native_lock_PAM_exit_passed_login_pixels_and_other_secure_regressions_pending",
         "eligible_normal_RSS_at_or_below300MiB": "pending",
         "eligible_source_rate_or60FPS_and_launcher_animation": "pending",
         "physical_devices_and_broader_applications": "pending"
@@ -3649,6 +3649,36 @@
       "exact_head_CI_passed": false,
       "published": false,
       "scope": "Candidate report and actual capture refresh; source/build/deployment are distinct from protected-main and Pages delivery."
+    },
+    "ba5_completed_click_V8": {
+      "report": "reports/measurements/lucent-widget-completed-click-ba5.json",
+      "report_sha256": "9cc6005267544dd4c8a8b33ef7741b148ef9ac949a521ea955a61d7062e34465",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "first_key_delivery_passed": false,
+      "gesture_contract": "completed-click-then-immediate-key",
+      "host_down_to_key_transport_ms": 66.63447699975222,
+      "Notes_logical_and_native_focus_observed_after_input": true,
+      "owned_browser_received_first_trusted_KeyA": true,
+      "Notes_insert_observed": false,
+      "restoration_checks_passed": 9,
+      "outside_click_and_reacquisition_attempted": false,
+      "actual_input_dispatch_timing_available": false,
+      "native_control_flush_fix_accepted": false,
+      "V7_held_button_result_unchanged": true
+    },
+    "ba5_native_lock_V3": {
+      "report": "reports/measurements/lucent-native-lock-ba5-v3.json",
+      "report_sha256": "c39c4a2d1b8d87935b809b95388858832b6f557132024c51806e2c18e50cd1b9",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "whole_trial_passed": true,
+      "checks_passed": 6,
+      "same_connection_new_locked_ACK_and_one_PAM_unlock": true,
+      "retained_same_invocation_exited_normally": true,
+      "exit_status": 0,
+      "reference_released": true,
+      "same_runtime_files_security_playback_idle_and_geometry_preserved": true,
+      "login_pixels_suspend_hardware_or_performance_accepted": false,
+      "V1_and_V2_failures_unchanged": true
     }
   },
   "requirements": [
@@ -5684,6 +5714,52 @@
         "eligible desktop resources and source-rate/animation performance",
         "protected-main and exact Pages delivery"
       ]
+    },
+    {
+      "milestone": "ba5-completed-click-first-key-native-result",
+      "status": "first_key_delivery_failed_cleanup_passed",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "report": "reports/measurements/lucent-widget-completed-click-ba5.json",
+      "report_sha256": "9cc6005267544dd4c8a8b33ef7741b148ef9ac949a521ea955a61d7062e34465",
+      "summary": {
+        "report": "reports/measurements/lucent-widget-completed-click-ba5.json",
+        "report_sha256": "9cc6005267544dd4c8a8b33ef7741b148ef9ac949a521ea955a61d7062e34465",
+        "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+        "first_key_delivery_passed": false,
+        "gesture_contract": "completed-click-then-immediate-key",
+        "host_down_to_key_transport_ms": 66.63447699975222,
+        "Notes_logical_and_native_focus_observed_after_input": true,
+        "owned_browser_received_first_trusted_KeyA": true,
+        "Notes_insert_observed": false,
+        "restoration_checks_passed": 9,
+        "outside_click_and_reacquisition_attempted": false,
+        "actual_input_dispatch_timing_available": false,
+        "native_control_flush_fix_accepted": false,
+        "V7_held_button_result_unchanged": true
+      },
+      "old_failures_unchanged": true
+    },
+    {
+      "milestone": "ba5-native-lock-PAM-retained-exit",
+      "status": "six_scoped_native_checks_passed",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "report": "reports/measurements/lucent-native-lock-ba5-v3.json",
+      "report_sha256": "c39c4a2d1b8d87935b809b95388858832b6f557132024c51806e2c18e50cd1b9",
+      "summary": {
+        "report": "reports/measurements/lucent-native-lock-ba5-v3.json",
+        "report_sha256": "c39c4a2d1b8d87935b809b95388858832b6f557132024c51806e2c18e50cd1b9",
+        "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+        "whole_trial_passed": true,
+        "checks_passed": 6,
+        "same_connection_new_locked_ACK_and_one_PAM_unlock": true,
+        "retained_same_invocation_exited_normally": true,
+        "exit_status": 0,
+        "reference_released": true,
+        "same_runtime_files_security_playback_idle_and_geometry_preserved": true,
+        "login_pixels_suspend_hardware_or_performance_accepted": false,
+        "V1_and_V2_failures_unchanged": true
+      },
+      "old_failures_unchanged": true
     }
   ],
   "performance_targets": {

@@ -207,8 +207,21 @@ delay; it grants no focus and is not a verified fix. A newly compiled runtime an
 the corrected native trial are required. The original cold URI workflow remains
 accepted in its separate recorded scope.
 
-The [ba5 lock trial](../reports/measurements/lucent-native-lock-ba5.json) separately
-observes secure acknowledgement, the exact native locker and one authenticated
-unlock. Its exit-status assertion fails, so it is not an overall regression
-pass. Later read-only preservation succeeds. The secure runtime remains opted
-out of the ordinary layer-surface acquisition API.
+The additional [V8 trial](../reports/measurements/lucent-widget-completed-click-ba5.json)
+completes DOWN and UP in separate synchronizations before immediate KeyA, with no
+focus wait or retry. It also fails first-key delivery at a 66.634 ms host interval
+from DOWN start, including UP transport. Notes gains logical/native focus, while
+the owned browser receives the key; all nine restorations pass. Outside-click
+and reacquisition remain unattempted. This case does not overwrite V7's failure.
+
+The [V1 lock trial](../reports/measurements/lucent-native-lock-ba5.json) retains its
+exit-status assertion failure. V2 refuses before lock/password because systemd
+serializes an initially null InvocationID as an empty array. The new
+[V3 regression](../reports/measurements/lucent-native-lock-ba5-v3.json) passes all
+six checks using one private unit reference: live nonzero invocation identity,
+exact native PID and positive start are retained through normal status0 exit.
+The same connection observes compositor lock acknowledgement and authenticated
+unlock; references and original state are preserved. No default Code0 is accepted
+as exit proof. This accepts the recorded lock/PAM cycle, not login, secure pixels,
+suspend, hardware or performance. Secure clients remain opted out of the ordinary
+layer-surface acquisition API.
