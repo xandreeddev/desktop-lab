@@ -455,8 +455,13 @@ selection. Buttons support Tab / Shift+Tab traversal and Enter / Space activatio
 lets a composite input field draw the focus outline around all its contents.
 `tab_stop(false)` lets composite clients own keyboard navigation. `Theme::apply`
 provides semantic focus color, outline width and caret width. Text, placeholder
-and caret share the renderer's line metrics. A long input scrolls to keep its
-end caret visible. General caret movement and IME are still future work.
+and caret share the renderer's line metrics. Ordinary fields support caret and
+selection editing, shaped/bidirectional text, font fallback and opted-in native
+IME; see [text shaping](text-shaping.md) for source-specific acceptance. Logical
+field focus is separate from native keyboard ownership. The proposed
+[one-shot focus path](keyboard-focus.md) gates native caret/focus painting and
+keeps widget capability separate from explicit user demand; its new native
+interaction checks remain pending.
 
 The launcher owns Tab / Shift+Tab to cycle Apps → Commands → Wallpapers → Themes
 → Widgets. Arrows change selection, Enter activates it, Escape closes. This is

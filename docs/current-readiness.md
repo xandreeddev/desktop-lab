@@ -1,19 +1,32 @@
 # Current daily-use readiness
 
-The named accepted-main and verified delivery checkpoint is
-[`912074f1`](https://github.com/xandreeddev/desktop-lab/commit/912074f1678b67b789b75217ea253d40dd327e73),
-through [PR115](https://github.com/xandreeddev/desktop-lab/pull/115).
-[Pages40414422493](https://github.com/xandreeddev/desktop-lab/actions/runs/40414422493)
+The current accepted-main delivery checkpoint is
+[`c3007cc5`](https://github.com/xandreeddev/desktop-lab/commit/c3007cc5cefc5faab36f751a28542898ecefac0d),
+through [PR116](https://github.com/xandreeddev/desktop-lab/pull/116).
+[Pages40418504442](https://github.com/xandreeddev/desktop-lab/actions/runs/40418504442)
 passes three exact public HTML artifact matches and the native manifest/PNG:
-**118 producer inputs and 480 captures from source 3640bd86** (public receipt
-`695a4c42b0f018eaf0339d947bf2814c8c1440deb1437bea55a22c133e8e23ea`).
-Twenty same-artifact LAN HTTP checks pass, retaining the 64/128 MiB static-server
-limits (receipt `7f47d1a2d4c22760cdc8b337d65d581a2e4d424387dd73b659493042067833db`).
-Earlier 9d42/PR114/Pages40396627106 served 4a0f932a's **117** producers;
-ca88/Pages40392718403 served b3c91fab's **116**. Those checkpoints remain historical.
-This later focus-investigation, CI and delivery reconciliation still needs its own
-final build, protected-main merge and publication. Delivery establishes no native
-keyboard fix or performance acceptance.
+**118 producer inputs and 480 captures from source 3640bd86**. Twenty
+same-artifact LAN HTTP checks pass with the 64/128 MiB static-server limits.
+These are delivery checks, not native keyboard or performance acceptance.
+Earlier 912/PR115, 9d42/PR114 and ca88 checkpoints remain historical.
+
+The current coherent VM release is source **b2f54551dfbe**, built by
+[hosted Arch run40415443527](https://github.com/xandreeddev/desktop-lab/actions/runs/40415443527).
+Its 17 qualification stages and 840 targeted tests pass. All ten ELF consumers
+pass static compatibility against the target provider closure; the concrete
+FFmpeg public-header comparison differs only in version literals. Deployment
+verifies all six user clients and the root greeter, preserves settings/security,
+and does not restart greetd. This deployment is separate from the older source
+3640 component captures.
+
+The [actual b2 cold-browser trial](../reports/measurements/lucent-cold-default-uri-b2.json)
+passes canonical pointer opening and trusted document input, while Tab/Enter
+still fails browser focus/key delivery. All nine cleanup checks pass in each
+case. The new native observer sees Clock regain keyboard focus after history
+closes; Clock/Calendar had committed `None` during history and subsequently
+restored `OnDemand`. The proposed [explicit widget-focus implementation](keyboard-focus.md)
+separates capability, demand and native ownership. Its fresh native checks and
+visual export are pending; it is not an accepted fix.
 
 Archived resource and earlier feature observations below retain `eb3481f4` and
 their other named sources. At the earlier [PR110](https://github.com/xandreeddev/desktop-lab/pull/110)
@@ -34,9 +47,9 @@ Candidate `3640bd86c6ec` implements the typed
 keyboard policy described in [default-handler activation](default-uri-activation.md).
 Its coherent build completes **17 stages and 823 targeted test passes**. A separate
 actual AMD RADV offscreen export covers **118 producers, nine stories, five
-palettes and 480 PNGs**, all byte-identical to the prior RADV reference. The
-candidate is now coherently deployed: all six user clients and the root greeter
-are verified, with user/settings/security state preserved and no greetd restart.
+palettes and 480 PNGs**, all byte-identical to the prior RADV reference. That
+candidate's deployment verified all six user clients and the root greeter,
+with user/settings/security state preserved and no greetd restart.
 The actual [cold-browser source 3640 run](../reports/measurements/lucent-cold-default-uri-3640.json)
 passes pointer opening and one trusted `KeyA`; the separate Tab/Enter route still
 fails browser focus/key delivery. Both owned cleanups pass all nine checks. The
@@ -59,14 +72,15 @@ member-aware widget suppression and read-only native keyboard diagnostics. Exact
 b2 passes the Ubuntu [Rust job](https://github.com/xandreeddev/desktop-lab/actions/runs/40411820911/job/121884163923)
 in [CI run40411820911](https://github.com/xandreeddev/desktop-lab/actions/runs/40411820911):
 workspace/protocol/software-Vulkan suites and all 17 individually verified new
-tests pass. A coherent Arch release, candidate VM deployment and native keyboard
-acceptance remain pending. See
+tests pass. The later coherent Arch release and deployment now pass as recorded
+above; the actual b2 canonical keyboard trial still fails. See
 [the activation guide](default-uri-activation.md#focus-geometry-and-cursor-only-diagnostic)
 for the requested-versus-committed ordering limitation. The seven-gap goal stays open.
 
-The 118 source3640 capture inputs are now published at main912, separate from
-historical 9d42's 117 inputs and ca88/b3's 116 inputs. This does not deploy the b2
-widget policy or diagnostic runtime to the VM.
+The 118 source3640 capture inputs are published at the c300 delivery checkpoint,
+separate from historical 9d42's 117 inputs and ca88/b3's 116 inputs. The b2 runtime
+was deployed in a separate verified transaction; publishing captures did not
+perform that deployment.
 
 The recent changes add:
 

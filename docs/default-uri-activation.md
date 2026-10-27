@@ -264,3 +264,24 @@ and twenty same-artifact LAN checks verify publication, including source3640's
 118 producer inputs and 480 native catalogue captures. This named delivery
 checkpoint does not publish this later investigation/CI reconciliation or establish
 candidate VM deployment. See [current readiness](current-readiness.md).
+
+
+## Actual b2 native observation and proposed focus ownership
+
+The [b2 native report](../reports/measurements/lucent-cold-default-uri-b2.json)
+adds actual native keyboard observation to the original independent pointer and
+Tab/Enter routes. Pointer passes. Keyboard still fails, and both cases pass all
+nine cleanup checks. During history, Clock and Calendar both request and commit
+`None`. After history closes, `OnDemand` returns; the keyboard route observes
+Clock as the current Lucent native keyboard owner while the browser document
+lacks focus. These client observations are not an atomic global seat-owner query.
+They establish the observed reacquisition; they do not establish every compositor
+ordering detail.
+
+The new [keyboard-focus guide](keyboard-focus.md) follows the proposed correction:
+capability alone creates no widget demand, a genuine prepared control press
+creates exact member/output intent, and the optional native backend acknowledges
+one-shot acquisition only after real Enter and teardown synchronization. Closing
+history does not recreate widget demand. This focus API leaves URI-opening policy
+in `UriPort` and notification lifetime policy in the client. Fresh first-click,
+outside-click, canonical URI and secure-session checks remain required.
