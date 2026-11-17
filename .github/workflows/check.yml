@@ -149,7 +149,14 @@ jobs:
           done
           systemctl --user show-environment >/dev/null
           export XDG_CACHE_HOME="$GITHUB_WORKSPACE/reports/local/optimized-cache"
-          python3 scripts/lucent-dev.py build --profile release
+          if ! python3 scripts/lucent-dev.py build --profile release; then
+            stat -c '%u %g %a %F %n' \
+              lucent/target/release/lucent-desktop \
+              lucent/target/release/lucent-cli \
+              lucent/target/release/lucent-menu \
+              configs/lucent/palettes.json
+            exit 1
+          fi
           python3 .github/scripts/package-dev-bundle.py \
             --bundles "$XDG_CACHE_HOME/lucent-dev/bundles" \
             --source-commit "$GITHUB_SHA" \

@@ -116,7 +116,9 @@ guessing a bundle name.
 
 Each build uses one Cargo job inside a separate user unit with a one-core CPU
 quota, a 900 MiB memory high threshold, a 1400 MiB memory maximum, 256 tasks and
-a 30-minute runtime limit. The memory high threshold applies pressure; it is not
+a 30-minute runtime limit. Its explicit `0077` umask keeps new outputs private
+even when the user manager has a more permissive default. The memory high
+threshold applies pressure; it is not
 a second hard cap. An exhausted build fails without replacing the desktop.
 
 Readiness defaults to a 45-second timeout and requires at least 35 seconds of

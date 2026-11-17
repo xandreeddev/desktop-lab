@@ -140,7 +140,7 @@ class BuildTests(unittest.TestCase):
                 patch.object(build.subprocess, 'Popen') as popen, patch.object(build.os, 'pidfd_open', return_value=123):
             job = build.BuildJob(Path('/source'), Path('/persistent-target'), 'release', Path('/bundles'))
             command = popen.call_args.args[0]
-            for setting in ('CPUQuota=100%', 'MemoryHigh=900M', 'MemoryMax=1400M', 'TasksMax=256', 'RuntimeMaxSec=1800'):
+            for setting in ('CPUQuota=100%', 'MemoryHigh=900M', 'MemoryMax=1400M', 'TasksMax=256', 'RuntimeMaxSec=1800', 'UMask=0077'):
                 self.assertIn('--property=' + setting, command)
             self.assertEqual(popen.call_args.kwargs['env']['CARGO_TARGET_DIR'], '/persistent-target')
             self.assertEqual(popen.call_args.kwargs['env']['CARGO_BUILD_JOBS'], '1')

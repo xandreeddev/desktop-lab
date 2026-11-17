@@ -111,6 +111,7 @@ class BuildJob:
                    '--property=CPUQuota=100%', '--property=MemoryHigh=900M',
                    '--property=MemoryMax=1400M', '--property=TasksMax=256',
                    '--property=RuntimeMaxSec=1800', '--property=TimeoutStopSec=15',
+                   '--property=UMask=0077',
                    '--property=KillMode=control-group', '--property=Restart=no']
         for name in ('PATH', 'HOME', 'PYTHONPATH', 'CARGO_TARGET_DIR', 'CARGO_BUILD_JOBS',
                      'LUCENT_DEV_CARGO', 'LUCENT_DEV_BUILD_UNIT', 'CARGO_HOME', 'RUSTUP_HOME', 'RUSTUP_TOOLCHAIN',

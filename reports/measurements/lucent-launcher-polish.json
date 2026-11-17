@@ -245,7 +245,7 @@
     "scope": "All required source checks pass. Optimized bundle construction and target VM/native acceptance remain separate."
   },
   "hosted_optimized_candidate": {
-    "status": "workflow_prepared",
+    "status": "compiled_but_publication_rejected_followup_prepared",
     "artifact_name": "optimized-development-bundle",
     "builder": "Existing lucent-dev.py release builder in its bounded user unit on GitHub",
     "scope": "Three ordinary clients and seven theme files. The actual candidate build and target VM qualification remain open.",
@@ -261,7 +261,35 @@
     },
     "packaging_receipt_sha256": "0d21ec0a92dde2c27086605dab63f586025aa95304296d804c5452214dda4a5d",
     "vm_qualified": false,
-    "native_accepted": false
+    "native_accepted": false,
+    "failed_attempt": {
+      "source_commit": "ae4306869354a8db72504f305d6e266ae8d6d899",
+      "run": "https://github.com/xandreeddev/desktop-lab/actions/runs/44100838350",
+      "regular_rust_and_protocol_steps_passed": true,
+      "native_vulkan_step_passed": true,
+      "optimized_compile_passed": true,
+      "compile_seconds": 393,
+      "bundle_publication_passed": false,
+      "artifact_uploaded": false,
+      "failure": "The unchanged file guard rejected the compiled desktop output as not an owned regular file with safe permissions.",
+      "followup": "Use an explicit0077 worker umask. A real user-unit fake-compiler probe creates all three outputs as0700 and passes publication with a caller umask of0002. Any repeated CI rejection now includes stat diagnostics; the ownership/permission guard remains unchanged."
+    },
+    "private_umask_probe": {
+      "passed": true,
+      "real_rust_compilation": false,
+      "rendering": false,
+      "vm_started": false,
+      "caller_umask": "0002",
+      "actual_target_modes": {
+        "lucent-desktop": "0o700",
+        "lucent-cli": "0o700",
+        "lucent-menu": "0o700"
+      },
+      "publication_checks_passed": true,
+      "temporary_fake_source_removed": true
+    },
+    "private_umask_probe_receipt_sha256": "d33f3c57d02576d8684205419c828d4898bd643f03cb37d7e3fc4c507fa0e36d",
+    "focused_dev_policy_tests_passed": 52
   },
   "hosted_verified_parent": {
     "source_commit": "42967f8fc81e3194beeb34da3eddfdb4c232cf2f",
