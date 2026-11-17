@@ -70,3 +70,20 @@ section context and stale callbacks. The real layout test checks the toolkit
 scroll bounds and retires a held thumb after a replacement with identical
 geometry. Native VM input, visual baselines and protected-main delivery are
 separate gates in [the polish backlog](desktop-polish.json).
+
+On the prepared idle, unlocked FHD Lucent VM, run the public native helpers
+against the exact installed optimized bundle:
+
+```bash
+python3 vm/test-launcher-polish.py --bundle /absolute/path/to/bundle
+python3 vm/test-launcher-application.py --bundle /absolute/path/to/bundle
+```
+
+The first checks physical navigation, section context, scrolling, dismissal and
+the independent picker. The second stages its own bounded XDG application entry,
+launches real foot processes through the production adapter and requires actual
+PTY input after keyboard launch, Escape and pointer launch. It never dispatches
+compositor focus. Both qualify native process identity, keep receipts private
+and verify restoration of owned artifacts, original preferences and cursor.
+The application fixture is staged by its controller; it is not a standalone
+test for an arbitrary desktop or keyboard layout.

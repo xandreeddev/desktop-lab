@@ -3,11 +3,11 @@
   "recorded_on": "2026-11-17",
   "status": "in_progress",
   "scope": "Launcher navigation, retained app context, real toolkit scrollbars and independent picker on the existing FHD VM. The full launcher feature is not yet accepted.",
-  "source_commit": "bd71fee40c17468c1b97bede91f792de75153229",
+  "source_commit": "b574812e1ac7db44121347399b5ae2b07daa77fa",
   "release_profile": "release with thin LTO",
-  "release_manifest_sha256": "203a4c6dc71e397abb190698477dfe30cd215a12f551734ee4fdd8b9a3642096",
+  "release_manifest_sha256": "568e846a41c2b9c93a9c28c5734a74448f55daa6bfd23f82292793d09b52a597",
   "installed_desktop_sha256": "c9921f09011258802807e40147590c6115b5dd1a7de46f069bfa1478f8557928",
-  "installed_menu_sha256": "108ef07890cf3eb306466a3ee107779a50e08583dae2065c85fddf2d3ca85925",
+  "installed_menu_sha256": "0d6f5f87ebc0252b8a302d9e0404ab4bab4a845bfc096b48ff4a56f7bb31f1fc",
   "native": {
     "passed": true,
     "checks": {
@@ -26,9 +26,9 @@
       "original_cursor": true,
       "desktop_preferences_wallpaper_exports_and_process": true
     },
-    "private_receipt_sha256": "948386373811e5acc46aadf3fe17ca8801f8a4ebd1885585bb7bd973f6a531b9",
-    "visual_review_complete": false,
-    "visual_findings": "The launcher rows, scrollbar, result count, selection and search field fit in the captured native panel. The picker footer shows missing arrow glyphs; a plain-text responsive hint is prepared and still needs a fresh build/native visual check.",
+    "private_receipt_sha256": "0ddd21aca5d2133c96ef564fcfe9f4f89f00526e9167154555b8d5c98cea3782",
+    "visual_review_complete": true,
+    "visual_findings": "The native launcher rows, scrollbar, counter, selection and search field fit the panel. The rebuilt picker footer uses readable responsive plain text; its actual native capture was reviewed. A subsequent long-label ellipsis refinement still needs its own deployment and native review.",
     "earlier_attempt": {
       "passed": false,
       "private_receipt_sha256": "dc837319b92da1345e184e3d19cb8f936f48652d4a943518a008720b0654c95e",
@@ -71,16 +71,64 @@
       }
     ],
     "full_final_regression_suite_passed": false,
-    "visual_goldens_reviewed_and_updated": false
+    "visual_goldens_reviewed_and_updated": true,
+    "b574_full_checkpoint": {
+      "passed": true,
+      "rust_tests_passed": 753,
+      "python_tests_passed": 802,
+      "formatting_passed": true,
+      "strict_workspace_clippy_passed": true,
+      "design_token_cases_passed": 590,
+      "icon_cases_passed": 58,
+      "receipt_sha256": "55e3e3c9e685205529ec8d790926d81201c3f101ea74ca9726742e9470f68a59"
+    }
   },
   "remaining": [
-    "Apply and visually verify the corrected picker footer.",
-    "Run full final source checks, review changed Vulkan baselines and refresh the source-bound component catalogue.",
-    "Finish native main-launch/focus acceptance for the launcher.",
+    "Finish the single-line long-label refinement, review intentional Vulkan baseline changes and pass the final visual matrix.",
+    "Refresh and verify the source-bound component catalogue and final source/site checks.",
+    "Deploy the final optimized ordinary-client bundle and repeat the public native helpers, including actual visual review.",
     "Protected-main delivery."
   ],
   "performance_accepted": false,
   "physical_hardware_accepted": false,
   "full_polish_goal_complete": false,
-  "privacy": "No user queries, application inventories, credentials, note content, clipboard payloads, locations, personal paths or VM screenshots are published."
+  "privacy": "No user queries, application inventories, credentials, note content, clipboard payloads, locations, personal paths or VM screenshots are published.",
+  "application_launch": {
+    "source_commit": "b574812e1ac7db44121347399b5ae2b07daa77fa",
+    "passed": true,
+    "checks": {
+      "keyboard_launch_foreground_and_physical_key_delivery": true,
+      "escape_returns_input_to_same_application": true,
+      "pointer_launch_foreground_and_physical_key_delivery": true
+    },
+    "restoration": {
+      "all_original_application_units_drained": true,
+      "owned_entry_and_stage_removed": true,
+      "original_cursor": true,
+      "desktop_preferences_wallpaper_exports_and_process": true,
+      "original_workspace": true
+    },
+    "controller_forced_focus": false,
+    "private_receipt_sha256": "cb824a40d590cf53072de5683ff3148c88ae9c008b51321d8550c02fa1b3aa2c",
+    "scope": "Two genuine bounded foot launches through the production XDG application adapter on one prepared FHD output. Literal physical KeyA/Enter must reach each real PTY, and Escape returns to the same original process. No compositor focus dispatch is used.",
+    "public_helper": "vm/test-launcher-application.py",
+    "earlier_transport_attempt": {
+      "passed": false,
+      "scope": "Guest staged-module import failed before application-entry creation. Separate exact-file stage cleanup passed; the original failed receipt is unchanged."
+    }
+  },
+  "visual_review": {
+    "changed_families": 17,
+    "changed_cases": 68,
+    "palettes": [
+      "dark",
+      "light"
+    ],
+    "densities": [
+      "1x",
+      "2x"
+    ],
+    "review_receipt_sha256": "3647d966f87399cc15167519d4401ecb1f32ffbac0c6941d6fad5f03f7228358",
+    "full_final_matrix_passed": false
+  }
 }

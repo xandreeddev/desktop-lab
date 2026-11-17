@@ -124,7 +124,9 @@ impl View<'_> {
                         Some(
                             Element::row(vec![
                                 self.app_icon(app, component::launcher::ICON_WIDTH),
-                                self.label(&app.name, font::BODY).width(Length::Fill),
+                                self.label(&app.name, font::BODY)
+                                    .width(Length::Fill)
+                                    .wrap(1),
                                 self.icon("pin", icon::SMALL)
                                     .padding(space::XS)
                                     .size(
