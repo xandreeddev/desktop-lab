@@ -70,7 +70,7 @@
         "returncode": 0
       }
     ],
-    "full_final_regression_suite_passed": false,
+    "full_final_regression_suite_passed": true,
     "visual_goldens_reviewed_and_updated": true,
     "b574_full_checkpoint": {
       "passed": true,
@@ -84,12 +84,12 @@
     },
     "final_workspace_and_visual_source_commit": "42967f8fc81e3194beeb34da3eddfdb4c232cf2f",
     "full_workspace_rust_passed": true,
-    "vulkan_visual_cases_passed": 832
+    "vulkan_visual_cases_passed": 832,
+    "final_source_checkpoint": "c63c1594f918e8261acbc26fc5be1c081287c7fe"
   },
   "remaining": [
-    "After local resource use is authorized again, complete the final optimized ordinary-client release build.",
-    "Pass final integration/site validation with the refreshed source-bound catalogue.",
-    "After resource use is authorized again, deploy the final optimized ordinary-client bundle and repeat both public native helpers, including actual visual review.",
+    "Finish and verify the hosted optimized ordinary-client release bundle; local builds remain stopped.",
+    "After resource use is authorized again, verify target dependencies, deploy the final optimized bundle and repeat both public native helpers, including actual visual review.",
     "Protected-main delivery."
   ],
   "performance_accepted": false,
@@ -144,7 +144,7 @@
     "scope": "The existing VM, optimized release worker, full Vulkan worker and catalogue worker are stopped. Their interrupted final checks are not accepted as passed."
   },
   "final_candidate": {
-    "source_commit": "42967f8fc81e3194beeb34da3eddfdb4c232cf2f",
+    "source_commit": "c63c1594f918e8261acbc26fc5be1c081287c7fe",
     "label_refinement_implemented": true,
     "baseline_changes_reviewed": true,
     "optimized_bundle_complete": false,
@@ -212,6 +212,58 @@
     }
   ],
   "hosted_current": {
+    "source_commit": "c63c1594f918e8261acbc26fc5be1c081287c7fe",
+    "run": "https://github.com/xandreeddev/desktop-lab/actions/runs/44094501695",
+    "whole_run_passed": true,
+    "integration_code_passed": true,
+    "site_passed": true,
+    "rust_job_passed": true,
+    "formatting_passed": true,
+    "strict_workspace_clippy_passed": true,
+    "full_workspace_rust_tests_passed": true,
+    "controlled_service_suites_passed": [
+      "notifications",
+      "audio",
+      "bluetooth",
+      "power",
+      "tray",
+      "media"
+    ],
+    "full_vulkan_matrix_status": "success",
+    "full_vulkan_visual_cases_passed": 832,
+    "visual_artifact_id": 14335321160,
+    "visual_archive_sha256": "c0c921d60cf78915d3435e4145c90e6c630ce4598a85b27752db11b492c97317",
+    "visual_archive_digest_verified": true,
+    "all_case_pngs_present_and_crc_verified": true,
+    "visual_receipt_sha256": "6bba62d562836eb03e674350741db40b7da77f8fa53342ee90d60eaab5cb6437",
+    "renderer": {
+      "backend": "Vulkan",
+      "adapter": "llvmpipe (LLVM 21.1.8, 256 bits)",
+      "device_type": "Cpu",
+      "driver": "Mesa 26.0.8-1ubuntu0.3 (LLVM 21.1.8)"
+    },
+    "scope": "All required source checks pass. Optimized bundle construction and target VM/native acceptance remain separate."
+  },
+  "hosted_optimized_candidate": {
+    "status": "workflow_prepared",
+    "artifact_name": "optimized-development-bundle",
+    "builder": "Existing lucent-dev.py release builder in its bounded user unit on GitHub",
+    "scope": "Three ordinary clients and seven theme files. The actual candidate build and target VM qualification remain open.",
+    "local_packaging_check": {
+      "existing_verified_release_packaged": true,
+      "manifest_and_all_payloads_survive_archive_round_trip": true,
+      "archive_digest_verified": true,
+      "wrong_source_rejected_before_output": true,
+      "two_inert_help_checks_passed": true,
+      "vm_qualified_flag_remains_false": true,
+      "local_compilation_or_rendering_started": false,
+      "owned_test_copies_removed": true
+    },
+    "packaging_receipt_sha256": "0d21ec0a92dde2c27086605dab63f586025aa95304296d804c5452214dda4a5d",
+    "vm_qualified": false,
+    "native_accepted": false
+  },
+  "hosted_verified_parent": {
     "source_commit": "42967f8fc81e3194beeb34da3eddfdb4c232cf2f",
     "run": "https://github.com/xandreeddev/desktop-lab/actions/runs/44090678488",
     "site_passed": true,

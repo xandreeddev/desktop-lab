@@ -52,11 +52,12 @@ nine stories and five palettes. Its archive digest, complete variant matrix,
 producer fingerprints and PNG hashes/dimensions validate. Twenty-two actual
 light/dark narrow samples across all nine families and selected 2× states were
 reviewed. The earlier catalogue is archived locally; interrupted/failed attempts
-remain historical. At that source, all 1,130 regular workspace tests,49 controlled service tests
+remain historical. At that source, all 1,130 regular workspace tests, 49 controlled service tests
 and 832 production Vulkan comparisons pass on software Vulkan. The
-visual artifact digest and every case PNG were independently verified. Fresh
-integration/site checks with the promoted catalogue, final optimized deployment
-and native acceptance remain open.
+visual artifact digest and every case PNG were independently verified. The promoted branch then passes [all required CI at c63c1594](https://github.com/xandreeddev/desktop-lab/actions/runs/44094501695),
+including integration/site checks and a second independently verified 832-case
+visual artifact. The hosted optimized three-client bundle is being prepared;
+its target dependencies, guarded deployment and native acceptance remain open.
 
 ## Delivery and earlier source-specific evidence
 

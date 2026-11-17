@@ -134,3 +134,28 @@ jobs:
           name: native-visual-report
           path: reports/local/visual-tests
           if-no-files-found: ignore
+      - name: Build optimized development bundle
+        timeout-minutes: 32
+        run: |
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y dbus-user-session
+          task_build_user=$(id -un)
+          task_build_uid=$(id -u)
+          sudo loginctl enable-linger "$task_build_user"
+          export XDG_RUNTIME_DIR="/run/user/$task_build_uid"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          for task_attempt in $(seq 1 50); do
+            if systemctl --user show-environment >/dev/null 2>&1; then break; fi
+            sleep .1
+          done
+          systemctl --user show-environment >/dev/null
+          export XDG_CACHE_HOME="$GITHUB_WORKSPACE/reports/local/optimized-cache"
+          python3 scripts/lucent-dev.py build --profile release
+          python3 .github/scripts/package-dev-bundle.py \
+            --bundles "$XDG_CACHE_HOME/lucent-dev/bundles" \
+            --source-commit "$GITHUB_SHA" \
+            --output reports/local/optimized-artifact
+      - uses: actions/upload-artifact@v4
+        with:
+          name: optimized-development-bundle
+          path: reports/local/optimized-artifact
+          if-no-files-found: error

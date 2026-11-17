@@ -74,6 +74,26 @@ the printed bundle to the target explicitly and run `apply` there. The receiver
 needs the developer tool and existing installation, but `apply` and `doctor` do
 not invoke Cargo or Git.
 
+## Prepare a hosted candidate
+
+The `checks` workflow is configured to produce an
+`optimized-development-bundle` artifact after the Rust and native visual checks.
+It runs the same `lucent-dev.py build --profile release` command in a bounded
+user unit on the hosted runner. This prepares the three ordinary clients and
+seven theme files without using the workstation or target VM for compilation.
+
+The artifact contains `development-bundle.tar.gz` and `qualification.json`.
+Packaging verifies the clean source revision, release profile, manifest and
+every archived payload hash. It preserves private file modes and normalizes
+archive ownership. The qualification records needed shared libraries, GLIBC
+requirements, builder dependency resolution and inert CLI/menu help probes.
+It leaves `vm_qualified` and `native_accepted` false.
+
+Copy the candidate to the target only when that session is available. Actual
+target dependencies, the existing installation and guarded apply still need
+qualification before native interaction can be accepted. The hosted artifact
+does not update a desktop or supply a coherent secure-client/supervisor release.
+
 ## Watch scope and build controls
 
 The watcher observes `lucent/`, `design/`, `configs/lucent/` and the design-token
