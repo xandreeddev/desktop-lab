@@ -1,5 +1,28 @@
 # Current daily-use readiness
 
+## Current desktop polish work
+
+The [polish backlog](desktop-polish.json) tracks the current Caelestia reference
+and the one-feature-at-a-time delivery rule. On 2026-11-17 the existing VM was
+booted and signed in through its native greeter; it still runs the coherent d77
+candidate described below. The working feature branch now retains that runtime
+implementation and the existing PR117 evidence.
+
+Fresh [focus verification](../reports/measurements/lucent-polish-keyboard-focus.json)
+passes both original cold-browser routes with actual trusted key delivery and
+nine restoration checks per route. A new independent `keyboard-focus` consumer
+passes native typing, Tab, Escape, reacquisition, foreground focus loss, explicit
+release, graceful quit/socket cleanup and desktop/cursor preservation. Its actual
+passive, focused and released visuals were reviewed. The source checks pass 729
+relevant Rust tests, 802 Python tests and all 832 unchanged Vulkan visual cases.
+
+The first focus feature remains in progress: actual Notes outside-click and
+immediate input ordering still need a corrected native trial. The independent
+consumer and cold-browser passes do not accept that older widget diagnostic.
+Protected-main delivery, other polish features and performance remain separate.
+
+## Delivery and earlier source-specific evidence
+
 The current accepted-main delivery checkpoint is
 [`c3007cc5`](https://github.com/xandreeddev/desktop-lab/commit/c3007cc5cefc5faab36f751a28542898ecefac0d),
 through [PR116](https://github.com/xandreeddev/desktop-lab/pull/116).
