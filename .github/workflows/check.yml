@@ -83,6 +83,7 @@ jobs:
       - run: cargo clippy --manifest-path lucent/Cargo.toml --locked --workspace --all-targets -- -D warnings
       - name: Export native component candidate
         run: |
+          mkdir -p reports/local
           export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name '*lvp*' -print -quit)"
           test -n "$VK_DRIVER_FILES"
           cargo run --manifest-path lucent/Cargo.toml --locked -p lucent-lab -- --render reports/local/component-lab-candidate

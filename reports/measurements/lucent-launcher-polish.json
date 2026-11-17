@@ -172,6 +172,20 @@
       "full_visual_matrix_attempted": false,
       "candidate_export_attempted": false,
       "followup": "Replace the obsolete lab assertion with real selection, paging, clamped endpoint and editor-key behavior; export/upload the inspectable component candidate before later functional checks."
+    },
+    {
+      "source_commit": "8fc66ffcfa40dae15c87c89ab76fb117df5dc849",
+      "run": "https://github.com/xandreeddev/desktop-lab/actions/runs/44089914061",
+      "conclusion": "failure",
+      "site_passed": true,
+      "formatting_passed": true,
+      "strict_workspace_clippy_passed": true,
+      "candidate_build_passed": true,
+      "candidate_export_passed": false,
+      "candidate_export_failure": "The CI export preceded creation of reports/local, so the exporter could not create its fresh output directory.",
+      "workspace_tests_attempted": false,
+      "full_visual_matrix_attempted": false,
+      "followup": "Create the output parent explicitly in the hosted export step. The candidate directory still must be fresh and is never overwritten."
     }
   ]
 }
