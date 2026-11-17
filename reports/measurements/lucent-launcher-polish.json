@@ -245,7 +245,7 @@
     "scope": "All required source checks pass. Optimized bundle construction and target VM/native acceptance remain separate."
   },
   "hosted_optimized_candidate": {
-    "status": "arch_process_limit_failure_diagnosed_init_followup_prepared",
+    "status": "arch_setup_passed_checkout_ownership_followup_prepared",
     "artifact_name": "optimized-development-bundle",
     "builder": "Existing lucent-dev.py release builder in its bounded user unit on GitHub",
     "scope": "Three ordinary clients and seven theme files. The actual candidate build and target VM qualification remain open.",
@@ -397,7 +397,22 @@
         "scope": "The bounded in-shell diagnostic exposes process exhaustion during signature verification. No candidate was built or accepted.",
         "followup": "Enable Docker init to reap exited helper processes; verify actual PID1 during setup and qualification. Keep the CPU, memory, swap and process limits unchanged."
       },
-      "configured_init_process": "docker-init"
+      "configured_init_process": "docker-init",
+      "checkout_ownership_attempt": {
+        "source_commit": "a5c0ad65e163c6c1617c063e9b3082a03ae3116a",
+        "run": "https://github.com/xandreeddev/desktop-lab/actions/runs/44124102206",
+        "job_id": 134183564715,
+        "arch_setup_passed": true,
+        "required_package_signatures_preserved": true,
+        "frozen_database_and_archive_checks_passed": true,
+        "actual_docker_init_checked": true,
+        "toolchain_install_passed": true,
+        "optimized_compile_attempted": false,
+        "source_guard_passed": false,
+        "failure": "Git rejected the CI checkout ownership before Cargo was invoked. checkout had configured its trust entry using a temporary HOME.",
+        "followup": "Trust only the exact GITHUB_WORKSPACE path in the ephemeral CI container before invoking the publisher. Retain source revision, dirty-state and payload ownership checks.",
+        "log_sha256": "8f3664b7585686256a803a23bf3b7a7ec87d7d2f0eba5a32d146413e4f1ae8bf"
+      }
     }
   },
   "hosted_verified_parent": {

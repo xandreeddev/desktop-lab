@@ -211,6 +211,8 @@ jobs:
       - name: Build and qualify the optimized Arch development bundle
         timeout-minutes: 32
         run: |
+          # checkout's temporary HOME exception does not survive into this step.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           python3 .github/scripts/build-arch-dev.py \
             --target "$RUNNER_TEMP/lucent-arch-target" \
             --bundles "$RUNNER_TEMP/lucent-arch-bundles" \
