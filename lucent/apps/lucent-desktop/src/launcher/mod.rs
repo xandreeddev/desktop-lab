@@ -63,7 +63,10 @@ pub enum Message {
     Query(String),
     EditQuery(TextEdit),
     Select(usize),
+    SelectApplication(AppId),
+    ScrollApplications(u64, ScrollEvent),
     Navigate(i32),
+    ListNavigate(ListNavigation),
     Activate,
     OpenActions(Application),
     SelectedActions,
@@ -137,15 +140,22 @@ pub struct Launcher {
     mode: Mode,
     query: String,
     query_field: TextFieldState,
-    results: Vec<usize>,
+    results: Vec<AppId>,
+    results_revision: u64,
     selected: usize,
     scroll: usize,
+    app_context: Option<AppContext>,
     action_menu: Option<application_actions::Menu>,
     action_pending: Option<application_actions::Pending>,
     action_revision: u64,
     reveal: Motion,
     panel_width: Motion,
     panel_height: Motion,
+}
+struct AppContext {
+    id: Option<AppId>,
+    selected: usize,
+    scroll: usize,
 }
 #[derive(Clone, Copy)]
 struct CloseRequest {
@@ -166,8 +176,10 @@ impl Default for Launcher {
             query: String::new(),
             query_field: TextFieldState::default(),
             results: vec![],
+            results_revision: 0,
             selected: 0,
             scroll: 0,
+            app_context: None,
             action_menu: None,
             action_pending: None,
             action_revision: 0,
@@ -223,9 +235,16 @@ impl Launcher {
 
     /// Discovery refreshes the active query, then clamps selection before paint.
     pub fn selected_application<'a>(&self, apps: &'a [Application]) -> Option<&'a AppId> {
+        if self.mode != Mode::Apps {
+            return self.app_context.as_ref().and_then(|context| {
+                apps.iter()
+                    .find(|app| Some(&app.id) == context.id.as_ref())
+                    .map(|app| &app.id)
+            });
+        }
         self.results
             .get(self.selected)
-            .and_then(|index| apps.get(*index))
+            .and_then(|id| apps.iter().find(|app| &app.id == id))
             .map(|app| &app.id)
     }
     pub fn refresh_preserving(
@@ -236,18 +255,32 @@ impl Launcher {
         now: f64,
     ) {
         self.revalidate_actions(apps);
-        self.results = lucent_usecases::search_applications(apps, &self.query);
+        self.filter(apps);
         if let Some(position) =
-            selected.and_then(|id| self.results.iter().position(|index| &apps[*index].id == id))
+            selected.and_then(|id| self.results.iter().position(|result| result == id))
         {
-            self.selected = position;
+            if self.mode == Mode::Apps {
+                self.selected = position;
+            } else if let Some(context) = &mut self.app_context {
+                context.selected = position;
+            }
         }
         self.reconcile(geometry, now);
     }
     pub fn refresh(&mut self, apps: &[Application], geometry: Geometry, now: f64) {
         self.revalidate_actions(apps);
-        self.results = lucent_usecases::search_applications(apps, &self.query);
+        self.filter(apps);
         self.reconcile(geometry, now);
+    }
+    fn filter(&mut self, apps: &[Application]) {
+        let results: Vec<_> = lucent_usecases::search_applications(apps, &self.query)
+            .into_iter()
+            .map(|index| apps[index].id.clone())
+            .collect();
+        if results != self.results {
+            self.results = results;
+            self.results_revision = self.results_revision.wrapping_add(1);
+        }
     }
     pub fn reconcile(&mut self, geometry: Geometry, now: f64) {
         self.choose(
@@ -291,56 +324,95 @@ impl Launcher {
             motion::DECELERATE,
         );
     }
-    fn choose(&mut self, index: usize, geometry: Geometry) {
-        if self.action_menu.is_some() {
-            self.choose_action(index, geometry);
-            return;
+    fn list_count(&self, geometry: Geometry) -> usize {
+        if let Some(menu) = &self.action_menu {
+            return menu.app.actions.len();
         }
-        let count = match self.mode {
+        match self.mode {
             Mode::Apps => self.results.len(),
             Mode::Commands => COMMANDS.len(),
             Mode::Widgets => WIDGETS.len() + 2,
             Mode::Themes => geometry.palettes + 1 + shell_layout::LAUNCHER_PRESETS.len(),
             Mode::Wallpapers => geometry.wallpapers,
-        };
-        self.selected = index.min(count.saturating_sub(1));
-        let mut rows = shell_layout::visible_rows(
+        }
+    }
+    fn list_rows(&self, geometry: Geometry) -> usize {
+        if self.action_menu.is_some() {
+            return shell_layout::visible_rows(
+                Mode::Apps,
+                self.presentation_count(),
+                geometry.viewport,
+                geometry.preferred,
+            );
+        }
+        if self.mode == Mode::Themes {
+            let (_, height) =
+                shell_layout::launcher_size(self.mode, 0, geometry.viewport, geometry.preferred);
+            return shell_layout::palette_rows(
+                height - lucent_design::component::dock::CONTENT_INSET * 2.,
+            );
+        }
+        shell_layout::visible_rows(
             self.mode,
             self.results.len(),
             geometry.viewport,
             geometry.preferred,
-        );
-        if self.mode == Mode::Themes {
-            let (_, height) =
-                shell_layout::launcher_size(self.mode, 0, geometry.viewport, geometry.preferred);
-            rows = shell_layout::palette_rows(
-                height - lucent_design::component::dock::CONTENT_INSET * 2.,
-            );
+        )
+    }
+    fn choose(&mut self, index: usize, geometry: Geometry) {
+        if self.action_menu.is_some() {
+            self.choose_action(index, geometry);
+            return;
         }
+        let count = self.list_count(geometry);
+        self.selected = index.min(count.saturating_sub(1));
+        let rows = self.list_rows(geometry);
         let row_count = match self.mode {
             Mode::Themes => geometry.palettes + 1,
             Mode::Widgets => WIDGETS.len(),
             _ => count,
         };
         let selected = self.selected.min(row_count.saturating_sub(1));
-        self.scroll = self
-            .scroll
-            .min(selected)
-            .max((selected + 1).saturating_sub(rows))
-            .min(row_count.saturating_sub(rows));
+        self.scroll = list_window(selected, self.scroll, row_count, rows).start;
     }
     fn open_mode(&mut self, mode: Mode, input: Input<'_>, geometry: Geometry, now: f64) {
+        let was_open = self.open;
+        let previous_mode = self.mode;
+        if was_open && previous_mode == Mode::Apps && mode != Mode::Apps {
+            self.app_context = Some(AppContext {
+                id: self.selected_application(input.apps).cloned(),
+                selected: self.selected,
+                scroll: self.scroll,
+            });
+        }
+        let returning = if was_open && previous_mode != Mode::Apps && mode == Mode::Apps {
+            self.app_context.take()
+        } else {
+            None
+        };
         self.action_menu = None;
         self.open = true;
         self.expanded = true;
         self.closing = None;
         self.edit_mounted = false;
         self.mode = mode;
-        self.query.clear();
-        self.query_field.reset("");
-        self.selected = 0;
-        self.scroll = 0;
-        self.refresh(input.apps, geometry, now);
+        if !was_open {
+            self.query.clear();
+            self.query_field.reset("");
+            self.app_context = None;
+        } else if mode != previous_mode {
+            self.query_field.cancel();
+        }
+        if !was_open || mode != previous_mode {
+            self.selected = returning.as_ref().map_or(0, |context| context.selected);
+            self.scroll = returning.as_ref().map_or(0, |context| context.scroll);
+        }
+        self.refresh_preserving(
+            input.apps,
+            returning.as_ref().and_then(|context| context.id.as_ref()),
+            geometry,
+            now,
+        );
     }
     fn close(&mut self, geometry: Geometry, now: f64) {
         self.action_menu = None;
@@ -367,7 +439,7 @@ impl Launcher {
             Mode::Apps => self
                 .results
                 .get(self.selected)
-                .and_then(|index| input.apps.get(*index))
+                .and_then(|id| input.apps.iter().find(|app| &app.id == id))
                 .map(|app| Intent::Launch(app.id.clone(), false)),
             Mode::Commands => COMMANDS
                 .get(self.selected)
@@ -501,6 +573,36 @@ impl Launcher {
                 }
                 None
             }
+            Message::SelectApplication(id) => {
+                if self.mode == Mode::Apps
+                    && self.action_menu.is_none()
+                    && let Some(index) = self.results.iter().position(|result| result == &id)
+                {
+                    self.choose(index, geometry);
+                }
+                None
+            }
+            Message::ScrollApplications(revision, event) => {
+                if self.open
+                    && self.mode == Mode::Apps
+                    && self.action_menu.is_none()
+                    && revision == self.results_revision
+                    && event.offset.is_finite()
+                    && event.offset >= 0.
+                {
+                    let rows = self.list_rows(geometry);
+                    let first = (event.offset / lucent_design::component::launcher::ROW_HEIGHT)
+                        .round() as usize;
+                    let first = first.min(self.results.len().saturating_sub(rows));
+                    let relative = self
+                        .selected
+                        .saturating_sub(self.scroll)
+                        .min(rows.saturating_sub(1));
+                    self.scroll = first;
+                    self.choose(first.saturating_add(relative), geometry);
+                }
+                None
+            }
             Message::OpenActions(app) => {
                 self.open_actions(app, input, geometry, now);
                 None
@@ -510,7 +612,7 @@ impl Launcher {
                     && let Some(app) = self
                         .results
                         .get(self.selected)
-                        .and_then(|index| input.apps.get(*index))
+                        .and_then(|id| input.apps.iter().find(|app| &app.id == id))
                         .cloned()
                 {
                     self.open_actions(app, input, geometry, now);
@@ -549,6 +651,21 @@ impl Launcher {
                     .as_ref()
                     .map_or(self.selected, |menu| menu.selected);
                 self.choose(selected.saturating_add_signed(delta as isize), geometry);
+                None
+            }
+            Message::ListNavigate(navigation) => {
+                let selected = self
+                    .action_menu
+                    .as_ref()
+                    .map_or(self.selected, |menu| menu.selected);
+                if let Some(index) = navigation.target(
+                    selected,
+                    self.list_count(geometry),
+                    self.list_rows(geometry),
+                    |_| true,
+                ) {
+                    self.choose(index, geometry);
+                }
                 None
             }
             Message::Activate if self.action_menu.is_some() => self
@@ -622,6 +739,13 @@ impl Launcher {
                 Key::Escape => Some(Message::Close),
                 Key::ContextMenu if self.mode == Mode::Apps => Some(Message::SelectedActions),
                 Key::Enter => Some(Message::Activate),
+                key if self.mode != Mode::Wallpapers
+                    && (matches!(key, Key::Up | Key::Down | Key::PageUp | Key::PageDown)
+                        || (matches!(key, Key::Home | Key::End)
+                            && (self.mode != Mode::Apps || self.action_menu.is_some()))) =>
+                {
+                    ListNavigation::from_key(&key).map(Message::ListNavigate)
+                }
                 Key::Up => Some(Message::Navigate(-1)),
                 Key::Left
                     if self.mode == Mode::Themes
@@ -644,7 +768,9 @@ impl Launcher {
             Event::Scroll {
                 surface: "dock",
                 lines,
-            } => Some(Message::Navigate(if lines > 0. { 1 } else { -1 })),
+            } if lines.is_finite() && lines != 0. => {
+                Some(Message::Navigate(if lines > 0. { 1 } else { -1 }))
+            }
             _ => None,
         }
     }
@@ -1076,7 +1202,7 @@ mod tests {
             fixture.geometry(),
             &mut effects,
         );
-        assert_eq!(launcher.query(), "");
+        assert_eq!(launcher.query(), "Beta");
         launcher.update(
             Message::EditQuery(TextEdit::Paste),
             fixture.input(),
@@ -1227,6 +1353,231 @@ mod tests {
         assert_eq!(launcher.query(), "beta");
         assert_eq!(launcher.result_count(), 0);
         assert!(fixture.send(&mut launcher, Message::Activate).is_none());
+    }
+    fn list_fixture() -> Fixture {
+        let mut fixture = Fixture::new();
+        fixture.apps = (0..40)
+            .map(|index| {
+                let mut app = fixture.apps[0].clone();
+                app.id = AppId::new(format!("App{index:02}.desktop")).unwrap();
+                app.name = format!("App {index:02}");
+                app
+            })
+            .collect();
+        fixture
+    }
+    #[test]
+    fn page_keys_reveal_the_selected_result_and_keep_editor_keys_available() {
+        let fixture = list_fixture();
+        let mut launcher = Launcher::default();
+        fixture.send(&mut launcher, Message::Mode(Mode::Apps));
+        let rows = launcher.list_rows(fixture.geometry());
+        for _ in 0..10 {
+            let message = launcher
+                .event(
+                    Event::Key {
+                        surface: "dock",
+                        key: Key::PageDown,
+                    },
+                    false,
+                )
+                .unwrap();
+            fixture.send(&mut launcher, message);
+            assert!(
+                list_window(launcher.selected, launcher.scroll, 40, rows)
+                    .contains(&launcher.selected)
+            );
+        }
+        assert_eq!(launcher.selected(), 39);
+        let message = launcher
+            .event(
+                Event::Key {
+                    surface: "dock",
+                    key: Key::PageUp,
+                },
+                false,
+            )
+            .unwrap();
+        fixture.send(&mut launcher, message);
+        assert_eq!(launcher.selected(), 39usize.saturating_sub(rows));
+        for key in [Key::Home, Key::End] {
+            assert!(
+                launcher
+                    .event(
+                        Event::Key {
+                            surface: "dock",
+                            key
+                        },
+                        false
+                    )
+                    .is_none()
+            );
+        }
+        fixture.send(&mut launcher, Message::Query("missing".into()));
+        fixture.send(
+            &mut launcher,
+            Message::ListNavigate(ListNavigation::PageNext),
+        );
+        assert!(fixture.send(&mut launcher, Message::Activate).is_none());
+        assert_eq!((launcher.selected, launcher.scroll), (0, 0));
+    }
+    #[test]
+    fn section_switch_retains_app_query_selection_and_scroll_until_close() {
+        let fixture = list_fixture();
+        let mut launcher = Launcher::default();
+        fixture.send(&mut launcher, Message::Mode(Mode::Apps));
+        fixture.send(&mut launcher, Message::Query("App".into()));
+        fixture.send(&mut launcher, Message::Select(23));
+        let before = (
+            launcher.selected,
+            launcher.scroll,
+            launcher.selected_application(&fixture.apps).cloned(),
+        );
+        for mode in [
+            Mode::Commands,
+            Mode::Wallpapers,
+            Mode::Themes,
+            Mode::Widgets,
+        ] {
+            fixture.send(&mut launcher, Message::Mode(mode));
+            fixture.send(&mut launcher, Message::Navigate(2));
+            assert_eq!(launcher.query(), "App");
+        }
+        fixture.send(&mut launcher, Message::Mode(Mode::Apps));
+        assert_eq!(
+            (
+                launcher.selected,
+                launcher.scroll,
+                launcher.selected_application(&fixture.apps).cloned()
+            ),
+            before
+        );
+        fixture.send(&mut launcher, Message::Mode(Mode::Apps));
+        assert_eq!(
+            launcher.selected, 23,
+            "clicking the active section retains context"
+        );
+        fixture.send(&mut launcher, Message::Close);
+        fixture.send(&mut launcher, Message::Toggle);
+        assert_eq!(launcher.query(), "");
+        assert_eq!((launcher.selected, launcher.scroll), (0, 0));
+    }
+    #[test]
+    fn catalog_reorder_in_another_section_preserves_app_identity_and_active_section_selection() {
+        let mut fixture = list_fixture();
+        let mut launcher = Launcher::default();
+        fixture.send(&mut launcher, Message::Mode(Mode::Apps));
+        fixture.send(&mut launcher, Message::Query("App".into()));
+        fixture.send(&mut launcher, Message::Select(23));
+        let selected = launcher
+            .selected_application(&fixture.apps)
+            .unwrap()
+            .clone();
+        fixture.send(&mut launcher, Message::Mode(Mode::Commands));
+        fixture.send(&mut launcher, Message::Select(2));
+        fixture
+            .apps
+            .iter_mut()
+            .find(|app| app.id == selected)
+            .unwrap()
+            .name = "App Aardvark".into();
+        launcher.refresh_preserving(&fixture.apps, Some(&selected), fixture.geometry(), 1.);
+        assert_eq!(launcher.selected, 2);
+        fixture.send(&mut launcher, Message::Mode(Mode::Apps));
+        assert_eq!(
+            launcher.selected_application(&fixture.apps),
+            Some(&selected)
+        );
+        fixture.send(&mut launcher, Message::Mode(Mode::Commands));
+        fixture.apps.clear();
+        launcher.refresh_preserving(&fixture.apps, None, fixture.geometry(), 1.);
+        fixture.send(&mut launcher, Message::Mode(Mode::Apps));
+        assert_eq!(
+            (launcher.selected, launcher.scroll, launcher.result_count()),
+            (0, 0, 0)
+        );
+        assert!(fixture.send(&mut launcher, Message::Activate).is_none());
+    }
+    #[test]
+    fn action_menu_pages_reveal_choices_and_neutral_scroll_does_not_select() {
+        let fixture = action_fixture();
+        let mut launcher = Launcher::default();
+        fixture.send(&mut launcher, Message::Mode(Mode::Apps));
+        fixture.send(&mut launcher, Message::OpenActions(fixture.apps[0].clone()));
+        let message = launcher
+            .event(
+                Event::Key {
+                    surface: "dock",
+                    key: Key::End,
+                },
+                false,
+            )
+            .unwrap();
+        fixture.send(&mut launcher, message);
+        let menu = launcher.action_menu.as_ref().unwrap();
+        assert_eq!(menu.selected, menu.app.actions.len() - 1);
+        assert!(
+            list_window(
+                menu.selected,
+                menu.scroll,
+                menu.app.actions.len(),
+                launcher.list_rows(fixture.geometry())
+            )
+            .contains(&menu.selected)
+        );
+        for lines in [0., f64::NAN, f64::INFINITY] {
+            assert!(
+                launcher
+                    .event(
+                        Event::Scroll {
+                            surface: "dock",
+                            lines
+                        },
+                        false
+                    )
+                    .is_none()
+            );
+        }
+    }
+    #[test]
+    fn scrollbar_retains_a_visible_selection_and_retires_with_the_result_set() {
+        let fixture = list_fixture();
+        let mut launcher = Launcher::default();
+        fixture.send(&mut launcher, Message::Mode(Mode::Apps));
+        fixture.send(&mut launcher, Message::Select(2));
+        let revision = launcher.results_revision;
+        fixture.send(
+            &mut launcher,
+            Message::ScrollApplications(
+                revision,
+                ScrollEvent {
+                    offset: 8. * lucent_design::component::launcher::ROW_HEIGHT,
+                },
+            ),
+        );
+        assert_eq!((launcher.scroll, launcher.selected), (8, 10));
+        fixture.send(&mut launcher, Message::Query("App 39".into()));
+        assert_ne!(launcher.results_revision, revision);
+        fixture.send(
+            &mut launcher,
+            Message::ScrollApplications(revision, ScrollEvent { offset: 9999. }),
+        );
+        assert_eq!((launcher.scroll, launcher.selected), (0, 0));
+        assert_eq!(
+            launcher
+                .selected_application(&fixture.apps)
+                .unwrap()
+                .as_str(),
+            "App39.desktop"
+        );
+        fixture.send(&mut launcher, Message::Mode(Mode::Commands));
+        fixture.send(&mut launcher, Message::Select(1));
+        let revision = launcher.results_revision;
+        fixture.send(
+            &mut launcher,
+            Message::ScrollApplications(revision, ScrollEvent { offset: 0. }),
+        );
+        assert_eq!(launcher.selected, 1);
     }
     #[test]
     fn interrupted_panel_motion_stays_continuous_and_settles() {

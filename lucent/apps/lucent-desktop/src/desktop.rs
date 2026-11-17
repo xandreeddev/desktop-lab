@@ -3385,6 +3385,11 @@ impl api::Application for Desktop {
         value["tray"] = self.tray.inspect();
         value["catalog"] = self.catalog.inspect();
         value["application_actions"] = self.launcher.actions_inspect();
+        value["selected_application"] = serde_json::json!(
+            self.launcher
+                .selected_application(&self.apps)
+                .map(AppId::as_str)
+        );
         value["dock"] = self.dock.inspect();
         value["weather"] = self.weather.inspect();
         value["widget_sizes"] = serde_json::json!(self.active_widget_layout().widget_sizes);

@@ -92,11 +92,7 @@ impl Launcher {
         if !self.open || self.mode != Mode::Apps {
             self.open_mode(Mode::Apps, input, geometry, now);
         }
-        if !self
-            .results
-            .iter()
-            .any(|index| input.apps.get(*index) == Some(&app))
-        {
+        if !self.results.iter().any(|id| id == &app.id) {
             return;
         }
         let Some(revision) = self.action_revision.checked_add(1) else {
@@ -121,11 +117,7 @@ impl Launcher {
         menu.selected = index.min(count.saturating_sub(1));
         let rows =
             shell_layout::visible_rows(Mode::Apps, count, geometry.viewport, geometry.preferred);
-        menu.scroll = menu
-            .scroll
-            .min(menu.selected)
-            .max((menu.selected + 1).saturating_sub(rows))
-            .min(count.saturating_sub(rows));
+        menu.scroll = list_window(menu.selected, menu.scroll, count, rows).start;
     }
     pub(super) fn admit_action(
         &mut self,

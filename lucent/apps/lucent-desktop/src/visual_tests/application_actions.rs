@@ -289,7 +289,16 @@ fn application_actions_have_native_hit_authority_and_narrow_keyboard_reachabilit
         let row = applications
             .hits
             .iter()
-            .find(|hit| hit.id == "result-0")
+            .find(|hit| {
+                hit.id
+                    == format!(
+                        "result-{}",
+                        app.launcher
+                            .selected_application(&app.apps)
+                            .unwrap()
+                            .as_str()
+                    )
+            })
             .unwrap();
         let secondary = row
             .secondary_click

@@ -31,7 +31,7 @@ def suite():
         for h in [panel, *rows]:
             assert all(abs(h[k] / grid - round(h[k] / grid)) < .001 for k in ('x', 'y', 'width', 'height')), h['id']
         inset = vm.token_value('component.dock.content_inset')
-        assert all(r['x']-panel['x'] == inset and panel['x']+panel['width']-r['x']-r['width'] == inset for r in rows)
+        assert all(r['x']-panel['x'] == inset and panel['x']+panel['width']-r['x']-r['width'] == inset + grid for r in rows)
         pitch = vm.token_value('component.launcher.row_height')
         assert all(b['y']-a['y'] == pitch for a,b in zip(rows,rows[1:]))
         search = next(h for h in dock['hits'] if h['id'] == 'launcher-search')
@@ -40,7 +40,7 @@ def suite():
         assert all(clock[k] % grid == 0 for k in ('x','y','width','height'))
         checks += ['panel_and_rows_on_shell_grid', 'equal_launcher_insets', 'uniform_row_pitch', 'input_on_shell_grid', 'top_bar_clock_on_shell_grid']
         assert rows, 'Launcher contains no visible result rows'
-        assert any(h['id'] == 'result-8' for h in rows)
+        assert any(h['id'] == 'result-' + state['client']['selected_application'] for h in rows)
         for row in rows:
             clip = row['clip']
             assert row['y'] >= clip['y']-0.01 and row['y']+row['height'] <= clip['y']+clip['height']+0.01, row['id']

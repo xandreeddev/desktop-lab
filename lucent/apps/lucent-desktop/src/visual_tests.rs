@@ -67,21 +67,24 @@ fn fixture(count: usize, light: bool) -> Desktop {
         "sun",
         "cloud",
     ];
+    let app_ids = [
+        "foot.desktop",
+        "org.gnome.Nautilus.desktop",
+        "cliamp.desktop",
+        "fcitx5-configtool.desktop",
+        "Google Contacts.desktop",
+        "chromium.desktop",
+        "libreoffice-writer.desktop",
+        "omacalc.desktop",
+        "unmapped-fixture.desktop",
+    ];
     app.apps = (0..count)
         .map(|n| App {
-            id: AppId::new(
-                [
-                    "foot.desktop",
-                    "org.gnome.Nautilus.desktop",
-                    "cliamp.desktop",
-                    "fcitx5-configtool.desktop",
-                    "Google Contacts.desktop",
-                    "chromium.desktop",
-                    "libreoffice-writer.desktop",
-                    "omacalc.desktop",
-                    "unmapped-fixture.desktop",
-                ][n % 9],
-            )
+            id: AppId::new(if n < app_ids.len() {
+                app_ids[n].to_string()
+            } else {
+                format!("fixture-{n}-{}", app_ids[n % app_ids.len()])
+            })
             .unwrap(),
             name: names[n % names.len()].into(),
             description: String::new(),
@@ -105,8 +108,8 @@ fn fixture(count: usize, light: bool) -> Desktop {
         Message::Catalog(crate::catalog::Message::Observed(Ok(app.apps.clone()))),
         &mut Effects::default(),
     );
-    for a in &app.apps {
-        if let Some(asset) = lucent_design::app_icons::lookup(a.id.as_str()) {
+    for (index, a) in app.apps.iter().enumerate() {
+        if let Some(asset) = lucent_design::app_icons::lookup(app_ids[index % app_ids.len()]) {
             app.images.insert(
                 format!("app:{}", a.id.as_str()),
                 lucent_services::images::svg_mask(
@@ -678,7 +681,15 @@ fn launcher_size_preserves_selection_and_limits_at_every_preset() {
             let last = rendered
                 .hits
                 .iter()
-                .find(|h| h.id == "result-49")
+                .find(|h| {
+                    h.id == format!(
+                        "result-{}",
+                        app.launcher
+                            .selected_application(&app.apps)
+                            .unwrap()
+                            .as_str()
+                    )
+                })
                 .expect("selected last result stays visible when resized");
             assert!(fully_visible(last.rect, last.clip.bounds));
             for hit in rendered
@@ -3983,7 +3994,15 @@ fn selection_fill_and_outline_move_together_on_the_first_frame() {
         let row = scene
             .hits
             .iter()
-            .find(|h| h.id == format!("result-{index}"))
+            .find(|h| {
+                h.id == format!(
+                    "result-{}",
+                    app.launcher
+                        .selected_application(&app.apps)
+                        .unwrap()
+                        .as_str()
+                )
+            })
             .unwrap();
         assert!(scene.paint.iter().any(|p|matches!(p,Paint::Shape {rect,color,..} if *rect==row.rect && *color==app.theme().surface_container)),"selected fill must be immediate");
         assert!(
@@ -3992,6 +4011,131 @@ fn selection_fill_and_outline_move_together_on_the_first_frame() {
                 .iter()
                 .any(|p| matches!(p,Paint::Outline {rect,..} if *rect==row.rect)),
             "fill and outline must share geometry"
+        );
+    }
+}
+#[test]
+fn launcher_scrollbar_uses_real_content_bounds_and_retires_after_filtering() {
+    let mut app = fixture(40, false);
+    for (index, item) in app.apps.iter_mut().enumerate() {
+        item.name = format!("{} {index}", if index < 20 { "Alpha" } else { "Beta" });
+    }
+    app.update(
+        Message::Catalog(crate::catalog::Message::Observed(Ok(app.apps.clone()))),
+        &mut Effects::default(),
+    );
+    app.update(
+        Message::Launcher(launcher::Message::Query("Alpha".into())),
+        &mut Effects::default(),
+    );
+    let layout = Layout::new(fonts(&app));
+    let mut input = Interaction::default();
+    let before = scene(&app, &layout, &mut input, 1.);
+    let scroll = before
+        .hits
+        .iter()
+        .find_map(|hit| {
+            hit.id
+                .starts_with("launcher-results-")
+                .then(|| hit.scroll.clone())
+                .flatten()
+        })
+        .expect("actual toolkit scroll viewport");
+    let row_height = lucent_design::component::launcher::ROW_HEIGHT;
+    let visible = (scroll.viewport.h / row_height).round() as usize;
+    assert_eq!(scroll.maximum, (20 - visible) as f32 * row_height);
+    let thumb = scroll.thumb;
+    assert!(thumb.h < scroll.track.h);
+    if let Some(message) = input.press(&before, thumb.x + thumb.w / 2., thumb.y + thumb.h / 2.) {
+        app.update(message, &mut Effects::default());
+    }
+    app.update(
+        Message::Launcher(launcher::Message::Query("Beta".into())),
+        &mut Effects::default(),
+    );
+    let after = scene(&app, &layout, &mut input, 1.1);
+    let replacement = after
+        .hits
+        .iter()
+        .find_map(|hit| hit.scroll.as_ref())
+        .unwrap();
+    assert_eq!(replacement.maximum, scroll.maximum);
+    assert_eq!(replacement.track, scroll.track);
+    assert_eq!(replacement.thumb.h, scroll.thumb.h);
+    assert_ne!(replacement.id, scroll.id);
+    assert!(
+        input
+            .motion(
+                &after,
+                thumb.x + thumb.w / 2.,
+                scroll.track.y + scroll.track.h,
+                1.2
+            )
+            .iter()
+            .all(|message| !matches!(
+                message,
+                Message::Launcher(launcher::Message::ScrollApplications(..))
+            )),
+        "retired thumb cannot scroll a replacement result set"
+    );
+    input.release(thumb.x, thumb.y);
+    app.update(
+        Message::Launcher(launcher::Message::Query(String::new())),
+        &mut Effects::default(),
+    );
+    let current = scene(&app, &layout, &mut input, 1.3);
+    let scroll = current
+        .hits
+        .iter()
+        .find_map(|hit| hit.scroll.as_ref())
+        .unwrap();
+    let message = (scroll.callback)(ScrollEvent {
+        offset: 8. * row_height,
+    });
+    app.update(message, &mut Effects::default());
+    let current = scene(&app, &layout, &mut input, 1.4);
+    let selected = format!(
+        "result-{}",
+        app.launcher
+            .selected_application(&app.apps)
+            .unwrap()
+            .as_str()
+    );
+    assert!(
+        current
+            .hits
+            .iter()
+            .any(|hit| hit.id == selected && fully_visible(hit.rect, hit.clip.bounds))
+    );
+}
+#[test]
+fn launcher_row_press_keeps_its_application_identity_after_catalog_replacement() {
+    let mut app = fixture(2, false);
+    let layout = Layout::new(fonts(&app));
+    let mut input = Interaction::default();
+    let before = scene(&app, &layout, &mut input, 1.);
+    let original = app
+        .launcher
+        .selected_application(&app.apps)
+        .unwrap()
+        .clone();
+    let row = before
+        .hits
+        .iter()
+        .find(|hit| hit.id == format!("result-{}", original.as_str()))
+        .unwrap();
+    let point = (row.rect.x + 8., row.rect.y + row.rect.h / 2.);
+    input.press(&before, point.0, point.1);
+    app.apps.retain(|app| app.id != original);
+    app.update(
+        Message::Catalog(crate::catalog::Message::Observed(Ok(app.apps.clone()))),
+        &mut Effects::default(),
+    );
+    let _after = scene(&app, &layout, &mut input, 1.1);
+    if let Some(message) = input.release(point.0, point.1) {
+        assert!(
+            matches!(message, Message::Launcher(launcher::Message::Request(launcher::Intent::Launch(id, _))) if id == original),
+            "release must never target the replacement row"
         );
     }
 }
@@ -4220,7 +4364,14 @@ fn settled_shell_geometry_obeys_grid_and_contains_its_controls() {
                     component::dock::CONTENT_INSET
                 );
                 assert!(
-                    rendered.hits.iter().any(|h| h.id == "result-19"),
+                    rendered.hits.iter().any(|h| h.id
+                        == format!(
+                            "result-{}",
+                            app.launcher
+                                .selected_application(&app.apps)
+                                .unwrap()
+                                .as_str()
+                        )),
                     "last result must remain reachable at {height}px tall"
                 );
             }

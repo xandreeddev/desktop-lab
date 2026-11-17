@@ -250,7 +250,7 @@ def suite(results):
         if how == 'keyboard':
             h['key'](name, 42, 68)  # Shift+F10: the native ContextMenu key route.
         else:
-            click(name, monitor, 'result-0', 'right')
+            click(name, monitor, 'result-' + entries[kind]['id'], 'right')
         eventually(lambda: menu()['open'] and menu()['application'] == entries[kind]['id'],
                    'owned_action_chooser_open')
         require([action['id'] for action in menu()['actions']] ==

@@ -22,7 +22,13 @@
     "build_service_result": "success",
     "build_service_exit_status": 0,
     "local_pipe_caller_exit_status": 143,
-    "caller_scope": "The pipe caller ended with143. The independent bounded service completed with Result=success/ExecMainStatus=0; all actual step logs and its terminal receipt pass."
+    "caller_scope": "The pipe caller ended with143. The independent bounded service completed with Result=success/ExecMainStatus=0; all actual step logs and its terminal receipt pass.",
+    "required_ci": {
+      "source_commit": "3f3204ebc9150f645e4aad4b1a5c0d899bf23596",
+      "passed": true,
+      "run": "https://github.com/xandreeddev/desktop-lab/actions/runs/44066091093",
+      "scope": "Integration code, site, full Rust workspace, native protocol suites and Vulkan visual checks."
+    }
   },
   "cold_browser_routes": [
     {

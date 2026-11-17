@@ -25,8 +25,9 @@ visuals were reviewed; all ten restoration/profile checks pass. This accepts the
 acknowledged guest-input contract, not the earlier held-button or uninterrupted
 host-gesture cases. Those failures remain historical evidence below.
 
-The first feature is native-verified and awaits current CI/protected-main
-delivery through [PR117](https://github.com/xandreeddev/desktop-lab/pull/117).
+The first feature is native-verified; [all required CI at source 3f3204eb](https://github.com/xandreeddev/desktop-lab/actions/runs/44066091093)
+passes. Protected-main delivery through [PR117](https://github.com/xandreeddev/desktop-lab/pull/117)
+awaits a GitHub API account with writer permission.
 Other polish features and performance remain separate. The current native
 component catalogue is regenerated from source `beb696411c83`: 121 inputs and
 480 actual Vulkan captures, with all nine story families sampled for visual

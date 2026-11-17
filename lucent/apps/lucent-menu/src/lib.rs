@@ -40,6 +40,10 @@ pub enum Message {
     Noop,
     Query(String),
     Navigate(i32),
+    ListNavigate(ListNavigation),
+    ScrollResults(u64, ScrollEvent),
+    SelectEntry(usize),
+    ChooseEntry(usize),
     Select(usize),
     Choose(usize),
     Accept,
@@ -62,6 +66,7 @@ pub struct Menu {
     query_field: TextFieldState,
     edit_error: String,
     start: usize,
+    query_revision: u64,
     viewport: (f32, f32),
     reveal: Motion,
     completion: Completion,
@@ -78,6 +83,7 @@ impl Menu {
                 query_field: TextFieldState::default(),
                 edit_error: String::new(),
                 start: 0,
+                query_revision: 0,
                 viewport: (1920., 1080.),
                 reveal: Motion::fixed(0.),
                 completion: completion.clone(),
@@ -134,7 +140,13 @@ impl Component for Menu {
             .max(token::MIN_WIDTH)
             .min((cx.width - space::XXL * 2.).max(0.));
         let height = self.height(cx.height);
-        let start = self.selection.start(self.start, self.rows(cx.height));
+        let start = list_window(
+            self.selection.selected,
+            self.start,
+            self.selection.matches.len(),
+            self.rows(cx.height),
+        )
+        .start;
         let mut header = vec![
             Element::text(&self.request.prompt)
                 .font(font::TITLE)
@@ -216,11 +228,12 @@ impl Component for Menu {
                         } else {
                             Color::TRANSPARENT
                         })
-                        .id(format!("menu-row-{index}"))
-                        .on_hover(Message::Select(index))
-                        .on_click(Message::Choose(index))
+                        .id(format!("menu-row-{source}"))
+                        .on_hover(Message::SelectEntry(*source))
+                        .on_click(Message::ChooseEntry(*source))
                         .hover_feedback(!entry.disabled)
                         .tab_stop(false)
+                        .at(0., index as f32 * (token::ROW_HEIGHT + space::XS))
                 })
                 .collect();
             children.push(if rows.is_empty() {
@@ -232,8 +245,25 @@ impl Component for Menu {
                     .padding(space::LG)
                     .wrap(2)
             } else {
-                Element::column(rows)
-                    .gap(space::XS)
+                let pitch = token::ROW_HEIGHT + space::XS;
+                let revision = self.query_revision;
+                let count = self.selection.matches.len();
+                let visible = self.rows(cx.height);
+                let viewport = Element::scroll(
+                    ScrollSpec::new(start as f32 * pitch, pitch).unwrap(),
+                    Element::stack(rows)
+                        .width(Length::Fill)
+                        .height(Length::Fixed(count as f32 * pitch - space::XS)),
+                    move |event| Message::ScrollResults(revision, event),
+                )
+                .scroll_style(t.scroll_style())
+                .width(Length::Fill)
+                .height(Length::Fixed(visible as f32 * pitch - space::XS))
+                .tab_stop(false)
+                .focus_outline(false)
+                .hover_feedback(false)
+                .id(format!("menu-results-{revision}"));
+                Element::stack(vec![viewport])
                     .width(Length::Fill)
                     .height(Length::Fill)
             });
@@ -248,7 +278,7 @@ impl Component for Menu {
                     "Enter confirm · Esc cancel".into()
                 } else {
                     format!(
-                        "{} results · Arrows select · Enter run · Esc {}",
+                        "{} results · ↑↓ select · PgUp/PgDn page · Enter run · Esc {}",
                         self.selection.matches.len(),
                         if self.request.back { "back" } else { "close" }
                     )
@@ -285,6 +315,7 @@ impl Component for Menu {
         match message {
             Message::Noop => {}
             Message::Query(query) => {
+                self.query_revision = self.query_revision.wrapping_add(1);
                 self.query = query.chars().take(4096).collect();
                 self.query_field.reset(&self.query);
                 self.edit_error.clear();
@@ -303,6 +334,7 @@ impl Component for Menu {
                     Ok(change) => {
                         self.edit_error.clear();
                         if change.content {
+                            self.query_revision = self.query_revision.wrapping_add(1);
                             self.selection.search(&self.query);
                             self.start = 0;
                         }
@@ -311,6 +343,51 @@ impl Component for Menu {
                 }
             }
             Message::Navigate(delta) => self.selection.navigate(delta),
+            Message::ListNavigate(navigation) => {
+                if let Some(index) = navigation.target(
+                    self.selection.selected,
+                    self.selection.matches.len(),
+                    self.rows(self.viewport.1),
+                    |index| !self.selection.entries[self.selection.matches[index]].disabled,
+                ) {
+                    self.selection.select(index);
+                }
+            }
+            Message::ScrollResults(revision, event) => {
+                if revision == self.query_revision
+                    && self.request.mode == Mode::Select
+                    && event.offset.is_finite()
+                    && event.offset >= 0.
+                {
+                    let page = self.rows(self.viewport.1);
+                    let first = (event.offset / (token::ROW_HEIGHT + space::XS)).round() as usize;
+                    let first = first.min(self.selection.matches.len().saturating_sub(page));
+                    let relative = self
+                        .selection
+                        .selected
+                        .saturating_sub(self.start)
+                        .min(page.saturating_sub(1));
+                    self.start = first;
+                    self.update(
+                        Message::ListNavigate(ListNavigation::Select(
+                            first.saturating_add(relative),
+                        )),
+                        effects,
+                    );
+                }
+            }
+            Message::SelectEntry(source) | Message::ChooseEntry(source) => {
+                if let Some(index) = self
+                    .selection
+                    .matches
+                    .iter()
+                    .position(|entry| *entry == source)
+                    && self.selection.select(index)
+                    && matches!(message, Message::ChooseEntry(_))
+                {
+                    self.update(Message::Accept, effects);
+                }
+            }
             Message::Select(index) => {
                 self.selection.select(index);
             }
@@ -333,7 +410,13 @@ impl Component for Menu {
             Message::Back => self.finish(MenuOutcome::Parent, effects),
             Message::Resize(w, h) => self.viewport = (w, h),
         }
-        self.start = self.selection.start(self.start, self.rows(self.viewport.1));
+        self.start = list_window(
+            self.selection.selected,
+            self.start,
+            self.selection.matches.len(),
+            self.rows(self.viewport.1),
+        )
+        .start;
         effects.redraw("menu");
     }
 }
@@ -381,7 +464,10 @@ impl Application for Menu {
             Event::FrameSubmitted { .. } | Event::KeyboardFocus { .. } => None,
             Event::Outside { .. } => Some(Message::Cancel),
             Event::Resize { width, height, .. } => Some(Message::Resize(width, height)),
-            Event::Scroll { lines, .. } => Some(Message::Navigate(if lines > 0. { 1 } else { -1 })),
+            Event::Scroll { lines, .. } if lines.is_finite() && lines != 0. => {
+                Some(Message::Navigate(if lines > 0. { 1 } else { -1 }))
+            }
+            Event::Scroll { .. } => None,
             Event::Key { key, .. } => match key {
                 Key::Escape => Some(if self.request.back {
                     Message::Back
@@ -389,8 +475,13 @@ impl Application for Menu {
                     Message::Cancel
                 }),
                 Key::Enter => Some(Message::Accept),
-                Key::Down | Key::Tab => Some(Message::Navigate(1)),
-                Key::Up | Key::BackTab => Some(Message::Navigate(-1)),
+                Key::Tab => Some(Message::ListNavigate(ListNavigation::Next)),
+                Key::BackTab => Some(Message::ListNavigate(ListNavigation::Previous)),
+                key if self.request.mode == Mode::Select
+                    && !matches!(key, Key::Home | Key::End) =>
+                {
+                    ListNavigation::from_key(&key).map(Message::ListNavigate)
+                }
                 _ => None,
             },
         }
@@ -459,6 +550,104 @@ mod tests {
         );
         assert_eq!(menu.query, "Action 227");
         assert_eq!(menu.edit_error, "Clipboard transfer timed out");
+    }
+    #[test]
+    fn page_navigation_uses_visible_rows_skips_disabled_and_never_accepts() {
+        let (mut menu, completion) = Menu::new(request());
+        let page = menu.rows(menu.viewport.1);
+        menu.selection.entries[page].disabled = true;
+        menu.selection.entries[page + 1].disabled = true;
+        let message = menu
+            .event(Event::Key {
+                surface: "menu",
+                key: Key::PageDown,
+            })
+            .unwrap();
+        menu.update(message, &mut Effects::default());
+        assert_eq!(menu.selection.selected, page + 2);
+        assert!(
+            list_window(
+                menu.selection.selected,
+                menu.start,
+                menu.selection.matches.len(),
+                page
+            )
+            .contains(&menu.selection.selected)
+        );
+        assert!(completion.outcome().is_none());
+        menu.update(
+            Message::ListNavigate(ListNavigation::Last),
+            &mut Effects::default(),
+        );
+        assert_eq!(menu.selection.selected, 227);
+        let message = menu
+            .event(Event::Key {
+                surface: "menu",
+                key: Key::PageUp,
+            })
+            .unwrap();
+        menu.update(message, &mut Effects::default());
+        assert_eq!(menu.selection.selected, 227 - page);
+        menu.update(
+            Message::Query("no such result".into()),
+            &mut Effects::default(),
+        );
+        menu.update(
+            Message::ListNavigate(ListNavigation::PageNext),
+            &mut Effects::default(),
+        );
+        menu.update(Message::Accept, &mut Effects::default());
+        assert_eq!(menu.start, 0);
+        assert!(completion.outcome().is_none());
+        for key in [Key::Home, Key::End] {
+            assert!(
+                menu.event(Event::Key {
+                    surface: "menu",
+                    key
+                })
+                .is_none(),
+                "editor retains Home/End"
+            );
+        }
+        for lines in [0., f64::NAN, f64::INFINITY] {
+            assert!(
+                menu.event(Event::Scroll {
+                    surface: "menu",
+                    lines
+                })
+                .is_none()
+            );
+        }
+    }
+    #[test]
+    fn captured_entry_and_scroll_messages_cannot_target_a_replacement_search() {
+        let (mut menu, completion) = Menu::new(request());
+        let revision = menu.query_revision;
+        menu.update(
+            Message::ScrollResults(
+                revision,
+                ScrollEvent {
+                    offset: 12. * (token::ROW_HEIGHT + space::XS),
+                },
+            ),
+            &mut Effects::default(),
+        );
+        assert_eq!((menu.start, menu.selection.selected), (12, 12));
+        menu.update(Message::Query("Action 227".into()), &mut Effects::default());
+        menu.update(
+            Message::ScrollResults(revision, ScrollEvent { offset: 0. }),
+            &mut Effects::default(),
+        );
+        menu.update(Message::ChooseEntry(0), &mut Effects::default());
+        assert_eq!(menu.start, 0);
+        assert!(
+            completion.outcome().is_none(),
+            "retired source index cannot accept the new rank-zero result"
+        );
+        menu.update(Message::ChooseEntry(227), &mut Effects::default());
+        assert!(
+            matches!(completion.outcome(), Some(MenuOutcome::Accepted(value)) if value == "original-227")
+        );
     }
     #[test]
     fn last_row_is_visible_and_selection_keeps_input_focus() {

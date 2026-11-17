@@ -119,49 +119,53 @@ impl View<'_> {
                     .enumerate()
                     .skip(self.launcher.scroll)
                     .take(visible_rows)
-                    .map(|(rank, index)| {
-                        let app = &self.input.apps[*index];
-                        Element::row(vec![
-                            self.app_icon(app, component::launcher::ICON_WIDTH),
-                            self.label(&app.name, font::BODY).width(Length::Fill),
-                            self.icon("pin", icon::SMALL)
-                                .padding(space::XS)
-                                .size(
-                                    component::launcher::TAB_HEIGHT,
-                                    component::launcher::TAB_HEIGHT,
-                                )
-                                .tint(if pinned.contains(&app.id) {
-                                    self.accent()
-                                } else {
-                                    self.ink()
-                                })
-                                .opacity(if pinned.contains(&app.id) {
-                                    1.
-                                } else {
-                                    component::launcher::PIN_UNSELECTED_OPACITY
-                                })
-                                .radius(radius::CONTROL)
-                                .on_click(Message::Request(Intent::Pin(app.id.clone())))
-                                .id(format!("pin-{}", app.id.as_str())),
-                        ])
-                        .align(Align::Center)
-                        .gap(space::LG)
-                        .padding_xy(
-                            component::launcher::ROW_PADDING_INLINE,
-                            component::launcher::ROW_PADDING_BLOCK,
+                    .filter_map(|(rank, id)| {
+                        let app = self.input.apps.iter().find(|app| &app.id == id)?;
+                        Some(
+                            Element::row(vec![
+                                self.app_icon(app, component::launcher::ICON_WIDTH),
+                                self.label(&app.name, font::BODY).width(Length::Fill),
+                                self.icon("pin", icon::SMALL)
+                                    .padding(space::XS)
+                                    .size(
+                                        component::launcher::TAB_HEIGHT,
+                                        component::launcher::TAB_HEIGHT,
+                                    )
+                                    .tint(if pinned.contains(&app.id) {
+                                        self.accent()
+                                    } else {
+                                        self.ink()
+                                    })
+                                    .opacity(if pinned.contains(&app.id) {
+                                        1.
+                                    } else {
+                                        component::launcher::PIN_UNSELECTED_OPACITY
+                                    })
+                                    .radius(radius::CONTROL)
+                                    .on_click(Message::Request(Intent::Pin(app.id.clone())))
+                                    .id(format!("pin-{}", app.id.as_str())),
+                            ])
+                            .align(Align::Center)
+                            .gap(space::LG)
+                            .padding_xy(
+                                component::launcher::ROW_PADDING_INLINE,
+                                component::launcher::ROW_PADDING_BLOCK,
+                            )
+                            .width(Length::Fill)
+                            .height(Length::Fixed(component::launcher::ROW_HEIGHT))
+                            .radius(radius::CARD)
+                            .background(if rank == self.launcher.selected {
+                                self.widget_color()
+                            } else {
+                                Color::TRANSPARENT
+                            })
+                            .selected(rank == self.launcher.selected)
+                            .on_hover(Message::SelectApplication(app.id.clone()))
+                            .on_click(Message::Request(Intent::Launch(app.id.clone(), false)))
+                            .on_secondary_click(Message::OpenActions(app.clone()))
+                            .id(format!("result-{}", app.id.as_str()))
+                            .at(0., rank as f32 * component::launcher::ROW_HEIGHT),
                         )
-                        .size(width, component::launcher::ROW_HEIGHT)
-                        .radius(radius::CARD)
-                        .background(if rank == self.launcher.selected {
-                            self.widget_color()
-                        } else {
-                            Color::TRANSPARENT
-                        })
-                        .selected(rank == self.launcher.selected)
-                        .on_hover(Message::Select(rank))
-                        .on_click(Message::Request(Intent::Launch(app.id.clone(), false)))
-                        .on_secondary_click(Message::OpenActions(app.clone()))
-                        .id(format!("result-{rank}"))
                     })
                     .collect();
                 let list = if rows.is_empty() {
@@ -179,7 +183,30 @@ impl View<'_> {
                     .size(width, component::launcher::EMPTY_HEIGHT)
                     .align(Align::Center)
                 } else {
-                    Element::column(rows).size(width, body_h).clip()
+                    let revision = self.launcher.results_revision;
+                    Element::scroll(
+                        ScrollSpec::new(
+                            self.launcher.scroll as f32 * component::launcher::ROW_HEIGHT,
+                            component::launcher::ROW_HEIGHT,
+                        )
+                        .unwrap(),
+                        Element::stack(rows)
+                            .width(Length::Fill)
+                            .height(Length::Fixed(
+                                self.launcher.results.len() as f32
+                                    * component::launcher::ROW_HEIGHT,
+                            )),
+                        move |event| Message::ScrollApplications(revision, event),
+                    )
+                    .scroll_style(ScrollStyle {
+                        gutter: layout::SHELL_STEP,
+                        ..self.theme().scroll_style()
+                    })
+                    .size(width, visible_rows as f32 * component::launcher::ROW_HEIGHT)
+                    .tab_stop(false)
+                    .focus_outline(false)
+                    .hover_feedback(false)
+                    .id(format!("launcher-results-{revision}"))
                 };
                 elements.push(list.at(0., body_y));
                 let search = self
@@ -190,11 +217,21 @@ impl View<'_> {
                             .text_input_content(
                                 &self.launcher.query,
                                 self.launcher.query_field.selection(),
-                                "Search apps and settings",
+                                "Search applications",
                                 Message::EditQuery,
                             )
                             .id("launcher-search")
                             .autofocus(),
+                        self.label(
+                            match self.launcher.results.len() {
+                                0 => "0 results".into(),
+                                1 => "1 result".into(),
+                                count => format!("{} / {count}", self.launcher.selected + 1),
+                            },
+                            font::CAPTION,
+                        )
+                        .opacity(opacity::SUPPORTING)
+                        .id("launcher-result-count"),
                         self.icon("close", icon::SMALL)
                             .on_click(Message::Query(String::new()))
                             .id("clear-search"),

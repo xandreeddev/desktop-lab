@@ -4,7 +4,7 @@
   "status": "in_progress",
   "implementation": "Lucent Rust desktop and reusable UI toolkit",
   "visual_direction": "Develop Lucent's existing design tokens and visual identity while matching the reference's attention to interaction, motion and complete user workflows.",
-  "working_branch": "feat/caelestia-polish",
+  "working_branch": "feat/lucent-launcher-polish",
   "test_environment": {
     "vm": "desktop-lab-lucent",
     "console": "python3 vm/lab.py console lucent",
@@ -40,18 +40,27 @@
         "Actual passive, focused and released native visuals reviewed.",
         "Actual Notes completed-click typing, ordinary Undo, first same-workspace outside browser click/key, explicit Notes reacquisition and no browser key leak pass. All ten restoration/profile checks pass.",
         "Two disjoint90-second read-only guest capture windows close with terminal receipts; each guest click precedes its KeyA. Actual focused/lost/reacquired caret visuals reviewed.",
-        "CI compatibility fix passes local strict workspace Clippy; actual source-bound native catalogue regenerated and validated:121 inputs,480 captures,9 stories."
+        "CI compatibility fix passes local strict workspace Clippy; actual source-bound native catalogue regenerated and validated:121 inputs,480 captures,9 stories.",
+        "All required CI checks pass at3f3204ebc915: integration-code, site, full Rust workspace, real protocol suites and native Vulkan visuals (run44066091093)."
       ],
       "remaining": [
-        "Finish protected-main delivery through the existing keyboard-focus PR after current CI completes."
+        "Protected-main delivery of PR117; the configured GitHub API account lacks permission to mark it ready or merge."
       ],
       "report": "reports/measurements/lucent-polish-keyboard-focus.json"
     },
     {
       "id": "launcher",
-      "status": "queued",
+      "status": "in_progress",
       "behavior": "Search, keyboard selection, scrolling, section changes, launch/focus and dismissal form one consistent workflow.",
-      "toolkit": "Controlled text, list layout/scrolling, stable identity and focus routing; add virtualization only where the actual workload requires it."
+      "toolkit": "Controlled ListNavigation and list_window are pure public API contracts reused by the launcher/action lists and independent native picker; text editing retains its own keys and generation-bound clipboard state.",
+      "acceptance": [
+        "App Page Up/Down moves by actual visible rows, keeps selection visible and clamps at both ends; empty results cannot activate.",
+        "Search and the selected AppId/scroll survive section switches and catalogue changes while the launcher remains open; a fresh open starts clean.",
+        "Home/End and modified editor keys retain ordinary text behavior. Stale clipboard completions cannot change a retired field.",
+        "The standalone native picker uses the shared navigation/window contract and skips disabled entries.",
+        "Result count, search layout and selected-row visuals fit regular, narrow and high-density output.",
+        "Actual VM keyboard, pointer, search, section, launch/focus and dismissal workflows pass with original settings/session restoration."
+      ]
     },
     {
       "id": "control-panels",
