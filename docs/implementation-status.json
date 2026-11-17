@@ -5,16 +5,17 @@
   "completion_rule": "An item is verified only when its behavior, boundary checks, documentation and applicable native integration checks have evidence. Implemented without verification remains incomplete.",
   "current_rollup": {
     "desktop_polish": {
-      "status": "in_progress",
+      "status": "native_verified_delivery_pending",
       "guide": "docs/desktop-polish.json",
       "report": "reports/measurements/lucent-polish-keyboard-focus.json",
       "working_branch": "feat/caelestia-polish",
       "current_vm_source_commit": "d77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb",
       "fresh_cold_pointer_and_keyboard_routes_accepted": true,
       "independent_focus_consumer_accepted": true,
-      "actual_Notes_outside_handoff_accepted": false,
+      "actual_Notes_outside_handoff_accepted": true,
       "new_polish_changes_merged": false,
-      "scope": "2026-11-17 fresh VM execution and independent consumer on the retained d77 toolkit: 729 relevant Rust tests, 802 Python tests, 832 unchanged Vulkan cases, two cold browser routes and native consumer checks pass. Actual desktop Notes outside-click/input order, protected-main delivery and the broader polish goal remain open. Earlier reports retain their original outcomes."
+      "scope": "2026-11-17 fresh d77 VM execution: two cold browser routes, the independent toolkit consumer and actual Notes/browser/Notes completed-click input pass. Guest timestamps prove button-before-key ordering within the acknowledged-input contract; all ten final restoration/profile checks pass and native caret visuals are reviewed. Local checks include729 relevant Rust tests,802 Python tests,832 unchanged Vulkan visual cases and a fresh121-input/480-capture catalogue. Current PR CI and protected-main delivery remain pending; the broader polish goal remains open. Earlier failures retain their original outcomes.",
+      "actual_Notes_reacquisition_accepted": true
     },
     "snapshot_source_commit": "c3007cc5cefc5faab36f751a28542898ecefac0d",
     "snapshot_date": "2026-10-27",

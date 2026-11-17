@@ -16,10 +16,21 @@ release, graceful quit/socket cleanup and desktop/cursor preservation. Its actua
 passive, focused and released visuals were reviewed. The source checks pass 729
 relevant Rust tests, 802 Python tests and all 832 unchanged Vulkan visual cases.
 
-The first focus feature remains in progress: actual Notes outside-click and
-immediate input ordering still need a corrected native trial. The independent
-consumer and cold-browser passes do not accept that older widget diagnostic.
-Protected-main delivery, other polish features and performance remain separate.
+Actual Notes → browser → Notes now passes the completed-click workflow: initial
+typing and Undo, the first outside browser click/key, explicit Notes reacquisition
+without a browser key leak, and ordinary Undo again. Two separate bounded guest
+recording windows prove button-before-key delivery and close both input
+descriptors before the next window or restoration. Focused/lost/reacquired caret
+visuals were reviewed; all ten restoration/profile checks pass. This accepts the
+acknowledged guest-input contract, not the earlier held-button or uninterrupted
+host-gesture cases. Those failures remain historical evidence below.
+
+The first feature is native-verified and awaits current CI/protected-main
+delivery through [PR117](https://github.com/xandreeddev/desktop-lab/pull/117).
+Other polish features and performance remain separate. The current native
+component catalogue is regenerated from source `beb696411c83`: 121 inputs and
+480 actual Vulkan captures, with all nine story families sampled for visual
+review. Production visual-test goldens remain unchanged.
 
 ## Delivery and earlier source-specific evidence
 

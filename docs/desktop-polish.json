@@ -29,7 +29,7 @@
   "features": [
     {
       "id": "keyboard-handoff",
-      "status": "in_progress",
+      "status": "native_verified_delivery_pending",
       "behavior": "Ordinary controls acquire keyboard focus only after user intent, release it when their interaction ends, and do not steal it back from an application opened by mouse or keyboard.",
       "toolkit": "Prepared pointer-press observation, one-shot native focus requests, exact native lifetime events, focus-aware caret painting and bounded control commits.",
       "completed_checks": [
@@ -37,11 +37,13 @@
         "Formatting and strict workspace Clippy pass; 729 relevant Rust tests, 802 Python tests and 832 unchanged Vulkan visual cases pass.",
         "Fresh pointer and Tab/Enter notification links each open a separate cold browser and deliver one trusted KeyA; nine restoration checks pass per route.",
         "The independent bottom-layer focus client passes typing, Tab, Escape, reacquisition, foreground loss, explicit release, graceful quit/socket cleanup and desktop/cursor preservation.",
-        "Actual passive, focused and released native visuals reviewed."
+        "Actual passive, focused and released native visuals reviewed.",
+        "Actual Notes completed-click typing, ordinary Undo, first same-workspace outside browser click/key, explicit Notes reacquisition and no browser key leak pass. All ten restoration/profile checks pass.",
+        "Two disjoint90-second read-only guest capture windows close with terminal receipts; each guest click precedes its KeyA. Actual focused/lost/reacquired caret visuals reviewed.",
+        "CI compatibility fix passes local strict workspace Clippy; actual source-bound native catalogue regenerated and validated:121 inputs,480 captures,9 stories."
       ],
       "remaining": [
-        "Complete actual Notes outside-click acceptance with proved guest pointer/key delivery ordering; retain earlier transport failures and limitations.",
-        "Finish protected-main delivery through the existing keyboard-focus PR."
+        "Finish protected-main delivery through the existing keyboard-focus PR after current CI completes."
       ],
       "report": "reports/measurements/lucent-polish-keyboard-focus.json"
     },

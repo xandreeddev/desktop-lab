@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "recorded_on": "2026-11-17",
-  "status": "scoped_checks_passed_feature_in_progress",
-  "scope": "Current Lucent VM: cold notification-to-browser handoff and an independent ordinary focus consumer. Actual Notes outside-click and immediate input ordering remain separate acceptance work.",
+  "status": "native_workflows_verified_delivery_pending",
+  "scope": "Current d77 Lucent VM: cold notification-to-browser handoff, independent ordinary focus consumer, and actual Notes/browser/Notes completed-click workflows with observed guest button-before-key ordering. Protected-main delivery remains separate.",
   "toolkit_source_commit": "d77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb",
   "installed_desktop_sha256": "ed2166062a55676897bc745b3cea956e8276b4ae5f9a6019dce4aa1f4c5a70b5",
   "accepted_main_merge": false,
@@ -102,11 +102,95 @@
     }
   },
   "remaining": [
-    "Actual desktop Notes outside-click with proved guest pointer/key delivery ordering. Earlier transport diagnostics remain failed or inconclusive.",
     "Protected-main delivery of the reconciled feature and independent consumer.",
     "Other features in docs/desktop-polish.json."
   ],
   "performance_accepted": false,
   "physical_hardware_accepted": false,
-  "privacy": "No credentials, user note/query content, location, URI targets, process arguments, environment, personal paths or VM screenshots are included."
+  "privacy": "No credentials, user note/query content, location, URI targets, process arguments, environment, personal paths or VM screenshots are included.",
+  "actual_notes_native": {
+    "passed": true,
+    "source_commit": "d77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb",
+    "private_receipt_sha256": "0fab864e479a5d1bc8ade3bb7236903390f907d9b55ab11f67a67cbb6806b960",
+    "controller_sha256": "dca79d2ad1e64d8fae5777ad0dda80fcf5b0a7598d7f30113c4830532ab02ef1",
+    "checks": {
+      "first_notes_key_and_ordinary_undo": true,
+      "first_outside_click_and_normal_browser_keyboard": true,
+      "reacquisition_does_not_leak_key_to_browser": true,
+      "reacquire_and_normal_undo": true
+    },
+    "restoration": {
+      "owned_browser_retired": true,
+      "exact_original_settings_stopped_service": true,
+      "normal_desktop_35s_stability": true,
+      "original_workspace": true,
+      "original_monitor": true,
+      "exact_wallpaper_source_exports_and_settings": true,
+      "original_idle_marker": true,
+      "owned_guest_checkpoint_removed": true,
+      "original_cursor": true,
+      "owned_private_profile_removed": true
+    },
+    "all_restoration_checks_passed": true,
+    "restoration_check_count": 10,
+    "capture_windows": 2,
+    "max_seconds_per_capture_window": 90,
+    "all_input_descriptors_closed_with_terminal_receipts": true,
+    "single_continuous_three_gesture_trace": false,
+    "guest_chronology": [
+      {
+        "case": "initial-notes",
+        "guest_press_to_key_ms": 42.752,
+        "guest_release_to_key_ms": 41.854
+      },
+      {
+        "case": "outside-browser",
+        "guest_press_to_key_ms": 41.647,
+        "guest_release_to_key_ms": 40.679
+      },
+      {
+        "case": "reacquired-notes",
+        "guest_press_to_key_ms": 47.112,
+        "guest_release_to_key_ms": 45.971
+      }
+    ],
+    "max_host_press_to_key_ms": 150,
+    "measured_host_press_to_key_ms": {
+      "first_notes_input": 89.441,
+      "outside_input": 100.094,
+      "reacquire_input": 103.382
+    },
+    "input_contract": "Complete the physical click, acknowledge only the owned guest input pipe, then send one KeyA within the original150ms wall-clock bound. No focus wait, forced focus, DOM input synthesis or key replay. This does not accept the earlier uninterrupted-host/held-button cases.",
+    "native_visuals_reviewed": [
+      "focused Notes caret and outline after initial key",
+      "outline/caret absent after outside loss, original Notes text retained",
+      "caret/outline return after explicit Notes reacquisition"
+    ],
+    "earlier_trials": [
+      {
+        "version": "V12",
+        "passed": false,
+        "private_receipt_sha256": "bd54f93cd7747c6a6dd9c6fc5c7c0a1d0725b98f3b4938e29e8c28029758d4b5",
+        "scope": "Initial Notes and outside browser pass; the90-second observer expired before reacquisition. All nine restorations pass."
+      },
+      {
+        "version": "V13 first execution",
+        "passed": false,
+        "private_receipt_sha256": "38d85a5583f9ecbe7e0c75ab50df36648c86c7054bc8eb5a32ab45d5c9dec3be",
+        "scope": "The guest-button deadline expired before any key was sent during a concurrent bounded native-gallery export. All nine restorations pass. Repeated after that export completed with the identical controller,150ms bound and CPU/memory limits."
+      }
+    ],
+    "global_seat_owner_observed": false
+  },
+  "fresh_component_catalogue": {
+    "source_commit": "beb696411c83d7e1bf3b41538cc7577780bf6b2c",
+    "rendering_inputs": 121,
+    "captures": 480,
+    "stories": 9,
+    "integrity_check_passed": true,
+    "native_story_samples_reviewed": 9,
+    "backend": "RADV Vulkan",
+    "production_visual_goldens_changed": false,
+    "PNGs_byte_identical_to_previous_software_export": false
+  }
 }

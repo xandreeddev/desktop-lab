@@ -3,8 +3,19 @@
 A text box can remember its caret while another application receives the
 keyboard. Lucent keeps those facts separate. This guide follows the implemented
 one-shot focus API in compiled and deployed candidate `ba5b8a51f960`.
-The original canonical cold URI interaction now passes in its recorded scope;
-inline-widget and secure-session acceptance remain separate.
+The original canonical cold URI interaction passes in its recorded scope.
+The later d77 completed-click widget workflow is also verified below; older
+held-button and uninterrupted host-gesture results keep their original limits.
+
+The [2026-11-17 native report](../reports/measurements/lucent-polish-keyboard-focus.json)
+verifies Notes typing/Undo, the first outside browser click/key and explicit
+Notes reacquisition without leaking a key to the browser. Two separate finite
+guest recording windows prove each button pair precedes its KeyA; only the owned
+input pipe is acknowledged before sending that key, within a 150 ms host bound.
+No focus wait or key replay is used. Focused/lost/reacquired caret visuals and all
+ten final restoration/profile checks pass. The independent toolkit consumer and
+both cold-browser launch routes pass separately. This is one-output VM evidence;
+protected-main delivery and broader session/hardware acceptance remain distinct.
 
 ## Four different states
 
