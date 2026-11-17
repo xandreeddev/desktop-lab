@@ -77,7 +77,10 @@ not invoke Cargo or Git.
 ## Prepare a hosted candidate
 
 The `checks` workflow is configured to produce an
-`optimized-development-bundle` artifact after the Rust and native visual checks.
+`optimized-development-bundle` artifact alongside the Rust and native visual checks.
+The Arch job starts after the fast integration/site checks so dependency failures
+are visible promptly. All four jobs, including Rust and Vulkan comparisons, must
+pass before the artifact is used for target qualification.
 It reuses the checked release bundle publisher inside a pinned Arch container
 with one CPU, a 4 GiB memory limit, no extra swap and a 512-process limit. The
 container's actual cgroup limits are checked before Cargo runs. A signed full

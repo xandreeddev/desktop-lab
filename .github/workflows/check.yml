@@ -135,7 +135,9 @@ jobs:
           path: reports/local/visual-tests
           if-no-files-found: ignore
   arch-development-bundle:
-    needs: [rust, integration-code, site]
+    # Start the target build after fast checks so setup failures are visible
+    # promptly. Rust and visual checks must also pass before using its artifact.
+    needs: [integration-code, site]
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     container:
@@ -155,18 +157,48 @@ jobs:
         run: |
           task_proof="$RUNNER_TEMP/arch-dependencies"
           mkdir -p "$task_proof/cache" "$task_proof/databases"
+          task_stage=admission
+          task_failure() {
+            local task_status=$?
+            trap - ERR
+            set +e
+            printf 'Arch dependency setup failed: stage=%s status=%s\n' "$task_stage" "$task_status"
+            # Use shell builtins: a failed transaction may prevent docker exec
+            # or even a new tail process from starting inside this container.
+            local task_file task_line task_count task_index
+            local -a task_lines
+            for task_file in "$task_proof/download.log" "$task_proof/install.log" /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.current /sys/fs/cgroup/pids.events /sys/fs/cgroup/pids.current; do
+              if ! test -r "$task_file"; then continue; fi
+              printf '\n%s\n' "$task_file"
+              task_lines=(); task_count=0
+              while IFS= read -r task_line || test -n "$task_line"; do
+                task_lines[task_count % 80]="${task_line:0:2000}"
+                task_count=$((task_count + 1))
+              done < "$task_file"
+              for ((task_index=task_count > 80 ? task_count - 80 : 0; task_index < task_count; task_index++)); do
+                printf '%s\n' "${task_lines[task_index % 80]}"
+              done
+            done
+            exit "$task_status"
+          }
+          trap task_failure ERR
           test "$(cat /sys/fs/cgroup/memory.max)" = 4294967296
           test "$(cat /sys/fs/cgroup/cpu.max)" = '100000 100000'
           test "$(cat /sys/fs/cgroup/memory.swap.max)" = 0
           task_packages=(base-devel git python rustup clang llvm pkgconf wayland libxkbcommon pam polkit libpulse ffmpeg vulkan-icd-loader dbus)
+          task_stage=signature-policy
           pacman-conf SigLevel > "$task_proof/signature-policy.txt"
           grep -qw PackageRequired "$task_proof/signature-policy.txt"
+          task_stage=download
           pacman -Syuw --noconfirm --cachedir "$task_proof/cache" "${task_packages[@]}" > "$task_proof/download.log" 2>&1
+          task_stage=freeze
           sha256sum /var/lib/pacman/sync/*.db > "$task_proof/databases.sha256"
           cp /var/lib/pacman/sync/*.db "$task_proof/databases/"
           find "$task_proof/cache" -type f -name '*.pkg.tar.*' ! -name '*.sig' -print0 | sort -z | xargs -0 -r sha256sum > "$task_proof/archives.sha256"
           test -s "$task_proof/archives.sha256"
+          task_stage=install
           pacman -Su --needed --noconfirm --cachedir "$task_proof/cache" "${task_packages[@]}" > "$task_proof/install.log" 2>&1
+          task_stage=verify
           sha256sum --check "$task_proof/databases.sha256"
           sha256sum --check "$task_proof/archives.sha256"
           pacman -Q > "$task_proof/installed-packages.txt"

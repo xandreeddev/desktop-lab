@@ -245,7 +245,7 @@
     "scope": "All required source checks pass. Optimized bundle construction and target VM/native acceptance remain separate."
   },
   "hosted_optimized_candidate": {
-    "status": "ubuntu_bundle_verified_reference_abi_rejected_arch_followup_prepared",
+    "status": "ubuntu_bundle_reference_abi_rejected_arch_setup_failed_diagnostic_followup_prepared",
     "artifact_name": "optimized-development-bundle",
     "builder": "Existing lucent-dev.py release builder in its bounded user unit on GitHub",
     "scope": "Three ordinary clients and seven theme files. The actual candidate build and target VM qualification remain open.",
@@ -347,7 +347,37 @@
         "unknown_glibc_namespace_rejected": true
       },
       "vm_qualified": false,
-      "native_accepted": false
+      "native_accepted": false,
+      "failed_attempt": {
+        "source_commit": "a599be6dae8a3772d6faddb8f24f66409383c782",
+        "run": "https://github.com/xandreeddev/desktop-lab/actions/runs/44118132724",
+        "rust_job_passed": true,
+        "integration_code_passed": true,
+        "site_passed": true,
+        "full_vulkan_visual_cases_passed": 832,
+        "visual_artifact_id": 14345886469,
+        "visual_archive_sha256": "d0c9773928ad6c7f003a45a7b3f0391e027a669cf5fde40347c4ffade6964f3c",
+        "visual_archive_digest_verified": true,
+        "all_case_pngs_present_and_crc_verified": true,
+        "visual_receipt_sha256": "a796996560669819da7af40944c6f8e95c66d61357b96012f91109c600945ae3",
+        "whole_run_passed": false,
+        "arch_job_id": 134174455159,
+        "arch_setup_passed": false,
+        "optimized_compile_attempted": false,
+        "artifact_uploaded": false,
+        "failure": "The dependency setup failed, then the container could not start the separate diagnostics or upload processes. The original package log was not exposed; the cause remains unproven.",
+        "followup": "Print stage, bounded package-log tails and cgroup counters from the still-running setup shell using only shell builtins. Begin Arch setup after the fast checks; require Rust/Vulkan and all other jobs before using the artifact."
+      },
+      "diagnostic_probe": {
+        "workflow_yaml_parsed": true,
+        "bash_syntax_passed": true,
+        "shellcheck_passed": true,
+        "failure_status_preserved": 23,
+        "last_80_log_lines_retained": true,
+        "resource_counters_reported": true,
+        "diagnostic_with_no_external_executables_passed": true,
+        "compilation_rendering_or_vm_started": false
+      }
     }
   },
   "hosted_verified_parent": {
