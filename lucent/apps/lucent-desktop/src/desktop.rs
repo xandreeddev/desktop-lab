@@ -8,7 +8,6 @@ mod panels;
 #[cfg(test)]
 mod system_tests;
 use crate::widgets::{self, catalog::WIDGETS};
-use lucent_api::Application as _;
 use lucent_api::{self as api, *};
 use lucent_design::{component::panel, motion};
 use lucent_domain::{self as domain, *};
@@ -2898,7 +2897,7 @@ impl api::Application for Desktop {
                     {
                         Some(Message::Widgets(widgets::Message::Edit(false)))
                     }
-                    event => self.event(event),
+                    event => api::Application::event(self, event),
                 }?;
                 Some(Message::OnMonitor(route, Box::new(message)))
             }
@@ -3411,7 +3410,7 @@ impl api::Application for Desktop {
                 .get(&surface.instance)
                 .is_some_and(|(_, presentation)| presentation.active(now))
         } else {
-            self.animating(surface.role, now)
+            api::Application::animating(self, surface.role, now)
         }
     }
     fn animating(&self, surface: &str, now: f64) -> bool {
