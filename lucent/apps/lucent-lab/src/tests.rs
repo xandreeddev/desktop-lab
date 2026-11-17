@@ -228,20 +228,32 @@ fn menu_keyboard_session_preserves_chrome_then_enters_actual_menu_policy() {
     let active = layout.build(&lab.view(&cx), cx.width, cx.height, &input, cx.now);
     input.synchronize(&active);
     assert_eq!(input.focus.as_deref(), Some("menu-search"));
-    for key in [Key::Down, Key::Tab] {
+    for (key, selected) in [
+        (Key::Down, 1),
+        (Key::Tab, 2),
+        (Key::BackTab, 1),
+        (Key::Tab, 2),
+        (Key::PageDown, 3),
+        (Key::Tab, 3),
+    ] {
         let message = lab
             .event(Event::Key {
                 surface: SURFACE,
                 key,
             })
             .unwrap();
-        assert!(matches!(
-            &message,
-            Message::Menu(_, lucent_menu::Message::Navigate(1))
-        ));
         lab.update(message, &mut Effects::default());
+        assert_eq!(lab.menu.selection.selected, selected);
     }
-    assert_eq!(lab.menu.selection.selected, 2);
+    for key in [Key::Home, Key::End] {
+        assert!(
+            lab.event(Event::Key {
+                surface: SURFACE,
+                key,
+            })
+            .is_none()
+        );
+    }
     assert!(
         lab.event(Event::Scroll {
             surface: SURFACE,

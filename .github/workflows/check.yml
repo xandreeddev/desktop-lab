@@ -81,6 +81,18 @@ jobs:
       - run: rustup update stable && rustup component add rustfmt clippy
       - run: cargo fmt --manifest-path lucent/Cargo.toml --all --check
       - run: cargo clippy --manifest-path lucent/Cargo.toml --locked --workspace --all-targets -- -D warnings
+      - name: Export native component candidate
+        run: |
+          export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name '*lvp*' -print -quit)"
+          test -n "$VK_DRIVER_FILES"
+          cargo run --manifest-path lucent/Cargo.toml --locked -p lucent-lab -- --render reports/local/component-lab-candidate
+          python3 scripts/check-component-lab.py --catalog reports/local/component-lab-candidate
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-component-candidate
+          path: reports/local/component-lab-candidate
+          if-no-files-found: ignore
       - run: cargo test --manifest-path lucent/Cargo.toml --locked --workspace
       - run: dbus-run-session -- cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-services notification_ -- --ignored
       - run: cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-services audio_protocol -- --ignored
@@ -115,18 +127,6 @@ jobs:
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-desktop bounded_widget_pixels -- --ignored --nocapture
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-desktop --bin lucent-desktop bar_handoff_carriers_keep_identical_pixels -- --ignored --nocapture --test-threads=1
           cargo test --manifest-path lucent/Cargo.toml --locked -p lucent-desktop visual_regressions -- --ignored --nocapture
-      - name: Export native component candidate
-        run: |
-          export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name '*lvp*' -print -quit)"
-          test -n "$VK_DRIVER_FILES"
-          cargo run --manifest-path lucent/Cargo.toml --locked -p lucent-lab -- --render reports/local/component-lab-candidate
-          python3 scripts/check-component-lab.py --catalog reports/local/component-lab-candidate
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: native-component-candidate
-          path: reports/local/component-lab-candidate
-          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()
         with:

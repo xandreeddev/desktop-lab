@@ -156,5 +156,22 @@
     "failure": "Catalog omits a production rendering input",
     "missing_input": "lucent/crates/lucent-api/src/list.rs",
     "replacement_export_interrupted": true
-  }
+  },
+  "hosted_attempts": [
+    {
+      "source_commit": "b8cc30794962fb27152609dc521083ddfb4e4da7",
+      "run": "https://github.com/xandreeddev/desktop-lab/actions/runs/44088206114",
+      "conclusion": "failure",
+      "site_passed": true,
+      "formatting_passed": true,
+      "strict_workspace_clippy_passed": true,
+      "workspace_tests_passed": false,
+      "workspace_failure": "The component lab test expected the old private Navigate(1) message instead of verifying the new shared navigation behavior.",
+      "catalogue_check_passed": false,
+      "catalogue_failure": "Catalog omits a production rendering input",
+      "full_visual_matrix_attempted": false,
+      "candidate_export_attempted": false,
+      "followup": "Replace the obsolete lab assertion with real selection, paging, clamped endpoint and editor-key behavior; export/upload the inspectable component candidate before later functional checks."
+    }
+  ]
 }
