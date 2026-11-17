@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+  "manifest_sha256": "0e1291f46312057a6c9b349148868ad770b9b07c848fdd901ca4b01e32050b4d",
+  "status": "native_cycle_observed_exit_status_assertion_failed",
+  "whole_trial_passed": false,
+  "failure": "native_locker_normal_exit_required",
+  "actual_private_trial_sha256": "2fd477bc1c101dd6fdde22307b1594000e4c8b9e0428d7dad85b8ec9449577e5",
+  "actual_later_readonly_receipt_sha256": "31670b13e70025babc14c13277530f8f3fa07eacdcc243d289b75fab2deb9ced",
+  "original_checks_passed": {
+    "same_connection_new_locked_ack": true,
+    "exact_native_locker_without_fallback_or_restart": true,
+    "existing_live_wallpaper_pauses_without_preference_change": true
+  },
+  "same_connection_notifier_events": [
+    "ready_unlocked",
+    "locked_ack_transition",
+    "unlocked_transition",
+    "complete",
+    "connection_closed"
+  ],
+  "ordinary_lock_requested": true,
+  "private_password_helper_invocations": 1,
+  "authenticated_unlock_observed": true,
+  "native_exit_status": null,
+  "later_systemd_properties": {
+    "ActiveState": "inactive",
+    "SubState": "dead",
+    "Result": "success",
+    "NRestarts": 0,
+    "ExecMainCode": "0",
+    "ExecMainStatus": "0"
+  },
+  "later_readonly_preservation": {
+    "same_normal_runtime": true,
+    "unlocked_no_locker_or_fallback": true,
+    "fingerprint_matches_before": true,
+    "security_matches_before": true,
+    "playback_matches_before": true,
+    "all_tracing_OFF": true
+  },
+  "earlier_failure_retroactively_changed": false,
+  "original_geometry_and_idle_baselines_saved": false,
+  "caret_wallpaper_pixels_login_suspend_hardware_or_performance_accepted": false,
+  "scope": "One FHD virtual output, ordinary lock, new compositor acknowledgement, exact native locker and one private PAM helper. Unlock and later same-runtime preservation are observed. The original exit-status assertion failed; later ExecMainCode=0 does not establish native exit status or its cause. No retry, forced unlock or locker kill.",
+  "privacy": {
+    "credentials_Notes_wallpaper_images_or_private_identifiers_published": false
+  }
+}

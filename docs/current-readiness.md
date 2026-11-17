@@ -1,19 +1,125 @@
 # Current daily-use readiness
 
-The named accepted-main and verified delivery checkpoint is
-[`912074f1`](https://github.com/xandreeddev/desktop-lab/commit/912074f1678b67b789b75217ea253d40dd327e73),
-through [PR115](https://github.com/xandreeddev/desktop-lab/pull/115).
-[Pages40414422493](https://github.com/xandreeddev/desktop-lab/actions/runs/40414422493)
+The current accepted-main delivery checkpoint is
+[`c3007cc5`](https://github.com/xandreeddev/desktop-lab/commit/c3007cc5cefc5faab36f751a28542898ecefac0d),
+through [PR116](https://github.com/xandreeddev/desktop-lab/pull/116).
+[Pages40418504442](https://github.com/xandreeddev/desktop-lab/actions/runs/40418504442)
 passes three exact public HTML artifact matches and the native manifest/PNG:
-**118 producer inputs and 480 captures from source 3640bd86** (public receipt
-`695a4c42b0f018eaf0339d947bf2814c8c1440deb1437bea55a22c133e8e23ea`).
-Twenty same-artifact LAN HTTP checks pass, retaining the 64/128 MiB static-server
-limits (receipt `7f47d1a2d4c22760cdc8b337d65d581a2e4d424387dd73b659493042067833db`).
-Earlier 9d42/PR114/Pages40396627106 served 4a0f932a's **117** producers;
-ca88/Pages40392718403 served b3c91fab's **116**. Those checkpoints remain historical.
-This later focus-investigation, CI and delivery reconciliation still needs its own
-final build, protected-main merge and publication. Delivery establishes no native
-keyboard fix or performance acceptance.
+**118 producer inputs and 480 captures from source 3640bd86**. Twenty
+same-artifact LAN HTTP checks pass with the 64/128 MiB static-server limits.
+These are delivery checks, not native keyboard or performance acceptance.
+Earlier 912/PR115, 9d42/PR114 and ca88 checkpoints remain historical.
+
+The latest recorded coherent VM release is source **d77f3d0b2caf**, built by
+[hosted Arch run40448216820](https://github.com/xandreeddev/desktop-lab/actions/runs/40448216820).
+It passes 17 qualification stages, 885 targeted tests and 99 required named
+regressions, fresh software-Vulkan export and static compatibility for all ten
+ELF consumers. The independent ABI review and coherent six-client/root-greeter
+deployment pass without restarting greetd or writing settings/themes. Its
+[sanitized source-specific report](../reports/measurements/lucent-keyboard-control-flush-d77.json)
+keeps this installation separate from accepted main and PR117's ba5 source.
+
+The d77 input results are mixed. The held-button case still sends the first key
+to the browser. A completed click delivers the first key to Notes, with native
+focus, a visible caret and ordinary undo. The corrected complete-flow trial then
+fails the outside handoff: the browser receives trusted pointer down/up/click,
+but the following key reaches Notes. All nine restorations pass in each of the
+three trials. Reacquisition remains unattempted. Host command order does not prove
+guest delivery order across the VM's USB tablet and PS/2 keyboard; that chronology
+and the failure cause remain unmeasured. A finite read-only guest-input diagnostic
+is being prepared. The later [original canonical d77 URI trial](../reports/measurements/lucent-cold-default-uri-d77.json)
+passes both pointer and Tab/Enter routes, including one trusted unmodified
+nonrepeat KeyA and all three feature/nine cleanup checks per route. It preserves
+the same normal desktop lifetime and uses independent cold browser births. This
+new execution accepts that controlled handoff; no widget focus fix, lock/login
+regression or performance acceptance is inherited from the earlier source.
+
+The subsequent [closed V10 input-order diagnostic](../reports/measurements/lucent-widget-input-order-d77.json)
+shows the guest receiving the outside KeyA **4.332 ms before** the tablet press,
+despite the host sending click commands first. The cursor also remains at the
+previous Notes point, so the intended browser target is not reached. The first
+Notes key arrives 33.278 ms after its guest press and ordinary undo passes. The
+observer closes both descriptors with balanced complete packets and no drop.
+Eight restoration checks pass; cursor restoration fails because the owned move
+was not confirmed. The normal desktop/settings are restored, but the original
+cursor point was not persisted and no later cursor recovery is claimed. This
+case establishes a test-transport problem, not a Lucent focus failure. Correct
+physical-pointer preparation and guest delivery ordering need a separate trial;
+compositor processing and earlier trials' guest order remain unknown.
+
+The earlier coherent VM release is source **ba5b8a51f960**, built by
+[hosted Arch run40433468095](https://github.com/xandreeddev/desktop-lab/actions/runs/40433468095).
+Its **17 qualification stages, 880 targeted tests and 94 required named
+regressions pass**. All ten ELF consumers pass static import compatibility;
+the separate review of 134 FFmpeg public headers finds 129 identical files and
+five version-literal changes, with no unresolved header/layout issue for this
+trial. Deployment verifies all six user clients and the root greeter beyond
+the startup deadline, preserves settings/security and does not restart greetd
+or write settings/themes. The verified b2 cohort remains the rollback baseline.
+See the [sanitized release report](../reports/measurements/lucent-keyboard-intent-ba5-release.json).
+
+The same build produces a fresh **CPU software-Vulkan** catalogue: llvmpipe,
+121 producer inputs, nine stories, five palettes and 480 PNGs. The committed
+catalogue preserves the actual ba5 manifest. All 480 PNG hashes differ from the
+older RADV captures; 18 paired examples across all nine stories at 1×/2× show a
+maximum normalized peak error of about 2/255. Four visual pairs show no visible
+layout, caret or clipping regression. This sampled comparison does not establish
+all-480 decoded-pixel parity, native GPU behavior or performance. PR117 carries
+these captures; their new Pages publication is not yet verified.
+
+The first Notes controller attempt stops before typing with a bounded-command
+harness failure and no feature checks. All nine restoration checks pass,
+including guarded settings/source restoration and a 35-second normal restart.
+Its earlier normal process is intentionally retired. A fresh identity was then
+bound for the original [canonical cold URI trial](../reports/measurements/lucent-cold-default-uri-ba5.json):
+both pointer and Tab/Enter routes pass all three feature checks, each exact cold
+document receives one trusted, unmodified, nonrepeat `KeyA`, and each case passes
+all nine cleanup checks. No forced focus, prewarming or cursor workaround is used.
+This accepts the controlled cold URI handoff on one FHD virtual output.
+The corrected [V7 first-key trial](../reports/measurements/lucent-widget-first-key-ba5.json)
+fails immediate Notes input. Notes gains logical focus and one native Enter with
+requested and committed `OnDemand`, but the first trusted `KeyA` reaches the
+owned browser. The host down-to-key transport interval is 31.625 ms; guest
+callback and request timing were not measured. All nine restoration checks pass.
+Outside-click and reacquisition were not attempted. Earlier V4–V6 failures remain
+recorded, but their combined down/up QMP call did not publish a pressed USB
+report. The later [V8 trial](../reports/measurements/lucent-widget-completed-click-ba5.json)
+completes the click before sending KeyA and also fails: Notes gains logical/native
+focus, while the owned browser receives the first key. Its host down-to-key
+interval is 66.634 ms, including release transport; all nine restorations pass.
+The V7 held-button result remains unchanged. No outside-click or reacquisition
+result is accepted. The later d77 candidate and its mixed native results are recorded above;
+whole-flow keyboard acceptance remains open. Eligible memory and FPS acceptance
+remain separate.
+
+The [separate native lock trial](../reports/measurements/lucent-native-lock-ba5.json)
+observes a new compositor acknowledgement, the exact native locker, wallpaper
+pause and one ordinary authenticated unlock. Its exit-status assertion fails;
+the later systemd code is zero and the native exit status remains unavailable.
+A separate read-only check verifies the same normal desktop, unchanged file and
+security fingerprints, restored playback and all tracing OFF. The original failed
+result remains unchanged.
+
+The new [V3 lock/PAM regression](../reports/measurements/lucent-native-lock-ba5-v3.json)
+passes all six checks. A private unit reference retains the exact native
+invocation through normal exit, with exit status0 and positive execution history.
+The same notifier connection observes lock acknowledgement and unlock; the
+reference is released, and the normal runtime, files, security, playback, idle
+policy and geometry remain unchanged. An intervening V2 preflight fails before
+any lock or password because an empty initial InvocationID was misread. Both
+earlier failures remain recorded. This scoped pass does not establish login,
+secure-client pixels, suspend, physical hardware or performance.
+
+The historical [actual b2 cold-browser trial](../reports/measurements/lucent-cold-default-uri-b2.json)
+passes canonical pointer opening and trusted document input, while Tab/Enter
+still fails browser focus/key delivery. All nine cleanup checks pass in each
+case. The new native observer sees Clock regain keyboard focus after history
+closes; Clock/Calendar had committed `None` during history and subsequently
+restored `OnDemand`. The candidate [explicit widget-focus implementation](keyboard-focus.md)
+separates capability, demand and native ownership. Its source qualification,
+visual export and coherent candidate deployment pass. The new original canonical
+cold URI trial accepts pointer and keyboard handoff in that controlled scope;
+first-click widget, secure-session and broader application checks remain separate.
 
 Archived resource and earlier feature observations below retain `eb3481f4` and
 their other named sources. At the earlier [PR110](https://github.com/xandreeddev/desktop-lab/pull/110)
@@ -24,8 +130,8 @@ Earlier checkpoints remain in [the ledger](implementation-status.json).
 
 The core Wi-Fi repair, safe display editing, international text and explicit
 application-opening paths are implemented with scoped native evidence. The
-seven-gap goal is **not complete**: cold keyboard handoff, eligible ≤300 MiB and
-source-rate presentation acceptance, physical devices and broader application
+seven-gap goal is **not complete**: eligible ≤300 MiB and source-rate presentation
+acceptance, physical devices and broader application
 interoperability remain open. Delivery and a green test suite do not establish
 those results.
 
@@ -34,9 +140,9 @@ Candidate `3640bd86c6ec` implements the typed
 keyboard policy described in [default-handler activation](default-uri-activation.md).
 Its coherent build completes **17 stages and 823 targeted test passes**. A separate
 actual AMD RADV offscreen export covers **118 producers, nine stories, five
-palettes and 480 PNGs**, all byte-identical to the prior RADV reference. The
-candidate is now coherently deployed: all six user clients and the root greeter
-are verified, with user/settings/security state preserved and no greetd restart.
+palettes and 480 PNGs**, all byte-identical to the prior RADV reference. That
+candidate's deployment verified all six user clients and the root greeter,
+with user/settings/security state preserved and no greetd restart.
 The actual [cold-browser source 3640 run](../reports/measurements/lucent-cold-default-uri-3640.json)
 passes pointer opening and one trusted `KeyA`; the separate Tab/Enter route still
 fails browser focus/key delivery. Both owned cleanups pass all nine checks. The
@@ -59,14 +165,16 @@ member-aware widget suppression and read-only native keyboard diagnostics. Exact
 b2 passes the Ubuntu [Rust job](https://github.com/xandreeddev/desktop-lab/actions/runs/40411820911/job/121884163923)
 in [CI run40411820911](https://github.com/xandreeddev/desktop-lab/actions/runs/40411820911):
 workspace/protocol/software-Vulkan suites and all 17 individually verified new
-tests pass. A coherent Arch release, candidate VM deployment and native keyboard
-acceptance remain pending. See
+tests pass. The later coherent Arch release and deployment now pass as recorded
+above; the actual b2 canonical keyboard trial still fails. See
 [the activation guide](default-uri-activation.md#focus-geometry-and-cursor-only-diagnostic)
 for the requested-versus-committed ordering limitation. The seven-gap goal stays open.
 
-The 118 source3640 capture inputs are now published at main912, separate from
-historical 9d42's 117 inputs and ca88/b3's 116 inputs. This does not deploy the b2
-widget policy or diagnostic runtime to the VM.
+The 118 source3640 capture inputs are published at the c300 delivery checkpoint,
+separate from historical 9d42's 117 inputs and ca88/b3's 116 inputs. The b2 runtime
+was deployed in a separate verified transaction. PR117 now commits the actual
+ba5 catalogue with 121 inputs; its deployment is another separately verified
+transaction. Publishing captures does not perform either deployment.
 
 The recent changes add:
 
@@ -154,6 +262,33 @@ interval and its normal reference remain host-pressure-ineligible, with unmatche
 I/O pressure and null targets. Separate driver/restore receipts verify original
 source/security/settings and return to normal profiling OFF. This adds no eligible
 60 FPS or causal CPU-reuse gain and leaves the original memory matrix unchanged.
+
+## Isolated decoder retarget experiment
+
+The [f26 hosted experiment](../reports/measurements/lucent-decoder-retarget-f26.json)
+compares reopening with one retargeted decoder, using the same genuine imported
+4K60 H.264 asset and backend source `1aebe2e3`. Actual source gates pass
+37 domain, 67 video and 21 observer tests, plus 15 experiment-consumer tests.
+Four fresh nonoverlapping processes pass the original PTS, aspect, revision,
+12-second phase and cancellation/join checks. Allocator snapshots are taken only
+while playback is stopped.
+
+| End-of-hold restored FHD RSS | Reopen | Retarget |
+| --- | ---: | ---: |
+| Cold FHD → 4K → FHD | 197.38 MiB | 176.13 MiB |
+| Source size → FHD → 4K → FHD | 229.21 MiB | 269.34 MiB |
+
+The result is mixed. After the final source-size frame is dropped, retarget still
+uses 8.98 MiB more RSS. Accounted in-use bytes are nearly equal, while its free
+arena total is 10.63 MiB higher. This is consistent with additional arena
+retention; it does not prove the complete allocation cause. The latest FHD frame
+capacity is exactly 8,294,400 bytes in both paths. Old-last-good and in-flight
+ownership are not separately instrumented.
+
+These are finite decoder-only observations on a hosted CPU, with no compositor,
+renderer or whole desktop. They establish functional one-worker retargeting but
+**no general memory improvement**, ≤300 MiB desktop acceptance or display FPS.
+Production target-only client wiring remains disabled pending further work.
 
 ## Read-only host service observations
 
@@ -441,7 +576,7 @@ ledger's requirement history remains useful for the broader backlog.
 | Safe display settings | Native whole-layout drafts, Apply → Keep/Revert and independent 15-second/UI-crash EOF rollback. Seven earlier one-output flows and the historical four-flow two-output run retain their results. The later [nine-flow run](../reports/measurements/lucent-native-two-output-displays-26d-nine.json), harness `1774fa87` on runtime `26d03adf`, also covers rotation, disable/re-enable, fractional scale Keep and native pointer/keyboard input on a scale-1.25 Displays panel. Five positive preservation checks, one explicit ctime/link-count scope marker, three cursor checks and independent later normal-OFF verification pass. | Physical displays/cable hotplug, suspend/resume, compositor restart, secure-output changes and pacing remain open. Monitor ctime, link count and parent entry timestamps are not claimed unchanged. Earlier failed attempts remain failed; their separate recoveries are not feature passes. The Keep-to-file-identity-capture host-loss interval retains manual recovery. |
 | Resources and animation | The new [same-runtime eb348 matrix](../reports/measurements/lucent-output-resource-matrix-eb348.json) completes cold FHD →4K →restored warm FHD with preservation/all tracing OFF. Mean/peak RSS is 229.181/230.875, 494.683/526.516 and 435.063/435.063 MiB respectively; all host-pressure-ineligible. Earlier 9eb/26d/35ed and shape/presentation reports retain their own values and limitations. | Warm FHD memory remains elevated even after current-frame/prepared-image payloads return to FHD values. Isolate pool/codec/staging/allocator/driver ownership; collect eligible resource and presentation evidence. Overlapping payload/RSS counters, same-runtime sequencing and VMA labels do not establish cause, leak, CPU-reuse gain, visible pixels or physical scanout. Preserve earlier failed attempts and independent recoveries. |
 | International text | Merged `8e6d074b` implements script shaping, hard-paragraph context across soft wraps, exact row-bound visual source/caret maps, tab separator projection, deterministic fallback and opt-in text-input-v3 composition. Five owned native feature checks pass: visible preedit/caret advance, CJK commit/delete/history, masked-focus retirement, multiline composition and RTL navigation. | The fresh owned native suite passes all five feature and five restoration checks; earlier cleanup failures retain their original results. Third-party IME, broader native pixel/scroll details, delayed clipboard/focus races, physical/cross-output text and broader GUI clipboard coverage remain pending. The later Chromium/Notes test passes both directions with nine interaction and twelve restoration checks on one virtual output. Exact merged `8e6d074b` passes six CI checks, full workspace, six controlled service-protocol filters and 832 Vulkan desktop cases; those checks retain their own scope. |
-| Application integration | Accepted main includes fresh input-bound context, explicit file/URI Open, expanded XDG parsing and the canonical default-handler `UriPort::open(target, context)` path. Notification links use the SDK's optional app ID and revalidate their revision/link around token delivery; `XdgUri` forwards that context through the shared application-unit policy. Earlier local-file `8e` and HTTP `%U` `9b` results keep their original scope. The `4c9a4739` harness on coherent `35ed` passes **twelve singular HTTP `%u` feature and nine restoration checks**: pointer, socket and CLI Open each create exactly one fresh owned HTTP document; the declared Action still creates two local documents. The later [R9 default-route run](../reports/measurements/lucent-default-uri-native-26d.json), harness `563781a2` on `26d03adf`, passes five scoped checks and nine cleanup checks: native pointer and Tab/Enter each load one exact selected document through the temporary default handler with fresh context, using an already warm real browser. PR105 accepts source fix `194c0c57`; the later [9eb run](../reports/measurements/lucent-runtime-9eb-native-trial.json) separately passes five route/nine cleanup checks and both trusted browser KeyA cases after natural history close, using the same controlled warm-browser scope. The coherently deployed unmerged [source 3640 trial](../reports/measurements/lucent-cold-default-uri-3640.json) passes the cold pointer route but fails the separate keyboard route; all nine cleanup checks per route pass. | The current cold keyboard route fails browser focus/trusted KeyA delivery despite the last pre-key history/input/frame guards passing. Its missing event and post-event observations remain null, and the cause and a fix are unestablished. Historical warm-browser delivery and the older R9 active-window observation keep their own scopes. Direct protocol-token consumption, external navigation, other handlers/applications and broader workflows remain open. Historical explicit-application and failed default-route reports keep their source/input/cleanup outcomes. Application acceptance does not accept performance. |
+| Application integration | Accepted main includes fresh input-bound context, explicit file/URI Open, expanded XDG parsing and the canonical default-handler `UriPort::open(target, context)` path. Notification links use the SDK's optional app ID and revalidate their revision/link around token delivery; `XdgUri` forwards that context through the shared application-unit policy. Earlier local-file `8e` and HTTP `%U` `9b` results keep their original scope. The `4c9a4739` harness on coherent `35ed` passes **twelve singular HTTP `%u` feature and nine restoration checks**: pointer, socket and CLI Open each create exactly one fresh owned HTTP document; the declared Action still creates two local documents. The later [R9 default-route run](../reports/measurements/lucent-default-uri-native-26d.json), harness `563781a2` on `26d03adf`, passes five scoped checks and nine cleanup checks: native pointer and Tab/Enter each load one exact selected document through the temporary default handler with fresh context, using an already warm real browser. PR105 accepts source fix `194c0c57`; the later [9eb run](../reports/measurements/lucent-runtime-9eb-native-trial.json) separately passes five route/nine cleanup checks and both trusted browser KeyA cases after natural history close, using the same controlled warm-browser scope. The coherently deployed unmerged [source 3640 trial](../reports/measurements/lucent-cold-default-uri-3640.json) passes the cold pointer route but fails the separate keyboard route; all nine cleanup checks per route pass. | The later [ba5 canonical trial](../reports/measurements/lucent-cold-default-uri-ba5.json) passes both original cold routes, one trusted nonrepeat KeyA and all nine cleanup checks per case on one FHD virtual output. It supersedes the blanket cold-keyboard blocker only for that source and controlled workflow. Historical missing events remain null; first-click widgets and secure-session checks remain separate. Historical warm-browser delivery and the older R9 active-window observation keep their own scopes. Direct protocol-token consumption, external navigation, other handlers/applications and broader workflows remain open. Historical explicit-application and failed default-route reports keep their source/input/cleanup outcomes. Application acceptance does not accept performance. |
 | Real-world validation | [Two virtual outputs](../reports/measurements/lucent-native-multi-output.json) pass sixteen native checks on `8e`; [nine Display workflows](../reports/measurements/lucent-native-two-output-displays-26d-nine.json) pass on `26d`, including fractional-panel input. Unchanged `8e` passes [genuine wired-only tray](../reports/measurements/lucent-native-third-party-tray-8e.json) five interaction/four cleanup/thirteen preservation checks, [Chromium–Notes clipboard](../reports/measurements/lucent-native-gui-clipboard-2044.json) nine interaction/twelve restoration checks, and [owned mapped-peer IME](../reports/measurements/lucent-international-text.json) five feature/five restoration checks. Earlier software-HCI Bluetooth and virtual audio control results keep their sources. | Physical monitors/cable hotplug, actual sleep/secure resume, physical keyboard/radio/pairing and audible output/microphone/routing remain open. Additional tray apps/menus, third-party IMEs, other GUI clipboard apps/rich content, delayed-provider/focus races and cross-output text/clipboard need execution. [Suspend inspection](../reports/measurements/lucent-suspend-prerequisites.json) issued no sleep request; [host counts](../reports/measurements/lucent-host-service-observations-6f9.json) sent no input/controls. Historical passes do not accept candidate `3640` or performance. |
 | Documentation accuracy | Named accepted main `9d42c20e`/PR114, [Pages40396627106](https://github.com/xandreeddev/desktop-lab/actions/runs/40396627106) and same-artifact LAN receipt `dbd81b26…` verify three HTML pages, native manifest/PNG, **117 inputs/480 captures from `4a0f932a`**, and twenty HTTP checks. Prior ca88/b3/116 delivery remains historical. Active evidence separates virtual outputs, genuine applications, owned peers and physical devices; failed reports keep their flags. | This later framework/text/URI/ledger reconciliation needs its own final build/link/Pages checks and protected-main delivery. Publication supplies no extra native controls, physical interoperability, eligible performance or full-goal acceptance. |
 

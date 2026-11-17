@@ -155,9 +155,16 @@
           "sha256": "602bf9bc5613fd20bdb6a22ce574215cc3fec4d9a12459202ca90761c1b293b3",
           "source_commit": "3640bd86c6ec9115cd71c6afacaedea78f6e94d9",
           "scope": "Source 3640 completes 17 build stages and 823 targeted tests and coherent six-client/root-greeter VM deployment with state/security preservation. The actual canonical cold pointer route passes; the separate Tab/Enter route fails browser focus/trusted KeyA delivery. Last pre-key history/input/frame guards and all nine cleanup checks per route pass. This is no keyboard fix, accepted-main promotion, broader-handler or performance acceptance."
+        },
+        {
+          "kind": "coherent-candidate-original-canonical-cold-URI-native-result",
+          "path": "reports/measurements/lucent-cold-default-uri-ba5.json",
+          "sha256": "4b3fe0b80081ee8421f9a9f7aa248a161c4846c842cfa519375833bac0d76ad3",
+          "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+          "scope": "Both original pointer and Tab/Enter routes pass three feature checks, one trusted unmodified nonrepeat KeyA and nine cleanup checks per case on one FHD virtual output, with independent cold browser births. No forced focus/cursor workaround, broader handler, widget, secure-session, hardware or performance acceptance."
         }
       ],
-      "current_scope": "Historical build-only and warm-route entries retain their original source scopes. The deployed unmerged source 3640 candidate passes the canonical cold pointer route but still fails keyboard focus/KeyA delivery. Missing keyboard event/post-event observations remain null; both cleanups pass. Protocol/client tests and coherent deployment establish no keyboard fix or failure cause. Broader real-application workflows remain open."
+      "current_scope": "Historical failures and warm-route entries retain their source scopes. The deployed ba5 candidate now passes both original canonical cold routes and every owned cleanup. Native input-release observation remains distinct from destination-focus and direct token-consumption guarantees; first-click widget behavior, secure sessions and broader real-application workflows require separate evidence."
     },
     {
       "id": "real-world-validation",
@@ -391,6 +398,77 @@
         "scope": "Named ca88 Pages artifact/public bytes and same-artifact LAN checkpoint. Accepted main has advanced to9d42/PR114; its publication and this later reconciliation require their own exact delivery proof. This does not establish native/device/performance acceptance."
       }
     ],
-    "last_evidence_update_utc": "2026-10-26T21:36:25.415700+00:00"
+    "last_evidence_update_utc": "2026-10-26T21:36:25.415700+00:00",
+    "keyboard_focus_intent_ba5_canonical_URI": {
+      "report": "reports/measurements/lucent-cold-default-uri-ba5.json",
+      "report_sha256": "4b3fe0b80081ee8421f9a9f7aa248a161c4846c842cfa519375833bac0d76ad3",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "manifest_sha256": "0e1291f46312057a6c9b349148868ad770b9b07c848fdd901ca4b01e32050b4d",
+      "desktop_sha256": "633960b90c1d08b84e4b53c85e3ccf9e63b1e091a8ab6f6b2a406296c4b916a5",
+      "deployment_receipt_sha256": "289ea9d6fe54adc8d792fd89676b0d2e4591e67a05c8f79a3afe43fb685cddbc",
+      "pointer_route_passed": true,
+      "keyboard_route_passed": true,
+      "feature_checks_per_case": 3,
+      "cleanup_checks_per_case": 9,
+      "trusted_nonrepeat_KeyA_events_per_case": 1,
+      "global_seat_owner_observed": false,
+      "direct_protocol_token_consumption_established": false,
+      "broader_widget_secure_hardware_or_performance_acceptance": false,
+      "accepted_main_at_capture": false
+    },
+    "keyboard_focus_intent_ba5_first_key": {
+      "report": "reports/measurements/lucent-widget-first-key-ba5.json",
+      "report_sha256": "a95916d4d1cb4082984475378ca27157bac68a021979b0ce4a60efc3f0582828",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "status": "corrected_native_first_key_delivery_failed",
+      "host_down_to_key_transport_ms": 31.62471897667274,
+      "Notes_logical_and_native_focus_observed_after_input": true,
+      "controlled_browser_received_first_trusted_KeyA": true,
+      "Notes_insert_observed": false,
+      "restoration_checks_passed": 9,
+      "outside_click_and_reacquisition_attempted": false,
+      "actual_input_dispatch_timing_available": false,
+      "control_flush_candidate_native_verified": false
+    },
+    "keyboard_focus_intent_ba5_native_lock": {
+      "report": "reports/measurements/lucent-native-lock-ba5.json",
+      "report_sha256": "af160b848c92e1d0a9453be672656f2b1e8f5c21e39df97db5fb078c103b9f61",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "whole_trial_passed": false,
+      "native_lock_and_authenticated_unlock_observed": true,
+      "exit_status_assertion_failed": true,
+      "native_exit_status": null,
+      "later_same_runtime_files_security_and_playback_preserved": true
+    },
+    "keyboard_focus_intent_ba5_completed_click_V8": {
+      "report": "reports/measurements/lucent-widget-completed-click-ba5.json",
+      "report_sha256": "9cc6005267544dd4c8a8b33ef7741b148ef9ac949a521ea955a61d7062e34465",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "first_key_delivery_passed": false,
+      "gesture_contract": "completed-click-then-immediate-key",
+      "host_down_to_key_transport_ms": 66.63447699975222,
+      "Notes_logical_and_native_focus_observed_after_input": true,
+      "owned_browser_received_first_trusted_KeyA": true,
+      "Notes_insert_observed": false,
+      "restoration_checks_passed": 9,
+      "outside_click_and_reacquisition_attempted": false,
+      "actual_input_dispatch_timing_available": false,
+      "native_control_flush_fix_accepted": false,
+      "V7_held_button_result_unchanged": true
+    },
+    "keyboard_focus_intent_ba5_native_lock_V3": {
+      "report": "reports/measurements/lucent-native-lock-ba5-v3.json",
+      "report_sha256": "c39c4a2d1b8d87935b809b95388858832b6f557132024c51806e2c18e50cd1b9",
+      "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+      "whole_trial_passed": true,
+      "checks_passed": 6,
+      "same_connection_new_locked_ACK_and_one_PAM_unlock": true,
+      "retained_same_invocation_exited_normally": true,
+      "exit_status": 0,
+      "reference_released": true,
+      "same_runtime_files_security_playback_idle_and_geometry_preserved": true,
+      "login_pixels_suspend_hardware_or_performance_accepted": false,
+      "V1_and_V2_failures_unchanged": true
+    }
   }
 }

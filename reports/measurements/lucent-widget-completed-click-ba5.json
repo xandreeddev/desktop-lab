@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "status": "native_completed_click_first_key_delivery_failed",
+  "scope": "Source ba5 on one FHD virtual output. This additional case completes the physical click with separate DOWN and UP synchronizations before sending the first KeyA. Notes gains logical/native focus, but the first key reaches the owned browser; all nine restorations pass. V7 held-button failure remains unchanged. Outside-click and reacquisition are unattempted.",
+  "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+  "manifest_sha256": "0e1291f46312057a6c9b349148868ad770b9b07c848fdd901ca4b01e32050b4d",
+  "desktop_sha256": "633960b90c1d08b84e4b53c85e3ccf9e63b1e091a8ab6f6b2a406296c4b916a5",
+  "accepted_main_at_capture": false,
+  "actual_private_report_sha256": "f824c39bd944f9df01efa453f92a7d7f5007afb5b1d4cf9463a8009a3adb5d2e",
+  "actual_bound_controller_sha256": "55bc4daff1a193c236db8b163e4ee667e4dd16a23bcfe14cdfd4703affabc241",
+  "controller_version": "V8",
+  "input": {
+    "button_edges_have_separate_QMP_synchronizations": true,
+    "sequence": "Primary DOWN and separate completed UP synchronization, then immediate unmodified KeyA; no focus wait or retry.",
+    "host_down_transport_start_to_key_transport_start_ms": 66.63447699975222,
+    "host_interval_is_guest_dispatch_latency": false,
+    "focus_wait_sleep_retry_or_forced_focus": false,
+    "prepared_target_revalidated_by_final_guard": true,
+    "QMP_return_is_guest_delivery_acknowledgement": false,
+    "gesture_contract": "completed-click-then-immediate-key",
+    "key_sent_after_completed_click": true
+  },
+  "native_result": {
+    "first_key_delivery_passed": false,
+    "failed_check": "first_physical_notes_key_arrived",
+    "Notes_insert_observed": false,
+    "first_key_destination": "controlled_owned_browser",
+    "controlled_browser_plain_trusted_nonrepeat_KeyA_count": 1,
+    "controlled_browser_untrusted_or_repeated_KeyA_count": 0,
+    "outside_click_attempted": false,
+    "reacquisition_attempted": false,
+    "caret_visuals_accepted": false,
+    "native_focus_fix_accepted": false
+  },
+  "observations": [
+    {
+      "checkpoint": "before_final_press_guard",
+      "Notes_logical_focus": false,
+      "Notes_native_group_role": "calendar",
+      "requested_keyboard": "none",
+      "committed_keyboard": "none",
+      "actual_native_focus_is_Notes_group": false,
+      "observed_native_Enter_count": 0,
+      "observed_native_Leave_count": 0,
+      "request_pending": false,
+      "completed_request_outcome": null,
+      "keyboard_active": null,
+      "browser_document_has_focus": true,
+      "browser_plain_trusted_nonrepeat_KeyA_count": 0,
+      "browser_trusted_pointerdown_count": 0,
+      "browser_trusted_pointerup_count": 0,
+      "browser_trusted_click_count": 0,
+      "Notes_insert_observed": false,
+      "classified_client_focus_error": null
+    },
+    {
+      "checkpoint": "after_key_transport",
+      "Notes_logical_focus": true,
+      "Notes_native_group_role": "calendar",
+      "requested_keyboard": "on-demand",
+      "committed_keyboard": "on-demand",
+      "actual_native_focus_is_Notes_group": true,
+      "observed_native_Enter_count": 1,
+      "observed_native_Leave_count": 0,
+      "request_pending": false,
+      "completed_request_outcome": null,
+      "keyboard_active": null,
+      "browser_document_has_focus": false,
+      "browser_plain_trusted_nonrepeat_KeyA_count": 1,
+      "browser_trusted_pointerdown_count": 0,
+      "browser_trusted_pointerup_count": 0,
+      "browser_trusted_click_count": 0,
+      "Notes_insert_observed": false,
+      "classified_client_focus_error": null
+    },
+    {
+      "checkpoint": "failure_before_restoration",
+      "Notes_logical_focus": true,
+      "Notes_native_group_role": "calendar",
+      "requested_keyboard": "on-demand",
+      "committed_keyboard": "on-demand",
+      "actual_native_focus_is_Notes_group": true,
+      "observed_native_Enter_count": 1,
+      "observed_native_Leave_count": 0,
+      "request_pending": false,
+      "completed_request_outcome": null,
+      "keyboard_active": null,
+      "browser_document_has_focus": false,
+      "browser_plain_trusted_nonrepeat_KeyA_count": 1,
+      "browser_trusted_pointerdown_count": 0,
+      "browser_trusted_pointerup_count": 0,
+      "browser_trusted_click_count": 0,
+      "Notes_insert_observed": false,
+      "classified_client_focus_error": null
+    }
+  ],
+  "missing_timing_and_authority": {
+    "pointer_callback_timestamp": null,
+    "request_queue_timestamp": null,
+    "socket_flush_attempt_or_completion_timestamp": null,
+    "compositor_request_processing_timestamp": null,
+    "native_Enter_timestamp": null,
+    "native_KeyA_dispatch_timestamp": null,
+    "completed_typed_focus_request_outcome": null,
+    "exact_Enter_vs_KeyA_dispatch_order_measured": false,
+    "global_seat_owner_observed": false,
+    "scope": "Sequential SDK and owned-document checkpoints are not an atomic global input timeline. Source-specific keyboard-active and completed-outcome fields are unavailable."
+  },
+  "restoration": {
+    "checks_passed": 9,
+    "all_passed": true,
+    "checks": {
+      "owned_browser_retired": true,
+      "exact_original_settings_stopped_service": true,
+      "normal_desktop_35s_stability": true,
+      "original_workspace": true,
+      "original_monitor": true,
+      "exact_wallpaper_source_exports_and_settings": true,
+      "original_idle_marker": true,
+      "owned_guest_checkpoint_removed": true,
+      "original_cursor": true
+    },
+    "guarded_original_settings_wallpaper_source_exports_workspace_monitor_idle_and_cursor_restored": true,
+    "normal_desktop_restart_supervised_for35seconds": true,
+    "captured_runtime_identity_retired_by_expected_cleanup": true,
+    "fresh_normal_binding_required_before_later_native_trial": true
+  },
+  "historical_transport_scope": {
+    "prior_V4_V5_V6_records_preserved": true,
+    "prior_combined_DOWN_UP_QMP_call_proves_a_pressed_USB_report": false,
+    "QEMU_version": "11.1.1",
+    "actual_USB_tablet_and_host_version_checked_by_controller_owner": true,
+    "source_review_sha256": "c91bfb8fd24a0875bbc809d6f3051dc52d3fd543f57b5db2a39ad6c832f0ee34",
+    "finding": "QMP sends the event list before one synchronization. USB HID updates one pending button bitfield, so DOWN then UP in that same call does not publish a pressed report. Earlier failed outcomes and cleanup evidence remain unchanged; actual Notes press delivery is not inferred for those cases.",
+    "primary_sources": [
+      "https://gitlab.com/qemu-project/qemu/-/blob/v11.1.1/ui/input.c#L145-214",
+      "https://gitlab.com/qemu-project/qemu/-/blob/v11.1.1/hw/input/hid.c#L103-207"
+    ]
+  },
+  "next_source_investigation": {
+    "adapter_control_flush_candidate_native_verified": false,
+    "transport_or_acquisition_failure_cause_established": false,
+    "scope": "The native control-flush candidate is not installed in this measured ba5 run and has no native first-key acceptance. Sequential checkpoints do not measure flush/server-processing timing or establish the cause. A separately built/deployed source and corrected native trial are required."
+  },
+  "separate_accepted_workflow": {
+    "report": "reports/measurements/lucent-cold-default-uri-ba5.json",
+    "report_sha256": "4b3fe0b80081ee8421f9a9f7aa248a161c4846c842cfa519375833bac0d76ad3",
+    "original_canonical_pointer_and_Tab_Enter_passed": true,
+    "feature_checks_passed_per_case": 3,
+    "cleanup_checks_passed_per_case": 9,
+    "scope": "Controlled cold URI handoff remains accepted for its recorded source/workflow; it does not accept inline-widget first-key delivery."
+  },
+  "privacy": {
+    "Notes_text_lengths_images_or_private_identifiers_published": false,
+    "raw_paths_profiles_credentials_argv_environment_or_exact_epochs_published": false
+  },
+  "separate_preserved_held_button_trial": {
+    "report": "reports/measurements/lucent-widget-first-key-ba5.json",
+    "report_sha256": "a95916d4d1cb4082984475378ca27157bac68a021979b0ce4a60efc3f0582828",
+    "first_key_delivery_passed": false,
+    "host_down_to_key_transport_ms": 31.62471897667274,
+    "restoration_checks_passed": 9,
+    "result_unchanged": true
+  }
+}
