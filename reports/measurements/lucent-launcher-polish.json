@@ -85,7 +85,7 @@
   },
   "remaining": [
     "Complete the final optimized release build and the full 832-case Vulkan comparison against the reviewed baselines.",
-    "Review and promote a complete source-bound component catalogue, then pass final source/site checks.",
+    "Pass final integration/site validation with the refreshed source-bound catalogue.",
     "After resource use is authorized again, deploy the final optimized ordinary-client bundle and repeat both public native helpers, including actual visual review.",
     "Protected-main delivery."
   ],
@@ -139,23 +139,41 @@
     "scope": "The existing VM, optimized release worker, full Vulkan worker and catalogue worker are stopped. Their interrupted final checks are not accepted as passed."
   },
   "final_candidate": {
-    "source_commit": "7b36850ed359a2160c0b62047b47219145260755",
+    "source_commit": "42967f8fc81e3194beeb34da3eddfdb4c232cf2f",
     "label_refinement_implemented": true,
     "baseline_changes_reviewed": true,
     "optimized_bundle_complete": false,
     "full_vulkan_matrix_complete": false,
-    "component_catalogue_export_complete": false,
+    "component_catalogue_export_complete": true,
     "deployed": false,
-    "native_accepted": false
+    "native_accepted": false,
+    "production_ui_source_commit": "7b36850ed359a2160c0b62047b47219145260755"
   },
   "component_catalogue": {
-    "source_commit": "beb696411c83d7e1bf3b41538cc7577780bf6b2c",
-    "producer_inputs": 121,
+    "source_commit": "42967f8fc81e3194beeb34da3eddfdb4c232cf2f",
+    "run": "https://github.com/xandreeddev/desktop-lab/actions/runs/44090678488",
+    "producer_inputs": 122,
     "captures": 480,
-    "current_source_check_passed": false,
-    "failure": "Catalog omits a production rendering input",
-    "missing_input": "lucent/crates/lucent-api/src/list.rs",
-    "replacement_export_interrupted": true
+    "stories": 9,
+    "palettes": 5,
+    "archive_digest_verified": true,
+    "archive_sha256": "7777578d118ca28edac498f946a951ddb4ea454a3679db84dcbae7743ec3ad2d",
+    "current_source_check_passed": true,
+    "visually_reviewed_samples": 22,
+    "all_nine_story_families_reviewed": true,
+    "selected_2x_states_reviewed": true,
+    "all_480_png_hashes_changed_from_previous": true,
+    "previous_catalogue_archived": true,
+    "review_receipt_sha256": "a51ffd76d6ea44c1efd5dcecacd084e10e7db831e5e6295614b3473628c28828",
+    "previous_catalogue": {
+      "source_commit": "beb696411c83d7e1bf3b41538cc7577780bf6b2c",
+      "producer_inputs": 121,
+      "captures": 480,
+      "current_source_check_passed": false,
+      "failure": "Catalog omits a production rendering input",
+      "missing_input": "lucent/crates/lucent-api/src/list.rs",
+      "replacement_export_interrupted": true
+    }
   },
   "hosted_attempts": [
     {
@@ -187,5 +205,25 @@
       "full_visual_matrix_attempted": false,
       "followup": "Create the output parent explicitly in the hosted export step. The candidate directory still must be fresh and is never overwritten."
     }
-  ]
+  ],
+  "hosted_current": {
+    "source_commit": "42967f8fc81e3194beeb34da3eddfdb4c232cf2f",
+    "run": "https://github.com/xandreeddev/desktop-lab/actions/runs/44090678488",
+    "site_passed": true,
+    "formatting_passed": true,
+    "strict_workspace_clippy_passed": true,
+    "component_export_and_integrity_passed": true,
+    "full_workspace_rust_tests_passed": true,
+    "controlled_service_suites_passed": [
+      "notifications",
+      "audio",
+      "bluetooth",
+      "power",
+      "tray",
+      "media"
+    ],
+    "full_vulkan_matrix_status": "in_progress",
+    "whole_run_passed": false,
+    "integration_scope": "The original run still fails its stale pre-promotion public catalogue. The reviewed replacement now passes the current local catalogue check; the next pushed source needs fresh integration/site validation."
+  }
 }

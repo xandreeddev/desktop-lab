@@ -5,20 +5,22 @@ into menus. The native client and browser capture exporter use the same Rust
 stories. The Astro explorer displays the resulting images; it does not rebuild
 our buttons, fields or menus in HTML and CSS.
 
-The retained catalogue records source `beb696411c83`, **121 producer inputs**,
-nine stories, five palettes and 480 actual Vulkan captures. This export refreshes
-the source fingerprints after adding the independent keyboard-focus example to
-the workspace lockfile. All captures were regenerated on the host's RADV Vulkan
-adapter; that source's complete matrix passed validation, and narrow light/dark
-samples from all nine stories were visually reviewed. The PNGs differ from the previous
-software-Vulkan export, so this is not a byte-identical refresh. Production
-visual-test goldens were unchanged at that checkpoint. The catalogue is now
-stale after the shared list API and picker changes; the input check correctly
-rejects it. The local replacement export was stopped at the user's memory
-request. The GitHub workflow is configured to export a separate validated
-`native-component-candidate` artifact for review before promotion; exporting a
-candidate does not update the public catalogue. Offscreen rendering, native input,
-application focus and performance acceptance remain separate.
+The current catalogue was exported by [GitHub run 44090678488](https://github.com/xandreeddev/desktop-lab/actions/runs/44090678488)
+from source `42967f8fc81e`: **122 producer inputs**, nine stories, five palettes
+and 480 actual Vulkan captures. The complete variant matrix, source fingerprints,
+PNG hashes and dimensions pass validation. Twenty-two actual narrow light/dark
+samples cover all nine story families and selected 2× menu, field and scroll
+states; their visuals were reviewed. All 480 PNG hashes differ from the retained
+RADV export at `beb696411c83`, so this is a fresh export rather than a
+byte-identical fingerprint update. The previous catalogue is archived locally.
+
+The GitHub workflow exports and uploads a separate validated
+`native-component-candidate` artifact before later functional checks, so captures
+remain available when another check fails. Review the actual images before
+promoting that artifact to the public catalogue. The earlier interrupted local
+export and failed hosted attempts retain their original scopes. The VM and local
+memory-heavy work remain stopped at the user's request. Offscreen rendering,
+native input, application focus and performance acceptance remain separate.
 
 Open `/component-lab/` on the documentation site. Choose a story, then compare
 its available palette, state, viewport and pixel density. The URL records the

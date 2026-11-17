@@ -70,7 +70,8 @@
         "Seven native launcher/picker interactions and five cleanup/preservation checks pass on b574. Its corrected responsive plain-text picker footer was visually reviewed.",
         "Three real application checks pass on b574: keyboard launch, Escape returning to the same application and pointer launch, each with actual PTY input delivery. Five cleanup/preservation checks pass.",
         "The full b574 source checkpoint passes formatting, strict workspace Clippy, 753 relevant Rust tests, 802 Python tests, 590 token cases and 58 icon cases. Intentional visual changes and the final label refinement remain under review.",
-        "Source7b36850ed359 adds long-label ellipsis and 68 reviewed Vulkan baseline updates across 17 families in dark/light at1x/2x. The final build, full visual run and catalogue export were interrupted at the user memory request; final deployment/native acceptance remain open."
+        "Source7b36850ed359 adds long-label ellipsis and 68 reviewed Vulkan baseline updates across 17 families in dark/light at1x/2x. The final build, full visual run and catalogue export were interrupted at the user memory request; final deployment/native acceptance remain open.",
+        "Hosted source 42967f8fc81e passes the full Rust workspace, strict Clippy and all six controlled service protocol suites. The component catalogue is refreshed from 122 inputs and 480 actual Vulkan captures, with 22 reviewed samples across all 9 families and selected 2x states. The full production visual comparison is still running; final optimized/native acceptance remain open."
       ]
     },
     {

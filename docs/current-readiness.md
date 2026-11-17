@@ -45,11 +45,16 @@ host-gesture cases. Those failures remain historical evidence below.
 The first feature is native-verified; [all required CI at source 3f3204eb](https://github.com/xandreeddev/desktop-lab/actions/runs/44066091093)
 passes. Protected-main delivery through [PR117](https://github.com/xandreeddev/desktop-lab/pull/117)
 awaits a GitHub API account with writer permission.
-Other polish features and performance remain separate. The retained native
-component catalogue was generated from source `beb696411c83`: 121 inputs and
-480 actual Vulkan captures, with all nine story families sampled for visual
-review. It is stale for the new list API; the checker correctly rejects its
-missing rendering input. The interrupted replacement export is not accepted.
+Other polish features and performance remain separate. A later
+[hosted export at 42967f8fc81e](https://github.com/xandreeddev/desktop-lab/actions/runs/44090678488)
+refreshes the current component catalogue: 122 inputs, 480 actual Vulkan captures,
+nine stories and five palettes. Its archive digest, complete variant matrix,
+producer fingerprints and PNG hashes/dimensions validate. Twenty-two actual
+light/dark narrow samples across all nine families and selected 2× states were
+reviewed. The earlier catalogue is archived locally; interrupted/failed attempts
+remain historical. At that source, the full Rust workspace and all six controlled
+service protocol suites pass. The full production Vulkan comparison is still
+running on GitHub; final optimized deployment and native acceptance remain open.
 
 ## Delivery and earlier source-specific evidence
 
