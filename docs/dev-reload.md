@@ -83,7 +83,9 @@ are visible promptly. All four jobs, including Rust and Vulkan comparisons, must
 pass before the artifact is used for target qualification.
 It reuses the checked release bundle publisher inside a pinned Arch container
 with one CPU, a 4 GiB memory limit, no extra swap and a 512-process limit. The
-container's actual cgroup limits are checked before Cargo runs. A signed full
+container uses Docker's init process to reap exited helpers. The earlier
+container, with `tail` as PID 1, reached that limit during signature checks. The actual
+cgroup limits and init process are checked before Cargo runs. A signed full
 Arch package transaction and its database/archive hashes are recorded. This
 prepares the three ordinary clients and seven theme files without using the
 workstation or target VM for compilation.

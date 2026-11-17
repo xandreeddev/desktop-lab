@@ -143,7 +143,7 @@ jobs:
     container:
       # Reuse the official pinned image from the qualified d77 Arch release.
       image: docker.io/library/archlinux@sha256:2acfa2683d458b7803b7aa4ee3c139d2ba6922cd84666fcb7496a3a02fcc4c83
-      options: --cpus 1 --memory 4g --memory-swap 4g --pids-limit 512
+      options: --init --cpus 1 --memory 4g --memory-swap 4g --pids-limit 512
     defaults:
       run:
         shell: bash --noprofile --norc -euo pipefail {0}
@@ -167,7 +167,7 @@ jobs:
             # or even a new tail process from starting inside this container.
             local task_file task_line task_count task_index
             local -a task_lines
-            for task_file in "$task_proof/download.log" "$task_proof/install.log" /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.current /sys/fs/cgroup/pids.events /sys/fs/cgroup/pids.current; do
+            for task_file in "$task_proof/download.log" "$task_proof/install.log" /proc/1/comm /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.current /sys/fs/cgroup/pids.events /sys/fs/cgroup/pids.current; do
               if ! test -r "$task_file"; then continue; fi
               printf '\n%s\n' "$task_file"
               task_lines=(); task_count=0
@@ -185,6 +185,8 @@ jobs:
           test "$(cat /sys/fs/cgroup/memory.max)" = 4294967296
           test "$(cat /sys/fs/cgroup/cpu.max)" = '100000 100000'
           test "$(cat /sys/fs/cgroup/memory.swap.max)" = 0
+          test "$(cat /sys/fs/cgroup/pids.max)" = 512
+          test "$(cat /proc/1/comm)" = docker-init
           task_packages=(base-devel git python rustup clang llvm pkgconf wayland libxkbcommon pam polkit libpulse ffmpeg vulkan-icd-loader dbus)
           task_stage=signature-policy
           pacman-conf SigLevel > "$task_proof/signature-policy.txt"

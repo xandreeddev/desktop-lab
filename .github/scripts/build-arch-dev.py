@@ -46,6 +46,8 @@ def main():
     assert (cgroup / 'memory.max').read_text().strip() == '4294967296'
     assert (cgroup / 'memory.swap.max').read_text().strip() == '0'
     assert (cgroup / 'pids.max').read_text().strip() == '512'
+    container_pid1 = Path('/proc/1/comm').read_text().strip()
+    assert container_pid1 == 'docker-init'
     os.umask(0o077)
     os.environ['CARGO_TARGET_DIR'] = str(args.target.resolve())
     result = publish_bundle(ROOT, args.target, 'release', args.bundles)
@@ -59,6 +61,7 @@ def main():
     reference = json.loads((ROOT / '.github/arch-dev-abi.json').read_text())
     value['arch_reference_imports'] = reference_imports(value, reference)
     value['builder_platform'] = 'Arch Linux'
+    value['container_pid1'] = container_pid1
     value['container_image'] = os.environ['LUCENT_CI_IMAGE']
     value['resource_limits'] = {'cpu_cores': 1, 'memory_max_bytes': 4294967296,
                                 'swap_max_bytes': 0, 'pids_max': 512}

@@ -245,7 +245,7 @@
     "scope": "All required source checks pass. Optimized bundle construction and target VM/native acceptance remain separate."
   },
   "hosted_optimized_candidate": {
-    "status": "ubuntu_bundle_reference_abi_rejected_arch_setup_failed_diagnostic_followup_prepared",
+    "status": "arch_process_limit_failure_diagnosed_init_followup_prepared",
     "artifact_name": "optimized-development-bundle",
     "builder": "Existing lucent-dev.py release builder in its bounded user unit on GitHub",
     "scope": "Three ordinary clients and seven theme files. The actual candidate build and target VM qualification remain open.",
@@ -374,10 +374,30 @@
         "shellcheck_passed": true,
         "failure_status_preserved": 23,
         "last_80_log_lines_retained": true,
-        "resource_counters_reported": true,
+        "resource_counters_and_pid1_reported": true,
         "diagnostic_with_no_external_executables_passed": true,
+        "init_configured_resource_limits_unchanged": true,
         "compilation_rendering_or_vm_started": false
-      }
+      },
+      "process_limit_attempt": {
+        "source_commit": "f442a3b16985f3832c150d8c4c1cf9764309f5ac",
+        "run": "https://github.com/xandreeddev/desktop-lab/actions/runs/44122981756",
+        "job_id": 134179421456,
+        "arch_setup_passed": false,
+        "optimized_compile_attempted": false,
+        "failure_stage": "install",
+        "processes_current": 510,
+        "process_limit": 512,
+        "rejected_process_starts": 162,
+        "memory_oom_events": 0,
+        "memory_oom_kills": 0,
+        "packages_upgraded": false,
+        "signature_policy_weakened": false,
+        "log_sha256": "343c02bc1ef2b31a2a6247ef7683f74d3303355e3364bca1fbaafe36895d78de",
+        "scope": "The bounded in-shell diagnostic exposes process exhaustion during signature verification. No candidate was built or accepted.",
+        "followup": "Enable Docker init to reap exited helper processes; verify actual PID1 during setup and qualification. Keep the CPU, memory, swap and process limits unchanged."
+      },
+      "configured_init_process": "docker-init"
     }
   },
   "hosted_verified_parent": {
