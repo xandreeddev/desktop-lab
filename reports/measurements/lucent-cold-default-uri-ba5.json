@@ -1,0 +1,711 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-10-27",
+  "scope": "Canonical cold default-handler notification pointer and Tab/Enter routes on source ba5, one 1920x1080 scale-1 virtual output. Both routes and each nine-check cleanup pass. This source was an unmerged candidate at capture; broader widget, secure-session, application, hardware and performance acceptance remain separate.",
+  "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+  "desktop_binary_sha256": "633960b90c1d08b84e4b53c85e3ccf9e63b1e091a8ab6f6b2a406296c4b916a5",
+  "release_manifest_sha256": "0e1291f46312057a6c9b349148868ad770b9b07c848fdd901ca4b01e32050b4d",
+  "deployment_receipt_sha256": "289ea9d6fe54adc8d792fd89676b0d2e4591e67a05c8f79a3afe43fb685cddbc",
+  "candidate_accepted_main_at_capture": false,
+  "host_controller_sha256": "dbad8457b42e0f1eb6d47b38b11beefca8d79e682bbb58bb9ee0f1763dd695ba",
+  "focus_probe_sha256": "d63f741d57d16a16fe0ec14871ce9b333c1c6a6de0d0be19ac1e01b8e10870a6",
+  "build": {
+    "hosted_run": 40433468095,
+    "stages_passed": 17,
+    "targeted_tests_passed": 880,
+    "static_target_ELF_imports_passed": 10
+  },
+  "cases": [
+    {
+      "case": "pointer",
+      "original_private_report_sha256": "9a13ffb1aad9628bb29e81309e03e3f9c3ac84fd269d2e149b41b2e65b2cc5f3",
+      "canonical_native_accepted": true,
+      "success_including_cleanup": true,
+      "feature_checks": {
+        "temporary_real_mime_default_selected": true,
+        "pointer_fresh_token_default_route_exact_document": true,
+        "pointer_notification_absent_after_expiry_window": true
+      },
+      "feature_checks_passed": 3,
+      "browser_focus_observed": true,
+      "trusted_key_dispatch_attempted": true,
+      "trusted_key_dispatch_returned": true,
+      "observer_armed_with_zero_events": true,
+      "trusted_unmodified_nonrepeat_KeyA_observed": true,
+      "trusted_KeyA_event_count": 1,
+      "last_release_observation": {
+        "history_closed": true,
+        "inspected_modal_input_released": true,
+        "native_frames_advanced": true,
+        "surface_absent": false,
+        "notification_policy": "normal-toast"
+      },
+      "before_key_dispatch_release_observation": {
+        "history_closed": true,
+        "inspected_modal_input_released": true,
+        "native_frames_advanced": null,
+        "surface_absent": true,
+        "notification_policy": "absent"
+      },
+      "after_key_event_release_observation": {
+        "history_closed": true,
+        "inspected_modal_input_released": true,
+        "native_frames_advanced": null,
+        "surface_absent": true,
+        "notification_policy": "absent"
+      },
+      "policy_timeline_event_count": 5,
+      "focus_checkpoints": [
+        {
+          "checkpoint": "after_group_setup",
+          "notification_history_open": true,
+          "native_resolution": "current-native",
+          "current_lucent_role": "notifications",
+          "native_enter_count": 1,
+          "native_leave_count": 0,
+          "document_available": false,
+          "document_has_focus": null,
+          "observed_policies": [
+            {
+              "role": "background",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "bar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "calendar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "dock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "notifications",
+              "requested_keyboard": "exclusive",
+              "committed_keyboard": "exclusive",
+              "actual_native_keyboard_focused": true
+            },
+            {
+              "role": "system",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        },
+        {
+          "checkpoint": "before_uri_dispatch",
+          "notification_history_open": true,
+          "native_resolution": "current-native",
+          "current_lucent_role": "notifications",
+          "native_enter_count": 1,
+          "native_leave_count": 0,
+          "document_available": false,
+          "document_has_focus": null,
+          "observed_policies": [
+            {
+              "role": "background",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "bar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "calendar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "dock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "notifications",
+              "requested_keyboard": "exclusive",
+              "committed_keyboard": "exclusive",
+              "actual_native_keyboard_focused": true
+            },
+            {
+              "role": "system",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        },
+        {
+          "checkpoint": "browser_mapped",
+          "notification_history_open": false,
+          "native_resolution": "no-client-focus-observed",
+          "current_lucent_role": null,
+          "native_enter_count": 1,
+          "native_leave_count": 1,
+          "document_available": true,
+          "document_has_focus": true,
+          "observed_policies": [
+            {
+              "role": "background",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "bar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "calendar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "dock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "notifications",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "system",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        },
+        {
+          "checkpoint": "before_key_a",
+          "notification_history_open": false,
+          "native_resolution": "no-client-focus-observed",
+          "current_lucent_role": null,
+          "native_enter_count": 1,
+          "native_leave_count": 1,
+          "document_available": true,
+          "document_has_focus": true,
+          "observed_policies": [
+            {
+              "role": "background",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "bar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "calendar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "dock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "system",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        },
+        {
+          "checkpoint": "after_key_a",
+          "notification_history_open": false,
+          "native_resolution": "no-client-focus-observed",
+          "current_lucent_role": null,
+          "native_enter_count": 1,
+          "native_leave_count": 1,
+          "document_available": true,
+          "document_has_focus": true,
+          "observed_policies": [
+            {
+              "role": "background",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "bar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "calendar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "dock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "system",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        }
+      ],
+      "cleanup": {
+        "browser_and_original_entry_retired": true,
+        "notifications_absent_after_expiry_window": true,
+        "default_mime_restored": true,
+        "default_entry_restored": true,
+        "notification_history_closed": true,
+        "configuration_guardian_retired": true,
+        "canonical_browser_and_entry_retired": true,
+        "original_http_watchdog_retired": true,
+        "caller_state_and_cursor_preserved": true
+      },
+      "cleanup_checks_passed": 9,
+      "cleanup_check_count": 9
+    },
+    {
+      "case": "keyboard",
+      "original_private_report_sha256": "dba0711517979d7a05cbaa6e551e7f565563b93013b33bcb9565526ef7e11a3b",
+      "canonical_native_accepted": true,
+      "success_including_cleanup": true,
+      "feature_checks": {
+        "temporary_real_mime_default_selected": true,
+        "keyboard_fresh_token_default_route_exact_document": true,
+        "keyboard_notification_absent_after_expiry_window": true
+      },
+      "feature_checks_passed": 3,
+      "browser_focus_observed": true,
+      "trusted_key_dispatch_attempted": true,
+      "trusted_key_dispatch_returned": true,
+      "observer_armed_with_zero_events": true,
+      "trusted_unmodified_nonrepeat_KeyA_observed": true,
+      "trusted_KeyA_event_count": 1,
+      "last_release_observation": {
+        "history_closed": true,
+        "inspected_modal_input_released": true,
+        "native_frames_advanced": null,
+        "surface_absent": true,
+        "notification_policy": "absent"
+      },
+      "before_key_dispatch_release_observation": {
+        "history_closed": true,
+        "inspected_modal_input_released": true,
+        "native_frames_advanced": null,
+        "surface_absent": true,
+        "notification_policy": "absent"
+      },
+      "after_key_event_release_observation": {
+        "history_closed": true,
+        "inspected_modal_input_released": true,
+        "native_frames_advanced": null,
+        "surface_absent": true,
+        "notification_policy": "absent"
+      },
+      "policy_timeline_event_count": 5,
+      "focus_checkpoints": [
+        {
+          "checkpoint": "after_group_setup",
+          "notification_history_open": true,
+          "native_resolution": "current-native",
+          "current_lucent_role": "notifications",
+          "native_enter_count": 2,
+          "native_leave_count": 1,
+          "document_available": false,
+          "document_has_focus": null,
+          "observed_policies": [
+            {
+              "role": "background",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "bar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "calendar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "dock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "notifications",
+              "requested_keyboard": "exclusive",
+              "committed_keyboard": "exclusive",
+              "actual_native_keyboard_focused": true
+            },
+            {
+              "role": "system",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        },
+        {
+          "checkpoint": "before_uri_dispatch",
+          "notification_history_open": true,
+          "native_resolution": "current-native",
+          "current_lucent_role": "notifications",
+          "native_enter_count": 2,
+          "native_leave_count": 1,
+          "document_available": false,
+          "document_has_focus": null,
+          "observed_policies": [
+            {
+              "role": "background",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "bar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "calendar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "dock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "notifications",
+              "requested_keyboard": "exclusive",
+              "committed_keyboard": "exclusive",
+              "actual_native_keyboard_focused": true
+            },
+            {
+              "role": "system",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        },
+        {
+          "checkpoint": "browser_mapped",
+          "notification_history_open": false,
+          "native_resolution": "no-client-focus-observed",
+          "current_lucent_role": null,
+          "native_enter_count": 2,
+          "native_leave_count": 2,
+          "document_available": true,
+          "document_has_focus": true,
+          "observed_policies": [
+            {
+              "role": "background",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "bar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "calendar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "dock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "notifications",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "system",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        },
+        {
+          "checkpoint": "before_key_a",
+          "notification_history_open": false,
+          "native_resolution": "no-client-focus-observed",
+          "current_lucent_role": null,
+          "native_enter_count": 2,
+          "native_leave_count": 2,
+          "document_available": true,
+          "document_has_focus": true,
+          "observed_policies": [
+            {
+              "role": "background",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "bar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "calendar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "dock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "system",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        },
+        {
+          "checkpoint": "after_key_a",
+          "notification_history_open": false,
+          "native_resolution": "no-client-focus-observed",
+          "current_lucent_role": null,
+          "native_enter_count": 2,
+          "native_leave_count": 2,
+          "document_available": true,
+          "document_has_focus": true,
+          "observed_policies": [
+            {
+              "role": "background",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "bar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "calendar",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "clock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "dock",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            },
+            {
+              "role": "system",
+              "requested_keyboard": "none",
+              "committed_keyboard": "none",
+              "actual_native_keyboard_focused": false
+            }
+          ],
+          "atomic_snapshot": false,
+          "actual_global_seat_owner_available": false,
+          "release_ack_directly_observable": false
+        }
+      ],
+      "cleanup": {
+        "browser_and_original_entry_retired": true,
+        "notifications_absent_after_expiry_window": true,
+        "default_mime_restored": true,
+        "default_entry_restored": true,
+        "notification_history_closed": true,
+        "configuration_guardian_retired": true,
+        "canonical_browser_and_entry_retired": true,
+        "original_http_watchdog_retired": true,
+        "caller_state_and_cursor_preserved": true
+      },
+      "cleanup_checks_passed": 9,
+      "cleanup_check_count": 9,
+      "tab_events_sent": 2
+    }
+  ],
+  "route_separation": {
+    "independent_cold_profiles": true,
+    "independent_original_browser_process_births": true,
+    "same_desktop_lifetime_during_two_URI_cases": true,
+    "second_case_after_first_successful_cleanup": true
+  },
+  "acceptance": {
+    "pointer_route_passed": true,
+    "keyboard_route_passed": true,
+    "both_original_cold_routes_passed": true,
+    "original_pointer_and_Tab_Enter_steps_unchanged": true,
+    "forced_compositor_focus_used": false,
+    "diagnostic_cursor_reposition_workaround_used": false,
+    "browser_prewarmed": false,
+    "direct_protocol_token_consumption_established": false,
+    "global_seat_owner_observed": false,
+    "immediate_first_Notes_key_or_first_outside_click_accepted_by_this_report": false,
+    "secure_lock_or_login_accepted_by_this_report": false,
+    "broader_handler_or_application_acceptance": false,
+    "physical_hardware_accepted": false,
+    "performance_accepted": false
+  },
+  "interpretation": [
+    "Each canonical route opens its exact declared document in a fresh owned Chromium birth through the real temporary default handler and receives exactly one trusted, unmodified, nonrepeat KeyA. Each passes all three feature and all nine named cleanup checks.",
+    "The original pointer and Tab/Enter routes are retained. No browser prewarming, focus dispatch, extra browser click, hiding, or diagnostic cursor-to-link workaround is used to make destination input succeed.",
+    "At browser-map, before-key and after-key checkpoints, the sampled Lucent widget policies remain None and the owned document reports focus. The Lucent observer reports no current own-client Native. This is dispatched client observation, not an atomic global seat-owner query.",
+    "Unavailable document focus, direct release acknowledgement timing and native-frame advancement are preserved as null or unavailable according to the actual report; disappearance of the notification surface is not converted into a zero frame count.",
+    "Historical eb348/3640/b2 keyboard failures and the separate cursor-only diagnostic retain their original outcomes. The mixed f26 decoder/performance result is unchanged. The current source closes only this controlled cold default-handler keyboard case, not every requested application or performance gap."
+  ],
+  "privacy": {
+    "only_allowlisted_source_hashes_booleans_counts_and_component_roles": true,
+    "credentials_URI_profile_paths_process_or_native_object_IDs_Notes_and_raw_snapshots_included": false,
+    "private_raw_evidence_preserved": true
+  }
+}

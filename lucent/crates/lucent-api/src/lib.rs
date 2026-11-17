@@ -2,8 +2,12 @@
 mod activation;
 mod clipboard;
 mod input_release;
+mod keyboard_focus;
 pub use activation::{ActivationOutcome, ActivationRequest, ActivationToken};
 pub use input_release::{InputReleaseOutcome, InputReleaseRequest};
+pub use keyboard_focus::{
+    KeyboardFocusChange, KeyboardFocusOutcome, KeyboardFocusRequest, NativeSurfaceToken,
+};
 mod density;
 mod output;
 mod surface;
@@ -299,6 +303,14 @@ pub type ScrollCallback<M> = Arc<dyn Fn(ScrollEvent) -> M + Send + Sync>;
 pub type SliderCallback<M> = Arc<dyn Fn(SliderEvent) -> M + Send + Sync>;
 pub type DragCallback<M> = Arc<dyn Fn(DragEvent) -> M + Send + Sync>;
 pub type WheelCallback<M> = Arc<dyn Fn(WheelEvent) -> M + Send + Sync>;
+/// A physical press on the actual prepared, clipped pointer target. This is
+/// distinct from the component which retained keyboard focus before the press.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PointerPress {
+    pub button: MouseButton,
+    pub keyboard_focusable: bool,
+}
+pub type PointerPressCallback<M> = Arc<dyn Fn(PointerPress) -> M + Send + Sync>;
 #[derive(Clone)]
 pub struct Element<M> {
     pub id: String,
@@ -311,6 +323,7 @@ pub struct Element<M> {
     pub secondary_click: Option<M>,
     pub middle_click: Option<M>,
     pub wheel: Option<WheelCallback<M>>,
+    pub pointer_press: Option<PointerPressCallback<M>>,
     pub submit: Option<M>,
     pub hover: Option<M>,
     pub input: Option<InputCallback<M>>,
@@ -335,6 +348,7 @@ impl<M> Element<M> {
             secondary_click: None,
             middle_click: None,
             wheel: None,
+            pointer_press: None,
             submit: None,
             hover: None,
             input: None,
@@ -653,6 +667,18 @@ impl<M> Element<M> {
         self.wheel = Some(Arc::new(callback));
         self
     }
+    /// Observe a physical press on an existing hit in this subtree. The nearest
+    /// observer receives one message before the pressed control's action. This
+    /// adds neither a hit region nor a keyboard traversal stop; rounded clips,
+    /// transforms, stacking and outside-popover dismissal keep their usual rules.
+    /// Keyboard activation does not synthesize this user-intent observation.
+    pub fn on_pointer_press(
+        mut self,
+        callback: impl Fn(PointerPress) -> M + Send + Sync + 'static,
+    ) -> Self {
+        self.pointer_press = Some(Arc::new(callback));
+        self
+    }
     pub fn on_hover(mut self, msg: M) -> Self {
         self.hover = Some(msg);
         self
@@ -865,6 +891,14 @@ pub enum Event {
         x: f32,
         y: f32,
     },
+    /// Own-client native keyboard observations/lifecycle. Tokens identify exact
+    /// native lifetimes, independently of logical names and profiling settings.
+    /// Absence or loss here does not establish the compositor's global owner.
+    KeyboardFocus {
+        surface: &'static str,
+        native: NativeSurfaceToken,
+        change: KeyboardFocusChange,
+    },
     /// A successful buffer submission, after view/layout/render. This is not
     /// scanout or a compositor display acknowledgement. `now` is the view's
     /// animation time; dimensions are the submitted logical buffer extent.
@@ -904,6 +938,12 @@ pub trait Component: 'static {
 }
 /// An application supplies surfaces and subscriptions in addition to its component tree.
 pub trait Application: Component {
+    /// Opt into explicit ordinary native keyboard requests. Secure clients keep the
+    /// default disabled; backend availability and physical-gesture checks apply.
+    fn keyboard_focus_requests_enabled(&self) -> bool {
+        false
+    }
+
     /// Compositor input methods require explicit ordinary-client authority.
     /// Authentication clients leave this disabled, independently of clipboard/IPC.
     fn input_method_enabled(&self) -> bool {
@@ -992,6 +1032,7 @@ pub struct Effects<M> {
     pub clipboard: Vec<ClipboardRequest<M>>,
     pub activation: Vec<ActivationRequest<M>>,
     pub input_release: Vec<InputReleaseRequest<M>>,
+    pub keyboard_focus: Vec<KeyboardFocusRequest<M>>,
 }
 impl<M> Default for Effects<M> {
     fn default() -> Self {
@@ -1005,6 +1046,7 @@ impl<M> Default for Effects<M> {
             clipboard: vec![],
             activation: vec![],
             input_release: vec![],
+            keyboard_focus: vec![],
         }
     }
 }
@@ -1100,6 +1142,11 @@ impl<M> Effects<M> {
         for request in child.clipboard {
             let map = map.clone();
             self.clipboard
+                .push(request.map(move |message| map(message)));
+        }
+        for request in child.keyboard_focus {
+            let map = map.clone();
+            self.keyboard_focus
                 .push(request.map(move |message| map(message)));
         }
         for request in child.input_release {
@@ -1448,6 +1495,10 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
             let map = mapper.clone();
             Arc::new(move |event| map(callback(event))) as WheelCallback<N>
         });
+        let pointer_press = self.pointer_press.map(|callback| {
+            let map = mapper.clone();
+            Arc::new(move |event| map(callback(event))) as PointerPressCallback<N>
+        });
         Element {
             id: self.id,
             kind: self.kind,
@@ -1479,6 +1530,7 @@ impl<M: Clone + Send + Sync + 'static> Element<M> {
             secondary_click: self.secondary_click.map(|m| mapper(m)),
             middle_click: self.middle_click.map(|m| mapper(m)),
             wheel,
+            pointer_press,
             submit: self.submit.map(|m| mapper(m)),
             hover: self.hover.map(|m| mapper(m)),
             input,

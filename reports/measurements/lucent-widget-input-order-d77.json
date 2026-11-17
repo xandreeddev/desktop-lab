@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "source_commit": "d77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb",
+  "status": "diagnostic_guest_key_preceded_outside_mouse_and_pointer_transition_failed",
+  "scope": "Preserved V9 completed-click host gesture, now with the finite exact-VM event observer. First Notes input/undo passes. The outside step is not a valid click-before-key focus test: guest KeyA precedes the tablet press, and the cursor remains at the earlier Notes point instead of reaching the owned browser. No focus fix or causal result is accepted.",
+  "private_report_sha256": "bae16ae6864531ad5ec2bacee811a9c03c9f42e52dbc128c97e99288edca46ef",
+  "closed_private_trace_sha256": "f47736b47f3ca229670ce7dae733177313439266b9b262affbf54cdf7d2a0bf4",
+  "observer": {
+    "both_bound_VM_devices_only": true,
+    "clock": "per-client CLOCK_MONOTONIC; actual ioctls and timestamps checked",
+    "READY_then_finished": true,
+    "end_reason": "deadline",
+    "whitelisted_edges": 8,
+    "balanced_edges": true,
+    "incomplete_packet": false,
+    "kernel_drop_reported": false,
+    "all_owned_input_FDs_closed": true,
+    "native_focus_accepted": false,
+    "read_sequence_is_global_chronology": false,
+    "compositor_dispatch_order_observed": false
+  },
+  "first_Notes_case": {
+    "left_DOWN_relative_ms": 0,
+    "left_UP_relative_ms": 0.977,
+    "KeyA_DOWN_relative_ms": 33.278,
+    "host_DOWN_to_key_transport_ms": 57.69790802150965,
+    "first_key_and_ordinary_undo_passed": true
+  },
+  "outside_case": {
+    "guest_KeyA_MINUS_button_DOWN_ms": -4.332,
+    "guest_KeyA_preceded_button_DOWN": true,
+    "host_sent_completed_click_before_key": true,
+    "prepared_browser_target_reached": false,
+    "cursor_remained_at_prior_owned_Notes_point": true,
+    "browser_trusted_pointerdown_up_click_each": 0,
+    "first_key_reached_Notes": true,
+    "failed_check": "application_cursor_transition_not_confirmed",
+    "reacquisition_attempted": false
+  },
+  "restoration": {
+    "checks": {
+      "owned_browser_retired": true,
+      "exact_original_settings_stopped_service": true,
+      "normal_desktop_35s_stability": true,
+      "original_workspace": true,
+      "original_monitor": true,
+      "exact_wallpaper_source_exports_and_settings": true,
+      "original_idle_marker": true,
+      "owned_guest_checkpoint_removed": true,
+      "original_cursor": false
+    },
+    "passed": 8,
+    "total": 9,
+    "original_cursor_restored": false,
+    "all_other_recorded_restoration_passed": true,
+    "normal_restart_supervised35seconds": true,
+    "later_readonly_source_birth_check_passed": true,
+    "original_cursor_not_persisted_by_this_harness": true,
+    "later_recovery_claimed": false
+  },
+  "interpretation": [
+    "Host QMP completion is not guest delivery acknowledgement. For this outside step the guest keyboard packet precedes both tablet button packets; the key reaching Notes does not establish an incorrect Lucent focus handoff.",
+    "The pointer-target failure is separate. Mixing compositor cursor warps with absolute emulated tablet input is under source review; the A/button-only trace cannot prove the absolute-coordinate cause.",
+    "Earlier V7/V8/V9 failures retain their original observations and restoration flags. Their guest order was not measured and is not inferred from this later run.",
+    "A corrected transport must establish the actual intended pointer target and guest click/key ordering. A delivery acknowledgement is distinct from waiting for application focus; any new gesture and measured interval must be reported explicitly."
+  ],
+  "privacy": {
+    "exact_timestamps_device_paths_process_ids_credentials_argv_environment_Notes_and_images_published": false
+  }
+}

@@ -209,7 +209,12 @@ its 823 targeted tests, then passes coherent VM deployment. Its
 [cold-browser report](../reports/measurements/lucent-cold-default-uri-3640.json)
 passes pointer handoff but still fails the separate keyboard route after the
 history/input-release guards pass. A callback acknowledgement establishes no
-destination focus or trusted-key guarantee; the keyboard defect remains open.
+destination focus or trusted-key guarantee. A later [source ba5 canonical trial](../reports/measurements/lucent-cold-default-uri-ba5.json)
+passes both original cold routes and trusted nonrepeat document `KeyA` with full
+owned cleanup after explicit widget-demand ownership is introduced. That scoped
+result does not strengthen the `after_input_release` API into a destination-focus
+guarantee; inline-widget acquisition and secure-session behavior have separate
+acceptance requirements.
 
 Runtime ingress is a shared FIFO with capacity for 64 waiting messages from
 subscriptions, effect completions and local IPC. When full, background producers
@@ -277,9 +282,47 @@ Dragging reports displacement from the original press in the stationary surface'
 coordinates. The use case clamps placement and saves only on release. A five-pixel
 threshold prevents a drag from launching an app or activating a button.
 
-The current backend targets one compositor-selected output and supports integer
-buffer scaling. Output selection, fractional scaling, touch and xdg-shell windows
-are not implemented. A compositor-closed layer currently ends the client.
+### Explicit ordinary keyboard focus
+
+`Element::on_pointer_press` observes the actual prepared target before its control
+message, without adding input coverage or a Tab stop. `PointerPress` distinguishes
+a keyboard-focusable control from a passive member sharing the same native buffer.
+It does not turn retained logical focus into fresh user intent.
+
+Ordinary applications can opt into `Application::keyboard_focus_requests_enabled`
+and use `Effects::request_keyboard_focus` for the exact surface receiving that
+physical press. The target requests `Keyboard::OnDemand`. The native backend
+validates the gesture, seat and native lifetime; unsupported compositors return
+`Unavailable`. The current Hyprland adapter uses a temporary focus-grab transaction,
+destroys the grab after Enter and checks retention before reporting `Focused`.
+Keyboard-only commits retain the last presented image and input geometry. They do
+not attach a buffer, advance frame history or wait for another rendered frame.
+
+Clients cancel pending requests when their interaction ends, and handle exact
+`Event::KeyboardFocus` loss/retirement events after a successful request. A native
+token identifies one lifetime, so an old completion cannot own a replacement
+surface. Native focus gates caret and focus-outline painting while retaining
+logical text selection and scroll. Secure clients keep this capability disabled.
+
+The independent `keyboard-focus` example contains two ordinary fields on a passive
+bottom-layer surface. It imports the public toolkit and design system, with no
+desktop, domain or service dependency:
+
+```sh
+cargo run --manifest-path lucent/Cargo.toml --locked -p keyboard-focus
+python3 vm/test-keyboard-focus.py --binary lucent/target/debug/keyboard-focus
+```
+
+Click to acquire focus, Tab between fields, and use Escape or Release keyboard to
+yield it. Opening another foreground owner retires the request. Closing that owner
+does not create a new request. The native helper checks actual typing and
+restoration in the existing unlocked 1920×1080/1× test VM; a prepared helper alone
+is not a passing native result.
+
+The native backend supports named output targets and integer/fractional density.
+Client layout policy and source-specific native acceptance are described in
+[monitor layouts](monitor-layouts.md) and [fractional scaling](fractional-scaling.md).
+Touch and xdg-shell windows remain unfinished.
 
 ## Animation and rendering
 
@@ -299,7 +342,9 @@ Shared kerning-aware logical advances keep layout, caret placement and text
 rasterization consistent. Glyph coverage is sampled at twice the physical output
 density and area-resolved once, then cached at output resolution. Text origins
 snap to physical pixels; shapes continue moving at subpixel coordinates. The full
-framebuffer is not supersampled. Complex-script shaping and IME remain open.
+framebuffer is not supersampled. Shared text shaping and ordinary opt-in IME are
+implemented; [international text](text-shaping.md) records their contracts and
+remaining application/device acceptance scope.
 
 `Canvas::paint` returns `Result<(), Error>`. Renderer-owned validation checks output
 extents, finite scene geometry, image dimensions and instance/clip buffer sizes
@@ -455,8 +500,13 @@ selection. Buttons support Tab / Shift+Tab traversal and Enter / Space activatio
 lets a composite input field draw the focus outline around all its contents.
 `tab_stop(false)` lets composite clients own keyboard navigation. `Theme::apply`
 provides semantic focus color, outline width and caret width. Text, placeholder
-and caret share the renderer's line metrics. A long input scrolls to keep its
-end caret visible. General caret movement and IME are still future work.
+and caret share the renderer's line metrics. Ordinary fields support caret and
+selection editing, shaped/bidirectional text, font fallback and opted-in native
+IME; see [text shaping](text-shaping.md) for source-specific acceptance. Logical
+field focus is separate from native keyboard ownership. The proposed
+[one-shot focus path](keyboard-focus.md) gates native caret/focus painting and
+keeps widget capability separate from explicit user demand; its new native
+interaction checks remain pending.
 
 The launcher owns Tab / Shift+Tab to cycle Apps → Commands → Wallpapers → Themes
 → Widgets. Arrows change selection, Enter activates it, Escape closes. This is
@@ -573,11 +623,10 @@ This is a practical ports-and-adapters structure, not a claim of a finished fram
 The launcher owns private interaction and motion state; `widgets::Host` owns
 drag origins, calendar navigation and timer behavior. Both borrow explicit inputs
 and return typed intents for shared root operations. Audio uses a native libpulse
-adapter and its own control-center child; media still uses a polled CLI adapter.
-NetworkPort and the native NetworkManager adapter have an independent headless
-consumer; the desktop network panel is the next integration step. The framework
-has controlled vertical scrolling, while virtualization, touch/kinetic/horizontal
-scrolling and complex-script shaping remain unfinished. OS operations
+adapter, media uses native MPRIS, and networking uses NetworkManager. These ports
+have independent consumers as well as native desktop children. The framework has
+controlled vertical scrolling, shared Unicode shaping and ordinary opt-in IME;
+virtualization and touch/kinetic/horizontal scrolling remain unfinished. OS operations
 stay behind ports, while pure search, launch/focus, positioning and notification
 expiry policy live in `lucent-usecases`. Architecture dependency checks enforce
 these boundaries in CI.

@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "status": "coherent_candidate_deployed_native_input_handoff_unresolved",
+  "source_commit": "d77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb",
+  "manifest_sha256": "b25ac061d3fe334299f61d7d120d489d03975036ed477fc797caca4ba7ab0a06",
+  "desktop_sha256": "ed2166062a55676897bc745b3cea956e8276b4ae5f9a6019dce4aa1f4c5a70b5",
+  "accepted_main": false,
+  "source_change": {
+    "scope": "Two nonblocking complete keyboard-control transaction flushes; no timer, focus assertion or input replay. WouldBlock remains deferred to the existing event loop.",
+    "new_regression_tests_passed": 5,
+    "native_fix_accepted": false
+  },
+  "actual_hosted_release": {
+    "run": 40448216820,
+    "job": 122004465545,
+    "conclusion": "SUCCESS",
+    "qualification_stages": 17,
+    "targeted_tests_passed": 885,
+    "required_named_tests_passed": 99,
+    "fresh_producer_inputs": 121,
+    "actual_PNGs": 480,
+    "static_ELF_consumers_passed": 10,
+    "independent_FFmpeg_header_ABI_review_passed_for_this_trial": true,
+    "target_provider_and_header_closure_revalidated": true,
+    "public_component_catalogue_promoted": false,
+    "catalogue_scope": "All 480 PNG bytes and 121 producer fingerprints match the ba5 catalogue; the actual fresh manifest records d77. No native or performance acceptance follows from headless rendering."
+  },
+  "actual_coherent_deployment": {
+    "passed": true,
+    "private_receipt_sha256": "bc518320b94891739f3abc9e21961d2754030f8c83e88d7c6399e3efe964b8b8",
+    "managed_user_clients_verified": 6,
+    "root_greeter_verified": true,
+    "state_security_and_startup_stability_passed": true,
+    "greetd_restarted": false,
+    "settings_or_theme_written": false,
+    "scope": "Recorded installation and normal-state checkpoint; not ongoing process-liveness or lock/login interaction proof."
+  },
+  "held_button_trial": {
+    "private_report_sha256": "ba52c2dab32472ac004ee9a5a4fb3ad741853b5d1eeb36620e802de64950bc37",
+    "whole_trial_passed": false,
+    "failed_check": "first_physical_notes_key_arrived",
+    "restoration_checks_passed": 9,
+    "all_recorded_restoration_passed": true,
+    "runtime_retired_by_expected_cleanup": true,
+    "host_DOWN_to_key_transport_ms": 42.85748297115788,
+    "first_key_reached_Notes": false,
+    "first_key_reached_owned_browser": true,
+    "Notes_native_focus_observed_later": true,
+    "outside_or_reacquisition_attempted": false
+  },
+  "completed_click_V8": {
+    "private_report_sha256": "b671fefb8820e7a518043a9449860ae1cc3b1066a5c8d413f5fd4f8794741cf4",
+    "whole_trial_passed": false,
+    "failed_check": "no_managed_window_has_notes_keyboard_focus",
+    "restoration_checks_passed": 9,
+    "all_recorded_restoration_passed": true,
+    "runtime_retired_by_expected_cleanup": true,
+    "host_DOWN_to_key_transport_ms": 72.52693903865293,
+    "first_key_reached_Notes": true,
+    "first_key_reached_owned_browser": false,
+    "Notes_native_focus_and_visible_caret_observed": true,
+    "guard_failure_scope": "Inherited empty active-window assertion was invalid for a focused layer surface; the preserved trial still fails and stops before outside input.",
+    "outside_or_reacquisition_attempted": false
+  },
+  "completed_click_V9": {
+    "private_report_sha256": "d3b0c2484847b5948171c4e93c1e93a444d10a39d2308f588fd010fcff6efd5e",
+    "whole_trial_passed": false,
+    "failed_check": "first_genuine_outside_click_and_key_delivered",
+    "restoration_checks_passed": 9,
+    "all_recorded_restoration_passed": true,
+    "runtime_retired_by_expected_cleanup": true,
+    "host_first_DOWN_to_key_transport_ms": 72.12372601497918,
+    "first_Notes_key_and_ordinary_undo_passed": true,
+    "guard_correction_scope": "Uses the actual current native layer object, seat keyboard availability, routing, native Enter and OnDemand policy together with browser DOM focus=false; managed active-window labels are not keyboard ownership.",
+    "outside_host_DOWN_to_key_transport_ms": 61.36029399931431,
+    "outside_browser_trusted_pointerdown_up_and_click_each": 1,
+    "outside_browser_plain_trusted_KeyA_count": 0,
+    "outside_browser_document_focus_observed_later": true,
+    "outside_key_reached_Notes": true,
+    "reacquisition_attempted": false
+  },
+  "input_order_scope": {
+    "button_edges_have_separate_QMP_synchronizations": true,
+    "completed_click_sends_UP_before_key_on_host": true,
+    "QMP_return_is_guest_delivery_acknowledgement": false,
+    "host_transport_order_is_guest_input_dispatch_order": false,
+    "guest_kernel_input_order_measured": false,
+    "compositor_or_client_dispatch_order_measured": false,
+    "failure_cause_established": false,
+    "next_diagnostic": "A finite read-only observer of the exact VM USB tablet and PS/2 keyboard is being prepared. No delay, focus wait, repeated input or compositor-policy workaround is accepted as a fix."
+  },
+  "remaining_acceptance": {
+    "canonical_cold_URI_on_d77": "not_executed; ba5 results are not inherited",
+    "first_same_workspace_outside_click_and_key": "failed_in_V9",
+    "Notes_reacquisition": "unattempted",
+    "secure_lock_on_d77": "not_executed; ba5 V3 pass retains its source",
+    "eligible_RSS_and_source_rate_pacing": "pending"
+  },
+  "privacy": {
+    "raw_Notes_content_lengths_or_images_published": false,
+    "raw_paths_credentials_argv_environment_or_exact_epochs_published": false
+  },
+  "historical_ba5_reports_unchanged": true
+}

@@ -535,6 +535,9 @@ mod tests {
             let app = SessionScreen::new(mode, "identity-fixture".into(), Arc::new(Deny));
             assert!(!lucent_api::Application::input_method_enabled(&app));
             assert!(!lucent_api::Application::clipboard_enabled(&app));
+            assert!(!lucent_api::Application::keyboard_focus_requests_enabled(
+                &app
+            ));
         }
     }
     struct Deny;

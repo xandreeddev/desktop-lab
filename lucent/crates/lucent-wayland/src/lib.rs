@@ -51,12 +51,14 @@ mod batching;
 mod clipboard;
 mod delivery;
 mod effects;
+mod focus_request;
 mod fractional;
 mod handoff;
 mod input_method;
 mod input_release;
 mod ipc;
 mod keyboard;
+mod keyboard_control;
 mod keyboard_focus;
 mod layer_commit;
 mod outputs;
@@ -74,11 +76,14 @@ enum RuntimeEvent<M> {
 }
 struct Native<M> {
     input_release_callbacks: Option<input_release::CallbackOwner>,
+    identity: api::NativeSurfaceToken,
     renderer: Renderer,                      // Drop before layer.
     fractional: Option<fractional::Surface>, // Destroy extensions before role/surface.
     role: SurfaceRole,
     spec: api::SurfaceSpec,
     committed_spec: api::SurfaceSpec,
+    pending_keyboard_none: bool,
+    keyboard_claimed: bool,
     bound_output: Option<wl_output::WlOutput>,
     width: u32,
     height: u32,
@@ -100,10 +105,11 @@ impl<M> Drop for Native<M> {
         drop(self.input_release_callbacks.take());
     }
 }
-#[derive(Clone, Copy)]
-struct PresentationState {
-    extent: (u32, u32),
-    buffer_scale: i32,
+type PresentationState = keyboard_control::Presented;
+fn native_interaction<M: Clone>() -> Interaction<M> {
+    let mut interaction = Interaction::default();
+    interaction.set_keyboard_active(false);
+    interaction
 }
 impl<M> Native<M> {
     fn density(&self) -> api::Density {
@@ -113,6 +119,14 @@ impl<M> Native<M> {
             .unwrap_or_else(|| {
                 api::Density::integer(self.scale).expect("positive native integer scale")
             })
+    }
+    fn set_keyboard_active(&mut self, active: bool)
+    where
+        M: Clone,
+    {
+        if self.interaction.set_keyboard_active(active) {
+            self.demand.invalidate();
+        }
     }
 }
 enum SurfaceRole {
@@ -155,6 +169,7 @@ struct State<A: Application> {
     input_method: input_method::InputMethod,
     activation: activation::Activation<A::Message>,
     input_release: input_release::Releases<A::Message>,
+    focus_requests: focus_request::Requests<A::Message>,
     modifiers: Modifiers,
     epoch: Instant,
     profile_frames: bool,
@@ -178,6 +193,7 @@ impl<A: Application> Drop for State<A> {
         self.clipboard_drop();
         self.input_method.shutdown();
         self.presentation.clear_pending();
+        self.focus_request_end(api::KeyboardFocusOutcome::Retired, false);
         // Drop GPU surfaces before their protocol roles, then send the queued
         // destroy requests while the connection is still alive. A caller such
         // as a permission agent can outlive this individual runtime invocation.
@@ -276,6 +292,11 @@ fn run_inner<A: Application>(
         &qh,
         app.activation_enabled() && authorize_unlock.is_none(),
     );
+    let focus_requests = focus_request::Requests::bind::<A>(
+        &globals,
+        &qh,
+        ipc && authorize_unlock.is_none() && app.keyboard_focus_requests_enabled(),
+    );
     let profile_frames =
         std::env::var_os("LUCENT_PROFILE_FRAMES").is_some_and(|value| value == "1");
     let mut state = State {
@@ -306,6 +327,7 @@ fn run_inner<A: Application>(
         input_method: input_method::InputMethod::bind(&globals, &qh, !input_method_allowed),
         activation,
         input_release: Default::default(),
+        focus_requests,
         modifiers: Modifiers::default(),
         epoch: Instant::now(),
         presentation: presentation::Capture::bind(&globals, &qh, ipc && authorize_unlock.is_none()),
@@ -435,6 +457,7 @@ impl<A: Application> State<A> {
                 ))?),
                 Native {
                     input_release_callbacks: None,
+                    identity: api::NativeSurfaceToken::new(),
                     renderer,
                     fractional: self
                         .fractional
@@ -442,6 +465,8 @@ impl<A: Application> State<A> {
                         .map(|globals| globals.surface(lock_surface.wl_surface(), qh)),
                     role: SurfaceRole::Lock(lock_surface, output),
                     committed_spec: spec.clone(),
+                    pending_keyboard_none: false,
+                    keyboard_claimed: false,
                     spec,
                     bound_output: None,
                     width: 1,
@@ -451,7 +476,7 @@ impl<A: Application> State<A> {
                     presented: None,
                     demand: FrameDemand::default(),
                     scene: Scene::default(),
-                    interaction: Interaction::default(),
+                    interaction: native_interaction(),
                     regions: vec![],
                     history: Default::default(),
                     pacing: self.pacing.start_native(),
@@ -516,6 +541,7 @@ impl<A: Application> State<A> {
         let surfaces = self.surfaces.iter().map(|(id,s)|serde_json::json!({"id":id.to_string(),"role":s.spec.id,"instance":s.spec.instance.as_ref().map(api::SurfaceInstance::as_str),"redraw_group":s.spec.redraw_group,"output":s.spec.output.as_ref().map(api::OutputName::as_str),"keyboard":keyboard_focus::policy_name(s.spec.keyboard),"requested_keyboard":keyboard_focus::policy_name(s.spec.keyboard),"committed_keyboard":keyboard_focus::policy_name(s.committed_spec.keyboard),"actual_native_keyboard_focused":keyboard_focus.current_address==Some(id),"pointer_input":s.spec.pointer_input.name(),"width":s.width,"height":s.height,"scale":s.scale,"density":s.density().factor(),"buffer_scale":if s.fractional.is_some(){1}else{s.scale},"buffer_width":s.density().physical_size(s.width,s.height).ok().map(|size|size.0),"buffer_height":s.density().physical_size(s.width,s.height).ok().map(|size|size.1),"frames":s.history.frames,"native_frames":s.renderer.frames,"native_generation":s.native_generation,"paint_primitives":s.scene.paint.len(),"focus":s.interaction.focus,"focus_visible":s.interaction.focus_visible,"frame_times_ms":s.history.frame_times,"frame_profiles":s.history.profiles.json(),"frame_pacing":s.pacing.as_ref().map(pacing::Trace::json),"presentation":s.history.presentation.json(),"hits":s.scene.hits.iter().map(|h|serde_json::json!({"id":h.id,"x":h.rect.x,"y":h.rect.y,"width":h.rect.w,"height":h.rect.h,"clip":{"x":h.clip.bounds.x,"y":h.clip.bounds.y,"width":h.clip.bounds.w,"height":h.clip.bounds.h}})).collect::<Vec<_>>() })).collect::<Vec<_>>();
         let mut result = serde_json::json!({"profile_memory":profile_memory,"presentation_feedback":self.presentation.json(),"frame_profiling":self.profile_frames,"profile_scope":"Successful submissions only; CPU-side wall time includes driver waits. prepare_breakdown_ms is nested within prepare. No GPU execution or scanout timestamps.","gpu_cache":{"entries":cache.entries,"payload_bytes":cache.bytes,"active_payload_bytes":cache.active_bytes,"reuse_budget_bytes":cache.budget_bytes,"hits":cache.hits,"misses":cache.misses,"evictions":cache.evictions},"uptime_ms":self.epoch.elapsed().as_secs_f64()*1000.,"adapter":self.gpu.adapter_description,"surfaces":surfaces,"client":serde_json::from_str::<serde_json::Value>(&self.app.inspect()).unwrap_or(serde_json::Value::Null)});
         result["native_keyboard_focus"] = keyboard_focus.json;
+        result["keyboard_focus_requests"] = self.focus_requests.inspect();
         result["native_keyboard_focus"]["routing_address_matches_observed_native"] = serde_json::json!(
             keyboard_focus
                 .current_address
@@ -655,6 +681,10 @@ impl<A: Application> State<A> {
             self.error = Some(e.to_string());
             self.exit = true;
         }
+        self.focus_request_revalidate();
+        for request in effects.keyboard_focus {
+            self.focus_request(request, qh);
+        }
         self.input_release_revalidate(qh);
         for request in effects.input_release {
             self.input_release_request(request, qh);
@@ -738,6 +768,7 @@ impl<A: Application> State<A> {
         for request in effects.clipboard {
             self.clipboard_request(request, qh);
         }
+        self.focus_request_flush(qh);
     }
     fn reconcile(&mut self, qh: &QueueHandle<Self>) -> Result<(), Error> {
         self.reconcile_with_recreation(qh, &Default::default())
@@ -853,6 +884,7 @@ impl<A: Application> State<A> {
                     address,
                     Native {
                         input_release_callbacks: None,
+                        identity: api::NativeSurfaceToken::new(),
                         renderer,
                         fractional: self
                             .fractional
@@ -860,6 +892,8 @@ impl<A: Application> State<A> {
                             .map(|globals| globals.surface(layer.wl_surface(), qh)),
                         role: SurfaceRole::Layer(layer),
                         committed_spec: spec.clone(),
+                        pending_keyboard_none: false,
+                        keyboard_claimed: false,
                         spec,
                         bound_output: target,
                         width: 1,
@@ -869,7 +903,7 @@ impl<A: Application> State<A> {
                         presented: None,
                         demand: FrameDemand::default(),
                         scene: Scene::default(),
-                        interaction: Interaction::default(),
+                        interaction: native_interaction(),
                         regions: vec![],
                         history: history.unwrap_or_default(),
                         pacing: self.pacing.start_native(),
@@ -884,12 +918,20 @@ impl<A: Application> State<A> {
         Ok(())
     }
     fn retire_native(&mut self, id: &api::SurfaceAddress) -> Option<Native<A::Message>> {
+        if self.focus_requests_pending_for(id) {
+            self.focus_request_end(api::KeyboardFocusOutcome::Retired, false);
+        }
         if self.keyboard_surface.as_ref() == Some(id) {
             self.keyboard_surface = None;
             self.input_serial = None;
         }
         self.retiring.retire(id);
         let mut native = self.surfaces.remove(id)?;
+        self.focus_request_lifecycle(
+            native.spec.clone(),
+            native.identity.clone(),
+            api::KeyboardFocusChange::Retired,
+        );
         self.pacing.retire(native.pacing.take());
         self.presentation.retire_native(native.native_generation);
         Some(native)
@@ -898,6 +940,9 @@ impl<A: Application> State<A> {
         &mut self,
         id: &api::SurfaceAddress,
     ) -> Result<Option<handoff::SubmissionHistory>, Error> {
+        if self.focus_requests_pending_for(id) {
+            self.focus_request_end(api::KeyboardFocusOutcome::Retired, false);
+        }
         let Some(native) = self.surfaces.get_mut(id) else {
             return Ok(None);
         };
@@ -905,7 +950,7 @@ impl<A: Application> State<A> {
             return Err("Cannot recreate a session-lock surface".into());
         };
         let region = Region::new(&self.compositor)?;
-        if let Some(presented) = native.presented {
+        if let Some(presented) = &native.presented {
             // A failed/retried render may have queued viewport/role state
             // without submitting its matching buffer. This input-disable commit
             // must retain the geometry and scale of the last successful image.
@@ -928,6 +973,11 @@ impl<A: Application> State<A> {
             // native replacement and logical-history transfer are incomplete.
         }
         let mut previous = self.surfaces.remove(id).expect("validated native surface");
+        self.focus_request_lifecycle(
+            previous.spec.clone(),
+            previous.identity.clone(),
+            api::KeyboardFocusChange::Retired,
+        );
         self.pacing.retire(previous.pacing.take());
         self.presentation.retire_native(previous.native_generation);
         let history = previous.history.continuation();
@@ -1150,6 +1200,11 @@ impl<A: Application> State<A> {
                     continue;
                 }
             }
+            if s.committed_spec.keyboard != api::Keyboard::None
+                && s.spec.keyboard == api::Keyboard::None
+            {
+                s.pending_keyboard_none = true;
+            }
             s.committed_spec = s.spec.clone();
             s.width = width;
             s.height = height;
@@ -1166,6 +1221,7 @@ impl<A: Application> State<A> {
                 } else {
                     s.scale as i32
                 },
+                regions: s.regions.clone(),
             });
             s.scene = scene;
             submitted.push((
@@ -1278,6 +1334,8 @@ impl<A: Application> State<A> {
             .map(|(id, _)| id.clone())
     }
     fn key(&mut self, event: KeyEvent, qh: &QueueHandle<Self>) {
+        self.focus_request_revalidate();
+        self.focus_request_flush(qh);
         let Some(id) = self.keyboard_surface.clone() else {
             return;
         };
@@ -1287,6 +1345,10 @@ impl<A: Application> State<A> {
         let Some(origin) = self
             .surfaces
             .get(&id)
+            .filter(|native| {
+                native.spec.keyboard != api::Keyboard::None
+                    && native.committed_spec.keyboard != api::Keyboard::None
+            })
             .map(|native| native.role.wl_surface().clone())
         else {
             return;
@@ -1298,7 +1360,12 @@ impl<A: Application> State<A> {
             self.message(message, qh);
         }
         self.clipboard_observe_focus(qh);
-        if self.id_for(&origin).as_ref() != Some(&id) {
+        if self.id_for(&origin).as_ref() != Some(&id)
+            || !self.surfaces.get(&id).is_some_and(|native| {
+                native.spec.keyboard != api::Keyboard::None
+                    && native.committed_spec.keyboard != api::Keyboard::None
+            })
+        {
             return;
         }
         if let Some(s) = self.surfaces.get_mut(&id) {
@@ -1708,6 +1775,7 @@ impl<A: Application> LayerShellHandler for State<A> {
         } else {
             self.exit = true;
         }
+        self.focus_request_flush(qh);
     }
     fn configure(
         &mut self,
@@ -1778,6 +1846,7 @@ impl<A: Application> OutputHandler for State<A> {
             self.retire_native(&id);
         }
         self.outputs_changed(qh);
+        self.focus_request_flush(qh);
     }
 }
 impl<A: Application> SeatHandler for State<A> {
@@ -1828,6 +1897,8 @@ impl<A: Application> SeatHandler for State<A> {
             && self.pointer_seat.as_ref() == Some(&seat)
             && let Some(p) = self.pointer.take()
         {
+            self.focus_request_end(api::KeyboardFocusOutcome::Unavailable, false);
+            self.focus_requests.origin = None;
             p.release();
             self.pointer_seat = None;
         }
@@ -1835,8 +1906,28 @@ impl<A: Application> SeatHandler for State<A> {
             && self.keyboard_seat.as_ref() == Some(&seat)
             && let Some(k) = self.keyboard.take()
         {
+            if let Some(native) = self
+                .keyboard_surface
+                .as_ref()
+                .and_then(|id| self.surfaces.get(id))
+            {
+                self.focus_request_lifecycle(
+                    native.spec.clone(),
+                    native.identity.clone(),
+                    api::KeyboardFocusChange::Unavailable,
+                );
+            }
+            if let Some(native) = self
+                .keyboard_surface
+                .as_ref()
+                .and_then(|id| self.surfaces.get_mut(id))
+            {
+                native.set_keyboard_active(false);
+            }
+            self.focus_request_end(api::KeyboardFocusOutcome::Unavailable, false);
             self.input_serial = None;
             self.activation.input = None;
+            self.focus_requests.origin = None;
             self.input_method_remove_seat(qh);
             k.release();
             self.native_keyboard_focus.keyboard_removed();
@@ -1845,6 +1936,7 @@ impl<A: Application> SeatHandler for State<A> {
             self.clipboard_cancel(qh, true);
             self.clipboard_drop();
         }
+        self.focus_request_flush(qh);
     }
     fn remove_seat(&mut self, conn: &Connection, qh: &QueueHandle<Self>, seat: wl_seat::WlSeat) {
         self.remove_capability(conn, qh, seat.clone(), Capability::Keyboard);
@@ -1856,15 +1948,19 @@ impl<A: Application> PointerHandler for State<A> {
         &mut self,
         _: &Connection,
         qh: &QueueHandle<Self>,
-        _: &wl_pointer::WlPointer,
+        pointer: &wl_pointer::WlPointer,
         events: &[PointerEvent],
     ) {
+        if self.pointer.as_ref() != Some(pointer) {
+            return;
+        }
         for event in events {
             // A wl_pointer.frame may contain several distinct native events.
             // Reconciliation for the next event must not borrow a preceding
             // button's unused authority (including when it is Motion/Leave).
             self.input_serial = None;
             self.activation.input = None;
+            self.focus_requests.origin = None;
             let Some(id) = self.id_for(&event.surface) else {
                 continue;
             };
@@ -1911,19 +2007,34 @@ impl<A: Application> PointerHandler for State<A> {
                         let button = pointer_input::button(button);
                         outside = button == api::MouseButton::Primary
                             && !s.scene.hits.iter().any(|h| h.contains(x, y));
-                        if let Some(message) = s.interaction.press_button(
-                            &s.scene,
-                            x,
-                            y,
-                            button,
-                            api::KeyModifiers {
-                                control: self.modifiers.ctrl,
-                                shift: self.modifiers.shift,
-                                alt: self.modifiers.alt,
-                                logo: self.modifiers.logo,
-                            },
-                        ) {
-                            messages.push(message);
+                        messages.extend(
+                            s.interaction
+                                .press_button_messages(
+                                    &s.scene,
+                                    x,
+                                    y,
+                                    button,
+                                    api::KeyModifiers {
+                                        control: self.modifiers.ctrl,
+                                        shift: self.modifiers.shift,
+                                        alt: self.modifiers.alt,
+                                        logo: self.modifiers.logo,
+                                    },
+                                )
+                                .into_iter()
+                                .flatten(),
+                        );
+                        if button == api::MouseButton::Primary
+                            && s.interaction.pressed_keyboard_focusable()
+                            && s.spec.pointer_input != api::PointerInput::None
+                            && let Some(seat) = &self.pointer_seat
+                        {
+                            self.focus_requests.origin = Some(focus_request::Origin {
+                                address: id.clone(),
+                                surface: event.surface.clone(),
+                                native: s.identity.clone(),
+                                seat: seat.clone(),
+                            });
                         }
                     }
                     PointerEventKind::Release { button, .. } => {
@@ -2023,9 +2134,18 @@ impl<A: Application> PointerHandler for State<A> {
                 }
                 self.message(m, qh);
             }
+            if matches!(event.kind, PointerEventKind::Leave { .. })
+                && self.focus_request_acquiring_for(&id)
+            {
+                self.focus_request_end(api::KeyboardFocusOutcome::Superseded, false);
+            }
+            self.focus_requests.origin = None;
+            self.focus_request_revalidate();
+            self.focus_request_flush(qh);
         }
         self.input_serial = None;
         self.activation.input = None;
+        self.focus_requests.origin = None;
     }
 }
 impl<A: Application> KeyboardHandler for State<A> {
@@ -2041,7 +2161,20 @@ impl<A: Application> KeyboardHandler for State<A> {
     ) {
         self.native_keyboard_focus
             .enter(self.keyboard.as_ref() == Some(keyboard), surface);
+        if self.keyboard.as_ref() != Some(keyboard) {
+            return;
+        }
+        // Even an Enter for a retiring/unknown own surface revokes the old
+        // routing address. It cannot leave a newer same-role native looking
+        // focused merely because this proxy is absent from the current map.
+        if let Some(previous) = self.keyboard_surface.take()
+            && let Some(native) = self.surfaces.get_mut(&previous)
+        {
+            native.set_keyboard_active(false);
+        }
         let Some(id) = self.id_for(surface) else {
+            self.input_method_observe();
+            self.clipboard_cancel(qh, false);
             return;
         };
         self.clipboard_cancel(qh, false);
@@ -2049,8 +2182,25 @@ impl<A: Application> KeyboardHandler for State<A> {
         // may hide or renew this address; only this exact native object's Enter
         // can grant authority to the still-current lifetime.
         if self.id_for(surface).as_ref() == Some(&id) {
-            self.keyboard_surface = Some(id);
+            self.keyboard_surface = Some(id.clone());
+            if let Some(native) = self.surfaces.get_mut(&id) {
+                native.set_keyboard_active(true);
+            }
             self.input_method_observe();
+            if let Some(native) = self
+                .id_for(surface)
+                .as_ref()
+                .and_then(|id| self.surfaces.get(id))
+            {
+                self.focus_request_lifecycle(
+                    native.spec.clone(),
+                    native.identity.clone(),
+                    api::KeyboardFocusChange::Entered,
+                );
+            }
+            self.focus_request_flush(qh);
+            self.focus_request_enter(surface, qh);
+            self.focus_request_flush(qh);
         }
     }
     fn leave(
@@ -2063,6 +2213,9 @@ impl<A: Application> KeyboardHandler for State<A> {
     ) {
         self.native_keyboard_focus
             .leave(self.keyboard.as_ref() == Some(keyboard), surface);
+        if self.keyboard.as_ref() != Some(keyboard) {
+            return;
+        }
         let Some(id) = self.id_for(surface) else {
             return;
         };
@@ -2070,18 +2223,37 @@ impl<A: Application> KeyboardHandler for State<A> {
             return;
         }
         self.keyboard_surface = None;
+        if let Some(native) = self.surfaces.get_mut(&id) {
+            native.pending_keyboard_none = false;
+            native.set_keyboard_active(false);
+        }
         self.input_serial = None;
         self.input_method_observe();
         self.clipboard_cancel(qh, false);
+        if let Some(native) = self
+            .surfaces
+            .get(&id)
+            .filter(|native| native.role.wl_surface() == surface)
+        {
+            self.focus_request_lifecycle(
+                native.spec.clone(),
+                native.identity.clone(),
+                api::KeyboardFocusChange::Left,
+            );
+        }
+        self.focus_request_flush(qh);
     }
     fn press_key(
         &mut self,
         _: &Connection,
         qh: &QueueHandle<Self>,
-        _: &wl_keyboard::WlKeyboard,
+        keyboard: &wl_keyboard::WlKeyboard,
         serial: u32,
         event: KeyEvent,
     ) {
+        if self.keyboard.as_ref() != Some(keyboard) {
+            return;
+        }
         self.input_serial = Some(serial);
         self.activation.input = self
             .keyboard_surface
@@ -2101,10 +2273,13 @@ impl<A: Application> KeyboardHandler for State<A> {
         &mut self,
         _: &Connection,
         qh: &QueueHandle<Self>,
-        _: &wl_keyboard::WlKeyboard,
+        keyboard: &wl_keyboard::WlKeyboard,
         _: u32,
         event: KeyEvent,
     ) {
+        if self.keyboard.as_ref() != Some(keyboard) {
+            return;
+        }
         self.key(event, qh);
     }
     fn release_key(
@@ -2120,12 +2295,15 @@ impl<A: Application> KeyboardHandler for State<A> {
         &mut self,
         _: &Connection,
         _: &QueueHandle<Self>,
-        _: &wl_keyboard::WlKeyboard,
+        keyboard: &wl_keyboard::WlKeyboard,
         _: u32,
         modifiers: Modifiers,
         _: RawModifiers,
         _: u32,
     ) {
+        if self.keyboard.as_ref() != Some(keyboard) {
+            return;
+        }
         self.modifiers = modifiers;
     }
 }
@@ -2134,7 +2312,7 @@ impl<A: Application> ProvidesRegistryState for State<A> {
     fn registry(&mut self) -> &mut RegistryState {
         &mut self.registry
     }
-    registry_handlers![OutputState, SeatState];
+    registry_handlers![OutputState, SeatState, focus_request::Registry];
 }
 smithay_client_toolkit::delegate_dispatch2!(@<A:Application> State<A>);
 

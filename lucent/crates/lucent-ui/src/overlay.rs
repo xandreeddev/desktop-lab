@@ -470,7 +470,8 @@ impl Layout {
 }
 impl<M: Clone> Interaction<M> {
     fn tooltip_target<'a>(&self, scene: &'a Scene<M>) -> Option<(&'a TooltipTarget, bool)> {
-        let keyboard = self.focus_visible
+        let keyboard = self.keyboard_active
+            && self.focus_visible
             && self
                 .focus
                 .as_ref()

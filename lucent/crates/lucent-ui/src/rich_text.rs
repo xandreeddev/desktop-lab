@@ -516,6 +516,7 @@ pub(super) fn paint<M: Clone>(
             secondary_click: None,
             middle_click: None,
             wheel: None,
+            pointer_press: None,
             submit: None,
             hover: None,
             input: None,

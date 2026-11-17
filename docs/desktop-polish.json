@@ -1,0 +1,99 @@
+{
+  "objective": "Deliver a coherent, polished Lucent desktop, using Caelestia as the reference for complete interactions and visual quality.",
+  "reference": "https://github.com/caelestia-dots/shell",
+  "status": "in_progress",
+  "implementation": "Lucent Rust desktop and reusable UI toolkit",
+  "visual_direction": "Develop Lucent's existing design tokens and visual identity while matching the reference's attention to interaction, motion and complete user workflows.",
+  "working_branch": "feat/caelestia-polish",
+  "test_environment": {
+    "vm": "desktop-lab-lucent",
+    "console": "python3 vm/lab.py console lucent",
+    "launch": "python3 vm/launch.py lucent",
+    "runtime_source_commit": "d77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb",
+    "runtime_source_status": "Reviewed local candidate; separate from the published main checkpoint",
+    "host_desktop_modified": false
+  },
+  "delivery_rule": {
+    "one_active_feature": true,
+    "required": [
+      "Define the user-visible behavior and its error, empty, cancellation and recovery cases.",
+      "Put reusable interaction, layout, input and rendering support in the toolkit; retain desktop policy in the client and OS operations in adapters.",
+      "Exercise new toolkit contracts through an independent consumer when the contract is public.",
+      "Pass relevant behavior/protocol tests, formatting, strict Clippy and architecture checks.",
+      "Review real Vulkan output at relevant densities and sizes; preserve existing visual baselines unless a reviewed change is intentional.",
+      "Run actual mouse and keyboard workflows in the VM, verify the resulting application behavior, and restore temporary test state.",
+      "Record exact source/binary and test scope; keep implementation, VM acceptance, performance and protected-main delivery distinct.",
+      "Leave the VM usable for the user's own testing before moving to the next feature."
+    ]
+  },
+  "features": [
+    {
+      "id": "keyboard-handoff",
+      "status": "native_verified_delivery_pending",
+      "behavior": "Ordinary controls acquire keyboard focus only after user intent, release it when their interaction ends, and do not steal it back from an application opened by mouse or keyboard.",
+      "toolkit": "Prepared pointer-press observation, one-shot native focus requests, exact native lifetime events, focus-aware caret painting and bounded control commits.",
+      "completed_checks": [
+        "Working branch reconciled with the exact d77 runtime already installed in the VM.",
+        "Formatting and strict workspace Clippy pass; 729 relevant Rust tests, 802 Python tests and 832 unchanged Vulkan visual cases pass.",
+        "Fresh pointer and Tab/Enter notification links each open a separate cold browser and deliver one trusted KeyA; nine restoration checks pass per route.",
+        "The independent bottom-layer focus client passes typing, Tab, Escape, reacquisition, foreground loss, explicit release, graceful quit/socket cleanup and desktop/cursor preservation.",
+        "Actual passive, focused and released native visuals reviewed.",
+        "Actual Notes completed-click typing, ordinary Undo, first same-workspace outside browser click/key, explicit Notes reacquisition and no browser key leak pass. All ten restoration/profile checks pass.",
+        "Two disjoint90-second read-only guest capture windows close with terminal receipts; each guest click precedes its KeyA. Actual focused/lost/reacquired caret visuals reviewed.",
+        "CI compatibility fix passes local strict workspace Clippy; actual source-bound native catalogue regenerated and validated:121 inputs,480 captures,9 stories."
+      ],
+      "remaining": [
+        "Finish protected-main delivery through the existing keyboard-focus PR after current CI completes."
+      ],
+      "report": "reports/measurements/lucent-polish-keyboard-focus.json"
+    },
+    {
+      "id": "launcher",
+      "status": "queued",
+      "behavior": "Search, keyboard selection, scrolling, section changes, launch/focus and dismissal form one consistent workflow.",
+      "toolkit": "Controlled text, list layout/scrolling, stable identity and focus routing; add virtualization only where the actual workload requires it."
+    },
+    {
+      "id": "control-panels",
+      "status": "queued",
+      "behavior": "Bar controls switch panels in one click, with consistent focus, dismissal, loading, unavailable, retry and confirmation behavior.",
+      "toolkit": "Reusable panel/popover focus scopes, controls and menu behavior driven by real client requirements."
+    },
+    {
+      "id": "notifications",
+      "status": "queued",
+      "behavior": "Toasts and history have readable content, reachable actions, reliable DND and grouping, safe links and consistent keyboard navigation.",
+      "toolkit": "Rich text, image preparation, scrolling, focus scopes and lifetimes."
+    },
+    {
+      "id": "desktop-utilities",
+      "status": "queued",
+      "behavior": "Clipboard, emoji, command/menu and capture entry points feel integrated and preserve correct return-to-application behavior.",
+      "toolkit": "Shared pickers, selection, clipboard transfers and any justified native popup/capture contracts."
+    },
+    {
+      "id": "dashboard-and-media",
+      "status": "queued",
+      "behavior": "Widgets, notes, calendar and media controls have complete editing, resizing, persistence, empty and error behavior.",
+      "toolkit": "Controlled editors, sliders, pointer capture and reusable layout/input boundaries."
+    },
+    {
+      "id": "appearance",
+      "status": "queued",
+      "behavior": "Palette and wallpaper browsing, previews, applying, cancellation and failures share consistent motion, spacing and density.",
+      "toolkit": "Prepared assets, streaming textures, clipping, motion and cache ownership."
+    },
+    {
+      "id": "outputs-and-session",
+      "status": "queued",
+      "behavior": "Display changes, per-output layouts, scaling and secure session transitions preserve usable controls and user state.",
+      "toolkit": "Output/native lifetime contracts, density, input routing and secure role boundaries."
+    },
+    {
+      "id": "resources-and-motion",
+      "status": "queued",
+      "behavior": "Verify cold/warm interaction cost and presentation, including resize/return-to-FHD memory, against the existing resource targets.",
+      "toolkit": "Measured renderer/resource ownership and compositor pacing; keep resource checks part of each preceding feature as well."
+    }
+  ]
+}

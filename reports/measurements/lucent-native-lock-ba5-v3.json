@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "status": "scoped_native_lock_PAM_and_retained_exit_regression_passed",
+  "source_commit": "ba5b8a51f960e07507520a77534d1eccbce9e40c",
+  "manifest_sha256": "0e1291f46312057a6c9b349148868ad770b9b07c848fdd901ca4b01e32050b4d",
+  "desktop_sha256": "633960b90c1d08b84e4b53c85e3ccf9e63b1e091a8ab6f6b2a406296c4b916a5",
+  "native_locker_sha256": "4859c6c22ecbc62fb560e5a29ca3372b8223b2d52c14761c4b7c96b27ad8b423",
+  "controller_version": "V3",
+  "accepted_main_at_capture": false,
+  "whole_trial_passed": true,
+  "actual_private_report_sha256": "ab1f715db2ba4e2b30b0f2a93ff1f7ca717e771cf32f78547e09cbd03b5fd17b",
+  "controller_template_sha256": "108f8d6a15d5f187d5901494ea592331c36397e769d8ec6c97cf39258cacf991",
+  "actual_bound_controller_sha256": null,
+  "bound_controller_hash_exposed_by_trial_report": false,
+  "scope": "One FHD virtual output and one ordinary native lock/PAM unlock on ba5. The same notifier connection observes a new compositor Locked acknowledgement and subsequent Unlock. Six checks pass, including positive same-invocation native exit and exact normal-state preservation. Login, secure-client pixels, suspend, physical hardware and performance are not accepted.",
+  "checks_passed": 6,
+  "checks": {
+    "same_connection_new_locked_ack": true,
+    "exact_native_locker_without_fallback_or_restart": true,
+    "existing_live_wallpaper_pauses_without_preference_change": true,
+    "ordinary_PAM_unlock_and_native_exit_zero": true,
+    "existing_playback_policy_resumes_or_retains_manual_pause": true,
+    "normal_lifetime_settings_media_security_idle_and_geometry_preserved": true
+  },
+  "ordinary_lock_requests": 1,
+  "private_password_helper_invocations": 1,
+  "notifier_events": [
+    "ready_unlocked",
+    "locked_ack_transition",
+    "unlocked_transition",
+    "complete",
+    "connection_closed"
+  ],
+  "retained_native_exit": {
+    "one_owned_private_bus_reference_held_before_lock": true,
+    "same_manager_connection_and_live_invocation": true,
+    "same_live_and_exited_ExecMainPID": true,
+    "same_positive_start_timestamp": true,
+    "positive_exit_at_or_after_start": true,
+    "main_process_exited_normally": true,
+    "exit_status": 0,
+    "manager_result": "success",
+    "restart_count": 0,
+    "inactive_and_dead_after_exit": true,
+    "reference_released": true,
+    "reference_observation_count": 5,
+    "default_or_missing_Code0_accepted_as_exit_proof": false
+  },
+  "preservation": {
+    "same_desktop_lifetime": true,
+    "normal_profiling_and_tracing_OFF": true,
+    "settings_media_exports_clipboard_and_supervision_unchanged": true,
+    "PAM_locker_login_security_unchanged": true,
+    "playback_policy_restored": true,
+    "idle_monitor_workspace_cursor_and_keyboard_map_unchanged": true,
+    "preservation_fingerprint_before_sha256": "2ce386b083cbefc51a91de5217a231c4c2ae748c73bf822b2b182f06749f510c",
+    "preservation_fingerprint_after_sha256": "2ce386b083cbefc51a91de5217a231c4c2ae748c73bf822b2b182f06749f510c",
+    "security_fingerprint_before_sha256": "68a7b7867d1af60ca515d0fec90043cff13f2d9ae77ed49be691877e1e9834e5",
+    "security_fingerprint_after_sha256": "68a7b7867d1af60ca515d0fec90043cff13f2d9ae77ed49be691877e1e9834e5"
+  },
+  "intervention_scope": {
+    "preference_media_or_idle_writes": false,
+    "desktop_or_greetd_restarts": false,
+    "automatic_password_retry_or_forced_unlock": false,
+    "locker_kill_or_fallback_suppression": false,
+    "login_logout_or_power_request": false,
+    "password_output_or_images_captured": false
+  },
+  "earlier_results_preserved": {
+    "V1_report": "reports/measurements/lucent-native-lock-ba5.json",
+    "V1_report_sha256": "af160b848c92e1d0a9453be672656f2b1e8f5c21e39df97db5fb078c103b9f61",
+    "V1_exit_assertion_failed_and_remains_failed": true,
+    "V2_private_prelock_refusal_sha256": "687ad020b97d71816e9a7e07b4d8c47fd899e20ba2b74b562c8f4833608325b6",
+    "V2_lock_requests": 0,
+    "V2_password_helper_invocations": 0,
+    "V2_initial_empty_ID_cause_confirmed_by_readonly_probe": true,
+    "V2_readonly_shape_receipt_sha256": "d76a06dacc24cb4bab7ae0c5bcc1c99992579f31700e8754c057545644150914",
+    "old_failures_retroactively_passed": false
+  },
+  "not_accepted": {
+    "login_logout": true,
+    "caret_wallpaper_or_other_secure_pixels": true,
+    "suspend_resume": true,
+    "physical_device_or_driver_faults": true,
+    "FPS_CPU_or_memory_targets": true
+  },
+  "privacy": {
+    "raw_PIDs_process_births_boot_ids_invocation_IDs_paths_or_exact_epochs_published": false,
+    "credentials_Notes_images_argv_or_environment_published": false
+  }
+}
