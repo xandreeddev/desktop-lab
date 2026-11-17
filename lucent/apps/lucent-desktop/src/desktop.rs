@@ -8,6 +8,7 @@ mod panels;
 #[cfg(test)]
 mod system_tests;
 use crate::widgets::{self, catalog::WIDGETS};
+use lucent_api::Application as _;
 use lucent_api::{self as api, *};
 use lucent_design::{component::panel, motion};
 use lucent_domain::{self as domain, *};
