@@ -8,7 +8,15 @@ Three isolated Omarchy experiments for comparing Lucid, native Noctalia v5, and 
 | `desktop-lab-noctalia` | Native C++ comparison | Official Noctalia v5, a Lucid-inspired declarative configuration |
 | `desktop-lab-lucent` | Native Rust development | Rust framework/client with bar, dock, launcher, selectors and draggable widgets |
 
-Lucent now has a reusable declarative Rust framework and a desktop client using Vulkan. Its launcher morphs out of the dock, selectors animate, and widget positions persist. Omarchy retains secure locking and session services. The VM uses software Vulkan; see [framework concepts](docs/lucent-framework.md) and [current validation](reports/lucent-framework.md).
+Lucent has a reusable declarative Rust framework and a desktop client using Vulkan.
+Its launcher morphs out of the dock, selectors animate, and widget positions persist.
+Separate native lock/login clients use PAM and greetd. Graphics and native results
+depend on the named guest and build; see [framework concepts](docs/lucent-framework.md)
+and [current readiness](docs/current-readiness.md).
+
+The [desktop polish backlog](docs/desktop-polish.json) tracks the current work toward
+Caelestia-level interaction and visual quality, one feature at a time, with toolkit,
+source, visual and native VM checks before completion.
 
 The [local Astro site](site/README.md) provides a visual desktop tour, interactive
 framework walkthrough, measured results and a hands-on VM guide. Start it with

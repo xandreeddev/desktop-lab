@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-17",
+  "status": "scoped_checks_passed_feature_in_progress",
+  "scope": "Current Lucent VM: cold notification-to-browser handoff and an independent ordinary focus consumer. Actual Notes outside-click and immediate input ordering remain separate acceptance work.",
+  "toolkit_source_commit": "d77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb",
+  "installed_desktop_sha256": "ed2166062a55676897bc745b3cea956e8276b4ae5f9a6019dce4aa1f4c5a70b5",
+  "accepted_main_merge": false,
+  "full_polish_goal_complete": false,
+  "source_checks": {
+    "formatting_passed": true,
+    "strict_workspace_clippy_passed": true,
+    "rust_tests": {
+      "lucent_api": 84,
+      "lucent_ui": 121,
+      "lucent_wayland": 120,
+      "lucent_desktop": 404
+    },
+    "python_tests_passed": 802,
+    "vulkan_visual_cases_passed": 832,
+    "goldens_changed": false,
+    "build_service_result": "success",
+    "build_service_exit_status": 0,
+    "local_pipe_caller_exit_status": 143,
+    "caller_scope": "The pipe caller ended with143. The independent bounded service completed with Result=success/ExecMainStatus=0; all actual step logs and its terminal receipt pass."
+  },
+  "cold_browser_routes": [
+    {
+      "case": "pointer",
+      "passed": true,
+      "fresh_cold_browser": true,
+      "trusted_key_event": {
+        "count": 1,
+        "event": {
+          "trusted": true,
+          "key": "a",
+          "code": "KeyA",
+          "ctrl": false,
+          "alt": false,
+          "meta": false,
+          "shift": false,
+          "repeat": false
+        }
+      },
+      "restoration_checks_passed": 9,
+      "private_receipt_sha256": "9f61855b040102bd299525dfe4507a9ec8eff9bae498a47cb18fde2558f1561d"
+    },
+    {
+      "case": "keyboard",
+      "passed": true,
+      "fresh_cold_browser": true,
+      "trusted_key_event": {
+        "count": 1,
+        "event": {
+          "trusted": true,
+          "key": "a",
+          "code": "KeyA",
+          "ctrl": false,
+          "alt": false,
+          "meta": false,
+          "shift": false,
+          "repeat": false
+        }
+      },
+      "restoration_checks_passed": 9,
+      "private_receipt_sha256": "9ecfb2c8fc291d7863dbe4074c8adf107a318c9ee8fbcba4113912e3085e431d"
+    }
+  ],
+  "independent_consumer": {
+    "path": "lucent/examples/keyboard-focus",
+    "native_helper": "vm/test-keyboard-focus.py",
+    "binary_sha256": "14db9804511e3d6f0a3a9ef763b36b5eb41e3ee1025d558f93ef24c2af648949",
+    "source_sha256": "988437bf7525f399616deb8abf566d2ed5865517f80bea6c4f0102ded943406e",
+    "harness_sha256": "3ac4df8913c17008dcbead4ee43e2e5accf389b89cd5cc876e40f19c2179ad00",
+    "passed": true,
+    "checks": {
+      "starts_passive_on_bottom_layer": true,
+      "physical_press_text_and_tab": true,
+      "escape_releases_and_retains_text": true,
+      "reacquires_after_release": true,
+      "foreground_focus_loss_does_not_reacquire": true,
+      "explicit_release_button": true,
+      "original_unit_drained": true,
+      "graceful_exit_and_socket_cleanup": true,
+      "owned_stage_removed": true,
+      "desktop_settings_wallpaper_and_cursor_preserved": true
+    },
+    "native_visuals_reviewed": [
+      "passive",
+      "focused",
+      "released"
+    ],
+    "visual_findings": "Fields and controls fit; native focus shows the active caret/outline, and release removes them while retaining ordinary text.",
+    "private_receipt_sha256": "1e61d28e1bc56a897c7e7d634d38bf8cce21ccdddb8b60a6902899ebd3b78432",
+    "earlier_helper_cleanup_attempt": {
+      "passed": false,
+      "cause": "The helper expected a JSON reply to quit; the public IPC acknowledgement is plain text ok.",
+      "owned_client_exited": true,
+      "owned_stage_later_removed_after_drain_proof": true,
+      "original_report_preserved": true,
+      "superseded_by_final_native_run": true
+    }
+  },
+  "remaining": [
+    "Actual desktop Notes outside-click with proved guest pointer/key delivery ordering. Earlier transport diagnostics remain failed or inconclusive.",
+    "Protected-main delivery of the reconciled feature and independent consumer.",
+    "Other features in docs/desktop-polish.json."
+  ],
+  "performance_accepted": false,
+  "physical_hardware_accepted": false,
+  "privacy": "No credentials, user note/query content, location, URI targets, process arguments, environment, personal paths or VM screenshots are included."
+}

@@ -1,0 +1,11 @@
+[package]
+name = "keyboard-focus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+lucent-api = { path = "../../crates/lucent-api" }
+lucent-design = { path = "../../crates/lucent-design" }
+lucent-wayland = { path = "../../crates/lucent-wayland" }
+serde_json = "1"

@@ -157,17 +157,18 @@ with the semantic foreground on a transparent background. Icons are rasterized a
 icon, with a Lucent fallback when it is unavailable. The local design-system page
 includes the complete icon gallery.
 
-Text uses supersampled coverage, kerning-aware measurement and physical-pixel
-alignment. Images prefer larger/vector originals, with filtered mip levels for
-animated reductions. The output buffer still follows the compositor's integer
-scale; fractional scaling is not implemented. The current asset budgets target
-up to 2× density. See the local site's `/design-system/` and `/docs/` pages.
+Text uses shaped glyphs, deterministic fallback, supersampled coverage and
+physical-pixel alignment. Images prefer larger/vector originals, with filtered
+mip levels for animated reductions. Named outputs support integer and fractional
+density; see [fractional scaling](../docs/fractional-scaling.md) for contracts and
+source-specific native scope. See the local site's `/design-system/` and `/docs/`
+pages for the design system.
 
 ## State and IPC
 
 `~/.local/state/lucent/desktop.json` stores the versioned layout, visible widget
 IDs, pinned app IDs, notes and palette choice. Saves are atomic. Invalid versions
-are left intact and disable saving until corrected. Notes are currently one line.
+are left intact and disable saving until corrected. Notes use the shared multiline editor.
 A running timer uses a deadline and catches up after delayed callbacks; it is
 not persisted across a restart.
 
@@ -218,10 +219,15 @@ and measurements. The old card prototype and its tests are historical milestones
 The prepared VM uses **software Vulkan (Mesa lavapipe)**. The host GPU is not
 passed through; the compositor uses virgl. [Graphics details](../docs/lucent-vulkan.md).
 The reference layout and primary launcher/selector transitions are implemented;
-this is not complete Lucid feature or pixel parity. Tray hosting, a complete control center,
-widget resizing, fractional scaling, multi-output
-placement and full Unicode shaping remain future work. Notification history is
-in memory; images, markup, inline replies and sound are not implemented. System services retain OS responsibilities; the stock Quickshell process is stopped.
+this is not complete Lucid feature or pixel parity. Native system panels and tray,
+widget resizing, named output profiles, fractional density, Unicode shaping and
+ordinary IME are implemented. Notifications have durable history, styled content,
+links and images. Physical devices, broader application interoperability, secure
+resume, resource targets and presentation pacing retain separate acceptance gaps.
+Use [current readiness](../docs/current-readiness.md) and the
+[polish backlog](../docs/desktop-polish.json) for current scope; older reports keep
+their original source and results. System services retain OS responsibilities;
+the stock Quickshell process is stopped.
 Notification delivery bounds queued close/action signals and returns an explicit
 overload error before changing state. Idle bus disconnects trigger reconnection;
 old pending signals are discarded rather than replayed on a new connection.
