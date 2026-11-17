@@ -278,8 +278,13 @@ impl Component for Menu {
                     "Enter confirm · Esc cancel".into()
                 } else {
                     format!(
-                        "{} results · ↑↓ select · PgUp/PgDn page · Enter run · Esc {}",
+                        "{} results · {} · Enter · Esc {}",
                         self.selection.matches.len(),
+                        if width >= token::WIDTH {
+                            "Arrows select · PgUp/PgDn page"
+                        } else {
+                            "PgUp/PgDn"
+                        },
                         if self.request.back { "back" } else { "close" }
                     )
                 })

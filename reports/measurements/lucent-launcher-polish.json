@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-17",
+  "status": "in_progress",
+  "scope": "Launcher navigation, retained app context, real toolkit scrollbars and independent picker on the existing FHD VM. The full launcher feature is not yet accepted.",
+  "source_commit": "bd71fee40c17468c1b97bede91f792de75153229",
+  "release_profile": "release with thin LTO",
+  "release_manifest_sha256": "203a4c6dc71e397abb190698477dfe30cd215a12f551734ee4fdd8b9a3642096",
+  "installed_desktop_sha256": "c9921f09011258802807e40147590c6115b5dd1a7de46f069bfa1478f8557928",
+  "installed_menu_sha256": "108ef07890cf3eb306466a3ee107779a50e08583dae2065c85fddf2d3ca85925",
+  "native": {
+    "passed": true,
+    "checks": {
+      "page_navigation_and_section_context": true,
+      "search_home_remains_editor_navigation": true,
+      "empty_result_enter_is_safe": true,
+      "native_wheel_scroll": true,
+      "native_thumb_drag_retains_search_focus": true,
+      "escape_outside_and_fresh_open": true,
+      "independent_picker_pages_disabled_rows_scroll_and_original_value": true
+    },
+    "restoration": {
+      "original_unit_drained": true,
+      "graceful_exit_and_socket_cleanup": true,
+      "owned_stage_removed": true,
+      "original_cursor": true,
+      "desktop_preferences_wallpaper_exports_and_process": true
+    },
+    "private_receipt_sha256": "948386373811e5acc46aadf3fe17ca8801f8a4ebd1885585bb7bd973f6a531b9",
+    "visual_review_complete": false,
+    "visual_findings": "The launcher rows, scrollbar, result count, selection and search field fit in the captured native panel. The picker footer shows missing arrow glyphs; a plain-text responsive hint is prepared and still needs a fresh build/native visual check.",
+    "earlier_attempt": {
+      "passed": false,
+      "private_receipt_sha256": "dc837319b92da1345e184e3d19cb8f936f48652d4a943518a008720b0654c95e",
+      "cause": "The helper required live-unit identity after the picker accepted its value and systemd collected the successful unit. All seven feature checks passed; cleanup and cursor restoration were not accepted.",
+      "separate_recovery_passed": true,
+      "recovery_receipt_sha256": "9048d1be67fd4fa2abd7b1bd2c6477cb76e7bb404553f6ddf96132fa9d991ff4",
+      "original_failed_flags_preserved": true
+    }
+  },
+  "source_checks": {
+    "strict_workspace_clippy_passed": true,
+    "targeted_checks": [
+      {
+        "name": "clippy",
+        "returncode": 0
+      },
+      {
+        "name": "launcher",
+        "returncode": 0
+      },
+      {
+        "name": "menu",
+        "returncode": 0
+      },
+      {
+        "name": "api",
+        "returncode": 0
+      },
+      {
+        "name": "press-identity",
+        "returncode": 0
+      },
+      {
+        "name": "scroll-layout",
+        "returncode": 0
+      },
+      {
+        "name": "first-layout",
+        "returncode": 0
+      }
+    ],
+    "full_final_regression_suite_passed": false,
+    "visual_goldens_reviewed_and_updated": false
+  },
+  "remaining": [
+    "Apply and visually verify the corrected picker footer.",
+    "Run full final source checks, review changed Vulkan baselines and refresh the source-bound component catalogue.",
+    "Finish native main-launch/focus acceptance for the launcher.",
+    "Protected-main delivery."
+  ],
+  "performance_accepted": false,
+  "physical_hardware_accepted": false,
+  "full_polish_goal_complete": false,
+  "privacy": "No user queries, application inventories, credentials, note content, clipboard payloads, locations, personal paths or VM screenshots are published."
+}

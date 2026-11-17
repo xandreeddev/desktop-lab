@@ -9,8 +9,8 @@
     "vm": "desktop-lab-lucent",
     "console": "python3 vm/lab.py console lucent",
     "launch": "python3 vm/launch.py lucent",
-    "runtime_source_commit": "d77f3d0b2cafbd1fd4fcecc02e27844c5583b2cb",
-    "runtime_source_status": "Reviewed local candidate; separate from the published main checkpoint",
+    "runtime_source_commit": "bd71fee40c17468c1b97bede91f792de75153229",
+    "runtime_source_status": "Optimized three-client development candidate; the secure clients and supervisor retain the prior coherent d77 release.",
     "host_desktop_modified": false
   },
   "delivery_rule": {
@@ -60,6 +60,12 @@
         "The standalone native picker uses the shared navigation/window contract and skips disabled entries.",
         "Result count, search layout and selected-row visuals fit regular, narrow and high-density output.",
         "Actual VM keyboard, pointer, search, section, launch/focus and dismissal workflows pass with original settings/session restoration."
+      ],
+      "report": "reports/measurements/lucent-launcher-polish.json",
+      "completed_checks": [
+        "Strict workspace Clippy and targeted API/launcher/picker/layout tests pass.",
+        "Optimized three-client bundle built from clean committed source; all ELF dependencies resolve in the guest and checked deployment preserves user preferences, wallpaper, media and supervisor.",
+        "Seven native launcher/picker interactions and five cleanup/preservation checks pass on bd71; visual and full final regression acceptance remain open."
       ]
     },
     {

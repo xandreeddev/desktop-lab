@@ -4,9 +4,17 @@
 
 The [polish backlog](desktop-polish.json) tracks the current Caelestia reference
 and the one-feature-at-a-time delivery rule. On 2026-11-17 the existing VM was
-booted and signed in through its native greeter; it still runs the coherent d77
-candidate described below. The working feature branch now retains that runtime
-implementation and the existing PR117 evidence.
+booted and signed in through its native greeter. It now runs the optimized
+three-client launcher candidate `bd71fee40c17`; the supervisor and secure clients
+retain the coherent d77 release described below. The checked developer deployment
+passes runtime dependency checks and preserves preferences, wallpaper, exports
+and media. This is distinct from accepted main and the coherent six-client archive.
+
+The [launcher slice](../reports/measurements/lucent-launcher-polish.json) passes
+seven native navigation/search/scroll/picker interactions and five cleanup checks.
+Its full final source/visual checks and main-launch/focus acceptance remain open.
+Native review caught missing arrow glyphs in the picker footer; its plain-text
+replacement is prepared and awaits a fresh build and visual check.
 
 Fresh [focus verification](../reports/measurements/lucent-polish-keyboard-focus.json)
 passes both original cold-browser routes with actual trusted key delivery and
