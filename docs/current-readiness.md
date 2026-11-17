@@ -21,9 +21,9 @@ forces focus. The corrected plain-text picker footer was reviewed in the VM.
 The b574 source checkpoint passes strict Clippy, 753 relevant Rust tests and
 802 Python tests. Source `7b36850ed359` adds single-line long-label ellipsis and
 68 reviewed Vulkan baselines across 17 launcher/picker families, dark/light and
-1×/2×. Targeted follow-up behavior checks and strict Clippy pass. The final
-optimized build, full 832-case run and catalogue export were interrupted by the
-memory request; the refinement has not been deployed or native-accepted.
+1×/2×. Targeted follow-up behavior checks and strict Clippy pass. The local build and render runs were interrupted by the memory request.
+Subsequent hosted verification is recorded below; the refinement has not been
+deployed or native-accepted.
 
 Fresh [focus verification](../reports/measurements/lucent-polish-keyboard-focus.json)
 passes both original cold-browser routes with actual trusted key delivery and
@@ -52,9 +52,11 @@ nine stories and five palettes. Its archive digest, complete variant matrix,
 producer fingerprints and PNG hashes/dimensions validate. Twenty-two actual
 light/dark narrow samples across all nine families and selected 2× states were
 reviewed. The earlier catalogue is archived locally; interrupted/failed attempts
-remain historical. At that source, the full Rust workspace and all six controlled
-service protocol suites pass. The full production Vulkan comparison is still
-running on GitHub; final optimized deployment and native acceptance remain open.
+remain historical. At that source, all 1,130 regular workspace tests,49 controlled service tests
+and 832 production Vulkan comparisons pass on software Vulkan. The
+visual artifact digest and every case PNG were independently verified. Fresh
+integration/site checks with the promoted catalogue, final optimized deployment
+and native acceptance remain open.
 
 ## Delivery and earlier source-specific evidence
 

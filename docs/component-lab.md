@@ -7,7 +7,7 @@ our buttons, fields or menus in HTML and CSS.
 
 The current catalogue was exported by [GitHub run 44090678488](https://github.com/xandreeddev/desktop-lab/actions/runs/44090678488)
 from source `42967f8fc81e`: **122 producer inputs**, nine stories, five palettes
-and 480 actual Vulkan captures. The complete variant matrix, source fingerprints,
+and 480 actual software-Vulkan captures (llvmpipe). The complete variant matrix, source fingerprints,
 PNG hashes and dimensions pass validation. Twenty-two actual narrow light/dark
 samples cover all nine story families and selected 2× menu, field and scroll
 states; their visuals were reviewed. All 480 PNG hashes differ from the retained

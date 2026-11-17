@@ -81,10 +81,13 @@
       "design_token_cases_passed": 590,
       "icon_cases_passed": 58,
       "receipt_sha256": "55e3e3c9e685205529ec8d790926d81201c3f101ea74ca9726742e9470f68a59"
-    }
+    },
+    "final_workspace_and_visual_source_commit": "42967f8fc81e3194beeb34da3eddfdb4c232cf2f",
+    "full_workspace_rust_passed": true,
+    "vulkan_visual_cases_passed": 832
   },
   "remaining": [
-    "Complete the final optimized release build and the full 832-case Vulkan comparison against the reviewed baselines.",
+    "After local resource use is authorized again, complete the final optimized ordinary-client release build.",
     "Pass final integration/site validation with the refreshed source-bound catalogue.",
     "After resource use is authorized again, deploy the final optimized ordinary-client bundle and repeat both public native helpers, including actual visual review.",
     "Protected-main delivery."
@@ -129,7 +132,9 @@
       "2x"
     ],
     "review_receipt_sha256": "3647d966f87399cc15167519d4401ecb1f32ffbac0c6941d6fad5f03f7228358",
-    "full_final_matrix_passed": false
+    "full_final_matrix_passed": true,
+    "source_commit": "42967f8fc81e3194beeb34da3eddfdb4c232cf2f",
+    "cases_passed": 832
   },
   "resource_hold": {
     "requested_by_user": true,
@@ -143,7 +148,7 @@
     "label_refinement_implemented": true,
     "baseline_changes_reviewed": true,
     "optimized_bundle_complete": false,
-    "full_vulkan_matrix_complete": false,
+    "full_vulkan_matrix_complete": true,
     "component_catalogue_export_complete": true,
     "deployed": false,
     "native_accepted": false,
@@ -222,8 +227,59 @@
       "tray",
       "media"
     ],
-    "full_vulkan_matrix_status": "in_progress",
+    "full_vulkan_matrix_status": "success",
     "whole_run_passed": false,
-    "integration_scope": "The original run still fails its stale pre-promotion public catalogue. The reviewed replacement now passes the current local catalogue check; the next pushed source needs fresh integration/site validation."
+    "integration_scope": "The original run still fails its stale pre-promotion public catalogue. The reviewed replacement now passes the current local catalogue check; the next pushed source needs fresh integration/site validation.",
+    "rust_job_passed": true,
+    "full_vulkan_visual_cases_passed": 832,
+    "visual_artifact_id": 14331744161,
+    "visual_archive_sha256": "b271293632f5cb289ed0b112055f9f7ee43590b37b0f32d604421e200c965492",
+    "visual_archive_digest_verified": true,
+    "all_case_pngs_present_and_crc_verified": true,
+    "visual_receipt_sha256": "9360357c79c34c0da8525c4a2f08b60561db68709af24d4d94bba531405a6bf0",
+    "rust_test_counts": {
+      "workspace": {
+        "passed": 1130,
+        "failed": 0,
+        "ignored": 89
+      },
+      "notification_": {
+        "passed": 12,
+        "failed": 0,
+        "ignored": 0
+      },
+      "audio_protocol": {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      "bluetooth_protocol": {
+        "passed": 17,
+        "failed": 0,
+        "ignored": 0
+      },
+      "power_protocol": {
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      "tray_protocol": {
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0
+      },
+      "media_protocol": {
+        "passed": 9,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    "renderer": {
+      "backend": "Vulkan",
+      "adapter": "llvmpipe (LLVM 21.1.8, 256 bits)",
+      "device_type": "Cpu",
+      "driver": "Mesa 26.0.8-1ubuntu0.3 (LLVM 21.1.8)"
+    },
+    "log_sha256": "8a11b49dcaf50c891a11d80b36869dff253ed2b2420711fcedf21fd386259325"
   }
 }
