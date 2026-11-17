@@ -245,7 +245,7 @@
     "scope": "All required source checks pass. Optimized bundle construction and target VM/native acceptance remain separate."
   },
   "hosted_optimized_candidate": {
-    "status": "compiled_but_publication_rejected_followup_prepared",
+    "status": "ubuntu_bundle_verified_reference_abi_rejected_arch_followup_prepared",
     "artifact_name": "optimized-development-bundle",
     "builder": "Existing lucent-dev.py release builder in its bounded user unit on GitHub",
     "scope": "Three ordinary clients and seven theme files. The actual candidate build and target VM qualification remain open.",
@@ -289,7 +289,66 @@
       "temporary_fake_source_removed": true
     },
     "private_umask_probe_receipt_sha256": "d33f3c57d02576d8684205419c828d4898bd643f03cb37d7e3fc4c507fa0e36d",
-    "focused_dev_policy_tests_passed": 52
+    "focused_dev_policy_tests_passed": 52,
+    "ubuntu_candidate": {
+      "run_id": 44107082651,
+      "job_id": 134122231820,
+      "source_commit": "302d6fe5951488a56bedf806fd6c5bc5915980ee",
+      "artifact_id": 14341527520,
+      "github_archive_sha256": "a5e90fc1adcb63b685b84b2e7c32a743d9a7fd05085508615639490aeae265d1",
+      "github_archive_digest_verified": true,
+      "inner_archive_sha256": "6d4c7f22d40da89a2cc73a790812386a5b4873f4f519f84cbafd9f764d76dc34",
+      "manifest_sha256": "5ad4109212593e552025973688274b6a0dafae4fb71e72959978b3d7a19953af",
+      "profile": "release",
+      "binaries": {
+        "lucent-desktop": {
+          "sha256": "37e67334c4fffd78dc3c8f0f4bb81de58463232a6df389c0553de511e2dfbe23",
+          "bytes": 37564712
+        },
+        "lucent-cli": {
+          "sha256": "6d451beeeebec63c418082130cfb365d1c7e71f0c9e4adb679df1eafc80bfad0",
+          "bytes": 409592
+        },
+        "lucent-menu": {
+          "sha256": "1836c5f38a0f1b41d97212e6b71846cda964569f4d4d4eff5215c754e0e4304b",
+          "bytes": 24436008
+        }
+      },
+      "support_files_verified": 7,
+      "builder_qualification_verified": true,
+      "all_local_payload_hashes_verified": true,
+      "bundle": ".cache/launcher-polish-checks/ci-optimized-302-14341527520/payload/302d6fe59514-3fd343a10fdaeb7a4b6a8fc9",
+      "vm_qualified": false,
+      "deployed": false,
+      "native_accepted": false,
+      "local_compilation_or_rendering_started": false,
+      "receipt_sha256": "1e5748e37c0eae6b14c1f7e578d8ed95d1ed5144b8ce42673aed2db66427a715",
+      "host_static_dependencies_resolved": false,
+      "reference_needed_libraries_match": false,
+      "mismatch": "The VM-verified b574 desktop imports FFmpeg9 libraries (avcodec63,avformat63,avutil61,swscale10). The Ubuntu candidate imports FFmpeg8 libraries (62,62,60,9).",
+      "accepted_for_vm": false
+    },
+    "arch_followup": {
+      "workflow_job": "arch-development-bundle",
+      "pinned_official_image": "docker.io/library/archlinux@sha256:2acfa2683d458b7803b7aa4ee3c139d2ba6922cd84666fcb7496a3a02fcc4c83",
+      "resource_limits": {
+        "cpu_cores": 1,
+        "memory_max_bytes": 4294967296,
+        "swap_max_bytes": 0,
+        "pids_max": 512
+      },
+      "reference_source_commit": "b574812e1ac7db44121347399b5ae2b07daa77fa",
+      "reference_check_tests": {
+        "vm_verified_reference_imports_accepted": true,
+        "incompatible_ubuntu_imports_rejected": true,
+        "target_vm_qualified_flag_remains_false": true,
+        "compilation_rendering_or_vm_started": false,
+        "newer_glibc_rejected": true,
+        "unknown_glibc_namespace_rejected": true
+      },
+      "vm_qualified": false,
+      "native_accepted": false
+    }
   },
   "hosted_verified_parent": {
     "source_commit": "42967f8fc81e3194beeb34da3eddfdb4c232cf2f",
@@ -361,5 +420,16 @@
       "driver": "Mesa 26.0.8-1ubuntu0.3 (LLVM 21.1.8)"
     },
     "log_sha256": "8a11b49dcaf50c891a11d80b36869dff253ed2b2420711fcedf21fd386259325"
+  },
+  "hosted_current_followup": {
+    "source_commit": "302d6fe5951488a56bedf806fd6c5bc5915980ee",
+    "run": "https://github.com/xandreeddev/desktop-lab/actions/runs/44107082651",
+    "whole_run_passed": true,
+    "optimized_publication_passed": true,
+    "all_bundle_payloads_verified": true,
+    "full_vulkan_visual_cases_passed": 832,
+    "visual_archive_sha256": "724841d5f62e46700a222715af4d79058d1ecbd970fb863f7396cd7ad71ddd39",
+    "visual_artifact_id": 14341246415,
+    "source_checks_scope": "All required CI passes. Successful publication does not accept the Ubuntu desktop FFmpeg imports for the Arch target."
   }
 }

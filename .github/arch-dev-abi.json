@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "reference_source_commit": "b574812e1ac7db44121347399b5ae2b07daa77fa",
+  "reference_desktop_sha256": "c9921f09011258802807e40147590c6115b5dd1a7de46f069bfa1478f8557928",
+  "maximum_glibc": [2, 44],
+  "allowed_glibc_abi_names": ["GLIBC_ABI_DT_RELR"],
+  "needed": {
+    "lucent-desktop": ["libxkbcommon.so.0", "libavutil.so.61", "libavformat.so.63", "libswscale.so.10", "libavcodec.so.63", "libpulse.so.0", "libgcc_s.so.1", "libm.so.6", "libc.so.6", "ld-linux-x86-64.so.2"],
+    "lucent-cli": ["libgcc_s.so.1", "libc.so.6"],
+    "lucent-menu": ["libxkbcommon.so.0", "libgcc_s.so.1", "libm.so.6", "libc.so.6", "ld-linux-x86-64.so.2"]
+  },
+  "scope": "Static imports from the last VM-verified ordinary bundle. Matching these imports does not replace actual target dependency, deployment or native interaction checks."
+}

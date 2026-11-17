@@ -78,16 +78,23 @@ not invoke Cargo or Git.
 
 The `checks` workflow is configured to produce an
 `optimized-development-bundle` artifact after the Rust and native visual checks.
-It runs the same `lucent-dev.py build --profile release` command in a bounded
-user unit on the hosted runner. This prepares the three ordinary clients and
-seven theme files without using the workstation or target VM for compilation.
+It reuses the checked release bundle publisher inside a pinned Arch container
+with one CPU, a 4 GiB memory limit, no extra swap and a 512-process limit. The
+container's actual cgroup limits are checked before Cargo runs. A signed full
+Arch package transaction and its database/archive hashes are recorded. This
+prepares the three ordinary clients and seven theme files without using the
+workstation or target VM for compilation.
 
 The artifact contains `development-bundle.tar.gz` and `qualification.json`.
 Packaging verifies the clean source revision, release profile, manifest and
 every archived payload hash. It preserves private file modes and normalizes
 archive ownership. The qualification records needed shared libraries, GLIBC
 requirements, builder dependency resolution and inert CLI/menu help probes.
-It leaves `vm_qualified` and `native_accepted` false.
+The Arch wrapper checks imports against the last VM-verified bundle and rejects
+different FFmpeg majors or a newer required GLIBC. It leaves `vm_qualified` and
+`native_accepted` false. The earlier Ubuntu-built candidate has verified bytes
+but different FFmpeg imports, so it is retained as a builder result rather than
+accepted for the Arch VM.
 
 Copy the candidate to the target only when that session is available. Actual
 target dependencies, the existing installation and guarded apply still need

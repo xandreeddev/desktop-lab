@@ -134,35 +134,71 @@ jobs:
           name: native-visual-report
           path: reports/local/visual-tests
           if-no-files-found: ignore
-      - name: Build optimized development bundle
+  arch-development-bundle:
+    needs: [rust, integration-code, site]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    container:
+      # Reuse the official pinned image from the qualified d77 Arch release.
+      image: docker.io/library/archlinux@sha256:2acfa2683d458b7803b7aa4ee3c139d2ba6922cd84666fcb7496a3a02fcc4c83
+      options: --cpus 1 --memory 4g --memory-swap 4g --pids-limit 512
+    defaults:
+      run:
+        shell: bash --noprofile --norc -euo pipefail {0}
+    env:
+      LUCENT_CI_IMAGE: docker.io/library/archlinux@sha256:2acfa2683d458b7803b7aa4ee3c139d2ba6922cd84666fcb7496a3a02fcc4c83
+      RUSTUP_TOOLCHAIN: 1.99.0
+      CARGO_TERM_COLOR: never
+    steps:
+      - name: Freeze and install one signed Arch package transaction
+        timeout-minutes: 15
+        run: |
+          task_proof="$RUNNER_TEMP/arch-dependencies"
+          mkdir -p "$task_proof/cache" "$task_proof/databases"
+          test "$(cat /sys/fs/cgroup/memory.max)" = 4294967296
+          test "$(cat /sys/fs/cgroup/cpu.max)" = '100000 100000'
+          test "$(cat /sys/fs/cgroup/memory.swap.max)" = 0
+          task_packages=(base-devel git python rustup clang llvm pkgconf wayland libxkbcommon pam polkit libpulse ffmpeg vulkan-icd-loader dbus)
+          pacman-conf SigLevel > "$task_proof/signature-policy.txt"
+          grep -qw PackageRequired "$task_proof/signature-policy.txt"
+          pacman -Syuw --noconfirm --cachedir "$task_proof/cache" "${task_packages[@]}" > "$task_proof/download.log" 2>&1
+          sha256sum /var/lib/pacman/sync/*.db > "$task_proof/databases.sha256"
+          cp /var/lib/pacman/sync/*.db "$task_proof/databases/"
+          find "$task_proof/cache" -type f -name '*.pkg.tar.*' ! -name '*.sig' -print0 | sort -z | xargs -0 -r sha256sum > "$task_proof/archives.sha256"
+          test -s "$task_proof/archives.sha256"
+          pacman -Su --needed --noconfirm --cachedir "$task_proof/cache" "${task_packages[@]}" > "$task_proof/install.log" 2>&1
+          sha256sum --check "$task_proof/databases.sha256"
+          sha256sum --check "$task_proof/archives.sha256"
+          pacman -Q > "$task_proof/installed-packages.txt"
+      - uses: actions/checkout@v4
+      - name: Install the qualified Rust toolchain
+        timeout-minutes: 10
+        run: rustup toolchain install 1.99.0 --profile minimal
+      - name: Build and qualify the optimized Arch development bundle
         timeout-minutes: 32
         run: |
-          sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y dbus-user-session
-          task_build_user=$(id -un)
-          task_build_uid=$(id -u)
-          sudo loginctl enable-linger "$task_build_user"
-          export XDG_RUNTIME_DIR="/run/user/$task_build_uid"
-          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
-          for task_attempt in $(seq 1 50); do
-            if systemctl --user show-environment >/dev/null 2>&1; then break; fi
-            sleep .1
-          done
-          systemctl --user show-environment >/dev/null
-          export XDG_CACHE_HOME="$GITHUB_WORKSPACE/reports/local/optimized-cache"
-          if ! python3 scripts/lucent-dev.py build --profile release; then
-            stat -c '%u %g %a %F %n' \
-              lucent/target/release/lucent-desktop \
-              lucent/target/release/lucent-cli \
-              lucent/target/release/lucent-menu \
-              configs/lucent/palettes.json
-            exit 1
-          fi
-          python3 .github/scripts/package-dev-bundle.py \
-            --bundles "$XDG_CACHE_HOME/lucent-dev/bundles" \
-            --source-commit "$GITHUB_SHA" \
+          python3 .github/scripts/build-arch-dev.py \
+            --target "$RUNNER_TEMP/lucent-arch-target" \
+            --bundles "$RUNNER_TEMP/lucent-arch-bundles" \
             --output reports/local/optimized-artifact
       - uses: actions/upload-artifact@v4
         with:
           name: optimized-development-bundle
           path: reports/local/optimized-artifact
           if-no-files-found: error
+      - name: Collect Arch dependency diagnostics
+        if: failure()
+        run: |
+          mkdir -p reports/local/arch-diagnostics
+          for task_file in "$RUNNER_TEMP/arch-dependencies/download.log" "$RUNNER_TEMP/arch-dependencies/install.log" "$RUNNER_TEMP/arch-dependencies/installed-packages.txt"; do
+            if test -f "$task_file"; then cp "$task_file" reports/local/arch-diagnostics/; fi
+          done
+          if test -f reports/local/optimized-artifact/qualification.json; then
+            cp reports/local/optimized-artifact/qualification.json reports/local/arch-diagnostics/
+          fi
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: arch-development-diagnostics
+          path: reports/local/arch-diagnostics
+          if-no-files-found: ignore
