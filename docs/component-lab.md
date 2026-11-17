@@ -5,13 +5,15 @@ into menus. The native client and browser capture exporter use the same Rust
 stories. The Astro explorer displays the resulting images; it does not rebuild
 our buttons, fields or menus in HTML and CSS.
 
-The checked-in catalogue records source `3640bd86c6ec`, **118 producer inputs**,
-nine stories, five palettes and 480 actual Vulkan captures. Its fresh native
-export matches all 480 PNGs from the earlier `4a0f932a` RADV reference byte for
-byte. The new input-release API changes the producer roster without changing
-those pixels. The actual exported manifest is promoted; the identical image
-files are retained. This is offscreen rendering evidence, separate from native
-input, application focus and performance acceptance.
+The checked-in catalogue records source `beb696411c83`, **121 producer inputs**,
+nine stories, five palettes and 480 actual Vulkan captures. This export refreshes
+the source fingerprints after adding the independent keyboard-focus example to
+the workspace lockfile. All captures were regenerated on the host's RADV Vulkan
+adapter; the complete matrix passes validation, and narrow light/dark samples
+from all nine stories were visually reviewed. The PNGs differ from the previous
+software-Vulkan export, so this is not a byte-identical refresh. Production
+visual-test goldens remain unchanged. Offscreen rendering, native input,
+application focus and performance acceptance remain separate.
 
 Open `/component-lab/` on the documentation site. Choose a story, then compare
 its available palette, state, viewport and pixel density. The URL records the
