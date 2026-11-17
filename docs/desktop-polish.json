@@ -10,8 +10,10 @@
     "console": "python3 vm/lab.py console lucent",
     "launch": "python3 vm/launch.py lucent",
     "runtime_source_commit": "b574812e1ac7db44121347399b5ae2b07daa77fa",
-    "runtime_source_status": "Optimized three-client development candidate; the secure clients and supervisor retain the prior coherent d77 release.",
-    "host_desktop_modified": false
+    "runtime_source_status": "Last installed and native-tested optimized three-client development candidate; the secure clients and supervisor retain the prior coherent d77 release.",
+    "host_desktop_modified": false,
+    "power_state": "shut_off_at_user_request",
+    "resource_policy": "Keep the VM and local memory-heavy builds/renders stopped until the user authorizes resource use again."
   },
   "delivery_rule": {
     "one_active_feature": true,
@@ -67,7 +69,8 @@
         "Optimized three-client bundle built from clean committed source; all ELF dependencies resolve in the guest and checked deployment preserves user preferences, wallpaper, media and supervisor.",
         "Seven native launcher/picker interactions and five cleanup/preservation checks pass on b574. Its corrected responsive plain-text picker footer was visually reviewed.",
         "Three real application checks pass on b574: keyboard launch, Escape returning to the same application and pointer launch, each with actual PTY input delivery. Five cleanup/preservation checks pass.",
-        "The full b574 source checkpoint passes formatting, strict workspace Clippy, 753 relevant Rust tests, 802 Python tests, 590 token cases and 58 icon cases. Intentional visual changes and the final label refinement remain under review."
+        "The full b574 source checkpoint passes formatting, strict workspace Clippy, 753 relevant Rust tests, 802 Python tests, 590 token cases and 58 icon cases. Intentional visual changes and the final label refinement remain under review.",
+        "Source7b36850ed359 adds long-label ellipsis and 68 reviewed Vulkan baseline updates across 17 families in dark/light at1x/2x. The final build, full visual run and catalogue export were interrupted at the user memory request; final deployment/native acceptance remain open."
       ]
     },
     {

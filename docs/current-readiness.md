@@ -3,9 +3,11 @@
 ## Current desktop polish work
 
 The [polish backlog](desktop-polish.json) tracks the current Caelestia reference
-and the one-feature-at-a-time delivery rule. On 2026-11-17 the existing VM was
-booted and signed in through its native greeter. It now runs the optimized
-three-client launcher candidate `b574812e1ac7`; the supervisor and secure clients
+and the one-feature-at-a-time delivery rule. The VM is now **powered off at the
+user's request to free memory**. Local builds and renders were stopped too;
+leave them stopped until resource use is authorized again. Its last installed
+and native-tested optimized three-client launcher candidate is `b574812e1ac7`;
+the supervisor and secure clients
 retain the coherent d77 release described below. The checked developer deployment
 passes runtime dependency checks and preserves preferences, wallpaper, exports
 and media. This is distinct from accepted main and the coherent six-client archive.
@@ -17,8 +19,11 @@ the same app, and pointer launch, with actual physical input received by the
 owned application's PTY and all five cleanup checks. No compositor command
 forces focus. The corrected plain-text picker footer was reviewed in the VM.
 The b574 source checkpoint passes strict Clippy, 753 relevant Rust tests and
-802 Python tests. Final Vulkan baseline review, catalogue refresh and the
-subsequent long-label ellipsis refinement remain open.
+802 Python tests. Source `7b36850ed359` adds single-line long-label ellipsis and
+68 reviewed Vulkan baselines across 17 launcher/picker families, dark/light and
+1×/2×. Targeted follow-up behavior checks and strict Clippy pass. The final
+optimized build, full 832-case run and catalogue export were interrupted by the
+memory request; the refinement has not been deployed or native-accepted.
 
 Fresh [focus verification](../reports/measurements/lucent-polish-keyboard-focus.json)
 passes both original cold-browser routes with actual trusted key delivery and
@@ -40,10 +45,11 @@ host-gesture cases. Those failures remain historical evidence below.
 The first feature is native-verified; [all required CI at source 3f3204eb](https://github.com/xandreeddev/desktop-lab/actions/runs/44066091093)
 passes. Protected-main delivery through [PR117](https://github.com/xandreeddev/desktop-lab/pull/117)
 awaits a GitHub API account with writer permission.
-Other polish features and performance remain separate. The current native
-component catalogue is regenerated from source `beb696411c83`: 121 inputs and
+Other polish features and performance remain separate. The retained native
+component catalogue was generated from source `beb696411c83`: 121 inputs and
 480 actual Vulkan captures, with all nine story families sampled for visual
-review. Production visual-test goldens remain unchanged.
+review. It is stale for the new list API; the checker correctly rejects its
+missing rendering input. The interrupted replacement export is not accepted.
 
 ## Delivery and earlier source-specific evidence
 

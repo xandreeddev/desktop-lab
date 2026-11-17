@@ -5,14 +5,19 @@ into menus. The native client and browser capture exporter use the same Rust
 stories. The Astro explorer displays the resulting images; it does not rebuild
 our buttons, fields or menus in HTML and CSS.
 
-The checked-in catalogue records source `beb696411c83`, **121 producer inputs**,
+The retained catalogue records source `beb696411c83`, **121 producer inputs**,
 nine stories, five palettes and 480 actual Vulkan captures. This export refreshes
 the source fingerprints after adding the independent keyboard-focus example to
 the workspace lockfile. All captures were regenerated on the host's RADV Vulkan
-adapter; the complete matrix passes validation, and narrow light/dark samples
-from all nine stories were visually reviewed. The PNGs differ from the previous
+adapter; that source's complete matrix passed validation, and narrow light/dark
+samples from all nine stories were visually reviewed. The PNGs differ from the previous
 software-Vulkan export, so this is not a byte-identical refresh. Production
-visual-test goldens remain unchanged. Offscreen rendering, native input,
+visual-test goldens were unchanged at that checkpoint. The catalogue is now
+stale after the shared list API and picker changes; the input check correctly
+rejects it. The local replacement export was stopped at the user's memory
+request. The GitHub workflow is configured to export a separate validated
+`native-component-candidate` artifact for review before promotion; exporting a
+candidate does not update the public catalogue. Offscreen rendering, native input,
 application focus and performance acceptance remain separate.
 
 Open `/component-lab/` on the documentation site. Choose a story, then compare

@@ -84,9 +84,9 @@
     }
   },
   "remaining": [
-    "Finish the single-line long-label refinement, review intentional Vulkan baseline changes and pass the final visual matrix.",
-    "Refresh and verify the source-bound component catalogue and final source/site checks.",
-    "Deploy the final optimized ordinary-client bundle and repeat the public native helpers, including actual visual review.",
+    "Complete the final optimized release build and the full 832-case Vulkan comparison against the reviewed baselines.",
+    "Review and promote a complete source-bound component catalogue, then pass final source/site checks.",
+    "After resource use is authorized again, deploy the final optimized ordinary-client bundle and repeat both public native helpers, including actual visual review.",
     "Protected-main delivery."
   ],
   "performance_accepted": false,
@@ -130,5 +130,31 @@
     ],
     "review_receipt_sha256": "3647d966f87399cc15167519d4401ecb1f32ffbac0c6941d6fad5f03f7228358",
     "full_final_matrix_passed": false
+  },
+  "resource_hold": {
+    "requested_by_user": true,
+    "vm_power_state_verified": "shut_off",
+    "local_builds_and_renders_stopped": true,
+    "restart_authorized": false,
+    "scope": "The existing VM, optimized release worker, full Vulkan worker and catalogue worker are stopped. Their interrupted final checks are not accepted as passed."
+  },
+  "final_candidate": {
+    "source_commit": "7b36850ed359a2160c0b62047b47219145260755",
+    "label_refinement_implemented": true,
+    "baseline_changes_reviewed": true,
+    "optimized_bundle_complete": false,
+    "full_vulkan_matrix_complete": false,
+    "component_catalogue_export_complete": false,
+    "deployed": false,
+    "native_accepted": false
+  },
+  "component_catalogue": {
+    "source_commit": "beb696411c83d7e1bf3b41538cc7577780bf6b2c",
+    "producer_inputs": 121,
+    "captures": 480,
+    "current_source_check_passed": false,
+    "failure": "Catalog omits a production rendering input",
+    "missing_input": "lucent/crates/lucent-api/src/list.rs",
+    "replacement_export_interrupted": true
   }
 }
