@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-18",
+  "status": "implementation_ready_for_hosted_checks",
+  "scope": "Hidden Notes input retirement and pending media seek lifetimes.",
+  "changes": [
+    "Hidden Notes reject edits, selection, clipboard requests and scroll callbacks for their own output while retaining shared text.",
+    "Showing Notes restores editing and Undo without reviving cancelled clipboard replies.",
+    "Accepted media commands retire the old seek epoch; the pending slider remains visible but has no input/focus/capture callback.",
+    "Media command status stays beside transport controls outside metadata scrolling."
+  ],
+  "validation": {
+    "formatting_passed": true,
+    "diff_check_passed": true,
+    "architecture_cases_passed": 26,
+    "rust_execution_pending": true,
+    "hosted_visuals_pending": true,
+    "native_vm_pending": true,
+    "coverage": [
+      "Hidden edit/selection/IME/clipboard/scroll matrix with unchanged settings and no save effects, reopening, late clipboard and Undo.",
+      "Two-output routing rejects hidden Notes callbacks while allowing the visible output to edit the shared document.",
+      "Actual media slider callbacks across transport/seek admission, terminal-before-admission and failure/recovery ordering.",
+      "Stable passive slider paint geometry with retired focus/capture, and globally available closed-panel controls.",
+      "Sending/Waiting status stays visible with artwork and long metadata at640x580,390x420,320x420.",
+      "New media-pending Vulkan fixture at both palettes and densities."
+    ]
+  },
+  "vm_started": false,
+  "native_accepted": false,
+  "full_polish_goal_complete": false
+}

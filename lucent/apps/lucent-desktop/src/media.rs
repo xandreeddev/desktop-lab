@@ -303,6 +303,12 @@ impl Media {
         }
     }
     fn seek_target(&self) -> Option<SeekTarget> {
+        if self.pending.is_some() {
+            return None;
+        }
+        self.track_seek_target()
+    }
+    fn track_seek_target(&self) -> Option<SeekTarget> {
         let playback = self.playback()?;
         let track = playback.track.as_ref()?;
         let target = SeekTarget {
@@ -427,6 +433,9 @@ impl Media {
                 } else if self.pending.is_some() {
                     self.error = "A media command is still being delivered".into();
                 } else {
+                    // An accepted command retires every callback from the
+                    // previous seek gesture, even if admission later fails.
+                    self.cancel_seek();
                     self.error.clear();
                     self.command_revision = self.command_revision.wrapping_add(1);
                     let revision = self.command_revision;

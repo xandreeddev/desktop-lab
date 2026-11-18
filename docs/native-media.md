@@ -70,6 +70,13 @@ plain data; checked constructors enforce only their documented invariants.
 
 ## What happens when you click Pause or seek
 
+Admitting a command retires the current seek gesture. Until that operation
+settles, the slider keeps its geometry with disabled styling and no input
+callback or focus target. Retained callbacks from the earlier gesture cannot
+produce another seek, including after admission failure or late completion.
+The Sending/Waiting status remains beside the transport controls, outside the
+scrolling metadata, so artwork and long track text cannot hide it.
+
 The element captures `Pause(player_id)` for the player it actually displayed.
 The child revalidates the command and schedules `MediaPort::start` on the existing
 controls work lane. This call only admits one job to a bounded local mailbox and

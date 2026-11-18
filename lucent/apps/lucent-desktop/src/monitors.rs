@@ -438,6 +438,42 @@ mod tests {
         }
     }
     #[test]
+    fn hidden_notes_on_one_output_cannot_edit_the_shared_document_visible_on_another() {
+        let mut app = desktop();
+        let hidden = lucent_domain::WidgetLayout {
+            visible_widgets: vec!["calendar".into()],
+            ..Default::default()
+        };
+        let visible = lucent_domain::WidgetLayout {
+            visible_widgets: vec!["notes".into()],
+            ..Default::default()
+        };
+        app.settings.monitor_layouts.insert(id("DP-1"), hidden);
+        app.settings.monitor_layouts.insert(id("DP-2"), visible);
+        app.settings.notes = "Shared document".into();
+        let before = app.settings.clone();
+        let effects = send(
+            &mut app,
+            "DP-1",
+            Message::Widgets(widgets::Message::EditNotes(TextEdit::Replace(
+                "stale".into(),
+            ))),
+        );
+        assert_eq!(app.settings, before);
+        assert!(effects.tasks.is_empty());
+        assert!(effects.clipboard.is_empty());
+        send(
+            &mut app,
+            "DP-2",
+            Message::Widgets(widgets::Message::EditNotes(TextEdit::Replace(
+                "Accepted edit".into(),
+            ))),
+        );
+        assert_eq!(app.settings.notes, "Accepted edit");
+        assert_eq!(app.settings.monitor_layouts, before.monitor_layouts);
+    }
+
+    #[test]
     fn notes_clipboard_keeps_instance_and_does_not_switch_monitor_on_completion() {
         let mut app = desktop();
         app.settings.layout.visible_widgets = vec!["notes".into()];

@@ -423,6 +423,9 @@ impl Host {
             Message::Media(message) => Some(Intent::Media(message)),
             Message::Weather(message) => Some(Intent::Weather(message)),
             Message::ScrollNotes(event) => {
+                if !settings.visible_widgets.iter().any(|id| id == "notes") {
+                    return None;
+                }
                 if event.offset.is_finite() && event.offset >= 0. {
                     self.notes_scroll = event.offset;
                     effects.redraw("widgets");
@@ -430,6 +433,9 @@ impl Host {
                 None
             }
             Message::EditNotes(edit) => {
+                if !settings.visible_widgets.iter().any(|id| id == "notes") {
+                    return None;
+                }
                 effects.redraw("widgets");
                 let surface = self
                     .surfaces(settings, input.viewport)
@@ -882,6 +888,7 @@ mod tests {
     fn notes_and_media_return_typed_parent_intents() {
         let mut host = Host::default();
         let mut settings = DesktopSettings::default();
+        settings.layout.visible_widgets.push("notes".into());
         assert!(matches!(
             send(
                 &mut host,
@@ -904,6 +911,7 @@ mod tests {
     fn notes_editing_uses_the_same_byte_limit_as_saved_preferences() {
         let mut host = Host::default();
         let mut settings = DesktopSettings::default();
+        settings.layout.visible_widgets.push("notes".into());
         let admitted = "é".repeat(NOTES_MAX_BYTES / 2);
         assert!(matches!(
             send(
@@ -957,6 +965,7 @@ mod multiline_notes_tests {
     fn notes_preserves_lines_and_persists_only_content_not_selection_or_scroll() {
         let mut host = Host::default();
         let mut settings = DesktopSettings::default();
+        settings.layout.visible_widgets.push("notes".into());
         let (intent, effects) = send(
             &mut host,
             &mut settings,
@@ -995,6 +1004,100 @@ mod multiline_notes_tests {
             Some(Intent::Save)
         ));
     }
+    #[test]
+    fn hidden_notes_reject_edit_clipboard_and_scroll_callbacks_without_saving() {
+        let mut host = Host::default();
+        let mut settings = DesktopSettings::default();
+        send(&mut host, &mut settings, Message::Show("notes".into()));
+        send(
+            &mut host,
+            &mut settings,
+            Message::EditNotes(TextEdit::Replace("Keep this note".into())),
+        );
+        send(
+            &mut host,
+            &mut settings,
+            Message::ScrollNotes(ScrollEvent { offset: 40. }),
+        );
+        let (_, mut paste_effects) = send(
+            &mut host,
+            &mut settings,
+            Message::EditNotes(TextEdit::Paste),
+        );
+        let pending = paste_effects.clipboard.pop().unwrap();
+        send(&mut host, &mut settings, Message::Toggle("notes".into()));
+        let before = settings.clone();
+        let selection = host.notes_field.selection();
+        for edit in [
+            TextEdit::Insert("stale".into()),
+            TextEdit::Replace("stale".into()),
+            TextEdit::InputMethod {
+                before: 1,
+                after: 0,
+                commit: "stale".into(),
+            },
+            TextEdit::Backspace,
+            TextEdit::Delete,
+            TextEdit::Clear,
+            TextEdit::Undo,
+            TextEdit::Redo,
+            TextEdit::SelectAll,
+            TextEdit::Select {
+                anchor: 0,
+                caret: 1,
+            },
+            TextEdit::Move {
+                movement: lucent_api::TextMove::Start,
+                extend: true,
+            },
+            TextEdit::Copy,
+            TextEdit::Cut,
+            TextEdit::Paste,
+        ] {
+            let (intent, effects) = send(&mut host, &mut settings, Message::EditNotes(edit));
+            assert!(intent.is_none());
+            assert_eq!(settings, before);
+            assert_eq!(host.notes_field.selection(), selection);
+            assert!(effects.redraw.is_empty());
+            assert!(effects.tasks.is_empty());
+            assert!(effects.clipboard.is_empty());
+        }
+        let (intent, effects) = send(
+            &mut host,
+            &mut settings,
+            Message::ScrollNotes(ScrollEvent { offset: 100. }),
+        );
+        assert!(intent.is_none() && effects.redraw.is_empty());
+        assert_eq!(host.notes_scroll, 40.);
+
+        send(&mut host, &mut settings, Message::Show("notes".into()));
+        assert!(
+            send(
+                &mut host,
+                &mut settings,
+                pending.finish(lucent_api::ClipboardOutcome::Text("retired paste".into())),
+            )
+            .0
+            .is_none()
+        );
+        assert_eq!(settings.notes, before.notes);
+        assert!(matches!(
+            send(
+                &mut host,
+                &mut settings,
+                Message::EditNotes(TextEdit::Insert(" restored".into())),
+            )
+            .0,
+            Some(Intent::Save)
+        ));
+        assert_eq!(settings.notes, "Keep this note restored");
+        assert!(matches!(
+            send(&mut host, &mut settings, Message::EditNotes(TextEdit::Undo),).0,
+            Some(Intent::Save)
+        ));
+        assert_eq!(settings.notes, before.notes);
+    }
+
     #[test]
     fn hidden_notes_retires_pending_clipboard_and_normalized_limit_is_atomic() {
         let mut host = Host::default();

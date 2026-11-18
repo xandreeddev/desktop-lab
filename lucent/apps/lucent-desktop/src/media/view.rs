@@ -99,20 +99,25 @@ impl Media {
                     content.push(
                         theme.status_text(format!("{} / {}", time(position), time(length)), false),
                     );
-                    if let Some(target) = self.seek_target() {
-                        content.push(
-                            theme
-                                .slider(
-                                    SliderSpec::new(fraction, 0.01).expect("normalized progress"),
-                                    move |event| Message::Seek(target, event),
-                                )
-                                .id(format!(
-                                    "media-seek-{}-{}-{}",
-                                    target.player.value(),
-                                    target.track.value(),
-                                    target.epoch
-                                )),
-                        );
+                    if let Some(target) = self.track_seek_target() {
+                        let mut slider = theme
+                            .slider(
+                                SliderSpec::new(fraction, 0.01).expect("normalized progress"),
+                                move |event| Message::Seek(target, event),
+                            )
+                            .id(format!(
+                                "media-seek-{}-{}-{}",
+                                target.player.value(),
+                                target.track.value(),
+                                target.epoch
+                            ));
+                        if self.pending.is_some() {
+                            slider.slider = None;
+                            slider = slider
+                                .tab_stop(false)
+                                .opacity(lucent_design::opacity::DISABLED);
+                        }
+                        content.push(slider);
                     }
                 }
                 let toggle = if playback.status == PlaybackStatus::Playing {
@@ -166,14 +171,20 @@ impl Media {
             content.push(theme.status_text(&self.error, true).wrap(3));
         }
         if let Some(pending) = &self.pending {
-            content.push(theme.status_text(
-                if pending.operation.is_some() {
-                    "Waiting for player…"
-                } else {
-                    "Sending command…"
-                },
-                false,
-            ));
+            controls.push(
+                theme
+                    .status_text(
+                        if pending.operation.is_some() {
+                            "Waiting for player…"
+                        } else {
+                            "Sending command…"
+                        },
+                        false,
+                    )
+                    .width(Length::Fill)
+                    .wrap(2)
+                    .id("media-command-status"),
+            );
         }
         let rect = crate::shell_layout::media_panel((cx.width, cx.height));
         let progress = self.motion.value(cx.now);

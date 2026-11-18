@@ -206,7 +206,7 @@ impl crate::ports::AssetPort for MediaArtworkAssets {
 }
 fn open_media_fixture(app: &mut Desktop, name: &str) {
     use crate::media::Message as MediaMessage;
-    let artwork = matches!(name, "media-playing" | "media-paused");
+    let artwork = matches!(name, "media-playing" | "media-paused" | "media-pending");
     if artwork {
         app.media = crate::media::Media::new(
             app.adapters.media.clone(),
@@ -256,6 +256,16 @@ fn open_media_fixture(app: &mut Desktop, name: &str) {
             ))),
             &mut Effects::default(),
         );
+    }
+    if name == "media-pending" {
+        let player = app.media.selected().unwrap().id;
+        app.update(
+            Message::Media(MediaMessage::Request(lucent_domain::MediaCommand::Pause(
+                player,
+            ))),
+            &mut effects,
+        );
+        assert_eq!(effects.tasks.len(), 1, "command admission remains pending");
     }
 }
 struct FixturePlaybackLibrary(Arc<dyn lucent_domain::WallpaperPlaybackPort>);
@@ -1269,6 +1279,7 @@ fn unrelated_preference_save_during_drag_cannot_persist_the_preview() {
     adapters.settings = store.clone();
     let mut app = Desktop::new(adapters);
     app.settings_writable = true;
+    app.settings.layout.visible_widgets.push("notes".into());
     let origin = Placement::new(32., 96.).unwrap();
     app.settings
         .layout
@@ -2119,6 +2130,7 @@ fn visual_regressions() {
             ("media-loading", Mode::Apps, 0, 0, "", 1., 640.),
             ("media-empty", Mode::Apps, 0, 0, "", 1., 390.),
             ("media-playing", Mode::Apps, 0, 0, "", 1., 640.),
+            ("media-pending", Mode::Apps, 0, 0, "", 1., 640.),
             ("application-actions", Mode::Apps, 2, 0, "", 1., 640.),
             (
                 "application-actions-narrow",
@@ -3193,6 +3205,17 @@ fn visual_regressions() {
                 let mut input = Interaction::default();
                 input.synchronize(&layout.build(&tree, width, height, &input, now));
                 let mut scene = layout.build(&tree, width, height, &input, now);
+                if name == "media-pending" {
+                    assert!(
+                        !scene
+                            .hits
+                            .iter()
+                            .any(|hit| hit.id.starts_with("media-seek-"))
+                    );
+                    assert!(scene.paint.iter().any(|paint| matches!(paint,
+                        Paint::Text { text, .. } if text == "Sending command…"
+                    )));
+                }
                 let controls: Vec<_> = if matches!(name, "media-playing" | "media-paused") {
                     let scroll = scene
                         .hits

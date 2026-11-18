@@ -136,6 +136,9 @@ their existing catalog dimensions.
 Only accepted content changes return `Intent::Save`. Selection and scrolling
 redraw without saving; the root persistence coordinator remains the sole settings
 writer. Clipboard targets retain the current native group and monitor instance.
+Hidden Notes reject edit, selection, clipboard-request and scroll callbacks for
+their own output, even when another output still displays the shared document.
+Showing Notes restores ordinary editing without reviving retired clipboard work.
 Hiding Notes or cancelling its host interactions retires pending clipboard work,
 so a late response cannot resurrect an edit in a hidden/recreated field.
 
