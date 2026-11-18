@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "recorded_on": "2026-11-18",
-  "status": "source_prepared_hosted_checks_pending",
+  "status": "hosted_behavior_and_visual_review_passed_baseline_rerun_pending",
   "scope": "Responsive Media widget geometry, bounded metadata and preserved playback/resize input ownership. No native or performance acceptance is claimed.",
   "changes": [
     "Media receives the actual widget card size, including the frozen native source size during resize capture.",
@@ -28,8 +28,8 @@
   },
   "validation": {
     "new_Rust_cases_prepared": 9,
-    "Rust_execution_pending": true,
-    "hosted_visuals_pending": true,
+    "Rust_execution_pending": false,
+    "hosted_visuals_pending": false,
     "native_vm_pending": true,
     "local_Rust_compilation_performed": false,
     "local_rendering_performed": false,
@@ -49,7 +49,7 @@
     "new_visual_comparisons_prepared": 24,
     "expected_existing_golden_changes": [],
     "existing_fixture_scope": "Existing widget goldens contain Notes, Calendar, Weather, Clock or System, while the widgets case is a launcher selector. Existing media-* cases render the media panel. The separate bounded_widget_pixels_match_the_full_surface Vulkan test includes Media and remains required.",
-    "baseline_promotion_performed": false,
+    "baseline_promotion_performed": true,
     "coverage_prepared": [
       "Actual Layout at minimum, wide, tall and combined sizes, with complete centered controls and preserved bottom spacing.",
       "Long title/artist ellipsis, cover UV aspect and rounded hits, and centered fallback artwork.",
@@ -65,6 +65,57 @@
       "captures": 480,
       "identical_to_previous_reviewed_matrix": true,
       "promoted": true
+    },
+    "hosted_validation": {
+      "source_commit": "30ed89acb7d31fb8103dbd34bf68f0bdc845a983",
+      "run_id": 44286964583,
+      "rust_job_id": 134741997065,
+      "strict_clippy_passed": true,
+      "workspace_cases_passed": 1247,
+      "controlled_protocol_cases_passed": 49,
+      "visual_cases": 944,
+      "visual_passed_cases": 864,
+      "visual_differences": {
+        "session": 56,
+        "media_widget": 24
+      },
+      "artifact_id": 14418844884,
+      "archive_sha256": "c9766ae7f40250eaad1b0595253a7a8b8d2b54186e388db2f6dfe4934223250c",
+      "all_case_pngs_present_and_crc_verified": true,
+      "integration_catalogue_failure": "This source preceded the component catalogue refresh; current source now contains the verified export from this run.",
+      "log": ".cache/launcher-polish-checks/media-ci-30ed-job.log"
+    },
+    "visual_review": {
+      "all_24_media_cases_independently_reviewed": true,
+      "root_family_spotchecks": 6,
+      "findings": [],
+      "promoted_cases": [
+        "media-widget-default-dark-1x",
+        "media-widget-default-dark-2x",
+        "media-widget-wide-long-dark-1x",
+        "media-widget-wide-long-dark-2x",
+        "media-widget-tall-dark-1x",
+        "media-widget-tall-dark-2x",
+        "media-widget-fallback-dark-1x",
+        "media-widget-fallback-dark-2x",
+        "media-widget-pending-dark-1x",
+        "media-widget-pending-dark-2x",
+        "media-widget-resize-preview-dark-1x",
+        "media-widget-resize-preview-dark-2x",
+        "media-widget-default-light-1x",
+        "media-widget-default-light-2x",
+        "media-widget-wide-long-light-1x",
+        "media-widget-wide-long-light-2x",
+        "media-widget-tall-light-1x",
+        "media-widget-tall-light-2x",
+        "media-widget-fallback-light-1x",
+        "media-widget-fallback-light-2x",
+        "media-widget-pending-light-1x",
+        "media-widget-pending-light-2x",
+        "media-widget-resize-preview-light-1x",
+        "media-widget-resize-preview-light-2x"
+      ],
+      "consolidated_rerun_pending": true
     }
   },
   "vm_started": false,

@@ -1,0 +1,204 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-18",
+  "status": "implemented_source_slices_final_qualification_and_release_pending",
+  "scope": "Consolidated desktop polish source progress under the user-requested VM and local build/render hold. This is not final release, native or performance acceptance.",
+  "implemented_scopes": [
+    {
+      "id": "launcher_and_focus",
+      "behavior": "Shared list navigation, retained search/selection context, controlled scrolling, long-label ellipsis and explicit keyboard ownership.",
+      "reports": [
+        "reports/measurements/lucent-launcher-polish.json",
+        "reports/measurements/lucent-polish-keyboard-focus.json"
+      ],
+      "native_scope": "Earlier launcher b574 and focus trials retain their exact source-specific acceptance; no later source inherits native acceptance."
+    },
+    {
+      "id": "control_panels",
+      "behavior": "Audio nested dismissal and closed controls, exact Power confirmation prompts and Bluetooth Forget/device lifetimes preserve legitimate global inputs and accepted completions.",
+      "report": "reports/measurements/lucent-control-panel-polish.json"
+    },
+    {
+      "id": "notifications_and_bounded_scroll",
+      "behavior": "Short toasts retain natural height; long toast/history content keeps actions reachable with bounded app/action labels and reconciled history pages.",
+      "toolkit": "Finite nonnegative maximum outer height, consistent intrinsic scroll measurement, and independent scroll-list keyboard/pointer coverage.",
+      "report": "reports/measurements/lucent-notification-polish.json"
+    },
+    {
+      "id": "bar_dock_tray",
+      "behavior": "Tray actions and loads retain application/revision/presentation authority; changed saved pins retire a captured dock gesture before release.",
+      "report": "reports/measurements/lucent-bar-dock-tray-polish.json"
+    },
+    {
+      "id": "dashboard_input",
+      "behavior": "Hidden Notes reject edit, scroll and clipboard callbacks while preserving shared text and Undo. Media command admission retires old seek authority, keeps a passive slider and pins status beside controls.",
+      "report": "reports/measurements/lucent-dashboard-input-polish.json"
+    },
+    {
+      "id": "system_observation",
+      "behavior": "Bounded CPU/memory observations distinguish warmup, measured idle, stale readings and recovery, preserving last-good values and targeted redraw ownership.",
+      "report": "reports/measurements/lucent-system-observation-polish.json"
+    },
+    {
+      "id": "desktop_utilities",
+      "behavior": "Bounded validated clipboard history uses exact serialized admission, preserves committed bytes on failure or cancelled recovery, revalidates owned images and requests shell dismissal before accepted picker/menu/capture routes.",
+      "native_scope": "Command ordering fixtures do not prove actual desktop focus, paste or capture behavior.",
+      "report": "reports/measurements/lucent-desktop-utilities-polish.json"
+    },
+    {
+      "id": "appearance",
+      "behavior": "Wallpaper paging uses the submitted provider/query; online result/download and live source/Apply controls retain exact presentation, selection and target lifetimes. Closed callbacks retire without weakening global commands or accepted worker ownership.",
+      "report": "reports/measurements/lucent-appearance-selection-polish.json"
+    },
+    {
+      "id": "display_confirmation",
+      "behavior": "Keep/Revert require the rendered transaction and current local confirmation lifetime; close/reopen cannot revive cancelled confirmation or lose late Apply cancellation. Internal native rollback retains its existing authority.",
+      "report": "reports/measurements/lucent-display-confirmation-polish.json"
+    },
+    {
+      "id": "session_presentation",
+      "behavior": "Lock, login and authorization use natural centered cards, bounded public RichText scrolling and compact output spacing with reachable input/actions and phase cancellation. Prompt changes retire scroll authority; authentication boundaries remain unchanged.",
+      "report": "reports/measurements/lucent-session-presentation-polish.json"
+    },
+    {
+      "id": "responsive_media_widget",
+      "behavior": "Artwork, one-line metadata and centered controls respond to card geometry; cover fitting, exact player identity and frozen native input during resize are preserved.",
+      "report": "reports/measurements/lucent-media-widget-polish.json"
+    },
+    {
+      "id": "resource_measurement_admission",
+      "behavior": "Reject unsettled preview/background/refit/native retirement at admission, polls and final observation. Complete typed surface addresses and positive generations bind current presentation history; old/null/legacy histories cannot fabricate verified pacing. Invalid surface inventories and conflicting presentation feedback fail before retained presentation maps change; failed observations never produce a report.",
+      "scope_limit": "Sampler admission and owned-process cleanup are fixture-tested. No production resource leak, measured improvement or actual cadence acceptance is established.",
+      "report": "reports/measurements/lucent-resource-measurement-polish.json"
+    }
+  ],
+  "latest_hosted_application_checkpoint": {
+    "source_commit": "30ed89acb7d31fb8103dbd34bf68f0bdc845a983",
+    "run_id": 44286964583,
+    "run_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/44286964583",
+    "rust_job_id": 134741997065,
+    "workspace_cases_passed": 1247,
+    "controlled_protocol_cases_passed": 49,
+    "strict_clippy_passed": true,
+    "all_standard_jobs_passed": false,
+    "rust_job_conclusion": "failure",
+    "failure_step": "Native Vulkan visual regressions",
+    "visual": {
+      "cases": 944,
+      "passed_cases": 864,
+      "differences": 80,
+      "session_differences": 56,
+      "new_media_widget_cases": 24,
+      "artifact_id": 14418844884,
+      "archive_sha256": "c9766ae7f40250eaad1b0595253a7a8b8d2b54186e388db2f6dfe4934223250c",
+      "github_archive_digest_matched": true,
+      "all_case_pngs_present_and_crc_verified": true,
+      "receipt": ".cache/launcher-polish-checks/ci-visual-30ed89acb7d3-14418844884/receipt.json",
+      "scope": "This source predates the later session baseline and tail-focus fixture updates. Expected difference scope does not constitute visual approval or a passing job."
+    },
+    "log": ".cache/launcher-polish-checks/media-ci-30ed-job.log"
+  },
+  "visual_review_followup": {
+    "session_review_source": "33dbd58ad72ed41307b311161250dc24832c956b",
+    "session_cases_reviewed": 56,
+    "session_cases_accepted": 44,
+    "session_tail_cases_withheld": 12,
+    "session_baseline_and_fixture_commit": "8bd2024c86c",
+    "session_tail_reason": "The old tail fixture discarded actual BackTab/End focus during message mapping and re-autofocused the secret field. Focus preservation is corrected; fresh hosted images remain required before approval.",
+    "media_widget_cases_awaiting_review": 0,
+    "consolidated_visual_rerun_pending": true,
+    "media_widget_cases_reviewed_and_accepted": 24
+  },
+  "component_catalogue": {
+    "source_commit": "30ed89acb7d31fb8103dbd34bf68f0bdc845a983",
+    "run_id": 44286964583,
+    "artifact_id": 14419607104,
+    "archive_sha256": "9d609837dbd0e99e7c5c908e8e238aefffbb694792bcd554703d7a580ddb9f4f",
+    "producer_inputs": 122,
+    "stories": 9,
+    "captures": 480,
+    "generated_tokens": 598,
+    "archive_digest_current_fingerprints_and_inventory_verified": true,
+    "pngs_byte_identical_to_previous_reviewed_matrix": 480,
+    "refreshed": true,
+    "refresh_commit": "71ac451debe",
+    "receipt": ".cache/launcher-polish-checks/ci-component-30ed89acb7d3-14419607104/receipt.json"
+  },
+  "local_fixture_validation": {
+    "full_Python_suite_cases_passed": 919,
+    "full_Python_suite_log": ".cache/launcher-polish-checks/final-polish-python-checks.log",
+    "resource_cases_passed": 29,
+    "resource_new_cases": 17,
+    "resource_independent_review_passed": true,
+    "execution_scope": "Owned fixtures, including temporary Unix sockets and fully mocked sampler/process boundaries. No VM, live desktop commands, local Rust compilation, rendering or performance sampling."
+  },
+  "coherent_release_preparation": {
+    "producer": "ci/arch_release.py",
+    "receiver": "ci/arch_receive.py",
+    "profile": "ci/arch-release-profile.json",
+    "dedicated_future_branch": "ci/lucent-polish-coherent-release",
+    "managed_clients": 6,
+    "support_files": 29,
+    "acceptance_executables": 3,
+    "component_lab_included": true,
+    "bundled_license_notices": 14,
+    "producer_fixture_cases_passed": 30,
+    "receiver_fixture_cases_passed": 25,
+    "independent_tooling_review_passed": true,
+    "source_commit": null,
+    "source_tree": null,
+    "built": false,
+    "received_and_reviewed": false,
+    "scope": "Prepared tooling only. A future pinned hosted build must include every client and changed support dependency. The offline receiver validates trusted bindings and exact bounded archive contents without executing downloaded code. Fresh Arch images require hash/inventory checks and actual review; Ubuntu PNG equality is not assumed."
+  },
+  "final_qualification": {
+    "source_commit": null,
+    "standard_check_run_id": null,
+    "standard_jobs_required": [
+      "site",
+      "integration-code",
+      "rust",
+      "arch-development-bundle"
+    ],
+    "all_standard_jobs_passed": false,
+    "all_49_controlled_protocol_cases_passed_on_final_source": false,
+    "full_visual_matrix_passed_on_final_source": false,
+    "coherent_release_run_id": null,
+    "coherent_release_artifact_id": null,
+    "coherent_release_archive_sha256": null,
+    "coherent_archive_independently_verified": false,
+    "fresh_release_catalogue_reviewed": false,
+    "pending": [
+      "Review new Media images and freshly rendered corrected session tail fixtures, then verify the complete production visual matrix.",
+      "Pin the final application commit/tree and obtain success for all four standard jobs, including all 49 controlled protocol cases.",
+      "Build the coherent six-client/support archive remotely, bind its terminal run/job and source to the original receipt/artifact, and verify all payload hashes and static ELF evidence offline.",
+      "Review the fresh release catalogue with matching producer fingerprints and inventory; retain differing images rather than silently promote them."
+    ]
+  },
+  "deferred_native_and_delivery": {
+    "vm_power_state_last_verified": "shut_off",
+    "vm_started_during_current_hold": false,
+    "local_builds_and_renders_stopped": true,
+    "last_native_tested_ordinary_client_source": "b574812e1ac7db44121347399b5ae2b07daa77fa",
+    "supervisor_and_secure_client_release": "d77f3d0b2caf",
+    "new_source_deployed": false,
+    "target_runtime_ABI_accepted": false,
+    "current_native_interactions_and_visuals_accepted": false,
+    "eligible_resource_and_pacing_accepted": false,
+    "physical_hardware_accepted": false,
+    "protected_main_delivery": "PR117 awaits GitHub API writer permission; SSH pushes and hosted CI remain available.",
+    "scope": "The existing VM stays off under the user's memory instruction. Earlier installation, native passes, failures and ineligible resource observations retain their original source and measurement scope."
+  },
+  "historical_evidence_preserved": true,
+  "full_polish_goal_complete": false,
+  "source_coherence_review": {
+    "independent_review_passed": true,
+    "unimplemented_identified_source_items_found": 0,
+    "public_contract_consumers": {
+      "ListNavigation_and_list_window": "lucent-menu",
+      "max_height": "scroll-list",
+      "keyboard_handoff": "keyboard-focus"
+    },
+    "scope": "Reviewed the existing backlog implementation items and toolkit consumer coverage. This does not establish universal feature parity, native behavior or performance."
+  }
+}

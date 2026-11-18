@@ -2,17 +2,72 @@
 
 ## Current desktop polish work
 
-The [polish backlog](desktop-polish.json) tracks the current Caelestia reference
-and the one-feature-at-a-time delivery rule. The user instructed continued implementation
-and remote testing on 2026-11-18 with the VM off. Native acceptance stays pending
-while source work proceeds through the remaining features. The VM is now **powered off at the
-user's request to free memory**. Local builds and renders were stopped too;
-leave them stopped until resource use is authorized again. Its last installed
-and native-tested optimized three-client launcher candidate is `b574812e1ac7`;
-the supervisor and secure clients
-retain the coherent d77 release described below. The checked developer deployment
-passes runtime dependency checks and preserves preferences, wallpaper, exports
-and media. This is distinct from accepted main and the coherent six-client archive.
+The [polish backlog](desktop-polish.json) tracks the Caelestia reference and the
+one-feature-at-a-time delivery rule. The current source work covers the concrete
+workflow gaps below. **Final source qualification and coherent release review
+are still pending.** The [consolidated source report](../reports/measurements/lucent-polish-source-consolidation.json)
+separates implemented behavior, source-specific test evidence and open acceptance.
+
+| Area | Implemented source scope |
+| --- | --- |
+| Launcher and focus | Shared list navigation, retained selection/search context, controlled scrolling, long-label ellipsis and explicit keyboard ownership. Earlier native results remain tied to their original sources. |
+| Control panels | Nested Audio dismissal, closed-control rejection, prompt-bound Power and Bluetooth confirmations, and preserved global/accepted operations. |
+| Notifications | Naturally sized bounded toast scrolling, readable app/action labels, reachable final actions and reconciled history paging. The public maximum-height contract is exercised by an independent scroll-list client. |
+| Bar, dock and tray | Menu callbacks and loads retain their owner, revision and presentation lifetime; newer pin preferences retire an in-progress dock drag. |
+| Notes and media commands | Hidden Notes retire editing/clipboard callbacks; admitted media commands retire seek previews, retain a passive slider and keep command status visible beside transport controls. |
+| System widget | Bounded sampling distinguishes loading, measured idle, stale data and recovery without treating the last good reading as current. |
+| Desktop utilities | Bounded validated clipboard storage, explicit recovery that preserves bytes on cancellation, and shell dismissal before accepted picker/menu/capture routes. |
+| Appearance | Paging retains the submitted search; result, source, selection and target lifetimes govern online download and live Apply controls. |
+| Displays | Keep/Revert retain the exact transaction and local confirmation lifetime; close/reopen preserves cancellation, including late admission. |
+| Secure session presentation | Centered natural cards and bounded public text scrolling keep input and actions reachable on short outputs; authentication authority is unchanged. |
+| Responsive Media widget | Artwork, metadata and controls respond to card size with bounded labels, preserved player authority and frozen native input geometry during resize. |
+| Resource collection | Idle admission includes previews, background transitions, refits and native retirement; typed address/generation checks prevent retained historical feedback from becoming current pacing evidence. No performance improvement is claimed. |
+
+The latest hosted application checkpoint,
+[`30ed89acb7d3`](https://github.com/xandreeddev/desktop-lab/actions/runs/44286964583),
+passes **1,247 workspace Rust tests, all 49 controlled service cases and strict
+Clippy**. Its production Vulkan comparison ran 944 cases: 864 passed and 80
+required review or fixture updates, comprising 56 session and 24 new Media
+images. The visual job failed and is not recorded as a full pass. Forty-four
+session images from the earlier `33dbd58ad72e` run were reviewed and accepted;
+the 12 tail-position fixtures were corrected to retain actual keyboard focus
+and still require fresh hosted rendering. All 24 Media variants have now passed
+independent visual review and are accepted. The consolidated visual rerun remains
+pending.
+
+The current component catalogue was independently received from `30ed89acb7d3`:
+122 producer inputs, nine stories and 480 captures. Its archive digest, current
+fingerprints and full variant inventory validate; all 480 PNGs exactly match
+the previously reviewed matrix. The resource collector passes 29 owned Python
+fixtures and independent source review; the complete Python suite passes 919
+cases. These checks do not establish a final all-jobs hosted pass.
+
+The [coherent release producer](../ci/README.md) and
+[offline receiver](../ci/RECEIVING.md) are prepared and fixture-tested. The future
+archive includes all six managed clients, all 29 support files, acceptance
+examples, Component Lab and bundled notices. Its application commit/tree pin is
+still unset. Final delivery requires all four standard jobs on the pinned source,
+including the 49 controlled protocol cases and the full visual matrix, followed
+by a successful coherent build, independently verified receipt/archive and
+fresh catalogue review. Static ELF inspection does not establish target runtime
+ABI, native behavior or performance. The ordinary three-client development
+archive does not satisfy this coherent release scope.
+
+The VM remains **powered off at the user's request to free memory**. Local
+builds, renders and native resource measurements remain stopped. Its last
+installed and native-tested optimized three-client launcher candidate is
+`b574812e1ac7`; the supervisor and secure clients retain the coherent d77 release
+described below. New source work has not been deployed there. Native utility,
+session, resize, target-dependency and eligible RSS/pacing acceptance remain
+deferred. Protected-main delivery through
+[PR117](https://github.com/xandreeddev/desktop-lab/pull/117) still needs a GitHub API
+account with writer permission; SSH pushes and hosted checks remain available.
+The full polish goal is not complete.
+
+### Earlier launcher and focus checkpoints
+
+The following results retain their original source and execution scopes. Failed
+attempts and native evidence below are not replaced by the newer source checks.
 
 The [launcher slice](../reports/measurements/lucent-launcher-polish.json) passes
 seven native navigation/search/scroll/picker interactions and five cleanup checks.

@@ -141,7 +141,7 @@
     },
     {
       "id": "dashboard-and-media",
-      "status": "in_progress",
+      "status": "hosted_behavior_and_visual_review_passed_baseline_rerun_pending",
       "behavior": "Widgets, notes, calendar and media controls have complete editing, resizing, persistence, empty and error behavior.",
       "toolkit": "Controlled editors, sliders, pointer capture and reusable layout/input boundaries.",
       "identified_work": [
@@ -150,14 +150,14 @@
         "Represent system sampling loading, failure and recovery truthfully, retaining last-good data without presenting it as current.",
         "Make resized media content responsive and bound long title/artist metadata."
       ],
-      "active_slice": "Hidden Notes, pending media input and system observation passed hosted behavior and visual review. Responsive Media now has source preparation, nine layout/input regressions and six new visual fixture families; hosted execution and native resize acceptance remain pending.",
+      "active_slice": "Responsive Media passes strict Clippy, 1,247 workspace cases and all 49 controlled protocol cases at source30ed. All 24 new visual variants passed independent review and are accepted; prior dashboard/system baselines also pass in that run. Consolidated checks and native resize/playback acceptance remain separate.",
       "report": "reports/measurements/lucent-dashboard-input-polish.json",
       "system_report": "reports/measurements/lucent-system-observation-polish.json",
       "media_report": "reports/measurements/lucent-media-widget-polish.json"
     },
     {
       "id": "appearance",
-      "status": "hosted_behavior_and_visual_review_passed_fixture_rerun_pending",
+      "status": "hosted_behavior_and_visual_review_passed_consolidated_rerun_pending",
       "behavior": "Palette and wallpaper browsing, previews, applying, cancellation and failures share consistent motion, spacing and density.",
       "toolkit": "Prepared assets, streaming textures, clipping, motion and cache ownership.",
       "identified_work": [
@@ -166,11 +166,11 @@
         "Bind online result selection and download callbacks to the rendered result and selection lifetime; reject retired form callbacks before root admission."
       ],
       "report": "reports/measurements/lucent-appearance-selection-polish.json",
-      "active_slice": "Source270f passes1,222 workspace cases,49 controlled protocol cases and strictClippy. Four reviewed browser-error baselines are accepted; a stale monitor fixture was corrected without replacing its two baselines. Consolidated hosted rerun and native acceptance remain pending."
+      "active_slice": "All affected wallpaper-error and live-monitor comparisons pass at source30ed in the 944-case run. Four reviewed error baselines are accepted, while the corrected monitor fixture preserves its original baselines. Full consolidated checks and native acceptance remain distinct."
     },
     {
       "id": "outputs-and-session",
-      "status": "in_progress",
+      "status": "hosted_behavior_passed_partial_visual_approval_pending",
       "behavior": "Display changes, per-output layouts, scaling and secure session transitions preserve usable controls and user state.",
       "toolkit": "Output/native lifetime contracts, density, input routing and secure role boundaries.",
       "identified_work": [
@@ -178,7 +178,7 @@
         "Preserve pending display apply cancellation across close then reopen before admission returns.",
         "Verify authentication control reachability on short outputs and long prompts before presentation-only changes; preserve all secure authority."
       ],
-      "active_slice": "Shared session cards now have bounded scrolling public copy, fixed input/actions and compact output spacing; source tests and hosted behavior/visual verification are in progress.",
+      "active_slice": "Shared session cards pass hosted behavior, with bounded public scrolling and reachable fixed controls. Of 56 reviewed session images, 44 are accepted. Twelve tail fixtures now preserve the real keyboard scroll focus and await hosted rendering; native secure-session and output workflows remain deferred.",
       "report": "reports/measurements/lucent-display-confirmation-polish.json",
       "session_report": "reports/measurements/lucent-session-presentation-polish.json"
     },
@@ -195,5 +195,6 @@
       "active_slice": "Schema 2 collector passes 29 owned Python fixtures, both independent source reviews, 27 architecture cases and the full 919-case lightweight Python suite. Mocked pre-spawn admission, every-poll/final validation and owned sampler cleanup pass. Hosted integration remains pending; no native measurement was executed.",
       "report": "reports/measurements/lucent-resource-measurement-polish.json"
     }
-  ]
+  ],
+  "source_consolidation_report": "reports/measurements/lucent-polish-source-consolidation.json"
 }

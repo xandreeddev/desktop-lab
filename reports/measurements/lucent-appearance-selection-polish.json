@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "recorded_on": "2026-11-18",
-  "status": "hosted_behavior_and_visual_review_passed_fixture_rerun_pending",
+  "status": "hosted_behavior_and_visual_review_passed_consolidated_rerun_pending",
   "scope": "Submitted wallpaper search paging and rendered selection authority in online and live wallpaper pickers.",
   "changes": [
     "Explicit Search submits the draft query from page one; paging retains the submitted provider and query.",
@@ -17,7 +17,7 @@
   ],
   "validation": {
     "rust_execution_pending": false,
-    "hosted_visuals_pending": true,
+    "hosted_visuals_pending": false,
     "native_vm_pending": true,
     "rustfmt_parse_passed": true,
     "documentation_diff_check_passed": true,
@@ -124,6 +124,17 @@
         "menu-light-populated-narrow-1x"
       ],
       "promoted": true
+    },
+    "corrected_fixture_verification": {
+      "source_commit": "30ed89acb7d31fb8103dbd34bf68f0bdc845a983",
+      "run_id": 44286964583,
+      "artifact_id": 14418844884,
+      "archive_sha256": "c9766ae7f40250eaad1b0595253a7a8b8d2b54186e388db2f6dfe4934223250c",
+      "wallpaper_error_comparisons_passed": 4,
+      "live_monitor_comparisons_passed": 4,
+      "original_live_monitor_baselines_preserved": true,
+      "all_case_pngs_present_and_crc_verified": true,
+      "scope": "Affected appearance comparisons pass in the 944-case Media run; its 80 differences are exclusively session and new Media cases. Full consolidated green run remains pending."
     }
   },
   "vm_started": false,
