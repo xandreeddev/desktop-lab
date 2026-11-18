@@ -2934,6 +2934,10 @@ fn visual_regressions() {
                 }
                 let tree = session.view(&cx).map(|_| Message::Quit);
                 let mut input = Interaction::default();
+                // Mapping callbacks changes the message type, but the rendered
+                // focus must retain the actual session keyboard interaction.
+                input.focus = session_input.focus.clone();
+                input.focus_visible = session_input.focus_visible;
                 let initial = layout.build(&tree, width, height, &input, now);
                 input.synchronize(&initial);
                 let scene = layout.build(&tree, width, height, &input, now);
@@ -2944,6 +2948,17 @@ fn visual_regressions() {
                     }
                 }
                 if name.ends_with("-last") {
+                    let public = scene
+                        .hits
+                        .iter()
+                        .find(|hit| {
+                            hit.id.starts_with("authentication-public-") && hit.scroll.is_some()
+                        })
+                        .expect("session public scroll must remain present at its tail");
+                    assert_eq!(input.focus, session_input.focus);
+                    assert_eq!(input.focus.as_deref(), Some(public.id.as_str()));
+                    assert!(input.focus_visible);
+                    assert_ne!(input.focus.as_deref(), Some("authentication-input"));
                     assert!(
                         scene.paint.iter().any(|paint| matches!(paint,
                             Paint::Text { text, rect, clip, .. }

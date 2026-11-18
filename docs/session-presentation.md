@@ -7,7 +7,7 @@ action row remain outside the scroll viewport. Short forms center at their
 actual height.
 
 Outputs shorter than the normal card plus its margins use existing compact
-spacing tokens and omit the decorative LUCENT label. At 320×240, the card leaves
+spacing tokens and omit the decorative LUCENT label. At 320×240, the card allows up to
 96 logical pixels for public copy while retaining the 48-pixel field and
 40-pixel actions. Titles, identity, authorization reasons, prompt labels and
 status remain public presentation. Long public blocks use the toolkit's
@@ -41,6 +41,6 @@ presentation. Synthetic Vulkan fixtures cover compact initial, long and final
 scroll positions plus connecting/verifying authorization. This slice adds no
 SDK API; the independent `scroll-list` consumer already exercises capped natural
 scroll sizing. See the [source-specific report](../reports/measurements/lucent-session-presentation-polish.json)
-for executed checks. Hosted Rust execution and visual review must complete before
-this preparation is accepted. Native VM interaction remains deferred under the
+for executed checks. Hosted behavior checks pass; final visual comparison and
+focus-fixture rendering remain pending. Native VM interaction remains deferred under the
 user's instruction to keep the VM stopped.
